@@ -8,6 +8,7 @@ import { UploadForm } from "./UploadForm";
 import { NoteForm } from "./NoteForm";
 import { ReminderForm, ResolveReminderButton } from "./ReminderForm";
 import { DocumentStatusSelect } from "@/components/DocumentStatusSelect";
+import { PortalAccessPanel } from "./PortalAccessPanel";
 
 type StageHistoryRow = {
   id: string;
@@ -73,7 +74,7 @@ export default async function StudentDetailPage(props: PageProps<"/students/[id]
 
   const { data: student, error } = await supabase
     .from("students")
-    .select("id, full_name, email, phone, destination_country, current_stage, assigned_counselor_id")
+    .select("id, full_name, email, phone, destination_country, current_stage, assigned_counselor_id, auth_user_id")
     .eq("id", id)
     .maybeSingle();
 
@@ -167,6 +168,10 @@ export default async function StudentDetailPage(props: PageProps<"/students/[id]
                 </ol>
               )}
             </div>
+          </div>
+
+          <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
+            <PortalAccessPanel studentId={id} enabled={Boolean(student.auth_user_id)} />
           </div>
 
           <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">

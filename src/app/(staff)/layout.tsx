@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
-export default async function Home() {
+export default async function StaffLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
 
   const {
@@ -14,5 +14,9 @@ export default async function Home() {
     .eq("id", user?.id ?? "")
     .maybeSingle();
 
-  redirect(staffRow ? "/students" : "/portal");
+  if (!staffRow) {
+    redirect("/portal");
+  }
+
+  return children;
 }

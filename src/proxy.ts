@@ -37,7 +37,7 @@ export async function proxy(request: NextRequest) {
 
   if (user && isLoginPage) {
     const url = request.nextUrl.clone();
-    url.pathname = "/students";
+    url.pathname = "/";
     return NextResponse.redirect(url);
   }
 

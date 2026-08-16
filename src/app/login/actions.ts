@@ -14,5 +14,5 @@ export async function signIn(_prevState: unknown, formData: FormData) {
     return { error: "Incorrect email or password." };
   }
 
-  redirect("/students");
+  redirect("/");
 }

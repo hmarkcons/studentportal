@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { signOut } from "@/app/students/actions";
+import { signOut } from "@/app/(staff)/students/actions";
 
 export async function AppHeader({ active }: { active: "students" | "board" | "dashboard" }) {
   const supabase = await createClient();
