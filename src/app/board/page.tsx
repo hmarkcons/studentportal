@@ -3,12 +3,14 @@ import { createClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
 import { STAGES, STAGE_LABELS } from "@/lib/stages";
 import { StageMover } from "@/components/StageMover";
+import { isStalled } from "@/lib/stall";
 
 type BoardRow = {
   id: string;
   full_name: string;
   destination_country: string;
   current_stage: string;
+  updated_at: string;
   assigned_counselor: { full_name: string } | { full_name: string }[] | null;
 };
 
@@ -22,7 +24,7 @@ export default async function BoardPage() {
 
   const { data: students, error } = await supabase
     .from("students")
-    .select("id, full_name, destination_country, current_stage, assigned_counselor:staff(full_name)")
+    .select("id, full_name, destination_country, current_stage, updated_at, assigned_counselor:staff(full_name)")
     .order("updated_at", { ascending: false })
     .returns<BoardRow[]>();
 
@@ -73,12 +75,22 @@ export default async function BoardPage() {
                         key={s.id}
                         className="flex flex-col gap-2 rounded-md border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950"
                       >
-                        <Link
-                          href={`/students/${s.id}`}
-                          className="text-sm font-medium text-zinc-900 hover:underline dark:text-zinc-50"
-                        >
-                          {s.full_name}
-                        </Link>
+                        <div className="flex items-center justify-between gap-2">
+                          <Link
+                            href={`/students/${s.id}`}
+                            className="text-sm font-medium text-zinc-900 hover:underline dark:text-zinc-50"
+                          >
+                            {s.full_name}
+                          </Link>
+                          {isStalled(s.updated_at, s.current_stage) && (
+                            <span
+                              title="No movement in 7+ days"
+                              className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-400"
+                            >
+                              stalled
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs text-zinc-500 dark:text-zinc-400">
                           {s.destination_country} &middot; {counselorName(s.assigned_counselor)}
                         </p>

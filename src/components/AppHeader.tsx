@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { signOut } from "@/app/students/actions";
 
-export async function AppHeader({ active }: { active: "students" | "board" }) {
+export async function AppHeader({ active }: { active: "students" | "board" | "dashboard" }) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -14,7 +14,7 @@ export async function AppHeader({ active }: { active: "students" | "board" }) {
     .eq("id", user?.id ?? "")
     .maybeSingle();
 
-  const linkClass = (name: "students" | "board") =>
+  const linkClass = (name: "students" | "board" | "dashboard") =>
     `text-sm font-medium ${
       active === name
         ? "text-zinc-900 dark:text-zinc-50"
@@ -42,6 +42,9 @@ export async function AppHeader({ active }: { active: "students" | "board" }) {
           </Link>
           <Link href="/board" className={linkClass("board")}>
             Board
+          </Link>
+          <Link href="/dashboard" className={linkClass("dashboard")}>
+            Dashboard
           </Link>
         </nav>
       </div>

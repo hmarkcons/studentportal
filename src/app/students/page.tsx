@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
 import { STAGE_LABELS } from "@/lib/stages";
+import { isStalled } from "@/lib/stall";
 
 type StudentRow = {
   id: string;
@@ -100,7 +101,17 @@ export default async function StudentsPage() {
                         {counselorName(student.assigned_counselor)}
                       </td>
                       <td className="px-4 py-3 text-zinc-500 dark:text-zinc-500">
-                        {new Date(student.updated_at).toLocaleDateString()}
+                        <span className="inline-flex items-center gap-1.5">
+                          {new Date(student.updated_at).toLocaleDateString()}
+                          {isStalled(student.updated_at, student.current_stage) && (
+                            <span
+                              title="No movement in 7+ days"
+                              className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-400"
+                            >
+                              stalled
+                            </span>
+                          )}
+                        </span>
                       </td>
                     </tr>
                   ))}
