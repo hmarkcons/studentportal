@@ -6,6 +6,16 @@ Phase 1 scope, design rationale, and build plan: see the published design artifa
 
 ## Stack
 
-- Next.js
+- Next.js (App Router, TypeScript)
+- Tailwind CSS
 - Supabase (Postgres, Auth, Storage)
 - Vercel (hosting)
+
+## Getting started
+
+```bash
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000). Requires `.env.local` with `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` — see `.env.example`.
