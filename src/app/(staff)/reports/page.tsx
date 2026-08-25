@@ -26,6 +26,19 @@ export default async function ReportsPage() {
   const { data: visaRecords } = await supabase.from("visa_records").select("outcome");
   const { data: staff } = await supabase.from("staff").select("id, full_name").eq("role", "counselor");
 
+  const today = new Date().toISOString().slice(0, 10);
+  const { count: overdueTasks } = await supabase
+    .from("application_tasks")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "pending")
+    .lt("due_date", today);
+  const { count: overdueReminders } = await supabase
+    .from("reminders")
+    .select("id", { count: "exact", head: true })
+    .eq("resolved", false)
+    .lt("due_date", today);
+  const overdueCount = (overdueTasks ?? 0) + (overdueReminders ?? 0);
+
   const totalLeads = leads?.length ?? 0;
   const registeredCount = (leads ?? []).filter((l) => l.registered_at).length;
 
@@ -56,11 +69,14 @@ export default async function ReportsPage() {
     <div className="mx-auto max-w-5xl">
       <h2 className="mb-6 text-lg font-semibold text-ink">Reports</h2>
 
-      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-5">
         <StatCard label="Total leads" value={totalLeads} />
         <StatCard label="Registered" value={registeredCount} tone="success" />
         <StatCard label="Visa approval rate" value={`${Math.round(visaApprovalRate)}%`} tone="success" />
         <StatCard label="Calls logged" value={logs?.length ?? 0} />
+        <Link href="/calendar">
+          <StatCard label="Overdue" value={overdueCount} tone={overdueCount > 0 ? "danger" : "default"} />
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">

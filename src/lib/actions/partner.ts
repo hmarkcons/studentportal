@@ -90,3 +90,54 @@ export async function partnerUploadDocument(universityId: string, _prevState: un
   revalidatePath("/partner/documents");
   return { success: true };
 }
+
+// Module 3D: Course/Program Management — partners self-manage their own
+// university's course directory (RLS in 0034 scopes every call here to the
+// caller's own university via partner_university_id()).
+export async function partnerAddProgram(_prevState: unknown, formData: FormData) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: account } = await supabase
+    .from("partner_university_accounts")
+    .select("university_id, status")
+    .eq("id", user?.id ?? "")
+    .maybeSingle();
+  if (!account || account.status !== "active") return { error: "Not authorized." };
+  const universityId = account.university_id;
+
+  const level = String(formData.get("level") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const core_field = String(formData.get("core_field") ?? "").trim() || null;
+  const sub_field = String(formData.get("sub_field") ?? "").trim() || null;
+  const tuition_fee = formData.get("tuition_fee") ? Number(formData.get("tuition_fee")) : null;
+  const duration = String(formData.get("duration") ?? "").trim() || null;
+  const language_requirement = String(formData.get("language_requirement") ?? "").trim() || null;
+  const application_deadline = String(formData.get("application_deadline") ?? "").trim() || null;
+
+  if (!level || !name) return { error: "Level and name are required." };
+
+  const { error } = await supabase.from("programs").insert({
+    university_id: universityId,
+    level,
+    name,
+    core_field,
+    sub_field,
+    tuition_fee,
+    duration,
+    language_requirement,
+    application_deadline,
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath("/partner/programs");
+  return { success: true };
+}
+
+export async function partnerDeleteProgram(programId: string) {
+  const supabase = await createClient();
+  await supabase.from("programs").delete().eq("id", programId);
+  revalidatePath("/partner/programs");
+}

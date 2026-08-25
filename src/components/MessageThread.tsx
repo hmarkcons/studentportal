@@ -1,7 +1,9 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { sendMessage } from "@/lib/actions/messages";
+
+export type TemplateRow = { id: string; purpose: string; channel: string; body: string };
 
 export type MessageRow = {
   id: string;
@@ -23,6 +25,7 @@ export function MessageThread({
   channel,
   revalidateTo,
   placeholder = "Write a message…",
+  templates,
 }: {
   messages: MessageRow[];
   entityType: "student" | "university";
@@ -30,9 +33,17 @@ export function MessageThread({
   channel: string;
   revalidateTo: string;
   placeholder?: string;
+  templates?: TemplateRow[];
 }) {
   const action = sendMessage.bind(null, entityType, entityId, channel, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
+  const [body, setBody] = useState("");
+  const wasPending = useRef(false);
+
+  useEffect(() => {
+    if (wasPending.current && !pending && !state?.error) setBody("");
+    wasPending.current = pending;
+  }, [pending, state]);
 
   return (
     <div>
@@ -47,8 +58,32 @@ export function MessageThread({
           </div>
         ))}
       </div>
-      <form action={formAction} className="mt-4 flex gap-2">
-        <input name="body" placeholder={placeholder} required className="flex-1 rounded-md border border-border px-3 py-2 text-sm" />
+      {templates && templates.length > 0 && (
+        <select
+          className="mt-3 w-full rounded-md border border-border px-2 py-1.5 text-xs"
+          defaultValue=""
+          onChange={(e) => {
+            const t = templates.find((t) => t.id === e.target.value);
+            if (t) setBody(t.body);
+          }}
+        >
+          <option value="">Use a template…</option>
+          {templates.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.purpose} ({t.channel})
+            </option>
+          ))}
+        </select>
+      )}
+      <form action={formAction} className="mt-2 flex gap-2">
+        <input
+          name="body"
+          placeholder={placeholder}
+          required
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          className="flex-1 rounded-md border border-border px-3 py-2 text-sm"
+        />
         <button type="submit" disabled={pending} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-ink disabled:opacity-50">
           Send
         </button>

@@ -4,6 +4,7 @@ export const STAFF_NAV: NavItem[] = [
   { label: "Leads", href: "/leads", icon: "📇" },
   { label: "Students", href: "/students", icon: "🎓" },
   { label: "Applications", href: "/applications", icon: "🗂️" },
+  { label: "Calendar", href: "/calendar", icon: "📅" },
   {
     label: "Setup",
     icon: "⚙️",
@@ -30,6 +31,7 @@ export const STAFF_NAV: NavItem[] = [
       { label: "Social calendar", href: "/marketing/social-calendar" },
       { label: "Referrals", href: "/marketing/referrals" },
       { label: "Ad campaigns", href: "/marketing/ad-campaigns" },
+      { label: "Broadcast message", href: "/marketing/broadcast" },
     ],
   },
   { label: "Reports", href: "/reports", icon: "📊" },
@@ -41,12 +43,15 @@ export const STAFF_NAV: NavItem[] = [
       { label: "Audit log", href: "/admin/audit-log" },
       { label: "Attendance", href: "/admin/attendance" },
       { label: "Additional services", href: "/admin/additional-services" },
+      { label: "Message templates", href: "/admin/message-templates" },
     ],
   },
 ];
 
 export const STUDENT_NAV: NavItem[] = [
   { label: "Dashboard", href: "/portal", icon: "🏠" },
+  { label: "Profile", href: "/portal/profile", icon: "👤" },
+  { label: "Appointments", href: "/portal/appointments", icon: "📅" },
   { label: "Payments", href: "/portal/payments", icon: "💳" },
   { label: "Agreement", href: "/portal/agreement", icon: "📄" },
   { label: "Messages", href: "/portal/messages", icon: "💬" },
@@ -56,7 +61,9 @@ export const STUDENT_NAV: NavItem[] = [
 
 export const PARTNER_NAV: NavItem[] = [
   { label: "Dashboard", href: "/partner", icon: "🏠" },
+  { label: "Programs", href: "/partner/programs", icon: "📚" },
   { label: "Commissions", href: "/partner/commissions", icon: "💰" },
   { label: "Documents", href: "/partner/documents", icon: "📁" },
+  { label: "Reports", href: "/partner/reports", icon: "📊" },
   { label: "Agreement", href: "/partner/agreement", icon: "📄" },
 ];

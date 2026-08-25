@@ -63,6 +63,8 @@ export default async function StudentDetailPage(props: PageProps<"/students/[id]
     .order("sent_at", { ascending: true })
     .returns<MessageRow[]>();
 
+  const { data: messageTemplates } = await supabase.from("message_templates").select("id, purpose, channel, body").order("purpose");
+
   return (
     <div className="mx-auto max-w-5xl">
       <Link href="/students" className="text-sm text-muted hover:text-ink">
@@ -155,17 +157,37 @@ export default async function StudentDetailPage(props: PageProps<"/students/[id]
         )}
       </Card>
 
-      <Card className="mt-6">
-        <h3 className="mb-3 text-sm font-medium text-ink">Notes & messages</h3>
-        <MessageThread
-          messages={messages ?? []}
-          entityType="student"
-          entityId={id}
-          channel="internal_note"
-          revalidateTo={`/students/${id}`}
-          placeholder="Internal note (not visible to student)…"
-        />
-      </Card>
+      <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
+        <Card>
+          <h3 className="mb-3 text-sm font-medium text-ink">Message student</h3>
+          <p className="mb-3 text-xs text-muted">
+            Visible to the student in their portal. Real email/SMS/WhatsApp sending needs a gateway integration —
+            this sends as an in-app portal message for now.
+          </p>
+          <MessageThread
+            messages={(messages ?? []).filter((m) => m.channel !== "internal_note")}
+            entityType="student"
+            entityId={id}
+            channel="inapp"
+            revalidateTo={`/students/${id}`}
+            placeholder="Message to the student…"
+            templates={messageTemplates ?? []}
+          />
+        </Card>
+
+        <Card>
+          <h3 className="mb-3 text-sm font-medium text-ink">Internal notes</h3>
+          <p className="mb-3 text-xs text-muted">Staff-only — never visible to the student.</p>
+          <MessageThread
+            messages={(messages ?? []).filter((m) => m.channel === "internal_note")}
+            entityType="student"
+            entityId={id}
+            channel="internal_note"
+            revalidateTo={`/students/${id}`}
+            placeholder="Internal note…"
+          />
+        </Card>
+      </div>
     </div>
   );
 }
