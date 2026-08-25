@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { AddProgramForm } from "./AddProgramForm";
+import { ImportProgramsForm } from "./ImportProgramsForm";
 
 export default async function UniversityDetailPage(props: PageProps<"/setup/universities/[id]">) {
   const { id } = await props.params;
@@ -10,7 +11,7 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
 
   const { data: university, error } = await supabase
     .from("universities")
-    .select("id, name, type, status, destination:destinations(display_name)")
+    .select("id, name, city, region, type, status, destination:destinations(display_name)")
     .eq("id", id)
     .maybeSingle();
 
@@ -34,6 +35,8 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
       <h2 className="mt-2 mb-1 text-xl font-semibold text-ink">{university.name}</h2>
       <p className="mb-6 text-sm text-muted">
         {one(university.destination)?.display_name} · {university.type}
+        {university.city ? ` · ${university.city}` : ""}
+        {university.region ? `, ${university.region}` : ""}
       </p>
 
       <Card>
@@ -51,6 +54,7 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
           {(!programs || programs.length === 0) && <p className="py-2 text-sm text-muted">No programs added yet.</p>}
         </div>
         <AddProgramForm universityId={id} />
+        <ImportProgramsForm universityId={id} />
       </Card>
     </div>
   );

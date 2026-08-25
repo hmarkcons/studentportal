@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { parseCsvWithHeader } from "@/lib/csv";
 
 export async function createUniversity(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
@@ -37,4 +38,101 @@ export async function addProgram(universityId: string, _prevState: unknown, form
 
   revalidatePath(`/setup/universities/${universityId}`);
   return { success: true };
+}
+
+function splitList(v: string | undefined): string[] {
+  return (v ?? "")
+    .split(";")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function parseBool(v: string | undefined): boolean {
+  return ["yes", "true", "1", "y"].includes((v ?? "").trim().toLowerCase());
+}
+
+// University bulk import — one destination per file. Expected CSV columns
+// (header row required): name, city, region, type, levels_offered,
+// fields_offered — the last two are semicolon-separated within the cell
+// (e.g. "bachelors;masters"), since commas are the CSV delimiter. Only
+// `name` is required; anything else left blank keeps the column's DB
+// default. `type` defaults to "public" when blank.
+export async function importUniversities(_prevState: unknown, formData: FormData) {
+  const supabase = await createClient();
+  const destinationId = String(formData.get("destination_id") ?? "");
+  if (!destinationId) return { error: "Choose a destination first." };
+
+  const file = formData.get("file") as File | null;
+  if (!file || file.size === 0) return { error: "Choose a CSV file first." };
+
+  const text = await file.text();
+  const rows = parseCsvWithHeader(text);
+  if (rows.length === 0) return { error: "The file has no data rows." };
+
+  const records = rows
+    .filter((r) => r.name)
+    .map((r) => ({
+      destination_id: destinationId,
+      name: r.name,
+      city: r.city || null,
+      region: r.region || null,
+      type: r.type === "private" ? "private" : "public",
+      levels_offered: splitList(r.levels_offered),
+      fields_offered: splitList(r.fields_offered),
+    }));
+
+  if (records.length === 0) return { error: "No rows had a 'name' column value." };
+
+  const { error } = await supabase.from("universities").insert(records);
+  if (error) return { error: error.message };
+
+  revalidatePath("/setup/universities");
+  return { success: true, count: records.length };
+}
+
+// Program bulk import — one university per file. Expected CSV columns
+// (header row required): level, name, core_field, sub_field, page_link,
+// interview_required, interview_details, admission_test_required,
+// admission_test_type, application_portal_name, application_portal_link,
+// intake_dates (semicolon-separated), application_deadline (YYYY-MM-DD),
+// tuition_fee, duration, language_requirement. Only `level` and `name` are
+// required; `level` must be bachelors/masters/phd.
+export async function importPrograms(universityId: string, _prevState: unknown, formData: FormData) {
+  const supabase = await createClient();
+  const file = formData.get("file") as File | null;
+  if (!file || file.size === 0) return { error: "Choose a CSV file first." };
+
+  const text = await file.text();
+  const rows = parseCsvWithHeader(text);
+  if (rows.length === 0) return { error: "The file has no data rows." };
+
+  const records = rows
+    .filter((r) => r.name && ["bachelors", "masters", "phd"].includes(r.level))
+    .map((r) => ({
+      university_id: universityId,
+      level: r.level,
+      name: r.name,
+      core_field: r.core_field || null,
+      sub_field: r.sub_field || null,
+      page_link: r.page_link || null,
+      interview_required: parseBool(r.interview_required),
+      interview_details: r.interview_details || null,
+      admission_test_required: parseBool(r.admission_test_required),
+      admission_test_type: r.admission_test_type || null,
+      application_portal_name: r.application_portal_name || null,
+      application_portal_link: r.application_portal_link || null,
+      intake_dates: splitList(r.intake_dates),
+      application_deadline: r.application_deadline || null,
+      tuition_fee: r.tuition_fee ? Number(r.tuition_fee) : null,
+      duration: r.duration || null,
+      language_requirement: r.language_requirement || null,
+    }));
+
+  if (records.length === 0) return { error: "No rows had valid 'name' and 'level' (bachelors/masters/phd) columns." };
+
+  const { error } = await supabase.from("programs").insert(records);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/setup/universities/${universityId}`);
+  return { success: true, count: records.length };
 }
