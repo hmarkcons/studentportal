@@ -1,0 +1,51 @@
+import { createClient } from "@/lib/supabase/server";
+import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+
+export default async function PortalPaymentsPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { data: student } = await supabase.from("students").select("id").eq("auth_user_id", user?.id ?? "").maybeSingle();
+  if (!student) return null;
+
+  const { data: invoices } = await supabase.from("invoices").select("id, admin_charge, consultancy_fee, currency, sent_status").eq("student_id", student.id);
+  const invoiceIds = (invoices ?? []).map((i) => i.id);
+  const { data: installments } = invoiceIds.length
+    ? await supabase.from("invoice_installments").select("*").in("invoice_id", invoiceIds)
+    : { data: [] };
+
+  return (
+    <div className="mx-auto max-w-2xl">
+      <h2 className="mb-4 text-lg font-semibold text-ink">Payments & Invoices</h2>
+      {(invoices ?? []).map((inv) => (
+        <Card key={inv.id} className="mb-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-ink">
+              Total: {inv.currency} {(inv.admin_charge + inv.consultancy_fee).toFixed(2)}
+            </p>
+            <Badge tone={inv.sent_status === "sent" ? "success" : "neutral"}>{inv.sent_status}</Badge>
+          </div>
+          <p className="mt-1 text-xs text-muted">
+            Administrative charge: {inv.currency} {inv.admin_charge} · Consultancy fee: {inv.currency} {inv.consultancy_fee}
+          </p>
+          <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3">
+            {(installments ?? [])
+              .filter((i) => i.invoice_id === inv.id)
+              .map((i) => (
+                <div key={i.id} className="flex items-center justify-between text-sm">
+                  <span className="text-ink">
+                    Installment {i.installment_no} — {inv.currency} {i.amount}
+                  </span>
+                  <Badge tone={i.status === "paid" ? "success" : "warning"}>{i.status}</Badge>
+                </div>
+              ))}
+          </div>
+        </Card>
+      ))}
+      {(!invoices || invoices.length === 0) && <p className="text-sm text-muted">No invoices yet.</p>}
+    </div>
+  );
+}

@@ -3,57 +3,84 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
-const STATUSES = ["missing", "submitted", "under_review", "verified", "rejected"] as const;
-
 export async function uploadDocument(
+  documentId: string,
   studentId: string,
-  studentDocumentId: string,
+  revalidateTo: string,
   _prevState: unknown,
   formData: FormData
 ) {
   const supabase = await createClient();
-  const file = formData.get("file");
+  const file = formData.get("file") as File | null;
 
-  if (!(file instanceof File) || file.size === 0) {
-    return { error: "Choose a file first." };
+  if (!file || file.size === 0) {
+    return { error: "Choose a file to upload." };
   }
 
-  const path = `${studentId}/${studentDocumentId}-${file.name}`;
-  const { error: uploadError } = await supabase.storage
-    .from("documents")
-    .upload(path, file, { upsert: true });
-
-  if (uploadError) {
-    return { error: uploadError.message };
-  }
+  const path = `${studentId}/${documentId}-${file.name}`;
+  const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: true });
+  if (uploadError) return { error: uploadError.message };
 
   const { error } = await supabase
     .from("student_documents")
-    .update({ file_path: path, status: "submitted", uploaded_at: new Date().toISOString() })
-    .eq("id", studentDocumentId);
+    .update({
+      file_path: path,
+      status: "submitted",
+      uploaded_at: new Date().toISOString(),
+      uploaded_by_role: "staff",
+    })
+    .eq("id", documentId);
 
-  if (error) {
-    return { error: error.message };
-  }
+  if (error) return { error: error.message };
 
-  revalidatePath(`/students/${studentId}`);
+  revalidatePath(revalidateTo);
   return { success: true };
 }
 
-export async function updateDocumentStatus(studentId: string, studentDocumentId: string, status: string) {
-  if (!STATUSES.includes(status as (typeof STATUSES)[number])) return;
-
+export async function reviewDocument(documentId: string, revalidateTo: string, status: "verified" | "rejected", reason?: string) {
   const supabase = await createClient();
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const patch: Record<string, unknown> = { status };
-  if (status === "verified") {
-    patch.verified_by = user?.id ?? null;
-    patch.verified_at = new Date().toISOString();
-  }
+  await supabase
+    .from("student_documents")
+    .update({
+      status,
+      verified_by: user?.id,
+      verified_at: new Date().toISOString(),
+      rejected_reason: status === "rejected" ? reason ?? null : null,
+    })
+    .eq("id", documentId);
 
-  await supabase.from("student_documents").update(patch).eq("id", studentDocumentId);
-  revalidatePath(`/students/${studentId}`);
+  revalidatePath(revalidateTo);
+}
+
+export async function addDocumentRequirement(
+  studentId: string,
+  applicationId: string | null,
+  revalidateTo: string,
+  _prevState: unknown,
+  formData: FormData
+) {
+  const supabase = await createClient();
+  const category = String(formData.get("category") ?? "other");
+  const name = String(formData.get("name") ?? "").trim();
+  const deadline = String(formData.get("deadline") ?? "") || null;
+
+  if (!name) return { error: "Name is required." };
+
+  const { error } = await supabase.from("student_documents").insert({
+    student_id: studentId,
+    application_id: applicationId,
+    category,
+    deadline,
+    status: "missing",
+  });
+
+  if (error) return { error: error.message };
+
+  revalidatePath(revalidateTo);
+  return { success: true };
 }

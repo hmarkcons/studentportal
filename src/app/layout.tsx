@@ -1,29 +1,33 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Public_Sans } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const publicSans = Public_Sans({
+  variable: "--font-public-sans",
   subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-  title: "Case Flow",
-  description: "HMark Consultants internal student-case portal",
+  title: "HMARK Consultants",
+  description: "HMARK Consultants — Student Portal / CRM",
 };
+
+// Runs before paint so the stored theme choice applies immediately (no
+// flash of the light theme while React hydrates).
+const THEME_INIT_SCRIPT = `
+try {
+  var t = localStorage.getItem('hmark-theme');
+  if (t === 'dark' || t === 'semi-dark') document.documentElement.setAttribute('data-theme', t);
+} catch (e) {}
+`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="en" className={`${publicSans.variable} h-full antialiased`}>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
+      <body className="min-h-full flex flex-col font-sans">{children}</body>
     </html>
   );
 }
