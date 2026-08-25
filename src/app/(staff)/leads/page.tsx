@@ -30,6 +30,43 @@ export default async function LeadsPage() {
     .order("date_of_inquiry", { ascending: false })
     .returns<LeadRow[]>();
 
+  const columns = [
+    { key: "name", header: "Name" },
+    { key: "contact", header: "Contact" },
+    { key: "country", header: "Country" },
+    { key: "status", header: "Status" },
+    { key: "counselor", header: "Counselor" },
+    { key: "date", header: "Inquiry date" },
+  ];
+
+  const rows = (leads ?? []).map((r) => ({
+    id: r.id,
+    cells: {
+      name: (
+        <Link href={`/leads/${r.id}`} className="font-medium text-ink hover:underline">
+          {r.full_name}
+        </Link>
+      ),
+      contact: r.contact_number ?? r.email ?? "—",
+      country: r.country_of_interest ?? "—",
+      status: (
+        <Badge tone={LEAD_STATUS_TONE[r.status as never] ?? "neutral"}>
+          {LEAD_STATUS_LABELS[r.status as never] ?? r.status}
+        </Badge>
+      ),
+      counselor: one(r.assigned_counselor)?.full_name ?? "Unassigned",
+      date: new Date(r.date_of_inquiry).toLocaleDateString(),
+    },
+    csv: {
+      name: r.full_name,
+      contact: r.contact_number ?? r.email ?? "",
+      country: r.country_of_interest ?? "",
+      status: r.status,
+      counselor: one(r.assigned_counselor)?.full_name ?? "",
+      date: r.date_of_inquiry,
+    },
+  }));
+
   return (
     <div className="mx-auto max-w-6xl">
       <div className="mb-4 flex items-center justify-between">
@@ -44,43 +81,7 @@ export default async function LeadsPage() {
 
       {error && <p className="text-sm text-danger">{error.message}</p>}
 
-      {!error && (
-        <DataTable
-          exportFilename="leads"
-          rows={leads ?? []}
-          columns={[
-            {
-              key: "name",
-              header: "Name",
-              render: (r) => (
-                <Link href={`/leads/${r.id}`} className="font-medium text-ink hover:underline">
-                  {r.full_name}
-                </Link>
-              ),
-              csv: (r) => r.full_name,
-            },
-            { key: "contact", header: "Contact", render: (r) => r.contact_number ?? r.email ?? "—", csv: (r) => r.contact_number ?? r.email ?? "" },
-            { key: "country", header: "Country", render: (r) => r.country_of_interest ?? "—", csv: (r) => r.country_of_interest ?? "" },
-            {
-              key: "status",
-              header: "Status",
-              render: (r) => (
-                <Badge tone={LEAD_STATUS_TONE[r.status as never] ?? "neutral"}>
-                  {LEAD_STATUS_LABELS[r.status as never] ?? r.status}
-                </Badge>
-              ),
-              csv: (r) => r.status,
-            },
-            {
-              key: "counselor",
-              header: "Counselor",
-              render: (r) => one(r.assigned_counselor)?.full_name ?? "Unassigned",
-              csv: (r) => one(r.assigned_counselor)?.full_name ?? "",
-            },
-            { key: "date", header: "Inquiry date", render: (r) => new Date(r.date_of_inquiry).toLocaleDateString(), csv: (r) => r.date_of_inquiry },
-          ]}
-        />
-      )}
+      {!error && <DataTable exportFilename="leads" rows={rows} columns={columns} />}
     </div>
   );
 }

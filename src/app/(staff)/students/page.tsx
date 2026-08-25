@@ -29,6 +29,39 @@ export default async function StudentsPage() {
     .order("registered_at", { ascending: false })
     .returns<StudentRow[]>();
 
+  const columns = [
+    { key: "name", header: "Name" },
+    { key: "contact", header: "Contact" },
+    { key: "country", header: "Country" },
+    { key: "counselor", header: "Counselor" },
+    { key: "portal", header: "Portal" },
+    { key: "date", header: "Registered" },
+  ];
+
+  const rows = (students ?? []).map((r) => ({
+    id: r.id,
+    cells: {
+      name: (
+        <Link href={`/students/${r.id}`} className="font-medium text-ink hover:underline">
+          {r.full_name}
+        </Link>
+      ),
+      contact: r.email ?? r.contact_number ?? "—",
+      country: r.country_of_interest ?? "—",
+      counselor: one(r.assigned_counselor)?.full_name ?? "—",
+      portal: <Badge tone={r.portal_active ? "success" : "neutral"}>{r.portal_active ? "Active" : "Inactive"}</Badge>,
+      date: new Date(r.registered_at).toLocaleDateString(),
+    },
+    csv: {
+      name: r.full_name,
+      contact: r.email ?? "",
+      country: r.country_of_interest ?? "",
+      counselor: one(r.assigned_counselor)?.full_name ?? "",
+      portal: r.portal_active ? "active" : "inactive",
+      date: r.registered_at,
+    },
+  }));
+
   return (
     <div className="mx-auto max-w-6xl">
       <div className="mb-4">
@@ -38,34 +71,7 @@ export default async function StudentsPage() {
 
       {error && <p className="text-sm text-danger">{error.message}</p>}
 
-      {!error && (
-        <DataTable
-          exportFilename="students"
-          rows={students ?? []}
-          columns={[
-            {
-              key: "name",
-              header: "Name",
-              render: (r) => (
-                <Link href={`/students/${r.id}`} className="font-medium text-ink hover:underline">
-                  {r.full_name}
-                </Link>
-              ),
-              csv: (r) => r.full_name,
-            },
-            { key: "contact", header: "Contact", render: (r) => r.email ?? r.contact_number ?? "—", csv: (r) => r.email ?? "" },
-            { key: "country", header: "Country", render: (r) => r.country_of_interest ?? "—", csv: (r) => r.country_of_interest ?? "" },
-            { key: "counselor", header: "Counselor", render: (r) => one(r.assigned_counselor)?.full_name ?? "—", csv: (r) => one(r.assigned_counselor)?.full_name ?? "" },
-            {
-              key: "portal",
-              header: "Portal",
-              render: (r) => <Badge tone={r.portal_active ? "success" : "neutral"}>{r.portal_active ? "Active" : "Inactive"}</Badge>,
-              csv: (r) => (r.portal_active ? "active" : "inactive"),
-            },
-            { key: "date", header: "Registered", render: (r) => new Date(r.registered_at).toLocaleDateString(), csv: (r) => r.registered_at },
-          ]}
-        />
-      )}
+      {!error && <DataTable exportFilename="students" rows={rows} columns={columns} />}
     </div>
   );
 }

@@ -31,12 +31,16 @@ export default async function StaffCommissionReportPage() {
       <h2 className="mt-2 mb-4 text-lg font-semibold text-ink">Staff Commission Report</h2>
       <DataTable
         exportFilename="staff-commission-report"
-        rows={[...byStaff.values()]}
         columns={[
-          { key: "name", header: "Staff", render: (r) => r.name, csv: (r) => r.name },
-          { key: "paid", header: "Paid", align: "right", render: (r) => r.paid.toFixed(0), csv: (r) => String(r.paid) },
-          { key: "unpaid", header: "Unpaid", align: "right", render: (r) => r.unpaid.toFixed(0), csv: (r) => String(r.unpaid) },
+          { key: "name", header: "Staff" },
+          { key: "paid", header: "Paid", align: "right" },
+          { key: "unpaid", header: "Unpaid", align: "right" },
         ]}
+        rows={[...byStaff.values()].map((r) => ({
+          id: r.id,
+          cells: { name: r.name, paid: r.paid.toFixed(0), unpaid: r.unpaid.toFixed(0) },
+          csv: { name: r.name, paid: String(r.paid), unpaid: String(r.unpaid) },
+        }))}
       />
     </div>
   );

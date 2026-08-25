@@ -37,14 +37,18 @@ export default async function UniversitySuccessPage() {
       <h2 className="mt-2 mb-4 text-lg font-semibold text-ink">University-wise Application / Success Rate</h2>
       <DataTable
         exportFilename="university-success"
-        rows={rows}
         columns={[
-          { key: "name", header: "University", render: (r) => r.name, csv: (r) => r.name },
-          { key: "total", header: "Applications", align: "right", render: (r) => r.total, csv: (r) => String(r.total) },
-          { key: "enrolled", header: "Enrolled", align: "right", render: (r) => r.enrolled, csv: (r) => String(r.enrolled) },
-          { key: "rejected", header: "Rejected", align: "right", render: (r) => r.rejected, csv: (r) => String(r.rejected) },
-          { key: "rate", header: "Success rate", align: "right", render: (r) => `${r.successPct}%`, csv: (r) => String(r.successPct) },
+          { key: "name", header: "University" },
+          { key: "total", header: "Applications", align: "right" },
+          { key: "enrolled", header: "Enrolled", align: "right" },
+          { key: "rejected", header: "Rejected", align: "right" },
+          { key: "rate", header: "Success rate", align: "right" },
         ]}
+        rows={rows.map((r) => ({
+          id: r.id,
+          cells: { name: r.name, total: r.total, enrolled: r.enrolled, rejected: r.rejected, rate: `${r.successPct}%` },
+          csv: { name: r.name, total: String(r.total), enrolled: String(r.enrolled), rejected: String(r.rejected), rate: String(r.successPct) },
+        }))}
       />
     </div>
   );

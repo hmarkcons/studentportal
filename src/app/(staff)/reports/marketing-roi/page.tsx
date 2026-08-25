@@ -47,13 +47,17 @@ export default async function MarketingRoiPage() {
         <h3 className="mb-3 text-sm font-medium text-ink">Campaign cost-per-lead</h3>
         <DataTable
           exportFilename="campaign-roi"
-          rows={campaignRows}
           columns={[
-            { key: "name", header: "Campaign", render: (r) => r.name, csv: (r) => r.name },
-            { key: "spend", header: "Spend", align: "right", render: (r) => r.spend, csv: (r) => String(r.spend) },
-            { key: "leads", header: "Leads", align: "right", render: (r) => r.leads, csv: (r) => String(r.leads) },
-            { key: "cpl", header: "Cost / lead", align: "right", render: (r) => r.costPerLead ?? "—", csv: (r) => String(r.costPerLead ?? "") },
+            { key: "name", header: "Campaign" },
+            { key: "spend", header: "Spend", align: "right" },
+            { key: "leads", header: "Leads", align: "right" },
+            { key: "cpl", header: "Cost / lead", align: "right" },
           ]}
+          rows={campaignRows.map((r) => ({
+            id: r.id,
+            cells: { name: r.name, spend: r.spend, leads: r.leads, cpl: r.costPerLead ?? "—" },
+            csv: { name: r.name, spend: String(r.spend), leads: String(r.leads), cpl: String(r.costPerLead ?? "") },
+          }))}
         />
       </Card>
 

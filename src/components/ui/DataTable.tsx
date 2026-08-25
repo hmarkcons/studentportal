@@ -2,22 +2,30 @@
 
 import { useState } from "react";
 
-type Column<T> = {
+// Server Component pages build `cells`/`csv` for every row up front (calling
+// their own render logic server-side) instead of passing render/csv
+// functions through this client component's props — a function can't cross
+// the server->client boundary (only already-resolved nodes/strings can).
+type Column = {
   key: string;
   header: string;
   align?: "left" | "right";
-  render: (row: T) => React.ReactNode;
-  csv?: (row: T) => string;
 };
 
-export function DataTable<T extends { id: string }>({
+type Row = {
+  id: string;
+  cells: Record<string, React.ReactNode>;
+  csv?: Record<string, string>;
+};
+
+export function DataTable({
   columns,
   rows,
   selectable = false,
   exportFilename,
 }: {
-  columns: Column<T>[];
-  rows: T[];
+  columns: Column[];
+  rows: Row[];
   selectable?: boolean;
   exportFilename?: string;
 }) {
@@ -37,11 +45,10 @@ export function DataTable<T extends { id: string }>({
   }
 
   function exportCsv() {
-    const csvCols = columns.filter((c) => c.csv);
-    const header = csvCols.map((c) => c.header).join(",");
+    const header = columns.map((c) => c.header).join(",");
     const lines = rows
       .filter((r) => selected.size === 0 || selected.has(r.id))
-      .map((r) => csvCols.map((c) => `"${(c.csv?.(r) ?? "").replace(/"/g, '""')}"`).join(","));
+      .map((r) => columns.map((c) => `"${(r.csv?.[c.key] ?? "").replace(/"/g, '""')}"`).join(","));
     const blob = new Blob([[header, ...lines].join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -89,7 +96,7 @@ export function DataTable<T extends { id: string }>({
               )}
               {columns.map((c) => (
                 <td key={c.key} className={`px-4 py-3 ${c.align === "right" ? "text-right tabular-nums" : ""}`}>
-                  {c.render(row)}
+                  {row.cells[c.key]}
                 </td>
               ))}
             </tr>

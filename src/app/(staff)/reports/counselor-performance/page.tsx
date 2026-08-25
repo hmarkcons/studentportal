@@ -30,13 +30,17 @@ export default async function CounselorPerformancePage() {
       <h2 className="mt-2 mb-4 text-lg font-semibold text-ink">Counselor-wise Performance</h2>
       <DataTable
         exportFilename="counselor-performance"
-        rows={rows}
         columns={[
-          { key: "name", header: "Counselor", render: (r) => r.name, csv: (r) => r.name },
-          { key: "assigned", header: "Leads assigned", align: "right", render: (r) => r.assigned, csv: (r) => String(r.assigned) },
-          { key: "registered", header: "Registered", align: "right", render: (r) => r.registered, csv: (r) => String(r.registered) },
-          { key: "conv", header: "Conversion rate", align: "right", render: (r) => `${r.conversionPct}%`, csv: (r) => String(r.conversionPct) },
+          { key: "name", header: "Counselor" },
+          { key: "assigned", header: "Leads assigned", align: "right" },
+          { key: "registered", header: "Registered", align: "right" },
+          { key: "conv", header: "Conversion rate", align: "right" },
         ]}
+        rows={rows.map((r) => ({
+          id: r.id,
+          cells: { name: r.name, assigned: r.assigned, registered: r.registered, conv: `${r.conversionPct}%` },
+          csv: { name: r.name, assigned: String(r.assigned), registered: String(r.registered), conv: String(r.conversionPct) },
+        }))}
       />
     </div>
   );

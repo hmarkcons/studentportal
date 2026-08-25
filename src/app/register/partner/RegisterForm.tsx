@@ -8,6 +8,17 @@ const inputClass = "rounded-md border border-border bg-card px-3 py-2 text-sm";
 export function RegisterForm({ universities }: { universities: { id: string; name: string }[] }) {
   const [state, formAction, pending] = useActionState(registerPartnerAccount, undefined);
 
+  if (state?.success) {
+    return (
+      <div className="mt-6 flex flex-col gap-3">
+        <p className="text-sm text-ink">{state.success}</p>
+        <a href="/login" className="text-sm font-medium text-primary underline">
+          Go to sign in
+        </a>
+      </div>
+    );
+  }
+
   return (
     <form action={formAction} className="mt-6 flex flex-col gap-4">
       <input name="staff_name" placeholder="Your name" required className={inputClass} />

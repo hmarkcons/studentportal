@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { Suspense, useActionState } from "react";
+import { useSearchParams } from "next/navigation";
 import { signIn } from "./actions";
 
 function TravelIllustration() {
@@ -33,7 +34,17 @@ function TravelIllustration() {
 }
 
 export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginFormWithNext />
+    </Suspense>
+  );
+}
+
+function LoginFormWithNext() {
   const [state, formAction, pending] = useActionState(signIn, undefined);
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next") ?? "";
 
   return (
     <div className="flex min-h-screen">
@@ -57,6 +68,7 @@ export default function LoginPage() {
           <p className="mt-1 text-sm text-muted">Sign in to your account.</p>
 
           <form action={formAction} className="mt-6 flex flex-col gap-4">
+            <input type="hidden" name="next" value={next} />
             <div className="flex flex-col gap-1.5">
               <label htmlFor="email" className="text-sm font-medium text-ink">
                 Email
