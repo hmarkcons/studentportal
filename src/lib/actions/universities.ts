@@ -22,6 +22,64 @@ export async function createUniversity(_prevState: unknown, formData: FormData) 
   redirect(`/setup/universities/${data.id}`);
 }
 
+export async function updateUniversity(universityId: string, _prevState: unknown, formData: FormData) {
+  const supabase = await createClient();
+
+  const name = String(formData.get("name") ?? "").trim();
+  const city = String(formData.get("city") ?? "").trim() || null;
+  const region = String(formData.get("region") ?? "").trim() || null;
+  const type = String(formData.get("type") ?? "");
+  const status = String(formData.get("status") ?? "active");
+
+  if (!name || !["public", "private"].includes(type)) {
+    return { error: "Name and type are required." };
+  }
+
+  const { error } = await supabase.from("universities").update({ name, city, region, type, status }).eq("id", universityId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/setup/universities/${universityId}`);
+  revalidatePath("/setup/universities");
+  return { success: true };
+}
+
+export async function deleteUniversity(universityId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("universities").delete().eq("id", universityId);
+  if (error) return { error: error.message };
+  redirect("/setup/universities");
+}
+
+export async function updateProgram(programId: string, universityId: string, _prevState: unknown, formData: FormData) {
+  const supabase = await createClient();
+
+  const level = String(formData.get("level") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const core_field = String(formData.get("core_field") ?? "").trim() || null;
+  const sub_field = String(formData.get("sub_field") ?? "").trim() || null;
+  const tuition_fee = formData.get("tuition_fee") ? Number(formData.get("tuition_fee")) : null;
+  const duration = String(formData.get("duration") ?? "").trim() || null;
+  const language_requirement = String(formData.get("language_requirement") ?? "").trim() || null;
+  const application_deadline = String(formData.get("application_deadline") ?? "").trim() || null;
+
+  if (!level || !name) return { error: "Level and name are required." };
+
+  const { error } = await supabase
+    .from("programs")
+    .update({ level, name, core_field, sub_field, tuition_fee, duration, language_requirement, application_deadline })
+    .eq("id", programId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/setup/universities/${universityId}`);
+  return { success: true };
+}
+
+export async function deleteProgram(programId: string, universityId: string) {
+  const supabase = await createClient();
+  await supabase.from("programs").delete().eq("id", programId);
+  revalidatePath(`/setup/universities/${universityId}`);
+}
+
 export async function addProgram(universityId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
 

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { NewDestinationForm } from "./NewDestinationForm";
+import { ImportDestinationsForm } from "./ImportDestinationsForm";
 
 export default async function DestinationsPage() {
   const supabase = await createClient();
@@ -13,6 +14,7 @@ export default async function DestinationsPage() {
       <h2 className="mb-4 text-lg font-semibold text-ink">Destinations</h2>
       <Card className="mb-6">
         <NewDestinationForm />
+        <ImportDestinationsForm />
       </Card>
       <div className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
         {(destinations ?? []).map((d) => (

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { StagesForm } from "./StagesForm";
+import { DestinationEditForm } from "./DestinationEditForm";
 
 export default async function DestinationDetailPage(props: PageProps<"/setup/destinations/[id]">) {
   const { id } = await props.params;
@@ -21,11 +22,8 @@ export default async function DestinationDetailPage(props: PageProps<"/setup/des
       <h2 className="mt-2 mb-6 text-xl font-semibold text-ink">{destination.display_name}</h2>
 
       <Card className="mb-6">
-        <h3 className="mb-3 text-sm font-medium text-ink">Fees</h3>
-        <p className="text-sm text-muted">
-          Admin charge: {destination.admin_charge} {destination.consultancy_fee_currency} · Consultancy fee:{" "}
-          {destination.consultancy_fee} {destination.consultancy_fee_currency}
-        </p>
+        <h3 className="mb-3 text-sm font-medium text-ink">Details & fees</h3>
+        <DestinationEditForm destination={destination} />
       </Card>
 
       <Card className="mb-6">
