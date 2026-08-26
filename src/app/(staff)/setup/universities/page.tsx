@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { NewUniversityForm } from "./NewUniversityForm";
 import { ImportUniversitiesForm } from "./ImportUniversitiesForm";
+import { DeleteUniversityIcon } from "./DeleteUniversityIcon";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -12,6 +13,12 @@ function one<T>(v: T | T[] | null) {
 export default async function UniversitiesPage(props: { searchParams: Promise<{ destination?: string }> }) {
   const { destination: destinationFilter } = await props.searchParams;
   const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  const isSuperAdmin = staffRow?.role === "super_admin";
 
   let query = supabase
     .from("universities")
@@ -23,7 +30,7 @@ export default async function UniversitiesPage(props: { searchParams: Promise<{ 
   const { data: destinations } = await supabase.from("destinations").select("id, display_name").order("display_name");
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="w-full">
       <h2 className="mb-4 text-lg font-semibold text-ink">Universities</h2>
       <Card className="mb-6">
         <NewUniversityForm destinations={destinations ?? []} />
@@ -50,15 +57,30 @@ export default async function UniversitiesPage(props: { searchParams: Promise<{ 
 
       <div className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
         {(universities ?? []).map((u) => (
-          <Link key={u.id} href={`/setup/universities/${u.id}`} className="flex items-center justify-between px-4 py-3 text-sm hover:bg-bg">
-            <span className="text-ink">
-              {u.name}
-              <span className="text-muted">
-                {u.city ? ` · ${u.city}` : ""} · {one(u.destination)?.display_name}
+          <div key={u.id} className="flex items-center justify-between px-4 py-3 text-sm hover:bg-bg">
+            <Link href={`/setup/universities/${u.id}`} className="flex flex-1 items-center gap-3 text-ink">
+              <span>
+                {u.name}
+                <span className="text-muted">
+                  {u.city ? ` · ${u.city}` : ""} · {one(u.destination)?.display_name}
+                </span>
               </span>
-            </span>
-            <Badge tone={u.status === "active" ? "success" : "neutral"}>{u.type}</Badge>
-          </Link>
+              <Badge tone={u.status === "active" ? "success" : "neutral"}>{u.type}</Badge>
+            </Link>
+            {isSuperAdmin && (
+              <div className="flex items-center gap-1">
+                <Link
+                  href={`/setup/universities/${u.id}`}
+                  title="Edit university"
+                  aria-label="Edit university"
+                  className="rounded p-1 text-muted hover:bg-bg hover:text-primary"
+                >
+                  ✏️
+                </Link>
+                <DeleteUniversityIcon id={u.id} name={u.name} />
+              </div>
+            )}
+          </div>
         ))}
         {(!universities || universities.length === 0) && <p className="px-4 py-6 text-sm text-muted">No universities yet.</p>}
       </div>

@@ -11,7 +11,7 @@ export default async function CampaignsPage() {
     .order("event_date_start", { ascending: false });
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="w-full">
       <h2 className="mb-4 text-lg font-semibold text-ink">Campaigns</h2>
       <Card className="mb-6">
         <NewCampaignForm />

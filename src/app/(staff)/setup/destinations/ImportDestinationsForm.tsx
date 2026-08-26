@@ -2,6 +2,10 @@
 
 import { useActionState } from "react";
 import { importDestinations } from "@/lib/actions/destinations";
+import { SampleCsvButton } from "@/components/ui/SampleCsvButton";
+
+const HEADERS = ["country", "country_code", "track", "currency", "display_name", "visa_type", "admin_charge", "consultancy_fee", "consultancy_fee_currency"];
+const EXAMPLE = ["Italy", "IT", "public", "EUR", "Italy (Public)", "National visa", "100", "500", "EUR"];
 
 export function ImportDestinationsForm() {
   const [state, formAction, pending] = useActionState(importDestinations, undefined);
@@ -14,6 +18,7 @@ export function ImportDestinationsForm() {
         <button type="submit" disabled={pending} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-ink disabled:opacity-50">
           {pending ? "Importing…" : "Import"}
         </button>
+        <SampleCsvButton filename="destinations-sample.csv" headers={HEADERS} exampleRow={EXAMPLE} />
       </form>
       <p className="mt-2 text-xs text-muted">
         CSV columns: <code>country</code>, <code>country_code</code>, <code>track</code> (public/private), <code>currency</code>{" "}

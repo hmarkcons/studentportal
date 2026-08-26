@@ -8,20 +8,45 @@ export async function createApplication(studentId: string, _prevState: unknown, 
   const supabase = await createClient();
 
   const university_id = String(formData.get("university_id") ?? "");
-  const program_id = String(formData.get("program_id") ?? "") || null;
+  const program_ids = formData.getAll("program_ids").map(String).filter(Boolean);
   const intake = String(formData.get("intake") ?? "").trim() || null;
+  const deadline = String(formData.get("deadline") ?? "") || null;
 
   if (!university_id) return { error: "Choose a university." };
 
-  const { data, error } = await supabase
-    .from("applications")
-    .insert({ student_id: studentId, university_id, program_id, intake })
-    .select("id")
-    .single();
+  const { data: university } = await supabase.from("universities").select("status").eq("id", university_id).maybeSingle();
+  if (!university || university.status !== "active") {
+    return { error: "This university is inactive — applications can't be added for it." };
+  }
 
+  const rows = (program_ids.length > 0 ? program_ids : [null]).map((program_id) => ({
+    student_id: studentId,
+    university_id,
+    program_id,
+    intake,
+    deadline,
+  }));
+
+  const { data, error } = await supabase.from("applications").insert(rows).select("id");
   if (error) return { error: error.message };
 
-  redirect(`/students/${studentId}/applications/${data.id}`);
+  redirect(`/students/${studentId}/applications/${data[0].id}`);
+}
+
+export async function updateApplicationDetails(applicationId: string, studentId: string, _prevState: unknown, formData: FormData) {
+  const supabase = await createClient();
+  const deadline = String(formData.get("deadline") ?? "") || null;
+  const application_fee = formData.get("application_fee") ? Number(formData.get("application_fee")) : null;
+  const special_requirements = String(formData.get("special_requirements") ?? "").trim() || null;
+
+  const { error } = await supabase
+    .from("applications")
+    .update({ deadline, application_fee, special_requirements })
+    .eq("id", applicationId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/students/${studentId}/applications/${applicationId}`);
+  return { success: true };
 }
 
 export async function updateApplicationStage(applicationId: string, studentId: string, _prevState: unknown, formData: FormData) {
@@ -36,25 +61,49 @@ export async function updateApplicationStage(applicationId: string, studentId: s
   return { success: true };
 }
 
-export async function addApplicationTask(applicationId: string, studentId: string, _prevState: unknown, formData: FormData) {
+export async function addApplicationTask(applicationId: string, studentId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
   const description = String(formData.get("description") ?? "").trim();
   const due_date = String(formData.get("due_date") ?? "") || null;
   const owner_id = String(formData.get("owner_id") ?? "") || null;
+  const priority = String(formData.get("priority") ?? "medium");
 
   if (!description) return { error: "Description is required." };
 
-  const { error } = await supabase.from("application_tasks").insert({ application_id: applicationId, description, due_date, owner_id });
+  const { error } = await supabase
+    .from("application_tasks")
+    .insert({ application_id: applicationId, description, due_date, owner_id, priority });
   if (error) return { error: error.message };
 
-  revalidatePath(`/students/${studentId}/applications/${applicationId}`);
+  revalidatePath(revalidateTo);
   return { success: true };
 }
 
-export async function toggleApplicationTask(taskId: string, applicationId: string, studentId: string, done: boolean) {
+export async function toggleApplicationTask(taskId: string, revalidateTo: string, done: boolean) {
   const supabase = await createClient();
   await supabase.from("application_tasks").update({ status: done ? "done" : "pending" }).eq("id", taskId);
-  revalidatePath(`/students/${studentId}/applications/${applicationId}`);
+  revalidatePath(revalidateTo);
+}
+
+export async function updateApplicationTask(taskId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
+  const supabase = await createClient();
+  const description = String(formData.get("description") ?? "").trim();
+  const due_date = String(formData.get("due_date") ?? "") || null;
+  const priority = String(formData.get("priority") ?? "medium");
+
+  if (!description) return { error: "Description is required." };
+
+  const { error } = await supabase.from("application_tasks").update({ description, due_date, priority }).eq("id", taskId);
+  if (error) return { error: error.message };
+
+  revalidatePath(revalidateTo);
+  return { success: true };
+}
+
+export async function deleteApplicationTask(taskId: string, revalidateTo: string) {
+  const supabase = await createClient();
+  await supabase.from("application_tasks").delete().eq("id", taskId);
+  revalidatePath(revalidateTo);
 }
 
 export async function updateVisaRecord(applicationId: string, studentId: string, _prevState: unknown, formData: FormData) {

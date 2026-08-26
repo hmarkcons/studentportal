@@ -66,7 +66,7 @@ export default async function ReportsPage() {
     });
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="w-full">
       <h2 className="mb-6 text-lg font-semibold text-ink">Reports</h2>
 
       <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-5">

@@ -37,7 +37,7 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
   const registerAction = registerLead.bind(null, id);
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="w-full">
       <Link href="/leads" className="text-sm text-muted hover:text-ink">
         &larr; Back to leads
       </Link>
@@ -68,7 +68,19 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
           <p className="text-sm text-muted">
             Converts this lead into a Registered Student and hands ownership to the Processing Team.
           </p>
-          <form action={registerAction} className="mt-3">
+          <form action={registerAction} className="mt-3 flex flex-wrap items-end gap-2">
+            <input
+              name="discount_amount"
+              type="number"
+              step="0.01"
+              placeholder="Discount amount (optional)"
+              className="w-48 rounded-md border border-border px-2 py-1.5 text-sm"
+            />
+            <input
+              name="discount_reason"
+              placeholder="Discount reason"
+              className="w-56 rounded-md border border-border px-2 py-1.5 text-sm"
+            />
             <button type="submit" className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink">
               Register this lead
             </button>

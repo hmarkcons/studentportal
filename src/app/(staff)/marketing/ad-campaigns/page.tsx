@@ -16,7 +16,7 @@ export default async function AdCampaignsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="w-full">
       <h2 className="mb-4 text-lg font-semibold text-ink">Digital Marketing — Ad Campaigns</h2>
       <Card className="mb-6">
         <NewAdCampaignForm universities={universities ?? []} />

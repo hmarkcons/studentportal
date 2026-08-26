@@ -20,7 +20,7 @@ export default async function StaffAdminPage() {
     .eq("status", "pending");
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="w-full">
       <h2 className="mb-4 text-lg font-semibold text-ink">Staff</h2>
       <Card className="mb-6">
         <NewStaffForm />

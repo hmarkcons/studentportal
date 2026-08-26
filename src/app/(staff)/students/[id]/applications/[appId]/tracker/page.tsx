@@ -38,7 +38,7 @@ export default async function CountryTrackerPage(props: PageProps<"/students/[id
 
   if (!canAccess) {
     return (
-      <div className="mx-auto max-w-2xl">
+      <div className="w-full">
         <p className="text-sm text-muted">
           The country documentation tracker is visible only to the Documentation/Processing Officer role and Super Admin.
         </p>
@@ -51,13 +51,46 @@ export default async function CountryTrackerPage(props: PageProps<"/students/[id
   (extras ?? []).forEach((e) => (values[e.field_key] = e.field_value ?? ""));
 
   const isItaly = countryCode === "IT";
-  const { data: bodies } = isItaly ? await supabase.from("scholarship_bodies").select("id, name, region") : { data: [] };
+  const { data: bodies } = isItaly ? await supabase.from("scholarship_bodies").select("id, name, region, covers") : { data: [] };
   const { data: scholarships } = isItaly
     ? await supabase.from("student_scholarships").select("id, name, status, award_amount").eq("application_id", appId)
     : { data: [] };
 
+  const dynamicOptions: Record<string, { value: string; label: string }[] | string[]> = {};
+  const regionByUniversityValue: Record<string, string> = {};
+
+  if (isItaly) {
+    const { data: studentApps } = await supabase
+      .from("applications")
+      .select("id, university:universities(name)")
+      .eq("student_id", id);
+
+    dynamicOptions.preenrollment_university = (studentApps ?? []).map((a) => {
+      const uni = one(a.university as never) as { name?: string } | null;
+      return { value: a.id, label: uni?.name ?? "University" };
+    });
+
+    for (const a of studentApps ?? []) {
+      const uni = one(a.university as never) as { name?: string } | null;
+      const uniName = uni?.name;
+      if (!uniName) continue;
+      const match = (bodies ?? []).find((b) => (b.covers ?? []).includes(uniName));
+      if (match?.region) regionByUniversityValue[a.id] = match.region;
+    }
+
+    const { data: docs } = await supabase
+      .from("student_documents")
+      .select("id, category, template:document_templates(name)")
+      .eq("application_id", appId)
+      .neq("status", "verified");
+    dynamicOptions.pending_documents = (docs ?? []).map((d) => {
+      const template = one(d.template as never) as { name?: string } | null;
+      return template?.name ?? d.category ?? "Document";
+    });
+  }
+
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="w-full">
       <Link href={`/students/${id}/applications/${appId}`} className="text-sm text-muted hover:text-ink">
         &larr; Back to application
       </Link>
@@ -71,7 +104,14 @@ export default async function CountryTrackerPage(props: PageProps<"/students/[id
         </Card>
       ) : (
         <Card className="mb-6">
-          <CountryTrackerForm applicationId={appId} fields={fields} values={values} revalidateTo={revalidateTo} />
+          <CountryTrackerForm
+            applicationId={appId}
+            fields={fields}
+            values={values}
+            revalidateTo={revalidateTo}
+            dynamicOptions={dynamicOptions}
+            regionByUniversityValue={regionByUniversityValue}
+          />
         </Card>
       )}
 
@@ -85,6 +125,7 @@ export default async function CountryTrackerPage(props: PageProps<"/students/[id
             bodies={bodies ?? []}
             scholarships={scholarships ?? []}
             preenrollmentFinalized={app.preenrollment_finalized}
+            isSuperAdmin={staffRow?.role === "super_admin"}
           />
         </Card>
       )}

@@ -22,7 +22,7 @@ export default async function RevenueCommissionPage() {
   const partnerOutstanding = (partnerCommissions ?? []).filter((c) => c.status !== "received").reduce((s, c) => s + (c.expected_amount ?? 0), 0);
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="w-full">
       <Link href="/reports" className="text-sm text-muted hover:text-ink">
         &larr; Back to reports
       </Link>

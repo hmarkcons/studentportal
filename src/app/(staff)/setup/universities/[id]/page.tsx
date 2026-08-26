@@ -11,6 +11,12 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
   const { id } = await props.params;
   const supabase = await createClient();
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  const isSuperAdmin = staffRow?.role === "super_admin";
+
   const { data: university, error } = await supabase
     .from("universities")
     .select("id, name, city, region, type, status, destination:destinations(display_name)")
@@ -30,7 +36,7 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="w-full">
       <Link href="/setup/universities" className="text-sm text-muted hover:text-ink">
         &larr; Back to universities
       </Link>
@@ -39,14 +45,23 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
 
       <Card className="mb-6">
         <h3 className="mb-3 text-sm font-medium text-ink">Details</h3>
-        <UniversityEditForm university={university} />
+        {isSuperAdmin ? (
+          <UniversityEditForm university={university} />
+        ) : (
+          <p className="text-sm text-muted">
+            {university.type} · {university.city ?? "—"}
+            {university.region ? `, ${university.region}` : ""} · {university.status}
+            <br />
+            Only Super Admin can edit or delete universities.
+          </p>
+        )}
       </Card>
 
       <Card>
         <h3 className="mb-3 text-sm font-medium text-ink">Programs</h3>
         <div className="mb-4 flex flex-col divide-y divide-border">
           {(programs ?? []).map((p) => (
-            <ProgramRow key={p.id} program={p} universityId={id} />
+            <ProgramRow key={p.id} program={p} universityId={id} canEdit={isSuperAdmin} />
           ))}
           {(!programs || programs.length === 0) && <p className="py-2 text-sm text-muted">No programs added yet.</p>}
         </div>

@@ -18,7 +18,15 @@ export type ProgramRowData = {
   application_deadline: string | null;
 };
 
-export function ProgramRow({ program, universityId }: { program: ProgramRowData; universityId: string }) {
+export function ProgramRow({
+  program,
+  universityId,
+  canEdit = false,
+}: {
+  program: ProgramRowData;
+  universityId: string;
+  canEdit?: boolean;
+}) {
   const [editing, setEditing] = useState(false);
   const action = updateProgram.bind(null, program.id, universityId);
   const [state, formAction, pending] = useActionState(action, undefined);
@@ -32,17 +40,23 @@ export function ProgramRow({ program, universityId }: { program: ProgramRowData;
         </span>
         <div className="flex items-center gap-3">
           {program.tuition_fee != null && <span className="text-muted">{program.tuition_fee}</span>}
-          <button onClick={() => setEditing(true)} className="text-xs text-primary hover:underline">
-            Edit
-          </button>
-          <button
-            onClick={() => {
-              if (confirm(`Delete ${program.name}?`)) deleteProgram(program.id, universityId);
-            }}
-            className="text-xs text-danger hover:underline"
-          >
-            Delete
-          </button>
+          {canEdit && (
+            <>
+              <button onClick={() => setEditing(true)} title="Edit program" aria-label="Edit program" className="rounded p-1 text-muted hover:bg-bg hover:text-primary">
+                ✏️
+              </button>
+              <button
+                onClick={() => {
+                  if (confirm(`Delete ${program.name}?`)) deleteProgram(program.id, universityId);
+                }}
+                title="Delete program"
+                aria-label="Delete program"
+                className="rounded p-1 text-muted hover:bg-danger-bg hover:text-danger"
+              >
+                🗑️
+              </button>
+            </>
+          )}
         </div>
       </div>
     );

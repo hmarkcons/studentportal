@@ -59,6 +59,13 @@ export async function storeCredentialAction(
   return { success: true };
 }
 
+export async function listCredentialTypesAction(ownerType: "student" | "application", ownerId: string): Promise<string[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("list_credential_types", { p_owner_type: ownerType, p_owner_id: ownerId });
+  if (error || !data) return [];
+  return data as string[];
+}
+
 export async function readCredentialAction(ownerType: "student" | "application", ownerId: string, credentialType: string) {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("read_credential", {

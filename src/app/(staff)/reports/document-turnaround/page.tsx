@@ -26,7 +26,7 @@ export default async function DocumentTurnaroundPage() {
   }));
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="w-full">
       <Link href="/reports" className="text-sm text-muted hover:text-ink">
         &larr; Back to reports
       </Link>

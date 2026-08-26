@@ -9,13 +9,19 @@ export default async function DestinationDetailPage(props: PageProps<"/setup/des
   const { id } = await props.params;
   const supabase = await createClient();
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  const isSuperAdmin = staffRow?.role === "super_admin";
+
   const { data: destination, error } = await supabase.from("destinations").select("*").eq("id", id).maybeSingle();
   if (error || !destination) notFound();
 
   const { data: universities } = await supabase.from("universities").select("id, name").eq("destination_id", id);
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="w-full">
       <Link href="/setup/destinations" className="text-sm text-muted hover:text-ink">
         &larr; Back to destinations
       </Link>
@@ -23,12 +29,27 @@ export default async function DestinationDetailPage(props: PageProps<"/setup/des
 
       <Card className="mb-6">
         <h3 className="mb-3 text-sm font-medium text-ink">Details & fees</h3>
-        <DestinationEditForm destination={destination} />
+        {isSuperAdmin ? (
+          <DestinationEditForm destination={destination} />
+        ) : (
+          <p className="text-sm text-muted">
+            {destination.track} · {destination.currency} · Admin charge: {destination.admin_charge}{" "}
+            {destination.consultancy_fee_currency} · Consultancy fee: {destination.consultancy_fee}{" "}
+            {destination.consultancy_fee_currency}
+            {destination.visa_type ? ` · Visa: ${destination.visa_type}` : ""}
+            <br />
+            Only Super Admin can edit or delete destinations.
+          </p>
+        )}
       </Card>
 
       <Card className="mb-6">
         <h3 className="mb-3 text-sm font-medium text-ink">Application pipeline stages</h3>
-        <StagesForm destinationId={id} stages={destination.pipeline_stages as string[]} />
+        {isSuperAdmin ? (
+          <StagesForm destinationId={id} stages={destination.pipeline_stages as string[]} />
+        ) : (
+          <p className="text-sm text-muted">{(destination.pipeline_stages as string[]).join(", ")}</p>
+        )}
       </Card>
 
       <Card>

@@ -3,11 +3,18 @@
 import { useActionState } from "react";
 import { createLead } from "@/lib/actions/leads";
 import { STUDY_LEVELS } from "@/lib/constants";
+import { DestinationMultiSelect } from "@/components/DestinationMultiSelect";
 
 const inputClass = "rounded-md border border-border bg-card px-3 py-2 text-sm outline-none focus:border-primary";
 const labelClass = "text-sm font-medium text-ink";
 
-export function NewLeadForm({ counselors }: { counselors: { id: string; full_name: string }[] }) {
+export function NewLeadForm({
+  counselors,
+  destinations,
+}: {
+  counselors: { id: string; full_name: string }[];
+  destinations: { id: string; display_name: string }[];
+}) {
   const [state, formAction, pending] = useActionState(createLead, undefined);
 
   return (
@@ -47,15 +54,13 @@ export function NewLeadForm({ counselors }: { counselors: { id: string; full_nam
           </select>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="flex flex-col gap-1.5">
-          <label className={labelClass}>Course of interest</label>
-          <input name="course_of_interest" className={inputClass} />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label className={labelClass}>Country of interest</label>
-          <input name="country_of_interest" className={inputClass} />
-        </div>
+      <div className="flex flex-col gap-1.5">
+        <label className={labelClass}>Course of interest</label>
+        <input name="course_of_interest" className={inputClass} />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label className={labelClass}>Countries of interest</label>
+        <DestinationMultiSelect destinations={destinations} />
       </div>
       <div className="flex flex-col gap-1.5">
         <label className={labelClass}>Assigned counselor</label>

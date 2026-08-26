@@ -2,6 +2,44 @@
 
 import { useActionState } from "react";
 import { importPrograms } from "@/lib/actions/universities";
+import { SampleCsvButton } from "@/components/ui/SampleCsvButton";
+
+const HEADERS = [
+  "level",
+  "name",
+  "core_field",
+  "sub_field",
+  "page_link",
+  "interview_required",
+  "interview_details",
+  "admission_test_required",
+  "admission_test_type",
+  "application_portal_name",
+  "application_portal_link",
+  "intake_dates",
+  "application_deadline",
+  "tuition_fee",
+  "duration",
+  "language_requirement",
+];
+const EXAMPLE = [
+  "bachelors",
+  "Computer Science",
+  "IT/CS",
+  "Software Engineering",
+  "https://example.edu/cs",
+  "no",
+  "",
+  "yes",
+  "TOLC",
+  "Universitaly",
+  "https://universitaly.it",
+  "Fall;Spring",
+  "2026-08-01",
+  "3000",
+  "3 years",
+  "B2 English",
+];
 
 export function ImportProgramsForm({ universityId }: { universityId: string }) {
   const action = importPrograms.bind(null, universityId);
@@ -15,6 +53,7 @@ export function ImportProgramsForm({ universityId }: { universityId: string }) {
         <button type="submit" disabled={pending} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-ink disabled:opacity-50">
           {pending ? "Importing…" : "Import"}
         </button>
+        <SampleCsvButton filename="programs-sample.csv" headers={HEADERS} exampleRow={EXAMPLE} />
       </form>
       <p className="mt-2 text-xs text-muted">
         CSV columns: <code>level</code> (bachelors/masters/phd, required), <code>name</code> (required),{" "}

@@ -18,7 +18,7 @@ export default async function RefundReportPage() {
   const statuses = ["requested", "approved", "processed", "rejected"];
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="w-full">
       <Link href="/reports" className="text-sm text-muted hover:text-ink">
         &larr; Back to reports
       </Link>

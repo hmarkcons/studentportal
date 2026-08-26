@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { Badge } from "@/components/ui/Badge";
+import { NewApplicationForStudent } from "./NewApplicationForStudent";
 
 type Row = {
   id: string;
   student_id: string;
   current_stage: string;
-  university: { name: string; destination: { display_name: string } | { display_name: string }[] | null } | { name: string; destination: unknown }[] | null;
+  university: { destination: { pipeline_stages: string[] } | { pipeline_stages: string[] }[] | null } | { destination: unknown }[] | null;
   student: { full_name: string } | { full_name: string }[] | null;
 };
 
@@ -20,45 +20,79 @@ export default async function ApplicationsBoardPage() {
   const { data: applications, error } = await supabase
     .from("applications")
     .select(
-      "id, student_id, current_stage, university:universities(name, destination:destinations(display_name)), student:leads(full_name)"
+      "id, student_id, current_stage, university:universities(destination:destinations(pipeline_stages)), student:leads(full_name)"
     )
     .returns<Row[]>();
 
-  const byDestination = new Map<string, Row[]>();
+  const { data: students } = await supabase.from("students").select("id, full_name").order("full_name");
+
+  const byStudent = new Map<string, { name: string; rows: Row[] }>();
   (applications ?? []).forEach((app) => {
-    const uni = one(app.university);
-    const dest = uni ? one(uni.destination as never) : null;
-    const key = (dest as { display_name?: string } | null)?.display_name ?? "Unassigned";
-    byDestination.set(key, [...(byDestination.get(key) ?? []), app]);
+    const name = one(app.student)?.full_name ?? "Unknown";
+    if (!byStudent.has(app.student_id)) byStudent.set(app.student_id, { name, rows: [] });
+    byStudent.get(app.student_id)!.rows.push(app);
   });
 
+  function counts(rows: Row[]) {
+    let submitted = 0;
+    let pending = 0;
+    let offer = 0;
+    for (const r of rows) {
+      const uni = one(r.university as never) as { destination?: unknown } | null;
+      const dest = uni?.destination ? (one(uni.destination as never) as { pipeline_stages?: string[] } | null) : null;
+      const firstStage = dest?.pipeline_stages?.[0];
+      if (r.current_stage === firstStage) pending++;
+      else submitted++;
+      if (r.current_stage.includes("offer")) offer++;
+    }
+    return { total: rows.length, submitted, pending, offer };
+  }
+
   return (
-    <div>
-      <h2 className="mb-4 text-lg font-semibold text-ink">Applications</h2>
+    <div className="w-full">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-ink">Applications</h2>
+        <NewApplicationForStudent students={students ?? []} />
+      </div>
       {error && <p className="text-sm text-danger">{error.message}</p>}
-      <div className="flex flex-col gap-6">
-        {[...byDestination.entries()].map(([destination, rows]) => (
-          <div key={destination} className="rounded-lg border border-border bg-card p-4">
-            <h3 className="mb-3 text-sm font-medium text-ink">
-              {destination} <span className="text-muted">({rows.length})</span>
-            </h3>
-            <div className="flex flex-col divide-y divide-border">
-              {rows.map((app) => (
-                <Link
-                  key={app.id}
-                  href={`/students/${app.student_id}/applications/${app.id}`}
-                  className="flex items-center justify-between py-2 text-sm hover:text-primary"
-                >
-                  <span>
-                    {one(app.student)?.full_name} · {one(app.university)?.name}
-                  </span>
-                  <Badge tone="info">{app.current_stage.replace(/_/g, " ")}</Badge>
-                </Link>
-              ))}
-            </div>
-          </div>
-        ))}
-        {(!applications || applications.length === 0) && !error && <p className="text-sm text-muted">No applications yet.</p>}
+
+      <div className="overflow-x-auto rounded-lg border border-border">
+        <table className="w-full min-w-[720px] text-sm">
+          <thead>
+            <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-muted">
+              <th className="px-4 py-3">Student</th>
+              <th className="px-4 py-3 text-right">Total</th>
+              <th className="px-4 py-3 text-right">Submitted</th>
+              <th className="px-4 py-3 text-right">Pending submission</th>
+              <th className="px-4 py-3 text-right">With offer letters</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...byStudent.entries()].map(([studentId, { name, rows }]) => {
+              const c = counts(rows);
+              return (
+                <tr key={studentId} className="border-b border-border last:border-0 hover:bg-bg/60">
+                  <td className="px-4 py-3">
+                    <Link href={`/students/${studentId}/applications`} className="font-medium text-ink hover:text-primary">
+                      {name}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums">{c.total}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{c.submitted}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{c.pending}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{c.offer}</td>
+                </tr>
+              );
+            })}
+            {byStudent.size === 0 && !error && (
+              <tr>
+                <td colSpan={5} className="px-4 py-10 text-center text-muted">
+                  No applications yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );

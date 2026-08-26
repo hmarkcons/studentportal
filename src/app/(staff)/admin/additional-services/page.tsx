@@ -29,7 +29,7 @@ export default async function AdditionalServicesPage() {
     .returns<RequestRow[]>();
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="w-full">
       <h2 className="mb-4 text-lg font-semibold text-ink">Additional Services</h2>
       <Card className="mb-6">
         <NewServiceRequestForm students={students ?? []} />

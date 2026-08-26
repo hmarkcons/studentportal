@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { Badge } from "@/components/ui/Badge";
 import { DataTable } from "@/components/ui/DataTable";
-import { LEAD_STATUS_LABELS, LEAD_STATUS_TONE } from "@/lib/constants";
+import { ImportLeadsForm } from "./ImportLeadsForm";
+import { InlineStatusCell } from "./InlineStatusCell";
 
 type LeadRow = {
   id: string;
@@ -49,11 +49,7 @@ export default async function LeadsPage() {
       ),
       contact: r.contact_number ?? r.email ?? "—",
       country: r.country_of_interest ?? "—",
-      status: (
-        <Badge tone={LEAD_STATUS_TONE[r.status as never] ?? "neutral"}>
-          {LEAD_STATUS_LABELS[r.status as never] ?? r.status}
-        </Badge>
-      ),
+      status: <InlineStatusCell leadId={r.id} currentStatus={r.status} />,
       counselor: one(r.assigned_counselor)?.full_name ?? "Unassigned",
       date: new Date(r.date_of_inquiry).toLocaleDateString(),
     },
@@ -68,7 +64,7 @@ export default async function LeadsPage() {
   }));
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="w-full">
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-ink">Leads</h2>
@@ -79,9 +75,15 @@ export default async function LeadsPage() {
         </Link>
       </div>
 
+      <ImportLeadsForm />
+
       {error && <p className="text-sm text-danger">{error.message}</p>}
 
-      {!error && <DataTable exportFilename="leads" rows={rows} columns={columns} />}
+      {!error && (
+        <div className="mt-4">
+          <DataTable exportFilename="leads" rows={rows} columns={columns} />
+        </div>
+      )}
     </div>
   );
 }

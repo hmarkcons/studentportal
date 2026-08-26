@@ -9,7 +9,7 @@ export default async function MessageTemplatesPage() {
   const { data: templates } = await supabase.from("message_templates").select("*").order("purpose");
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="w-full">
       <h2 className="mb-4 text-lg font-semibold text-ink">Message Templates</h2>
       <Card className="mb-6">
         <NewTemplateForm />

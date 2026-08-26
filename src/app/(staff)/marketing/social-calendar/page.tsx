@@ -11,7 +11,7 @@ export default async function SocialCalendarPage() {
     .order("post_date", { ascending: true });
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="w-full">
       <h2 className="mb-4 text-lg font-semibold text-ink">Social Media Content Calendar</h2>
       <Card className="mb-6">
         <NewSocialPostForm />

@@ -2,6 +2,10 @@
 
 import { useActionState } from "react";
 import { importUniversities } from "@/lib/actions/universities";
+import { SampleCsvButton } from "@/components/ui/SampleCsvButton";
+
+const HEADERS = ["name", "city", "region", "type", "levels_offered", "fields_offered"];
+const EXAMPLE = ["Sapienza University of Rome", "Rome", "Lazio", "public", "bachelors;masters", "Engineering;IT/CS"];
 
 export function ImportUniversitiesForm({ destinations }: { destinations: { id: string; display_name: string }[] }) {
   const [state, formAction, pending] = useActionState(importUniversities, undefined);
@@ -22,9 +26,10 @@ export function ImportUniversitiesForm({ destinations }: { destinations: { id: s
         <button type="submit" disabled={pending} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-ink disabled:opacity-50">
           {pending ? "Importing…" : "Import"}
         </button>
+        <SampleCsvButton filename="universities-sample.csv" headers={HEADERS} exampleRow={EXAMPLE} />
       </form>
       <p className="mt-2 text-xs text-muted">
-        CSV columns: <code>name</code> (required), <code>city</code>, <code>region</code>, <code>type</code>{" "}
+        CSV columns: <code>name</code> and <code>city</code> (both required), <code>region</code>, <code>type</code>{" "}
         (public/private, defaults to public), <code>levels_offered</code>, <code>fields_offered</code> (semicolon-separated
         within a cell).
       </p>

@@ -34,7 +34,7 @@ export function UniversityEditForm({ university }: { university: University }) {
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
           City
-          <input name="city" defaultValue={university.city ?? ""} className={inputClass} />
+          <input name="city" defaultValue={university.city ?? ""} required className={inputClass} />
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
           Region

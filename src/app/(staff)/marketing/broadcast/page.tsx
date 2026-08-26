@@ -8,7 +8,7 @@ export default async function BroadcastPage() {
   const { data: templates } = await supabase.from("message_templates").select("id, purpose, channel, body").order("purpose");
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="w-full">
       <h2 className="mb-1 text-lg font-semibold text-ink">Broadcast Message</h2>
       <p className="mb-4 text-sm text-muted">
         Send the same in-app portal message to multiple students at once. Only students visible to your role are

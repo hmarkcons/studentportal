@@ -5,6 +5,7 @@ export const STAFF_NAV: NavItem[] = [
   { label: "Students", href: "/students", icon: "🎓" },
   { label: "Applications", href: "/applications", icon: "🗂️" },
   { label: "Calendar", href: "/calendar", icon: "📅" },
+  { label: "Inventory", href: "/inventory", icon: "📦" },
   {
     label: "Setup",
     icon: "⚙️",

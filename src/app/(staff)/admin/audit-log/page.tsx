@@ -27,7 +27,7 @@ export default async function AuditLogPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="w-full">
       <h2 className="mb-4 text-lg font-semibold text-ink">Audit Log</h2>
       <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full min-w-[640px] text-sm">

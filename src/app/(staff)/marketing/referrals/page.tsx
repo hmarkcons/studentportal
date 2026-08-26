@@ -17,7 +17,7 @@ export default async function ReferralsPage() {
     .order("created_at", { ascending: false });
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="w-full">
       <h2 className="mb-4 text-lg font-semibold text-ink">Referral Tracking</h2>
       <Card className="mb-6">
         <NewReferralForm leads={leads ?? []} />

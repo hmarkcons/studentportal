@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { generateAgreement, uploadSignedAgreement } from "@/lib/actions/agreements";
+import { generateAgreement, uploadSignedAgreement, deleteAgreement } from "@/lib/actions/agreements";
 
 export function GenerateAgreementForm({
   studentId,
@@ -33,11 +33,25 @@ export function GenerateAgreementForm({
       </select>
       <input name="admin_charge_override" type="number" step="0.01" placeholder="Admin charge override" className="w-40 rounded-md border border-border px-2 py-1.5 text-sm" />
       <input name="consultancy_fee_override" type="number" step="0.01" placeholder="Consultancy fee override" className="w-44 rounded-md border border-border px-2 py-1.5 text-sm" />
+      <input name="discount_amount" type="number" step="0.01" placeholder="Discount amount" className="w-36 rounded-md border border-border px-2 py-1.5 text-sm" />
       <button type="submit" disabled={pending} className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink disabled:opacity-50">
         Generate agreement
       </button>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
+  );
+}
+
+export function DeleteAgreementButton({ agreementId, studentId }: { agreementId: string; studentId: string }) {
+  return (
+    <button
+      onClick={() => {
+        if (confirm("Delete this agreement? This cannot be undone.")) deleteAgreement(agreementId, studentId);
+      }}
+      className="text-xs text-danger hover:underline"
+    >
+      Delete
+    </button>
   );
 }
 

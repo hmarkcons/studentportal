@@ -22,6 +22,7 @@ export function NewApplicationForm({
   const [state, formAction, pending] = useActionState(action, undefined);
   const [destinationId, setDestinationId] = useState("");
   const [universityId, setUniversityId] = useState("");
+  const [programSlots, setProgramSlots] = useState<string[]>([""]);
 
   const filteredUniversities = useMemo(
     () => universities.filter((u) => !destinationId || u.destination_id === destinationId),
@@ -34,6 +35,7 @@ export function NewApplicationForm({
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-medium text-ink">Country</label>
         <select
+          required
           value={destinationId}
           onChange={(e) => {
             setDestinationId(e.target.value);
@@ -41,13 +43,16 @@ export function NewApplicationForm({
           }}
           className="rounded-md border border-border bg-card px-3 py-2 text-sm"
         >
-          <option value="">All countries…</option>
+          <option value="">Choose…</option>
           {destinations.map((d) => (
             <option key={d.id} value={d.id}>
               {d.display_name}
             </option>
           ))}
         </select>
+        {destinations.length === 0 && (
+          <p className="text-xs text-danger">This student isn&apos;t registered for any destination yet.</p>
+        )}
       </div>
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-medium text-ink">University</label>
@@ -66,20 +71,43 @@ export function NewApplicationForm({
           ))}
         </select>
       </div>
-      <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-ink">Program</label>
-        <select name="program_id" className="rounded-md border border-border bg-card px-3 py-2 text-sm">
-          <option value="">—</option>
-          {filteredPrograms.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
+      <div className="flex flex-col gap-2">
+        <label className="text-sm font-medium text-ink">Programs</label>
+        {programSlots.map((value, i) => (
+          <select
+            key={i}
+            name="program_ids"
+            value={value}
+            onChange={(e) =>
+              setProgramSlots((prev) => prev.map((v, idx) => (idx === i ? e.target.value : v)))
+            }
+            className="rounded-md border border-border bg-card px-3 py-2 text-sm"
+          >
+            <option value="">Program {i + 1}…</option>
+            {filteredPrograms.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        ))}
+        <button
+          type="button"
+          onClick={() => setProgramSlots((prev) => [...prev, ""])}
+          className="self-start text-xs font-medium text-primary hover:underline"
+        >
+          + Add another program
+        </button>
       </div>
-      <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-ink">Intake</label>
-        <input name="intake" placeholder="e.g. Fall 2026" className="rounded-md border border-border bg-card px-3 py-2 text-sm" />
+      <div className="grid grid-cols-2 gap-4">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-ink">Intake</label>
+          <input name="intake" placeholder="e.g. Fall 2026" className="rounded-md border border-border bg-card px-3 py-2 text-sm" />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-ink">Deadline</label>
+          <input name="deadline" type="date" className="rounded-md border border-border bg-card px-3 py-2 text-sm" />
+        </div>
       </div>
       {state?.error && <p className="text-sm text-danger">{state.error}</p>}
       <button type="submit" disabled={pending} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-ink disabled:opacity-50">

@@ -14,6 +14,7 @@ export async function generateAgreement(studentId: string, _prevState: unknown, 
   const consultancy_fee_override = formData.get("consultancy_fee_override")
     ? Number(formData.get("consultancy_fee_override"))
     : null;
+  const discount_amount = formData.get("discount_amount") ? Number(formData.get("discount_amount")) : null;
 
   if (!["paper", "e_signature"].includes(signing_method)) {
     return { error: "Choose a signing method." };
@@ -29,10 +30,26 @@ export async function generateAgreement(studentId: string, _prevState: unknown, 
     signing_method,
     admin_charge_override,
     consultancy_fee_override,
+    discount_amount,
     generated_by: user?.id,
     status: "pending_signature",
   });
 
+  if (error) return { error: error.message };
+
+  revalidatePath(`/students/${studentId}`);
+  return { success: true };
+}
+
+export async function deleteAgreement(agreementId: string, studentId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  if (staffRow?.role !== "super_admin") return { error: "Only Super Admin can delete an agreement." };
+
+  const { error } = await supabase.from("agreements").delete().eq("id", agreementId);
   if (error) return { error: error.message };
 
   revalidatePath(`/students/${studentId}`);

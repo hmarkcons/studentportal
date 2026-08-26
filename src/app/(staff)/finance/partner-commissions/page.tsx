@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Badge } from "@/components/ui/Badge";
 import { StatusButtons } from "./StatusButtons";
+import { DeletePartnerCommissionButton } from "./DeletePartnerCommissionButton";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -18,12 +19,18 @@ const TONE: Record<string, "success" | "warning" | "danger" | "neutral"> = {
 export default async function PartnerCommissionsPage() {
   const supabase = await createClient();
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  const isSuperAdmin = staffRow?.role === "super_admin";
+
   const { data: rows } = await supabase
     .from("partner_commissions")
     .select("id, paid_fee, expected_amount, currency, status, student:leads(full_name), application:applications(university:universities(name))");
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="w-full">
       <h2 className="mb-4 text-lg font-semibold text-ink">Partner Commissions</h2>
       <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full min-w-[640px] text-sm">
@@ -51,7 +58,10 @@ export default async function PartnerCommissionsPage() {
                     <Badge tone={TONE[r.status] ?? "neutral"}>{r.status.replace(/_/g, " ")}</Badge>
                   </td>
                   <td className="px-4 py-3">
-                    <StatusButtons id={r.id} />
+                    <div className="flex items-center gap-2">
+                      <StatusButtons id={r.id} />
+                      {isSuperAdmin && <DeletePartnerCommissionButton id={r.id} />}
+                    </div>
                   </td>
                 </tr>
               );

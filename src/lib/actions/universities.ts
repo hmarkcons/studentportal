@@ -10,13 +10,15 @@ export async function createUniversity(_prevState: unknown, formData: FormData) 
 
   const destination_id = String(formData.get("destination_id") ?? "");
   const name = String(formData.get("name") ?? "").trim();
+  const city = String(formData.get("city") ?? "").trim();
+  const region = String(formData.get("region") ?? "").trim() || null;
   const type = String(formData.get("type") ?? "");
 
-  if (!destination_id || !name || !["public", "private"].includes(type)) {
-    return { error: "Fill in all required fields." };
+  if (!destination_id || !name || !city || !["public", "private"].includes(type)) {
+    return { error: "Fill in all required fields — city is mandatory." };
   }
 
-  const { data, error } = await supabase.from("universities").insert({ destination_id, name, type }).select("id").single();
+  const { data, error } = await supabase.from("universities").insert({ destination_id, name, city, region, type }).select("id").single();
   if (error) return { error: error.message };
 
   redirect(`/setup/universities/${data.id}`);
@@ -128,18 +130,18 @@ export async function importUniversities(_prevState: unknown, formData: FormData
   if (rows.length === 0) return { error: "The file has no data rows." };
 
   const records = rows
-    .filter((r) => r.name)
+    .filter((r) => r.name && r.city)
     .map((r) => ({
       destination_id: destinationId,
       name: r.name,
-      city: r.city || null,
+      city: r.city,
       region: r.region || null,
       type: r.type === "private" ? "private" : "public",
       levels_offered: splitList(r.levels_offered),
       fields_offered: splitList(r.fields_offered),
     }));
 
-  if (records.length === 0) return { error: "No rows had a 'name' column value." };
+  if (records.length === 0) return { error: "No valid rows — 'name' and 'city' columns are both required." };
 
   const { error } = await supabase.from("universities").insert(records);
   if (error) return { error: error.message };
