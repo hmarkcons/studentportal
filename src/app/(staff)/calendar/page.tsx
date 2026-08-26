@@ -2,12 +2,21 @@ import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { CalendarTaskRow } from "./CalendarTaskRow";
+import { AddCalendarTaskForm } from "./AddCalendarTaskForm";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
 }
 
-type Event = { date: string; type: string; label: string; tone: "warning" | "danger" | "info"; taskId?: string; priority?: string };
+type Event = {
+  date: string;
+  type: string;
+  label: string;
+  tone: "warning" | "danger" | "info";
+  taskId?: string;
+  priority?: string;
+  description?: string;
+};
 
 function groupByDay(events: Event[]) {
   const groups = new Map<string, Event[]>();
@@ -55,6 +64,7 @@ export default async function CalendarPage() {
       tone: t.due_date! < today ? "danger" : "warning",
       taskId: t.id,
       priority: t.priority,
+      description: t.description,
     });
   });
 
@@ -90,10 +100,25 @@ export default async function CalendarPage() {
   const upcoming = events.filter((e) => e.date >= today);
   const overdue = events.filter((e) => e.date < today);
 
+  const { data: applications } = await supabase
+    .from("applications")
+    .select("id, student:leads(full_name), university:universities(name)")
+    .order("created_at", { ascending: false });
+
+  const applicationOptions = (applications ?? []).map((a) => ({
+    id: a.id,
+    label: `${one(a.student)?.full_name ?? "Student"} — ${one(a.university)?.name ?? "University"}`,
+  }));
+
   return (
     <div className="w-full">
       <h2 className="mb-1 text-lg font-semibold text-ink">Calendar</h2>
       <p className="mb-6 text-sm text-muted">Intake/application deadlines, visa appointments, tasks, and reminders across your students.</p>
+
+      <Card className="mb-6">
+        <h3 className="mb-3 text-sm font-medium text-ink">Add task</h3>
+        <AddCalendarTaskForm applications={applicationOptions} />
+      </Card>
 
       {overdue.length > 0 && (
         <Card className="mb-6 border-danger/40">
@@ -102,7 +127,14 @@ export default async function CalendarPage() {
             {overdue.map((e, i) =>
               e.taskId ? (
                 <div key={i} className="py-2">
-                  <CalendarTaskRow taskId={e.taskId} label={e.label} priority={e.priority ?? "medium"} tone={e.tone} />
+                  <CalendarTaskRow
+                    taskId={e.taskId}
+                    label={e.label}
+                    description={e.description ?? ""}
+                    dueDate={e.date}
+                    priority={e.priority ?? "medium"}
+                    tone={e.tone}
+                  />
                 </div>
               ) : (
                 <div key={i} className="flex items-center justify-between py-2 text-sm">
@@ -128,7 +160,15 @@ export default async function CalendarPage() {
               <div className="flex flex-col gap-1.5">
                 {dayEvents.map((e, i) =>
                   e.taskId ? (
-                    <CalendarTaskRow key={i} taskId={e.taskId} label={e.label} priority={e.priority ?? "medium"} tone={e.tone} />
+                    <CalendarTaskRow
+                      key={i}
+                      taskId={e.taskId}
+                      label={e.label}
+                      description={e.description ?? ""}
+                      dueDate={e.date}
+                      priority={e.priority ?? "medium"}
+                      tone={e.tone}
+                    />
                   ) : (
                     <div key={i} className="flex items-center justify-between text-sm">
                       <span className="text-ink">{e.label}</span>
