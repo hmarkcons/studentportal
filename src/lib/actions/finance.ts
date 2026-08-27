@@ -19,7 +19,7 @@ async function requireFinance(supabase: Awaited<ReturnType<typeof createClient>>
   return staffRow?.role === "finance" || staffRow?.role === "super_admin";
 }
 
-export async function createStaffCommission(_prevState: unknown, formData: FormData) {
+export async function createStaffCommission(revalidateTo: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
   if (!(await requireSuperAdmin(supabase))) return { error: "Only Super Admin can add commission records." };
 
@@ -27,24 +27,25 @@ export async function createStaffCommission(_prevState: unknown, formData: FormD
   const student_id = String(formData.get("student_id") ?? "");
   const amount = Number(formData.get("amount") ?? 0);
   const currency = String(formData.get("currency") ?? "EUR");
+  const registration_date = String(formData.get("registration_date") ?? "") || null;
 
   if (!staff_id || !student_id || !amount) return { error: "Staff, student, and amount are required." };
 
-  const { error } = await supabase.from("staff_commissions").insert({ staff_id, student_id, amount, currency });
+  const { error } = await supabase.from("staff_commissions").insert({ staff_id, student_id, amount, currency, registration_date });
   if (error) return { error: error.message };
 
-  revalidatePath("/finance/commissions");
+  revalidatePath(revalidateTo);
   return { success: true };
 }
 
-export async function deleteStaffCommission(id: string) {
+export async function deleteStaffCommission(id: string, revalidateTo: string) {
   const supabase = await createClient();
   if (!(await requireSuperAdmin(supabase))) return { error: "Only Super Admin can delete commission records." };
 
   const { error } = await supabase.from("staff_commissions").delete().eq("id", id);
   if (error) return { error: error.message };
 
-  revalidatePath("/finance/commissions");
+  revalidatePath(revalidateTo);
   return { success: true };
 }
 

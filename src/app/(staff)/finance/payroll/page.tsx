@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/Card";
 import { CURRENCY_SYMBOLS } from "@/lib/constants";
 import { PayrollSelectors } from "./PayrollSelectors";
 import { PayrollForm } from "./PayrollForm";
+import { CommissionLedgerTable, type CommissionRecord } from "./CommissionLedgerTable";
 
 const PKR_RATE: Record<string, number> = { PKR: 1, USD: 280, EUR: 335 };
 
@@ -65,19 +66,9 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
             .in("student_id", studentIds)
         : { data: [] };
 
-      const generalRate = staff.commission_rate_general ?? 0;
-      const publicRate = staff.commission_rate_public_universities ?? 0;
-
       let totalConsultancyFeePKR = 0;
-      let computedCommission = 0;
       for (const inv of invoices ?? []) {
-        const feePKR = toPKR(inv.consultancy_fee ?? 0, inv.currency ?? "PKR");
-        totalConsultancyFeePKR += feePKR;
-        const agreement = one(inv.agreement as never) as { template?: unknown } | null;
-        const template = agreement?.template ? (one(agreement.template as never) as { destination?: unknown } | null) : null;
-        const destination = template?.destination ? (one(template.destination as never) as { track?: string } | null) : null;
-        const rate = destination?.track === "public" ? publicRate : generalRate;
-        computedCommission += feePKR * (rate / 100);
+        totalConsultancyFeePKR += toPKR(inv.consultancy_fee ?? 0, inv.currency ?? "PKR");
       }
 
       const { data: existingPayroll } = await supabase
@@ -86,6 +77,41 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
         .eq("staff_id", staffId)
         .eq("payroll_month", monthStart)
         .maybeSingle();
+
+      // Folded-in commission ledger (per-student amount, tracked/paid manually
+      // by Finance) — this, not the invoice-derived figure, is the source of
+      // truth for Total Commission.
+      const { data: rawCommissions } = await supabase
+        .from("staff_commissions")
+        .select("id, amount, currency, status, registration_date, payment_proof_path, student:leads(full_name)")
+        .eq("staff_id", staffId)
+        .gte("registration_date", monthStart)
+        .lt("registration_date", nextMonthStart)
+        .order("registration_date", { ascending: false });
+
+      const proofUrls: Record<string, string> = {};
+      await Promise.all(
+        (rawCommissions ?? [])
+          .filter((c) => c.payment_proof_path)
+          .map(async (c) => {
+            const { data } = await supabase.storage.from("documents").createSignedUrl(c.payment_proof_path!, 3600);
+            if (data?.signedUrl) proofUrls[c.id] = data.signedUrl;
+          })
+      );
+
+      const commissionRecords: CommissionRecord[] = (rawCommissions ?? []).map((c) => ({
+        id: c.id,
+        amount: c.amount,
+        currency: c.currency,
+        status: c.status,
+        registration_date: c.registration_date,
+        payment_proof_path: c.payment_proof_path,
+        student_name: (one(c.student as never) as { full_name?: string } | null)?.full_name ?? "Unknown",
+      }));
+
+      const totalCommissionFromLedger = commissionRecords.reduce((sum, c) => sum + toPKR(c.amount, c.currency), 0);
+
+      const { data: allStudents } = await supabase.from("students").select("id, full_name").order("full_name");
 
       const currencySymbol = CURRENCY_SYMBOLS[staff.currency] ?? staff.currency;
       const revalidateTo = `/finance/payroll?staff=${staffId}&month=${month}`;
@@ -117,9 +143,17 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
             <p className="mb-2 text-sm text-muted">
               {invoices?.length ?? 0} fee record{(invoices?.length ?? 0) === 1 ? "" : "s"} registered in selected month under {staff.full_name}
             </p>
-            <p className="text-lg font-semibold text-ink">
+            <p className="mb-4 text-lg font-semibold text-ink">
               Generated business amount: ₨ {totalConsultancyFeePKR.toLocaleString()}
             </p>
+            <CommissionLedgerTable
+              staffId={staffId}
+              records={commissionRecords}
+              students={allStudents ?? []}
+              proofUrls={proofUrls}
+              defaultDate={monthStart}
+              revalidateTo={revalidateTo}
+            />
           </Card>
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -133,7 +167,7 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
                 initial={{
                   basic_salary: existingPayroll?.basic_salary ?? staff.monthly_salary ?? 0,
                   allowances: existingPayroll?.allowances ?? staff.allowance ?? 0,
-                  total_commission: existingPayroll?.total_commission ?? Math.round(computedCommission * 100) / 100,
+                  total_commission: existingPayroll?.total_commission ?? Math.round(totalCommissionFromLedger * 100) / 100,
                   overtime: existingPayroll?.overtime ?? 0,
                   deduction_absent: existingPayroll?.deduction_absent ?? 0,
                   deduction_late: existingPayroll?.deduction_late ?? 0,
