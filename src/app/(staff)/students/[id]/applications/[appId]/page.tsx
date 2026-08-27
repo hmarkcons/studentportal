@@ -9,6 +9,7 @@ import { TaskList } from "./TaskList";
 import { ApplicationDetailsForm } from "./ApplicationDetailsForm";
 import { listTrackerDefinitions } from "@/lib/actions/countryTracker";
 import { DocumentChecklist, type DocRow } from "@/components/DocumentChecklist";
+import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -41,6 +42,8 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
 
   const revalidateTo = `/students/${id}/applications/${appId}`;
 
+  await ensureStudentDocumentRequirements(id);
+
   const [{ data: tasks }, { data: rawDocs }] = await Promise.all([
     supabase
       .from("application_tasks")
@@ -49,9 +52,10 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
       .order("due_date", { ascending: true }),
     supabase
       .from("student_documents")
-      .select("id, category, custom_name, status, file_path, deadline, rejected_reason, template:document_templates(name)")
-      .eq("application_id", appId)
-      .returns<(DocRow & { custom_name: string | null; template: { name: string } | { name: string }[] | null })[]>(),
+      .select("id, category, custom_name, status, file_path, deadline, rejected_reason, application_id, template:document_templates(name)")
+      .eq("student_id", id)
+      .or(`application_id.eq.${appId},application_id.is.null`)
+      .returns<(DocRow & { custom_name: string | null; application_id: string | null; template: { name: string } | { name: string }[] | null })[]>(),
   ]);
 
   function one2<T>(v: T | T[] | null) {
@@ -61,7 +65,11 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
   const docsWithUrls = await Promise.all(
     (rawDocs ?? []).map(async (d) => {
       const templateName = one2(d.template as never) as { name?: string } | null;
-      const name = d.custom_name ?? templateName?.name ?? d.category ?? "Document";
+      const baseName = d.custom_name ?? templateName?.name ?? d.category ?? "Document";
+      // Student-level documents (application_id null) are shared across every
+      // application — uploading/verifying one here satisfies it everywhere,
+      // not just this university, so it's labeled to make that clear.
+      const name = d.application_id === null ? `${baseName} (shared — all applications)` : baseName;
       if (!d.file_path) return { ...d, name };
       const { data } = await supabase.storage.from("documents").createSignedUrl(d.file_path, 3600);
       return { ...d, name, fileUrl: data?.signedUrl ?? null };

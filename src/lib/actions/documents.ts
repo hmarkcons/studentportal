@@ -2,7 +2,65 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { sanitizeFilename, validateDocumentFile } from "@/lib/documentUpload";
+
+// The static document_templates checklist (Passport copy, Academic
+// transcripts, ...) previously had no auto-population anywhere — staff had
+// to manually re-type every standard document on every single application.
+// This makes each student's checklist come from that static list
+// automatically, as student-level rows (application_id null) so the same
+// document (e.g. passport) covers every application instead of needing a
+// separate upload per university. Safe to call on every page load —
+// existing template_ids are checked first and only the missing ones get
+// inserted (not a DB-level upsert: some real students already have
+// per-application rows sharing a template_id from before this fix existed,
+// which a plain (student_id, template_id) unique constraint would collide
+// with, and a partial index scoped to application_id is null can't be used
+// as a Postgres/PostgREST upsert onConflict target without an explicit
+// inference WHERE clause, which the JS client has no way to pass). Always
+// runs as the admin client since a student has no INSERT grant on
+// student_documents (only staff do, via student_documents_staff_write) —
+// this is system bookkeeping, not user-submitted data, and every value it
+// reads/writes is already visible to whichever caller (staff or the
+// student themself) triggered it.
+export async function ensureStudentDocumentRequirements(studentId: string) {
+  const supabase = createAdminClient();
+  const [{ data: student }, { data: destRows }, { data: templates }, { data: existing }] = await Promise.all([
+    supabase.from("leads").select("level_applying_for").eq("id", studentId).maybeSingle(),
+    supabase.from("lead_destinations").select("destination_id").eq("lead_id", studentId),
+    supabase.from("document_templates").select("id, category, level, destination_id"),
+    supabase.from("student_documents").select("template_id").eq("student_id", studentId).is("application_id", null),
+  ]);
+
+  if (!templates || templates.length === 0) return;
+
+  const destinationIds = new Set((destRows ?? []).map((d) => d.destination_id));
+  const existingTemplateIds = new Set((existing ?? []).map((d) => d.template_id).filter(Boolean));
+  const level = student?.level_applying_for;
+
+  const missing = templates.filter((t) => {
+    if (existingTemplateIds.has(t.id)) return false;
+    const levelMatches = t.level === "all" || t.level === level;
+    const destMatches = t.destination_id === null || destinationIds.has(t.destination_id);
+    return levelMatches && destMatches;
+  });
+
+  if (missing.length === 0) return;
+
+  const { error } = await supabase.from("student_documents").insert(
+    missing.map((t) => ({
+      student_id: studentId,
+      application_id: null,
+      template_id: t.id,
+      category: t.category,
+      status: "missing",
+    }))
+  );
+  // 23505 = the partial unique index caught a concurrent duplicate insert
+  // (two page loads racing) — safe to ignore, the row already exists.
+  if (error && error.code !== "23505") throw error;
+}
 
 export async function uploadDocument(
   documentId: string,

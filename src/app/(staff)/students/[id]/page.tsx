@@ -11,6 +11,7 @@ import { StudentProfileForm } from "./StudentProfileForm";
 import { GenerateAgreementForm, UploadSignedAgreementForm, DeleteAgreementButton } from "./GenerateAgreementForm";
 import { GenerateAgreementPdfButton } from "./GenerateAgreementPdfButton";
 import { GenerateInvoiceForm, InvoiceCard } from "./InvoicePanel";
+import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
 import { PortalCredentialsSection } from "./PortalCredentialsSection";
 import { DashboardTaskList, type DashboardTaskRow } from "./DashboardTaskList";
 import { listCredentialTypesAction } from "@/lib/actions/countryTracker";
@@ -28,6 +29,8 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   const role = staffRow?.role;
   const isSuperAdmin = role === "super_admin";
   const canModifyAgreement = role === "super_admin" || role === "processing";
+
+  await ensureStudentDocumentRequirements(id);
 
   // ---- Level 1: every query below is independent of every other — fetch all
   // of them concurrently instead of one round trip at a time. ----

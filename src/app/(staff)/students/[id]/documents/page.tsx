@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { DocumentChecklist, type DocRow } from "@/components/DocumentChecklist";
+import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -9,6 +10,8 @@ function one<T>(v: T | T[] | null) {
 export default async function StudentDocumentsTab(props: PageProps<"/students/[id]/documents">) {
   const { id } = await props.params;
   const supabase = await createClient();
+
+  await ensureStudentDocumentRequirements(id);
 
   const { data: applications } = await supabase
     .from("applications")

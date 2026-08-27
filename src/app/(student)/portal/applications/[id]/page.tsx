@@ -4,6 +4,7 @@ import { getStudentUser } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { BoardingPassTracker } from "@/components/ui/BoardingPassTracker";
 import { PortalDocumentRow } from "./PortalDocumentRow";
+import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -26,16 +27,22 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
   const university = one(app.university);
   const destination = university ? one(university.destination as never) : null;
 
+  await ensureStudentDocumentRequirements(app.student_id);
+
   const { data: documents } = await supabase
     .from("student_documents")
-    .select("id, category, custom_name, status, file_path, deadline, rejected_reason")
-    .eq("application_id", id);
+    .select("id, category, custom_name, status, file_path, deadline, rejected_reason, application_id, template:document_templates(name)")
+    .eq("student_id", app.student_id)
+    .or(`application_id.eq.${id},application_id.is.null`);
 
   const docsWithUrls = await Promise.all(
     (documents ?? []).map(async (d) => {
-      if (!d.file_path) return d;
+      const templateName = one(d.template as never) as { name?: string } | null;
+      const baseName = d.custom_name ?? templateName?.name ?? d.category ?? "Document";
+      const custom_name = d.application_id === null ? `${baseName} (shared — all applications)` : baseName;
+      if (!d.file_path) return { ...d, custom_name };
       const { data } = await supabase.storage.from("documents").createSignedUrl(d.file_path, 3600);
-      return { ...d, fileUrl: data?.signedUrl ?? null };
+      return { ...d, custom_name, fileUrl: data?.signedUrl ?? null };
     })
   );
 
