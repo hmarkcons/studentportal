@@ -1,7 +1,20 @@
 "use server";
 
+import { createElement } from "react";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { CURRENCY_SYMBOLS } from "@/lib/constants";
+import { getAgreementContent } from "@/lib/pdf/agreementContent";
+
+function one<T>(v: T | T[] | null) {
+  return Array.isArray(v) ? v[0] ?? null : v;
+}
+
+function formatAgreementDate(d: Date) {
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = d.toLocaleString("en-US", { month: "long" });
+  return `${day}-${month}-${d.getFullYear()}`;
+}
 
 export async function generateAgreement(studentId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
@@ -38,6 +51,111 @@ export async function generateAgreement(studentId: string, _prevState: unknown, 
   if (error) return { error: error.message };
 
   revalidatePath(`/students/${studentId}`);
+  return { success: true };
+}
+
+// Renders the destination's retainer agreement with the student's details,
+// fee breakdown, agreement date, and HMARK's pre-uploaded signature filled
+// in, then stores it as agreements.pdf_path. The student's own signature
+// line and the per-page right-hand signature box are left blank for them
+// to sign after printing/e-signing.
+export async function generateAgreementPdf(agreementId: string, studentId: string, revalidateTo: string) {
+  const supabase = await createClient();
+
+  const { data: agreement, error: agreementError } = await supabase
+    .from("agreements")
+    .select("id, template_id, admin_charge_override, consultancy_fee_override, discount_amount, generated_by, created_at")
+    .eq("id", agreementId)
+    .single();
+  if (agreementError || !agreement) return { error: agreementError?.message ?? "Agreement not found." };
+  if (!agreement.template_id) return { error: "This agreement has no template selected." };
+
+  const { data: template } = await supabase
+    .from("agreement_templates")
+    .select("destination:destinations(country_code, track, display_name, admin_charge, consultancy_fee, consultancy_fee_currency)")
+    .eq("id", agreement.template_id)
+    .maybeSingle();
+  const destination = template?.destination
+    ? (one(template.destination as never) as {
+        country_code?: string;
+        track?: string;
+        display_name?: string;
+        admin_charge?: number;
+        consultancy_fee?: number;
+        consultancy_fee_currency?: string;
+      } | null)
+    : null;
+  if (!destination?.country_code || !destination.track) return { error: "This agreement's destination could not be resolved." };
+
+  const content = getAgreementContent(destination.country_code, destination.track);
+  if (!content) {
+    return { error: `No agreement wording is configured yet for ${destination.display_name ?? destination.country_code} — ask a developer to add it.` };
+  }
+
+  const { data: student } = await supabase
+    .from("students")
+    .select("full_name, date_of_birth, email, address, contact_number, home_phone, current_qualification, course_of_interest")
+    .eq("id", studentId)
+    .maybeSingle();
+  if (!student) return { error: "Student not found." };
+
+  let consultantName: string | null = null;
+  if (agreement.generated_by) {
+    const { data: staffRow } = await supabase.from("staff").select("full_name").eq("id", agreement.generated_by).maybeSingle();
+    consultantName = staffRow?.full_name ?? null;
+  }
+
+  const { data: sigFile } = await supabase.storage.from("documents").download("branding/hmark-signature.png");
+  const signatureDataUri = sigFile ? `data:image/png;base64,${Buffer.from(await sigFile.arrayBuffer()).toString("base64")}` : null;
+
+  const adminCharge = agreement.admin_charge_override ?? destination.admin_charge ?? 0;
+  const consultancyFee = agreement.consultancy_fee_override ?? destination.consultancy_fee ?? 0;
+  const currencySymbol = CURRENCY_SYMBOLS[destination.consultancy_fee_currency ?? "EUR"] ?? destination.consultancy_fee_currency ?? "€";
+
+  const { renderToBuffer } = await import("@react-pdf/renderer");
+  const { AgreementDocument } = await import("@/lib/pdf/AgreementDocument");
+
+  const element = createElement(AgreementDocument, {
+    data: {
+      destinationLabel: destination.display_name ?? "",
+      officeLine: content.officeLine,
+      blocks: content.blocks,
+      student: {
+        fullName: student.full_name,
+        dob: student.date_of_birth ? new Date(student.date_of_birth).toLocaleDateString() : null,
+        email: student.email,
+        address: student.address,
+        mobile: student.contact_number,
+        home: student.home_phone,
+        currentEducation: student.current_qualification,
+        courseOfInterest: student.course_of_interest,
+      },
+      fee: {
+        currencySymbol,
+        adminCharge,
+        consultancyFee,
+        discount: agreement.discount_amount,
+        total: adminCharge + consultancyFee,
+      },
+      agreementDate: formatAgreementDate(new Date(agreement.created_at)),
+      signatureDataUri,
+      consultantName,
+    },
+  });
+
+  // AgreementDocument's root element is a <Document>, but react-pdf's
+  // renderToBuffer type can't see through the wrapper component to verify
+  // that structurally — safe to assert since we control the component.
+  const buffer = await renderToBuffer(element as Parameters<typeof renderToBuffer>[0]);
+
+  const path = `${studentId}/agreements/${agreementId}-generated.pdf`;
+  const { error: uploadError } = await supabase.storage.from("documents").upload(path, buffer, { contentType: "application/pdf", upsert: true });
+  if (uploadError) return { error: uploadError.message };
+
+  const { error: updateError } = await supabase.from("agreements").update({ pdf_path: path }).eq("id", agreementId);
+  if (updateError) return { error: updateError.message };
+
+  revalidatePath(revalidateTo);
   return { success: true };
 }
 

@@ -9,6 +9,7 @@ import { listTrackerDefinitions } from "@/lib/actions/countryTracker";
 import { PortalAccessPanel } from "./PortalAccessPanel";
 import { StudentProfileForm } from "./StudentProfileForm";
 import { GenerateAgreementForm, UploadSignedAgreementForm, DeleteAgreementButton } from "./GenerateAgreementForm";
+import { GenerateAgreementPdfButton } from "./GenerateAgreementPdfButton";
 import { GenerateInvoiceForm, InvoiceCard } from "./InvoicePanel";
 import { PortalCredentialsSection } from "./PortalCredentialsSection";
 import { DashboardTaskList, type DashboardTaskRow } from "./DashboardTaskList";
@@ -61,7 +62,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       supabase
         .from("agreements")
         .select(
-          "id, status, signing_method, signed_file_path, email_verified, discount_amount, created_at, template:agreement_templates(file_path)"
+          "id, status, signing_method, signed_file_path, pdf_path, email_verified, discount_amount, created_at, template:agreement_templates(file_path)"
         )
         .eq("student_id", id)
         .order("created_at", { ascending: false }),
@@ -134,7 +135,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   ] = await Promise.all([
     Promise.all(
       (agreements ?? []).map(async (a) => {
-        const links: { templateUrl?: string; signedUrl?: string } = {};
+        const links: { templateUrl?: string; signedUrl?: string; pdfUrl?: string } = {};
         const tmpl = one(a.template as never) as { file_path?: string } | null;
         if (tmpl?.file_path) {
           const { data } = await supabase.storage.from("documents").createSignedUrl(tmpl.file_path, 3600);
@@ -143,6 +144,10 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         if (a.signed_file_path) {
           const { data } = await supabase.storage.from("documents").createSignedUrl(a.signed_file_path, 3600);
           if (data?.signedUrl) links.signedUrl = data.signedUrl;
+        }
+        if (a.pdf_path) {
+          const { data } = await supabase.storage.from("documents").createSignedUrl(a.pdf_path, 3600);
+          if (data?.signedUrl) links.pdfUrl = data.signedUrl;
         }
         return [a.id, links] as const;
       })
@@ -282,6 +287,14 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                           View template
                         </a>
                       )
+                    )}
+                    {links?.pdfUrl && (
+                      <a href={links.pdfUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
+                        View generated agreement
+                      </a>
+                    )}
+                    {canModifyAgreement && a.status !== "signed" && (
+                      <GenerateAgreementPdfButton agreementId={a.id} studentId={id} revalidateTo={`/students/${id}`} hasPdf={Boolean(links?.pdfUrl)} />
                     )}
                     <Badge tone={a.status === "signed" ? "success" : "warning"}>{a.status}</Badge>
                     {isSuperAdmin && <DeleteAgreementButton agreementId={a.id} studentId={id} />}
