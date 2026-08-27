@@ -24,6 +24,10 @@ export const STAFF_NAV: NavItem[] = [
     children: [
       { label: "Staff Commission", href: "/finance/staff-commission" },
       { label: "Refunds", href: "/finance/refunds" },
+      { label: "Consultancy Fee", href: "/finance/consultancy-fee" },
+      { label: "Payroll", href: "/finance/payroll" },
+      { label: "University Commissions", href: "/finance/partner-commissions" },
+      { label: "Referrals", href: "/marketing/referrals" },
     ],
   },
   {
@@ -43,10 +47,6 @@ export const STAFF_NAV: NavItem[] = [
     children: [
       { label: "Staff Management", href: "/admin/staff" },
       { label: "Attendance", href: "/admin/attendance" },
-      { label: "Consultancy Fee", href: "/finance/consultancy-fee" },
-      { label: "Payroll", href: "/finance/payroll" },
-      { label: "University Commissions", href: "/finance/partner-commissions" },
-      { label: "Referrals", href: "/marketing/referrals" },
       { label: "Message templates", href: "/admin/message-templates" },
     ],
   },
