@@ -175,6 +175,18 @@ function Block({ block, fee }: { block: AgreementBlock; fee: AgreementPdfData["f
             ))}
         </View>
       );
+    case "heading":
+      return (
+        <View>
+          <Text style={styles.clauseHead}>{block.heading}</Text>
+          {block.intro &&
+            block.intro.split("\n").map((line, i) => (
+              <Text key={i} style={styles.clauseIntro}>
+                {line}
+              </Text>
+            ))}
+        </View>
+      );
     case "subheading":
       return <Text style={styles.subheading}>{block.text}</Text>;
     case "paragraph":
