@@ -39,6 +39,7 @@ export const STAFF_NAV: NavItem[] = [
     icon: "👥",
     children: [
       { label: "Staff Payroll", href: "/finance/commissions" },
+      { label: "Payroll", href: "/finance/payroll" },
       { label: "University Commissions", href: "/finance/partner-commissions" },
       { label: "Staff Management", href: "/admin/staff" },
       { label: "Referrals", href: "/marketing/referrals" },

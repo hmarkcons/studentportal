@@ -119,6 +119,47 @@ export async function updatePartnerCommissionStatus(id: string, revalidateTo: st
   revalidatePath(revalidateTo);
 }
 
+export async function upsertStaffPayroll(staffId: string, payrollMonth: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
+  const supabase = await createClient();
+  if (!(await requireFinance(supabase))) return { error: "Only Finance/Super Admin can update payroll." };
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const basic_salary = Number(formData.get("basic_salary") ?? 0);
+  const allowances = Number(formData.get("allowances") ?? 0);
+  const total_commission = Number(formData.get("total_commission") ?? 0);
+  const overtime = Number(formData.get("overtime") ?? 0);
+  const deduction_absent = Number(formData.get("deduction_absent") ?? 0);
+  const deduction_late = Number(formData.get("deduction_late") ?? 0);
+  const deduction_other = Number(formData.get("deduction_other") ?? 0);
+  const tax = Number(formData.get("tax") ?? 0);
+  const payment_status = String(formData.get("payment_status") ?? "pending");
+
+  const { error } = await supabase.from("staff_payroll").upsert(
+    {
+      staff_id: staffId,
+      payroll_month: payrollMonth,
+      basic_salary,
+      allowances,
+      total_commission,
+      overtime,
+      deduction_absent,
+      deduction_late,
+      deduction_other,
+      tax,
+      payment_status,
+      updated_by: user?.id,
+    },
+    { onConflict: "staff_id,payroll_month" }
+  );
+  if (error) return { error: error.message };
+
+  revalidatePath(revalidateTo);
+  return { success: true };
+}
+
 export async function updateStaffCommission(id: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
   if (!(await requireFinance(supabase))) return { error: "Only Finance/Super Admin can edit commission records." };
