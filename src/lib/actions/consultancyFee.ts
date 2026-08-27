@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail, isEmailConfigured } from "@/lib/email";
@@ -33,6 +33,7 @@ export async function createFeeProduct(_prevState: unknown, formData: FormData) 
   if (error) return { error: error.message };
 
   revalidatePath("/finance/consultancy-fee");
+  revalidateTag("fee-products", { expire: 0 });
   return { success: true };
 }
 
@@ -49,6 +50,7 @@ export async function updateFeeProduct(productId: string, _prevState: unknown, f
   if (error) return { error: error.message };
 
   revalidatePath("/finance/consultancy-fee");
+  revalidateTag("fee-products", { expire: 0 });
   return { success: true };
 }
 
@@ -60,6 +62,7 @@ export async function deleteFeeProduct(productId: string) {
   if (error) return { error: error.message };
 
   revalidatePath("/finance/consultancy-fee");
+  revalidateTag("fee-products", { expire: 0 });
   return { success: true };
 }
 

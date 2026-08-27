@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { finalizeApplication, unfinalizeApplication } from "@/lib/actions/applications";
+import { Button } from "@/components/ui/Button";
 
 export function FinalizeApplicationButton({
   applicationId,
@@ -29,16 +30,9 @@ export function FinalizeApplicationButton({
 
   return (
     <div className="flex flex-col items-end">
-      <button
-        type="button"
-        onClick={handle}
-        disabled={pending}
-        className={`rounded-md border px-2 py-0.5 text-xs disabled:opacity-50 ${
-          isFinalized ? "border-success text-success hover:bg-bg" : "border-border text-muted hover:bg-bg"
-        }`}
-      >
-        {pending ? "…" : isFinalized ? "Un-finalize" : "Finalize for visa"}
-      </button>
+      <Button type="button" onClick={handle} pending={pending} size="sm" variant={isFinalized ? "success" : "outline"}>
+        {isFinalized ? "Un-finalize" : "Finalize for visa"}
+      </Button>
       {error && <p className="mt-1 text-xs text-danger">{error}</p>}
     </div>
   );

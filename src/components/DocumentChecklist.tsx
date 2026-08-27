@@ -3,6 +3,9 @@
 import { useActionState, useState, useTransition } from "react";
 import { uploadDocument, reviewDocument, addDocumentRequirement, deleteDocumentRequirement } from "@/lib/actions/documents";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Input, Select } from "@/components/ui/Input";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { DOCUMENT_STATUS_TONE } from "@/lib/constants";
 import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
 
@@ -16,6 +19,20 @@ export type DocRow = {
   fileUrl?: string | null;
   name?: string | null;
 };
+
+const REQUIREMENT_CATEGORIES = [
+  "admission",
+  "interview",
+  "attestation",
+  "visa",
+  "scholarship",
+  "scholarship_documents",
+  "italian_translations",
+  "visa_sticker",
+  "travel",
+  "enrollment",
+  "other",
+];
 
 function UploadRow({ doc, studentId, revalidateTo }: { doc: DocRow; studentId: string; revalidateTo: string }) {
   const action = uploadDocument.bind(null, doc.id, studentId, revalidateTo);
@@ -66,61 +83,32 @@ function UploadRow({ doc, studentId, revalidateTo }: { doc: DocRow; studentId: s
       {showUploadForm ? (
         <form action={formAction} className="flex items-center gap-2">
           <input type="file" name="file" accept={ACCEPTED_DOCUMENT_ACCEPT} className="text-xs" />
-          <button type="submit" disabled={pending} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-bg disabled:opacity-50">
+          <Button type="submit" pending={pending} size="sm">
             Upload
-          </button>
+          </Button>
           {isVerified && (
-            <button
-              type="button"
-              onClick={() => setShowReplace(false)}
-              className="text-xs text-muted hover:underline"
-            >
+            <button type="button" onClick={() => setShowReplace(false)} className="text-xs text-muted hover:underline">
               Cancel
             </button>
           )}
         </form>
       ) : (
-        <button
-          type="button"
-          onClick={() => setShowReplace(true)}
-          className="rounded-md border border-border px-2 py-1 text-xs text-muted hover:bg-bg"
-        >
+        <Button type="button" variant="outline" size="sm" onClick={() => setShowReplace(true)}>
           Replace document
-        </button>
+        </Button>
       )}
 
       <div className="flex items-center gap-1">
-        <button
-          type="button"
-          onClick={() => review("verified")}
-          disabled={!doc.file_path || reviewPending}
-          className="rounded-md border border-success px-2 py-1 text-xs text-success disabled:opacity-40"
-        >
+        <Button type="button" variant="success" size="sm" onClick={() => review("verified")} disabled={!doc.file_path || reviewPending}>
           Accept
-        </button>
-        <input
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          placeholder="reason"
-          className="w-24 rounded-md border border-border px-2 py-1 text-xs"
-        />
-        <button
-          type="button"
-          onClick={() => review("rejected")}
-          disabled={!doc.file_path || reviewPending}
-          className="rounded-md border border-danger px-2 py-1 text-xs text-danger disabled:opacity-40"
-        >
+        </Button>
+        <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="reason" className="w-24" />
+        <Button type="button" variant="danger" size="sm" onClick={() => review("rejected")} disabled={!doc.file_path || reviewPending}>
           Reject
-        </button>
-        <button
-          type="button"
-          onClick={remove}
-          disabled={reviewPending}
-          className="rounded-md border border-border px-2 py-1 text-xs text-muted hover:bg-bg disabled:opacity-40"
-          title="Remove this document from the checklist"
-        >
+        </Button>
+        <Button type="button" variant="outline" size="sm" onClick={remove} disabled={reviewPending} title="Remove this document from the checklist">
           🗑️
-        </button>
+        </Button>
       </div>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
       {reviewError && <p className="text-xs text-danger">{reviewError}</p>}
@@ -142,30 +130,18 @@ function AddRequirementForm({
 
   return (
     <form action={formAction} className="mt-3 flex flex-wrap items-end gap-2 border-t border-border pt-3">
-      <input name="name" placeholder="Document name" required className="rounded-md border border-border px-2 py-1.5 text-sm" />
-      <select name="category" className="rounded-md border border-border px-2 py-1.5 text-sm">
-        {[
-          "admission",
-          "interview",
-          "attestation",
-          "visa",
-          "scholarship",
-          "scholarship_documents",
-          "italian_translations",
-          "visa_sticker",
-          "travel",
-          "enrollment",
-          "other",
-        ].map((c) => (
+      <Input name="name" placeholder="Document name" required className="w-auto" />
+      <Select name="category" className="w-auto">
+        {REQUIREMENT_CATEGORIES.map((c) => (
           <option key={c} value={c}>
             {c}
           </option>
         ))}
-      </select>
-      <input name="deadline" type="date" className="rounded-md border border-border px-2 py-1.5 text-sm" />
-      <button type="submit" disabled={pending} className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-ink disabled:opacity-50">
+      </Select>
+      <Input name="deadline" type="date" className="w-auto" />
+      <Button type="submit" variant="primary" size="sm" pending={pending}>
         Add requirement
-      </button>
+      </Button>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
   );
@@ -185,7 +161,7 @@ export function DocumentChecklist({
   return (
     <div>
       {docs.length === 0 ? (
-        <p className="text-sm text-muted">No documents required yet.</p>
+        <EmptyState>No documents required yet.</EmptyState>
       ) : (
         <div className="flex flex-col divide-y divide-border">
           {docs.map((doc) => (

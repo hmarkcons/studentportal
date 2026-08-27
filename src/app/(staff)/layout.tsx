@@ -26,6 +26,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
       nav={STAFF_NAV}
       userName={staffRow.full_name}
       userSubtitle={ROLE_LABELS[staffRow.role] ?? staffRow.role}
+      showSearch
     >
       {children}
     </AppShell>

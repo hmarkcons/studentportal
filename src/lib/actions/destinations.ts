@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
 function slugifyStages(raw: string) {
@@ -48,6 +48,7 @@ export async function createDestination(_prevState: unknown, formData: FormData)
 
   if (error) return { error: error.message };
 
+  revalidateTag("destinations", { expire: 0 });
   redirect(`/setup/destinations/${data.id}`);
 }
 
@@ -92,6 +93,7 @@ export async function updateDestination(destinationId: string, _prevState: unkno
 
   revalidatePath(`/setup/destinations/${destinationId}`);
   revalidatePath("/setup/destinations");
+  revalidateTag("destinations", { expire: 0 });
   return { success: true };
 }
 
@@ -99,6 +101,7 @@ export async function deleteDestination(destinationId: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("destinations").delete().eq("id", destinationId);
   if (error) return { error: error.message };
+  revalidateTag("destinations", { expire: 0 });
   redirect("/setup/destinations");
 }
 
@@ -139,5 +142,6 @@ export async function importDestinations(_prevState: unknown, formData: FormData
   if (error) return { error: error.message };
 
   revalidatePath("/setup/destinations");
+  revalidateTag("destinations", { expire: 0 });
   return { success: true, count: records.length };
 }

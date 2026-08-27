@@ -2,6 +2,9 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { sendMessage } from "@/lib/actions/messages";
+import { Button } from "@/components/ui/Button";
+import { Input, Select } from "@/components/ui/Input";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 export type TemplateRow = { id: string; purpose: string; channel: string; body: string };
 
@@ -48,7 +51,7 @@ export function MessageThread({
   return (
     <div>
       <div className="flex flex-col gap-3">
-        {messages.length === 0 && <p className="text-sm text-muted">No messages yet.</p>}
+        {messages.length === 0 && <EmptyState>No messages yet.</EmptyState>}
         {messages.map((m) => (
           <div key={m.id} className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${m.direction === "outbound" ? "self-end bg-primary text-primary-ink" : "bg-bg text-ink"}`}>
             <p>{m.body}</p>
@@ -59,8 +62,8 @@ export function MessageThread({
         ))}
       </div>
       {templates && templates.length > 0 && (
-        <select
-          className="mt-3 w-full rounded-md border border-border px-2 py-1.5 text-xs"
+        <Select
+          className="mt-3 text-xs"
           defaultValue=""
           onChange={(e) => {
             const t = templates.find((t) => t.id === e.target.value);
@@ -73,20 +76,13 @@ export function MessageThread({
               {t.purpose} ({t.channel})
             </option>
           ))}
-        </select>
+        </Select>
       )}
       <form action={formAction} className="mt-2 flex gap-2">
-        <input
-          name="body"
-          placeholder={placeholder}
-          required
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          className="flex-1 rounded-md border border-border px-3 py-2 text-sm"
-        />
-        <button type="submit" disabled={pending} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-ink disabled:opacity-50">
+        <Input name="body" placeholder={placeholder} required value={body} onChange={(e) => setBody(e.target.value)} className="flex-1" />
+        <Button type="submit" variant="primary" pending={pending}>
           Send
-        </button>
+        </Button>
       </form>
       {state?.error && <p className="mt-1 text-xs text-danger">{state.error}</p>}
     </div>

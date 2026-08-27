@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { parseCsvWithHeader } from "@/lib/csv";
 
@@ -21,6 +21,7 @@ export async function createUniversity(_prevState: unknown, formData: FormData) 
   const { data, error } = await supabase.from("universities").insert({ destination_id, name, city, region, type }).select("id").single();
   if (error) return { error: error.message };
 
+  revalidateTag("universities", { expire: 0 });
   redirect(`/setup/universities/${data.id}`);
 }
 
@@ -42,6 +43,7 @@ export async function updateUniversity(universityId: string, _prevState: unknown
 
   revalidatePath(`/setup/universities/${universityId}`);
   revalidatePath("/setup/universities");
+  revalidateTag("universities", { expire: 0 });
   return { success: true };
 }
 
@@ -49,6 +51,7 @@ export async function deleteUniversity(universityId: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("universities").delete().eq("id", universityId);
   if (error) return { error: error.message };
+  revalidateTag("universities", { expire: 0 });
   redirect("/setup/universities");
 }
 
@@ -147,6 +150,7 @@ export async function importUniversities(_prevState: unknown, formData: FormData
   if (error) return { error: error.message };
 
   revalidatePath("/setup/universities");
+  revalidateTag("universities", { expire: 0 });
   return { success: true, count: records.length };
 }
 

@@ -14,6 +14,7 @@ import { DashboardTaskList, type DashboardTaskRow } from "./DashboardTaskList";
 import { listCredentialTypesAction } from "@/lib/actions/countryTracker";
 import { LeadEditForm } from "@/components/LeadEditForm";
 import { RegistrationEditForm } from "./RegistrationEditForm";
+import { getCachedDestinations, getCachedCounselors, getCachedAgreementTemplates, getCachedFeeProducts } from "@/lib/cachedQueries";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -29,63 +30,69 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   // ---- Level 1: every query below is independent of every other — fetch all
   // of them concurrently instead of one round trip at a time. ----
   const [
-    { data: student },
-    { data: profile },
-    { data: leadRegistration },
-    { data: selectedDestinations },
-    { data: allDestinations },
-    { data: counselors },
-    { data: templates },
-    { data: agreements },
-    { data: invoices },
-    { data: feeProducts },
-    { data: applications },
-    { data: rawDocs },
-    existingCredentialTypes,
+    [
+      { data: student },
+      { data: profile },
+      { data: leadRegistration },
+      { data: selectedDestinations },
+      { data: agreements },
+      { data: invoices },
+      { data: applications },
+      { data: rawDocs },
+      existingCredentialTypes,
+    ],
+    allDestinations,
+    counselors,
+    templates,
+    feeProducts,
   ] = await Promise.all([
-    supabase
-      .from("students")
-      .select(
-        "auth_user_id, full_name, contact_number, email, platform_source, current_qualification, level_applying_for, course_of_interest, date_of_birth, address, home_phone"
-      )
-      .eq("id", id)
-      .maybeSingle(),
-    supabase.from("student_profiles").select("*").eq("student_id", id).maybeSingle(),
-    supabase.from("leads").select("assigned_counselor_id, discount_amount, discount_reason").eq("id", id).maybeSingle(),
-    supabase.from("lead_destinations").select("destination_id").eq("lead_id", id),
-    supabase.from("destinations").select("id, display_name").order("display_name"),
-    supabase.from("staff").select("id, full_name").order("full_name"),
-    supabase.from("agreement_templates").select("id, signatory_name, destination:destinations(display_name)"),
-    supabase
-      .from("agreements")
-      .select(
-        "id, status, signing_method, signed_file_path, email_verified, discount_amount, created_at, template:agreement_templates(file_path)"
-      )
-      .eq("student_id", id)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("invoices")
-      .select(
-        "id, admin_charge, consultancy_fee, currency, sent_status, agreement_id, pdf_path, invoice_number, intake, terms, admin_fee_status, admin_fee_paid_date, admin_fee_payment_method"
-      )
-      .eq("student_id", id),
-    supabase.from("fee_products").select("id, name, default_amount, default_currency").order("name"),
-    supabase
-      .from("applications")
-      .select(
-        `id, current_stage, intake, deadline,
-         university:universities(name, destination:destinations(country_code, display_name)),
-         program:programs(name)`
-      )
-      .eq("student_id", id)
-      .order("created_at", { ascending: true }),
-    supabase
-      .from("student_documents")
-      .select("id, category, custom_name, status, file_path, deadline, rejected_reason, application_id, template:document_templates(name)")
-      .eq("student_id", id)
-      .order("created_at", { ascending: false })
-      .returns<(DocRow & { application_id: string | null; custom_name: string | null; template: { name: string } | { name: string }[] | null })[]>(),
-    listCredentialTypesAction("student", id),
+    Promise.all([
+      supabase
+        .from("students")
+        .select(
+          "auth_user_id, full_name, contact_number, email, platform_source, current_qualification, level_applying_for, course_of_interest, date_of_birth, address, home_phone"
+        )
+        .eq("id", id)
+        .maybeSingle(),
+      supabase.from("student_profiles").select("*").eq("student_id", id).maybeSingle(),
+      supabase.from("leads").select("assigned_counselor_id, discount_amount, discount_reason").eq("id", id).maybeSingle(),
+      supabase.from("lead_destinations").select("destination_id").eq("lead_id", id),
+      supabase
+        .from("agreements")
+        .select(
+          "id, status, signing_method, signed_file_path, email_verified, discount_amount, created_at, template:agreement_templates(file_path)"
+        )
+        .eq("student_id", id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("invoices")
+        .select(
+          "id, admin_charge, consultancy_fee, currency, sent_status, agreement_id, pdf_path, invoice_number, intake, terms, admin_fee_status, admin_fee_paid_date, admin_fee_payment_method"
+        )
+        .eq("student_id", id),
+      supabase
+        .from("applications")
+        .select(
+          `id, current_stage, intake, deadline,
+           university:universities(name, destination:destinations(country_code, display_name)),
+           program:programs(name)`
+        )
+        .eq("student_id", id)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("student_documents")
+        .select("id, category, custom_name, status, file_path, deadline, rejected_reason, application_id, template:document_templates(name)")
+        .eq("student_id", id)
+        .order("created_at", { ascending: false })
+        .returns<(DocRow & { application_id: string | null; custom_name: string | null; template: { name: string } | { name: string }[] | null })[]>(),
+      listCredentialTypesAction("student", id),
+    ]),
+    // Reference/lookup data — identical for every staff member, cached for 5
+    // minutes and invalidated on demand from the Setup pages that edit it.
+    getCachedDestinations(),
+    getCachedCounselors(),
+    getCachedAgreementTemplates(),
+    getCachedFeeProducts(),
   ]);
 
   const signedAgreement = agreements?.find((a) => a.status === "signed");

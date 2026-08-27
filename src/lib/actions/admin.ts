@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -64,6 +64,7 @@ export async function createStaffAccount(_prevState: unknown, formData: FormData
   if (error) return { error: error.message };
 
   revalidatePath("/admin/staff");
+  revalidateTag("staff-directory", { expire: 0 });
   return { success: true, email, password: tempPassword };
 }
 
@@ -78,6 +79,7 @@ export async function updateStaffDetails(staffId: string, _prevState: unknown, f
   if (error) return { error: error.message };
 
   revalidatePath("/admin/staff");
+  revalidateTag("staff-directory", { expire: 0 });
   return { success: true };
 }
 
@@ -98,6 +100,7 @@ export async function deleteStaffAccount(staffId: string) {
   await admin.auth.admin.deleteUser(staffId).catch(() => {});
 
   revalidatePath("/admin/staff");
+  revalidateTag("staff-directory", { expire: 0 });
   return { success: true };
 }
 
@@ -105,6 +108,7 @@ export async function updateStaffStatus(staffId: string, status: string) {
   const supabase = await createClient();
   await supabase.from("staff").update({ status }).eq("id", staffId);
   revalidatePath("/admin/staff");
+  revalidateTag("staff-directory", { expire: 0 });
 }
 
 export async function approvePartnerAccount(accountId: string, status: string) {

@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
 export async function createAgreementTemplate(_prevState: unknown, formData: FormData) {
@@ -22,6 +22,7 @@ export async function createAgreementTemplate(_prevState: unknown, formData: For
   if (error) return { error: error.message };
 
   revalidatePath("/setup/agreement-templates");
+  revalidateTag("agreement-templates", { expire: 0 });
   return { success: true };
 }
 
@@ -31,5 +32,6 @@ export async function deleteAgreementTemplate(templateId: string) {
   if (error) return { error: error.message };
 
   revalidatePath("/setup/agreement-templates");
+  revalidateTag("agreement-templates", { expire: 0 });
   return { success: true };
 }

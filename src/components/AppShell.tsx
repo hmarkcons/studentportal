@@ -1,9 +1,18 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { ThemeToggle } from "./ThemeToggle";
+import { Button } from "./ui/Button";
 import { signOut } from "@/lib/actions/auth";
+
+// Pulls in React Query's client runtime — only staff nav uses search, so
+// student/partner portals never ship this code.
+const GlobalSearch = dynamic(() => import("./GlobalSearch").then((m) => m.GlobalSearch), {
+  ssr: false,
+  loading: () => <div className="h-8 w-64 animate-pulse rounded-md bg-border/40" />,
+});
 
 export type NavItem = {
   label: string;
@@ -17,12 +26,14 @@ export function AppShell({
   nav,
   userName,
   userSubtitle,
+  showSearch = false,
   children,
 }: {
   brand: string;
   nav: NavItem[];
   userName: string;
   userSubtitle: string;
+  showSearch?: boolean;
   children: React.ReactNode;
 }) {
   const activePath = usePathname();
@@ -91,31 +102,17 @@ export function AppShell({
 
       <div className="flex flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-border bg-card px-6 py-3">
-          <input
-            type="search"
-            placeholder="Search…"
-            className="w-64 rounded-md border border-border bg-bg px-3 py-1.5 text-sm outline-none focus:border-primary"
-          />
+          {showSearch ? <GlobalSearch /> : <div />}
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <button
-              type="button"
-              className="flex h-9 w-9 items-center justify-center rounded-md border border-border text-sm hover:bg-bg"
-              title="Notifications"
-            >
-              🔔
-            </button>
             <div className="text-right">
               <p className="text-sm font-medium text-ink">{userName}</p>
               <p className="text-xs text-muted">{userSubtitle}</p>
             </div>
             <form action={signOut}>
-              <button
-                type="submit"
-                className="rounded-md border border-border px-3 py-1.5 text-sm text-ink hover:bg-bg"
-              >
+              <Button type="submit" variant="outline">
                 Sign out
-              </button>
+              </Button>
             </form>
           </div>
         </header>
