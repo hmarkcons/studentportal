@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { VisaForm } from "../applications/[appId]/VisaForm";
 
 function one<T>(v: T | T[] | null) {
@@ -19,7 +20,7 @@ export default async function StudentVisaTab(props: PageProps<"/students/[id]/vi
   if (!applications || applications.length === 0) {
     return (
       <Card>
-        <p className="text-sm text-muted">No applications yet — visa tracking appears once an application is added.</p>
+        <EmptyState>No applications yet — visa tracking appears once an application is added.</EmptyState>
       </Card>
     );
   }
@@ -29,13 +30,13 @@ export default async function StudentVisaTab(props: PageProps<"/students/[id]/vi
   if (!finalized) {
     return (
       <Card>
-        <p className="text-sm text-muted">
+        <EmptyState>
           No university has been finalized for visa yet. Go to the{" "}
           <Link href={`/students/${id}/applications`} className="text-primary hover:underline">
             Applications tab
           </Link>{" "}
           and click &quot;Finalize for visa&quot; on the university the student is actually pursuing a visa for.
-        </p>
+        </EmptyState>
       </Card>
     );
   }

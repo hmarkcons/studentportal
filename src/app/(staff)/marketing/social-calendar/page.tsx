@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { NewSocialPostForm } from "./NewSocialPostForm";
 import { StatusAdvance } from "./StatusAdvance";
 
@@ -28,7 +29,11 @@ export default async function SocialCalendarPage() {
             <StatusAdvance id={p.id} status={p.status} />
           </div>
         ))}
-        {(!posts || posts.length === 0) && <p className="px-4 py-6 text-sm text-muted">No slots yet.</p>}
+        {(!posts || posts.length === 0) && (
+          <div className="px-4 py-6">
+            <EmptyState>No slots yet.</EmptyState>
+          </div>
+        )}
       </div>
     </div>
   );

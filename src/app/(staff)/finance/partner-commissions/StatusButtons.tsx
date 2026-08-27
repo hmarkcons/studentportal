@@ -1,17 +1,18 @@
 "use client";
 
 import { updatePartnerCommissionStatus } from "@/lib/actions/finance";
+import { Select } from "@/components/ui/Input";
 
 const STATUSES = ["not_yet_due", "pending", "received", "partially_received", "overdue", "disputed"];
 
 export function StatusButtons({ id }: { id: string }) {
   return (
-    <select
+    <Select
       defaultValue=""
       onChange={(e) => {
         if (e.target.value) updatePartnerCommissionStatus(id, "/finance/partner-commissions", e.target.value);
       }}
-      className="rounded-md border border-border px-2 py-1 text-xs"
+      className="px-2 py-1 text-xs"
     >
       <option value="">Change status…</option>
       {STATUSES.map((s) => (
@@ -19,6 +20,6 @@ export function StatusButtons({ id }: { id: string }) {
           {s.replace(/_/g, " ")}
         </option>
       ))}
-    </select>
+    </Select>
   );
 }

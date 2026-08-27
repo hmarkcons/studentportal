@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { NewCampaignForm } from "./NewCampaignForm";
 
 export default async function CampaignsPage() {
@@ -33,7 +34,7 @@ export default async function CampaignsPage() {
             )}
           </Card>
         ))}
-        {(!campaigns || campaigns.length === 0) && <p className="text-sm text-muted">No campaigns yet.</p>}
+        {(!campaigns || campaigns.length === 0) && <EmptyState>No campaigns yet.</EmptyState>}
       </div>
     </div>
   );

@@ -2,6 +2,8 @@
 
 import { useActionState, useMemo, useState } from "react";
 import { createApplication } from "@/lib/actions/applications";
+import { Button } from "@/components/ui/Button";
+import { Input, Select } from "@/components/ui/Input";
 
 type Destination = { id: string; display_name: string };
 type University = { id: string; name: string; destination_id: string };
@@ -34,14 +36,13 @@ export function NewApplicationForm({
     <form action={formAction} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-medium text-ink">Country</label>
-        <select
+        <Select
           required
           value={destinationId}
           onChange={(e) => {
             setDestinationId(e.target.value);
             setUniversityId("");
           }}
-          className="rounded-md border border-border bg-card px-3 py-2 text-sm"
         >
           <option value="">Choose…</option>
           {destinations.map((d) => (
@@ -49,19 +50,18 @@ export function NewApplicationForm({
               {d.display_name}
             </option>
           ))}
-        </select>
+        </Select>
         {destinations.length === 0 && (
           <p className="text-xs text-danger">This student isn&apos;t registered for any destination yet.</p>
         )}
       </div>
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-medium text-ink">University</label>
-        <select
+        <Select
           name="university_id"
           required
           value={universityId}
           onChange={(e) => setUniversityId(e.target.value)}
-          className="rounded-md border border-border bg-card px-3 py-2 text-sm"
         >
           <option value="">Choose…</option>
           {filteredUniversities.map((u) => (
@@ -69,19 +69,18 @@ export function NewApplicationForm({
               {u.name}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
       <div className="flex flex-col gap-2">
         <label className="text-sm font-medium text-ink">Programs</label>
         {programSlots.map((value, i) => (
-          <select
+          <Select
             key={i}
             name="program_ids"
             value={value}
             onChange={(e) =>
               setProgramSlots((prev) => prev.map((v, idx) => (idx === i ? e.target.value : v)))
             }
-            className="rounded-md border border-border bg-card px-3 py-2 text-sm"
           >
             <option value="">Program {i + 1}…</option>
             {filteredPrograms.map((p) => (
@@ -89,7 +88,7 @@ export function NewApplicationForm({
                 {p.name}
               </option>
             ))}
-          </select>
+          </Select>
         ))}
         <button
           type="button"
@@ -102,17 +101,17 @@ export function NewApplicationForm({
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-ink">Intake</label>
-          <input name="intake" placeholder="e.g. Fall 2026" className="rounded-md border border-border bg-card px-3 py-2 text-sm" />
+          <Input name="intake" placeholder="e.g. Fall 2026" />
         </div>
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-ink">Deadline</label>
-          <input name="deadline" type="date" className="rounded-md border border-border bg-card px-3 py-2 text-sm" />
+          <Input name="deadline" type="date" />
         </div>
       </div>
       {state?.error && <p className="text-sm text-danger">{state.error}</p>}
-      <button type="submit" disabled={pending} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-ink disabled:opacity-50">
-        {pending ? "Creating…" : "Create application"}
-      </button>
+      <Button type="submit" variant="primary" pending={pending}>
+        Create application
+      </Button>
     </form>
   );
 }

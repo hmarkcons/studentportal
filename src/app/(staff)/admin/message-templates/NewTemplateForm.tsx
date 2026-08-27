@@ -2,6 +2,8 @@
 
 import { useActionState } from "react";
 import { createMessageTemplate } from "@/lib/actions/messageTemplates";
+import { Input, Select, Textarea } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
 
 export function NewTemplateForm() {
   const [state, formAction, pending] = useActionState(createMessageTemplate, undefined);
@@ -9,18 +11,18 @@ export function NewTemplateForm() {
   return (
     <form action={formAction} className="flex flex-col gap-2">
       <div className="flex flex-wrap gap-2">
-        <input name="purpose" placeholder="Purpose (e.g. Document reminder)" required className="min-w-[220px] flex-1 rounded-md border border-border px-2 py-1.5 text-sm" />
-        <select name="channel" required className="rounded-md border border-border px-2 py-1.5 text-sm">
+        <Input name="purpose" placeholder="Purpose (e.g. Document reminder)" required className="min-w-[220px] flex-1" />
+        <Select name="channel" required>
           <option value="email">Email</option>
           <option value="sms">SMS</option>
           <option value="whatsapp">WhatsApp</option>
-        </select>
+        </Select>
       </div>
-      <input name="subject" placeholder="Subject (email only)" className="rounded-md border border-border px-2 py-1.5 text-sm" />
-      <textarea name="body" placeholder="Message body…" required rows={3} className="rounded-md border border-border px-2 py-1.5 text-sm" />
-      <button type="submit" disabled={pending} className="self-start rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink disabled:opacity-50">
-        {pending ? "Adding…" : "Add template"}
-      </button>
+      <Input name="subject" placeholder="Subject (email only)" />
+      <Textarea name="body" placeholder="Message body…" required rows={3} />
+      <Button type="submit" variant="primary" pending={pending} className="self-start">
+        Add template
+      </Button>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
   );

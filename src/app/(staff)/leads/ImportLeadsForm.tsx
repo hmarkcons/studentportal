@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { importLeads } from "@/lib/actions/leads";
 import { SampleCsvButton } from "@/components/ui/SampleCsvButton";
+import { Button } from "@/components/ui/Button";
 
 const HEADERS = [
   "full_name",
@@ -24,9 +25,9 @@ export function ImportLeadsForm() {
       <summary className="cursor-pointer text-sm font-medium text-ink">Import leads from CSV</summary>
       <form action={formAction} className="mt-3 flex flex-wrap items-end gap-2">
         <input name="file" type="file" accept=".csv" required className="text-sm" />
-        <button type="submit" disabled={pending} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-ink disabled:opacity-50">
+        <Button type="submit" variant="primary" disabled={pending}>
           {pending ? "Importing…" : "Import"}
-        </button>
+        </Button>
         <SampleCsvButton filename="leads-sample.csv" headers={HEADERS} exampleRow={EXAMPLE} />
       </form>
       <p className="mt-2 text-xs text-muted">

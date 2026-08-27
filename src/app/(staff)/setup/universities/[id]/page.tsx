@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { AddProgramForm } from "./AddProgramForm";
 import { ImportProgramsForm } from "./ImportProgramsForm";
 import { UniversityEditForm } from "./UniversityEditForm";
@@ -63,7 +64,11 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
           {(programs ?? []).map((p) => (
             <ProgramRow key={p.id} program={p} universityId={id} canEdit={isSuperAdmin} />
           ))}
-          {(!programs || programs.length === 0) && <p className="py-2 text-sm text-muted">No programs added yet.</p>}
+          {(!programs || programs.length === 0) && (
+            <div className="py-2">
+              <EmptyState>No programs added yet.</EmptyState>
+            </div>
+          )}
         </div>
         <AddProgramForm universityId={id} />
         <ImportProgramsForm universityId={id} />

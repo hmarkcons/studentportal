@@ -2,8 +2,8 @@
 
 import { useActionState } from "react";
 import { registerPartnerAccount } from "@/lib/actions/partner-register";
-
-const inputClass = "rounded-md border border-border bg-card px-3 py-2 text-sm";
+import { Button } from "@/components/ui/Button";
+import { Input, Select } from "@/components/ui/Input";
 
 export function RegisterForm({ universities }: { universities: { id: string; name: string }[] }) {
   const [state, formAction, pending] = useActionState(registerPartnerAccount, undefined);
@@ -21,21 +21,21 @@ export function RegisterForm({ universities }: { universities: { id: string; nam
 
   return (
     <form action={formAction} className="mt-6 flex flex-col gap-4">
-      <input name="staff_name" placeholder="Your name" required className={inputClass} />
-      <select name="university_id" required className={inputClass}>
+      <Input name="staff_name" placeholder="Your name" required />
+      <Select name="university_id" required>
         <option value="">Your university…</option>
         {universities.map((u) => (
           <option key={u.id} value={u.id}>
             {u.name}
           </option>
         ))}
-      </select>
-      <input name="email" type="email" placeholder="Work email" required className={inputClass} />
-      <input name="password" type="password" placeholder="Password" required minLength={6} className={inputClass} />
+      </Select>
+      <Input name="email" type="email" placeholder="Work email" required />
+      <Input name="password" type="password" placeholder="Password" required minLength={6} />
       {state?.error && <p className="text-sm text-danger">{state.error}</p>}
-      <button type="submit" disabled={pending} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-ink disabled:opacity-50">
-        {pending ? "Submitting…" : "Register"}
-      </button>
+      <Button type="submit" variant="primary" pending={pending}>
+        Register
+      </Button>
     </form>
   );
 }

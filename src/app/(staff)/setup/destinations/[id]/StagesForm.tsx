@@ -2,6 +2,8 @@
 
 import { useActionState } from "react";
 import { updateDestinationStages } from "@/lib/actions/destinations";
+import { Button } from "@/components/ui/Button";
+import { Textarea } from "@/components/ui/Input";
 
 export function StagesForm({ destinationId, stages }: { destinationId: string; stages: string[] }) {
   const action = updateDestinationStages.bind(null, destinationId);
@@ -9,17 +11,12 @@ export function StagesForm({ destinationId, stages }: { destinationId: string; s
 
   return (
     <form action={formAction} className="flex flex-col gap-2">
-      <textarea
-        name="pipeline_stages"
-        rows={3}
-        defaultValue={stages.join(", ")}
-        className="rounded-md border border-border bg-card px-3 py-2 text-sm"
-      />
+      <Textarea name="pipeline_stages" rows={3} defaultValue={stages.join(", ")} />
       <p className="text-xs text-muted">Comma-separated, in order. Rejected/Declined/Withdrawn are always available regardless of this list.</p>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
-      <button type="submit" disabled={pending} className="self-start rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink disabled:opacity-50">
+      <Button type="submit" variant="primary" className="self-start" pending={pending}>
         Save stages
-      </button>
+      </Button>
     </form>
   );
 }

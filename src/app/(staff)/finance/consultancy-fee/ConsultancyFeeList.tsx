@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { InvoiceCard } from "@/app/(staff)/students/[id]/InvoicePanel";
 import { computeInvoiceStatus, type InvoiceStatus } from "@/lib/invoiceStatus";
+import { Input, Select } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 type Row = {
   invoice: Parameters<typeof InvoiceCard>[0]["invoice"];
@@ -43,25 +46,24 @@ export function ConsultancyFeeList({ rows, feeProducts }: { rows: Row[]; feeProd
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <input
+        <Input
           value={nameInput}
           onChange={(e) => setNameInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && search()}
           placeholder="Search student name…"
-          className="rounded-md border border-border bg-card px-3 py-1.5 text-sm"
         />
-        <select value={statusInput} onChange={(e) => setStatusInput(e.target.value)} className="rounded-md border border-border bg-card px-2 py-1.5 text-sm">
+        <Select value={statusInput} onChange={(e) => setStatusInput(e.target.value)}>
           <option value="all">All statuses</option>
           <option value="paid">Paid</option>
           <option value="pending">Pending</option>
           <option value="overdue">Overdue</option>
-        </select>
-        <button onClick={search} className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink">
+        </Select>
+        <Button variant="primary" onClick={search}>
           Search
-        </button>
-        <button onClick={clear} className="rounded-md border border-border px-3 py-1.5 text-sm text-muted hover:text-ink">
+        </Button>
+        <Button onClick={clear}>
           Clear
-        </button>
+        </Button>
       </div>
 
       <div className="flex flex-col gap-3">
@@ -82,7 +84,11 @@ export function ConsultancyFeeList({ rows, feeProducts }: { rows: Row[]; feeProd
             />
           </div>
         ))}
-        {filtered.length === 0 && <p className="py-10 text-center text-sm text-muted">No consultancy fee records match this search.</p>}
+        {filtered.length === 0 && (
+          <div className="py-10 text-center">
+            <EmptyState>No consultancy fee records match this search.</EmptyState>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -8,8 +8,8 @@ import {
   ADDITIONAL_SERVICE_LABELS,
   ADDITIONAL_SERVICE_FIELDS,
 } from "@/lib/additionalServiceFields";
-
-const inputClass = "rounded-md border border-border px-2 py-1.5 text-sm";
+import { Button } from "@/components/ui/Button";
+import { Input, Select } from "@/components/ui/Input";
 
 export function NewServiceRequestForm({ students }: { students: { id: string; full_name: string }[] }) {
   const [serviceType, setServiceType] = useState<(typeof ADDITIONAL_SERVICE_TYPES)[number]>(ADDITIONAL_SERVICE_TYPES[0]);
@@ -19,46 +19,45 @@ export function NewServiceRequestForm({ students }: { students: { id: string; fu
   return (
     <form action={formAction} className="flex flex-col gap-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <select name="student_id" required className={inputClass}>
+        <Select name="student_id" required>
           <option value="">Student…</option>
           {students.map((s) => (
             <option key={s.id} value={s.id}>
               {s.full_name}
             </option>
           ))}
-        </select>
-        <select
+        </Select>
+        <Select
           name="service_type"
           value={serviceType}
           onChange={(e) => setServiceType(e.target.value as typeof serviceType)}
-          className={inputClass}
         >
           {ADDITIONAL_SERVICE_TYPES.map((t) => (
             <option key={t} value={t}>
               {ADDITIONAL_SERVICE_LABELS[t]}
             </option>
           ))}
-        </select>
-        <input name="passport_number" placeholder="Passport number" className={inputClass} />
-        <input name="country_applying_to" placeholder="Country applying to" className={inputClass} />
+        </Select>
+        <Input name="passport_number" placeholder="Passport number" />
+        <Input name="country_applying_to" placeholder="Country applying to" />
         <label className="flex flex-col gap-1 text-xs text-muted">
           Documents submission date
-          <input name="documents_submission_date" type="date" className={inputClass} />
+          <Input name="documents_submission_date" type="date" />
         </label>
-        <input name="required_document_names" placeholder="Required documents (comma-separated)" className={inputClass} />
+        <Input name="required_document_names" placeholder="Required documents (comma-separated)" />
         <label className="flex items-center gap-2 text-sm text-ink">
           <input name="documents_received" type="checkbox" className="h-4 w-4" />
           Documents received
         </label>
-        <input name="pending_documents" placeholder="Pending documents (comma-separated)" className={inputClass} />
-        <input name="total_fee_paid" type="number" step="0.01" placeholder="Total fee paid" className={inputClass} />
+        <Input name="pending_documents" placeholder="Pending documents (comma-separated)" />
+        <Input name="total_fee_paid" type="number" step="0.01" placeholder="Total fee paid" />
         <label className="flex flex-col gap-1 text-xs text-muted">
           Fee receiving date
-          <input name="fee_receiving_date" type="date" className={inputClass} />
+          <Input name="fee_receiving_date" type="date" />
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
           Delivery date
-          <input name="delivery_date" type="date" className={inputClass} />
+          <Input name="delivery_date" type="date" />
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
           Proof of payment
@@ -78,16 +77,16 @@ export function NewServiceRequestForm({ students }: { students: { id: string; fu
                 {f.type === "boolean" ? (
                   <input type="checkbox" name={`extra_${f.key}`} className="h-4 w-4 self-start" />
                 ) : f.type === "select" ? (
-                  <select name={`extra_${f.key}`} className={inputClass}>
+                  <Select name={`extra_${f.key}`}>
                     <option value="">—</option>
                     {(f.options ?? []).map((o) => (
                       <option key={o} value={o}>
                         {o.replace(/_/g, " ")}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 ) : (
-                  <input type={f.type === "date" ? "date" : f.type === "number" ? "number" : "text"} name={`extra_${f.key}`} className={inputClass} />
+                  <Input type={f.type === "date" ? "date" : f.type === "number" ? "number" : "text"} name={`extra_${f.key}`} />
                 )}
               </div>
             ))}
@@ -98,13 +97,9 @@ export function NewServiceRequestForm({ students }: { students: { id: string; fu
       <input type="hidden" name="extra_field_keys" value={extraFields.map((f) => f.key).join(",")} />
 
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
-      <button
-        type="submit"
-        disabled={pending}
-        className="self-start rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink disabled:opacity-50"
-      >
+      <Button type="submit" disabled={pending} variant="primary" className="self-start">
         {pending ? "Adding…" : "Add request"}
-      </button>
+      </Button>
     </form>
   );
 }

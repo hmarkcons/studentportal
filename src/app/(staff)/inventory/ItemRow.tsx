@@ -3,6 +3,8 @@
 import { useActionState, useState } from "react";
 import { updateInventoryItem, deleteInventoryItem } from "@/lib/actions/inventory";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 
 type Item = {
   id: string;
@@ -25,17 +27,17 @@ export function ItemRow({ item, canManage }: { item: Item; canManage: boolean })
       <tr className="border-b border-border last:border-0">
         <td colSpan={5} className="px-4 py-3">
           <form action={formAction} className="flex flex-wrap items-end gap-2">
-            <input name="name" defaultValue={item.name} required className="rounded-md border border-border px-2 py-1.5 text-sm" />
-            <input name="category" defaultValue={item.category ?? ""} className="rounded-md border border-border px-2 py-1.5 text-sm" />
-            <input name="unit" defaultValue={item.unit ?? ""} className="w-28 rounded-md border border-border px-2 py-1.5 text-sm" />
-            <input name="quantity_on_hand" type="number" defaultValue={item.quantity_on_hand} className="w-28 rounded-md border border-border px-2 py-1.5 text-sm" />
-            <input name="low_stock_threshold" type="number" defaultValue={item.low_stock_threshold ?? ""} className="w-32 rounded-md border border-border px-2 py-1.5 text-sm" />
-            <button type="submit" disabled={pending} className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-ink disabled:opacity-50">
+            <Input name="name" defaultValue={item.name} required />
+            <Input name="category" defaultValue={item.category ?? ""} />
+            <Input name="unit" defaultValue={item.unit ?? ""} className="w-28" />
+            <Input name="quantity_on_hand" type="number" defaultValue={item.quantity_on_hand} className="w-28" />
+            <Input name="low_stock_threshold" type="number" defaultValue={item.low_stock_threshold ?? ""} className="w-32" />
+            <Button type="submit" variant="primary" size="sm" pending={pending}>
               Save
-            </button>
-            <button type="button" onClick={() => setEditing(false)} className="text-xs text-muted hover:underline">
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>
               Cancel
-            </button>
+            </Button>
             {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
           </form>
         </td>
@@ -54,17 +56,18 @@ export function ItemRow({ item, canManage }: { item: Item; canManage: boolean })
       <td className="px-4 py-3">
         {canManage && (
           <div className="flex items-center gap-2">
-            <button onClick={() => setEditing(true)} className="rounded p-1 text-muted hover:text-primary">
+            <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
               ✏️
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => {
                 if (confirm(`Delete ${item.name}?`)) deleteInventoryItem(item.id);
               }}
-              className="rounded p-1 text-muted hover:text-danger"
             >
               🗑️
-            </button>
+            </Button>
           </div>
         )}
       </td>

@@ -3,8 +3,8 @@
 import { useActionState, useState } from "react";
 import { updateLead } from "@/lib/actions/leads";
 import { STUDY_LEVELS } from "@/lib/constants";
-
-const inputClass = "rounded-md border border-border bg-card px-2 py-1.5 text-sm";
+import { Button } from "@/components/ui/Button";
+import { Input, Select } from "@/components/ui/Input";
 
 export type LeadEditable = {
   id: string;
@@ -45,59 +45,59 @@ export function LeadEditForm({
     <form action={formAction} className="grid grid-cols-1 gap-2 rounded-md border border-border p-3 sm:grid-cols-2">
       <label className="flex flex-col gap-1 text-xs text-muted">
         Name
-        <input name="full_name" defaultValue={lead.full_name} required className={inputClass} />
+        <Input name="full_name" defaultValue={lead.full_name} required />
       </label>
       <label className="flex flex-col gap-1 text-xs text-muted">
         Contact number
-        <input name="contact_number" defaultValue={lead.contact_number ?? ""} className={inputClass} />
+        <Input name="contact_number" defaultValue={lead.contact_number ?? ""} />
       </label>
       <label className="flex flex-col gap-1 text-xs text-muted">
         Email
-        <input name="email" type="email" defaultValue={lead.email ?? ""} className={inputClass} />
+        <Input name="email" type="email" defaultValue={lead.email ?? ""} />
       </label>
       <label className="flex flex-col gap-1 text-xs text-muted">
         Platform / source
-        <input name="platform_source" defaultValue={lead.platform_source ?? ""} className={inputClass} />
+        <Input name="platform_source" defaultValue={lead.platform_source ?? ""} />
       </label>
       <label className="flex flex-col gap-1 text-xs text-muted">
         Current qualification
-        <input name="current_qualification" defaultValue={lead.current_qualification ?? ""} className={inputClass} />
+        <Input name="current_qualification" defaultValue={lead.current_qualification ?? ""} />
       </label>
       <label className="flex flex-col gap-1 text-xs text-muted">
         Applying for
-        <select name="level_applying_for" defaultValue={lead.level_applying_for ?? ""} className={inputClass}>
+        <Select name="level_applying_for" defaultValue={lead.level_applying_for ?? ""}>
           <option value="">—</option>
           {STUDY_LEVELS.map((l) => (
             <option key={l} value={l}>
               {l}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       <label className="col-span-full flex flex-col gap-1 text-xs text-muted">
         Course of interest
-        <input name="course_of_interest" defaultValue={lead.course_of_interest ?? ""} className={inputClass} />
+        <Input name="course_of_interest" defaultValue={lead.course_of_interest ?? ""} />
       </label>
       {showRegistrationFields && (
         <>
           <label className="flex flex-col gap-1 text-xs text-muted">
             Date of birth
-            <input name="date_of_birth" type="date" defaultValue={lead.date_of_birth ?? ""} className={inputClass} />
+            <Input name="date_of_birth" type="date" defaultValue={lead.date_of_birth ?? ""} />
           </label>
           <label className="flex flex-col gap-1 text-xs text-muted">
             Home phone
-            <input name="home_phone" defaultValue={lead.home_phone ?? ""} className={inputClass} />
+            <Input name="home_phone" defaultValue={lead.home_phone ?? ""} />
           </label>
           <label className="col-span-full flex flex-col gap-1 text-xs text-muted">
             Address
-            <input name="address" defaultValue={lead.address ?? ""} className={inputClass} />
+            <Input name="address" defaultValue={lead.address ?? ""} />
           </label>
         </>
       )}
       <div className="col-span-full flex items-center gap-2">
-        <button type="submit" disabled={pending} className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-ink disabled:opacity-50">
-          {pending ? "Saving…" : "Save"}
-        </button>
+        <Button type="submit" variant="primary" size="sm" pending={pending}>
+          Save
+        </Button>
         <button type="button" onClick={() => setEditing(false)} className="text-xs text-muted hover:underline">
           Cancel
         </button>

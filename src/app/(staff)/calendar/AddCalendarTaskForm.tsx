@@ -2,6 +2,9 @@
 
 import { useActionState, useState } from "react";
 import { addApplicationTask } from "@/lib/actions/applications";
+import { Input, Select } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 export function AddCalendarTaskForm({ applications }: { applications: { id: string; label: string }[] }) {
   const [applicationId, setApplicationId] = useState(applications[0]?.id ?? "");
@@ -9,28 +12,28 @@ export function AddCalendarTaskForm({ applications }: { applications: { id: stri
   const [state, formAction, pending] = useActionState(action, undefined);
 
   if (applications.length === 0) {
-    return <p className="text-sm text-muted">No applications yet — add a student application before scheduling a task.</p>;
+    return <EmptyState>No applications yet — add a student application before scheduling a task.</EmptyState>;
   }
 
   return (
     <form action={formAction} className="flex flex-wrap items-end gap-2">
-      <select value={applicationId} onChange={(e) => setApplicationId(e.target.value)} className="rounded-md border border-border px-2 py-1.5 text-sm">
+      <Select value={applicationId} onChange={(e) => setApplicationId(e.target.value)}>
         {applications.map((a) => (
           <option key={a.id} value={a.id}>
             {a.label}
           </option>
         ))}
-      </select>
-      <input name="description" placeholder="Task" required className="min-w-[200px] flex-1 rounded-md border border-border px-2 py-1.5 text-sm" />
-      <input name="due_date" type="date" required className="rounded-md border border-border px-2 py-1.5 text-sm" />
-      <select name="priority" defaultValue="medium" className="rounded-md border border-border px-2 py-1.5 text-sm">
+      </Select>
+      <Input name="description" placeholder="Task" required className="min-w-[200px] flex-1" />
+      <Input name="due_date" type="date" required />
+      <Select name="priority" defaultValue="medium">
         <option value="urgent">Urgent</option>
         <option value="medium">Medium</option>
         <option value="low">Low</option>
-      </select>
-      <button type="submit" disabled={pending} className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink disabled:opacity-50">
+      </Select>
+      <Button type="submit" variant="primary" pending={pending}>
         Add task
-      </button>
+      </Button>
       {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
     </form>
   );

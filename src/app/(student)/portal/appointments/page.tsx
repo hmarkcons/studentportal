@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -64,7 +65,11 @@ export default async function PortalAppointmentsPage() {
               <CountdownBadge dateStr={a.date} />
             </div>
           ))}
-          {appointments.length === 0 && <p className="py-4 text-sm text-muted">No appointments scheduled yet.</p>}
+          {appointments.length === 0 && (
+            <div className="py-4">
+              <EmptyState>No appointments scheduled yet.</EmptyState>
+            </div>
+          )}
         </div>
       </Card>
     </div>

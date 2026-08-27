@@ -7,6 +7,9 @@ import {
   updateApplicationTask,
   deleteApplicationTask,
 } from "@/lib/actions/applications";
+import { Button } from "@/components/ui/Button";
+import { Input, Select } from "@/components/ui/Input";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 export type TaskRow = { id: string; description: string; due_date: string | null; status: string; priority: string; label?: string };
 
@@ -24,16 +27,16 @@ function TaskRowView({ task, revalidateTo }: { task: TaskRow; revalidateTo: stri
   if (editing) {
     return (
       <form action={formAction} className="flex flex-wrap items-end gap-2 rounded-md border border-border p-2">
-        <input name="description" defaultValue={task.description} required className="flex-1 rounded-md border border-border px-2 py-1 text-xs" />
-        <input name="due_date" type="date" defaultValue={task.due_date ?? ""} className="rounded-md border border-border px-2 py-1 text-xs" />
-        <select name="priority" defaultValue={task.priority} className="rounded-md border border-border px-2 py-1 text-xs">
+        <Input name="description" defaultValue={task.description} required className="flex-1" />
+        <Input name="due_date" type="date" defaultValue={task.due_date ?? ""} />
+        <Select name="priority" defaultValue={task.priority}>
           <option value="urgent">Urgent</option>
           <option value="medium">Medium</option>
           <option value="low">Low</option>
-        </select>
-        <button type="submit" disabled={pending} className="rounded-md bg-primary px-2 py-1 text-xs text-primary-ink disabled:opacity-50">
+        </Select>
+        <Button type="submit" variant="primary" size="sm" pending={pending}>
           Save
-        </button>
+        </Button>
         <button type="button" onClick={() => setEditing(false)} className="text-xs text-muted hover:underline">
           Cancel
         </button>
@@ -82,22 +85,22 @@ export function TaskList({
   return (
     <div>
       <div className="flex flex-col gap-2">
-        {tasks.length === 0 && <p className="text-sm text-muted">No tasks yet.</p>}
+        {tasks.length === 0 && <EmptyState>No tasks yet.</EmptyState>}
         {tasks.map((t) => (
           <TaskRowView key={t.id} task={t} revalidateTo={revalidateTo} />
         ))}
       </div>
       <form action={formAction} className="mt-3 flex flex-wrap items-end gap-2 border-t border-border pt-3">
-        <input name="description" placeholder="Task" required className="flex-1 rounded-md border border-border px-2 py-1.5 text-sm" />
-        <input name="due_date" type="date" className="rounded-md border border-border px-2 py-1.5 text-sm" />
-        <select name="priority" defaultValue="medium" className="rounded-md border border-border px-2 py-1.5 text-sm">
+        <Input name="description" placeholder="Task" required className="flex-1" />
+        <Input name="due_date" type="date" />
+        <Select name="priority" defaultValue="medium">
           <option value="urgent">Urgent</option>
           <option value="medium">Medium</option>
           <option value="low">Low</option>
-        </select>
-        <button type="submit" disabled={pending} className="rounded-md border border-primary px-2 py-1.5 text-xs font-medium text-primary disabled:opacity-50">
+        </Select>
+        <Button type="submit" size="sm" pending={pending}>
           Add
-        </button>
+        </Button>
       </form>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </div>

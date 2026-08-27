@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getStaffSession } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { DocumentChecklist, type DocRow } from "@/components/DocumentChecklist";
 import { CountryTrackerForm } from "@/components/CountryTrackerForm";
 import { listTrackerDefinitions } from "@/lib/actions/countryTracker";
@@ -360,7 +361,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
           </Link>
         </div>
         {!applications || applications.length === 0 ? (
-          <p className="text-sm text-muted">No applications yet.</p>
+          <EmptyState>No applications yet.</EmptyState>
         ) : (
           <div className="flex flex-col divide-y divide-border">
             {applications.map((app) => (

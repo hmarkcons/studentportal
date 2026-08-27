@@ -2,6 +2,8 @@
 
 import { useActionState } from "react";
 import { generateAgreement, uploadSignedAgreement, deleteAgreement } from "@/lib/actions/agreements";
+import { Button } from "@/components/ui/Button";
+import { Input, Select } from "@/components/ui/Input";
 
 export function GenerateAgreementForm({
   studentId,
@@ -19,24 +21,24 @@ export function GenerateAgreementForm({
 
   return (
     <form action={formAction} className="flex flex-wrap items-end gap-2">
-      <select name="template_id" required className="rounded-md border border-border px-2 py-1.5 text-sm">
+      <Select name="template_id" required>
         <option value="">Template…</option>
         {templates.map((t) => (
           <option key={t.id} value={t.id}>
             {destName(t.destination)}
           </option>
         ))}
-      </select>
-      <select name="signing_method" required className="rounded-md border border-border px-2 py-1.5 text-sm">
+      </Select>
+      <Select name="signing_method" required>
         <option value="paper">Paper (Karachi)</option>
         <option value="e_signature">E-signature (outside Karachi)</option>
-      </select>
-      <input name="admin_charge_override" type="number" step="0.01" placeholder="Admin charge override" className="w-40 rounded-md border border-border px-2 py-1.5 text-sm" />
-      <input name="consultancy_fee_override" type="number" step="0.01" placeholder="Consultancy fee override" className="w-44 rounded-md border border-border px-2 py-1.5 text-sm" />
-      <input name="discount_amount" type="number" step="0.01" placeholder="Discount amount" className="w-36 rounded-md border border-border px-2 py-1.5 text-sm" />
-      <button type="submit" disabled={pending} className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink disabled:opacity-50">
+      </Select>
+      <Input name="admin_charge_override" type="number" step="0.01" placeholder="Admin charge override" className="w-40" />
+      <Input name="consultancy_fee_override" type="number" step="0.01" placeholder="Consultancy fee override" className="w-44" />
+      <Input name="discount_amount" type="number" step="0.01" placeholder="Discount amount" className="w-36" />
+      <Button type="submit" variant="primary" pending={pending}>
         Generate agreement
-      </button>
+      </Button>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
   );
@@ -65,7 +67,7 @@ export function UploadSignedAgreementForm({ agreementId, studentId }: { agreemen
       <label className="flex items-center gap-1 text-xs text-muted">
         <input type="checkbox" name="email_verified" /> Email verified
       </label>
-      <input name="video_recording_path" placeholder="Video recording path (e-sign only)" className="w-56 rounded-md border border-border px-2 py-1 text-xs" />
+      <Input name="video_recording_path" placeholder="Video recording path (e-sign only)" className="w-56" />
       <button type="submit" disabled={pending} className="rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary disabled:opacity-50">
         Upload signed agreement
       </button>

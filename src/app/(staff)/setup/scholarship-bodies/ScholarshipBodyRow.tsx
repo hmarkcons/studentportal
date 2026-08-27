@@ -2,6 +2,8 @@
 
 import { useActionState, useState } from "react";
 import { updateScholarshipBody, deleteScholarshipBody } from "@/lib/actions/scholarships";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 
 type Body = {
   id: string;
@@ -22,17 +24,17 @@ export function ScholarshipBodyRow({ body, isSuperAdmin }: { body: Body; isSuper
       <tr className="border-b border-border last:border-0">
         <td colSpan={6} className="px-4 py-3">
           <form action={formAction} className="flex flex-wrap items-end gap-2">
-            <input name="name" defaultValue={body.name} required className="rounded-md border border-border px-2 py-1.5 text-sm" />
-            <input name="region" defaultValue={body.region ?? ""} placeholder="Region" className="rounded-md border border-border px-2 py-1.5 text-sm" />
-            <input name="academic_year" defaultValue={body.academic_year} required className="w-28 rounded-md border border-border px-2 py-1.5 text-sm" />
-            <input name="covers" defaultValue={body.covers.join(", ")} placeholder="Covers (comma-separated)" className="min-w-[200px] flex-1 rounded-md border border-border px-2 py-1.5 text-sm" />
-            <input name="stipend_amount" defaultValue={body.stipend_amount ?? ""} placeholder="Stipend / notes" className="rounded-md border border-border px-2 py-1.5 text-sm" />
-            <button type="submit" disabled={pending} className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-ink disabled:opacity-50">
+            <Input name="name" defaultValue={body.name} required />
+            <Input name="region" defaultValue={body.region ?? ""} placeholder="Region" />
+            <Input name="academic_year" defaultValue={body.academic_year} required className="w-28" />
+            <Input name="covers" defaultValue={body.covers.join(", ")} placeholder="Covers (comma-separated)" className="min-w-[200px] flex-1" />
+            <Input name="stipend_amount" defaultValue={body.stipend_amount ?? ""} placeholder="Stipend / notes" />
+            <Button type="submit" variant="primary" size="sm" pending={pending}>
               Save
-            </button>
-            <button type="button" onClick={() => setEditing(false)} className="text-xs text-muted hover:underline">
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>
               Cancel
-            </button>
+            </Button>
             {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
           </form>
         </td>

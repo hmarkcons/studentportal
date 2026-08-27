@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { Button } from "@/components/ui/Button";
 
 type ActionState = { error?: string; success?: boolean } | undefined;
 
@@ -22,9 +23,9 @@ export function ProofFileCell({
       )}
       <form action={formAction} className="flex items-center gap-1">
         <input type="file" name="file" className="w-28 text-xs" />
-        <button type="submit" disabled={pending} className="rounded-md border border-border px-2 py-1 text-xs text-muted hover:text-ink disabled:opacity-50">
-          {pending ? "…" : viewUrl ? "Replace" : "Upload"}
-        </button>
+        <Button type="submit" size="sm" pending={pending}>
+          {viewUrl ? "Replace" : "Upload"}
+        </Button>
       </form>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </div>

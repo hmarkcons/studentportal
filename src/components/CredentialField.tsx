@@ -2,6 +2,8 @@
 
 import { useActionState, useState } from "react";
 import { storeCredentialAction, readCredentialAction } from "@/lib/actions/countryTracker";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 
 export function CredentialField({
   label,
@@ -32,14 +34,14 @@ export function CredentialField({
     <div className="rounded-md border border-border p-3">
       <p className="mb-2 text-xs font-medium text-ink">{label} (encrypted)</p>
       <form action={formAction} className="flex flex-wrap items-center gap-2">
-        <input name="username" placeholder="Username / ID" className="w-36 rounded-md border border-border px-2 py-1 text-xs" />
-        <input name="password" type="password" placeholder="Password" className="w-36 rounded-md border border-border px-2 py-1 text-xs" />
-        <button type="submit" disabled={pending} className="rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-ink disabled:opacity-50">
+        <Input name="username" placeholder="Username / ID" className="w-36" />
+        <Input name="password" type="password" placeholder="Password" className="w-36" />
+        <Button type="submit" variant="primary" size="sm" pending={pending}>
           Save
-        </button>
-        <button type="button" onClick={reveal} disabled={revealing} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-bg disabled:opacity-50">
-          {revealing ? "Loading…" : "Reveal"}
-        </button>
+        </Button>
+        <Button type="button" onClick={reveal} size="sm" pending={revealing}>
+          Reveal
+        </Button>
       </form>
       {revealed && (
         <p className="mt-2 text-xs text-muted">

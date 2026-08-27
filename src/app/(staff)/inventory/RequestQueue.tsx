@@ -2,6 +2,7 @@
 
 import { updateInventoryRequestStatus } from "@/lib/actions/inventory";
 import { Badge } from "@/components/ui/Badge";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 type Request = {
   id: string;
@@ -15,7 +16,7 @@ type Request = {
 const TONE: Record<string, "success" | "warning" | "danger"> = { pending: "warning", fulfilled: "success", rejected: "danger" };
 
 export function RequestQueue({ requests, canManage }: { requests: Request[]; canManage: boolean }) {
-  if (requests.length === 0) return <p className="text-sm text-muted">No requests yet.</p>;
+  if (requests.length === 0) return <EmptyState>No requests yet.</EmptyState>;
 
   return (
     <div className="flex flex-col divide-y divide-border">

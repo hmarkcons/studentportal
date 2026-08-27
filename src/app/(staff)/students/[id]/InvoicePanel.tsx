@@ -13,6 +13,8 @@ import {
 import { updateAdminFeeStatus, addLineItem, deleteLineItem, sendInvoiceEmail } from "@/lib/actions/consultancyFee";
 import { computeInvoiceStatus, INVOICE_STATUS_LABELS } from "@/lib/invoiceStatus";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Input, Select, Textarea } from "@/components/ui/Input";
 
 const DEFAULT_TERMS =
   "Only upon refusal from the university, 100% of the paid consultancy charges only will be refundable. There is no refund on withdrawal or rejection from the embassy or on failing the admission test, or under any other condition. Refunds are processed within 90 working days of the refusal notice.";
@@ -24,37 +26,37 @@ export function GenerateInvoiceForm({ studentId, agreementId }: { studentId: str
   return (
     <form action={formAction} className="flex flex-col gap-2">
       <div className="flex flex-wrap items-end gap-2">
-        <input name="admin_charge" type="number" step="0.01" placeholder="Admin charge" required className="w-32 rounded-md border border-border px-2 py-1.5 text-sm" />
-        <input name="consultancy_fee" type="number" step="0.01" placeholder="Consultancy fee" required className="w-36 rounded-md border border-border px-2 py-1.5 text-sm" />
-        <select name="currency" className="rounded-md border border-border px-2 py-1.5 text-sm">
+        <Input name="admin_charge" type="number" step="0.01" placeholder="Admin charge" required className="w-32" />
+        <Input name="consultancy_fee" type="number" step="0.01" placeholder="Consultancy fee" required className="w-36" />
+        <Select name="currency">
           <option value="EUR">EUR</option>
           <option value="PKR">PKR</option>
           <option value="USD">USD</option>
-        </select>
-        <select name="installment_count" className="rounded-md border border-border px-2 py-1.5 text-sm">
+        </Select>
+        <Select name="installment_count">
           <option value="1">1 installment</option>
           <option value="2">2 installments</option>
           <option value="3">3 installments</option>
-        </select>
+        </Select>
       </div>
       <div className="flex flex-wrap items-end gap-2">
-        <input name="invoice_number" placeholder="Invoice # (optional, auto-generated)" className="w-56 rounded-md border border-border px-2 py-1.5 text-sm" />
-        <input name="intake" placeholder="Intake (e.g. Winter 2026)" className="w-44 rounded-md border border-border px-2 py-1.5 text-sm" />
+        <Input name="invoice_number" placeholder="Invoice # (optional, auto-generated)" className="w-56" />
+        <Input name="intake" placeholder="Intake (e.g. Winter 2026)" className="w-44" />
         <label className="flex flex-col gap-0.5 text-xs text-muted">
           First installment due date
-          <input name="first_due_date" type="date" className="rounded-md border border-border px-2 py-1.5 text-sm" />
+          <Input name="first_due_date" type="date" />
         </label>
       </div>
-      <textarea
+      <Textarea
         name="terms"
         defaultValue={DEFAULT_TERMS}
         rows={2}
-        className="w-full rounded-md border border-border px-2 py-1.5 text-xs"
+        className="w-full"
         placeholder="Refund / consultancy terms shown on the invoice"
       />
-      <button type="submit" disabled={pending} className="self-start rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink disabled:opacity-50">
-        {pending ? "Generating…" : "Generate invoice"}
-      </button>
+      <Button type="submit" variant="primary" pending={pending} className="self-start">
+        Generate invoice
+      </Button>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
   );
@@ -77,26 +79,26 @@ function EditInvoiceForm({
   return (
     <form action={formAction} className="mt-2 flex flex-col gap-2 rounded-md border border-border p-3">
       <div className="flex flex-wrap items-end gap-2">
-        <input name="admin_charge" type="number" step="0.01" defaultValue={invoice.admin_charge} required className="w-32 rounded-md border border-border px-2 py-1.5 text-sm" />
-        <input name="consultancy_fee" type="number" step="0.01" defaultValue={invoice.consultancy_fee} required className="w-36 rounded-md border border-border px-2 py-1.5 text-sm" />
-        <select name="currency" defaultValue={invoice.currency} className="rounded-md border border-border px-2 py-1.5 text-sm">
+        <Input name="admin_charge" type="number" step="0.01" defaultValue={invoice.admin_charge} required className="w-32" />
+        <Input name="consultancy_fee" type="number" step="0.01" defaultValue={invoice.consultancy_fee} required className="w-36" />
+        <Select name="currency" defaultValue={invoice.currency}>
           <option value="EUR">EUR</option>
           <option value="PKR">PKR</option>
           <option value="USD">USD</option>
-        </select>
+        </Select>
       </div>
       <div className="flex flex-wrap items-end gap-2">
-        <input name="invoice_number" defaultValue={invoice.invoice_number ?? ""} placeholder="Invoice #" className="w-56 rounded-md border border-border px-2 py-1.5 text-sm" />
-        <input name="intake" defaultValue={invoice.intake ?? ""} placeholder="Intake" className="w-44 rounded-md border border-border px-2 py-1.5 text-sm" />
+        <Input name="invoice_number" defaultValue={invoice.invoice_number ?? ""} placeholder="Invoice #" className="w-56" />
+        <Input name="intake" defaultValue={invoice.intake ?? ""} placeholder="Intake" className="w-44" />
       </div>
-      <textarea name="terms" defaultValue={invoice.terms ?? DEFAULT_TERMS} rows={2} className="w-full rounded-md border border-border px-2 py-1.5 text-xs" />
+      <Textarea name="terms" defaultValue={invoice.terms ?? DEFAULT_TERMS} rows={2} className="w-full" />
       <div className="flex items-center gap-2">
-        <button type="submit" disabled={pending} className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-ink disabled:opacity-50">
-          {pending ? "Saving…" : "Save invoice"}
-        </button>
-        <button type="button" onClick={onDone} className="text-xs text-muted hover:underline">
+        <Button type="submit" variant="primary" pending={pending}>
+          Save invoice
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={onDone}>
           Cancel
-        </button>
+        </Button>
       </div>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
@@ -127,15 +129,15 @@ function MarkPaidForm({ installmentId, studentId }: { installmentId: string; stu
   const [, formAction] = useActionState(action, undefined);
   return (
     <form action={formAction} className="flex items-center gap-1">
-      <select name="payment_method" className="rounded-md border border-border px-1.5 py-0.5 text-xs">
+      <Select name="payment_method">
         <option value="Cash">Cash</option>
         <option value="Bank transfer">Bank transfer</option>
         <option value="Card">Card</option>
         <option value="Other">Other</option>
-      </select>
-      <button type="submit" className="rounded-md border border-success px-2 py-0.5 text-xs text-success">
+      </Select>
+      <Button type="submit" variant="success" size="sm">
         Mark paid
-      </button>
+      </Button>
     </form>
   );
 }
@@ -156,27 +158,27 @@ function EditInstallmentForm({
 
   return (
     <form action={formAction} className="flex flex-wrap items-center gap-1 rounded-md border border-border p-2">
-      <input name="amount" type="number" step="0.01" defaultValue={installment.amount} required className="w-24 rounded-md border border-border px-2 py-1 text-xs" />
-      <input name="due_date" type="date" defaultValue={installment.due_date ?? ""} className="rounded-md border border-border px-2 py-1 text-xs" />
-      <select name="status" defaultValue={installment.status} className="rounded-md border border-border px-2 py-1 text-xs">
+      <Input name="amount" type="number" step="0.01" defaultValue={installment.amount} required className="w-24" />
+      <Input name="due_date" type="date" defaultValue={installment.due_date ?? ""} />
+      <Select name="status" defaultValue={installment.status}>
         <option value="unpaid">unpaid</option>
         <option value="paid">paid</option>
         <option value="partial">partial</option>
-      </select>
-      <select name="payment_method" defaultValue={installment.payment_method ?? ""} className="rounded-md border border-border px-2 py-1 text-xs">
+      </Select>
+      <Select name="payment_method" defaultValue={installment.payment_method ?? ""}>
         <option value="">Method…</option>
         <option value="Cash">Cash</option>
         <option value="Bank transfer">Bank transfer</option>
         <option value="Card">Card</option>
         <option value="Other">Other</option>
-      </select>
-      <input name="paid_date" type="date" defaultValue={installment.paid_date ?? ""} className="rounded-md border border-border px-2 py-1 text-xs" />
-      <button type="submit" disabled={pending} className="rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-ink disabled:opacity-50">
-        {pending ? "…" : "Save"}
-      </button>
-      <button type="button" onClick={onDone} className="text-xs text-muted hover:underline">
+      </Select>
+      <Input name="paid_date" type="date" defaultValue={installment.paid_date ?? ""} />
+      <Button type="submit" variant="primary" pending={pending} size="sm">
+        Save
+      </Button>
+      <Button type="button" variant="ghost" size="sm" onClick={onDone}>
         Cancel
-      </button>
+      </Button>
       {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
     </form>
   );
@@ -203,9 +205,9 @@ function AdminFeeSection({
         </span>
         <div className="flex items-center gap-1">
           <Badge tone={invoice.admin_fee_status === "paid" ? "success" : "warning"}>{invoice.admin_fee_status}</Badge>
-          <button type="button" onClick={() => setEditing(true)} className="rounded-md border border-border px-1.5 py-0.5 text-xs hover:bg-bg">
+          <Button type="button" size="sm" onClick={() => setEditing(true)}>
             ✏️
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -213,24 +215,24 @@ function AdminFeeSection({
 
   return (
     <form action={formAction} className="flex flex-wrap items-center gap-1 rounded-md border border-border p-2">
-      <select name="admin_fee_status" defaultValue={invoice.admin_fee_status} className="rounded-md border border-border px-2 py-1 text-xs">
+      <Select name="admin_fee_status" defaultValue={invoice.admin_fee_status}>
         <option value="unpaid">unpaid</option>
         <option value="paid">paid</option>
-      </select>
-      <select name="admin_fee_payment_method" defaultValue={invoice.admin_fee_payment_method ?? ""} className="rounded-md border border-border px-2 py-1 text-xs">
+      </Select>
+      <Select name="admin_fee_payment_method" defaultValue={invoice.admin_fee_payment_method ?? ""}>
         <option value="">Method…</option>
         <option value="Cash">Cash</option>
         <option value="Bank transfer">Bank transfer</option>
         <option value="Card">Card</option>
         <option value="Other">Other</option>
-      </select>
-      <input name="admin_fee_paid_date" type="date" defaultValue={invoice.admin_fee_paid_date ?? ""} className="rounded-md border border-border px-2 py-1 text-xs" />
-      <button type="submit" disabled={pending} className="rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-ink disabled:opacity-50">
-        {pending ? "…" : "Save"}
-      </button>
-      <button type="button" onClick={() => setEditing(false)} className="text-xs text-muted hover:underline">
+      </Select>
+      <Input name="admin_fee_paid_date" type="date" defaultValue={invoice.admin_fee_paid_date ?? ""} />
+      <Button type="submit" variant="primary" pending={pending} size="sm">
+        Save
+      </Button>
+      <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>
         Cancel
-      </button>
+      </Button>
       {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
     </form>
   );
@@ -266,10 +268,9 @@ function LineItemsSection({
         </div>
       ))}
       <form action={formAction} className="flex flex-wrap items-center gap-1">
-        <select
+        <Select
           value={selectedProduct}
           onChange={(e) => setSelectedProduct(e.target.value)}
-          className="rounded-md border border-border px-2 py-1 text-xs"
         >
           <option value="">Custom item…</option>
           {feeProducts.map((p) => (
@@ -277,17 +278,17 @@ function LineItemsSection({
               {p.name}
             </option>
           ))}
-        </select>
+        </Select>
         <input type="hidden" name="product_id" value={selectedProduct} />
-        <input
+        <Input
           name="name"
           placeholder="Item name"
           defaultValue={feeProducts.find((p) => p.id === selectedProduct)?.name ?? ""}
           key={selectedProduct}
           required
-          className="w-32 rounded-md border border-border px-2 py-1 text-xs"
+          className="w-32"
         />
-        <input
+        <Input
           name="amount"
           type="number"
           step="0.01"
@@ -295,7 +296,7 @@ function LineItemsSection({
           defaultValue={feeProducts.find((p) => p.id === selectedProduct)?.default_amount ?? ""}
           key={`${selectedProduct}-amount`}
           required
-          className="w-24 rounded-md border border-border px-2 py-1 text-xs"
+          className="w-24"
         />
         <button type="submit" disabled={pending} className="rounded-md border border-primary px-2 py-1 text-xs text-primary disabled:opacity-50">
           {pending ? "…" : "+ Add item"}
@@ -320,9 +321,9 @@ function GeneratePdfButton({ invoiceId, studentId, revalidateTo, hasExisting }: 
 
   return (
     <div className="flex flex-col items-end">
-      <button type="button" onClick={handle} disabled={pending} className="rounded-md border border-border px-2 py-0.5 text-xs hover:bg-bg disabled:opacity-50">
-        {pending ? "Generating PDF…" : hasExisting ? "Regenerate PDF" : "Generate PDF"}
-      </button>
+      <Button type="button" onClick={handle} pending={pending} size="sm">
+        {hasExisting ? "Regenerate PDF" : "Generate PDF"}
+      </Button>
       {error && <p className="mt-1 text-xs text-danger">{error}</p>}
     </div>
   );
@@ -342,9 +343,9 @@ function SendInvoiceEmailButton({ invoiceId, studentId, revalidateTo }: { invoic
 
   return (
     <div className="flex flex-col items-end">
-      <button type="button" onClick={handle} disabled={pending} className="rounded-md border border-border px-2 py-0.5 text-xs hover:bg-bg disabled:opacity-50">
-        {pending ? "Sending…" : "📧 Email invoice"}
-      </button>
+      <Button type="button" onClick={handle} pending={pending} size="sm">
+        📧 Email invoice
+      </Button>
       {message && <p className={`mt-1 text-xs ${message.ok ? "text-success" : "text-danger"}`}>{message.text}</p>}
     </div>
   );
@@ -402,12 +403,12 @@ export function InvoiceCard({
         <div className="flex items-center gap-2">
           <Badge tone={STATUS_TONE[status]}>{INVOICE_STATUS_LABELS[status]}</Badge>
           <Badge tone={invoice.sent_status === "sent" ? "success" : "neutral"}>{invoice.sent_status}</Badge>
-          <button type="button" onClick={() => sendReceipt(invoice.id, studentId)} className="rounded-md border border-border px-2 py-0.5 text-xs hover:bg-bg">
+          <Button type="button" onClick={() => sendReceipt(invoice.id, studentId)} size="sm">
             Send receipt
-          </button>
-          <button type="button" onClick={() => setEditingInvoice((v) => !v)} className="rounded-md border border-border px-2 py-0.5 text-xs hover:bg-bg">
+          </Button>
+          <Button type="button" onClick={() => setEditingInvoice((v) => !v)} size="sm">
             ✏️ Edit
-          </button>
+          </Button>
           <DeleteInvoiceButton invoiceId={invoice.id} studentId={studentId} revalidateTo={revalidateTo} />
         </div>
       </div>

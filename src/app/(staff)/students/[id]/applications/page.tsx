@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getStaffSession } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { BoardingPassTracker } from "@/components/ui/BoardingPassTracker";
 import { DeleteApplicationButton } from "./DeleteApplicationButton";
 import { FinalizeApplicationButton } from "./FinalizeApplicationButton";
@@ -47,7 +48,7 @@ export default async function StudentApplicationsTab(props: PageProps<"/students
 
       {(!applications || applications.length === 0) && (
         <Card>
-          <p className="text-sm text-muted">No applications yet.</p>
+          <EmptyState>No applications yet.</EmptyState>
         </Card>
       )}
 

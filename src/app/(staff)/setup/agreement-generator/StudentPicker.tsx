@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/Button";
+import { Input, Select } from "@/components/ui/Input";
 
 type Student = {
   id: string;
@@ -43,11 +45,11 @@ export function StudentPicker({ students, countries }: { students: Student[]; co
     <div className="flex flex-col gap-4">
       <div>
         <label className="mb-1 block text-xs font-medium text-muted">Search by name, email, or passport number</label>
-        <input
+        <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Start typing…"
-          className="w-full rounded-md border border-border px-3 py-2 text-sm"
+          className="w-full"
         />
         {searchResults.length > 0 && (
           <div className="mt-2 flex flex-col divide-y divide-border rounded-md border border-border">
@@ -76,13 +78,12 @@ export function StudentPicker({ students, countries }: { students: Student[]; co
       <div className="flex flex-wrap items-end gap-2">
         <div>
           <label className="mb-1 block text-xs font-medium text-muted">Country</label>
-          <select
+          <Select
             value={country}
             onChange={(e) => {
               setCountry(e.target.value);
               setCountryStudentId("");
             }}
-            className="rounded-md border border-border px-3 py-2 text-sm"
           >
             <option value="">Choose country…</option>
             {countries.map((c) => (
@@ -90,15 +91,14 @@ export function StudentPicker({ students, countries }: { students: Student[]; co
                 {c}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         {country && (
           <div>
             <label className="mb-1 block text-xs font-medium text-muted">Registered student in {country}</label>
-            <select
+            <Select
               value={countryStudentId}
               onChange={(e) => setCountryStudentId(e.target.value)}
-              className="rounded-md border border-border px-3 py-2 text-sm"
             >
               <option value="">Choose student…</option>
               {studentsInCountry.map((s) => (
@@ -106,13 +106,13 @@ export function StudentPicker({ students, countries }: { students: Student[]; co
                   {s.full_name}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         )}
         {countryStudentId && (
-          <button onClick={() => goToStudent(countryStudentId)} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-ink">
+          <Button onClick={() => goToStudent(countryStudentId)} variant="primary">
             Go
-          </button>
+          </Button>
         )}
       </div>
     </div>

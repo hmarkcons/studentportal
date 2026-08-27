@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { SlideOver } from "@/components/ui/SlideOver";
+import { Button } from "@/components/ui/Button";
 import { StaffForm } from "./StaffForm";
 
 export function AddStaffButton() {
@@ -9,9 +10,9 @@ export function AddStaffButton() {
 
   return (
     <>
-      <button onClick={() => setOpen(true)} className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink">
+      <Button variant="primary" onClick={() => setOpen(true)}>
         + Add Staff
-      </button>
+      </Button>
       <SlideOver open={open} onClose={() => setOpen(false)} title="Add Staff">
         <StaffForm onSuccess={() => setOpen(false)} />
       </SlideOver>

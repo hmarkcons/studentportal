@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { CredentialField } from "@/components/CredentialField";
+import { Input } from "@/components/ui/Input";
 
 const PRESETS = [
   { label: "Gmail", credentialType: "gmail" },
@@ -41,11 +42,11 @@ export function PortalCredentialsSection({ studentId, existingTypes }: { student
       ))}
 
       <div className="flex items-end gap-2 border-t border-border pt-3">
-        <input
+        <Input
           value={newLabel}
           onChange={(e) => setNewLabel(e.target.value)}
           placeholder="Portal name (e.g. Visa appointment portal)"
-          className="flex-1 rounded-md border border-border px-2 py-1.5 text-sm"
+          className="flex-1"
         />
         <button
           type="button"

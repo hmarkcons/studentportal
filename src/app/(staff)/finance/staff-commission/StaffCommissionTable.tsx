@@ -2,6 +2,8 @@
 
 import { useActionState, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Input, Select } from "@/components/ui/Input";
 import { ProofFileCell } from "@/components/ProofFileCell";
 import {
   createStaffCommission,
@@ -12,7 +14,6 @@ import {
 } from "@/lib/actions/finance";
 import { INVOICE_STATUS_LABELS, type InvoiceStatus } from "@/lib/invoiceStatus";
 
-const inputClass = "rounded-md border border-border bg-card px-2 py-1 text-xs";
 const REVALIDATE_TO = "/finance/staff-commission";
 
 export type CommissionRow = {
@@ -36,32 +37,32 @@ function AddCommissionForm({ staffList, students }: { staffList: { id: string; f
 
   return (
     <form action={formAction} className="mb-4 flex flex-wrap items-end gap-2 rounded-lg border border-border bg-card p-3">
-      <select name="staff_id" required className={inputClass}>
+      <Select name="staff_id" required>
         <option value="">Staff…</option>
         {staffList.map((s) => (
           <option key={s.id} value={s.id}>
             {s.full_name}
           </option>
         ))}
-      </select>
-      <select name="student_id" required className={inputClass}>
+      </Select>
+      <Select name="student_id" required>
         <option value="">Student…</option>
         {students.map((s) => (
           <option key={s.id} value={s.id}>
             {s.full_name}
           </option>
         ))}
-      </select>
-      <input name="amount" type="number" step="0.01" placeholder="Commission amount" required className={`${inputClass} w-32`} />
-      <select name="currency" defaultValue="PKR" className={inputClass}>
+      </Select>
+      <Input name="amount" type="number" step="0.01" placeholder="Commission amount" required className="w-32" />
+      <Select name="currency" defaultValue="PKR">
         <option value="PKR">PKR</option>
         <option value="EUR">EUR</option>
         <option value="USD">USD</option>
-      </select>
-      <input name="registration_date" type="date" className={inputClass} />
-      <button type="submit" disabled={pending} className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-ink disabled:opacity-50">
+      </Select>
+      <Input name="registration_date" type="date" />
+      <Button type="submit" variant="primary" size="sm" disabled={pending}>
         {pending ? "Adding…" : "+ Add commission"}
-      </button>
+      </Button>
       {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
     </form>
   );
@@ -73,26 +74,26 @@ function EditRow({ row, onDone }: { row: CommissionRow; onDone: () => void }) {
 
   return (
     <form action={formAction} className="flex flex-wrap items-center gap-1 rounded-md border border-border p-2">
-      <input name="amount" type="number" step="0.01" defaultValue={row.amount} required className={`${inputClass} w-24`} />
-      <input name="currency" defaultValue={row.currency} required className={`${inputClass} w-16`} />
-      <input name="registration_date" type="date" defaultValue={row.registration_date ?? ""} className={inputClass} />
-      <select name="status" defaultValue={row.status} className={inputClass}>
+      <Input name="amount" type="number" step="0.01" defaultValue={row.amount} required className="w-24" />
+      <Input name="currency" defaultValue={row.currency} required className="w-16" />
+      <Input name="registration_date" type="date" defaultValue={row.registration_date ?? ""} />
+      <Select name="status" defaultValue={row.status}>
         <option value="unpaid">unpaid</option>
         <option value="paid">paid</option>
-      </select>
-      <select name="payment_method" defaultValue={row.payment_method ?? ""} className={inputClass}>
+      </Select>
+      <Select name="payment_method" defaultValue={row.payment_method ?? ""}>
         <option value="">Method…</option>
         <option value="Cash">Cash</option>
         <option value="Bank transfer">Bank transfer</option>
         <option value="Card">Card</option>
         <option value="Other">Other</option>
-      </select>
-      <button type="submit" disabled={pending} className="rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-ink disabled:opacity-50">
-        {pending ? "…" : "Save"}
-      </button>
-      <button type="button" onClick={onDone} className="text-xs text-muted hover:underline">
+      </Select>
+      <Button type="submit" variant="primary" size="sm" pending={pending}>
+        Save
+      </Button>
+      <Button type="button" variant="ghost" size="sm" onClick={onDone}>
         Cancel
-      </button>
+      </Button>
       {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
     </form>
   );
@@ -103,9 +104,9 @@ function MarkPaidButton({ id }: { id: string }) {
   const [, formAction] = useActionState(action, undefined);
   return (
     <form action={formAction} className="flex items-center gap-1">
-      <button type="submit" className="rounded-md border border-success px-2 py-0.5 text-xs text-success">
+      <Button type="submit" variant="success" size="sm">
         Mark paid
-      </button>
+      </Button>
     </form>
   );
 }
@@ -156,24 +157,24 @@ export function StaffCommissionTable({
       <AddCommissionForm staffList={staffList} students={students} />
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <input
+        <Input
           value={nameInput}
           onChange={(e) => setNameInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && search()}
           placeholder="Search student or staff name…"
-          className="rounded-md border border-border bg-card px-3 py-1.5 text-sm"
+          className="px-3"
         />
-        <select value={statusInput} onChange={(e) => setStatusInput(e.target.value)} className="rounded-md border border-border bg-card px-2 py-1.5 text-sm">
+        <Select value={statusInput} onChange={(e) => setStatusInput(e.target.value)}>
           <option value="all">All statuses</option>
           <option value="unpaid">Unpaid</option>
           <option value="paid">Paid</option>
-        </select>
-        <button onClick={search} className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink">
+        </Select>
+        <Button variant="primary" onClick={search}>
           Search
-        </button>
-        <button onClick={clear} className="rounded-md border border-border px-3 py-1.5 text-sm text-muted hover:text-ink">
+        </Button>
+        <Button onClick={clear}>
           Clear
-        </button>
+        </Button>
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-border">
@@ -225,18 +226,19 @@ export function StaffCommissionTable({
                       <div className="flex flex-col items-start gap-2">
                         {r.status !== "paid" && <MarkPaidButton id={r.id} />}
                         <div className="flex items-center gap-2">
-                          <button type="button" onClick={() => setEditingId(r.id)} className="rounded-md border border-border px-2 py-0.5 text-xs hover:bg-bg">
+                          <Button type="button" variant="outline" size="sm" onClick={() => setEditingId(r.id)}>
                             ✏️ Edit
-                          </button>
-                          <button
+                          </Button>
+                          <Button
                             type="button"
+                            variant="outline"
+                            size="sm"
                             onClick={() => {
                               if (confirm(`Delete this commission record for ${r.studentName}?`)) deleteStaffCommission(r.id, REVALIDATE_TO);
                             }}
-                            className="rounded-md border border-border px-2 py-0.5 text-xs text-muted hover:text-danger"
                           >
                             🗑️
-                          </button>
+                          </Button>
                         </div>
                       </div>
                     </td>

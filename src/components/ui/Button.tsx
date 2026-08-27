@@ -3,6 +3,7 @@ import { forwardRef } from "react";
 const VARIANT_CLASSES = {
   primary: "border border-transparent bg-primary text-primary-ink hover:opacity-90",
   outline: "border border-border text-ink hover:bg-bg",
+  "outline-primary": "border border-primary text-primary hover:bg-primary/10",
   danger: "border border-danger text-danger hover:bg-danger-bg",
   success: "border border-success text-success hover:bg-success-bg",
   ghost: "border border-transparent text-muted hover:bg-bg",

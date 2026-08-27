@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { NewTicketForm } from "./NewTicketForm";
 
 const FAQS = [
@@ -61,7 +62,11 @@ export default async function SupportPage() {
             <Badge tone={t.status === "resolved" ? "success" : "warning"}>{t.status.replace("_", " ")}</Badge>
           </div>
         ))}
-        {(!tickets || tickets.length === 0) && <p className="px-4 py-6 text-sm text-muted">No tickets submitted.</p>}
+        {(!tickets || tickets.length === 0) && (
+          <div className="px-4 py-6">
+            <EmptyState>No tickets submitted.</EmptyState>
+          </div>
+        )}
       </div>
     </div>
   );

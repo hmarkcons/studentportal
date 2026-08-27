@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 export default async function PortalPaymentsPage() {
   const supabase = await createClient();
@@ -70,7 +71,7 @@ export default async function PortalPaymentsPage() {
           )}
         </Card>
       ))}
-      {(!invoices || invoices.length === 0) && <p className="text-sm text-muted">No invoices yet.</p>}
+      {(!invoices || invoices.length === 0) && <EmptyState>No invoices yet.</EmptyState>}
     </div>
   );
 }

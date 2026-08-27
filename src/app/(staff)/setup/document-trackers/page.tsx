@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/Card";
 import { listTrackerDefinitions, listTrackerCountries } from "@/lib/actions/countryTracker";
 import { NewTrackerFieldForm, TrackerFieldRow } from "./TrackerFieldForm";
 import { NewCountryForm } from "./NewCountryForm";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 export default async function DocumentTrackersPage() {
   const supabase = await createClient();
@@ -48,7 +49,7 @@ export default async function DocumentTrackersPage() {
             )}
           </Card>
         ))}
-        {countries.length === 0 && <p className="text-sm text-muted">No document trackers configured yet.</p>}
+        {countries.length === 0 && <EmptyState>No document trackers configured yet.</EmptyState>}
       </div>
     </div>
   );

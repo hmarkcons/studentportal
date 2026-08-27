@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
+import { Input, Select } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
 import { STAFF_ROLE_LABELS } from "@/lib/constants";
 import { StaffActionsMenu } from "./StaffActionsMenu";
 import type { StaffRecord } from "./StaffForm";
@@ -34,24 +36,23 @@ export function StaffTable({ staff }: { staff: StaffRecord[] }) {
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <input
+        <Input
           value={nameInput}
           onChange={(e) => setNameInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && search()}
           placeholder="Search staff name…"
-          className="rounded-md border border-border bg-card px-3 py-1.5 text-sm"
         />
-        <select value={statusInput} onChange={(e) => setStatusInput(e.target.value)} className="rounded-md border border-border bg-card px-2 py-1.5 text-sm">
+        <Select value={statusInput} onChange={(e) => setStatusInput(e.target.value)}>
           <option value="all">All Staff</option>
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
-        </select>
-        <button onClick={search} className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink">
+        </Select>
+        <Button variant="primary" onClick={search}>
           Search
-        </button>
-        <button onClick={clear} className="rounded-md border border-border px-3 py-1.5 text-sm text-muted hover:text-ink">
+        </Button>
+        <Button onClick={clear}>
           Clear
-        </button>
+        </Button>
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-border">

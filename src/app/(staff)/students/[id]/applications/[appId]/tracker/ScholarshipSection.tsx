@@ -2,6 +2,9 @@
 
 import { useActionState, useState } from "react";
 import { addStudentScholarship, markPreenrollmentFinalized, updateStudentScholarship, deleteStudentScholarship } from "@/lib/actions/scholarships";
+import { Button } from "@/components/ui/Button";
+import { Input, Select } from "@/components/ui/Input";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 function ScholarshipRow({
   s,
@@ -19,18 +22,18 @@ function ScholarshipRow({
   if (editing) {
     return (
       <form action={formAction} className="flex flex-wrap items-end gap-2 rounded-md border border-border p-2">
-        <input name="name" defaultValue={s.name ?? ""} placeholder="Name" className="rounded-md border border-border px-2 py-1 text-xs" />
-        <input name="award_amount" type="number" step="0.01" defaultValue={s.award_amount ?? ""} className="w-28 rounded-md border border-border px-2 py-1 text-xs" />
-        <select name="status" defaultValue={s.status} className="rounded-md border border-border px-2 py-1 text-xs">
+        <Input name="name" defaultValue={s.name ?? ""} placeholder="Name" />
+        <Input name="award_amount" type="number" step="0.01" defaultValue={s.award_amount ?? ""} className="w-28" />
+        <Select name="status" defaultValue={s.status}>
           <option value="submitted">Submitted</option>
           <option value="pending">Pending</option>
           <option value="rejected">Rejected</option>
           <option value="accepted">Accepted</option>
           <option value="modification">Modification</option>
-        </select>
-        <button type="submit" disabled={pending} className="rounded bg-primary px-2 py-1 text-xs text-primary-ink disabled:opacity-50">
+        </Select>
+        <Button type="submit" variant="primary" size="sm" pending={pending}>
           Save
-        </button>
+        </Button>
         <button type="button" onClick={() => setEditing(false)} className="text-xs text-muted hover:underline">
           Cancel
         </button>
@@ -94,30 +97,30 @@ export function ScholarshipSection({
         {scholarships.map((s) => (
           <ScholarshipRow key={s.id} s={s} revalidateTo={revalidateTo} isSuperAdmin={isSuperAdmin} />
         ))}
-        {scholarships.length === 0 && <p className="text-sm text-muted">No scholarship record yet.</p>}
+        {scholarships.length === 0 && <EmptyState>No scholarship record yet.</EmptyState>}
       </div>
 
       <form action={formAction} className="flex flex-wrap items-end gap-2 border-t border-border pt-3">
-        <select name="scholarship_body_id" className="rounded-md border border-border px-2 py-1.5 text-sm">
+        <Select name="scholarship_body_id">
           <option value="">Scholarship body…</option>
           {bodies.map((b) => (
             <option key={b.id} value={b.id}>
               {b.name} {b.region && `(${b.region})`}
             </option>
           ))}
-        </select>
-        <input name="name" placeholder="Scholarship name" className="rounded-md border border-border px-2 py-1.5 text-sm" />
-        <input name="award_amount" type="number" step="0.01" placeholder="Award amount" className="w-32 rounded-md border border-border px-2 py-1.5 text-sm" />
-        <select name="status" className="rounded-md border border-border px-2 py-1.5 text-sm">
+        </Select>
+        <Input name="name" placeholder="Scholarship name" />
+        <Input name="award_amount" type="number" step="0.01" placeholder="Award amount" className="w-32" />
+        <Select name="status">
           <option value="submitted">Submitted</option>
           <option value="pending">Pending</option>
           <option value="rejected">Rejected</option>
           <option value="accepted">Accepted</option>
           <option value="modification">Modification</option>
-        </select>
-        <button type="submit" disabled={pending} className="rounded-md border border-primary px-2 py-1.5 text-xs font-medium text-primary disabled:opacity-50">
+        </Select>
+        <Button type="submit" size="sm" pending={pending}>
           Add
-        </button>
+        </Button>
         {state?.error && <p className="text-xs text-danger">{state.error}</p>}
       </form>
     </div>

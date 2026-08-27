@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { PartnerStageForm } from "./PartnerStageForm";
 import { LetterUploadForm } from "./LetterUploadForm";
 
@@ -58,7 +59,7 @@ export default async function PartnerApplicationDetailPage(props: PageProps<"/pa
             ))}
           </div>
         ) : (
-          <p className="text-sm text-muted">No documents yet.</p>
+          <EmptyState>No documents yet.</EmptyState>
         )}
       </Card>
 

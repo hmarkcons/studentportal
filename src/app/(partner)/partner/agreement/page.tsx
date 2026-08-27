@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 export default async function PartnerAgreementPage() {
   const supabase = await createClient();
@@ -20,7 +21,7 @@ export default async function PartnerAgreementPage() {
     return (
       <div className="mx-auto max-w-2xl">
         <h2 className="mb-4 text-lg font-semibold text-ink">Partnership Agreement</h2>
-        <p className="text-sm text-muted">No agreement on file yet.</p>
+        <EmptyState>No agreement on file yet.</EmptyState>
       </div>
     );
   }

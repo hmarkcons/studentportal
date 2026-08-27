@@ -1,6 +1,7 @@
 "use client";
 
 import { updateRefundStatus, deleteRefundRequest } from "@/lib/actions/finance";
+import { Button } from "@/components/ui/Button";
 
 export function RefundActions({ id, status, isSuperAdmin }: { id: string; status: string; isSuperAdmin: boolean }) {
   const next: Record<string, { label: string; value: string }> = {
@@ -13,29 +14,24 @@ export function RefundActions({ id, status, isSuperAdmin }: { id: string; status
     <div className="flex gap-1">
       {action && (
         <>
-          <button
-            onClick={() => updateRefundStatus(id, "/finance/refunds", action.value)}
-            className="rounded-md border border-success px-2 py-0.5 text-xs text-success"
-          >
+          <Button variant="success" size="sm" onClick={() => updateRefundStatus(id, "/finance/refunds", action.value)}>
             {action.label}
-          </button>
-          <button
-            onClick={() => updateRefundStatus(id, "/finance/refunds", "rejected")}
-            className="rounded-md border border-danger px-2 py-0.5 text-xs text-danger"
-          >
+          </Button>
+          <Button variant="danger" size="sm" onClick={() => updateRefundStatus(id, "/finance/refunds", "rejected")}>
             Reject
-          </button>
+          </Button>
         </>
       )}
       {isSuperAdmin && (
-        <button
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => {
             if (confirm("Delete this refund record?")) deleteRefundRequest(id);
           }}
-          className="rounded-md border border-border px-2 py-0.5 text-xs text-muted hover:text-danger"
         >
           🗑️
-        </button>
+        </Button>
       )}
     </div>
   );

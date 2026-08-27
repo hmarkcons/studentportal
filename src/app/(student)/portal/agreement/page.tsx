@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 export default async function PortalAgreementPage() {
   const supabase = await createClient();
@@ -44,7 +45,7 @@ export default async function PortalAgreementPage() {
             )}
           </Card>
         ))}
-        {(!agreements || agreements.length === 0) && <p className="text-sm text-muted">No agreement on file yet.</p>}
+        {(!agreements || agreements.length === 0) && <EmptyState>No agreement on file yet.</EmptyState>}
       </div>
     </div>
   );

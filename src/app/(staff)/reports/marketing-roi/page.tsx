@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { DataTable } from "@/components/ui/DataTable";
 import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 export default async function MarketingRoiPage() {
   const supabase = await createClient();
@@ -72,7 +73,11 @@ export default async function MarketingRoiPage() {
               </span>
             </div>
           ))}
-          {bySource.size === 0 && <p className="py-2 text-sm text-muted">No leads yet.</p>}
+          {bySource.size === 0 && (
+            <div className="py-2">
+              <EmptyState>No leads yet.</EmptyState>
+            </div>
+          )}
         </div>
       </Card>
     </div>

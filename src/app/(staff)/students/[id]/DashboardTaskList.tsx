@@ -2,6 +2,8 @@
 
 import { useActionState, useState } from "react";
 import { addApplicationTask, toggleApplicationTask, deleteApplicationTask } from "@/lib/actions/applications";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Input, Select } from "@/components/ui/Input";
 
 export type DashboardTaskRow = {
   id: string;
@@ -35,7 +37,7 @@ export function DashboardTaskList({
   return (
     <div>
       <div className="flex flex-col gap-2">
-        {tasks.length === 0 && <p className="text-sm text-muted">No tasks yet.</p>}
+        {tasks.length === 0 && <EmptyState>No tasks yet.</EmptyState>}
         {tasks.map((t) => (
           <div key={t.id} className="flex items-center gap-2 text-sm">
             <input
@@ -59,20 +61,20 @@ export function DashboardTaskList({
 
       {applications.length > 0 && (
         <form action={formAction} className="mt-3 flex flex-wrap items-end gap-2 border-t border-border pt-3">
-          <select value={applicationId} onChange={(e) => setApplicationId(e.target.value)} className="rounded-md border border-border px-2 py-1.5 text-sm">
+          <Select value={applicationId} onChange={(e) => setApplicationId(e.target.value)}>
             {applications.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.label}
               </option>
             ))}
-          </select>
-          <input name="description" placeholder="Task" required className="flex-1 rounded-md border border-border px-2 py-1.5 text-sm" />
-          <input name="due_date" type="date" className="rounded-md border border-border px-2 py-1.5 text-sm" />
-          <select name="priority" defaultValue="medium" className="rounded-md border border-border px-2 py-1.5 text-sm">
+          </Select>
+          <Input name="description" placeholder="Task" required className="flex-1" />
+          <Input name="due_date" type="date" />
+          <Select name="priority" defaultValue="medium">
             <option value="urgent">Urgent</option>
             <option value="medium">Medium</option>
             <option value="low">Low</option>
-          </select>
+          </Select>
           <button type="submit" disabled={pending} className="rounded-md border border-primary px-2 py-1.5 text-xs font-medium text-primary disabled:opacity-50">
             Add
           </button>

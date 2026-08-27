@@ -2,8 +2,8 @@
 
 import { useActionState } from "react";
 import { updateUniversity, deleteUniversity } from "@/lib/actions/universities";
-
-const inputClass = "rounded-md border border-border bg-card px-3 py-2 text-sm";
+import { Button } from "@/components/ui/Button";
+import { Input, Select } from "@/components/ui/Input";
 
 type University = {
   id: string;
@@ -23,37 +23,37 @@ export function UniversityEditForm({ university }: { university: University }) {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="flex flex-col gap-1 text-xs text-muted">
           Name
-          <input name="name" defaultValue={university.name} required className={inputClass} />
+          <Input name="name" defaultValue={university.name} required />
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
           Type
-          <select name="type" defaultValue={university.type} required className={inputClass}>
+          <Select name="type" defaultValue={university.type} required>
             <option value="public">Public</option>
             <option value="private">Private</option>
-          </select>
+          </Select>
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
           City
-          <input name="city" defaultValue={university.city ?? ""} required className={inputClass} />
+          <Input name="city" defaultValue={university.city ?? ""} required />
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
           Region
-          <input name="region" defaultValue={university.region ?? ""} className={inputClass} />
+          <Input name="region" defaultValue={university.region ?? ""} />
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
           Status
-          <select name="status" defaultValue={university.status} className={inputClass}>
+          <Select name="status" defaultValue={university.status}>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
-          </select>
+          </Select>
         </label>
       </div>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
       {state?.success && <p className="text-xs text-success">Saved.</p>}
       <div className="flex items-center justify-between">
-        <button type="submit" disabled={pending} className="self-start rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink disabled:opacity-50">
-          {pending ? "Saving…" : "Save changes"}
-        </button>
+        <Button type="submit" variant="primary" pending={pending} className="self-start">
+          Save changes
+        </Button>
         <button
           type="button"
           onClick={() => {

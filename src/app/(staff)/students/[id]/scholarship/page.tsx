@@ -1,5 +1,6 @@
 import { getStaffSession } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { ScholarshipSection } from "../applications/[appId]/tracker/ScholarshipSection";
 
 function one<T>(v: T | T[] | null) {
@@ -25,7 +26,7 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
   if (italyApps.length === 0) {
     return (
       <Card>
-        <p className="text-sm text-muted">No scholarship applicable — this student has no Italy application.</p>
+        <EmptyState>No scholarship applicable — this student has no Italy application.</EmptyState>
       </Card>
     );
   }

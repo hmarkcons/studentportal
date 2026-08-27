@@ -1,16 +1,17 @@
 "use client";
 
 import { clockInOut } from "@/lib/actions/admin";
+import { Button } from "@/components/ui/Button";
 
 export function ClockButtons() {
   return (
     <div className="flex gap-2">
-      <button onClick={() => clockInOut("in")} className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink">
+      <Button onClick={() => clockInOut("in")} variant="primary">
         Clock In
-      </button>
-      <button onClick={() => clockInOut("out")} className="rounded-md border border-border px-3 py-1.5 text-sm text-ink hover:bg-bg">
+      </Button>
+      <Button onClick={() => clockInOut("out")}>
         Clock Out
-      </button>
+      </Button>
     </div>
   );
 }

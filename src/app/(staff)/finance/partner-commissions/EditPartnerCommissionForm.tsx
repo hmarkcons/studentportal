@@ -2,8 +2,10 @@
 
 import { useActionState, useState } from "react";
 import { updatePartnerCommission } from "@/lib/actions/finance";
+import { Input, Select } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
 
-const inputClass = "rounded-md border border-border bg-card px-2 py-1 text-xs";
+const inputClass = "px-2 py-1 text-xs";
 
 type Row = {
   id: string;
@@ -29,9 +31,9 @@ export function EditPartnerCommissionForm({ row }: { row: Row }) {
 
   if (!editing) {
     return (
-      <button onClick={() => setEditing(true)} className="rounded-md border border-border px-2 py-0.5 text-xs text-muted hover:text-ink">
+      <Button size="sm" onClick={() => setEditing(true)}>
         ✏️ Edit
-      </button>
+      </Button>
     );
   }
 
@@ -39,62 +41,62 @@ export function EditPartnerCommissionForm({ row }: { row: Row }) {
     <form action={formAction} className="grid grid-cols-2 gap-1 rounded-md border border-border p-2 sm:grid-cols-4">
       <label className="flex flex-col gap-0.5 text-[10px] text-muted">
         Expected
-        <input name="expected_amount" type="number" step="0.01" defaultValue={row.expected_amount ?? ""} className={inputClass} />
+        <Input name="expected_amount" type="number" step="0.01" defaultValue={row.expected_amount ?? ""} className={inputClass} />
       </label>
       <label className="flex flex-col gap-0.5 text-[10px] text-muted">
         Paid fee
-        <input name="paid_fee" type="number" step="0.01" defaultValue={row.paid_fee ?? ""} className={inputClass} />
+        <Input name="paid_fee" type="number" step="0.01" defaultValue={row.paid_fee ?? ""} className={inputClass} />
       </label>
       <label className="flex flex-col gap-0.5 text-[10px] text-muted">
         Fee payment date
-        <input name="fee_payment_date" type="date" defaultValue={row.fee_payment_date ?? ""} className={inputClass} />
+        <Input name="fee_payment_date" type="date" defaultValue={row.fee_payment_date ?? ""} className={inputClass} />
       </label>
       <label className="flex flex-col gap-0.5 text-[10px] text-muted">
         Currency
-        <input name="currency" defaultValue={row.currency} className={inputClass} />
+        <Input name="currency" defaultValue={row.currency} className={inputClass} />
       </label>
       <label className="flex flex-col gap-0.5 text-[10px] text-muted">
         Rate %
-        <input name="rate_percent" type="number" step="0.01" defaultValue={row.rate_percent ?? ""} className={inputClass} />
+        <Input name="rate_percent" type="number" step="0.01" defaultValue={row.rate_percent ?? ""} className={inputClass} />
       </label>
       <label className="flex flex-col gap-0.5 text-[10px] text-muted">
         Fixed amount
-        <input name="fixed_amount" type="number" step="0.01" defaultValue={row.fixed_amount ?? ""} className={inputClass} />
+        <Input name="fixed_amount" type="number" step="0.01" defaultValue={row.fixed_amount ?? ""} className={inputClass} />
       </label>
       <label className="flex flex-col gap-0.5 text-[10px] text-muted">
         Channel
-        <select name="channel" defaultValue={row.channel ?? ""} className={inputClass}>
+        <Select name="channel" defaultValue={row.channel ?? ""} className={inputClass}>
           <option value="">—</option>
           <option value="wallet">wallet</option>
           <option value="direct">direct</option>
-        </select>
+        </Select>
       </label>
       <label className="flex flex-col gap-0.5 text-[10px] text-muted">
         Wallet platform
-        <input name="wallet_platform" defaultValue={row.wallet_platform ?? ""} className={inputClass} />
+        <Input name="wallet_platform" defaultValue={row.wallet_platform ?? ""} className={inputClass} />
       </label>
       <label className="flex flex-col gap-0.5 text-[10px] text-muted">
         Received date
-        <input name="received_date" type="date" defaultValue={row.received_date ?? ""} className={inputClass} />
+        <Input name="received_date" type="date" defaultValue={row.received_date ?? ""} className={inputClass} />
       </label>
       <label className="flex flex-col gap-0.5 text-[10px] text-muted">
         HMARK bank account
-        <input name="hmark_bank_account" defaultValue={row.hmark_bank_account ?? ""} className={inputClass} />
+        <Input name="hmark_bank_account" defaultValue={row.hmark_bank_account ?? ""} className={inputClass} />
       </label>
       <label className="flex flex-col gap-0.5 text-[10px] text-muted">
         Status
-        <select name="status" defaultValue={row.status} className={inputClass}>
+        <Select name="status" defaultValue={row.status} className={inputClass}>
           {STATUSES.map((s) => (
             <option key={s} value={s}>
               {s.replace(/_/g, " ")}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       <div className="col-span-full flex items-center gap-2">
-        <button type="submit" disabled={pending} className="rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-ink disabled:opacity-50">
-          {pending ? "…" : "Save"}
-        </button>
+        <Button type="submit" variant="primary" size="sm" pending={pending}>
+          Save
+        </Button>
         <button type="button" onClick={() => setEditing(false)} className="text-xs text-muted hover:underline">
           Cancel
         </button>

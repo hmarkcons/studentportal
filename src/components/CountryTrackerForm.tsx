@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { useActionState } from "react";
 import { saveTrackerFields } from "@/lib/actions/countryTracker";
 import { CredentialField } from "@/components/CredentialField";
+import { Button } from "@/components/ui/Button";
+import { Input, Select, Textarea } from "@/components/ui/Input";
 import type { TrackerFieldDef } from "@/lib/countryTrackers";
 
 function parseJsonArray(raw: string | undefined): unknown[] {
@@ -79,7 +81,7 @@ export function CountryTrackerForm({
               {f.type === "boolean" ? (
                 <input type="checkbox" name={f.key} defaultChecked={values[f.key] === "true"} className="h-4 w-4 self-start" />
               ) : f.type === "select" ? (
-                <select
+                <Select
                   name={f.key}
                   value={live[f.key] ?? ""}
                   onChange={(e) => {
@@ -92,7 +94,6 @@ export function CountryTrackerForm({
                         : {}),
                     }));
                   }}
-                  className="rounded-md border border-border px-2 py-1.5 text-sm"
                 >
                   <option value="">—</option>
                   {selectOptions.map((o) => (
@@ -100,7 +101,7 @@ export function CountryTrackerForm({
                       {o.label}
                     </option>
                   ))}
-                </select>
+                </Select>
               ) : f.type === "multi_select" ? (
                 <MultiSelectField fieldKey={f.key} options={multiOptions} initial={values[f.key]} />
               ) : f.type === "multi_text" ? (
@@ -114,20 +115,18 @@ export function CountryTrackerForm({
                   initial={values[f.key]}
                 />
               ) : f.type === "textarea" ? (
-                <textarea
+                <Textarea
                   name={f.key}
                   value={live[f.key] ?? ""}
                   onChange={(e) => setLive((prev) => ({ ...prev, [f.key]: e.target.value }))}
                   rows={3}
-                  className="rounded-md border border-border px-2 py-1.5 text-sm"
                 />
               ) : (
-                <input
+                <Input
                   type={f.type === "date" ? "date" : f.type === "number" ? "number" : "text"}
                   name={f.key}
                   value={live[f.key] ?? ""}
                   onChange={(e) => setLive((prev) => ({ ...prev, [f.key]: e.target.value }))}
-                  className="rounded-md border border-border px-2 py-1.5 text-sm"
                 />
               )}
             </div>
@@ -135,9 +134,9 @@ export function CountryTrackerForm({
         })}
         <div className="col-span-full">
           {state?.error && <p className="mb-2 text-xs text-danger">{state.error}</p>}
-          <button type="submit" disabled={pending} className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink disabled:opacity-50">
+          <Button type="submit" variant="primary" pending={pending}>
             Save tracker fields
-          </button>
+          </Button>
         </div>
       </form>
 
@@ -202,11 +201,11 @@ function MultiTextField({ fieldKey, initial }: { fieldKey: string; initial?: str
     <div className="flex flex-col gap-2 rounded-md border border-border p-2">
       {items.map((v, i) => (
         <div key={i} className="flex items-center gap-2">
-          <input
+          <Input
             value={v}
             onChange={(e) => update(i, e.target.value)}
             placeholder={`Pending document ${i + 1}`}
-            className="flex-1 rounded border border-border px-2 py-1 text-xs"
+            className="flex-1"
           />
           <button type="button" onClick={() => remove(i)} className="text-xs text-danger hover:underline">
             Remove
@@ -258,10 +257,9 @@ function UniversityStatusField({
     <div className="flex flex-col gap-2 rounded-md border border-border p-2">
       {entries.map((entry, i) => (
         <div key={i} className="flex flex-wrap items-center gap-2">
-          <select
+          <Select
             value={entry.university_id}
             onChange={(e) => update(i, { university_id: e.target.value })}
-            className="rounded border border-border px-2 py-1 text-xs"
           >
             <option value="">University…</option>
             {universities.map((u) => (
@@ -269,11 +267,10 @@ function UniversityStatusField({
                 {u.label}
               </option>
             ))}
-          </select>
-          <select
+          </Select>
+          <Select
             value={entry.status}
             onChange={(e) => update(i, { status: e.target.value })}
-            className="rounded border border-border px-2 py-1 text-xs"
           >
             <option value="">Status…</option>
             {statusOptions.map((s) => (
@@ -281,13 +278,12 @@ function UniversityStatusField({
                 {s}
               </option>
             ))}
-          </select>
+          </Select>
           {dateWhenStatus && entry.status === dateWhenStatus && (
-            <input
+            <Input
               type="date"
               value={entry.date ?? ""}
               onChange={(e) => update(i, { date: e.target.value })}
-              className="rounded border border-border px-2 py-1 text-xs"
             />
           )}
           <button type="button" onClick={() => remove(i)} className="text-xs text-danger hover:underline">

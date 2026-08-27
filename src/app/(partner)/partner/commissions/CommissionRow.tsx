@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { partnerUploadCommissionProof, partnerDisputeCommission } from "@/lib/actions/partner";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 
 export function CommissionRow({
   commission,
@@ -27,13 +28,13 @@ export function CommissionRow({
         </Badge>
         <form action={formAction} className="flex items-center gap-1">
           <input type="file" name="file" className="w-24 text-xs" />
-          <button type="submit" disabled={pending} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-bg">
+          <Button type="submit" pending={pending} size="sm">
             Upload proof
-          </button>
+          </Button>
         </form>
-        <button onClick={() => partnerDisputeCommission(commission.id)} className="rounded-md border border-danger px-2 py-1 text-xs text-danger">
+        <Button onClick={() => partnerDisputeCommission(commission.id)} variant="danger" size="sm">
           Dispute
-        </button>
+        </Button>
       </div>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </div>

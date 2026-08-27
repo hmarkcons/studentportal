@@ -2,6 +2,8 @@
 
 import { useActionState } from "react";
 import { partnerUploadDocument } from "@/lib/actions/partner";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 
 export function UploadExchangeForm({ universityId }: { universityId: string }) {
   const action = partnerUploadDocument.bind(null, universityId);
@@ -10,10 +12,10 @@ export function UploadExchangeForm({ universityId }: { universityId: string }) {
   return (
     <form action={formAction} className="flex flex-wrap items-end gap-2">
       <input type="file" name="file" required className="text-sm" />
-      <input name="description" placeholder="Description" className="rounded-md border border-border px-2 py-1.5 text-sm" />
-      <button type="submit" disabled={pending} className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink disabled:opacity-50">
+      <Input name="description" placeholder="Description" />
+      <Button type="submit" pending={pending} variant="primary">
         Upload
-      </button>
+      </Button>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
   );

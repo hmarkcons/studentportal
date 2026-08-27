@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { NewUniversityForm } from "./NewUniversityForm";
 import { ImportUniversitiesForm } from "./ImportUniversitiesForm";
 import { DeleteUniversityIcon } from "./DeleteUniversityIcon";
@@ -82,7 +83,11 @@ export default async function UniversitiesPage(props: { searchParams: Promise<{ 
             )}
           </div>
         ))}
-        {(!universities || universities.length === 0) && <p className="px-4 py-6 text-sm text-muted">No universities yet.</p>}
+        {(!universities || universities.length === 0) && (
+          <div className="px-4 py-6">
+            <EmptyState>No universities yet.</EmptyState>
+          </div>
+        )}
       </div>
     </div>
   );

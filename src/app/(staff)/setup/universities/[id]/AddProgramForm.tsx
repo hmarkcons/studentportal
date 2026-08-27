@@ -3,6 +3,8 @@
 import { useActionState } from "react";
 import { addProgram } from "@/lib/actions/universities";
 import { STUDY_LEVELS } from "@/lib/constants";
+import { Button } from "@/components/ui/Button";
+import { Input, Select } from "@/components/ui/Input";
 
 export function AddProgramForm({ universityId }: { universityId: string }) {
   const action = addProgram.bind(null, universityId);
@@ -10,20 +12,20 @@ export function AddProgramForm({ universityId }: { universityId: string }) {
 
   return (
     <form action={formAction} className="flex flex-wrap items-end gap-2">
-      <select name="level" required className="rounded-md border border-border px-2 py-1.5 text-sm">
+      <Select name="level" required>
         {STUDY_LEVELS.map((l) => (
           <option key={l} value={l}>
             {l}
           </option>
         ))}
-      </select>
-      <input name="name" placeholder="Program name" required className="min-w-[200px] flex-1 rounded-md border border-border px-2 py-1.5 text-sm" />
-      <input name="core_field" placeholder="Core field" className="rounded-md border border-border px-2 py-1.5 text-sm" />
-      <input name="sub_field" placeholder="Sub-field" className="rounded-md border border-border px-2 py-1.5 text-sm" />
-      <input name="tuition_fee" type="number" step="0.01" placeholder="Tuition fee" className="w-32 rounded-md border border-border px-2 py-1.5 text-sm" />
-      <button type="submit" disabled={pending} className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink disabled:opacity-50">
+      </Select>
+      <Input name="name" placeholder="Program name" required className="min-w-[200px] flex-1" />
+      <Input name="core_field" placeholder="Core field" />
+      <Input name="sub_field" placeholder="Sub-field" />
+      <Input name="tuition_fee" type="number" step="0.01" placeholder="Tuition fee" className="w-32" />
+      <Button type="submit" variant="primary" pending={pending}>
         Add program
-      </button>
+      </Button>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
   );

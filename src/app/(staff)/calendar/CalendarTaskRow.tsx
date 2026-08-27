@@ -3,6 +3,8 @@
 import { useActionState, useState } from "react";
 import { toggleApplicationTask, deleteApplicationTask, updateApplicationTask } from "@/lib/actions/applications";
 import { Badge } from "@/components/ui/Badge";
+import { Input, Select } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
 
 const PRIORITY_TONE: Record<string, "danger" | "warning" | "neutral"> = {
   urgent: "danger",
@@ -33,16 +35,16 @@ export function CalendarTaskRow({
   if (editing) {
     return (
       <form action={formAction} className="flex flex-wrap items-end gap-2 rounded-md border border-border p-2">
-        <input name="description" defaultValue={description} required className="min-w-[160px] flex-1 rounded-md border border-border px-2 py-1 text-xs" />
-        <input name="due_date" type="date" defaultValue={dueDate.slice(0, 10)} className="rounded-md border border-border px-2 py-1 text-xs" />
-        <select name="priority" defaultValue={priority} className="rounded-md border border-border px-2 py-1 text-xs">
+        <Input name="description" defaultValue={description} required className="min-w-[160px] flex-1" />
+        <Input name="due_date" type="date" defaultValue={dueDate.slice(0, 10)} />
+        <Select name="priority" defaultValue={priority}>
           <option value="urgent">Urgent</option>
           <option value="medium">Medium</option>
           <option value="low">Low</option>
-        </select>
-        <button type="submit" disabled={pending} className="rounded-md bg-primary px-2 py-1 text-xs text-primary-ink disabled:opacity-50">
+        </Select>
+        <Button type="submit" variant="primary" size="sm" pending={pending}>
           Save
-        </button>
+        </Button>
         <button type="button" onClick={() => setEditing(false)} className="text-xs text-muted hover:underline">
           Cancel
         </button>

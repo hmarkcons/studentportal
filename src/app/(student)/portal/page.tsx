@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getStudentUser } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { BoardingPassTracker } from "@/components/ui/BoardingPassTracker";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -80,7 +81,7 @@ export default async function PortalDashboardPage() {
             </Link>
           );
         })}
-        {(!applications || applications.length === 0) && <p className="text-sm text-muted">No applications yet.</p>}
+        {(!applications || applications.length === 0) && <EmptyState>No applications yet.</EmptyState>}
       </div>
     </div>
   );

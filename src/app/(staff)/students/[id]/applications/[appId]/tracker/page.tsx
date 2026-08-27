@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { CountryTrackerForm } from "@/components/CountryTrackerForm";
 import { listTrackerDefinitions } from "@/lib/actions/countryTracker";
 import { ScholarshipSection } from "./ScholarshipSection";
@@ -92,7 +93,7 @@ export default async function CountryTrackerPage(props: PageProps<"/students/[id
 
       {!fields ? (
         <Card>
-          <p className="text-sm text-muted">No documentation tracker is configured for this destination yet.</p>
+          <EmptyState>No documentation tracker is configured for this destination yet.</EmptyState>
         </Card>
       ) : (
         <Card className="mb-6">

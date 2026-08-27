@@ -3,6 +3,8 @@
 import { useActionState } from "react";
 import { importUniversities } from "@/lib/actions/universities";
 import { SampleCsvButton } from "@/components/ui/SampleCsvButton";
+import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Input";
 
 const HEADERS = ["name", "city", "region", "type", "levels_offered", "fields_offered"];
 const EXAMPLE = ["Sapienza University of Rome", "Rome", "Lazio", "public", "bachelors;masters", "Engineering;IT/CS"];
@@ -14,18 +16,18 @@ export function ImportUniversitiesForm({ destinations }: { destinations: { id: s
     <details className="mt-3 rounded-md border border-border p-3">
       <summary className="cursor-pointer text-sm font-medium text-ink">Import universities from CSV</summary>
       <form action={formAction} className="mt-3 flex flex-wrap items-end gap-2">
-        <select name="destination_id" required className="rounded-md border border-border bg-card px-3 py-2 text-sm">
+        <Select name="destination_id" required>
           <option value="">Destination…</option>
           {destinations.map((d) => (
             <option key={d.id} value={d.id}>
               {d.display_name}
             </option>
           ))}
-        </select>
+        </Select>
         <input name="file" type="file" accept=".csv" required className="text-sm" />
-        <button type="submit" disabled={pending} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-ink disabled:opacity-50">
-          {pending ? "Importing…" : "Import"}
-        </button>
+        <Button type="submit" variant="primary" pending={pending}>
+          Import
+        </Button>
         <SampleCsvButton filename="universities-sample.csv" headers={HEADERS} exampleRow={EXAMPLE} />
       </form>
       <p className="mt-2 text-xs text-muted">

@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { LEAD_STATUS_LABELS, LEAD_STATUS_TONE } from "@/lib/constants";
 import { CallLogForm } from "./CallLogForm";
 import { registerLead } from "@/lib/actions/leads";
@@ -70,9 +72,9 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
             Converts this lead into a Registered Student and hands ownership to the Processing Team.
           </p>
           <form action={registerAction} className="mt-3">
-            <button type="submit" className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink">
+            <Button type="submit" variant="primary">
               Register this lead
-            </button>
+            </Button>
           </form>
           <p className="mt-2 text-xs text-muted">Discount can be set anytime after registration from the student&apos;s dashboard.</p>
         </Card>
@@ -121,7 +123,7 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
       <Card className="mt-6">
         <h3 className="mb-3 text-sm font-medium text-ink">Call history</h3>
         {!logs || logs.length === 0 ? (
-          <p className="text-sm text-muted">No calls logged yet.</p>
+          <EmptyState>No calls logged yet.</EmptyState>
         ) : (
           <ol className="flex flex-col gap-3">
             {logs.map((log) => (

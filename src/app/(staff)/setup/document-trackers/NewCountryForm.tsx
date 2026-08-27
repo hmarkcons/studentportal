@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { NewTrackerFieldForm } from "./TrackerFieldForm";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 
 export function NewCountryForm() {
   const [code, setCode] = useState<string | null>(null);
@@ -27,16 +29,10 @@ export function NewCountryForm() {
           if (input) setCode(input);
         }}
       >
-        <input
-          name="country_code"
-          placeholder="Country code, e.g. CA"
-          maxLength={4}
-          required
-          className="rounded-md border border-border bg-card px-2 py-1.5 text-sm uppercase"
-        />
-        <button type="submit" className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink">
+        <Input name="country_code" placeholder="Country code, e.g. CA" maxLength={4} required className="uppercase" />
+        <Button type="submit" variant="primary">
           Continue
-        </button>
+        </Button>
       </form>
     </details>
   );

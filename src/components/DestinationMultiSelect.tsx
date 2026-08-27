@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 export function DestinationMultiSelect({
   destinations,
@@ -34,7 +35,7 @@ export function DestinationMultiSelect({
           )}
         </label>
       ))}
-      {destinations.length === 0 && <p className="text-sm text-muted">No destinations configured yet.</p>}
+      {destinations.length === 0 && <EmptyState>No destinations configured yet.</EmptyState>}
     </div>
   );
 }

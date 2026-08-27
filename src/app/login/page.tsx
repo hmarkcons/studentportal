@@ -3,6 +3,8 @@
 import { Suspense, useActionState } from "react";
 import { useSearchParams } from "next/navigation";
 import { signIn } from "./actions";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 
 function TravelIllustration() {
   return (
@@ -73,13 +75,12 @@ function LoginFormWithNext() {
               <label htmlFor="email" className="text-sm font-medium text-ink">
                 Email
               </label>
-              <input
+              <Input
                 id="email"
                 name="email"
                 type="email"
                 required
                 autoComplete="email"
-                className="rounded-md border border-border bg-card px-3 py-2 text-sm outline-none focus:border-primary"
               />
             </div>
 
@@ -87,25 +88,20 @@ function LoginFormWithNext() {
               <label htmlFor="password" className="text-sm font-medium text-ink">
                 Password
               </label>
-              <input
+              <Input
                 id="password"
                 name="password"
                 type="password"
                 required
                 autoComplete="current-password"
-                className="rounded-md border border-border bg-card px-3 py-2 text-sm outline-none focus:border-primary"
               />
             </div>
 
             {state?.error && <p className="text-sm text-danger">{state.error}</p>}
 
-            <button
-              type="submit"
-              disabled={pending}
-              className="mt-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-ink hover:opacity-90 disabled:opacity-50"
-            >
-              {pending ? "Signing in…" : "Sign In"}
-            </button>
+            <Button type="submit" variant="primary" pending={pending} className="mt-2">
+              Sign In
+            </Button>
           </form>
 
           <p className="mt-6 text-center text-xs text-muted">

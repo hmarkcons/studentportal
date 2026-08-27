@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { NewReferralForm } from "./NewReferralForm";
 import { IncentiveStatusButton } from "./IncentiveStatusButton";
 
@@ -38,7 +39,11 @@ export default async function ReferralsPage() {
             </div>
           </div>
         ))}
-        {(!referrals || referrals.length === 0) && <p className="px-4 py-6 text-sm text-muted">No referrals logged yet.</p>}
+        {(!referrals || referrals.length === 0) && (
+          <div className="px-4 py-6">
+            <EmptyState>No referrals logged yet.</EmptyState>
+          </div>
+        )}
       </div>
     </div>
   );

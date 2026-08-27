@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Select } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
 
 export function NewApplicationForStudent({ students }: { students: { id: string; full_name: string }[] }) {
   const router = useRouter();
@@ -9,21 +11,21 @@ export function NewApplicationForStudent({ students }: { students: { id: string;
 
   return (
     <div className="flex items-center gap-2">
-      <select value={studentId} onChange={(e) => setStudentId(e.target.value)} className="rounded-md border border-border px-2 py-1.5 text-sm">
+      <Select value={studentId} onChange={(e) => setStudentId(e.target.value)}>
         <option value="">Choose student…</option>
         {students.map((s) => (
           <option key={s.id} value={s.id}>
             {s.full_name}
           </option>
         ))}
-      </select>
-      <button
+      </Select>
+      <Button
+        variant="primary"
         disabled={!studentId}
         onClick={() => router.push(`/students/${studentId}/applications/new`)}
-        className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink disabled:opacity-50"
       >
         + Add application
-      </button>
+      </Button>
     </div>
   );
 }

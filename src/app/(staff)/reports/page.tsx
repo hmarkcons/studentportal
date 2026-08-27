@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { StatCard } from "@/components/ui/StatCard";
 import { Card } from "@/components/ui/Card";
 import { RadialGauge } from "@/components/ui/RadialGauge";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { LEAD_STATUS_LABELS } from "@/lib/constants";
 import { visibleReports } from "@/lib/reportsCatalogue";
 
@@ -105,7 +106,7 @@ export default async function ReportsPage() {
         <Card>
           <h3 className="mb-4 text-sm font-medium text-ink">Counselor call activity</h3>
           {callsByCounselor.size === 0 ? (
-            <p className="text-sm text-muted">No calls logged yet.</p>
+            <EmptyState>No calls logged yet.</EmptyState>
           ) : (
             <div className="flex flex-col gap-2">
               {[...callsByCounselor.entries()].map(([name, count]) => (
@@ -133,7 +134,7 @@ export default async function ReportsPage() {
                 </div>
               );
             })}
-            {(!staff || staff.length === 0) && <p className="text-sm text-muted">No counselors yet.</p>}
+            {(!staff || staff.length === 0) && <EmptyState>No counselors yet.</EmptyState>}
           </div>
         </Card>
       </div>

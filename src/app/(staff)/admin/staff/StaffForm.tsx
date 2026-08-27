@@ -3,8 +3,9 @@
 import { useActionState } from "react";
 import { createStaffAccount, updateStaffDetails } from "@/lib/actions/admin";
 import { STAFF_ROLES, STAFF_ROLE_LABELS, STAFF_DESIGNATIONS, GENDERS, MARITAL_STATUSES, STAFF_CURRENCIES, CURRENCY_SYMBOLS } from "@/lib/constants";
+import { Input, Select } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
 
-const inputClass = "rounded-md border border-border bg-card px-3 py-2 text-sm outline-none focus:border-primary";
 const labelClass = "text-xs font-medium text-muted";
 
 export type StaffRecord = {
@@ -61,122 +62,121 @@ export function StaffForm({ staff, onSuccess }: { staff?: StaffRecord; onSuccess
     <form action={formAction} className="flex flex-col">
       <Section title="Personal Information">
         <Field label="Staff name">
-          <input name="full_name" defaultValue={staff?.full_name ?? ""} required className={inputClass} />
+          <Input name="full_name" defaultValue={staff?.full_name ?? ""} required />
         </Field>
         <Field label="Designation">
-          <select name="designation" defaultValue={staff?.designation ?? ""} className={inputClass}>
+          <Select name="designation" defaultValue={staff?.designation ?? ""}>
             <option value="">—</option>
             {STAFF_DESIGNATIONS.map((d) => (
               <option key={d} value={d}>
                 {d}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         <Field label="Role (system access)">
-          <select name="role" defaultValue={staff?.role ?? ""} required className={inputClass}>
+          <Select name="role" defaultValue={staff?.role ?? ""} required>
             <option value="">—</option>
             {STAFF_ROLES.map((r) => (
               <option key={r} value={r}>
                 {STAFF_ROLE_LABELS[r]}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         <Field label="Gender">
-          <select name="gender" defaultValue={staff?.gender ?? ""} className={inputClass}>
+          <Select name="gender" defaultValue={staff?.gender ?? ""}>
             <option value="">—</option>
             {GENDERS.map((g) => (
               <option key={g} value={g}>
                 {g}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         <Field label="Date of birth">
-          <input name="date_of_birth" type="date" defaultValue={staff?.date_of_birth ?? ""} className={inputClass} />
+          <Input name="date_of_birth" type="date" defaultValue={staff?.date_of_birth ?? ""} />
         </Field>
         <Field label="Marital status">
-          <select name="marital_status" defaultValue={staff?.marital_status ?? ""} className={inputClass}>
+          <Select name="marital_status" defaultValue={staff?.marital_status ?? ""}>
             <option value="">—</option>
             {MARITAL_STATUSES.map((m) => (
               <option key={m} value={m}>
                 {m}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         <Field label="CNIC number">
-          <input name="cnic" placeholder="XXXXXX-XXXXXX-X" defaultValue={staff?.cnic ?? ""} className={inputClass} />
+          <Input name="cnic" placeholder="XXXXXX-XXXXXX-X" defaultValue={staff?.cnic ?? ""} />
         </Field>
         <Field label="Address" full>
-          <input name="address" defaultValue={staff?.address ?? ""} className={inputClass} />
+          <Input name="address" defaultValue={staff?.address ?? ""} />
         </Field>
       </Section>
 
       <Section title="Contact">
         <Field label="Mobile (Personal)">
-          <input name="mobile_personal" defaultValue={staff?.mobile_personal ?? ""} className={inputClass} />
+          <Input name="mobile_personal" defaultValue={staff?.mobile_personal ?? ""} />
         </Field>
         <Field label="Mobile (Official)">
-          <input name="mobile_official" defaultValue={staff?.mobile_official ?? ""} className={inputClass} />
+          <Input name="mobile_official" defaultValue={staff?.mobile_official ?? ""} />
         </Field>
         <Field label="Email (Personal)">
-          <input name="email_personal" type="email" defaultValue={staff?.email_personal ?? ""} className={inputClass} />
+          <Input name="email_personal" type="email" defaultValue={staff?.email_personal ?? ""} />
         </Field>
         <Field label={isEdit ? "Email (Official)" : "Email (Official) — used to log in"}>
-          <input name="email_official" type="email" required={!isEdit} defaultValue={staff?.email_official ?? ""} className={inputClass} />
+          <Input name="email_official" type="email" required={!isEdit} defaultValue={staff?.email_official ?? ""} />
         </Field>
         <Field label="Emergency contact number">
-          <input name="emergency_contact_number" defaultValue={staff?.emergency_contact_number ?? ""} className={inputClass} />
+          <Input name="emergency_contact_number" defaultValue={staff?.emergency_contact_number ?? ""} />
         </Field>
         <Field label="Emergency contact name">
-          <input name="emergency_contact_name" defaultValue={staff?.emergency_contact_name ?? ""} className={inputClass} />
+          <Input name="emergency_contact_name" defaultValue={staff?.emergency_contact_name ?? ""} />
         </Field>
         <Field label="Emergency contact relation">
-          <input name="emergency_contact_relation" defaultValue={staff?.emergency_contact_relation ?? ""} className={inputClass} />
+          <Input name="emergency_contact_relation" defaultValue={staff?.emergency_contact_relation ?? ""} />
         </Field>
       </Section>
 
       <Section title="Compensation">
         <Field label={`Monthly salary (${CURRENCY_SYMBOLS[currency] ?? currency})`}>
-          <input name="monthly_salary" type="number" step="0.01" defaultValue={staff?.monthly_salary ?? ""} className={inputClass} />
+          <Input name="monthly_salary" type="number" step="0.01" defaultValue={staff?.monthly_salary ?? ""} />
         </Field>
         <Field label="Currency">
-          <select name="currency" defaultValue={currency} className={inputClass}>
+          <Select name="currency" defaultValue={currency}>
             {STAFF_CURRENCIES.map((c) => (
               <option key={c} value={c}>
                 {c} ({CURRENCY_SYMBOLS[c]})
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         <Field label={`Allowance (${CURRENCY_SYMBOLS[currency] ?? currency})`}>
-          <input name="allowance" type="number" step="0.01" defaultValue={staff?.allowance ?? ""} className={inputClass} />
+          <Input name="allowance" type="number" step="0.01" defaultValue={staff?.allowance ?? ""} />
         </Field>
         <Field label="Commission rate — general (%)">
-          <input name="commission_rate_general" type="number" step="0.01" defaultValue={staff?.commission_rate_general ?? ""} className={inputClass} />
+          <Input name="commission_rate_general" type="number" step="0.01" defaultValue={staff?.commission_rate_general ?? ""} />
         </Field>
         <Field label="Commission rate — public universities (%)">
-          <input
+          <Input
             name="commission_rate_public_universities"
             type="number"
             step="0.01"
             defaultValue={staff?.commission_rate_public_universities ?? ""}
-            className={inputClass}
           />
         </Field>
         <Field label="Monthly target">
-          <input name="monthly_target" type="number" step="1" defaultValue={staff?.monthly_target ?? ""} className={inputClass} />
+          <Input name="monthly_target" type="number" step="1" defaultValue={staff?.monthly_target ?? ""} />
         </Field>
       </Section>
 
       <Section title="Status">
         <Field label="Status">
-          <select name="status" defaultValue={staff ? (staff.status === "active" ? "active" : "inactive") : "active"} className={inputClass}>
+          <Select name="status" defaultValue={staff ? (staff.status === "active" ? "active" : "inactive") : "active"}>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
-          </select>
+          </Select>
         </Field>
       </Section>
 
@@ -195,12 +195,12 @@ export function StaffForm({ staff, onSuccess }: { staff?: StaffRecord; onSuccess
       )}
 
       <div className="flex items-center gap-2">
-        <button type="submit" disabled={pending} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-ink disabled:opacity-50">
-          {pending ? "Saving…" : isEdit ? "Save changes" : "Create staff account"}
-        </button>
-        <button type="button" onClick={onSuccess} className="rounded-md border border-border px-4 py-2 text-sm text-muted hover:text-ink">
+        <Button type="submit" variant="primary" size="lg" pending={pending}>
+          {isEdit ? "Save changes" : "Create staff account"}
+        </Button>
+        <Button type="button" variant="outline" size="lg" onClick={onSuccess}>
           {state?.success ? "Close" : "Cancel"}
-        </button>
+        </Button>
       </div>
     </form>
   );

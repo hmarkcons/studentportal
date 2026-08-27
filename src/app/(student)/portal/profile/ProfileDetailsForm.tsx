@@ -2,6 +2,8 @@
 
 import { useActionState } from "react";
 import { updateProfileDetails } from "@/lib/actions/portal-profile";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 
 type Profile = {
   passport_number: string | null;
@@ -11,8 +13,6 @@ type Profile = {
   financial_sponsor_relation: string | null;
 } | null;
 
-const inputClass = "rounded-md border border-border bg-card px-3 py-2 text-sm";
-
 export function ProfileDetailsForm({ studentId, profile }: { studentId: string; profile: Profile }) {
   const action = updateProfileDetails.bind(null, studentId);
   const [state, formAction, pending] = useActionState(action, undefined);
@@ -21,29 +21,29 @@ export function ProfileDetailsForm({ studentId, profile }: { studentId: string; 
     <form action={formAction} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <label className="flex flex-col gap-1 text-xs text-muted">
         Passport number
-        <input name="passport_number" defaultValue={profile?.passport_number ?? ""} className={inputClass} />
+        <Input name="passport_number" defaultValue={profile?.passport_number ?? ""} />
       </label>
       <label className="flex flex-col gap-1 text-xs text-muted">
         Passport expiry
-        <input name="passport_expiry" type="date" defaultValue={profile?.passport_expiry ?? ""} className={inputClass} />
+        <Input name="passport_expiry" type="date" defaultValue={profile?.passport_expiry ?? ""} />
       </label>
       <label className="flex flex-col gap-1 text-xs text-muted">
         CNIC / B-Form number
-        <input name="cnic" defaultValue={profile?.cnic ?? ""} className={inputClass} />
+        <Input name="cnic" defaultValue={profile?.cnic ?? ""} />
       </label>
       <label className="flex flex-col gap-1 text-xs text-muted">
         Financial sponsor name
-        <input name="financial_sponsor_name" defaultValue={profile?.financial_sponsor_name ?? ""} className={inputClass} />
+        <Input name="financial_sponsor_name" defaultValue={profile?.financial_sponsor_name ?? ""} />
       </label>
       <label className="flex flex-col gap-1 text-xs text-muted">
         Sponsor relation
-        <input name="financial_sponsor_relation" defaultValue={profile?.financial_sponsor_relation ?? ""} className={inputClass} />
+        <Input name="financial_sponsor_relation" defaultValue={profile?.financial_sponsor_relation ?? ""} />
       </label>
       <div className="col-span-full">
         {state?.error && <p className="mb-2 text-xs text-danger">{state.error}</p>}
-        <button type="submit" disabled={pending} className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink disabled:opacity-50">
-          {pending ? "Saving…" : "Save"}
-        </button>
+        <Button type="submit" variant="primary" pending={pending}>
+          Save
+        </Button>
       </div>
     </form>
   );

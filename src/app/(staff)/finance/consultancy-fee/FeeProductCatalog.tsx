@@ -2,6 +2,9 @@
 
 import { useActionState, useState } from "react";
 import { createFeeProduct, updateFeeProduct, deleteFeeProduct } from "@/lib/actions/consultancyFee";
+import { Input, Select } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 type Product = { id: string; name: string; default_amount: number | null; default_currency: string };
 
@@ -9,16 +12,16 @@ function NewProductForm() {
   const [state, formAction, pending] = useActionState(createFeeProduct, undefined);
   return (
     <form action={formAction} className="flex flex-wrap items-end gap-2">
-      <input name="name" placeholder="Product / fee name" required className="w-48 rounded-md border border-border px-2 py-1.5 text-sm" />
-      <input name="default_amount" type="number" step="0.01" placeholder="Default amount" className="w-32 rounded-md border border-border px-2 py-1.5 text-sm" />
-      <select name="default_currency" defaultValue="EUR" className="rounded-md border border-border px-2 py-1.5 text-sm">
+      <Input name="name" placeholder="Product / fee name" required className="w-48" />
+      <Input name="default_amount" type="number" step="0.01" placeholder="Default amount" className="w-32" />
+      <Select name="default_currency" defaultValue="EUR">
         <option value="EUR">EUR</option>
         <option value="PKR">PKR</option>
         <option value="USD">USD</option>
-      </select>
-      <button type="submit" disabled={pending} className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink disabled:opacity-50">
-        {pending ? "Adding…" : "+ Add product"}
-      </button>
+      </Select>
+      <Button type="submit" variant="primary" pending={pending}>
+        + Add product
+      </Button>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
   );
@@ -32,16 +35,16 @@ function ProductRow({ product }: { product: Product }) {
   if (editing) {
     return (
       <form action={formAction} className="flex flex-wrap items-end gap-2 border-b border-border py-2">
-        <input name="name" defaultValue={product.name} required className="w-48 rounded-md border border-border px-2 py-1.5 text-sm" />
-        <input name="default_amount" type="number" step="0.01" defaultValue={product.default_amount ?? ""} className="w-32 rounded-md border border-border px-2 py-1.5 text-sm" />
-        <select name="default_currency" defaultValue={product.default_currency} className="rounded-md border border-border px-2 py-1.5 text-sm">
+        <Input name="name" defaultValue={product.name} required className="w-48" />
+        <Input name="default_amount" type="number" step="0.01" defaultValue={product.default_amount ?? ""} className="w-32" />
+        <Select name="default_currency" defaultValue={product.default_currency}>
           <option value="EUR">EUR</option>
           <option value="PKR">PKR</option>
           <option value="USD">USD</option>
-        </select>
-        <button type="submit" disabled={pending} className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-ink disabled:opacity-50">
-          {pending ? "…" : "Save"}
-        </button>
+        </Select>
+        <Button type="submit" variant="primary" size="sm" pending={pending}>
+          Save
+        </Button>
         <button type="button" onClick={() => setEditing(false)} className="text-xs text-muted hover:underline">
           Cancel
         </button>
@@ -86,7 +89,11 @@ export function FeeProductCatalog({ products }: { products: Product[] }) {
           {products.map((p) => (
             <ProductRow key={p.id} product={p} />
           ))}
-          {products.length === 0 && <p className="py-2 text-sm text-muted">No products yet — add one above to offer it as a line item on invoices.</p>}
+          {products.length === 0 && (
+            <div className="py-2">
+              <EmptyState>No products yet — add one above to offer it as a line item on invoices.</EmptyState>
+            </div>
+          )}
         </div>
       </div>
     </details>

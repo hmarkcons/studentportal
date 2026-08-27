@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { inviteStudentToPortal, resetStudentPortalPassword } from "@/lib/actions/portal";
 import { readCredentialAction } from "@/lib/actions/countryTracker";
+import { Button } from "@/components/ui/Button";
 
 type ActionState = { error?: string; success?: boolean; email?: string; password?: string } | undefined;
 
@@ -27,23 +28,14 @@ export function PortalAccessPanel({ studentId, enabled }: { studentId: string; e
         </p>
         <div className="flex items-center gap-2">
           {enabled && (
-            <button
-              type="button"
-              onClick={reveal}
-              disabled={revealing}
-              className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
-            >
-              {revealing ? "Loading…" : "Reveal credentials"}
-            </button>
+            <Button type="button" onClick={reveal} pending={revealing}>
+              Reveal credentials
+            </Button>
           )}
           <form action={formAction}>
-            <button
-              type="submit"
-              disabled={pending}
-              className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
-            >
-              {pending ? "Working…" : enabled ? "Reset password" : "Create portal login"}
-            </button>
+            <Button type="submit" pending={pending}>
+              {enabled ? "Reset password" : "Create portal login"}
+            </Button>
           </form>
         </div>
       </div>

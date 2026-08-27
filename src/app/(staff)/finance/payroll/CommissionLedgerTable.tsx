@@ -2,6 +2,9 @@
 
 import { useActionState, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Input, Select } from "@/components/ui/Input";
 import { ProofFileCell } from "@/components/ProofFileCell";
 import {
   createStaffCommission,
@@ -10,8 +13,6 @@ import {
   updateStaffCommission,
   uploadStaffCommissionProof,
 } from "@/lib/actions/finance";
-
-const inputClass = "rounded-md border border-border bg-card px-2 py-1 text-xs";
 
 export type CommissionRecord = {
   id: string;
@@ -30,27 +31,27 @@ function EditCommissionForm({ record, revalidateTo }: { record: CommissionRecord
 
   if (!editing) {
     return (
-      <button onClick={() => setEditing(true)} className="rounded-md border border-border px-2 py-0.5 text-xs text-muted hover:text-ink">
+      <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
         ✏️ Edit
-      </button>
+      </Button>
     );
   }
 
   return (
     <form action={formAction} className="flex flex-wrap items-center gap-1">
-      <input name="amount" type="number" step="0.01" defaultValue={record.amount} required className={`${inputClass} w-24`} />
-      <input name="currency" defaultValue={record.currency} required className={`${inputClass} w-16`} />
-      <input name="registration_date" type="date" defaultValue={record.registration_date ?? ""} className={inputClass} />
-      <select name="status" defaultValue={record.status} className={inputClass}>
+      <Input name="amount" type="number" step="0.01" defaultValue={record.amount} required className="w-24" />
+      <Input name="currency" defaultValue={record.currency} required className="w-16" />
+      <Input name="registration_date" type="date" defaultValue={record.registration_date ?? ""} />
+      <Select name="status" defaultValue={record.status}>
         <option value="unpaid">unpaid</option>
         <option value="paid">paid</option>
-      </select>
-      <button type="submit" disabled={pending} className="rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-ink disabled:opacity-50">
-        {pending ? "…" : "Save"}
-      </button>
-      <button type="button" onClick={() => setEditing(false)} className="text-xs text-muted hover:underline">
+      </Select>
+      <Button type="submit" variant="primary" size="sm" pending={pending}>
+        Save
+      </Button>
+      <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>
         Cancel
-      </button>
+      </Button>
       {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
     </form>
   );
@@ -62,9 +63,9 @@ function MarkPaidForm({ id, revalidateTo }: { id: string; revalidateTo: string }
 
   return (
     <form action={formAction} className="flex items-center gap-2">
-      <button type="submit" disabled={pending} className="rounded-md border border-success px-2 py-1 text-xs text-success disabled:opacity-50">
-        {pending ? "…" : "Mark paid"}
-      </button>
+      <Button type="submit" variant="success" size="sm" pending={pending}>
+        Mark paid
+      </Button>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
   );
@@ -72,14 +73,15 @@ function MarkPaidForm({ id, revalidateTo }: { id: string; revalidateTo: string }
 
 function DeleteCommissionButton({ id, revalidateTo }: { id: string; revalidateTo: string }) {
   return (
-    <button
+    <Button
+      variant="outline"
+      size="sm"
       onClick={() => {
         if (confirm("Delete this commission record?")) deleteStaffCommission(id, revalidateTo);
       }}
-      className="rounded-md border border-border px-2 py-0.5 text-xs text-muted hover:text-danger"
     >
       🗑️
-    </button>
+    </Button>
   );
 }
 
@@ -100,24 +102,24 @@ function AddCommissionForm({
   return (
     <form action={formAction} className="mb-3 flex flex-wrap items-end gap-2">
       <input type="hidden" name="staff_id" value={staffId} />
-      <select name="student_id" required className={inputClass}>
+      <Select name="student_id" required>
         <option value="">Student…</option>
         {students.map((s) => (
           <option key={s.id} value={s.id}>
             {s.full_name}
           </option>
         ))}
-      </select>
-      <input name="amount" type="number" step="0.01" placeholder="Amount" required className={`${inputClass} w-24`} />
-      <select name="currency" defaultValue="PKR" className={inputClass}>
+      </Select>
+      <Input name="amount" type="number" step="0.01" placeholder="Amount" required className="w-24" />
+      <Select name="currency" defaultValue="PKR">
         <option value="PKR">PKR</option>
         <option value="EUR">EUR</option>
         <option value="USD">USD</option>
-      </select>
-      <input name="registration_date" type="date" defaultValue={defaultDate} className={inputClass} />
-      <button type="submit" disabled={pending} className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-ink disabled:opacity-50">
+      </Select>
+      <Input name="registration_date" type="date" defaultValue={defaultDate} />
+      <Button type="submit" variant="primary" size="sm" disabled={pending}>
         {pending ? "Adding…" : "+ Add commission record"}
-      </button>
+      </Button>
       {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
     </form>
   );
@@ -142,7 +144,7 @@ export function CommissionLedgerTable({
     <div>
       <AddCommissionForm staffId={staffId} students={students} defaultDate={defaultDate} revalidateTo={revalidateTo} />
       {records.length === 0 ? (
-        <p className="text-sm text-muted">No commission records for this staff member in the selected month.</p>
+        <EmptyState>No commission records for this staff member in the selected month.</EmptyState>
       ) : (
         <div className="flex flex-col divide-y divide-border">
           {records.map((r) => (
