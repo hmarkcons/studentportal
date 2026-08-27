@@ -18,12 +18,12 @@ const styles = StyleSheet.create({
 
   footer: { position: "absolute", bottom: 28, left: 44, right: 44, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" },
   footerDate: { fontSize: 9, color: INK_SOFT },
-  sigBox: { width: 170, borderWidth: 1, borderColor: INK },
+  sigBox: { width: 220, borderWidth: 1, borderColor: INK },
   sigBoxLabel: { textAlign: "center", fontSize: 7.5, fontFamily: "Helvetica-Bold", paddingVertical: 2, borderBottomWidth: 1, borderBottomColor: INK },
-  sigBoxCells: { flexDirection: "row", height: 26 },
+  sigBoxCells: { flexDirection: "row", height: 42 },
   sigBoxCell: { flex: 1, alignItems: "center", justifyContent: "center" },
   sigBoxCellDivider: { borderLeftWidth: 1, borderLeftColor: INK },
-  sigBoxImg: { maxWidth: 70, maxHeight: 20 },
+  sigBoxImg: { maxWidth: 105, maxHeight: 36 },
 
   table: { borderWidth: 1, borderColor: INK, marginBottom: 10 },
   tRow: { flexDirection: "row" },
@@ -70,6 +70,9 @@ export type AgreementPdfData = {
     home: string | null;
     currentEducation: string | null;
     courseOfInterest: string | null;
+    emergencyContactName: string | null;
+    emergencyContactRelation: string | null;
+    emergencyContactNumber: string | null;
   };
   fee: {
     currencySymbol: string;
@@ -107,8 +110,10 @@ function Footer({ date, signatureDataUri }: { date: string; signatureDataUri: st
       <View style={styles.sigBox}>
         <Text style={styles.sigBoxLabel}>Signature</Text>
         <View style={styles.sigBoxCells}>
-          <View style={styles.sigBoxCell}>{signatureDataUri && <Image src={signatureDataUri} style={styles.sigBoxImg} />}</View>
-          <View style={[styles.sigBoxCell, styles.sigBoxCellDivider]} />
+          <View style={styles.sigBoxCell} />
+          <View style={[styles.sigBoxCell, styles.sigBoxCellDivider]}>
+            {signatureDataUri && <Image src={signatureDataUri} style={styles.sigBoxImg} />}
+          </View>
         </View>
       </View>
     </View>
@@ -129,6 +134,11 @@ function StudentDetailsChart({ student, destinationLabel }: { student: Agreement
       <View style={styles.tRow}>
         <Text style={styles.tCell}><Text style={styles.tLabel}>Mobile: </Text>{student.mobile ?? ""}</Text>
         <Text style={[styles.tCell, styles.tCellLast]}><Text style={styles.tLabel}>Home: </Text>{student.home ?? ""}</Text>
+      </View>
+      <View style={styles.tRow}>
+        <Text style={styles.tCell}><Text style={styles.tLabel}>Emergency Contact: </Text>{student.emergencyContactName ?? ""}</Text>
+        <Text style={styles.tCell}><Text style={styles.tLabel}>Relation: </Text>{student.emergencyContactRelation ?? ""}</Text>
+        <Text style={[styles.tCell, styles.tCellLast]}><Text style={styles.tLabel}>Contact Number: </Text>{student.emergencyContactNumber ?? ""}</Text>
       </View>
       <View style={styles.tRow}>
         <Text style={styles.tCell}><Text style={styles.tLabel}>Current Education: </Text>{student.currentEducation ?? ""}</Text>

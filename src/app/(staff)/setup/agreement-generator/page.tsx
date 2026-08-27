@@ -8,6 +8,7 @@ import {
   UploadSignedAgreementForm,
   DeleteAgreementButton,
 } from "@/app/(staff)/students/[id]/GenerateAgreementForm";
+import { GenerateAgreementPdfButton } from "@/app/(staff)/students/[id]/GenerateAgreementPdfButton";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -57,15 +58,15 @@ export default async function AgreementGeneratorPage(props: { searchParams: Prom
     const { data: agreements } = await supabase
       .from("agreements")
       .select(
-        "id, status, signing_method, signed_file_path, email_verified, discount_amount, created_at, template:agreement_templates(file_path)"
+        "id, status, signing_method, signed_file_path, pdf_path, email_verified, discount_amount, created_at, template:agreement_templates(file_path)"
       )
       .eq("student_id", selected.id)
       .order("created_at", { ascending: false });
 
-    const agreementLinks = new Map<string, { templateUrl?: string; signedUrl?: string }>();
+    const agreementLinks = new Map<string, { templateUrl?: string; signedUrl?: string; pdfUrl?: string }>();
     await Promise.all(
       (agreements ?? []).map(async (a) => {
-        const links: { templateUrl?: string; signedUrl?: string } = {};
+        const links: { templateUrl?: string; signedUrl?: string; pdfUrl?: string } = {};
         const tmpl = one(a.template as never) as { file_path?: string } | null;
         if (tmpl?.file_path) {
           const { data } = await supabase.storage.from("documents").createSignedUrl(tmpl.file_path, 3600);
@@ -74,6 +75,10 @@ export default async function AgreementGeneratorPage(props: { searchParams: Prom
         if (a.signed_file_path) {
           const { data } = await supabase.storage.from("documents").createSignedUrl(a.signed_file_path, 3600);
           if (data?.signedUrl) links.signedUrl = data.signedUrl;
+        }
+        if (a.pdf_path) {
+          const { data } = await supabase.storage.from("documents").createSignedUrl(a.pdf_path, 3600);
+          if (data?.signedUrl) links.pdfUrl = data.signedUrl;
         }
         agreementLinks.set(a.id, links);
       })
@@ -108,11 +113,25 @@ export default async function AgreementGeneratorPage(props: { searchParams: Prom
                         View signed copy
                       </a>
                     ) : (
+                      !links?.pdfUrl &&
                       links?.templateUrl && (
                         <a href={links.templateUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
                           View template
                         </a>
                       )
+                    )}
+                    {links?.pdfUrl && (
+                      <a href={links.pdfUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
+                        View generated agreement
+                      </a>
+                    )}
+                    {canModifyAgreement && a.status !== "signed" && (
+                      <GenerateAgreementPdfButton
+                        agreementId={a.id}
+                        studentId={selected.id}
+                        revalidateTo={`/setup/agreement-generator?student=${selected.id}`}
+                        hasPdf={Boolean(links?.pdfUrl)}
+                      />
                     )}
                     <Badge tone={a.status === "signed" ? "success" : "warning"}>{a.status}</Badge>
                     {isSuperAdmin && <DeleteAgreementButton agreementId={a.id} studentId={selected.id} />}

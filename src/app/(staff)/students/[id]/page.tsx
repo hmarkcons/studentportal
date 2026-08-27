@@ -291,6 +291,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                         View signed copy
                       </a>
                     ) : (
+                      !links?.pdfUrl &&
                       links?.templateUrl && (
                         <a href={links.templateUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
                           View template

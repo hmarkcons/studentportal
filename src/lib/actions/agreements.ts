@@ -99,6 +99,12 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
     .maybeSingle();
   if (!student) return { error: "Student not found." };
 
+  const { data: profile } = await supabase
+    .from("student_profiles")
+    .select("emergency_contact_name, emergency_contact_relation, emergency_contact_number")
+    .eq("student_id", studentId)
+    .maybeSingle();
+
   let consultantName: string | null = null;
   if (agreement.generated_by) {
     const { data: staffRow } = await supabase.from("staff").select("full_name").eq("id", agreement.generated_by).maybeSingle();
@@ -129,13 +135,16 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
         home: student.home_phone,
         currentEducation: student.current_qualification,
         courseOfInterest: student.course_of_interest,
+        emergencyContactName: profile?.emergency_contact_name ?? null,
+        emergencyContactRelation: profile?.emergency_contact_relation ?? null,
+        emergencyContactNumber: profile?.emergency_contact_number ?? null,
       },
       fee: {
         currencySymbol,
         adminCharge,
         consultancyFee,
         discount: agreement.discount_amount,
-        total: adminCharge + consultancyFee,
+        total: adminCharge + consultancyFee - (agreement.discount_amount ?? 0),
       },
       agreementDate: formatAgreementDate(new Date(agreement.created_at)),
       signatureDataUri,
