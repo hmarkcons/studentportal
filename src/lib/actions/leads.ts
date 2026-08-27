@@ -294,6 +294,44 @@ export async function reassignLead(leadId: string, _prevState: unknown, formData
   return { success: true };
 }
 
+export async function deleteStudent(studentId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  if (staffRow?.role !== "super_admin") return { error: "Only Super Admin can delete a student record." };
+
+  const { data: lead } = await supabase.from("leads").select("auth_user_id").eq("id", studentId).maybeSingle();
+  const { data: apps } = await supabase.from("applications").select("id").eq("student_id", studentId);
+  const appIds = (apps ?? []).map((a) => a.id);
+
+  // partner_document_exchange.student_id has no cascade/FK ON DELETE — detach
+  // rather than block the delete, since these files belong to the partner,
+  // not the student record being removed.
+  await supabase.from("partner_document_exchange").update({ student_id: null }).eq("student_id", studentId);
+
+  // encrypted_credentials has no FK at all (owner_id is generic) — clean up
+  // explicitly so deleting the lead doesn't leave orphaned encrypted rows.
+  await supabase.from("encrypted_credentials").delete().eq("owner_type", "student").eq("owner_id", studentId);
+  if (appIds.length > 0) {
+    await supabase.from("encrypted_credentials").delete().eq("owner_type", "application").in("owner_id", appIds);
+  }
+
+  const { error } = await supabase.from("leads").delete().eq("id", studentId);
+  if (error) return { error: error.message };
+
+  if (lead?.auth_user_id) {
+    const { createAdminClient } = await import("@/lib/supabase/admin");
+    const admin = createAdminClient();
+    await admin.auth.admin.deleteUser(lead.auth_user_id).catch(() => {});
+  }
+
+  revalidatePath("/students");
+  revalidatePath("/leads");
+  return { success: true };
+}
+
 export async function registerLead(leadId: string, formData: FormData) {
   const supabase = await createClient();
   const discount_amount = formData.get("discount_amount") ? Number(formData.get("discount_amount")) : null;

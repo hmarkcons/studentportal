@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { DataTable } from "@/components/ui/DataTable";
 import { NewApplicationForStudent } from "./NewApplicationForStudent";
 
 type Row = {
   id: string;
   student_id: string;
   current_stage: string;
-  university: { destination: { pipeline_stages: string[] } | { pipeline_stages: string[] }[] | null } | { destination: unknown }[] | null;
+  university: { destination: { display_name: string; pipeline_stages: string[] } | { display_name: string; pipeline_stages: string[] }[] | null } | { destination: unknown }[] | null;
   student: { full_name: string } | { full_name: string }[] | null;
 };
 
@@ -20,7 +21,7 @@ export default async function ApplicationsBoardPage() {
   const { data: applications, error } = await supabase
     .from("applications")
     .select(
-      "id, student_id, current_stage, university:universities(destination:destinations(pipeline_stages)), student:leads(full_name)"
+      "id, student_id, current_stage, university:universities(destination:destinations(display_name, pipeline_stages)), student:leads(full_name)"
     )
     .returns<Row[]>();
 
@@ -48,6 +49,55 @@ export default async function ApplicationsBoardPage() {
     return { total: rows.length, submitted, pending, offer };
   }
 
+  function countries(rows: Row[]) {
+    const names = new Set<string>();
+    for (const r of rows) {
+      const uni = one(r.university as never) as { destination?: unknown } | null;
+      const dest = uni?.destination ? (one(uni.destination as never) as { display_name?: string } | null) : null;
+      if (dest?.display_name) names.add(dest.display_name);
+    }
+    return Array.from(names);
+  }
+
+  const columns = [
+    { key: "student", header: "Student" },
+    { key: "countries", header: "Countries" },
+    { key: "total", header: "Total", align: "right" as const },
+    { key: "submitted", header: "Submitted", align: "right" as const },
+    { key: "pending", header: "Pending submission", align: "right" as const },
+    { key: "offer", header: "With offer letters", align: "right" as const },
+  ];
+
+  const rows = [...byStudent.entries()].map(([studentId, { name, rows: appRows }]) => {
+    const c = counts(appRows);
+    const countryNames = countries(appRows);
+    return {
+      id: studentId,
+      cells: {
+        student: (
+          <Link href={`/students/${studentId}/applications`} className="font-medium text-ink hover:text-primary">
+            {name}
+          </Link>
+        ),
+        countries: countryNames.join(", ") || "—",
+        total: c.total,
+        submitted: c.submitted,
+        pending: c.pending,
+        offer: c.offer,
+      },
+      csv: {
+        student: name,
+        countries: countryNames.join(", "),
+        total: String(c.total),
+        submitted: String(c.submitted),
+        pending: String(c.pending),
+        offer: String(c.offer),
+      },
+    };
+  });
+
+  const allCountries = Array.from(new Set(rows.flatMap((r) => r.csv.countries.split(", ").filter(Boolean)))).sort();
+
   return (
     <div className="w-full">
       <div className="mb-4 flex items-center justify-between">
@@ -56,44 +106,16 @@ export default async function ApplicationsBoardPage() {
       </div>
       {error && <p className="text-sm text-danger">{error.message}</p>}
 
-      <div className="overflow-x-auto rounded-lg border border-border">
-        <table className="w-full min-w-[720px] text-sm">
-          <thead>
-            <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-muted">
-              <th className="px-4 py-3">Student</th>
-              <th className="px-4 py-3 text-right">Total</th>
-              <th className="px-4 py-3 text-right">Submitted</th>
-              <th className="px-4 py-3 text-right">Pending submission</th>
-              <th className="px-4 py-3 text-right">With offer letters</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[...byStudent.entries()].map(([studentId, { name, rows }]) => {
-              const c = counts(rows);
-              return (
-                <tr key={studentId} className="border-b border-border last:border-0 hover:bg-bg/60">
-                  <td className="px-4 py-3">
-                    <Link href={`/students/${studentId}/applications`} className="font-medium text-ink hover:text-primary">
-                      {name}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">{c.total}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{c.submitted}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{c.pending}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{c.offer}</td>
-                </tr>
-              );
-            })}
-            {byStudent.size === 0 && !error && (
-              <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-muted">
-                  No applications yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      {!error && (
+        <DataTable
+          exportFilename="applications"
+          rows={rows}
+          columns={columns}
+          searchable
+          searchPlaceholder="Search student…"
+          filters={allCountries.length > 0 ? [{ key: "countries", label: "Country", options: allCountries }] : []}
+        />
+      )}
     </div>
   );
 }

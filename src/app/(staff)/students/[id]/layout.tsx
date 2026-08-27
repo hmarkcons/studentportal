@@ -3,10 +3,17 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Badge } from "@/components/ui/Badge";
 import { StudentTabs } from "./StudentTabs";
+import { DeleteStudentButton } from "./DeleteStudentButton";
 
 export default async function StudentLayout({ children, params }: { children: React.ReactNode; params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  const isSuperAdmin = staffRow?.role === "super_admin";
 
   const { data: student, error } = await supabase
     .from("students")
@@ -39,7 +46,10 @@ export default async function StudentLayout({ children, params }: { children: Re
             {student.email ?? "No email"} · {student.contact_number ?? "No phone"} · {student.country_of_interest ?? "—"}
           </p>
         </div>
-        <Badge tone={student.portal_active ? "success" : "neutral"}>{student.portal_active ? "Portal active" : "Portal inactive"}</Badge>
+        <div className="flex flex-col items-end gap-2">
+          <Badge tone={student.portal_active ? "success" : "neutral"}>{student.portal_active ? "Portal active" : "Portal inactive"}</Badge>
+          {isSuperAdmin && <DeleteStudentButton studentId={id} studentName={student.full_name} />}
+        </div>
       </div>
 
       <StudentTabs studentId={id} showScholarship={showScholarship} />

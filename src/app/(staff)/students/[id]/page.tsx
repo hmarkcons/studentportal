@@ -46,9 +46,28 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
 
   const { data: agreements } = await supabase
     .from("agreements")
-    .select("id, status, signing_method, signed_file_path, email_verified, discount_amount, created_at")
+    .select(
+      "id, status, signing_method, signed_file_path, email_verified, discount_amount, created_at, template:agreement_templates(file_path)"
+    )
     .eq("student_id", id)
     .order("created_at", { ascending: false });
+
+  const agreementLinks = new Map<string, { templateUrl?: string; signedUrl?: string }>();
+  await Promise.all(
+    (agreements ?? []).map(async (a) => {
+      const links: { templateUrl?: string; signedUrl?: string } = {};
+      const tmpl = one(a.template as never) as { file_path?: string } | null;
+      if (tmpl?.file_path) {
+        const { data } = await supabase.storage.from("documents").createSignedUrl(tmpl.file_path, 3600);
+        if (data?.signedUrl) links.templateUrl = data.signedUrl;
+      }
+      if (a.signed_file_path) {
+        const { data } = await supabase.storage.from("documents").createSignedUrl(a.signed_file_path, 3600);
+        if (data?.signedUrl) links.signedUrl = data.signedUrl;
+      }
+      agreementLinks.set(a.id, links);
+    })
+  );
 
   const signedAgreement = agreements?.find((a) => a.status === "signed");
   const latestAgreement = agreements?.[0];
@@ -196,19 +215,33 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         )}
         {agreements && agreements.length > 0 && (
           <div className="mt-4 flex flex-col gap-3 border-t border-border pt-3">
-            {agreements.map((a) => (
-              <div key={a.id} className="flex items-center justify-between text-sm">
-                <span className="text-ink">
-                  v{a.status === "signed" ? "signed" : "pending"} · {a.signing_method ?? "—"} ·{" "}
-                  {new Date(a.created_at).toLocaleDateString()}
-                  {a.discount_amount != null && ` · discount ${a.discount_amount}`}
-                </span>
-                <div className="flex items-center gap-3">
-                  <Badge tone={a.status === "signed" ? "success" : "warning"}>{a.status}</Badge>
-                  {isSuperAdmin && <DeleteAgreementButton agreementId={a.id} studentId={id} />}
+            {agreements.map((a) => {
+              const links = agreementLinks.get(a.id);
+              return (
+                <div key={a.id} className="flex items-center justify-between text-sm">
+                  <span className="text-ink">
+                    v{a.status === "signed" ? "signed" : "pending"} · {a.signing_method ?? "—"} ·{" "}
+                    {new Date(a.created_at).toLocaleDateString()}
+                    {a.discount_amount != null && ` · discount ${a.discount_amount}`}
+                  </span>
+                  <div className="flex items-center gap-3">
+                    {links?.signedUrl ? (
+                      <a href={links.signedUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
+                        View signed copy
+                      </a>
+                    ) : (
+                      links?.templateUrl && (
+                        <a href={links.templateUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
+                          View template
+                        </a>
+                      )
+                    )}
+                    <Badge tone={a.status === "signed" ? "success" : "warning"}>{a.status}</Badge>
+                    {isSuperAdmin && <DeleteAgreementButton agreementId={a.id} studentId={id} />}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             {canModifyAgreement && latestAgreement && latestAgreement.status !== "signed" && (
               <UploadSignedAgreementForm agreementId={latestAgreement.id} studentId={id} />
             )}

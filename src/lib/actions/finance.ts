@@ -11,6 +11,14 @@ async function requireSuperAdmin(supabase: Awaited<ReturnType<typeof createClien
   return staffRow?.role === "super_admin";
 }
 
+async function requireFinance(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  return staffRow?.role === "finance" || staffRow?.role === "super_admin";
+}
+
 export async function createStaffCommission(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
   if (!(await requireSuperAdmin(supabase))) return { error: "Only Super Admin can add commission records." };
@@ -109,6 +117,105 @@ export async function updatePartnerCommissionStatus(id: string, revalidateTo: st
   const supabase = await createClient();
   await supabase.from("partner_commissions").update({ status }).eq("id", id);
   revalidatePath(revalidateTo);
+}
+
+export async function updateStaffCommission(id: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
+  const supabase = await createClient();
+  if (!(await requireFinance(supabase))) return { error: "Only Finance/Super Admin can edit commission records." };
+
+  const amount = Number(formData.get("amount") ?? 0);
+  const currency = String(formData.get("currency") ?? "").trim();
+  const registration_date = String(formData.get("registration_date") ?? "") || null;
+  const status = String(formData.get("status") ?? "");
+
+  if (!amount || !currency) return { error: "Amount and currency are required." };
+  if (!["unpaid", "paid"].includes(status)) return { error: "Choose a valid status." };
+
+  const { error } = await supabase
+    .from("staff_commissions")
+    .update({ amount, currency, registration_date, status })
+    .eq("id", id);
+  if (error) return { error: error.message };
+
+  revalidatePath(revalidateTo);
+  return { success: true };
+}
+
+export async function uploadStaffCommissionProof(id: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
+  const supabase = await createClient();
+  if (!(await requireFinance(supabase))) return { error: "Only Finance/Super Admin can upload proof." };
+
+  const file = formData.get("file") as File | null;
+  if (!file || file.size === 0) return { error: "Choose a file to upload." };
+
+  const path = `${id}/proof-${Date.now()}-${file.name}`;
+  const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: true });
+  if (uploadError) return { error: uploadError.message };
+
+  const { error } = await supabase.from("staff_commissions").update({ payment_proof_path: path }).eq("id", id);
+  if (error) return { error: error.message };
+
+  revalidatePath(revalidateTo);
+  return { success: true };
+}
+
+export async function updatePartnerCommission(id: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
+  const supabase = await createClient();
+  if (!(await requireFinance(supabase))) return { error: "Only Finance/Super Admin can edit partner commission records." };
+
+  const paid_fee = formData.get("paid_fee") ? Number(formData.get("paid_fee")) : null;
+  const fee_payment_date = String(formData.get("fee_payment_date") ?? "") || null;
+  const rate_percent = formData.get("rate_percent") ? Number(formData.get("rate_percent")) : null;
+  const fixed_amount = formData.get("fixed_amount") ? Number(formData.get("fixed_amount")) : null;
+  const currency = String(formData.get("currency") ?? "").trim() || "EUR";
+  const expected_amount = formData.get("expected_amount") ? Number(formData.get("expected_amount")) : null;
+  const channel = String(formData.get("channel") ?? "") || null;
+  const wallet_platform = String(formData.get("wallet_platform") ?? "").trim() || null;
+  const received_date = String(formData.get("received_date") ?? "") || null;
+  const hmark_bank_account = String(formData.get("hmark_bank_account") ?? "").trim() || null;
+  const status = String(formData.get("status") ?? "");
+
+  const validStatuses = ["not_yet_due", "pending", "received", "partially_received", "overdue", "disputed"];
+  if (!validStatuses.includes(status)) return { error: "Choose a valid status." };
+
+  const { error } = await supabase
+    .from("partner_commissions")
+    .update({
+      paid_fee,
+      fee_payment_date,
+      rate_percent,
+      fixed_amount,
+      currency,
+      expected_amount,
+      channel,
+      wallet_platform,
+      received_date,
+      hmark_bank_account,
+      status,
+    })
+    .eq("id", id);
+  if (error) return { error: error.message };
+
+  revalidatePath(revalidateTo);
+  return { success: true };
+}
+
+export async function uploadPartnerCommissionProof(id: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
+  const supabase = await createClient();
+  if (!(await requireFinance(supabase))) return { error: "Only Finance/Super Admin can upload proof." };
+
+  const file = formData.get("file") as File | null;
+  if (!file || file.size === 0) return { error: "Choose a file to upload." };
+
+  const path = `${id}/proof-${Date.now()}-${file.name}`;
+  const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: true });
+  if (uploadError) return { error: uploadError.message };
+
+  const { error } = await supabase.from("partner_commissions").update({ payment_proof_path: path }).eq("id", id);
+  if (error) return { error: error.message };
+
+  revalidatePath(revalidateTo);
+  return { success: true };
 }
 
 export async function updateRefundStatus(id: string, revalidateTo: string, status: string) {

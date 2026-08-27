@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 // Server Component pages build `cells`/`csv` for every row up front (calling
 // their own render logic server-side) instead of passing render/csv
@@ -18,18 +18,50 @@ type Row = {
   csv?: Record<string, string>;
 };
 
+type FilterDef = {
+  key: string;
+  label: string;
+  options: string[];
+};
+
 export function DataTable({
   columns,
   rows,
   selectable = false,
   exportFilename,
+  searchable = false,
+  searchPlaceholder = "Search…",
+  filters = [],
 }: {
   columns: Column[];
   rows: Row[];
   selectable?: boolean;
   exportFilename?: string;
+  searchable?: boolean;
+  searchPlaceholder?: string;
+  filters?: FilterDef[];
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState("");
+  const [filterValues, setFilterValues] = useState<Record<string, string>>({});
+
+  const visibleRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return rows.filter((row) => {
+      if (q) {
+        const haystack = Object.values(row.csv ?? {}).join(" ").toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      for (const f of filters) {
+        const want = filterValues[f.key];
+        if (!want) continue;
+        const cell = row.csv?.[f.key] ?? "";
+        const parts = cell.split(",").map((p) => p.trim());
+        if (!parts.includes(want)) return false;
+      }
+      return true;
+    });
+  }, [rows, search, filterValues, filters]);
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -41,12 +73,12 @@ export function DataTable({
   }
 
   function toggleAll() {
-    setSelected((prev) => (prev.size === rows.length ? new Set() : new Set(rows.map((r) => r.id))));
+    setSelected((prev) => (prev.size === visibleRows.length ? new Set() : new Set(visibleRows.map((r) => r.id))));
   }
 
   function exportCsv() {
     const header = columns.map((c) => c.header).join(",");
-    const lines = rows
+    const lines = visibleRows
       .filter((r) => selected.size === 0 || selected.has(r.id))
       .map((r) => columns.map((c) => `"${(r.csv?.[c.key] ?? "").replace(/"/g, '""')}"`).join(","));
     const blob = new Blob([[header, ...lines].join("\n")], { type: "text/csv" });
@@ -58,13 +90,53 @@ export function DataTable({
     URL.revokeObjectURL(url);
   }
 
+  const showToolbar = exportFilename || searchable || filters.length > 0;
+
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
-      {exportFilename && (
-        <div className="flex justify-end border-b border-border bg-bg px-3 py-2">
-          <button onClick={exportCsv} className="text-xs font-medium text-primary hover:underline">
-            Export
-          </button>
+      {showToolbar && (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-bg px-3 py-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {searchable && (
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={searchPlaceholder}
+                className="rounded-md border border-border bg-card px-2 py-1 text-xs"
+              />
+            )}
+            {filters.map((f) => (
+              <select
+                key={f.key}
+                value={filterValues[f.key] ?? ""}
+                onChange={(e) => setFilterValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                className="rounded-md border border-border bg-card px-2 py-1 text-xs"
+              >
+                <option value="">{f.label}: all</option>
+                {f.options.map((o) => (
+                  <option key={o} value={o}>
+                    {o}
+                  </option>
+                ))}
+              </select>
+            ))}
+            {(search || Object.values(filterValues).some(Boolean)) && (
+              <button
+                onClick={() => {
+                  setSearch("");
+                  setFilterValues({});
+                }}
+                className="text-xs text-muted hover:text-ink"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          {exportFilename && (
+            <button onClick={exportCsv} className="text-xs font-medium text-primary hover:underline">
+              Export
+            </button>
+          )}
         </div>
       )}
       <table className="w-full min-w-[640px] text-sm">
@@ -74,7 +146,7 @@ export function DataTable({
               <th className="px-4 py-3">
                 <input
                   type="checkbox"
-                  checked={selected.size === rows.length && rows.length > 0}
+                  checked={selected.size === visibleRows.length && visibleRows.length > 0}
                   onChange={toggleAll}
                 />
               </th>
@@ -87,7 +159,7 @@ export function DataTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
+          {visibleRows.map((row) => (
             <tr key={row.id} className="border-b border-border last:border-0 hover:bg-bg/60">
               {selectable && (
                 <td className="px-4 py-3">
@@ -101,7 +173,7 @@ export function DataTable({
               ))}
             </tr>
           ))}
-          {rows.length === 0 && (
+          {visibleRows.length === 0 && (
             <tr>
               <td colSpan={columns.length + (selectable ? 1 : 0)} className="px-4 py-10 text-center text-muted">
                 No records.

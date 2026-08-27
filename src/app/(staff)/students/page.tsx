@@ -68,6 +68,11 @@ export default async function StudentsPage() {
     },
   }));
 
+  const countryOptions = Array.from(new Set((students ?? []).map((r) => r.country_of_interest).filter(Boolean))).sort() as string[];
+  const counselorOptions = Array.from(
+    new Set((students ?? []).map((r) => one(r.assigned_counselor)?.full_name).filter(Boolean))
+  ).sort() as string[];
+
   return (
     <div className="w-full">
       <div className="mb-4 flex items-center justify-between">
@@ -86,7 +91,19 @@ export default async function StudentsPage() {
 
       {!error && (
         <div className="mt-4">
-          <DataTable exportFilename="students" rows={rows} columns={columns} />
+          <DataTable
+            exportFilename="students"
+            rows={rows}
+            columns={columns}
+            searchable
+            searchPlaceholder="Search name, contact…"
+            filters={[
+              { key: "regStatus", label: "Registration", options: ["registered", "withdrawn", "ghost"] },
+              { key: "portal", label: "Portal", options: ["active", "inactive"] },
+              { key: "country", label: "Country", options: countryOptions },
+              { key: "counselor", label: "Counselor", options: counselorOptions },
+            ]}
+          />
         </div>
       )}
     </div>

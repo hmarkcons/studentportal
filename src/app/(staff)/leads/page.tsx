@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { DataTable } from "@/components/ui/DataTable";
+import { LEAD_STATUS_LABELS } from "@/lib/constants";
 import { ImportLeadsForm } from "./ImportLeadsForm";
 import { InlineStatusCell } from "./InlineStatusCell";
 
@@ -57,11 +58,16 @@ export default async function LeadsPage() {
       name: r.full_name,
       contact: r.contact_number ?? r.email ?? "",
       country: r.country_of_interest ?? "",
-      status: r.status,
+      status: LEAD_STATUS_LABELS[r.status as keyof typeof LEAD_STATUS_LABELS] ?? r.status,
       counselor: one(r.assigned_counselor)?.full_name ?? "",
       date: r.date_of_inquiry,
     },
   }));
+
+  const countryOptions = Array.from(new Set((leads ?? []).map((r) => r.country_of_interest).filter(Boolean))).sort() as string[];
+  const counselorOptions = Array.from(
+    new Set((leads ?? []).map((r) => one(r.assigned_counselor)?.full_name).filter(Boolean))
+  ).sort() as string[];
 
   return (
     <div className="w-full">
@@ -81,7 +87,18 @@ export default async function LeadsPage() {
 
       {!error && (
         <div className="mt-4">
-          <DataTable exportFilename="leads" rows={rows} columns={columns} />
+          <DataTable
+            exportFilename="leads"
+            rows={rows}
+            columns={columns}
+            searchable
+            searchPlaceholder="Search name, contact…"
+            filters={[
+              { key: "status", label: "Status", options: Object.values(LEAD_STATUS_LABELS) },
+              { key: "country", label: "Country", options: countryOptions },
+              { key: "counselor", label: "Counselor", options: counselorOptions },
+            ]}
+          />
         </div>
       )}
     </div>
