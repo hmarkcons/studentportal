@@ -11,7 +11,21 @@ export default async function PortalPaymentsPage() {
   const { data: student } = await supabase.from("students").select("id").eq("auth_user_id", user?.id ?? "").maybeSingle();
   if (!student) return null;
 
-  const { data: invoices } = await supabase.from("invoices").select("id, admin_charge, consultancy_fee, currency, sent_status").eq("student_id", student.id);
+  const { data: invoices } = await supabase
+    .from("invoices")
+    .select("id, admin_charge, consultancy_fee, currency, sent_status, pdf_path")
+    .eq("student_id", student.id);
+
+  const pdfUrls = new Map<string, string>();
+  await Promise.all(
+    (invoices ?? [])
+      .filter((i) => i.pdf_path)
+      .map(async (i) => {
+        const { data } = await supabase.storage.from("documents").createSignedUrl(i.pdf_path!, 3600);
+        if (data?.signedUrl) pdfUrls.set(i.id, data.signedUrl);
+      })
+  );
+
   const invoiceIds = (invoices ?? []).map((i) => i.id);
   const { data: installments } = invoiceIds.length
     ? await supabase.from("invoice_installments").select("*").in("invoice_id", invoiceIds)
@@ -38,11 +52,22 @@ export default async function PortalPaymentsPage() {
                 <div key={i.id} className="flex items-center justify-between text-sm">
                   <span className="text-ink">
                     Installment {i.installment_no} — {inv.currency} {i.amount}
+                    {i.due_date && ` · due ${new Date(i.due_date).toLocaleDateString()}`}
                   </span>
                   <Badge tone={i.status === "paid" ? "success" : "warning"}>{i.status}</Badge>
                 </div>
               ))}
           </div>
+          {pdfUrls.has(inv.id) && (
+            <a
+              href={pdfUrls.get(inv.id)}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-3 inline-block rounded-md border border-primary px-3 py-1.5 text-xs font-medium text-primary hover:bg-bg"
+            >
+              Download invoice
+            </a>
+          )}
         </Card>
       ))}
       {(!invoices || invoices.length === 0) && <p className="text-sm text-muted">No invoices yet.</p>}

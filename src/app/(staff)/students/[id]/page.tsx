@@ -84,8 +84,18 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
 
   const { data: invoices } = await supabase
     .from("invoices")
-    .select("id, admin_charge, consultancy_fee, currency, sent_status, agreement_id")
+    .select("id, admin_charge, consultancy_fee, currency, sent_status, agreement_id, pdf_path")
     .eq("student_id", id);
+
+  const invoicePdfUrls = new Map<string, string>();
+  await Promise.all(
+    (invoices ?? [])
+      .filter((i) => i.pdf_path)
+      .map(async (i) => {
+        const { data } = await supabase.storage.from("documents").createSignedUrl(i.pdf_path!, 3600);
+        if (data?.signedUrl) invoicePdfUrls.set(i.id, data.signedUrl);
+      })
+  );
 
   const invoiceIds = (invoices ?? []).map((i) => i.id);
   const { data: installments } = invoiceIds.length
@@ -275,6 +285,8 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                 invoice={inv}
                 installments={(installments ?? []).filter((i) => i.invoice_id === inv.id)}
                 studentId={id}
+                pdfUrl={invoicePdfUrls.get(inv.id)}
+                revalidateTo={`/students/${id}`}
               />
             ))}
           </div>
