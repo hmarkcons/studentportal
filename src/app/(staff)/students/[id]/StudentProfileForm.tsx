@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/Input";
 export function StudentProfileForm({
   studentId,
   profile,
+  address,
 }: {
   studentId: string;
   profile: {
@@ -23,6 +24,7 @@ export function StudentProfileForm({
     financial_sponsor_name: string | null;
     financial_sponsor_relation: string | null;
   } | null;
+  address?: string | null;
 }) {
   const action = updateStudentProfile.bind(null, studentId);
   const [state, formAction, pending] = useActionState(action, undefined);
@@ -48,6 +50,10 @@ export function StudentProfileForm({
       <div className="flex flex-col gap-1">
         <label className="text-xs text-muted">Postal code</label>
         <Input name="postal_code" defaultValue={profile?.postal_code ?? ""} />
+      </div>
+      <div className="col-span-2 flex flex-col gap-1">
+        <label className="text-xs text-muted">Address</label>
+        <Input name="address" defaultValue={address ?? ""} />
       </div>
       <div className="flex flex-col gap-1">
         <label className="text-xs text-muted">Qualification grade (% / CGPA / Grade)</label>

@@ -248,7 +248,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
             <h3 className="text-sm font-medium text-ink">Profile</h3>
             {student && <LeadEditForm lead={{ id, ...student }} revalidateTo={`/students/${id}`} showRegistrationFields />}
           </div>
-          <StudentProfileForm studentId={id} profile={profile} />
+          <StudentProfileForm studentId={id} profile={profile} address={student?.address} />
           <div className="mt-4 border-t border-border pt-3">
             <RegistrationEditForm
               studentId={id}
