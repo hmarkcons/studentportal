@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { addApplicationTask, toggleApplicationTask, deleteApplicationTask } from "@/lib/actions/applications";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input, Select } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
 
 export type DashboardTaskRow = {
   id: string;
@@ -75,9 +76,9 @@ export function DashboardTaskList({
             <option value="medium">Medium</option>
             <option value="low">Low</option>
           </Select>
-          <button type="submit" disabled={pending} className="rounded-md border border-primary px-2 py-1.5 text-xs font-medium text-primary disabled:opacity-50">
+          <Button type="submit" variant="outline-primary" size="sm" pending={pending}>
             Add
-          </button>
+          </Button>
         </form>
       )}
       {state?.error && <p className="mt-1 text-xs text-danger">{state.error}</p>}

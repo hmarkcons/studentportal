@@ -68,9 +68,9 @@ export function UploadSignedAgreementForm({ agreementId, studentId }: { agreemen
         <input type="checkbox" name="email_verified" /> Email verified
       </label>
       <Input name="video_recording_path" placeholder="Video recording path (e-sign only)" className="w-56" />
-      <button type="submit" disabled={pending} className="rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary disabled:opacity-50">
+      <Button type="submit" variant="outline-primary" size="sm" pending={pending}>
         Upload signed agreement
-      </button>
+      </Button>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
   );

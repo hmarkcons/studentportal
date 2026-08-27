@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CredentialField } from "@/components/CredentialField";
 import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
 
 const PRESETS = [
   { label: "Gmail", credentialType: "gmail" },
@@ -48,8 +49,10 @@ export function PortalCredentialsSection({ studentId, existingTypes }: { student
           placeholder="Portal name (e.g. Visa appointment portal)"
           className="flex-1"
         />
-        <button
+        <Button
           type="button"
+          variant="outline-primary"
+          size="sm"
           onClick={() => {
             const label = newLabel.trim();
             if (!label) return;
@@ -57,10 +60,9 @@ export function PortalCredentialsSection({ studentId, existingTypes }: { student
             if (!shown.has(credentialType)) setExtra((prev) => [...prev, { label, credentialType }]);
             setNewLabel("");
           }}
-          className="rounded-md border border-primary px-3 py-1.5 text-xs font-medium text-primary"
         >
           + Add credential
-        </button>
+        </Button>
       </div>
     </div>
   );

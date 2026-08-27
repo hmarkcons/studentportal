@@ -298,9 +298,9 @@ function LineItemsSection({
           required
           className="w-24"
         />
-        <button type="submit" disabled={pending} className="rounded-md border border-primary px-2 py-1 text-xs text-primary disabled:opacity-50">
-          {pending ? "…" : "+ Add item"}
-        </button>
+        <Button type="submit" variant="outline-primary" size="sm" pending={pending}>
+          + Add item
+        </Button>
         {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
       </form>
     </div>

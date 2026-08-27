@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { partnerUploadLetter } from "@/lib/actions/partner";
+import { Button } from "@/components/ui/Button";
 
 export function LetterUploadForm({ applicationId, category, label }: { applicationId: string; category: "offer_letter" | "rejection_letter"; label: string }) {
   const action = partnerUploadLetter.bind(null, applicationId, category);
@@ -10,9 +11,9 @@ export function LetterUploadForm({ applicationId, category, label }: { applicati
   return (
     <form action={formAction} className="flex items-center gap-2">
       <input type="file" name="file" required className="text-xs" />
-      <button type="submit" disabled={pending} className="rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary disabled:opacity-50">
+      <Button type="submit" variant="outline-primary" size="sm" pending={pending}>
         Upload {label}
-      </button>
+      </Button>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
   );

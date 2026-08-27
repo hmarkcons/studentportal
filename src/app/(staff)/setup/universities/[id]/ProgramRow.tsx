@@ -78,9 +78,9 @@ export function ProgramRow({
       <Input name="tuition_fee" type="number" step="0.01" defaultValue={program.tuition_fee ?? ""} placeholder="Fee" className="w-24" />
       <Input name="language_requirement" defaultValue={program.language_requirement ?? ""} placeholder="Language req." />
       <Input name="application_deadline" type="date" defaultValue={program.application_deadline ?? ""} />
-      <button type="submit" disabled={pending} className="rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary disabled:opacity-50">
-        {pending ? "Saving…" : "Save"}
-      </button>
+      <Button type="submit" variant="outline-primary" size="sm" pending={pending}>
+        Save
+      </Button>
       <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>
         Cancel
       </Button>
