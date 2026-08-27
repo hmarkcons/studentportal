@@ -20,7 +20,7 @@ export default async function StudentApplicationsTab(props: PageProps<"/students
     .from("applications")
     .select(
       `id, current_stage, intake, deadline, is_finalized,
-       university:universities(name, destination:destinations(display_name, pipeline_stages)),
+       university:universities(name, destination:destinations(display_name, country_code, pipeline_stages)),
        program:programs(name)`
     )
     .eq("student_id", id)
@@ -58,8 +58,11 @@ export default async function StudentApplicationsTab(props: PageProps<"/students
           <div className="flex flex-col gap-4">
             {(apps ?? []).map((a) => {
               const uni = one(a.university as never) as { name?: string; destination?: unknown } | null;
-              const dest = uni?.destination ? (one(uni.destination as never) as { pipeline_stages?: string[] } | null) : null;
+              const dest = uni?.destination
+                ? (one(uni.destination as never) as { pipeline_stages?: string[]; country_code?: string } | null)
+                : null;
               const program = one(a.program as never) as { name?: string } | null;
+              const isItaly = dest?.country_code === "IT";
               return (
                 <div key={a.id}>
                   <Link href={`/students/${id}/applications/${a.id}`} className="block">
@@ -79,12 +82,18 @@ export default async function StudentApplicationsTab(props: PageProps<"/students
                       {a.is_finalized && (
                         <>
                           {" · "}
-                          <Badge tone="success">Finalized for visa</Badge>
+                          <Badge tone="success">{isItaly ? "Pre-Enrolled" : "Finalized for visa"}</Badge>
                         </>
                       )}
                     </span>
                     <div className="flex items-center gap-2">
-                      <FinalizeApplicationButton applicationId={a.id} studentId={id} revalidateTo={revalidateTo} isFinalized={a.is_finalized} />
+                      <FinalizeApplicationButton
+                        applicationId={a.id}
+                        studentId={id}
+                        revalidateTo={revalidateTo}
+                        isFinalized={a.is_finalized}
+                        countryCode={dest?.country_code}
+                      />
                       {canDelete && (
                         <DeleteApplicationButton applicationId={a.id} revalidateTo={revalidateTo} label={uni?.name ?? "this university"} />
                       )}
