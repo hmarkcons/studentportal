@@ -24,6 +24,7 @@ export async function generateInvoice(studentId: string, agreementId: string, _p
   const terms = String(formData.get("terms") ?? "").trim() || DEFAULT_TERMS;
   const invoice_number = String(formData.get("invoice_number") ?? "").trim() || null;
   const firstDueDate = String(formData.get("first_due_date") ?? "") || null;
+  const installment_plan = String(formData.get("installment_plan") ?? "").trim() || null;
 
   const {
     data: { user },
@@ -31,7 +32,7 @@ export async function generateInvoice(studentId: string, agreementId: string, _p
 
   const { data: invoice, error } = await supabase
     .from("invoices")
-    .insert({ student_id: studentId, agreement_id: agreementId, admin_charge, consultancy_fee, currency, intake, terms, invoice_number, generated_by: user?.id })
+    .insert({ student_id: studentId, agreement_id: agreementId, admin_charge, consultancy_fee, currency, intake, terms, invoice_number, installment_plan, generated_by: user?.id })
     .select("id")
     .single();
 
@@ -88,10 +89,11 @@ export async function updateInvoice(invoiceId: string, studentId: string, revali
   const intake = String(formData.get("intake") ?? "").trim() || null;
   const terms = String(formData.get("terms") ?? "").trim() || DEFAULT_TERMS;
   const invoice_number = String(formData.get("invoice_number") ?? "").trim() || null;
+  const installment_plan = String(formData.get("installment_plan") ?? "").trim() || null;
 
   const { error } = await supabase
     .from("invoices")
-    .update({ admin_charge, consultancy_fee, currency, intake, terms, invoice_number })
+    .update({ admin_charge, consultancy_fee, currency, intake, terms, invoice_number, installment_plan })
     .eq("id", invoiceId);
   if (error) return { error: error.message };
 
@@ -183,7 +185,7 @@ export async function buildAndStoreInvoicePdf(
   const { data: invoice, error: invoiceError } = await supabase
     .from("invoices")
     .select(
-      `id, invoice_number, intake, terms, admin_charge, consultancy_fee, currency, created_at,
+      `id, invoice_number, intake, terms, admin_charge, consultancy_fee, currency, installment_plan, created_at,
        agreement:agreements(generated_by, template:agreement_templates(signatory_name, destination:destinations(display_name)))`
     )
     .eq("id", invoiceId)
@@ -254,6 +256,7 @@ export async function buildAndStoreInvoicePdf(
       destination: destination?.display_name ?? null,
       intake: invoice.intake,
       counselor: counselorName,
+      installmentPlan: invoice.installment_plan,
       adminCharge: invoice.admin_charge,
       consultancyFee: invoice.consultancy_fee,
       destinationLabel,

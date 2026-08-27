@@ -16,6 +16,7 @@ type Destination = {
   admin_charge: number;
   consultancy_fee: number;
   consultancy_fee_currency: string;
+  installment_plan: string | null;
   status: string;
 };
 
@@ -70,6 +71,14 @@ export function DestinationEditForm({ destination }: { destination: Destination 
           <Input name="consultancy_fee_currency" defaultValue={destination.consultancy_fee_currency} />
         </label>
       </div>
+      <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
+        Installment plan
+        <Input
+          name="installment_plan"
+          defaultValue={destination.installment_plan ?? ""}
+          placeholder="e.g. 2 installments"
+        />
+      </label>
       <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
         Status
         <Select name="status" defaultValue={destination.status}>

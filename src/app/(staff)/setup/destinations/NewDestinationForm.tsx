@@ -52,6 +52,10 @@ export function NewDestinationForm() {
         </div>
       </div>
       <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium text-ink">Installment plan (optional)</label>
+        <Input name="installment_plan" placeholder="e.g. 2 installments" />
+      </div>
+      <div className="flex flex-col gap-1.5">
         <label className="text-sm font-medium text-ink">Pipeline stages (comma-separated, in order — leave blank for the standard default)</label>
         <Textarea name="pipeline_stages" rows={2} placeholder="documents pending, documents verified, application submitted, ..." />
       </div>

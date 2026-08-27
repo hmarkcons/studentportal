@@ -19,7 +19,15 @@ import { Input, Select, Textarea } from "@/components/ui/Input";
 const DEFAULT_TERMS =
   "Only upon refusal from the university, 100% of the paid consultancy charges only will be refundable. There is no refund on withdrawal or rejection from the embassy or on failing the admission test, or under any other condition. Refunds are processed within 90 working days of the refusal notice.";
 
-export function GenerateInvoiceForm({ studentId, agreementId }: { studentId: string; agreementId: string }) {
+export function GenerateInvoiceForm({
+  studentId,
+  agreementId,
+  defaultInstallmentPlan,
+}: {
+  studentId: string;
+  agreementId: string;
+  defaultInstallmentPlan?: string | null;
+}) {
   const action = generateInvoice.bind(null, studentId, agreementId);
   const [state, formAction, pending] = useActionState(action, undefined);
 
@@ -46,6 +54,15 @@ export function GenerateInvoiceForm({ studentId, agreementId }: { studentId: str
           First installment due date
           <Input name="first_due_date" type="date" />
         </label>
+        <label className="flex flex-col gap-0.5 text-xs text-muted">
+          Installment plan
+          <Input
+            name="installment_plan"
+            defaultValue={defaultInstallmentPlan ?? ""}
+            placeholder="e.g. 2 installments"
+            className="w-44"
+          />
+        </label>
       </div>
       <Textarea
         name="terms"
@@ -68,7 +85,16 @@ function EditInvoiceForm({
   revalidateTo,
   onDone,
 }: {
-  invoice: { id: string; admin_charge: number; consultancy_fee: number; currency: string; invoice_number?: string | null; intake?: string | null; terms?: string | null };
+  invoice: {
+    id: string;
+    admin_charge: number;
+    consultancy_fee: number;
+    currency: string;
+    invoice_number?: string | null;
+    intake?: string | null;
+    terms?: string | null;
+    installment_plan?: string | null;
+  };
   studentId: string;
   revalidateTo: string;
   onDone: () => void;
@@ -90,6 +116,7 @@ function EditInvoiceForm({
       <div className="flex flex-wrap items-end gap-2">
         <Input name="invoice_number" defaultValue={invoice.invoice_number ?? ""} placeholder="Invoice #" className="w-56" />
         <Input name="intake" defaultValue={invoice.intake ?? ""} placeholder="Intake" className="w-44" />
+        <Input name="installment_plan" defaultValue={invoice.installment_plan ?? ""} placeholder="Installment plan" className="w-44" />
       </div>
       <Textarea name="terms" defaultValue={invoice.terms ?? DEFAULT_TERMS} rows={2} className="w-full" />
       <div className="flex items-center gap-2">
@@ -373,6 +400,7 @@ export function InvoiceCard({
     invoice_number?: string | null;
     intake?: string | null;
     terms?: string | null;
+    installment_plan?: string | null;
     admin_fee_status?: string;
     admin_fee_paid_date?: string | null;
     admin_fee_payment_method?: string | null;
@@ -399,6 +427,7 @@ export function InvoiceCard({
           {studentName && <span className="mr-2">{studentName}</span>}
           {invoice.invoice_number && <span className="mr-2 font-mono text-xs text-muted">{invoice.invoice_number}</span>}
           {invoice.currency} {total.toFixed(2)}
+          {invoice.installment_plan && <span className="ml-2 text-xs font-normal text-muted">· {invoice.installment_plan}</span>}
         </p>
         <div className="flex items-center gap-2">
           <Badge tone={STATUS_TONE[status]}>{INVOICE_STATUS_LABELS[status]}</Badge>

@@ -22,6 +22,7 @@ export async function createDestination(_prevState: unknown, formData: FormData)
   const admin_charge = Number(formData.get("admin_charge") ?? 0);
   const consultancy_fee = Number(formData.get("consultancy_fee") ?? 0);
   const consultancy_fee_currency = String(formData.get("consultancy_fee_currency") ?? "EUR");
+  const installment_plan = String(formData.get("installment_plan") ?? "").trim() || null;
   const stagesRaw = String(formData.get("pipeline_stages") ?? "");
 
   if (!country || !country_code || !["public", "private"].includes(track) || !currency) {
@@ -41,6 +42,7 @@ export async function createDestination(_prevState: unknown, formData: FormData)
       admin_charge,
       consultancy_fee,
       consultancy_fee_currency,
+      installment_plan,
       ...(pipeline_stages ? { pipeline_stages } : {}),
     })
     .select("id")
@@ -78,6 +80,7 @@ export async function updateDestination(destinationId: string, _prevState: unkno
   const admin_charge = Number(formData.get("admin_charge") ?? 0);
   const consultancy_fee = Number(formData.get("consultancy_fee") ?? 0);
   const consultancy_fee_currency = String(formData.get("consultancy_fee_currency") ?? "EUR");
+  const installment_plan = String(formData.get("installment_plan") ?? "").trim() || null;
   const status = String(formData.get("status") ?? "active");
 
   if (!country || !country_code || !["public", "private"].includes(track) || !currency || !display_name) {
@@ -86,7 +89,19 @@ export async function updateDestination(destinationId: string, _prevState: unkno
 
   const { error } = await supabase
     .from("destinations")
-    .update({ country, country_code, track, currency, display_name, visa_type, admin_charge, consultancy_fee, consultancy_fee_currency, status })
+    .update({
+      country,
+      country_code,
+      track,
+      currency,
+      display_name,
+      visa_type,
+      admin_charge,
+      consultancy_fee,
+      consultancy_fee_currency,
+      installment_plan,
+      status,
+    })
     .eq("id", destinationId);
 
   if (error) return { error: error.message };
@@ -107,9 +122,9 @@ export async function deleteDestination(destinationId: string) {
 
 // Bulk import — CSV columns (header row required): country, country_code,
 // track (public/private), display_name, currency, visa_type, admin_charge,
-// consultancy_fee, consultancy_fee_currency. Only country/country_code/
-// track/currency are required; everything else falls back to a sane
-// default the same way createDestination does.
+// consultancy_fee, consultancy_fee_currency, installment_plan. Only
+// country/country_code/track/currency are required; everything else falls
+// back to a sane default the same way createDestination does.
 export async function importDestinations(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
   const file = formData.get("file") as File | null;
@@ -132,6 +147,7 @@ export async function importDestinations(_prevState: unknown, formData: FormData
       admin_charge: r.admin_charge ? Number(r.admin_charge) : 0,
       consultancy_fee: r.consultancy_fee ? Number(r.consultancy_fee) : 0,
       consultancy_fee_currency: r.consultancy_fee_currency || "EUR",
+      installment_plan: r.installment_plan || null,
     }));
 
   if (records.length === 0) {

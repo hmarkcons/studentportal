@@ -80,6 +80,7 @@ export type InvoicePdfData = {
   destination: string | null;
   intake: string | null;
   counselor: string | null;
+  installmentPlan: string | null;
   adminCharge: number;
   consultancyFee: number;
   destinationLabel: string;
@@ -143,6 +144,7 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
             {data.destination && <View style={styles.infoRow}><Text style={styles.infoKey}>Destination</Text><Text style={styles.infoVal}>{data.destination}</Text></View>}
             {data.intake && <View style={styles.infoRow}><Text style={styles.infoKey}>Intake</Text><Text style={styles.infoVal}>{data.intake}</Text></View>}
             {data.counselor && <View style={styles.infoRow}><Text style={styles.infoKey}>Counselor</Text><Text style={styles.infoVal}>{data.counselor}</Text></View>}
+            {data.installmentPlan && <View style={styles.infoRow}><Text style={styles.infoKey}>Installment plan</Text><Text style={styles.infoVal}>{data.installmentPlan}</Text></View>}
           </View>
         </View>
 

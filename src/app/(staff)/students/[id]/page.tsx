@@ -62,14 +62,14 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       supabase
         .from("agreements")
         .select(
-          "id, status, signing_method, signed_file_path, pdf_path, email_verified, discount_amount, created_at, template:agreement_templates(file_path)"
+          "id, status, signing_method, signed_file_path, pdf_path, email_verified, discount_amount, created_at, template:agreement_templates(file_path, destination_id)"
         )
         .eq("student_id", id)
         .order("created_at", { ascending: false }),
       supabase
         .from("invoices")
         .select(
-          "id, admin_charge, consultancy_fee, currency, sent_status, agreement_id, pdf_path, invoice_number, intake, terms, admin_fee_status, admin_fee_paid_date, admin_fee_payment_method"
+          "id, admin_charge, consultancy_fee, currency, sent_status, agreement_id, pdf_path, invoice_number, intake, terms, installment_plan, admin_fee_status, admin_fee_paid_date, admin_fee_payment_method"
         )
         .eq("student_id", id),
       supabase
@@ -99,6 +99,12 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
 
   const signedAgreement = agreements?.find((a) => a.status === "signed");
   const latestAgreement = agreements?.[0];
+  const signedAgreementTemplate = signedAgreement
+    ? (one(signedAgreement.template as never) as { destination_id?: string } | null)
+    : null;
+  const defaultInstallmentPlan = signedAgreementTemplate?.destination_id
+    ? (allDestinations.find((d) => d.id === signedAgreementTemplate.destination_id)?.installment_plan ?? null)
+    : null;
   const invoiceIds = (invoices ?? []).map((i) => i.id);
   const appIds = (applications ?? []).map((a) => a.id);
   const appLabel = new Map((applications ?? []).map((a) => [a.id, one(a.university as never) as { name?: string } | null]));
@@ -312,7 +318,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       {signedAgreement && (
         <Card className="mt-6">
           <h3 className="mb-3 text-sm font-medium text-ink">Invoice</h3>
-          <GenerateInvoiceForm studentId={id} agreementId={signedAgreement.id} />
+          <GenerateInvoiceForm studentId={id} agreementId={signedAgreement.id} defaultInstallmentPlan={defaultInstallmentPlan} />
           <div className="mt-4 flex flex-col gap-3">
             {(invoices ?? []).map((inv) => (
               <InvoiceCard

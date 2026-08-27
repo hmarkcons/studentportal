@@ -12,7 +12,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export const getCachedDestinations = unstable_cache(
   async () => {
     const supabase = createAdminClient();
-    const { data } = await supabase.from("destinations").select("id, display_name").order("display_name");
+    const { data } = await supabase.from("destinations").select("id, display_name, installment_plan").order("display_name");
     return data ?? [];
   },
   ["destinations-list"],
