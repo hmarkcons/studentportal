@@ -17,10 +17,10 @@ export default async function StudentDocumentsTab(props: PageProps<"/students/[i
 
   const { data: rawDocs } = await supabase
     .from("student_documents")
-    .select("id, category, status, file_path, deadline, rejected_reason, application_id, template:document_templates(name)")
+    .select("id, category, custom_name, status, file_path, deadline, rejected_reason, application_id, template:document_templates(name)")
     .eq("student_id", id)
     .order("created_at", { ascending: false })
-    .returns<(DocRow & { application_id: string | null; template: { name: string } | { name: string }[] | null })[]>();
+    .returns<(DocRow & { application_id: string | null; custom_name: string | null; template: { name: string } | { name: string }[] | null })[]>();
 
   const appLabel = new Map((applications ?? []).map((a) => [a.id, one(a.university as never) as { name?: string } | null]));
 
@@ -28,7 +28,7 @@ export default async function StudentDocumentsTab(props: PageProps<"/students/[i
     (rawDocs ?? []).map(async (d) => {
       const templateName = one(d.template as never) as { name?: string } | null;
       const uni = d.application_id ? appLabel.get(d.application_id) : null;
-      const name = `${templateName?.name ?? d.category ?? "Document"}${uni?.name ? ` — ${uni.name}` : " — Student-level"}`;
+      const name = `${d.custom_name ?? templateName?.name ?? d.category ?? "Document"}${uni?.name ? ` — ${uni.name}` : " — Student-level"}`;
       if (!d.file_path) return { ...d, name };
       const { data } = await supabase.storage.from("documents").createSignedUrl(d.file_path, 3600);
       return { ...d, name, fileUrl: data?.signedUrl ?? null };

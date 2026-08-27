@@ -32,7 +32,7 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
 
   const { data: documents } = await supabase
     .from("student_documents")
-    .select("id, category, status, file_path, deadline, rejected_reason")
+    .select("id, category, custom_name, status, file_path, deadline, rejected_reason")
     .eq("application_id", id);
 
   const docsWithUrls = await Promise.all(

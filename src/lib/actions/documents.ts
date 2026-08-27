@@ -75,6 +75,7 @@ export async function addDocumentRequirement(
     student_id: studentId,
     application_id: applicationId,
     category,
+    custom_name: name,
     deadline,
     status: "missing",
   });

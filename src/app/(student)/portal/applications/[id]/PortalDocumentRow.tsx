@@ -10,7 +10,15 @@ export function PortalDocumentRow({
   studentId,
   revalidateTo,
 }: {
-  doc: { id: string; category: string | null; status: string; rejected_reason: string | null; fileUrl?: string | null; deadline: string | null };
+  doc: {
+    id: string;
+    category: string | null;
+    custom_name: string | null;
+    status: string;
+    rejected_reason: string | null;
+    fileUrl?: string | null;
+    deadline: string | null;
+  };
   studentId: string;
   revalidateTo: string;
 }) {
@@ -20,7 +28,7 @@ export function PortalDocumentRow({
   return (
     <div className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <p className="text-sm text-ink">{doc.category ?? "Document"}</p>
+        <p className="text-sm text-ink">{doc.custom_name ?? doc.category ?? "Document"}</p>
         <div className="mt-1 flex items-center gap-2">
           <Badge tone={DOCUMENT_STATUS_TONE[doc.status] ?? "neutral"}>{doc.status.replace("_", " ")}</Badge>
           {doc.deadline && <span className="text-xs text-muted">Due {new Date(doc.deadline).toLocaleDateString()}</span>}

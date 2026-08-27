@@ -1,0 +1,14 @@
+-- Real bug found while testing agreement generation: `destinations` has a
+-- vestigial `agreement_template_id` FK back to `agreement_templates` (added
+-- in 0010, "FK added in 0010 once agreement_templates exists") alongside
+-- `agreement_templates.destination_id` pointing the other way. Nothing in
+-- the app ever reads or writes destinations.agreement_template_id — the
+-- real direction is one destination -> many templates via
+-- agreement_templates.destination_id. But PostgREST sees two FK paths
+-- between the tables and refuses to auto-resolve any `destination:
+-- destinations(...)` embed on agreement_templates (PGRST201, "more than one
+-- relationship was found"), so every such query silently returned zero rows
+-- — the entire "generate agreement" template dropdown has been empty since
+-- this table was created. Dropping the unused column removes the ambiguity
+-- at the source instead of disambiguating every embed call site by hand.
+alter table destinations drop column if exists agreement_template_id;
