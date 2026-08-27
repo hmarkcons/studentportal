@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { DocumentChecklist, type DocRow } from "@/components/DocumentChecklist";
 import { CountryTrackerForm } from "@/components/CountryTrackerForm";
-import { COUNTRY_TRACKER_FIELDS } from "@/lib/countryTrackers";
+import { listTrackerDefinitions } from "@/lib/actions/countryTracker";
 import { PortalAccessPanel } from "./PortalAccessPanel";
 import { StudentProfileForm } from "./StudentProfileForm";
 import { GenerateAgreementForm, UploadSignedAgreementForm, DeleteAgreementButton } from "./GenerateAgreementForm";
@@ -13,6 +13,7 @@ import { PortalCredentialsSection } from "./PortalCredentialsSection";
 import { DashboardTaskList, type DashboardTaskRow } from "./DashboardTaskList";
 import { listCredentialTypesAction } from "@/lib/actions/countryTracker";
 import { LeadEditForm } from "@/components/LeadEditForm";
+import { RegistrationEditForm } from "./RegistrationEditForm";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -39,6 +40,15 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     .maybeSingle();
 
   const { data: profile } = await supabase.from("student_profiles").select("*").eq("student_id", id).maybeSingle();
+
+  const { data: leadRegistration } = await supabase
+    .from("leads")
+    .select("assigned_counselor_id, discount_amount, discount_reason")
+    .eq("id", id)
+    .maybeSingle();
+  const { data: selectedDestinations } = await supabase.from("lead_destinations").select("destination_id").eq("lead_id", id);
+  const { data: allDestinations } = await supabase.from("destinations").select("id, display_name").order("display_name");
+  const { data: counselors } = await supabase.from("staff").select("id, full_name").order("full_name");
 
   const { data: templates } = await supabase
     .from("agreement_templates")
@@ -135,58 +145,51 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     label: (one(a.university as never) as { name?: string } | null)?.name ?? "University",
   }));
 
-  // ---- Documentation trackers, grouped by country (primary application per country) ----
+  // ---- Documentation trackers, grouped by country (one card per country the
+  // student has an application in, keyed to that country's first application
+  // for the application_country_extra foreign key) ----
   const primaryAppByCountry = new Map<string, { id: string; countryCode: string; displayName: string }>();
+  const appsByCountry = new Map<string, { id: string; name: string }[]>();
   for (const a of applications ?? []) {
     const uni = one(a.university as never) as {
+      name?: string;
       destination?: { country_code?: string; display_name?: string } | { country_code?: string; display_name?: string }[];
     } | null;
     const dest = uni?.destination ? (one(uni.destination as never) as { country_code?: string; display_name?: string } | null) : null;
     const code = dest?.country_code;
-    if (!code || !COUNTRY_TRACKER_FIELDS[code]) continue;
+    if (!code) continue;
     if (!primaryAppByCountry.has(code)) {
       primaryAppByCountry.set(code, { id: a.id, countryCode: code, displayName: dest?.display_name ?? code });
     }
+    (appsByCountry.get(code) ?? appsByCountry.set(code, []).get(code)!).push({ id: a.id, name: uni?.name ?? "University" });
   }
 
+  const trackerDefsByCountry = await listTrackerDefinitions(Array.from(primaryAppByCountry.keys()));
+
   const trackerSections = await Promise.all(
-    Array.from(primaryAppByCountry.values()).map(async (entry) => {
-      const { data: extras } = await supabase
-        .from("application_country_extra")
-        .select("field_key, field_value")
-        .eq("application_id", entry.id);
-      const values: Record<string, string> = {};
-      (extras ?? []).forEach((e) => (values[e.field_key] = e.field_value ?? ""));
+    Array.from(primaryAppByCountry.values())
+      .filter((entry) => (trackerDefsByCountry[entry.countryCode]?.length ?? 0) > 0)
+      .map(async (entry) => {
+        const { data: extras } = await supabase
+          .from("application_country_extra")
+          .select("field_key, field_value")
+          .eq("application_id", entry.id);
+        const values: Record<string, string> = {};
+        (extras ?? []).forEach((e) => (values[e.field_key] = e.field_value ?? ""));
 
-      const dynamicOptions: Record<string, { value: string; label: string }[] | string[]> = {};
-      const regionByUniversityValue: Record<string, string> = {};
+        const universityOptions = (appsByCountry.get(entry.countryCode) ?? []).map((a) => ({ value: a.id, label: a.name }));
+        const regionByUniversityValue: Record<string, string> = {};
 
-      if (entry.countryCode === "IT") {
-        dynamicOptions.preenrollment_university = (applications ?? []).map((a) => ({
-          value: a.id,
-          label: (one(a.university as never) as { name?: string } | null)?.name ?? "University",
-        }));
-
-        const { data: bodies } = await supabase.from("scholarship_bodies").select("region, covers");
-        for (const a of applications ?? []) {
-          const uniName = (one(a.university as never) as { name?: string } | null)?.name;
-          if (!uniName) continue;
-          const match = (bodies ?? []).find((b) => (b.covers ?? []).includes(uniName));
-          if (match?.region) regionByUniversityValue[a.id] = match.region;
+        if (entry.countryCode === "IT") {
+          const { data: bodies } = await supabase.from("scholarship_bodies").select("region, covers");
+          for (const a of appsByCountry.get(entry.countryCode) ?? []) {
+            const match = (bodies ?? []).find((b) => (b.covers ?? []).includes(a.name));
+            if (match?.region) regionByUniversityValue[a.id] = match.region;
+          }
         }
 
-        const { data: docs } = await supabase
-          .from("student_documents")
-          .select("id, category, template:document_templates(name)")
-          .eq("application_id", entry.id)
-          .neq("status", "verified");
-        dynamicOptions.pending_documents = (docs ?? []).map(
-          (d) => ((one(d.template as never) as { name?: string } | null)?.name as string | undefined) ?? d.category ?? "Document"
-        );
-      }
-
-      return { entry, values, dynamicOptions, regionByUniversityValue };
-    })
+        return { entry, values, fields: trackerDefsByCountry[entry.countryCode] ?? [], universityOptions, regionByUniversityValue };
+      })
   );
 
   const existingCredentialTypes = await listCredentialTypesAction("student", id);
@@ -200,6 +203,18 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
             {student && <LeadEditForm lead={{ id, ...student }} revalidateTo={`/students/${id}`} showRegistrationFields />}
           </div>
           <StudentProfileForm studentId={id} profile={profile} />
+          <div className="mt-4 border-t border-border pt-3">
+            <RegistrationEditForm
+              studentId={id}
+              revalidateTo={`/students/${id}`}
+              destinations={allDestinations ?? []}
+              selectedDestinationIds={(selectedDestinations ?? []).map((d) => d.destination_id)}
+              counselors={counselors ?? []}
+              assignedCounselorId={leadRegistration?.assigned_counselor_id ?? null}
+              discountAmount={leadRegistration?.discount_amount ?? null}
+              discountReason={leadRegistration?.discount_reason ?? null}
+            />
+          </div>
         </Card>
 
         <Card>
@@ -280,15 +295,15 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         <Card className="mt-6">
           <h3 className="mb-3 text-sm font-medium text-ink">Documentation tracker</h3>
           <div className="flex flex-col gap-6">
-            {trackerSections.map(({ entry, values, dynamicOptions, regionByUniversityValue }) => (
+            {trackerSections.map(({ entry, values, fields, universityOptions, regionByUniversityValue }) => (
               <div key={entry.countryCode}>
                 <p className="mb-2 text-xs font-medium text-muted">{entry.displayName}</p>
                 <CountryTrackerForm
                   applicationId={entry.id}
-                  fields={COUNTRY_TRACKER_FIELDS[entry.countryCode]}
+                  fields={fields}
                   values={values}
                   revalidateTo={`/students/${id}`}
-                  dynamicOptions={dynamicOptions}
+                  universityOptions={universityOptions}
                   regionByUniversityValue={regionByUniversityValue}
                 />
               </div>

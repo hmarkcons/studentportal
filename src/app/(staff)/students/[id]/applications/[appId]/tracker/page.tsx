@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { CountryTrackerForm } from "@/components/CountryTrackerForm";
-import { COUNTRY_TRACKER_FIELDS } from "@/lib/countryTrackers";
+import { listTrackerDefinitions } from "@/lib/actions/countryTracker";
 import { ScholarshipSection } from "./ScholarshipSection";
 
 function one<T>(v: T | T[] | null) {
@@ -32,7 +32,7 @@ export default async function CountryTrackerPage(props: PageProps<"/students/[id
   const university = one(app.university);
   const destination = university ? one(university.destination as never) : null;
   const countryCode = (destination as { country_code?: string } | null)?.country_code;
-  const fields = countryCode ? COUNTRY_TRACKER_FIELDS[countryCode] : undefined;
+  const fields = countryCode ? (await listTrackerDefinitions([countryCode]))[countryCode] : undefined;
 
   const revalidateTo = `/students/${id}/applications/${appId}/tracker`;
 
@@ -56,37 +56,29 @@ export default async function CountryTrackerPage(props: PageProps<"/students/[id
     ? await supabase.from("student_scholarships").select("id, name, status, award_amount").eq("application_id", appId)
     : { data: [] };
 
-  const dynamicOptions: Record<string, { value: string; label: string }[] | string[]> = {};
   const regionByUniversityValue: Record<string, string> = {};
 
-  if (isItaly) {
-    const { data: studentApps } = await supabase
-      .from("applications")
-      .select("id, university:universities(name)")
-      .eq("student_id", id);
+  const { data: studentApps } = await supabase
+    .from("applications")
+    .select("id, university:universities(name, destination:destinations(country_code))")
+    .eq("student_id", id);
 
-    dynamicOptions.preenrollment_university = (studentApps ?? []).map((a) => {
+  const universityOptions = (studentApps ?? [])
+    .filter((a) => {
+      const uni = one(a.university as never) as { destination?: unknown } | null;
+      const dest = uni?.destination ? (one(uni.destination as never) as { country_code?: string } | null) : null;
+      return dest?.country_code === countryCode;
+    })
+    .map((a) => {
       const uni = one(a.university as never) as { name?: string } | null;
       return { value: a.id, label: uni?.name ?? "University" };
     });
 
-    for (const a of studentApps ?? []) {
-      const uni = one(a.university as never) as { name?: string } | null;
-      const uniName = uni?.name;
-      if (!uniName) continue;
-      const match = (bodies ?? []).find((b) => (b.covers ?? []).includes(uniName));
-      if (match?.region) regionByUniversityValue[a.id] = match.region;
+  if (isItaly) {
+    for (const opt of universityOptions) {
+      const match = (bodies ?? []).find((b) => (b.covers ?? []).includes(opt.label));
+      if (match?.region) regionByUniversityValue[opt.value] = match.region;
     }
-
-    const { data: docs } = await supabase
-      .from("student_documents")
-      .select("id, category, template:document_templates(name)")
-      .eq("application_id", appId)
-      .neq("status", "verified");
-    dynamicOptions.pending_documents = (docs ?? []).map((d) => {
-      const template = one(d.template as never) as { name?: string } | null;
-      return template?.name ?? d.category ?? "Document";
-    });
   }
 
   return (
@@ -109,7 +101,7 @@ export default async function CountryTrackerPage(props: PageProps<"/students/[id
             fields={fields}
             values={values}
             revalidateTo={revalidateTo}
-            dynamicOptions={dynamicOptions}
+            universityOptions={universityOptions}
             regionByUniversityValue={regionByUniversityValue}
           />
         </Card>

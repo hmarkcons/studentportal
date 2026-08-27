@@ -7,7 +7,7 @@ import { CredentialField } from "@/components/CredentialField";
 import { StageForm } from "./StageForm";
 import { TaskList } from "./TaskList";
 import { ApplicationDetailsForm } from "./ApplicationDetailsForm";
-import { COUNTRY_TRACKER_FIELDS } from "@/lib/countryTrackers";
+import { listTrackerDefinitions } from "@/lib/actions/countryTracker";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -34,7 +34,8 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
   const destination = university ? one(university.destination) : null;
   const pipelineStages: string[] = (destination?.pipeline_stages as string[]) ?? [];
   const countryCode = (destination as { country_code?: string } | null)?.country_code;
-  const hasTracker = countryCode ? Boolean(COUNTRY_TRACKER_FIELDS[countryCode]) : false;
+  const trackerDefs = countryCode ? (await listTrackerDefinitions([countryCode]))[countryCode] : undefined;
+  const hasTracker = Boolean(trackerDefs?.length);
   const program = one(app.program);
 
   const { data: tasks } = await supabase

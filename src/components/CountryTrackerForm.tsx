@@ -23,18 +23,22 @@ export function CountryTrackerForm({
   revalidateTo,
   dynamicOptions = {},
   regionByUniversityValue = {},
+  universityOptions = [],
 }: {
   applicationId: string;
   fields: TrackerFieldDef[];
   values: Record<string, string>;
   revalidateTo: string;
-  // Resolved options for fields with `dynamicOptions` set or an empty
-  // `options` array (e.g. Italy's `preenrollment_university`, `pending_documents`).
-  // Select fields take {value,label} pairs; multi_select/multi_test take plain strings.
+  // Resolved options for select fields whose `options` array is empty (e.g.
+  // "pick one of this student's applied universities" fields) and for the
+  // `pending_documents`-style dynamic lists.
   dynamicOptions?: Record<string, { value: string; label: string }[] | string[]>;
   // preenrollment_university option value -> scholarship region, used to
   // auto-fill `scholarship_region` when that select changes.
   regionByUniversityValue?: Record<string, string>;
+  // This application's country's applied universities, used as the per-row
+  // picker for multi_university_status fields.
+  universityOptions?: { value: string; label: string }[];
 }) {
   const plainFields = fields.filter((f) => f.type !== "credential");
   const credentialFields = fields.filter((f) => f.type === "credential");
@@ -50,7 +54,12 @@ export function CountryTrackerForm({
   const [state, formAction, pending] = useActionState(action, undefined);
 
   const visibleFields = useMemo(
-    () => plainFields.filter((f) => !f.showWhen || live[f.showWhen.key] === f.showWhen.equals),
+    () =>
+      plainFields.filter((f) => {
+        if (!f.showWhen) return true;
+        const current = live[f.showWhen.key] ?? "";
+        return f.showWhen.equals === "*" ? current.trim().length > 0 : current === f.showWhen.equals;
+      }),
     [plainFields, live]
   );
 
@@ -59,13 +68,13 @@ export function CountryTrackerForm({
       <form action={formAction} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {visibleFields.map((f) => {
           const staticOptions = f.options && f.options.length > 0 ? f.options.map((o) => ({ value: o, label: o.replace(/_/g, " ") })) : null;
-          const dynamic = dynamicOptions[f.key] ?? [];
+          const dynamic = dynamicOptions[f.key] ?? universityOptions;
           const selectOptions: { value: string; label: string }[] =
             staticOptions ?? (dynamic as { value: string; label: string }[]);
           const multiOptions: string[] = staticOptions ? f.options! : (dynamic as string[]);
 
           return (
-            <div key={f.key} className="flex flex-col gap-1">
+            <div key={f.key} className={f.type === "multi_university_status" ? "col-span-full flex flex-col gap-1" : "flex flex-col gap-1"}>
               <label className="text-xs text-muted">{f.label}</label>
               {f.type === "boolean" ? (
                 <input type="checkbox" name={f.key} defaultChecked={values[f.key] === "true"} className="h-4 w-4 self-start" />
@@ -94,11 +103,27 @@ export function CountryTrackerForm({
                 </select>
               ) : f.type === "multi_select" ? (
                 <MultiSelectField fieldKey={f.key} options={multiOptions} initial={values[f.key]} />
-              ) : f.type === "multi_test" ? (
-                <MultiTestField fieldKey={f.key} tests={f.options ?? []} initial={values[f.key]} />
+              ) : f.type === "multi_text" ? (
+                <MultiTextField fieldKey={f.key} initial={values[f.key]} />
+              ) : f.type === "multi_university_status" ? (
+                <UniversityStatusField
+                  fieldKey={f.key}
+                  statusOptions={f.options ?? []}
+                  dateWhenStatus={f.dateWhenStatus}
+                  universities={universityOptions}
+                  initial={values[f.key]}
+                />
+              ) : f.type === "textarea" ? (
+                <textarea
+                  name={f.key}
+                  value={live[f.key] ?? ""}
+                  onChange={(e) => setLive((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                  rows={3}
+                  className="rounded-md border border-border px-2 py-1.5 text-sm"
+                />
               ) : (
                 <input
-                  type={f.type === "date" ? "date" : "text"}
+                  type={f.type === "date" ? "date" : f.type === "number" ? "number" : "text"}
                   name={f.key}
                   value={live[f.key] ?? ""}
                   onChange={(e) => setLive((prev) => ({ ...prev, [f.key]: e.target.value }))}
@@ -157,53 +182,128 @@ function MultiSelectField({ fieldKey, options, initial }: { fieldKey: string; op
   );
 }
 
-type TestEntry = { test: string; date: string; score: string };
+// Free-typed repeatable list ("Pending document 1", "Pending document 2", …)
+// — staff types arbitrary names rather than picking from a fixed list.
+function MultiTextField({ fieldKey, initial }: { fieldKey: string; initial?: string }) {
+  const [items, setItems] = useState<string[]>(() => {
+    const parsed = parseJsonArray(initial) as string[];
+    return parsed.length > 0 ? parsed : [];
+  });
 
-// Checkbox per fixed test; each checked test reveals a date + score pair.
-// Stored as a JSON array in the same one-column shape as every other field.
-function MultiTestField({ fieldKey, tests, initial }: { fieldKey: string; tests: string[]; initial?: string }) {
-  const [entries, setEntries] = useState<TestEntry[]>(() => parseJsonArray(initial) as TestEntry[]);
-
-  function isChecked(test: string) {
-    return entries.some((e) => e.test === test);
+  function update(i: number, value: string) {
+    setItems((prev) => prev.map((v, idx) => (idx === i ? value : v)));
   }
 
-  function toggle(test: string) {
-    setEntries((prev) => (prev.some((e) => e.test === test) ? prev.filter((e) => e.test !== test) : [...prev, { test, date: "", score: "" }]));
-  }
-
-  function update(test: string, field: "date" | "score", value: string) {
-    setEntries((prev) => prev.map((e) => (e.test === test ? { ...e, [field]: value } : e)));
+  function remove(i: number) {
+    setItems((prev) => prev.filter((_, idx) => idx !== i));
   }
 
   return (
     <div className="flex flex-col gap-2 rounded-md border border-border p-2">
-      {tests.map((test) => (
-        <div key={test} className="flex flex-col gap-1">
-          <label className="flex items-center gap-2 text-xs text-ink">
-            <input type="checkbox" checked={isChecked(test)} onChange={() => toggle(test)} />
-            {test}
-          </label>
-          {isChecked(test) && (
-            <div className="ml-6 flex gap-2">
-              <input
-                type="date"
-                value={entries.find((e) => e.test === test)?.date ?? ""}
-                onChange={(e) => update(test, "date", e.target.value)}
-                className="rounded border border-border px-1.5 py-1 text-xs"
-              />
-              <input
-                type="text"
-                placeholder="Score"
-                value={entries.find((e) => e.test === test)?.score ?? ""}
-                onChange={(e) => update(test, "score", e.target.value)}
-                className="w-20 rounded border border-border px-1.5 py-1 text-xs"
-              />
-            </div>
-          )}
+      {items.map((v, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <input
+            value={v}
+            onChange={(e) => update(i, e.target.value)}
+            placeholder={`Pending document ${i + 1}`}
+            className="flex-1 rounded border border-border px-2 py-1 text-xs"
+          />
+          <button type="button" onClick={() => remove(i)} className="text-xs text-danger hover:underline">
+            Remove
+          </button>
         </div>
       ))}
-      <input type="hidden" name={fieldKey} value={JSON.stringify(entries)} />
+      <button
+        type="button"
+        onClick={() => setItems((prev) => [...prev, ""])}
+        className="self-start text-xs font-medium text-primary hover:underline"
+      >
+        + Add document
+      </button>
+      {items.length === 0 && <p className="text-xs text-muted">No pending documents listed.</p>}
+      <input type="hidden" name={fieldKey} value={JSON.stringify(items.filter((v) => v.trim()))} />
+    </div>
+  );
+}
+
+type UniStatusEntry = { university_id: string; status: string; date?: string };
+
+// Repeatable {university, status, optional date} rows — e.g. a credibility
+// interview per applied university, or a per-university bank-statement
+// requirement. Value stored as a JSON array in the one field_value column.
+function UniversityStatusField({
+  fieldKey,
+  statusOptions,
+  dateWhenStatus,
+  universities,
+  initial,
+}: {
+  fieldKey: string;
+  statusOptions: string[];
+  dateWhenStatus?: string;
+  universities: { value: string; label: string }[];
+  initial?: string;
+}) {
+  const [entries, setEntries] = useState<UniStatusEntry[]>(() => parseJsonArray(initial) as UniStatusEntry[]);
+
+  function update(i: number, patch: Partial<UniStatusEntry>) {
+    setEntries((prev) => prev.map((e, idx) => (idx === i ? { ...e, ...patch } : e)));
+  }
+
+  function remove(i: number) {
+    setEntries((prev) => prev.filter((_, idx) => idx !== i));
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-border p-2">
+      {entries.map((entry, i) => (
+        <div key={i} className="flex flex-wrap items-center gap-2">
+          <select
+            value={entry.university_id}
+            onChange={(e) => update(i, { university_id: e.target.value })}
+            className="rounded border border-border px-2 py-1 text-xs"
+          >
+            <option value="">University…</option>
+            {universities.map((u) => (
+              <option key={u.value} value={u.value}>
+                {u.label}
+              </option>
+            ))}
+          </select>
+          <select
+            value={entry.status}
+            onChange={(e) => update(i, { status: e.target.value })}
+            className="rounded border border-border px-2 py-1 text-xs"
+          >
+            <option value="">Status…</option>
+            {statusOptions.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+          {dateWhenStatus && entry.status === dateWhenStatus && (
+            <input
+              type="date"
+              value={entry.date ?? ""}
+              onChange={(e) => update(i, { date: e.target.value })}
+              className="rounded border border-border px-2 py-1 text-xs"
+            />
+          )}
+          <button type="button" onClick={() => remove(i)} className="text-xs text-danger hover:underline">
+            Remove
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={() => setEntries((prev) => [...prev, { university_id: "", status: "" }])}
+        className="self-start text-xs font-medium text-primary hover:underline"
+      >
+        + Add
+      </button>
+      {universities.length === 0 && <p className="text-xs text-muted">No applications for this country yet.</p>}
+      <input type="hidden" name={fieldKey} value={JSON.stringify(entries.filter((e) => e.university_id && e.status))} />
     </div>
   );
 }

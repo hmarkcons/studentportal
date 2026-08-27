@@ -294,6 +294,39 @@ export async function reassignLead(leadId: string, _prevState: unknown, formData
   return { success: true };
 }
 
+export async function updateRegistrationDetails(studentId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
+  const supabase = await createClient();
+  const destination_ids = formData.getAll("destination_ids").map(String).filter(Boolean);
+  const destination_names = formData.getAll("destination_names").map(String).filter(Boolean);
+  const assigned_counselor_id = String(formData.get("assigned_counselor_id") ?? "") || null;
+  const discount_amount = formData.get("discount_amount") ? Number(formData.get("discount_amount")) : null;
+  const discount_reason = String(formData.get("discount_reason") ?? "").trim() || null;
+
+  const { error: delErr } = await supabase.from("lead_destinations").delete().eq("lead_id", studentId);
+  if (delErr) return { error: delErr.message };
+  if (destination_ids.length > 0) {
+    const { error: destErr } = await supabase
+      .from("lead_destinations")
+      .insert(destination_ids.map((destination_id) => ({ lead_id: studentId, destination_id })));
+    if (destErr) return { error: destErr.message };
+  }
+
+  const { error } = await supabase
+    .from("leads")
+    .update({
+      country_of_interest: destination_names.join(", ") || null,
+      assigned_counselor_id,
+      discount_amount,
+      discount_reason,
+    })
+    .eq("id", studentId);
+  if (error) return { error: error.message };
+
+  revalidatePath(revalidateTo);
+  revalidatePath("/students");
+  return { success: true };
+}
+
 export async function deleteStudent(studentId: string) {
   const supabase = await createClient();
   const {
