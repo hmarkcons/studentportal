@@ -47,7 +47,7 @@ export default async function PartnerCommissionsPage() {
 
   return (
     <div className="w-full">
-      <h2 className="mb-4 text-lg font-semibold text-ink">Partner Commissions</h2>
+      <h2 className="mb-4 text-lg font-semibold text-ink">University Commissions</h2>
       <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full min-w-[720px] text-sm">
           <thead>

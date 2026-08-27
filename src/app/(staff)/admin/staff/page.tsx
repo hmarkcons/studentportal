@@ -21,7 +21,7 @@ export default async function StaffAdminPage() {
 
   return (
     <div className="w-full">
-      <h2 className="mb-4 text-lg font-semibold text-ink">Staff</h2>
+      <h2 className="mb-4 text-lg font-semibold text-ink">Staff Management</h2>
       <Card className="mb-6">
         <NewStaffForm />
       </Card>

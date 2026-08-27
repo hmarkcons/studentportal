@@ -21,11 +21,7 @@ export const STAFF_NAV: NavItem[] = [
   {
     label: "Finance",
     icon: "💰",
-    children: [
-      { label: "Commissions (staff)", href: "/finance/commissions" },
-      { label: "Partner commissions", href: "/finance/partner-commissions" },
-      { label: "Refunds", href: "/finance/refunds" },
-    ],
+    children: [{ label: "Refunds", href: "/finance/refunds" }],
   },
   {
     label: "Marketing",
@@ -33,17 +29,25 @@ export const STAFF_NAV: NavItem[] = [
     children: [
       { label: "Campaigns", href: "/marketing/campaigns" },
       { label: "Social calendar", href: "/marketing/social-calendar" },
-      { label: "Referrals", href: "/marketing/referrals" },
       { label: "Ad campaigns", href: "/marketing/ad-campaigns" },
       { label: "Broadcast message", href: "/marketing/broadcast" },
     ],
   },
   { label: "Reports", href: "/reports", icon: "📊" },
   {
+    label: "HR",
+    icon: "👥",
+    children: [
+      { label: "Staff Payroll", href: "/finance/commissions" },
+      { label: "University Commissions", href: "/finance/partner-commissions" },
+      { label: "Staff Management", href: "/admin/staff" },
+      { label: "Referrals", href: "/marketing/referrals" },
+    ],
+  },
+  {
     label: "Admin",
     icon: "🛠️",
     children: [
-      { label: "Staff", href: "/admin/staff" },
       { label: "Audit log", href: "/admin/audit-log" },
       { label: "Attendance", href: "/admin/attendance" },
       { label: "Additional services", href: "/admin/additional-services" },

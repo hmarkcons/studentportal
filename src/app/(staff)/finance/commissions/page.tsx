@@ -41,7 +41,7 @@ export default async function StaffCommissionsPage() {
 
   return (
     <div className="w-full">
-      <h2 className="mb-4 text-lg font-semibold text-ink">Staff Commissions</h2>
+      <h2 className="mb-4 text-lg font-semibold text-ink">Staff Payroll</h2>
       {isSuperAdmin && <NewCommissionForm staff={staffList ?? []} students={students ?? []} />}
       <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full min-w-[640px] text-sm">

@@ -302,24 +302,32 @@ export async function updateRegistrationDetails(studentId: string, revalidateTo:
   const discount_amount = formData.get("discount_amount") ? Number(formData.get("discount_amount")) : null;
   const discount_reason = String(formData.get("discount_reason") ?? "").trim() || null;
 
-  const { error: delErr } = await supabase.from("lead_destinations").delete().eq("lead_id", studentId);
-  if (delErr) return { error: delErr.message };
-  if (destination_ids.length > 0) {
-    const { error: destErr } = await supabase
-      .from("lead_destinations")
-      .insert(destination_ids.map((destination_id) => ({ lead_id: studentId, destination_id })));
-    if (destErr) return { error: destErr.message };
+  // Older records may predate lead_destinations and only carry the legacy
+  // country_of_interest text — the checkbox list then starts with nothing
+  // checked. Only touch destinations/country_of_interest when the form
+  // actually has a destination selection, or this student already had real
+  // lead_destinations rows (an explicit "uncheck everything" submit) — never
+  // silently wipe the legacy text field just because the widget started empty.
+  const { data: existingDestinations } = await supabase.from("lead_destinations").select("destination_id").eq("lead_id", studentId);
+  const hadExistingDestinations = (existingDestinations?.length ?? 0) > 0;
+
+  if (destination_ids.length > 0 || hadExistingDestinations) {
+    const { error: delErr } = await supabase.from("lead_destinations").delete().eq("lead_id", studentId);
+    if (delErr) return { error: delErr.message };
+    if (destination_ids.length > 0) {
+      const { error: destErr } = await supabase
+        .from("lead_destinations")
+        .insert(destination_ids.map((destination_id) => ({ lead_id: studentId, destination_id })));
+      if (destErr) return { error: destErr.message };
+    }
   }
 
-  const { error } = await supabase
-    .from("leads")
-    .update({
-      country_of_interest: destination_names.join(", ") || null,
-      assigned_counselor_id,
-      discount_amount,
-      discount_reason,
-    })
-    .eq("id", studentId);
+  const patch: Record<string, unknown> = { assigned_counselor_id, discount_amount, discount_reason };
+  if (destination_ids.length > 0 || hadExistingDestinations) {
+    patch.country_of_interest = destination_names.join(", ") || null;
+  }
+
+  const { error } = await supabase.from("leads").update(patch).eq("id", studentId);
   if (error) return { error: error.message };
 
   revalidatePath(revalidateTo);
