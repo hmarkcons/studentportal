@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getStaffSession } from "@/lib/auth/session";
 import { AppShell } from "@/components/AppShell";
 import { STAFF_NAV } from "@/lib/nav";
 
@@ -14,17 +14,7 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 export default async function StaffLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const { data: staffRow } = await supabase
-    .from("staff")
-    .select("full_name, role, status")
-    .eq("id", user?.id ?? "")
-    .maybeSingle();
+  const { staff: staffRow } = await getStaffSession();
 
   if (!staffRow || staffRow.status !== "active") {
     redirect("/");

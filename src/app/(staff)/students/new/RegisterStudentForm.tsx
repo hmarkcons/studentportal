@@ -58,16 +58,6 @@ export function RegisterStudentForm({
         <label className={labelClass}>Countries of interest</label>
         <DestinationMultiSelect destinations={destinations} />
       </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="flex flex-col gap-1.5">
-          <label className={labelClass}>Discount amount</label>
-          <input name="discount_amount" type="number" step="0.01" className={inputClass} />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label className={labelClass}>Discount reason</label>
-          <input name="discount_reason" className={inputClass} />
-        </div>
-      </div>
       <div className="flex flex-col gap-1.5">
         <label className={labelClass}>Assigned counselor</label>
         <select name="assigned_counselor_id" className={inputClass}>

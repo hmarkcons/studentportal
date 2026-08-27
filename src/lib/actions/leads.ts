@@ -203,8 +203,6 @@ export async function registerStudentManually(_prevState: unknown, formData: For
   const destination_ids = formData.getAll("destination_ids").map(String).filter(Boolean);
   const destination_names = formData.getAll("destination_names").map(String).filter(Boolean);
   const assigned_counselor_id = String(formData.get("assigned_counselor_id") ?? "") || null;
-  const discount_amount = formData.get("discount_amount") ? Number(formData.get("discount_amount")) : null;
-  const discount_reason = String(formData.get("discount_reason") ?? "").trim() || null;
 
   const { data, error } = await supabase
     .from("leads")
@@ -217,8 +215,6 @@ export async function registerStudentManually(_prevState: unknown, formData: For
       course_of_interest,
       country_of_interest: destination_names.join(", ") || null,
       assigned_counselor_id,
-      discount_amount,
-      discount_reason,
       status: "registered",
     })
     .select("id")
@@ -373,15 +369,10 @@ export async function deleteStudent(studentId: string) {
   return { success: true };
 }
 
-export async function registerLead(leadId: string, formData: FormData) {
+export async function registerLead(leadId: string, _formData: FormData) {
   const supabase = await createClient();
-  const discount_amount = formData.get("discount_amount") ? Number(formData.get("discount_amount")) : null;
-  const discount_reason = String(formData.get("discount_reason") ?? "").trim() || null;
 
-  const { error } = await supabase
-    .from("leads")
-    .update({ status: "registered", discount_amount, discount_reason })
-    .eq("id", leadId);
+  const { error } = await supabase.from("leads").update({ status: "registered" }).eq("id", leadId);
   if (error) throw new Error(error.message);
 
   revalidatePath(`/leads/${leadId}`);

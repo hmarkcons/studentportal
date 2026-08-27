@@ -47,7 +47,8 @@ export async function createApplication(studentId: string, _prevState: unknown, 
         status: "missing" as const,
       }))
     );
-    await supabase.from("student_documents").insert(docRows);
+    const { error: seedError } = await supabase.from("student_documents").insert(docRows);
+    if (seedError) console.error("Failed to seed document checklist for new application:", seedError.message);
   }
 
   redirect(`/students/${studentId}/applications/${data[0].id}`);
@@ -59,6 +60,33 @@ export async function deleteApplication(applicationId: string, revalidateTo: str
   if (error) return { error: error.message };
 
   revalidatePath(revalidateTo);
+  return { success: true };
+}
+
+// Finalizing an application marks it as the one university the student is
+// actually pursuing a visa for — the Visa tab only shows the finalized
+// application (or a prompt to finalize one), not every university applied to.
+export async function finalizeApplication(applicationId: string, studentId: string, revalidateTo: string) {
+  const supabase = await createClient();
+
+  const { error: clearError } = await supabase.from("applications").update({ is_finalized: false }).eq("student_id", studentId);
+  if (clearError) return { error: clearError.message };
+
+  const { error } = await supabase.from("applications").update({ is_finalized: true }).eq("id", applicationId);
+  if (error) return { error: error.message };
+
+  revalidatePath(revalidateTo);
+  revalidatePath(`/students/${studentId}/visa`);
+  return { success: true };
+}
+
+export async function unfinalizeApplication(applicationId: string, studentId: string, revalidateTo: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("applications").update({ is_finalized: false }).eq("id", applicationId);
+  if (error) return { error: error.message };
+
+  revalidatePath(revalidateTo);
+  revalidatePath(`/students/${studentId}/visa`);
   return { success: true };
 }
 

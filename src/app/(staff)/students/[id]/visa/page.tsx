@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { VisaForm } from "../applications/[appId]/VisaForm";
@@ -12,13 +13,8 @@ export default async function StudentVisaTab(props: PageProps<"/students/[id]/vi
 
   const { data: applications } = await supabase
     .from("applications")
-    .select("id, university:universities(name, destination:destinations(display_name))")
+    .select("id, is_finalized, university:universities(name, destination:destinations(display_name))")
     .eq("student_id", id);
-
-  const appIds = (applications ?? []).map((a) => a.id);
-  const { data: visas } = appIds.length
-    ? await supabase.from("visa_records").select("*").in("application_id", appIds)
-    : { data: [] };
 
   if (!applications || applications.length === 0) {
     return (
@@ -28,21 +24,35 @@ export default async function StudentVisaTab(props: PageProps<"/students/[id]/vi
     );
   }
 
+  const finalized = applications.find((a) => a.is_finalized);
+
+  if (!finalized) {
+    return (
+      <Card>
+        <p className="text-sm text-muted">
+          No university has been finalized for visa yet. Go to the{" "}
+          <Link href={`/students/${id}/applications`} className="text-primary hover:underline">
+            Applications tab
+          </Link>{" "}
+          and click &quot;Finalize for visa&quot; on the university the student is actually pursuing a visa for.
+        </p>
+      </Card>
+    );
+  }
+
+  const { data: visa } = await supabase.from("visa_records").select("*").eq("application_id", finalized.id).maybeSingle();
+
+  const uni = one(finalized.university as never) as { name?: string; destination?: unknown } | null;
+  const dest = uni?.destination ? (one(uni.destination as never) as { display_name?: string } | null) : null;
+
   return (
     <div className="flex flex-col gap-6">
-      {applications.map((a) => {
-        const uni = one(a.university as never) as { name?: string; destination?: unknown } | null;
-        const dest = uni?.destination ? (one(uni.destination as never) as { display_name?: string } | null) : null;
-        const visa = (visas ?? []).find((v) => v.application_id === a.id) ?? null;
-        return (
-          <Card key={a.id}>
-            <h3 className="mb-3 text-sm font-medium text-ink">
-              {uni?.name ?? "University"} {dest?.display_name && `· ${dest.display_name}`}
-            </h3>
-            <VisaForm applicationId={a.id} studentId={id} visa={visa} />
-          </Card>
-        );
-      })}
+      <Card>
+        <h3 className="mb-3 text-sm font-medium text-ink">
+          {uni?.name ?? "University"} {dest?.display_name && `· ${dest.display_name}`}
+        </h3>
+        <VisaForm applicationId={finalized.id} studentId={id} visa={visa} />
+      </Card>
     </div>
   );
 }

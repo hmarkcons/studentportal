@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { getStaffSession } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { ScholarshipSection } from "../applications/[appId]/tracker/ScholarshipSection";
 
@@ -8,12 +8,7 @@ function one<T>(v: T | T[] | null) {
 
 export default async function StudentScholarshipTab(props: PageProps<"/students/[id]/scholarship">) {
   const { id } = await props.params;
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  const { supabase, staff: staffRow } = await getStaffSession();
   const isSuperAdmin = staffRow?.role === "super_admin";
 
   const { data: applications } = await supabase
@@ -35,34 +30,33 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
     );
   }
 
-  const { data: bodies } = await supabase.from("scholarship_bodies").select("id, name, region");
+  const italyAppIds = italyApps.map((a) => a.id);
+  const [{ data: bodies }, { data: allScholarships }] = await Promise.all([
+    supabase.from("scholarship_bodies").select("id, name, region"),
+    supabase.from("student_scholarships").select("id, name, status, award_amount, application_id").in("application_id", italyAppIds),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
-      {await Promise.all(
-        italyApps.map(async (a) => {
-          const uni = one(a.university as never) as { name?: string } | null;
-          const { data: scholarships } = await supabase
-            .from("student_scholarships")
-            .select("id, name, status, award_amount")
-            .eq("application_id", a.id);
+      {italyApps.map((a) => {
+        const uni = one(a.university as never) as { name?: string } | null;
+        const scholarships = (allScholarships ?? []).filter((s) => s.application_id === a.id);
 
-          return (
-            <Card key={a.id}>
-              <h3 className="mb-3 text-sm font-medium text-ink">{uni?.name ?? "University"}</h3>
-              <ScholarshipSection
-                studentId={id}
-                applicationId={a.id}
-                revalidateTo={`/students/${id}/scholarship`}
-                bodies={bodies ?? []}
-                scholarships={scholarships ?? []}
-                preenrollmentFinalized={a.preenrollment_finalized}
-                isSuperAdmin={isSuperAdmin}
-              />
-            </Card>
-          );
-        })
-      )}
+        return (
+          <Card key={a.id}>
+            <h3 className="mb-3 text-sm font-medium text-ink">{uni?.name ?? "University"}</h3>
+            <ScholarshipSection
+              studentId={id}
+              applicationId={a.id}
+              revalidateTo={`/students/${id}/scholarship`}
+              bodies={bodies ?? []}
+              scholarships={scholarships}
+              preenrollmentFinalized={a.preenrollment_finalized}
+              isSuperAdmin={isSuperAdmin}
+            />
+          </Card>
+        );
+      })}
     </div>
   );
 }

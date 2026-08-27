@@ -69,23 +69,12 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
           <p className="text-sm text-muted">
             Converts this lead into a Registered Student and hands ownership to the Processing Team.
           </p>
-          <form action={registerAction} className="mt-3 flex flex-wrap items-end gap-2">
-            <input
-              name="discount_amount"
-              type="number"
-              step="0.01"
-              placeholder="Discount amount (optional)"
-              className="w-48 rounded-md border border-border px-2 py-1.5 text-sm"
-            />
-            <input
-              name="discount_reason"
-              placeholder="Discount reason"
-              className="w-56 rounded-md border border-border px-2 py-1.5 text-sm"
-            />
+          <form action={registerAction} className="mt-3">
             <button type="submit" className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink">
               Register this lead
             </button>
           </form>
+          <p className="mt-2 text-xs text-muted">Discount can be set anytime after registration from the student&apos;s dashboard.</p>
         </Card>
       )}
 

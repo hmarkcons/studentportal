@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { getStaffSession } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { BoardingPassTracker } from "@/components/ui/BoardingPassTracker";
 import { DeleteApplicationButton } from "./DeleteApplicationButton";
+import { FinalizeApplicationButton } from "./FinalizeApplicationButton";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -11,18 +12,13 @@ function one<T>(v: T | T[] | null) {
 
 export default async function StudentApplicationsTab(props: PageProps<"/students/[id]/applications">) {
   const { id } = await props.params;
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  const { supabase, staff: staffRow } = await getStaffSession();
   const canDelete = staffRow?.role === "super_admin" || staffRow?.role === "management";
 
   const { data: applications } = await supabase
     .from("applications")
     .select(
-      `id, current_stage, intake, deadline,
+      `id, current_stage, intake, deadline, is_finalized,
        university:universities(name, destination:destinations(display_name, pipeline_stages)),
        program:programs(name)`
     )
@@ -79,10 +75,19 @@ export default async function StudentApplicationsTab(props: PageProps<"/students
                       {a.deadline ? `Deadline: ${new Date(a.deadline).toLocaleDateString()}` : "No deadline set"}
                       {" · "}
                       <Badge tone="info">{a.current_stage.replace(/_/g, " ")}</Badge>
+                      {a.is_finalized && (
+                        <>
+                          {" · "}
+                          <Badge tone="success">Finalized for visa</Badge>
+                        </>
+                      )}
                     </span>
-                    {canDelete && (
-                      <DeleteApplicationButton applicationId={a.id} revalidateTo={revalidateTo} label={uni?.name ?? "this university"} />
-                    )}
+                    <div className="flex items-center gap-2">
+                      <FinalizeApplicationButton applicationId={a.id} studentId={id} revalidateTo={revalidateTo} isFinalized={a.is_finalized} />
+                      {canDelete && (
+                        <DeleteApplicationButton applicationId={a.id} revalidateTo={revalidateTo} label={uni?.name ?? "this university"} />
+                      )}
+                    </div>
                   </div>
                 </div>
               );

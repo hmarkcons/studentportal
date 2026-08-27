@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { getStudentUser } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { BoardingPassTracker } from "@/components/ui/BoardingPassTracker";
 
@@ -8,29 +8,33 @@ function one<T>(v: T | T[] | null) {
 }
 
 export default async function PortalDashboardPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, userId } = await getStudentUser();
 
   const { data: student } = await supabase
     .from("students")
     .select("id, full_name, assigned_counselor:staff(full_name, designation, phone, whatsapp_number)")
-    .eq("auth_user_id", user?.id ?? "")
+    .eq("auth_user_id", userId ?? "")
     .maybeSingle();
 
   if (!student) return null;
 
-  const { data: applications } = await supabase
-    .from("applications")
-    .select("id, current_stage, intake, university:universities(name, destination:destinations(pipeline_stages)), program:programs(name)")
-    .eq("student_id", student.id);
-
-  const { count: pendingDocs } = await supabase
-    .from("student_documents")
-    .select("id", { count: "exact", head: true })
-    .eq("student_id", student.id)
-    .in("status", ["missing", "rejected"]);
+  const [{ data: applications }, { count: pendingDocs }, { count: unassignedDocs }] = await Promise.all([
+    supabase
+      .from("applications")
+      .select("id, current_stage, intake, university:universities(name, destination:destinations(pipeline_stages)), program:programs(name)")
+      .eq("student_id", student.id),
+    supabase
+      .from("student_documents")
+      .select("id", { count: "exact", head: true })
+      .eq("student_id", student.id)
+      .in("status", ["missing", "rejected"]),
+    supabase
+      .from("student_documents")
+      .select("id", { count: "exact", head: true })
+      .eq("student_id", student.id)
+      .is("application_id", null)
+      .in("status", ["missing", "rejected"]),
+  ]);
 
   const counselor = one(student.assigned_counselor);
 
@@ -48,9 +52,16 @@ export default async function PortalDashboardPage() {
         </Card>
       )}
 
-      <Card className="mb-6 bg-warning-bg">
-        <p className="text-sm text-warning">{pendingDocs ?? 0} document(s) need your attention.</p>
-      </Card>
+      {(pendingDocs ?? 0) > 0 && (
+        <Link href="/portal/documents">
+          <Card className="mb-6 bg-warning-bg">
+            <p className="text-sm text-warning">
+              {pendingDocs} document(s) need your attention{(unassignedDocs ?? 0) > 0 ? ` — including ${unassignedDocs} general document(s)` : ""}. Tap
+              to upload.
+            </p>
+          </Card>
+        </Link>
+      )}
 
       <h3 className="mb-3 text-sm font-medium text-ink">Your applications</h3>
       <div className="flex flex-col gap-4">

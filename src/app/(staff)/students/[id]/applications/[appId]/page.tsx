@@ -8,6 +8,7 @@ import { StageForm } from "./StageForm";
 import { TaskList } from "./TaskList";
 import { ApplicationDetailsForm } from "./ApplicationDetailsForm";
 import { listTrackerDefinitions } from "@/lib/actions/countryTracker";
+import { DocumentChecklist, type DocRow } from "@/components/DocumentChecklist";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -38,13 +39,34 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
   const hasTracker = Boolean(trackerDefs?.length);
   const program = one(app.program);
 
-  const { data: tasks } = await supabase
-    .from("application_tasks")
-    .select("id, description, due_date, status, priority")
-    .eq("application_id", appId)
-    .order("due_date", { ascending: true });
-
   const revalidateTo = `/students/${id}/applications/${appId}`;
+
+  const [{ data: tasks }, { data: rawDocs }] = await Promise.all([
+    supabase
+      .from("application_tasks")
+      .select("id, description, due_date, status, priority")
+      .eq("application_id", appId)
+      .order("due_date", { ascending: true }),
+    supabase
+      .from("student_documents")
+      .select("id, category, custom_name, status, file_path, deadline, rejected_reason, template:document_templates(name)")
+      .eq("application_id", appId)
+      .returns<(DocRow & { custom_name: string | null; template: { name: string } | { name: string }[] | null })[]>(),
+  ]);
+
+  function one2<T>(v: T | T[] | null) {
+    return Array.isArray(v) ? v[0] ?? null : v;
+  }
+
+  const docsWithUrls = await Promise.all(
+    (rawDocs ?? []).map(async (d) => {
+      const templateName = one2(d.template as never) as { name?: string } | null;
+      const name = d.custom_name ?? templateName?.name ?? d.category ?? "Document";
+      if (!d.file_path) return { ...d, name };
+      const { data } = await supabase.storage.from("documents").createSignedUrl(d.file_path, 3600);
+      return { ...d, name, fileUrl: data?.signedUrl ?? null };
+    })
+  );
 
   return (
     <div className="w-full">
@@ -84,6 +106,11 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
           application_fee={app.application_fee}
           special_requirements={app.special_requirements}
         />
+      </Card>
+
+      <Card className="mb-6">
+        <h3 className="mb-3 text-sm font-medium text-ink">Documents</h3>
+        <DocumentChecklist docs={docsWithUrls} studentId={id} applicationId={appId} revalidateTo={revalidateTo} />
       </Card>
 
       <Card className="mb-6">

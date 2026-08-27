@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { getStaffSession } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { DocumentChecklist, type DocRow } from "@/components/DocumentChecklist";
@@ -21,148 +21,78 @@ function one<T>(v: T | T[] | null) {
 
 export default async function StudentDashboardPage(props: PageProps<"/students/[id]">) {
   const { id } = await props.params;
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  const { supabase, staff: staffRow } = await getStaffSession();
   const role = staffRow?.role;
   const isSuperAdmin = role === "super_admin";
   const canModifyAgreement = role === "super_admin" || role === "processing";
 
-  const { data: student } = await supabase
-    .from("students")
-    .select(
-      "auth_user_id, full_name, contact_number, email, platform_source, current_qualification, level_applying_for, course_of_interest, date_of_birth, address, home_phone"
-    )
-    .eq("id", id)
-    .maybeSingle();
-
-  const { data: profile } = await supabase.from("student_profiles").select("*").eq("student_id", id).maybeSingle();
-
-  const { data: leadRegistration } = await supabase
-    .from("leads")
-    .select("assigned_counselor_id, discount_amount, discount_reason")
-    .eq("id", id)
-    .maybeSingle();
-  const { data: selectedDestinations } = await supabase.from("lead_destinations").select("destination_id").eq("lead_id", id);
-  const { data: allDestinations } = await supabase.from("destinations").select("id, display_name").order("display_name");
-  const { data: counselors } = await supabase.from("staff").select("id, full_name").order("full_name");
-
-  const { data: templates } = await supabase
-    .from("agreement_templates")
-    .select("id, signatory_name, destination:destinations(display_name)");
-
-  const { data: agreements } = await supabase
-    .from("agreements")
-    .select(
-      "id, status, signing_method, signed_file_path, email_verified, discount_amount, created_at, template:agreement_templates(file_path)"
-    )
-    .eq("student_id", id)
-    .order("created_at", { ascending: false });
-
-  const agreementLinks = new Map<string, { templateUrl?: string; signedUrl?: string }>();
-  await Promise.all(
-    (agreements ?? []).map(async (a) => {
-      const links: { templateUrl?: string; signedUrl?: string } = {};
-      const tmpl = one(a.template as never) as { file_path?: string } | null;
-      if (tmpl?.file_path) {
-        const { data } = await supabase.storage.from("documents").createSignedUrl(tmpl.file_path, 3600);
-        if (data?.signedUrl) links.templateUrl = data.signedUrl;
-      }
-      if (a.signed_file_path) {
-        const { data } = await supabase.storage.from("documents").createSignedUrl(a.signed_file_path, 3600);
-        if (data?.signedUrl) links.signedUrl = data.signedUrl;
-      }
-      agreementLinks.set(a.id, links);
-    })
-  );
+  // ---- Level 1: every query below is independent of every other — fetch all
+  // of them concurrently instead of one round trip at a time. ----
+  const [
+    { data: student },
+    { data: profile },
+    { data: leadRegistration },
+    { data: selectedDestinations },
+    { data: allDestinations },
+    { data: counselors },
+    { data: templates },
+    { data: agreements },
+    { data: invoices },
+    { data: feeProducts },
+    { data: applications },
+    { data: rawDocs },
+    existingCredentialTypes,
+  ] = await Promise.all([
+    supabase
+      .from("students")
+      .select(
+        "auth_user_id, full_name, contact_number, email, platform_source, current_qualification, level_applying_for, course_of_interest, date_of_birth, address, home_phone"
+      )
+      .eq("id", id)
+      .maybeSingle(),
+    supabase.from("student_profiles").select("*").eq("student_id", id).maybeSingle(),
+    supabase.from("leads").select("assigned_counselor_id, discount_amount, discount_reason").eq("id", id).maybeSingle(),
+    supabase.from("lead_destinations").select("destination_id").eq("lead_id", id),
+    supabase.from("destinations").select("id, display_name").order("display_name"),
+    supabase.from("staff").select("id, full_name").order("full_name"),
+    supabase.from("agreement_templates").select("id, signatory_name, destination:destinations(display_name)"),
+    supabase
+      .from("agreements")
+      .select(
+        "id, status, signing_method, signed_file_path, email_verified, discount_amount, created_at, template:agreement_templates(file_path)"
+      )
+      .eq("student_id", id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("invoices")
+      .select(
+        "id, admin_charge, consultancy_fee, currency, sent_status, agreement_id, pdf_path, invoice_number, intake, terms, admin_fee_status, admin_fee_paid_date, admin_fee_payment_method"
+      )
+      .eq("student_id", id),
+    supabase.from("fee_products").select("id, name, default_amount, default_currency").order("name"),
+    supabase
+      .from("applications")
+      .select(
+        `id, current_stage, intake, deadline,
+         university:universities(name, destination:destinations(country_code, display_name)),
+         program:programs(name)`
+      )
+      .eq("student_id", id)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("student_documents")
+      .select("id, category, custom_name, status, file_path, deadline, rejected_reason, application_id, template:document_templates(name)")
+      .eq("student_id", id)
+      .order("created_at", { ascending: false })
+      .returns<(DocRow & { application_id: string | null; custom_name: string | null; template: { name: string } | { name: string }[] | null })[]>(),
+    listCredentialTypesAction("student", id),
+  ]);
 
   const signedAgreement = agreements?.find((a) => a.status === "signed");
   const latestAgreement = agreements?.[0];
-
-  const { data: invoices } = await supabase
-    .from("invoices")
-    .select(
-      "id, admin_charge, consultancy_fee, currency, sent_status, agreement_id, pdf_path, invoice_number, intake, terms, admin_fee_status, admin_fee_paid_date, admin_fee_payment_method"
-    )
-    .eq("student_id", id);
-
-  const { data: feeProducts } = await supabase.from("fee_products").select("id, name, default_amount, default_currency").order("name");
-
-  const invoiceIdsForLineItems = (invoices ?? []).map((i) => i.id);
-  const { data: allLineItems } = invoiceIdsForLineItems.length
-    ? await supabase.from("invoice_line_items").select("id, invoice_id, name, amount").in("invoice_id", invoiceIdsForLineItems)
-    : { data: [] };
-
-  const invoicePdfUrls = new Map<string, string>();
-  await Promise.all(
-    (invoices ?? [])
-      .filter((i) => i.pdf_path)
-      .map(async (i) => {
-        const { data } = await supabase.storage.from("documents").createSignedUrl(i.pdf_path!, 3600);
-        if (data?.signedUrl) invoicePdfUrls.set(i.id, data.signedUrl);
-      })
-  );
-
   const invoiceIds = (invoices ?? []).map((i) => i.id);
-  const { data: installments } = invoiceIds.length
-    ? await supabase.from("invoice_installments").select("*").in("invoice_id", invoiceIds)
-    : { data: [] };
-
-  const { data: applications } = await supabase
-    .from("applications")
-    .select(
-      `id, current_stage, intake, deadline,
-       university:universities(name, destination:destinations(country_code, display_name)),
-       program:programs(name)`
-    )
-    .eq("student_id", id)
-    .order("created_at", { ascending: true });
-
-  // ---- Consolidated documents (student-level + every application) ----
   const appIds = (applications ?? []).map((a) => a.id);
-  const { data: rawDocs } = await supabase
-    .from("student_documents")
-    .select("id, category, custom_name, status, file_path, deadline, rejected_reason, application_id, template:document_templates(name)")
-    .eq("student_id", id)
-    .returns<(DocRow & { application_id: string | null; custom_name: string | null; template: { name: string } | { name: string }[] | null })[]>();
-
   const appLabel = new Map((applications ?? []).map((a) => [a.id, one(a.university as never) as { name?: string } | null]));
-  const docsWithUrls = await Promise.all(
-    (rawDocs ?? []).map(async (d) => {
-      const templateName = one(d.template as never) as { name?: string } | null;
-      const uni = d.application_id ? appLabel.get(d.application_id) : null;
-      const name = `${d.custom_name ?? templateName?.name ?? d.category ?? "Document"}${uni?.name ? ` — ${uni.name}` : ""}`;
-      if (!d.file_path) return { ...d, name };
-      const { data } = await supabase.storage.from("documents").createSignedUrl(d.file_path, 3600);
-      return { ...d, name, fileUrl: data?.signedUrl ?? null };
-    })
-  );
-
-  // ---- Aggregated tasks across every application ----
-  const { data: rawTasks } = appIds.length
-    ? await supabase
-        .from("application_tasks")
-        .select("id, description, due_date, status, priority, application_id")
-        .in("application_id", appIds)
-        .order("due_date", { ascending: true })
-    : { data: [] };
-
-  const taskRows: DashboardTaskRow[] = (rawTasks ?? []).map((t) => ({
-    id: t.id,
-    description: t.description,
-    due_date: t.due_date,
-    status: t.status,
-    priority: t.priority,
-    applicationLabel: appLabel.get(t.application_id)?.name ?? "Application",
-  }));
-
-  const applicationOptions = (applications ?? []).map((a) => ({
-    id: a.id,
-    label: (one(a.university as never) as { name?: string } | null)?.name ?? "University",
-  }));
 
   // ---- Documentation trackers, grouped by country (one card per country the
   // student has an application in, keyed to that country's first application
@@ -183,26 +113,103 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     (appsByCountry.get(code) ?? appsByCountry.set(code, []).get(code)!).push({ id: a.id, name: uni?.name ?? "University" });
   }
 
-  const trackerDefsByCountry = await listTrackerDefinitions(Array.from(primaryAppByCountry.keys()));
+  // ---- Level 2: each of these depends only on level-1 results, and is
+  // independent of every other level-2 query — fetch concurrently again. ----
+  const [
+    agreementLinkEntries,
+    { data: allLineItems },
+    invoicePdfEntries,
+    { data: installments },
+    docsWithUrls,
+    { data: rawTasks },
+    trackerDefsByCountry,
+  ] = await Promise.all([
+    Promise.all(
+      (agreements ?? []).map(async (a) => {
+        const links: { templateUrl?: string; signedUrl?: string } = {};
+        const tmpl = one(a.template as never) as { file_path?: string } | null;
+        if (tmpl?.file_path) {
+          const { data } = await supabase.storage.from("documents").createSignedUrl(tmpl.file_path, 3600);
+          if (data?.signedUrl) links.templateUrl = data.signedUrl;
+        }
+        if (a.signed_file_path) {
+          const { data } = await supabase.storage.from("documents").createSignedUrl(a.signed_file_path, 3600);
+          if (data?.signedUrl) links.signedUrl = data.signedUrl;
+        }
+        return [a.id, links] as const;
+      })
+    ),
+    invoiceIds.length
+      ? supabase.from("invoice_line_items").select("id, invoice_id, name, amount").in("invoice_id", invoiceIds)
+      : Promise.resolve({ data: [] }),
+    Promise.all(
+      (invoices ?? [])
+        .filter((i) => i.pdf_path)
+        .map(async (i) => {
+          const { data } = await supabase.storage.from("documents").createSignedUrl(i.pdf_path!, 3600);
+          return [i.id, data?.signedUrl] as const;
+        })
+    ),
+    invoiceIds.length ? supabase.from("invoice_installments").select("*").in("invoice_id", invoiceIds) : Promise.resolve({ data: [] }),
+    Promise.all(
+      (rawDocs ?? []).map(async (d) => {
+        const templateName = one(d.template as never) as { name?: string } | null;
+        const uni = d.application_id ? appLabel.get(d.application_id) : null;
+        const name = `${d.custom_name ?? templateName?.name ?? d.category ?? "Document"}${uni?.name ? ` — ${uni.name}` : " — Student-level"}`;
+        if (!d.file_path) return { ...d, name };
+        const { data } = await supabase.storage.from("documents").createSignedUrl(d.file_path, 3600);
+        return { ...d, name, fileUrl: data?.signedUrl ?? null };
+      })
+    ),
+    appIds.length
+      ? supabase
+          .from("application_tasks")
+          .select("id, description, due_date, status, priority, application_id")
+          .in("application_id", appIds)
+          .order("due_date", { ascending: true })
+      : Promise.resolve({ data: [] }),
+    listTrackerDefinitions(Array.from(primaryAppByCountry.keys())),
+  ]);
 
+  const agreementLinks = new Map(agreementLinkEntries);
+  const invoicePdfUrls = new Map(invoicePdfEntries.filter((e): e is readonly [string, string] => Boolean(e[1])));
+
+  const taskRows: DashboardTaskRow[] = (rawTasks ?? []).map((t) => ({
+    id: t.id,
+    description: t.description,
+    due_date: t.due_date,
+    status: t.status,
+    priority: t.priority,
+    applicationLabel: appLabel.get(t.application_id)?.name ?? "Application",
+  }));
+
+  const applicationOptions = (applications ?? []).map((a) => ({
+    id: a.id,
+    label: (one(a.university as never) as { name?: string } | null)?.name ?? "University",
+  }));
+
+  // ---- Level 3: per-country tracker sections — each country's fields fetch
+  // in parallel, one level below trackerDefsByCountry (level 2). ----
   const trackerSections = await Promise.all(
     Array.from(primaryAppByCountry.values())
       .filter((entry) => (trackerDefsByCountry[entry.countryCode]?.length ?? 0) > 0)
       .map(async (entry) => {
-        const { data: extras } = await supabase
-          .from("application_country_extra")
-          .select("field_key, field_value")
-          .eq("application_id", entry.id);
+        const needsScholarshipBodies = entry.countryCode === "IT";
+        const [{ data: extras }, bodiesResult] = await Promise.all([
+          supabase.from("application_country_extra").select("field_key, field_value").eq("application_id", entry.id),
+          needsScholarshipBodies
+            ? supabase.from("scholarship_bodies").select("region, covers")
+            : Promise.resolve({ data: null as { region: string; covers: string[] | null }[] | null }),
+        ]);
         const values: Record<string, string> = {};
         (extras ?? []).forEach((e) => (values[e.field_key] = e.field_value ?? ""));
 
         const universityOptions = (appsByCountry.get(entry.countryCode) ?? []).map((a) => ({ value: a.id, label: a.name }));
         const regionByUniversityValue: Record<string, string> = {};
 
-        if (entry.countryCode === "IT") {
-          const { data: bodies } = await supabase.from("scholarship_bodies").select("region, covers");
+        if (needsScholarshipBodies) {
           for (const a of appsByCountry.get(entry.countryCode) ?? []) {
-            const match = (bodies ?? []).find((b) => (b.covers ?? []).includes(a.name));
+            const match = (bodiesResult.data ?? []).find((b) => (b.covers ?? []).includes(a.name));
             if (match?.region) regionByUniversityValue[a.id] = match.region;
           }
         }
@@ -210,8 +217,6 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         return { entry, values, fields: trackerDefsByCountry[entry.countryCode] ?? [], universityOptions, regionByUniversityValue };
       })
   );
-
-  const existingCredentialTypes = await listCredentialTypesAction("student", id);
 
   return (
     <div>

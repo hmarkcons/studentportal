@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { sanitizeFilename, validateDocumentFile } from "@/lib/documentUpload";
 
 export async function uploadDocument(
   documentId: string,
@@ -16,8 +17,10 @@ export async function uploadDocument(
   if (!file || file.size === 0) {
     return { error: "Choose a file to upload." };
   }
+  const validationError = validateDocumentFile(file);
+  if (validationError) return { error: validationError };
 
-  const path = `${studentId}/${documentId}-${file.name}`;
+  const path = `${studentId}/${documentId}-${sanitizeFilename(file.name)}`;
   const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: true });
   if (uploadError) return { error: uploadError.message };
 
@@ -44,17 +47,35 @@ export async function reviewDocument(documentId: string, revalidateTo: string, s
     data: { user },
   } = await supabase.auth.getUser();
 
-  await supabase
+  const trimmedReason = reason?.trim() || null;
+  const { error } = await supabase
     .from("student_documents")
     .update({
       status,
       verified_by: user?.id,
       verified_at: new Date().toISOString(),
-      rejected_reason: status === "rejected" ? reason ?? null : null,
+      rejected_reason: status === "rejected" ? trimmedReason : null,
     })
     .eq("id", documentId);
 
   revalidatePath(revalidateTo);
+  if (error) return { error: error.message };
+  return { success: true };
+}
+
+export async function deleteDocumentRequirement(documentId: string, revalidateTo: string) {
+  const supabase = await createClient();
+
+  const { data: doc } = await supabase.from("student_documents").select("file_path").eq("id", documentId).maybeSingle();
+  if (doc?.file_path) {
+    await supabase.storage.from("documents").remove([doc.file_path]);
+  }
+
+  const { error } = await supabase.from("student_documents").delete().eq("id", documentId);
+  if (error) return { error: error.message };
+
+  revalidatePath(revalidateTo);
+  return { success: true };
 }
 
 export async function addDocumentRequirement(

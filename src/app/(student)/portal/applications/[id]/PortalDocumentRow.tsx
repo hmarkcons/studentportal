@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { studentUploadDocument } from "@/lib/actions/portal-documents";
 import { Badge } from "@/components/ui/Badge";
 import { DOCUMENT_STATUS_TONE } from "@/lib/constants";
+import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
 
 export function PortalDocumentRow({
   doc,
@@ -42,7 +43,7 @@ export function PortalDocumentRow({
       </div>
       {doc.status !== "verified" && (
         <form action={formAction} className="flex items-center gap-2">
-          <input type="file" name="file" capture="environment" className="text-xs" />
+          <input type="file" name="file" accept={ACCEPTED_DOCUMENT_ACCEPT} capture="environment" className="text-xs" />
           <button type="submit" disabled={pending} className="rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary disabled:opacity-50">
             Upload
           </button>

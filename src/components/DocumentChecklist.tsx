@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import { uploadDocument, reviewDocument, addDocumentRequirement } from "@/lib/actions/documents";
+import { useActionState, useState, useTransition } from "react";
+import { uploadDocument, reviewDocument, addDocumentRequirement, deleteDocumentRequirement } from "@/lib/actions/documents";
 import { Badge } from "@/components/ui/Badge";
 import { DOCUMENT_STATUS_TONE } from "@/lib/constants";
+import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
 
 export type DocRow = {
   id: string;
@@ -20,6 +21,29 @@ function UploadRow({ doc, studentId, revalidateTo }: { doc: DocRow; studentId: s
   const action = uploadDocument.bind(null, doc.id, studentId, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
   const [reason, setReason] = useState("");
+  const [showReplace, setShowReplace] = useState(false);
+  const [reviewPending, startReview] = useTransition();
+  const [reviewError, setReviewError] = useState<string | null>(null);
+
+  const isVerified = doc.status === "verified";
+  const showUploadForm = !isVerified || showReplace;
+
+  function review(status: "verified" | "rejected") {
+    setReviewError(null);
+    startReview(async () => {
+      const result = await reviewDocument(doc.id, revalidateTo, status, status === "rejected" ? reason : undefined);
+      if (result?.error) setReviewError(result.error);
+      else if (status === "rejected") setReason("");
+    });
+  }
+
+  function remove() {
+    if (!confirm(`Remove "${doc.name ?? doc.category ?? "this document"}" from the checklist?`)) return;
+    startReview(async () => {
+      const result = await deleteDocumentRequirement(doc.id, revalidateTo);
+      if (result?.error) setReviewError(result.error);
+    });
+  }
 
   return (
     <div className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -39,18 +63,37 @@ function UploadRow({ doc, studentId, revalidateTo }: { doc: DocRow; studentId: s
         )}
       </div>
 
-      <form action={formAction} className="flex items-center gap-2">
-        <input type="file" name="file" className="text-xs" />
-        <button type="submit" disabled={pending} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-bg disabled:opacity-50">
-          Upload
+      {showUploadForm ? (
+        <form action={formAction} className="flex items-center gap-2">
+          <input type="file" name="file" accept={ACCEPTED_DOCUMENT_ACCEPT} className="text-xs" />
+          <button type="submit" disabled={pending} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-bg disabled:opacity-50">
+            Upload
+          </button>
+          {isVerified && (
+            <button
+              type="button"
+              onClick={() => setShowReplace(false)}
+              className="text-xs text-muted hover:underline"
+            >
+              Cancel
+            </button>
+          )}
+        </form>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setShowReplace(true)}
+          className="rounded-md border border-border px-2 py-1 text-xs text-muted hover:bg-bg"
+        >
+          Replace document
         </button>
-      </form>
+      )}
 
       <div className="flex items-center gap-1">
         <button
           type="button"
-          onClick={() => reviewDocument(doc.id, revalidateTo, "verified")}
-          disabled={!doc.file_path}
+          onClick={() => review("verified")}
+          disabled={!doc.file_path || reviewPending}
           className="rounded-md border border-success px-2 py-1 text-xs text-success disabled:opacity-40"
         >
           Accept
@@ -63,14 +106,24 @@ function UploadRow({ doc, studentId, revalidateTo }: { doc: DocRow; studentId: s
         />
         <button
           type="button"
-          onClick={() => reviewDocument(doc.id, revalidateTo, "rejected", reason)}
-          disabled={!doc.file_path}
+          onClick={() => review("rejected")}
+          disabled={!doc.file_path || reviewPending}
           className="rounded-md border border-danger px-2 py-1 text-xs text-danger disabled:opacity-40"
         >
           Reject
         </button>
+        <button
+          type="button"
+          onClick={remove}
+          disabled={reviewPending}
+          className="rounded-md border border-border px-2 py-1 text-xs text-muted hover:bg-bg disabled:opacity-40"
+          title="Remove this document from the checklist"
+        >
+          🗑️
+        </button>
       </div>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
+      {reviewError && <p className="text-xs text-danger">{reviewError}</p>}
     </div>
   );
 }

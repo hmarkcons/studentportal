@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getStudentUser } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { BoardingPassTracker } from "@/components/ui/BoardingPassTracker";
 import { PortalDocumentRow } from "./PortalDocumentRow";
@@ -11,11 +11,7 @@ function one<T>(v: T | T[] | null) {
 
 export default async function PortalApplicationPage(props: PageProps<"/portal/applications/[id]">) {
   const { id } = await props.params;
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, userId } = await getStudentUser();
 
   const { data: app, error } = await supabase
     .from("applications")
@@ -25,7 +21,7 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
     .eq("id", id)
     .maybeSingle();
 
-  if (error || !app || one(app.student)?.auth_user_id !== user?.id) notFound();
+  if (error || !app || one(app.student)?.auth_user_id !== userId) notFound();
 
   const university = one(app.university);
   const destination = university ? one(university.destination as never) : null;
