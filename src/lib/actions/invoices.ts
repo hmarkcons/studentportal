@@ -62,6 +62,85 @@ export async function generateInvoice(studentId: string, agreementId: string, _p
   return { success: true };
 }
 
+async function requireFinance(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  return staffRow?.role === "finance" || staffRow?.role === "super_admin";
+}
+
+async function requireSuperAdmin(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  return staffRow?.role === "super_admin";
+}
+
+export async function updateInvoice(invoiceId: string, studentId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
+  const supabase = await createClient();
+  if (!(await requireFinance(supabase))) return { error: "Only Finance/Super Admin can edit invoices." };
+
+  const admin_charge = Number(formData.get("admin_charge") ?? 0);
+  const consultancy_fee = Number(formData.get("consultancy_fee") ?? 0);
+  const currency = String(formData.get("currency") ?? "EUR");
+  const intake = String(formData.get("intake") ?? "").trim() || null;
+  const terms = String(formData.get("terms") ?? "").trim() || DEFAULT_TERMS;
+  const invoice_number = String(formData.get("invoice_number") ?? "").trim() || null;
+
+  const { error } = await supabase
+    .from("invoices")
+    .update({ admin_charge, consultancy_fee, currency, intake, terms, invoice_number })
+    .eq("id", invoiceId);
+  if (error) return { error: error.message };
+
+  revalidatePath(revalidateTo);
+  return { success: true };
+}
+
+export async function deleteInvoice(invoiceId: string, studentId: string, revalidateTo: string) {
+  const supabase = await createClient();
+  if (!(await requireSuperAdmin(supabase))) return { error: "Only Super Admin can delete invoices." };
+
+  const { data: invoice } = await supabase.from("invoices").select("pdf_path").eq("id", invoiceId).maybeSingle();
+
+  const { error: instError } = await supabase.from("invoice_installments").delete().eq("invoice_id", invoiceId);
+  if (instError) return { error: instError.message };
+
+  await supabase.from("receipts").delete().eq("invoice_id", invoiceId);
+
+  const { error } = await supabase.from("invoices").delete().eq("id", invoiceId);
+  if (error) return { error: error.message };
+
+  if (invoice?.pdf_path) {
+    await supabase.storage.from("documents").remove([invoice.pdf_path]);
+  }
+
+  revalidatePath(revalidateTo);
+  return { success: true };
+}
+
+export async function updateInstallment(installmentId: string, studentId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
+  const supabase = await createClient();
+  if (!(await requireFinance(supabase))) return { error: "Only Finance/Super Admin can edit installments." };
+
+  const amount = Number(formData.get("amount") ?? 0);
+  const due_date = String(formData.get("due_date") ?? "") || null;
+  const status = String(formData.get("status") ?? "unpaid");
+  const payment_method = String(formData.get("payment_method") ?? "").trim() || null;
+  const paid_date = String(formData.get("paid_date") ?? "") || null;
+
+  const { error } = await supabase
+    .from("invoice_installments")
+    .update({ amount, due_date, status, payment_method, paid_date: status === "paid" ? paid_date ?? new Date().toISOString().slice(0, 10) : paid_date })
+    .eq("id", installmentId);
+  if (error) return { error: error.message };
+
+  revalidatePath(revalidateTo);
+  return { success: true };
+}
+
 export async function markInstallmentPaid(installmentId: string, studentId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
   const paid_date = String(formData.get("paid_date") ?? new Date().toISOString().slice(0, 10));
@@ -93,9 +172,14 @@ export async function sendReceipt(invoiceId: string, studentId: string) {
   revalidatePath(`/students/${studentId}`);
 }
 
-export async function generateInvoicePdf(invoiceId: string, studentId: string, revalidateTo: string) {
-  const supabase = await createClient();
-
+// Shared by the interactive (staff-triggered) generateInvoicePdf below and
+// the cron-triggered overdue-reminder path, which has no staff session and
+// must pass in an admin (service-role) client instead.
+export async function buildAndStoreInvoicePdf(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  invoiceId: string,
+  studentId: string
+) {
   const { data: invoice, error: invoiceError } = await supabase
     .from("invoices")
     .select(
@@ -195,6 +279,14 @@ export async function generateInvoicePdf(invoiceId: string, studentId: string, r
     .update({ pdf_path: path, invoice_number: invoiceNumber })
     .eq("id", invoiceId);
   if (updateError) return { error: updateError.message };
+
+  return { success: true, pdfPath: path, invoiceNumber };
+}
+
+export async function generateInvoicePdf(invoiceId: string, studentId: string, revalidateTo: string) {
+  const supabase = await createClient();
+  const result = await buildAndStoreInvoicePdf(supabase, invoiceId, studentId);
+  if ("error" in result) return { error: result.error };
 
   revalidatePath(revalidateTo);
   return { success: true };

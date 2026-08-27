@@ -21,7 +21,7 @@ async function requireFinance(supabase: Awaited<ReturnType<typeof createClient>>
 
 export async function createStaffCommission(revalidateTo: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  if (!(await requireSuperAdmin(supabase))) return { error: "Only Super Admin can add commission records." };
+  if (!(await requireFinance(supabase))) return { error: "Only Finance/Super Admin can add commission records." };
 
   const staff_id = String(formData.get("staff_id") ?? "");
   const student_id = String(formData.get("student_id") ?? "");
@@ -40,7 +40,7 @@ export async function createStaffCommission(revalidateTo: string, _prevState: un
 
 export async function deleteStaffCommission(id: string, revalidateTo: string) {
   const supabase = await createClient();
-  if (!(await requireSuperAdmin(supabase))) return { error: "Only Super Admin can delete commission records." };
+  if (!(await requireFinance(supabase))) return { error: "Only Finance/Super Admin can delete commission records." };
 
   const { error } = await supabase.from("staff_commissions").delete().eq("id", id);
   if (error) return { error: error.message };
@@ -169,13 +169,14 @@ export async function updateStaffCommission(id: string, revalidateTo: string, _p
   const currency = String(formData.get("currency") ?? "").trim();
   const registration_date = String(formData.get("registration_date") ?? "") || null;
   const status = String(formData.get("status") ?? "");
+  const payment_method = String(formData.get("payment_method") ?? "").trim() || null;
 
   if (!amount || !currency) return { error: "Amount and currency are required." };
   if (!["unpaid", "paid"].includes(status)) return { error: "Choose a valid status." };
 
   const { error } = await supabase
     .from("staff_commissions")
-    .update({ amount, currency, registration_date, status })
+    .update({ amount, currency, registration_date, status, payment_method })
     .eq("id", id);
   if (error) return { error: error.message };
 

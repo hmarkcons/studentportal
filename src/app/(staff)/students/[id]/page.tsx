@@ -84,8 +84,17 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
 
   const { data: invoices } = await supabase
     .from("invoices")
-    .select("id, admin_charge, consultancy_fee, currency, sent_status, agreement_id, pdf_path")
+    .select(
+      "id, admin_charge, consultancy_fee, currency, sent_status, agreement_id, pdf_path, invoice_number, intake, terms, admin_fee_status, admin_fee_paid_date, admin_fee_payment_method"
+    )
     .eq("student_id", id);
+
+  const { data: feeProducts } = await supabase.from("fee_products").select("id, name, default_amount, default_currency").order("name");
+
+  const invoiceIdsForLineItems = (invoices ?? []).map((i) => i.id);
+  const { data: allLineItems } = invoiceIdsForLineItems.length
+    ? await supabase.from("invoice_line_items").select("id, invoice_id, name, amount").in("invoice_id", invoiceIdsForLineItems)
+    : { data: [] };
 
   const invoicePdfUrls = new Map<string, string>();
   await Promise.all(
@@ -284,6 +293,8 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                 key={inv.id}
                 invoice={inv}
                 installments={(installments ?? []).filter((i) => i.invoice_id === inv.id)}
+                lineItems={(allLineItems ?? []).filter((li) => li.invoice_id === inv.id)}
+                feeProducts={feeProducts ?? []}
                 studentId={id}
                 pdfUrl={invoicePdfUrls.get(inv.id)}
                 revalidateTo={`/students/${id}`}
