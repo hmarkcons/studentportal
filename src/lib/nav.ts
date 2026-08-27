@@ -14,6 +14,7 @@ export const STAFF_NAV: NavItem[] = [
       { label: "Universities", href: "/setup/universities" },
       { label: "Scholarship bodies", href: "/setup/scholarship-bodies" },
       { label: "Agreement templates", href: "/setup/agreement-templates" },
+      { label: "Agreement generator", href: "/setup/agreement-generator" },
     ],
   },
   {

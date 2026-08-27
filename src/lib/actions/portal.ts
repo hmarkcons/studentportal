@@ -56,7 +56,14 @@ export async function inviteStudentToPortal(studentId: string, _prevState: unkno
     return { error: linkError.message };
   }
 
-  revalidatePath(`/students/${studentId}`);
+  await supabase.rpc("store_credential", {
+    p_owner_type: "student",
+    p_owner_id: studentId,
+    p_credential_type: "portal_login",
+    p_plaintext: JSON.stringify({ username: student.email, password }),
+  });
+
+  revalidatePath(`/students/${studentId}`, "layout");
   return { success: true, email: student.email, password };
 }
 
@@ -65,7 +72,7 @@ export async function resetStudentPortalPassword(studentId: string, _prevState: 
 
   const { data: student, error } = await supabase
     .from("students")
-    .select("id, auth_user_id")
+    .select("id, email, auth_user_id")
     .eq("id", studentId)
     .maybeSingle();
 
@@ -81,6 +88,13 @@ export async function resetStudentPortalPassword(studentId: string, _prevState: 
     return { error: updateError.message };
   }
 
-  revalidatePath(`/students/${studentId}`);
+  await supabase.rpc("store_credential", {
+    p_owner_type: "student",
+    p_owner_id: studentId,
+    p_credential_type: "portal_login",
+    p_plaintext: JSON.stringify({ username: student.email ?? "", password }),
+  });
+
+  revalidatePath(`/students/${studentId}`, "layout");
   return { success: true, password };
 }

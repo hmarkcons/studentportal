@@ -2,7 +2,6 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { MessageThread, type MessageRow } from "@/components/MessageThread";
 import { DocumentChecklist, type DocRow } from "@/components/DocumentChecklist";
 import { CountryTrackerForm } from "@/components/CountryTrackerForm";
 import { COUNTRY_TRACKER_FIELDS } from "@/lib/countryTrackers";
@@ -13,6 +12,7 @@ import { GenerateInvoiceForm, InvoiceCard } from "./InvoicePanel";
 import { PortalCredentialsSection } from "./PortalCredentialsSection";
 import { DashboardTaskList, type DashboardTaskRow } from "./DashboardTaskList";
 import { listCredentialTypesAction } from "@/lib/actions/countryTracker";
+import { LeadEditForm } from "@/components/LeadEditForm";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -30,7 +30,13 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   const isSuperAdmin = role === "super_admin";
   const canModifyAgreement = role === "super_admin" || role === "processing";
 
-  const { data: student } = await supabase.from("students").select("auth_user_id").eq("id", id).maybeSingle();
+  const { data: student } = await supabase
+    .from("students")
+    .select(
+      "auth_user_id, full_name, contact_number, email, platform_source, current_qualification, level_applying_for, course_of_interest, date_of_birth, address, home_phone"
+    )
+    .eq("id", id)
+    .maybeSingle();
 
   const { data: profile } = await supabase.from("student_profiles").select("*").eq("student_id", id).maybeSingle();
 
@@ -66,16 +72,6 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     )
     .eq("student_id", id)
     .order("created_at", { ascending: true });
-
-  const { data: messages } = await supabase
-    .from("messages")
-    .select("id, body, channel, direction, sent_at, sent_by:staff(full_name)")
-    .eq("entity_type", "student")
-    .eq("entity_id", id)
-    .order("sent_at", { ascending: true })
-    .returns<MessageRow[]>();
-
-  const { data: messageTemplates } = await supabase.from("message_templates").select("id, purpose, channel, body").order("purpose");
 
   // ---- Consolidated documents (student-level + every application) ----
   const appIds = (applications ?? []).map((a) => a.id);
@@ -180,7 +176,10 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     <div>
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <Card>
-          <h3 className="mb-3 text-sm font-medium text-ink">Profile</h3>
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-medium text-ink">Profile</h3>
+            {student && <LeadEditForm lead={{ id, ...student }} revalidateTo={`/students/${id}`} showRegistrationFields />}
+          </div>
           <StudentProfileForm studentId={id} profile={profile} />
         </Card>
 
@@ -189,26 +188,6 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
           <PortalAccessPanel studentId={id} enabled={Boolean(student?.auth_user_id)} />
         </Card>
       </div>
-
-      <Card className="mt-6">
-        <h3 className="mb-3 text-sm font-medium text-ink">Pipeline stages</h3>
-        {(applications ?? []).length === 0 ? (
-          <p className="text-sm text-muted">No applications yet.</p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {(applications ?? []).map((a) => (
-              <Link
-                key={a.id}
-                href={`/students/${id}/applications/${a.id}`}
-                className="flex items-center gap-2 rounded-full border border-border px-3 py-1 text-xs hover:border-primary"
-              >
-                {(one(a.university as never) as { name?: string } | null)?.name ?? "University"}
-                <Badge tone="info">{a.current_stage.replace(/_/g, " ")}</Badge>
-              </Link>
-            ))}
-          </div>
-        )}
-      </Card>
 
       <Card className="mt-6">
         <h3 className="mb-3 text-sm font-medium text-ink">Agreement</h3>
@@ -314,37 +293,6 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
           </div>
         )}
       </Card>
-
-      <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
-        <Card>
-          <h3 className="mb-3 text-sm font-medium text-ink">Message student</h3>
-          <p className="mb-3 text-xs text-muted">
-            Visible to the student in their portal. Real email/SMS/WhatsApp sending needs a gateway integration —
-            this sends as an in-app portal message for now.
-          </p>
-          <MessageThread
-            messages={(messages ?? []).filter((m) => m.channel !== "internal_note")}
-            entityType="student"
-            entityId={id}
-            channel="inapp"
-            revalidateTo={`/students/${id}`}
-            placeholder="Message to the student…"
-            templates={messageTemplates ?? []}
-          />
-        </Card>
-
-        <Card>
-          <h3 className="mb-3 text-sm font-medium text-ink">Internal notes</h3>
-          <p className="mb-3 text-xs text-muted">Staff-only — never visible to the student.</p>
-          <MessageThread
-            messages={(messages ?? []).filter((m) => m.channel === "internal_note")}
-            entityType="student"
-            entityId={id}
-            channel="internal_note"
-            revalidateTo={`/students/${id}`}
-          />
-        </Card>
-      </div>
     </div>
   );
 }

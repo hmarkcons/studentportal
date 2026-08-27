@@ -12,6 +12,7 @@ export function StudentTabs({ studentId, showScholarship }: { studentId: string;
     { label: "Documents", href: `/students/${studentId}/documents` },
     { label: "Visa", href: `/students/${studentId}/visa` },
     ...(showScholarship ? [{ label: "Scholarship", href: `/students/${studentId}/scholarship` }] : []),
+    { label: "Communication", href: `/students/${studentId}/communication` },
   ];
 
   return (

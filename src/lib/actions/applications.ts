@@ -14,7 +14,7 @@ export async function createApplication(studentId: string, _prevState: unknown, 
 
   if (!university_id) return { error: "Choose a university." };
 
-  const { data: university } = await supabase.from("universities").select("status").eq("id", university_id).maybeSingle();
+  const { data: university } = await supabase.from("universities").select("status, destination_id").eq("id", university_id).maybeSingle();
   if (!university || university.status !== "active") {
     return { error: "This university is inactive — applications can't be added for it." };
   }
@@ -30,7 +30,36 @@ export async function createApplication(studentId: string, _prevState: unknown, 
   const { data, error } = await supabase.from("applications").insert(rows).select("id");
   if (error) return { error: error.message };
 
+  // Auto-provision the standard document checklist so staff see "missing"
+  // rows immediately instead of an empty Documents section.
+  const { data: templates } = await supabase
+    .from("document_templates")
+    .select("id, category")
+    .or(`destination_id.is.null,destination_id.eq.${university.destination_id}`);
+
+  if (templates && templates.length > 0) {
+    const docRows = data.flatMap((app) =>
+      templates.map((t) => ({
+        student_id: studentId,
+        application_id: app.id,
+        template_id: t.id,
+        category: t.category,
+        status: "missing" as const,
+      }))
+    );
+    await supabase.from("student_documents").insert(docRows);
+  }
+
   redirect(`/students/${studentId}/applications/${data[0].id}`);
+}
+
+export async function deleteApplication(applicationId: string, revalidateTo: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("applications").delete().eq("id", applicationId);
+  if (error) return { error: error.message };
+
+  revalidatePath(revalidateTo);
+  return { success: true };
 }
 
 export async function updateApplicationDetails(applicationId: string, studentId: string, _prevState: unknown, formData: FormData) {

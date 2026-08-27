@@ -49,6 +49,44 @@ export async function createLead(_prevState: unknown, formData: FormData) {
   redirect(`/leads/${data.id}`);
 }
 
+export async function updateLead(leadId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
+  const supabase = await createClient();
+
+  const full_name = String(formData.get("full_name") ?? "").trim();
+  if (!full_name) return { error: "Name is required." };
+
+  const contact_number = String(formData.get("contact_number") ?? "").trim() || null;
+  const email = String(formData.get("email") ?? "").trim() || null;
+  const platform_source = String(formData.get("platform_source") ?? "").trim() || null;
+  const current_qualification = String(formData.get("current_qualification") ?? "").trim() || null;
+  const level_applying_for = String(formData.get("level_applying_for") ?? "") || null;
+  const course_of_interest = String(formData.get("course_of_interest") ?? "").trim() || null;
+  const date_of_birth = String(formData.get("date_of_birth") ?? "") || null;
+  const address = String(formData.get("address") ?? "").trim() || null;
+  const home_phone = String(formData.get("home_phone") ?? "").trim() || null;
+
+  const { error } = await supabase
+    .from("leads")
+    .update({
+      full_name,
+      contact_number,
+      email,
+      platform_source,
+      current_qualification,
+      level_applying_for,
+      course_of_interest,
+      date_of_birth,
+      address,
+      home_phone,
+    })
+    .eq("id", leadId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(revalidateTo);
+  return { success: true };
+}
+
 export async function updateLeadDestinations(leadId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
   const destination_ids = formData.getAll("destination_ids").map(String).filter(Boolean);

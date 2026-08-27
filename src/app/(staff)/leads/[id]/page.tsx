@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { LEAD_STATUS_LABELS, LEAD_STATUS_TONE } from "@/lib/constants";
 import { CallLogForm } from "./CallLogForm";
 import { registerLead } from "@/lib/actions/leads";
+import { LeadEditForm } from "@/components/LeadEditForm";
 
 type CallLog = { id: string; status_at_time: string; remark: string; created_at: string; counselor: { full_name: string } | { full_name: string }[] | null };
 
@@ -90,7 +91,10 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <Card>
-          <h3 className="mb-3 text-sm font-medium text-ink">Details</h3>
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-medium text-ink">Details</h3>
+            <LeadEditForm lead={lead} revalidateTo={`/leads/${id}`} />
+          </div>
           <dl className="flex flex-col gap-2 text-sm">
             <div className="flex justify-between">
               <dt className="text-muted">Platform</dt>
