@@ -4,14 +4,51 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+function staffFieldsFromFormData(formData: FormData) {
+  return {
+    full_name: String(formData.get("full_name") ?? "").trim(),
+    role: String(formData.get("role") ?? ""),
+    designation: String(formData.get("designation") ?? "").trim() || null,
+    status: String(formData.get("status") ?? "active") === "inactive" ? "deactivated" : "active",
+    gender: String(formData.get("gender") ?? "").trim() || null,
+    date_of_birth: String(formData.get("date_of_birth") ?? "") || null,
+    marital_status: String(formData.get("marital_status") ?? "").trim() || null,
+    cnic: String(formData.get("cnic") ?? "").trim() || null,
+    address: String(formData.get("address") ?? "").trim() || null,
+    mobile_personal: String(formData.get("mobile_personal") ?? "").trim() || null,
+    mobile_official: String(formData.get("mobile_official") ?? "").trim() || null,
+    email_personal: String(formData.get("email_personal") ?? "").trim() || null,
+    email_official: String(formData.get("email_official") ?? "").trim() || null,
+    emergency_contact_number: String(formData.get("emergency_contact_number") ?? "").trim() || null,
+    emergency_contact_name: String(formData.get("emergency_contact_name") ?? "").trim() || null,
+    emergency_contact_relation: String(formData.get("emergency_contact_relation") ?? "").trim() || null,
+    monthly_salary: formData.get("monthly_salary") ? Number(formData.get("monthly_salary")) : null,
+    currency: String(formData.get("currency") ?? "PKR"),
+    allowance: formData.get("allowance") ? Number(formData.get("allowance")) : null,
+    commission_rate_general: formData.get("commission_rate_general") ? Number(formData.get("commission_rate_general")) : null,
+    commission_rate_public_universities: formData.get("commission_rate_public_universities")
+      ? Number(formData.get("commission_rate_public_universities"))
+      : null,
+    monthly_target: formData.get("monthly_target") ? Number(formData.get("monthly_target")) : null,
+  };
+}
+
+async function requireSuperAdmin(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  return staffRow?.role === "super_admin";
+}
+
 export async function createStaffAccount(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
+  if (!(await requireSuperAdmin(supabase))) return { error: "Only Super Admin can add staff." };
 
-  const email = String(formData.get("email") ?? "").trim();
-  const full_name = String(formData.get("full_name") ?? "").trim();
-  const role = String(formData.get("role") ?? "");
+  const email = String(formData.get("email_official") ?? "").trim();
+  const fields = staffFieldsFromFormData(formData);
 
-  if (!email || !full_name || !role) return { error: "All fields are required." };
+  if (!email || !fields.full_name || !fields.role) return { error: "Email (official), name, and role are required." };
 
   const admin = createAdminClient();
   const tempPassword = Math.random().toString(36).slice(2) + "A1!";
@@ -23,11 +60,45 @@ export async function createStaffAccount(_prevState: unknown, formData: FormData
 
   if (createError || !created.user) return { error: createError?.message ?? "Could not create the account." };
 
-  const { error } = await supabase.from("staff").insert({ id: created.user.id, full_name, role });
+  const { error } = await supabase.from("staff").insert({ id: created.user.id, ...fields });
   if (error) return { error: error.message };
 
   revalidatePath("/admin/staff");
   return { success: true, email, password: tempPassword };
+}
+
+export async function updateStaffDetails(staffId: string, _prevState: unknown, formData: FormData) {
+  const supabase = await createClient();
+  if (!(await requireSuperAdmin(supabase))) return { error: "Only Super Admin can edit staff." };
+
+  const fields = staffFieldsFromFormData(formData);
+  if (!fields.full_name || !fields.role) return { error: "Name and role are required." };
+
+  const { error } = await supabase.from("staff").update(fields).eq("id", staffId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/admin/staff");
+  return { success: true };
+}
+
+export async function deleteStaffAccount(staffId: string) {
+  const supabase = await createClient();
+  if (!(await requireSuperAdmin(supabase))) return { error: "Only Super Admin can delete staff." };
+
+  const { error } = await supabase.from("staff").delete().eq("id", staffId);
+  if (error) {
+    return {
+      error: error.message.includes("foreign key")
+        ? "Can't delete — this staff member has historical records (leads, commissions, agreements, etc.). Set them to Inactive instead."
+        : error.message,
+    };
+  }
+
+  const admin = createAdminClient();
+  await admin.auth.admin.deleteUser(staffId).catch(() => {});
+
+  revalidatePath("/admin/staff");
+  return { success: true };
 }
 
 export async function updateStaffStatus(staffId: string, status: string) {

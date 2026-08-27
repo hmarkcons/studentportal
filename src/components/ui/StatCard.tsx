@@ -3,11 +3,13 @@ export function StatCard({
   value,
   trend,
   tone = "default",
+  icon,
 }: {
   label: string;
   value: string | number;
   trend?: { direction: "up" | "down"; label: string };
   tone?: "default" | "success" | "warning" | "danger";
+  icon?: string;
 }) {
   const valueColor =
     tone === "success"
@@ -20,7 +22,10 @@ export function StatCard({
 
   return (
     <div className="rounded-lg border border-border bg-card p-4">
-      <p className="text-xs uppercase tracking-wide text-muted">{label}</p>
+      <div className="flex items-center justify-between">
+        <p className="text-xs uppercase tracking-wide text-muted">{label}</p>
+        {icon && <span className="text-lg">{icon}</span>}
+      </div>
       <p className={`mt-1 text-2xl font-semibold ${valueColor}`}>{value}</p>
       {trend && (
         <p className={`mt-1 text-xs ${trend.direction === "up" ? "text-success" : "text-danger"}`}>

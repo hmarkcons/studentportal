@@ -72,3 +72,26 @@ export const DOCUMENT_STATUS_TONE: Record<string, "success" | "warning" | "dange
 };
 
 export const MANUAL_APPLICATION_STATUSES = ["rejected", "declined", "withdrawn"] as const;
+
+export const STAFF_DESIGNATIONS = [
+  "Counselor",
+  "Senior Counselor",
+  "Team Lead",
+  "Branch Manager",
+  "Processing Officer",
+  "Documentation Officer",
+  "Finance Officer",
+  "Marketing Executive",
+  "Digital Marketing Executive",
+  "HR Officer",
+  "Management",
+  "Super Admin",
+] as const;
+
+export const GENDERS = ["Male", "Female", "Other"] as const;
+
+export const MARITAL_STATUSES = ["Single", "Married", "Divorced", "Widowed"] as const;
+
+export const STAFF_CURRENCIES = ["PKR", "USD", "EUR"] as const;
+
+export const CURRENCY_SYMBOLS: Record<string, string> = { PKR: "₨", USD: "$", EUR: "€" };

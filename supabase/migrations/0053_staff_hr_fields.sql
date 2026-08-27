@@ -1,0 +1,20 @@
+-- Staff Management HR redesign: personal/contact/compensation details.
+alter table staff
+  add column if not exists gender text,
+  add column if not exists date_of_birth date,
+  add column if not exists marital_status text,
+  add column if not exists cnic text,
+  add column if not exists address text,
+  add column if not exists mobile_personal text,
+  add column if not exists mobile_official text,
+  add column if not exists email_personal text,
+  add column if not exists email_official text,
+  add column if not exists emergency_contact_number text,
+  add column if not exists emergency_contact_name text,
+  add column if not exists emergency_contact_relation text,
+  add column if not exists monthly_salary numeric(12, 2),
+  add column if not exists currency text not null default 'PKR',
+  add column if not exists allowance numeric(12, 2),
+  add column if not exists commission_rate_general numeric(5, 2),
+  add column if not exists commission_rate_public_universities numeric(5, 2),
+  add column if not exists monthly_target numeric(12, 2);

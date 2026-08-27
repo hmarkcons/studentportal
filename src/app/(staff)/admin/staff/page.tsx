@@ -1,10 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { STAFF_ROLE_LABELS } from "@/lib/constants";
-import { NewStaffForm } from "./NewStaffForm";
-import { StaffStatusSelect } from "./StaffStatusSelect";
+import { StatCard } from "@/components/ui/StatCard";
+import { AddStaffButton } from "./AddStaffButton";
+import { StaffTable } from "./StaffTable";
 import { PartnerApprovalButton } from "./PartnerApprovalButton";
+import type { StaffRecord } from "./StaffForm";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -13,32 +14,44 @@ function one<T>(v: T | T[] | null) {
 export default async function StaffAdminPage() {
   const supabase = await createClient();
 
-  const { data: staff } = await supabase.from("staff").select("id, full_name, role, status").order("full_name");
+  const { data: staff } = await supabase
+    .from("staff")
+    .select(
+      `id, full_name, role, designation, status, gender, date_of_birth, marital_status, cnic, address,
+       mobile_personal, mobile_official, email_personal, email_official,
+       emergency_contact_number, emergency_contact_name, emergency_contact_relation,
+       monthly_salary, currency, allowance, commission_rate_general, commission_rate_public_universities, monthly_target`
+    )
+    .order("full_name")
+    .returns<StaffRecord[]>();
+
   const { data: pendingPartners } = await supabase
     .from("partner_university_accounts")
     .select("id, staff_name, status, university:universities(name)")
     .eq("status", "pending");
 
+  const total = staff?.length ?? 0;
+  const active = (staff ?? []).filter((s) => s.status === "active").length;
+  const inactive = total - active;
+
   return (
     <div className="w-full">
-      <h2 className="mb-4 text-lg font-semibold text-ink">Staff Management</h2>
-      <Card className="mb-6">
-        <NewStaffForm />
-      </Card>
+      <div className="mb-1 flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-ink">Staff Management</h2>
+        <AddStaffButton />
+      </div>
+      <p className="mb-4 text-sm text-muted">Manage all staff members — add, edit, and track their details and commission rates.</p>
 
-      <div className="mb-6 flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
-        {(staff ?? []).map((s) => (
-          <div key={s.id} className="flex items-center justify-between px-4 py-3 text-sm">
-            <span className="text-ink">
-              {s.full_name} <span className="text-muted">· {STAFF_ROLE_LABELS[s.role as never] ?? s.role}</span>
-            </span>
-            <StaffStatusSelect id={s.id} status={s.status} />
-          </div>
-        ))}
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <StatCard label="Total Staff" value={total} icon="👥" />
+        <StatCard label="Active" value={active} tone="success" icon="✅" />
+        <StatCard label="Inactive" value={inactive} tone="warning" icon="⏸️" />
       </div>
 
+      <StaffTable staff={staff ?? []} />
+
       {pendingPartners && pendingPartners.length > 0 && (
-        <Card>
+        <Card className="mt-6">
           <h3 className="mb-3 text-sm font-medium text-ink">Pending partner university accounts</h3>
           <div className="flex flex-col divide-y divide-border">
             {pendingPartners.map((p) => (
