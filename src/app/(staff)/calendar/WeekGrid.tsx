@@ -1,6 +1,7 @@
 "use client";
 
 import { getWeekDays, parseYMD, toYMD, MONTH_LABELS, WEEKDAY_LABELS } from "@/lib/calendarDates";
+import { colorDotClass } from "./eventColors";
 import type { CalendarEvent, CalendarTone } from "./types";
 
 const DOT_CLASS: Record<CalendarTone, string> = {
@@ -11,6 +12,10 @@ const DOT_CLASS: Record<CalendarTone, string> = {
   primary: "bg-primary",
   neutral: "bg-muted",
 };
+
+function dotClassFor(e: CalendarEvent) {
+  return colorDotClass(e.color) ?? DOT_CLASS[e.tone];
+}
 
 export function WeekGrid({
   referenceDate,
@@ -59,7 +64,7 @@ export function WeekGrid({
             <div className="flex flex-col gap-1">
               {dayEvents.map((e) => (
                 <span key={e.id} className={`flex items-start gap-1 text-[11px] ${e.done ? "text-muted line-through" : "text-ink"}`}>
-                  <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${DOT_CLASS[e.tone]}`} />
+                  <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${dotClassFor(e)}`} />
                   <span>{e.time ? `${e.time} ` : ""}{e.label}</span>
                 </span>
               ))}

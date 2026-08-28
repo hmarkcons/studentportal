@@ -1,6 +1,7 @@
 "use client";
 
 import { getMonthGridDays, parseYMD, toYMD, WEEKDAY_LABELS } from "@/lib/calendarDates";
+import { colorDotClass } from "./eventColors";
 import type { CalendarEvent, CalendarTone } from "./types";
 
 const DOT_CLASS: Record<CalendarTone, string> = {
@@ -11,6 +12,10 @@ const DOT_CLASS: Record<CalendarTone, string> = {
   primary: "bg-primary",
   neutral: "bg-muted",
 };
+
+function dotClassFor(e: CalendarEvent) {
+  return colorDotClass(e.color) ?? DOT_CLASS[e.tone];
+}
 
 const MAX_VISIBLE = 3;
 
@@ -69,7 +74,7 @@ export function MonthGrid({
               <div className="flex flex-col gap-0.5">
                 {visible.map((e) => (
                   <span key={e.id} className={`flex items-center gap-1 truncate text-[11px] ${e.done ? "text-muted line-through" : "text-ink"}`}>
-                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${DOT_CLASS[e.tone]}`} />
+                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotClassFor(e)}`} />
                     <span className="truncate">{e.time ? `${e.time} ` : ""}{e.label}</span>
                   </span>
                 ))}

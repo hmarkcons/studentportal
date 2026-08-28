@@ -32,6 +32,42 @@ export function getWeekDays(reference: Date): Date[] {
   return Array.from({ length: 7 }, (_, i) => addDays(start, i));
 }
 
+export function eachDateInRange(startStr: string, endStr: string): string[] {
+  const days: string[] = [];
+  let cur = parseYMD(startStr);
+  const endYMD = endStr;
+  let guard = 0;
+  while (toYMD(cur) <= endYMD && guard < 400) {
+    days.push(toYMD(cur));
+    cur = addDays(cur, 1);
+    guard++;
+  }
+  return days;
+}
+
+export function expandRecurrence(
+  startStr: string,
+  recurrence: "none" | "daily" | "weekly" | "monthly",
+  recurrenceEndStr: string | null,
+  rangeStartStr: string,
+  rangeEndStr: string
+): string[] {
+  if (recurrence === "none") return [];
+  let cur = parseYMD(startStr);
+  const hardEndStr = recurrenceEndStr && recurrenceEndStr < rangeEndStr ? recurrenceEndStr : rangeEndStr;
+  const dates: string[] = [];
+  let guard = 0;
+  while (toYMD(cur) <= hardEndStr && guard < 400) {
+    const curStr = toYMD(cur);
+    if (curStr >= rangeStartStr && curStr <= rangeEndStr) dates.push(curStr);
+    if (recurrence === "daily") cur = addDays(cur, 1);
+    else if (recurrence === "weekly") cur = addDays(cur, 7);
+    else cur = new Date(Date.UTC(cur.getUTCFullYear(), cur.getUTCMonth() + 1, cur.getUTCDate()));
+    guard++;
+  }
+  return dates;
+}
+
 export const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 export const MONTH_LABELS = [
   "January", "February", "March", "April", "May", "June",

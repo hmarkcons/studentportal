@@ -75,9 +75,18 @@ export function DayPanel({
                   taskId={e.taskId!}
                   label={e.label}
                   description={e.description ?? ""}
-                  dueDate={day}
+                  dueDate={e.startDate ?? day}
                   priority={e.priority ?? "medium"}
                   tone={e.tone === "danger" || e.tone === "warning" ? e.tone : "info"}
+                  notes={e.notes}
+                  allDay={e.allDay}
+                  time={e.time}
+                  endDate={e.endDate}
+                  color={e.color}
+                  guestEmails={e.guestEmails}
+                  recurrence={e.recurrence}
+                  recurrenceEndDate={e.recurrenceEndDate}
+                  isRecurrenceInstance={e.isRecurrenceInstance}
                 />
               );
             }
@@ -87,12 +96,19 @@ export function DayPanel({
                   key={e.id}
                   taskId={e.personalTaskId!}
                   title={e.label}
-                  description={e.description ?? ""}
-                  dueDate={day}
+                  description={e.notes ?? ""}
+                  dueDate={e.startDate ?? day}
                   dueTime={e.time}
                   priority={e.priority ?? "medium"}
                   done={Boolean(e.done)}
                   revalidateTo={revalidateTo}
+                  allDay={e.allDay}
+                  endDate={e.endDate}
+                  color={e.color}
+                  guestEmails={e.guestEmails}
+                  recurrence={e.recurrence}
+                  recurrenceEndDate={e.recurrenceEndDate}
+                  isRecurrenceInstance={e.isRecurrenceInstance}
                 />
               );
             }

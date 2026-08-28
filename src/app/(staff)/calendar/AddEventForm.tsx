@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import { createCalendarEvent } from "@/lib/actions/calendarEvents";
 import { Input, Select } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { TimeSelect } from "./TimeSelect";
+import { EventFieldsFieldset } from "./EventFieldsFieldset";
 
 export function AddEventForm({
   day,
@@ -35,7 +35,7 @@ export function AddEventForm({
 
       <div className="flex flex-wrap items-end gap-2">
         <Input name="title" placeholder="Title" required className="min-w-[220px] flex-1" />
-        {type === "task" ? (
+        {type === "task" && (
           <Select name="application_id" required className="w-56">
             <option value="">Choose student…</option>
             {applicationOptions.map((a) => (
@@ -44,18 +44,19 @@ export function AddEventForm({
               </option>
             ))}
           </Select>
-        ) : (
-          <TimeSelect name="due_time" className="w-40" />
         )}
         <Select name="priority" defaultValue="medium" className="w-28">
           <option value="urgent">Urgent</option>
           <option value="medium">Medium</option>
           <option value="low">Low</option>
         </Select>
-        <Button type="submit" variant="primary" size="sm" pending={pending}>
-          + Add
-        </Button>
       </div>
+
+      <EventFieldsFieldset />
+
+      <Button type="submit" variant="primary" size="sm" pending={pending} className="self-start">
+        + Add
+      </Button>
       {type === "task" && applicationOptions.length === 0 && (
         <p className="text-xs text-muted">No applications yet — add a student application before scheduling a task.</p>
       )}

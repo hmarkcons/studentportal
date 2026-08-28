@@ -3,50 +3,46 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
-export async function createPersonalTask(revalidateTo: string, _prevState: unknown, formData: FormData) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in." };
-
-  const title = String(formData.get("title") ?? "").trim();
-  const description = String(formData.get("description") ?? "").trim() || null;
-  const due_date = String(formData.get("due_date") ?? "");
-  const due_time = String(formData.get("due_time") ?? "").trim() || null;
-  const priority = String(formData.get("priority") ?? "medium");
-  const ownerIdInput = String(formData.get("owner_id") ?? "") || user.id;
-
-  if (!title || !due_date) return { error: "Title and date are required." };
-
-  const { error } = await supabase.from("personal_tasks").insert({
-    owner_id: ownerIdInput,
-    title,
-    description,
-    due_date,
-    due_time,
-    priority,
-  });
-  if (error) return { error: error.message };
-
-  revalidatePath(revalidateTo);
-  return { success: true };
+function parseGuestEmails(formData: FormData): string[] {
+  return String(formData.get("guest_emails") ?? "")
+    .split(",")
+    .map((e) => e.trim())
+    .filter(Boolean);
 }
 
 export async function updatePersonalTask(taskId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
 
   const title = String(formData.get("title") ?? "").trim();
-  const description = String(formData.get("description") ?? "").trim() || null;
+  const description = String(formData.get("notes") ?? "").trim() || null;
   const due_date = String(formData.get("due_date") ?? "");
-  const due_time = String(formData.get("due_time") ?? "").trim() || null;
+  const end_date = String(formData.get("end_date") ?? "").trim() || null;
+  const all_day = formData.get("all_day") === "on";
+  const due_time = !all_day ? String(formData.get("due_time") ?? "").trim() || null : null;
   const priority = String(formData.get("priority") ?? "medium");
+  const color = String(formData.get("color") ?? "").trim() || null;
+  const guest_emails = parseGuestEmails(formData);
+  const recurrence = String(formData.get("recurrence") ?? "none");
+  const recurrence_end_date = String(formData.get("recurrence_end_date") ?? "").trim() || null;
 
   if (!title || !due_date) return { error: "Title and date are required." };
+  if (end_date && end_date < due_date) return { error: "End date can't be before the start date." };
 
   const { error } = await supabase
     .from("personal_tasks")
-    .update({ title, description, due_date, due_time, priority })
+    .update({
+      title,
+      description,
+      due_date,
+      end_date,
+      all_day,
+      due_time,
+      priority,
+      color,
+      guest_emails,
+      recurrence,
+      recurrence_end_date,
+    })
     .eq("id", taskId);
   if (error) return { error: error.message };
 

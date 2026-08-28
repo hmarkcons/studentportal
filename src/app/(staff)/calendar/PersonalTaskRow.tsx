@@ -5,12 +5,19 @@ import { togglePersonalTask, deletePersonalTask, updatePersonalTask } from "@/li
 import { Badge } from "@/components/ui/Badge";
 import { Input, Select } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { TimeSelect } from "./TimeSelect";
+import { EventFieldsFieldset } from "./EventFieldsFieldset";
+import type { CalendarRecurrence } from "./types";
 
 const PRIORITY_TONE: Record<string, "danger" | "warning" | "neutral"> = {
   urgent: "danger",
   medium: "warning",
   low: "neutral",
+};
+
+const RECURRENCE_LABEL: Record<string, string> = {
+  daily: "Repeats daily",
+  weekly: "Repeats weekly",
+  monthly: "Repeats monthly",
 };
 
 export function PersonalTaskRow({
@@ -22,6 +29,13 @@ export function PersonalTaskRow({
   priority,
   done,
   revalidateTo,
+  allDay = false,
+  endDate,
+  color,
+  guestEmails = [],
+  recurrence = "none",
+  recurrenceEndDate,
+  isRecurrenceInstance,
 }: {
   taskId: string;
   title: string;
@@ -31,6 +45,13 @@ export function PersonalTaskRow({
   priority: string;
   done: boolean;
   revalidateTo: string;
+  allDay?: boolean;
+  endDate?: string | null;
+  color?: string | null;
+  guestEmails?: string[];
+  recurrence?: CalendarRecurrence;
+  recurrenceEndDate?: string | null;
+  isRecurrenceInstance?: boolean;
 }) {
   const [checked, setChecked] = useState(done);
   const [editing, setEditing] = useState(false);
@@ -39,21 +60,37 @@ export function PersonalTaskRow({
 
   if (editing) {
     return (
-      <form action={formAction} className="flex flex-wrap items-end gap-2 rounded-md border border-border p-2">
-        <Input name="title" defaultValue={title} required className="min-w-[160px] flex-1" />
-        <Input name="due_date" type="date" defaultValue={dueDate} required />
-        <TimeSelect name="due_time" defaultValue={dueTime ?? ""} />
-        <Select name="priority" defaultValue={priority}>
-          <option value="urgent">Urgent</option>
-          <option value="medium">Medium</option>
-          <option value="low">Low</option>
-        </Select>
-        <Button type="submit" variant="primary" size="sm" pending={pending}>
-          Save
-        </Button>
-        <button type="button" onClick={() => setEditing(false)} className="text-xs text-muted hover:underline">
-          Cancel
-        </button>
+      <form action={formAction} className="flex flex-col gap-2 rounded-md border border-border p-2">
+        {isRecurrenceInstance && (
+          <p className="text-xs text-muted">This reminder repeats — changes here apply to the whole series.</p>
+        )}
+        <div className="flex flex-wrap items-end gap-2">
+          <Input name="title" defaultValue={title} required className="min-w-[160px] flex-1" />
+          <Input name="due_date" type="date" defaultValue={dueDate} required />
+          <Select name="priority" defaultValue={priority}>
+            <option value="urgent">Urgent</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </Select>
+        </div>
+        <EventFieldsFieldset
+          allDayDefault={allDay}
+          timeDefault={dueTime}
+          endDateDefault={endDate}
+          notesDefault={description}
+          colorDefault={color}
+          guestEmailsDefault={guestEmails}
+          recurrenceDefault={recurrence}
+          recurrenceEndDateDefault={recurrenceEndDate}
+        />
+        <div className="flex items-center gap-2">
+          <Button type="submit" variant="primary" size="sm" pending={pending}>
+            Save
+          </Button>
+          <button type="button" onClick={() => setEditing(false)} className="text-xs text-muted hover:underline">
+            Cancel
+          </button>
+        </div>
         {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
       </form>
     );
@@ -71,9 +108,19 @@ export function PersonalTaskRow({
           }}
         />
         <span className={checked ? "text-muted line-through" : "text-ink"}>
-          {dueTime && <span className="mr-1 font-mono text-xs text-muted">{dueTime}</span>}
+          {!allDay && dueTime && <span className="mr-1 font-mono text-xs text-muted">{dueTime}</span>}
           {title}
         </span>
+        {recurrence !== "none" && (
+          <span title={RECURRENCE_LABEL[recurrence]} className="text-xs text-muted">
+            🔁
+          </span>
+        )}
+        {guestEmails.length > 0 && (
+          <span title={`Guests: ${guestEmails.join(", ")}`} className="text-xs text-muted">
+            👥
+          </span>
+        )}
       </label>
       <div className="flex items-center gap-2">
         <Badge tone={PRIORITY_TONE[priority] ?? "neutral"}>{priority}</Badge>

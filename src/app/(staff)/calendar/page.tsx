@@ -1,10 +1,27 @@
 import { getStaffSession } from "@/lib/auth/session";
-import { toYMD, parseYMD, getMonthGridDays, getWeekDays } from "@/lib/calendarDates";
+import { toYMD, parseYMD, getMonthGridDays, getWeekDays, eachDateInRange, expandRecurrence } from "@/lib/calendarDates";
 import { CalendarShell } from "./CalendarShell";
-import type { CalendarEvent } from "./types";
+import type { CalendarEvent, CalendarRecurrence } from "./types";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
+}
+
+function occurrenceDates(
+  dueDate: string,
+  endDate: string | null,
+  recurrence: string | null,
+  recurrenceEndDate: string | null,
+  rangeStartStr: string,
+  rangeEndStr: string
+): string[] {
+  if (recurrence && recurrence !== "none") {
+    return expandRecurrence(dueDate, recurrence as CalendarRecurrence, recurrenceEndDate, rangeStartStr, rangeEndStr);
+  }
+  if (endDate && endDate > dueDate) {
+    return eachDateInRange(dueDate, endDate).filter((d) => d >= rangeStartStr && d <= rangeEndStr);
+  }
+  return dueDate >= rangeStartStr && dueDate <= rangeEndStr ? [dueDate] : [];
 }
 
 export default async function CalendarPage(props: {
@@ -28,12 +45,11 @@ export default async function CalendarPage(props: {
 
   const { data: tasks } = await supabase
     .from("application_tasks")
-    .select("id, description, due_date, priority, status, application:applications(student:leads(full_name))")
+    .select(
+      "id, description, notes, due_date, due_time, end_date, all_day, priority, status, color, guest_emails, recurrence, recurrence_end_date, application:applications(student:leads(full_name))"
+    )
     .eq("status", "pending")
-    .not("due_date", "is", null)
-    .gte("due_date", rangeStartStr)
-    .lte("due_date", rangeEndStr)
-    .order("due_date");
+    .not("due_date", "is", null);
 
   const { data: reminders } = await supabase
     .from("reminders")
@@ -56,27 +72,39 @@ export default async function CalendarPage(props: {
   const { data: personalTasks } = targetStaffId
     ? await supabase
         .from("personal_tasks")
-        .select("id, title, description, due_date, due_time, priority, status")
+        .select(
+          "id, title, description, due_date, due_time, end_date, all_day, priority, status, color, guest_emails, recurrence, recurrence_end_date"
+        )
         .eq("owner_id", targetStaffId)
-        .gte("due_date", rangeStartStr)
-        .lte("due_date", rangeEndStr)
-        .order("due_date")
+        .eq("status", "pending")
     : { data: [] };
 
   const events: CalendarEvent[] = [];
 
   (tasks ?? []).forEach((t) => {
-    events.push({
-      id: `task-${t.id}`,
-      date: t.due_date!,
-      time: null,
-      kind: "task",
-      label: `${t.description} — ${one(one(t.application)?.student)?.full_name ?? "?"}`,
-      tone: "warning",
-      priority: t.priority,
-      done: t.status === "done",
-      taskId: t.id,
-      description: t.description,
+    const dates = occurrenceDates(t.due_date!, t.end_date, t.recurrence, t.recurrence_end_date, rangeStartStr, rangeEndStr);
+    dates.forEach((date) => {
+      events.push({
+        id: `task-${t.id}-${date}`,
+        date,
+        time: t.all_day ? null : t.due_time ? t.due_time.slice(0, 5) : null,
+        kind: "task",
+        label: `${t.description} — ${one(one(t.application)?.student)?.full_name ?? "?"}`,
+        tone: "warning",
+        color: t.color,
+        priority: t.priority,
+        done: t.status === "done",
+        taskId: t.id,
+        description: t.description,
+        notes: t.notes,
+        allDay: t.all_day,
+        startDate: t.due_date!,
+        endDate: t.end_date,
+        guestEmails: t.guest_emails ?? [],
+        recurrence: (t.recurrence as CalendarRecurrence) ?? "none",
+        recurrenceEndDate: t.recurrence_end_date,
+        isRecurrenceInstance: dates.length > 1,
+      });
     });
   });
 
@@ -129,17 +157,29 @@ export default async function CalendarPage(props: {
   });
 
   (personalTasks ?? []).forEach((p) => {
-    events.push({
-      id: `personal-${p.id}`,
-      date: p.due_date,
-      time: p.due_time ? p.due_time.slice(0, 5) : null,
-      kind: "personal",
-      label: p.title,
-      tone: p.status === "done" ? "neutral" : "primary",
-      priority: p.priority,
-      done: p.status === "done",
-      personalTaskId: p.id,
-      description: p.description ?? "",
+    const dates = occurrenceDates(p.due_date, p.end_date, p.recurrence, p.recurrence_end_date, rangeStartStr, rangeEndStr);
+    dates.forEach((date) => {
+      events.push({
+        id: `personal-${p.id}-${date}`,
+        date,
+        time: p.all_day ? null : p.due_time ? p.due_time.slice(0, 5) : null,
+        kind: "personal",
+        label: p.title,
+        tone: "primary",
+        color: p.color,
+        priority: p.priority,
+        done: p.status === "done",
+        personalTaskId: p.id,
+        description: p.title,
+        notes: p.description ?? "",
+        allDay: p.all_day,
+        startDate: p.due_date,
+        endDate: p.end_date,
+        guestEmails: p.guest_emails ?? [],
+        recurrence: (p.recurrence as CalendarRecurrence) ?? "none",
+        recurrenceEndDate: p.recurrence_end_date,
+        isRecurrenceInstance: dates.length > 1,
+      });
     });
   });
 
