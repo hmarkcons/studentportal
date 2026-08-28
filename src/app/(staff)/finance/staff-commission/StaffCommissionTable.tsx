@@ -13,6 +13,7 @@ import {
   deleteStaffCommission,
   markStaffCommissionPaid,
   uploadStaffCommissionProof,
+  carryForwardCommissionCredit,
 } from "@/lib/actions/finance";
 import { INVOICE_STATUS_LABELS, type InvoiceStatus } from "@/lib/invoiceStatus";
 
@@ -39,41 +40,101 @@ export type CommissionRow = {
   refundCount: number;
   consultancyFeeStatus: InvoiceStatus | null;
   adminFeeStatus: "paid" | "unpaid" | null;
+  hasCredit: boolean;
 };
 
-function AddCommissionForm({ staffList, students }: { staffList: { id: string; full_name: string }[]; students: { id: string; full_name: string }[] }) {
+export type AvailableCredit = { id: string; staff_id: string; amount: number; currency: string };
+
+function AddCommissionForm({
+  staffList,
+  students,
+  availableCredits,
+}: {
+  staffList: { id: string; full_name: string }[];
+  students: { id: string; full_name: string; assigned_counselor_id: string | null }[];
+  availableCredits: AvailableCredit[];
+}) {
   const action = createStaffCommission.bind(null, REVALIDATE_TO);
   const [state, formAction, pending] = useActionState(action, undefined);
+  const [staffId, setStaffId] = useState("");
+  const [applyCredit, setApplyCredit] = useState(false);
+  const [amount, setAmount] = useState("");
+
+  // Only students assigned to the selected staff member show up — matches
+  // the same staff member who'll actually be credited/paid for them.
+  const eligibleStudents = useMemo(
+    () => students.filter((s) => s.assigned_counselor_id === staffId),
+    [students, staffId]
+  );
+
+  const credit = useMemo(() => availableCredits.find((c) => c.staff_id === staffId) ?? null, [availableCredits, staffId]);
+
+  const amountNum = Number(amount) || 0;
+  const amountAfterCredit = credit && applyCredit ? Math.max(0, amountNum - credit.amount) : amountNum;
 
   return (
-    <form action={formAction} className="mb-4 flex flex-wrap items-end gap-2 rounded-lg border border-border bg-card p-3">
-      <Select name="staff_id" required>
-        <option value="">Staff…</option>
-        {staffList.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.full_name}
-          </option>
-        ))}
-      </Select>
-      <Select name="student_id" required>
-        <option value="">Student…</option>
-        {students.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.full_name}
-          </option>
-        ))}
-      </Select>
-      <Input name="amount" type="number" step="0.01" placeholder="Commission amount" required className="w-32" />
-      <Select name="currency" defaultValue="PKR">
-        <option value="PKR">PKR</option>
-        <option value="EUR">EUR</option>
-        <option value="USD">USD</option>
-      </Select>
-      <Input name="registration_date" type="date" />
-      <Button type="submit" variant="primary" size="sm" disabled={pending}>
-        {pending ? "Adding…" : "+ Add commission"}
-      </Button>
-      {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
+    <form action={formAction} className="mb-4 flex flex-col gap-2 rounded-lg border border-border bg-card p-3">
+      <div className="flex flex-wrap items-end gap-2">
+        <Select
+          name="staff_id"
+          required
+          value={staffId}
+          onChange={(e) => {
+            setStaffId(e.target.value);
+            setApplyCredit(false);
+          }}
+        >
+          <option value="">Staff…</option>
+          {staffList.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.full_name}
+            </option>
+          ))}
+        </Select>
+        <Select name="student_id" required disabled={!staffId} defaultValue="">
+          <option value="">{staffId ? (eligibleStudents.length ? "Student…" : "No students assigned to this staff member") : "Choose staff first"}</option>
+          {eligibleStudents.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.full_name}
+            </option>
+          ))}
+        </Select>
+        <Input
+          name="amount"
+          type="number"
+          step="0.01"
+          placeholder="Commission amount"
+          required
+          className="w-32"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+        />
+        <Select name="currency" defaultValue="PKR">
+          <option value="PKR">PKR</option>
+          <option value="EUR">EUR</option>
+          <option value="USD">USD</option>
+        </Select>
+        <Input name="registration_date" type="date" />
+        <Button type="submit" variant="primary" size="sm" disabled={pending}>
+          {pending ? "Adding…" : "+ Add commission"}
+        </Button>
+      </div>
+      {credit && (
+        <div className="flex items-center gap-2 rounded-md bg-warning/10 px-3 py-2 text-xs text-ink">
+          <input
+            type="checkbox"
+            id="apply-credit"
+            checked={applyCredit}
+            onChange={(e) => setApplyCredit(e.target.checked)}
+          />
+          <input type="hidden" name="apply_credit_id" value={applyCredit ? credit.id : ""} />
+          <label htmlFor="apply-credit">
+            Credit available: <strong>{credit.currency} {credit.amount}</strong> (carried forward from a no-admission/withdrawn student) — apply it to this commission.
+            {applyCredit && <span className="ml-1 text-muted">New amount after credit: {credit.currency} {amountAfterCredit}</span>}
+          </label>
+        </div>
+      )}
+      {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
   );
 }
@@ -121,6 +182,36 @@ function MarkPaidButton({ id }: { id: string }) {
   );
 }
 
+function CarryForwardButton({ id, studentName }: { id: string; studentName: string }) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handle() {
+    if (!confirm(`Mark this paid commission for ${studentName} as a credit? It'll be available to offset a new commission for the same staff member.`)) return;
+    setPending(true);
+    setError(null);
+    const result = await carryForwardCommissionCredit(id, REVALIDATE_TO);
+    if (result?.error) setError(result.error);
+    setPending(false);
+  }
+
+  return (
+    <div>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        pending={pending}
+        onClick={handle}
+        title="Student had no admission, or withdrew/went ghost — carry this paid amount forward as a credit"
+      >
+        No admission — carry forward
+      </Button>
+      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
+    </div>
+  );
+}
+
 function feeStatusTone(status: string | null) {
   if (status === "paid" || status === "registered") return "success" as const;
   if (status === "overdue" || status === "withdrawn") return "danger" as const;
@@ -165,11 +256,13 @@ export function StaffCommissionTable({
   staffList,
   students,
   proofUrls,
+  availableCredits,
 }: {
   rows: CommissionRow[];
   staffList: { id: string; full_name: string }[];
-  students: { id: string; full_name: string }[];
+  students: { id: string; full_name: string; assigned_counselor_id: string | null }[];
   proofUrls: Record<string, string>;
+  availableCredits: AvailableCredit[];
 }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [nameInput, setNameInput] = useState("");
@@ -243,7 +336,7 @@ export function StaffCommissionTable({
         </Button>
       </div>
 
-      {showAddForm && <AddCommissionForm staffList={staffList} students={students} />}
+      {showAddForm && <AddCommissionForm staffList={staffList} students={students} availableCredits={availableCredits} />}
 
       <div className="mb-3 flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-1 text-xs text-muted">
@@ -302,20 +395,20 @@ export function StaffCommissionTable({
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-border">
-        <table className="w-full min-w-[1180px] text-sm">
+        <table className="w-full min-w-[1700px] text-sm">
           <thead>
             <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-muted">
-              <th className="px-4 py-3">Student</th>
-              <th className="px-4 py-3">Reg. Month</th>
-              <th className="px-4 py-3">University</th>
-              <th className="px-4 py-3">Program</th>
-              <th className="px-4 py-3">Intake</th>
-              <th className="px-4 py-3">Counselor</th>
-              <th className="px-4 py-3">Reg. Status</th>
-              <th className="px-4 py-3 text-right">Commission</th>
-              <th className="px-4 py-3">Comm. Status</th>
-              <th className="px-4 py-3">Proof</th>
-              <th className="px-4 py-3">Action</th>
+              <th className="whitespace-nowrap px-4 py-3">Student</th>
+              <th className="whitespace-nowrap px-4 py-3">Reg. Month</th>
+              <th className="whitespace-nowrap px-4 py-3">University</th>
+              <th className="whitespace-nowrap px-4 py-3">Program</th>
+              <th className="whitespace-nowrap px-4 py-3">Intake</th>
+              <th className="whitespace-nowrap px-4 py-3">Counselor</th>
+              <th className="whitespace-nowrap px-4 py-3">Reg. Status</th>
+              <th className="whitespace-nowrap px-4 py-3 text-right">Commission</th>
+              <th className="whitespace-nowrap px-4 py-3">Comm. Status</th>
+              <th className="whitespace-nowrap px-4 py-3">Proof</th>
+              <th className="whitespace-nowrap px-4 py-3">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -327,50 +420,49 @@ export function StaffCommissionTable({
                   </td>
                 ) : (
                   <>
-                    <td className="px-4 py-3">
-                      <p className="text-ink">{r.studentName}</p>
-                      {r.studentEmail && <p className="text-xs text-muted">{r.studentEmail}</p>}
+                    <td className="whitespace-nowrap px-4 py-3">
+                      <span className="text-ink">{r.studentName}</span>
+                      {r.studentEmail && <span className="ml-2 text-xs text-muted">{r.studentEmail}</span>}
                     </td>
-                    <td className="px-4 py-3 text-muted">{r.registeredMonth ?? "—"}</td>
-                    <td className="px-4 py-3 text-ink">{r.universityName ?? "—"}</td>
-                    <td className="px-4 py-3 text-ink">{r.programName ?? "—"}</td>
-                    <td className="px-4 py-3 text-muted">{r.intake ?? "—"}</td>
-                    <td className="px-4 py-3 text-ink">{r.staffName}</td>
-                    <td className="px-4 py-3">
+                    <td className="whitespace-nowrap px-4 py-3 text-muted">{r.registeredMonth ?? "—"}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-ink">{r.universityName ?? "—"}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-ink">{r.programName ?? "—"}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-muted">{r.intake ?? "—"}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-ink">{r.staffName}</td>
+                    <td className="whitespace-nowrap px-4 py-3">
                       {r.registrationStatus ? (
                         <Badge tone={feeStatusTone(r.registrationStatus)}>{r.registrationStatus}</Badge>
                       ) : (
                         "—"
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-ink">
+                    <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-ink">
                       {r.currency} {r.amount}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="whitespace-nowrap px-4 py-3">
                       <Badge tone={r.status === "paid" ? "success" : "warning"}>{r.status}</Badge>
-                      {r.payment_method && <p className="mt-0.5 text-xs text-muted">{r.payment_method}</p>}
+                      {r.payment_method && <span className="ml-2 text-xs text-muted">{r.payment_method}</span>}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="whitespace-nowrap px-4 py-3">
                       <ProofFileCell viewUrl={proofUrls[r.id]} uploadAction={uploadStaffCommissionProof.bind(null, r.id, REVALIDATE_TO)} />
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-col items-start gap-2">
+                    <td className="whitespace-nowrap px-4 py-3">
+                      <div className="flex items-center gap-2">
                         {r.status !== "paid" && <MarkPaidButton id={r.id} />}
-                        <div className="flex items-center gap-2">
-                          <Button type="button" variant="outline" size="sm" onClick={() => setEditingId(r.id)}>
-                            ✏️ Edit
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              if (confirm(`Delete this commission record for ${r.studentName}?`)) deleteStaffCommission(r.id, REVALIDATE_TO);
-                            }}
-                          >
-                            🗑️
-                          </Button>
-                        </div>
+                        {r.status === "paid" && !r.hasCredit && <CarryForwardButton id={r.id} studentName={r.studentName} />}
+                        <Button type="button" variant="outline" size="sm" onClick={() => setEditingId(r.id)}>
+                          ✏️ Edit
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            if (confirm(`Delete this commission record for ${r.studentName}?`)) deleteStaffCommission(r.id, REVALIDATE_TO);
+                          }}
+                        >
+                          🗑️
+                        </Button>
                       </div>
                     </td>
                   </>

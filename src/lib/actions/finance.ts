@@ -25,13 +25,72 @@ export async function createStaffCommission(revalidateTo: string, _prevState: un
 
   const staff_id = String(formData.get("staff_id") ?? "");
   const student_id = String(formData.get("student_id") ?? "");
-  const amount = Number(formData.get("amount") ?? 0);
+  let amount = Number(formData.get("amount") ?? 0);
   const currency = String(formData.get("currency") ?? "EUR");
   const registration_date = String(formData.get("registration_date") ?? "") || null;
+  const apply_credit_id = String(formData.get("apply_credit_id") ?? "") || null;
 
   if (!staff_id || !student_id || !amount) return { error: "Staff, student, and amount are required." };
 
-  const { error } = await supabase.from("staff_commissions").insert({ staff_id, student_id, amount, currency, registration_date });
+  let creditToApply: { id: string; amount: number } | null = null;
+  if (apply_credit_id) {
+    const { data: credit } = await supabase
+      .from("staff_commission_credits")
+      .select("id, staff_id, amount, currency, status")
+      .eq("id", apply_credit_id)
+      .maybeSingle();
+    if (!credit || credit.status !== "available" || credit.staff_id !== staff_id) {
+      return { error: "That credit is no longer available." };
+    }
+    if (credit.currency !== currency) {
+      return { error: `Credit is in ${credit.currency}, but this commission is in ${currency} — match the currency to apply it.` };
+    }
+    creditToApply = { id: credit.id, amount: credit.amount };
+    amount = Math.max(0, amount - credit.amount);
+  }
+
+  const { data: newCommission, error } = await supabase
+    .from("staff_commissions")
+    .insert({ staff_id, student_id, amount, currency, registration_date })
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+
+  if (creditToApply) {
+    const { error: creditError } = await supabase
+      .from("staff_commission_credits")
+      .update({ status: "applied", applied_to_commission_id: newCommission.id, applied_at: new Date().toISOString() })
+      .eq("id", creditToApply.id);
+    if (creditError) return { error: creditError.message };
+  }
+
+  revalidatePath(revalidateTo);
+  return { success: true };
+}
+
+// Marks a paid commission as a credit owed back by that staff member —
+// used when the student it was paid for turns out to have no admission, or
+// withdraws/goes ghost. The credit sits available until Finance applies it
+// against a new commission for a different student under the same staff
+// member (see createStaffCommission's apply_credit_id handling).
+export async function carryForwardCommissionCredit(commissionId: string, revalidateTo: string) {
+  const supabase = await createClient();
+  if (!(await requireFinance(supabase))) return { error: "Only Finance/Super Admin can adjust commissions." };
+
+  const { data: commission } = await supabase
+    .from("staff_commissions")
+    .select("id, staff_id, amount, currency, status")
+    .eq("id", commissionId)
+    .maybeSingle();
+  if (!commission) return { error: "Commission not found." };
+  if (commission.status !== "paid") return { error: "Only a paid commission can be carried forward as a credit." };
+
+  const { error } = await supabase.from("staff_commission_credits").insert({
+    staff_id: commission.staff_id,
+    source_commission_id: commission.id,
+    amount: commission.amount,
+    currency: commission.currency,
+  });
   if (error) return { error: error.message };
 
   revalidatePath(revalidateTo);

@@ -36,6 +36,22 @@ export default async function StaffCommissionPage() {
     )
     .order("registration_date", { ascending: false });
 
+  // Which paid commissions have already been carried forward as a credit —
+  // hides the "No admission - carry forward" button on those (the DB's
+  // unique constraint on source_commission_id would reject a second one
+  // anyway; this just keeps the UI from offering it twice).
+  const commissionIds = (commissions ?? []).map((c) => c.id);
+  const { data: existingCredits } = commissionIds.length
+    ? await supabase.from("staff_commission_credits").select("source_commission_id").in("source_commission_id", commissionIds)
+    : { data: [] };
+  const creditedCommissionIds = new Set((existingCredits ?? []).map((c) => c.source_commission_id));
+
+  // Credits currently available to apply against a NEW commission, per staff.
+  const { data: availableCredits } = await supabase
+    .from("staff_commission_credits")
+    .select("id, staff_id, amount, currency")
+    .eq("status", "available");
+
   const proofUrls: Record<string, string> = {};
   await Promise.all(
     (commissions ?? [])
@@ -137,11 +153,12 @@ export default async function StaffCommissionPage() {
       refundCount: refundCountByStudent.get(c.student_id) ?? 0,
       consultancyFeeStatus: latestInvoice ? computeInvoiceStatus(latestInvoice.admin_fee_status, invInstallments) : null,
       adminFeeStatus: (latestInvoice?.admin_fee_status as "paid" | "unpaid" | undefined) ?? null,
+      hasCredit: creditedCommissionIds.has(c.id),
     };
   });
 
   const { data: staffList } = await supabase.from("staff").select("id, full_name").order("full_name");
-  const { data: students } = await supabase.from("students").select("id, full_name").order("full_name");
+  const { data: students } = await supabase.from("students").select("id, full_name, assigned_counselor_id").order("full_name");
 
   return (
     <div className="w-full">
@@ -149,7 +166,13 @@ export default async function StaffCommissionPage() {
       <p className="mb-4 text-sm text-muted">
         Commission owed to staff for each registered student, alongside that student&apos;s consultancy and administrative fee status.
       </p>
-      <StaffCommissionTable rows={rows} staffList={staffList ?? []} students={students ?? []} proofUrls={proofUrls} />
+      <StaffCommissionTable
+        rows={rows}
+        staffList={staffList ?? []}
+        students={students ?? []}
+        proofUrls={proofUrls}
+        availableCredits={availableCredits ?? []}
+      />
     </div>
   );
 }
