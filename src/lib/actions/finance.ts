@@ -207,8 +207,13 @@ export async function markStaffCommissionPaid(id: string, revalidateTo: string, 
 
 export async function updatePartnerCommissionStatus(id: string, revalidateTo: string, status: string) {
   const supabase = await createClient();
-  await supabase.from("partner_commissions").update({ status }).eq("id", id);
+  if (!(await requireFinance(supabase))) return { error: "Only Finance/Super Admin can change commission status." };
+
+  const { error } = await supabase.from("partner_commissions").update({ status }).eq("id", id);
+  if (error) return { error: error.message };
+
   revalidatePath(revalidateTo);
+  return { success: true };
 }
 
 export async function upsertStaffPayroll(staffId: string, payrollMonth: string, revalidateTo: string, _prevState: unknown, formData: FormData) {

@@ -104,7 +104,11 @@ export default async function PartnerCommissionsPage() {
                   <td className="px-4 py-3">
                     <div className="flex flex-col items-start gap-2">
                       <div className="flex items-center gap-2">
-                        <StatusButtons id={r.id} />
+                        {canManage ? (
+                          <StatusButtons id={r.id} />
+                        ) : (
+                          "—"
+                        )}
                         {canManage && <EditPartnerCommissionForm row={r} />}
                         {isSuperAdmin && <DeletePartnerCommissionButton id={r.id} />}
                       </div>
