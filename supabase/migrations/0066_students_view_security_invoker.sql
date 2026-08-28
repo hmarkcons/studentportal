@@ -1,0 +1,17 @@
+-- Critical fix: the `students` view (select * from leads where
+-- registered_at is not null) was created without security_invoker, so
+-- Postgres evaluates it with the VIEW OWNER's privileges (postgres, a
+-- superuser) instead of the querying role's. RLS is role-based, so this
+-- meant every query against `students` silently bypassed leads_select
+-- entirely -- any authenticated staff member, any role, could read any
+-- registered student's full profile (name, email, phone, address,
+-- emergency contact, etc.) regardless of assignment or role. Confirmed via
+-- a real authenticated session: querying `leads` directly for an
+-- unassigned student correctly returned nothing for a plain counselor,
+-- but querying `students` for the exact same row returned the full row.
+--
+-- security_invoker (Postgres 15+) makes the view evaluate as the invoking
+-- role, so leads_select's RLS policy is enforced the same way it already
+-- is for direct `leads` queries. Unrelated to migration 0065 -- leads_select
+-- itself was already correctly denying this case.
+alter view students set (security_invoker = on);
