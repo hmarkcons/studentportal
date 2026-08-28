@@ -22,6 +22,12 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
   const { staff: staffId = "", month: monthParam } = await props.searchParams;
   const supabase = await createClient();
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: viewerRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  const canManage = viewerRow?.role === "finance" || viewerRow?.role === "super_admin";
+
   const now = new Date();
   const month = monthParam || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const monthStart = `${month}-01`;
@@ -147,6 +153,7 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
               proofUrls={proofUrls}
               defaultDate={monthStart}
               revalidateTo={revalidateTo}
+              canManage={canManage}
             />
           </Card>
 
@@ -158,6 +165,7 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
                 payrollMonth={monthStart}
                 revalidateTo={revalidateTo}
                 currencySymbol={currencySymbol}
+                canManage={canManage}
                 initial={{
                   basic_salary: existingPayroll?.basic_salary ?? staff.monthly_salary ?? 0,
                   allowances: existingPayroll?.allowances ?? staff.allowance ?? 0,

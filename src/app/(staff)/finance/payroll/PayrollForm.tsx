@@ -13,11 +13,13 @@ export function PayrollForm({
   revalidateTo,
   currencySymbol,
   initial,
+  canManage,
 }: {
   staffId: string;
   payrollMonth: string;
   revalidateTo: string;
   currencySymbol: string;
+  canManage: boolean;
   initial: {
     basic_salary: number;
     allowances: number;
@@ -53,6 +55,7 @@ export function PayrollForm({
 
   return (
     <form action={formAction} className="flex flex-col">
+      <fieldset disabled={!canManage} className="contents">
       <div className={rowClass}>
         <label className="text-ink">Basic Salary ({currencySymbol})</label>
         <Input
@@ -163,13 +166,16 @@ export function PayrollForm({
           <option value="failed">Failed</option>
         </Select>
       </div>
+      </fieldset>
 
       {state?.error && <p className="mt-2 text-sm text-danger">{state.error}</p>}
       {state?.success && <p className="mt-2 text-sm text-success">Payroll updated.</p>}
 
-      <Button type="submit" variant="primary" size="lg" disabled={pending} className="mt-4 self-start">
-        {pending ? "Saving…" : "Update payroll"}
-      </Button>
+      {canManage && (
+        <Button type="submit" variant="primary" size="lg" disabled={pending} className="mt-4 self-start">
+          {pending ? "Saving…" : "Update payroll"}
+        </Button>
+      )}
     </form>
   );
 }

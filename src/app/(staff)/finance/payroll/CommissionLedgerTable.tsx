@@ -132,6 +132,7 @@ export function CommissionLedgerTable({
   proofUrls,
   defaultDate,
   revalidateTo,
+  canManage,
 }: {
   staffId: string;
   records: CommissionRecord[];
@@ -139,10 +140,13 @@ export function CommissionLedgerTable({
   proofUrls: Record<string, string>;
   defaultDate: string;
   revalidateTo: string;
+  canManage: boolean;
 }) {
   return (
     <div>
-      <AddCommissionForm staffId={staffId} students={students} defaultDate={defaultDate} revalidateTo={revalidateTo} />
+      {canManage && (
+        <AddCommissionForm staffId={staffId} students={students} defaultDate={defaultDate} revalidateTo={revalidateTo} />
+      )}
       {records.length === 0 ? (
         <EmptyState>No commission records for this staff member in the selected month.</EmptyState>
       ) : (
@@ -157,10 +161,20 @@ export function CommissionLedgerTable({
               </div>
               <div className="flex items-center gap-2">
                 <Badge tone={r.status === "paid" ? "success" : "warning"}>{r.status}</Badge>
-                <ProofFileCell viewUrl={proofUrls[r.id]} uploadAction={uploadStaffCommissionProof.bind(null, r.id, revalidateTo)} />
-                {r.status !== "paid" && <MarkPaidForm id={r.id} revalidateTo={revalidateTo} />}
-                <EditCommissionForm record={r} revalidateTo={revalidateTo} />
-                <DeleteCommissionButton id={r.id} revalidateTo={revalidateTo} />
+                {canManage ? (
+                  <>
+                    <ProofFileCell viewUrl={proofUrls[r.id]} uploadAction={uploadStaffCommissionProof.bind(null, r.id, revalidateTo)} />
+                    {r.status !== "paid" && <MarkPaidForm id={r.id} revalidateTo={revalidateTo} />}
+                    <EditCommissionForm record={r} revalidateTo={revalidateTo} />
+                    <DeleteCommissionButton id={r.id} revalidateTo={revalidateTo} />
+                  </>
+                ) : (
+                  proofUrls[r.id] && (
+                    <a href={proofUrls[r.id]} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
+                      View proof
+                    </a>
+                  )
+                )}
               </div>
             </div>
           ))}
