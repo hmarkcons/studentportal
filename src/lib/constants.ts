@@ -95,3 +95,12 @@ export const MARITAL_STATUSES = ["Single", "Married", "Divorced", "Widowed"] as 
 export const STAFF_CURRENCIES = ["PKR", "USD", "EUR"] as const;
 
 export const CURRENCY_SYMBOLS: Record<string, string> = { PKR: "₨", USD: "$", EUR: "€" };
+
+// Rough conversion used only for summarizing mixed-currency commission
+// figures into one PKR total on the payroll/commission dashboards — not a
+// live FX rate, just a fixed approximation.
+export const PKR_RATE: Record<string, number> = { PKR: 1, USD: 280, EUR: 335 };
+
+export function toPKR(amount: number, currency: string) {
+  return amount * (PKR_RATE[currency] ?? 1);
+}

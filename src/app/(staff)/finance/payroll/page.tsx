@@ -1,15 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
-import { CURRENCY_SYMBOLS } from "@/lib/constants";
+import { CURRENCY_SYMBOLS, toPKR } from "@/lib/constants";
 import { PayrollSelectors } from "./PayrollSelectors";
 import { PayrollForm } from "./PayrollForm";
 import { CommissionLedgerTable, type CommissionRecord } from "./CommissionLedgerTable";
-
-const PKR_RATE: Record<string, number> = { PKR: 1, USD: 280, EUR: 335 };
-
-function toPKR(amount: number, currency: string) {
-  return amount * (PKR_RATE[currency] ?? 1);
-}
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;

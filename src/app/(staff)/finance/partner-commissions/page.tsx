@@ -5,6 +5,7 @@ import { uploadPartnerCommissionProof } from "@/lib/actions/finance";
 import { StatusButtons } from "./StatusButtons";
 import { DeletePartnerCommissionButton } from "./DeletePartnerCommissionButton";
 import { EditPartnerCommissionForm } from "./EditPartnerCommissionForm";
+import { AddPartnerCommissionForm } from "./AddPartnerCommissionForm";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -45,9 +46,21 @@ export default async function PartnerCommissionsPage() {
       })
   );
 
+  const { data: students } = await supabase.from("students").select("id, full_name").order("full_name");
+  const { data: rawApplications } = await supabase
+    .from("applications")
+    .select("id, student_id, university:universities(name)")
+    .order("created_at", { ascending: false });
+  const applications = (rawApplications ?? []).map((a) => ({
+    id: a.id,
+    student_id: a.student_id,
+    universityName: (one(a.university as never) as { name?: string } | null)?.name ?? "Unknown university",
+  }));
+
   return (
     <div className="w-full">
       <h2 className="mb-4 text-lg font-semibold text-ink">University Commissions</h2>
+      {canManage && <AddPartnerCommissionForm students={students ?? []} applications={applications} />}
       <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full min-w-[720px] text-sm">
           <thead>

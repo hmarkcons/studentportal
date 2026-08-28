@@ -81,6 +81,38 @@ export async function deleteRefundRequest(id: string) {
   return { success: true };
 }
 
+export async function createPartnerCommission(revalidateTo: string, _prevState: unknown, formData: FormData) {
+  const supabase = await createClient();
+  if (!(await requireFinance(supabase))) return { error: "Only Finance/Super Admin can add commission records." };
+
+  const student_id = String(formData.get("student_id") ?? "");
+  const application_id = String(formData.get("application_id") ?? "") || null;
+  const expected_amount = formData.get("expected_amount") ? Number(formData.get("expected_amount")) : null;
+  const currency = String(formData.get("currency") ?? "").trim() || "EUR";
+  const rate_percent = formData.get("rate_percent") ? Number(formData.get("rate_percent")) : null;
+  const fixed_amount = formData.get("fixed_amount") ? Number(formData.get("fixed_amount")) : null;
+  const channel = String(formData.get("channel") ?? "") || null;
+
+  if (!student_id) return { error: "Choose a student." };
+
+  const { data: lead } = await supabase.from("leads").select("assigned_counselor_id").eq("id", student_id).maybeSingle();
+
+  const { error } = await supabase.from("partner_commissions").insert({
+    student_id,
+    application_id,
+    expected_amount,
+    currency,
+    rate_percent,
+    fixed_amount,
+    channel,
+    assigned_counselor_id: lead?.assigned_counselor_id ?? null,
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath(revalidateTo);
+  return { success: true };
+}
+
 export async function deletePartnerCommission(id: string, revalidateTo: string) {
   const supabase = await createClient();
   if (!(await requireSuperAdmin(supabase))) return { error: "Only Super Admin can delete partner commission records." };

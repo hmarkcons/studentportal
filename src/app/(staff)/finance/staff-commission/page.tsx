@@ -6,6 +6,11 @@ function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
 }
 
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
 export default async function StaffCommissionPage() {
   const supabase = await createClient();
 
@@ -26,7 +31,9 @@ export default async function StaffCommissionPage() {
 
   const { data: commissions } = await supabase
     .from("staff_commissions")
-    .select("id, amount, currency, status, payment_method, registration_date, payment_proof_path, staff_id, student_id, staff:staff(full_name), student:leads(full_name)")
+    .select(
+      "id, amount, currency, status, payment_method, registration_date, payment_proof_path, staff_id, student_id, staff:staff(full_name), student:leads(full_name, email, registered_at, registration_status)"
+    )
     .order("registration_date", { ascending: false });
 
   const proofUrls: Record<string, string> = {};
@@ -59,9 +66,57 @@ export default async function StaffCommissionPage() {
     }
   }
 
+  // One representative application per student (finalized one wins, else the
+  // earliest) — used for the University/Program/Intake columns. A student
+  // can have several applications; this table shows one row per commission
+  // record, not per application, so we pick the most meaningful single one
+  // rather than duplicating rows.
+  const { data: rawApplications } = studentIds.length
+    ? await supabase
+        .from("applications")
+        .select("student_id, intake, is_finalized, created_at, university:universities(name), program:programs(name)")
+        .in("student_id", studentIds)
+        .order("created_at", { ascending: true })
+    : { data: [] };
+
+  type AppRow = {
+    student_id: string;
+    intake: string | null;
+    is_finalized: boolean;
+    universityName: string | null;
+    programName: string | null;
+  };
+  const primaryAppByStudent = new Map<string, AppRow>();
+  for (const a of rawApplications ?? []) {
+    const mapped: AppRow = {
+      student_id: a.student_id,
+      intake: a.intake,
+      is_finalized: a.is_finalized,
+      universityName: (one(a.university as never) as { name?: string } | null)?.name ?? null,
+      programName: (one(a.program as never) as { name?: string } | null)?.name ?? null,
+    };
+    const existing = primaryAppByStudent.get(a.student_id);
+    if (!existing || (mapped.is_finalized && !existing.is_finalized)) {
+      primaryAppByStudent.set(a.student_id, mapped);
+    }
+  }
+
+  // Real refund-request counts per student (not fabricated) — feeds the
+  // "Refunds" stat card, scoped to whichever rows are currently filtered.
+  const { data: refundRows } = studentIds.length
+    ? await supabase.from("refund_requests").select("student_id").in("student_id", studentIds)
+    : { data: [] };
+  const refundCountByStudent = new Map<string, number>();
+  for (const r of refundRows ?? []) {
+    refundCountByStudent.set(r.student_id, (refundCountByStudent.get(r.student_id) ?? 0) + 1);
+  }
+
   const rows: CommissionRow[] = (commissions ?? []).map((c) => {
     const latestInvoice = latestInvoiceByStudent.get(c.student_id);
     const invInstallments = latestInvoice ? (installments ?? []).filter((i) => i.invoice_id === latestInvoice.id) : [];
+    const student = one(c.student);
+    const primaryApp = primaryAppByStudent.get(c.student_id);
+    const registeredAt = student?.registered_at ? new Date(student.registered_at) : null;
     return {
       id: c.id,
       amount: c.amount,
@@ -72,7 +127,14 @@ export default async function StaffCommissionPage() {
       payment_proof_path: c.payment_proof_path,
       staffId: c.staff_id,
       staffName: one(c.staff)?.full_name ?? "Unknown",
-      studentName: one(c.student)?.full_name ?? "Unknown",
+      studentName: student?.full_name ?? "Unknown",
+      studentEmail: student?.email ?? null,
+      registeredMonth: registeredAt ? `${MONTH_NAMES[registeredAt.getMonth()]} ${registeredAt.getFullYear()}` : null,
+      registrationStatus: student?.registration_status ?? null,
+      universityName: primaryApp?.universityName ?? null,
+      programName: primaryApp?.programName ?? null,
+      intake: primaryApp?.intake ?? null,
+      refundCount: refundCountByStudent.get(c.student_id) ?? 0,
       consultancyFeeStatus: latestInvoice ? computeInvoiceStatus(latestInvoice.admin_fee_status, invInstallments) : null,
       adminFeeStatus: (latestInvoice?.admin_fee_status as "paid" | "unpaid" | undefined) ?? null,
     };
