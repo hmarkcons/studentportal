@@ -5,6 +5,7 @@ import { togglePersonalTask, deletePersonalTask, updatePersonalTask } from "@/li
 import { Badge } from "@/components/ui/Badge";
 import { Input, Select } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { TimeSelect } from "./TimeSelect";
 
 const PRIORITY_TONE: Record<string, "danger" | "warning" | "neutral"> = {
   urgent: "danger",
@@ -41,7 +42,7 @@ export function PersonalTaskRow({
       <form action={formAction} className="flex flex-wrap items-end gap-2 rounded-md border border-border p-2">
         <Input name="title" defaultValue={title} required className="min-w-[160px] flex-1" />
         <Input name="due_date" type="date" defaultValue={dueDate} required />
-        <Input name="due_time" type="time" defaultValue={dueTime ?? ""} />
+        <TimeSelect name="due_time" defaultValue={dueTime ?? ""} />
         <Select name="priority" defaultValue={priority}>
           <option value="urgent">Urgent</option>
           <option value="medium">Medium</option>

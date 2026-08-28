@@ -33,9 +33,7 @@ export function CalendarShell({
   viewerStaffId: string;
 }) {
   const router = useRouter();
-  const [selectedDay, setSelectedDay] = useState<string | null>(
-    todayStr >= referenceDate ? todayStr : referenceDate
-  );
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const refDate = useMemo(() => parseYMD(referenceDate), [referenceDate]);
 
@@ -59,7 +57,6 @@ export function CalendarShell({
   }
   function goToday() {
     navigate(todayStr);
-    setSelectedDay(todayStr);
   }
 
   const headerLabel = useMemo(() => {
@@ -153,6 +150,7 @@ export function CalendarShell({
           events={eventsByDate[selectedDay] ?? []}
           applicationOptions={applicationOptions}
           revalidateTo="/calendar"
+          onClose={() => setSelectedDay(null)}
         />
       )}
     </div>

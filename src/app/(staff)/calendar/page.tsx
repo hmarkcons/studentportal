@@ -1,17 +1,11 @@
 import { getStaffSession } from "@/lib/auth/session";
 import { toYMD, parseYMD, getMonthGridDays, getWeekDays } from "@/lib/calendarDates";
 import { CalendarShell } from "./CalendarShell";
-import type { CalendarEvent, CalendarTone } from "./types";
+import type { CalendarEvent } from "./types";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
 }
-
-const PRIORITY_TONE: Record<string, CalendarTone> = {
-  urgent: "danger",
-  medium: "warning",
-  low: "neutral",
-};
 
 export default async function CalendarPage(props: {
   searchParams: Promise<{ view?: string; date?: string; staff?: string }>;
@@ -78,7 +72,7 @@ export default async function CalendarPage(props: {
       time: null,
       kind: "task",
       label: `${t.description} — ${one(one(t.application)?.student)?.full_name ?? "?"}`,
-      tone: t.status === "done" ? "neutral" : (PRIORITY_TONE[t.priority] ?? "warning"),
+      tone: "warning",
       priority: t.priority,
       done: t.status === "done",
       taskId: t.id,
@@ -115,7 +109,7 @@ export default async function CalendarPage(props: {
         time: d.toISOString().slice(11, 16),
         kind: "visa",
         label: `${label} — ${name}`,
-        tone: "info",
+        tone: "success",
       });
     });
   });
@@ -130,7 +124,7 @@ export default async function CalendarPage(props: {
       time: null,
       kind: "deadline",
       label: `${one(a.program)?.name} deadline — ${one(a.student)?.full_name ?? "?"}`,
-      tone: deadline < todayStr ? "danger" : "warning",
+      tone: "danger",
     });
   });
 
