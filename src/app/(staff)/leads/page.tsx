@@ -45,7 +45,7 @@ export default async function LeadsPage() {
     { key: "status", header: "Status" },
     { key: "counselor", header: "Counselor" },
     { key: "date", header: "Inquiry date" },
-    { key: "actions", header: "", align: "right" as const },
+    { key: "actions", header: "", align: "right" as const, exportable: false },
   ];
 
   const rows = (leads ?? []).map((r) => ({

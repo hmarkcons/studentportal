@@ -47,7 +47,7 @@ export default async function StudentsPage() {
     { key: "regStatus", header: "Registration status" },
     { key: "portal", header: "Portal" },
     { key: "date", header: "Registered" },
-    { key: "actions", header: "", align: "right" as const },
+    { key: "actions", header: "", align: "right" as const, exportable: false },
   ];
 
   const rows = (students ?? []).map((r) => ({

@@ -10,6 +10,7 @@ type Column = {
   key: string;
   header: string;
   align?: "left" | "right";
+  exportable?: boolean;
 };
 
 type Row = {
@@ -77,10 +78,11 @@ export function DataTable({
   }
 
   function exportCsv() {
-    const header = columns.map((c) => c.header).join(",");
+    const exportColumns = columns.filter((c) => c.exportable !== false);
+    const header = exportColumns.map((c) => c.header).join(",");
     const lines = visibleRows
       .filter((r) => selected.size === 0 || selected.has(r.id))
-      .map((r) => columns.map((c) => `"${(r.csv?.[c.key] ?? "").replace(/"/g, '""')}"`).join(","));
+      .map((r) => exportColumns.map((c) => `"${(r.csv?.[c.key] ?? "").replace(/"/g, '""')}"`).join(","));
     const blob = new Blob([[header, ...lines].join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
