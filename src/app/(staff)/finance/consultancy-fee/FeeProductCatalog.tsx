@@ -27,7 +27,7 @@ function NewProductForm() {
   );
 }
 
-function ProductRow({ product }: { product: Product }) {
+function ProductRow({ product, canManage }: { product: Product; canManage: boolean }) {
   const [editing, setEditing] = useState(false);
   const action = updateFeeProduct.bind(null, product.id);
   const [state, formAction, pending] = useActionState(action, undefined);
@@ -59,35 +59,37 @@ function ProductRow({ product }: { product: Product }) {
         {product.name}
         {product.default_amount != null && <span className="text-muted"> · {product.default_currency} {product.default_amount}</span>}
       </span>
-      <div className="flex items-center gap-2">
-        <button type="button" onClick={() => setEditing(true)} className="text-xs text-primary hover:underline">
-          Edit
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            if (confirm(`Delete "${product.name}" from the fee catalog?`)) deleteFeeProduct(product.id);
-          }}
-          className="text-xs text-danger hover:underline"
-        >
-          Delete
-        </button>
-      </div>
+      {canManage && (
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => setEditing(true)} className="text-xs text-primary hover:underline">
+            Edit
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (confirm(`Delete "${product.name}" from the fee catalog?`)) deleteFeeProduct(product.id);
+            }}
+            className="text-xs text-danger hover:underline"
+          >
+            Delete
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
-export function FeeProductCatalog({ products }: { products: Product[] }) {
+export function FeeProductCatalog({ products, canManage }: { products: Product[]; canManage: boolean }) {
   const [open, setOpen] = useState(false);
 
   return (
     <details className="mb-6 rounded-lg border border-border bg-card p-4" open={open} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
       <summary className="cursor-pointer text-sm font-medium text-ink">Fee / product catalog ({products.length})</summary>
       <div className="mt-3">
-        <NewProductForm />
+        {canManage && <NewProductForm />}
         <div className="mt-3 flex flex-col">
           {products.map((p) => (
-            <ProductRow key={p.id} product={p} />
+            <ProductRow key={p.id} product={p} canManage={canManage} />
           ))}
           {products.length === 0 && (
             <div className="py-2">

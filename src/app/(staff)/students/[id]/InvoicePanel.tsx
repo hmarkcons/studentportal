@@ -214,9 +214,11 @@ function EditInstallmentForm({
 function AdminFeeSection({
   invoice,
   revalidateTo,
+  canManage,
 }: {
   invoice: { id: string; currency: string; admin_fee_status: string; admin_fee_paid_date: string | null; admin_fee_payment_method: string | null };
   revalidateTo: string;
+  canManage: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const action = updateAdminFeeStatus.bind(null, invoice.id, revalidateTo);
@@ -232,9 +234,11 @@ function AdminFeeSection({
         </span>
         <div className="flex items-center gap-1">
           <Badge tone={invoice.admin_fee_status === "paid" ? "success" : "warning"}>{invoice.admin_fee_status}</Badge>
-          <Button type="button" size="sm" onClick={() => setEditing(true)}>
-            ✏️
-          </Button>
+          {canManage && (
+            <Button type="button" size="sm" onClick={() => setEditing(true)}>
+              ✏️
+            </Button>
+          )}
         </div>
       </div>
     );
@@ -271,12 +275,14 @@ function LineItemsSection({
   feeProducts,
   currency,
   revalidateTo,
+  canManage,
 }: {
   invoiceId: string;
   lineItems: { id: string; name: string; amount: number }[];
   feeProducts: { id: string; name: string; default_amount: number | null; default_currency: string }[];
   currency: string;
   revalidateTo: string;
+  canManage: boolean;
 }) {
   const action = addLineItem.bind(null, invoiceId, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
@@ -289,11 +295,14 @@ function LineItemsSection({
           <span>
             {li.name} — {currency} {li.amount.toFixed(2)}
           </span>
-          <button type="button" onClick={() => deleteLineItem(li.id, revalidateTo)} className="text-danger hover:underline">
-            Remove
-          </button>
+          {canManage && (
+            <button type="button" onClick={() => deleteLineItem(li.id, revalidateTo)} className="text-danger hover:underline">
+              Remove
+            </button>
+          )}
         </div>
       ))}
+      {canManage && (
       <form action={formAction} className="flex flex-wrap items-center gap-1">
         <Select
           value={selectedProduct}
@@ -330,6 +339,7 @@ function LineItemsSection({
         </Button>
         {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
       </form>
+      )}
     </div>
   );
 }
@@ -389,6 +399,8 @@ export function InvoiceCard({
   studentName,
   pdfUrl,
   revalidateTo,
+  canManage = false,
+  isSuperAdmin = false,
 }: {
   invoice: {
     id: string;
@@ -412,6 +424,8 @@ export function InvoiceCard({
   studentName?: string;
   pdfUrl?: string | null;
   revalidateTo: string;
+  canManage?: boolean;
+  isSuperAdmin?: boolean;
 }) {
   const [editingInvoice, setEditingInvoice] = useState(false);
   const [editingInstallmentId, setEditingInstallmentId] = useState<string | null>(null);
@@ -432,17 +446,23 @@ export function InvoiceCard({
         <div className="flex items-center gap-2">
           <Badge tone={STATUS_TONE[status]}>{INVOICE_STATUS_LABELS[status]}</Badge>
           <Badge tone={invoice.sent_status === "sent" ? "success" : "neutral"}>{invoice.sent_status}</Badge>
-          <Button type="button" onClick={() => sendReceipt(invoice.id, studentId)} size="sm">
-            Send receipt
-          </Button>
-          <Button type="button" onClick={() => setEditingInvoice((v) => !v)} size="sm">
-            ✏️ Edit
-          </Button>
-          <DeleteInvoiceButton invoiceId={invoice.id} studentId={studentId} revalidateTo={revalidateTo} />
+          {canManage && (
+            <>
+              <Button type="button" onClick={() => sendReceipt(invoice.id, studentId)} size="sm">
+                Send receipt
+              </Button>
+              <Button type="button" onClick={() => setEditingInvoice((v) => !v)} size="sm">
+                ✏️ Edit
+              </Button>
+            </>
+          )}
+          {isSuperAdmin && <DeleteInvoiceButton invoiceId={invoice.id} studentId={studentId} revalidateTo={revalidateTo} />}
         </div>
       </div>
 
-      {editingInvoice && <EditInvoiceForm invoice={invoice} studentId={studentId} revalidateTo={revalidateTo} onDone={() => setEditingInvoice(false)} />}
+      {editingInvoice && canManage && (
+        <EditInvoiceForm invoice={invoice} studentId={studentId} revalidateTo={revalidateTo} onDone={() => setEditingInvoice(false)} />
+      )}
 
       <div className="mt-2 border-t border-border pt-2">
         <AdminFeeSection
@@ -454,12 +474,13 @@ export function InvoiceCard({
             admin_fee_payment_method: invoice.admin_fee_payment_method ?? null,
           }}
           revalidateTo={revalidateTo}
+          canManage={canManage}
         />
       </div>
 
       <div className="mt-2 flex flex-col gap-1 border-t border-border pt-2">
         {installments.map((i) =>
-          editingInstallmentId === i.id ? (
+          editingInstallmentId === i.id && canManage ? (
             <EditInstallmentForm key={i.id} installment={i} studentId={studentId} revalidateTo={revalidateTo} onDone={() => setEditingInstallmentId(null)} />
           ) : (
             <div key={i.id} className="flex items-center justify-between text-xs text-muted">
@@ -468,10 +489,18 @@ export function InvoiceCard({
                 {i.due_date && ` · due ${new Date(i.due_date).toLocaleDateString()}`}
               </span>
               <div className="flex items-center gap-1">
-                {i.status === "paid" ? <Badge tone="success">Paid</Badge> : <MarkPaidForm installmentId={i.id} studentId={studentId} />}
-                <button type="button" onClick={() => setEditingInstallmentId(i.id)} className="rounded-md border border-border px-1.5 py-0.5 text-xs hover:bg-bg">
-                  ✏️
-                </button>
+                {i.status === "paid" ? (
+                  <Badge tone="success">Paid</Badge>
+                ) : canManage ? (
+                  <MarkPaidForm installmentId={i.id} studentId={studentId} />
+                ) : (
+                  <Badge tone="warning">{i.status}</Badge>
+                )}
+                {canManage && (
+                  <button type="button" onClick={() => setEditingInstallmentId(i.id)} className="rounded-md border border-border px-1.5 py-0.5 text-xs hover:bg-bg">
+                    ✏️
+                  </button>
+                )}
               </div>
             </div>
           )
@@ -479,7 +508,14 @@ export function InvoiceCard({
       </div>
 
       <div className="mt-2 border-t border-border pt-2">
-        <LineItemsSection invoiceId={invoice.id} lineItems={lineItems} feeProducts={feeProducts} currency={invoice.currency} revalidateTo={revalidateTo} />
+        <LineItemsSection
+          invoiceId={invoice.id}
+          lineItems={lineItems}
+          feeProducts={feeProducts}
+          currency={invoice.currency}
+          revalidateTo={revalidateTo}
+          canManage={canManage}
+        />
       </div>
 
       <div className="mt-3 flex items-center gap-2 border-t border-border pt-2">
@@ -488,8 +524,12 @@ export function InvoiceCard({
             Download PDF
           </a>
         )}
-        <GeneratePdfButton invoiceId={invoice.id} studentId={studentId} revalidateTo={revalidateTo} hasExisting={Boolean(pdfUrl)} />
-        <SendInvoiceEmailButton invoiceId={invoice.id} studentId={studentId} revalidateTo={revalidateTo} />
+        {canManage && (
+          <>
+            <GeneratePdfButton invoiceId={invoice.id} studentId={studentId} revalidateTo={revalidateTo} hasExisting={Boolean(pdfUrl)} />
+            <SendInvoiceEmailButton invoiceId={invoice.id} studentId={studentId} revalidateTo={revalidateTo} />
+          </>
+        )}
       </div>
     </div>
   );

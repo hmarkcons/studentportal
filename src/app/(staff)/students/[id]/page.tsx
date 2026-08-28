@@ -29,6 +29,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   const role = staffRow?.role;
   const isSuperAdmin = role === "super_admin";
   const canModifyAgreement = role === "super_admin" || role === "processing";
+  const canManageInvoice = role === "super_admin" || role === "finance" || role === "processing";
 
   await ensureStudentDocumentRequirements(id);
 
@@ -322,7 +323,9 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       {signedAgreement && (
         <Card className="mt-6">
           <h3 className="mb-3 text-sm font-medium text-ink">Invoice</h3>
-          <GenerateInvoiceForm studentId={id} agreementId={signedAgreement.id} defaultInstallmentPlan={defaultInstallmentPlan} />
+          {canManageInvoice && (
+            <GenerateInvoiceForm studentId={id} agreementId={signedAgreement.id} defaultInstallmentPlan={defaultInstallmentPlan} />
+          )}
           <div className="mt-4 flex flex-col gap-3">
             {(invoices ?? []).map((inv) => (
               <InvoiceCard
@@ -334,6 +337,8 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                 studentId={id}
                 pdfUrl={invoicePdfUrls.get(inv.id)}
                 revalidateTo={`/students/${id}`}
+                canManage={canManageInvoice}
+                isSuperAdmin={isSuperAdmin}
               />
             ))}
           </div>

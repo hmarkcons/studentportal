@@ -11,6 +11,13 @@ function one<T>(v: T | T[] | null) {
 export default async function ConsultancyFeePage() {
   const supabase = await createClient();
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  const canManage = staffRow?.role === "super_admin" || staffRow?.role === "finance" || staffRow?.role === "processing";
+  const isSuperAdmin = staffRow?.role === "super_admin";
+
   const { data: invoices } = await supabase
     .from("invoices")
     .select(
@@ -74,9 +81,9 @@ export default async function ConsultancyFeePage() {
         <StatCard label="Overdue" value={counts.overdue} tone="danger" icon="⚠️" />
       </div>
 
-      <FeeProductCatalog products={feeProducts ?? []} />
+      <FeeProductCatalog products={feeProducts ?? []} canManage={canManage} />
 
-      <ConsultancyFeeList rows={rows} feeProducts={feeProducts ?? []} />
+      <ConsultancyFeeList rows={rows} feeProducts={feeProducts ?? []} canManage={canManage} isSuperAdmin={isSuperAdmin} />
     </div>
   );
 }

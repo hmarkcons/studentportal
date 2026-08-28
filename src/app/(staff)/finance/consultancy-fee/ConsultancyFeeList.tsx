@@ -17,7 +17,17 @@ type Row = {
   pdfUrl?: string | null;
 };
 
-export function ConsultancyFeeList({ rows, feeProducts }: { rows: Row[]; feeProducts: Parameters<typeof InvoiceCard>[0]["feeProducts"] }) {
+export function ConsultancyFeeList({
+  rows,
+  feeProducts,
+  canManage,
+  isSuperAdmin,
+}: {
+  rows: Row[];
+  feeProducts: Parameters<typeof InvoiceCard>[0]["feeProducts"];
+  canManage: boolean;
+  isSuperAdmin: boolean;
+}) {
   const [nameInput, setNameInput] = useState("");
   const [statusInput, setStatusInput] = useState("all");
   const [appliedName, setAppliedName] = useState("");
@@ -81,6 +91,8 @@ export function ConsultancyFeeList({ rows, feeProducts }: { rows: Row[]; feeProd
               studentName={r.studentName}
               pdfUrl={r.pdfUrl}
               revalidateTo="/finance/consultancy-fee"
+              canManage={canManage}
+              isSuperAdmin={isSuperAdmin}
             />
           </div>
         ))}
