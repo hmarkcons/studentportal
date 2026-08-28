@@ -1,13 +1,18 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { DataTable } from "@/components/ui/DataTable";
 import { NewApplicationForStudent } from "./NewApplicationForStudent";
+import { ApplicationsByStudent, type StudentApplicationGroup } from "./ApplicationsByStudent";
+
+type Destination = { display_name: string };
+type University = { name: string; city: string | null; destination: Destination | Destination[] | null };
+type Program = { name: string };
 
 type Row = {
   id: string;
   student_id: string;
   current_stage: string;
-  university: { destination: { display_name: string; pipeline_stages: string[] } | { display_name: string; pipeline_stages: string[] }[] | null } | { destination: unknown }[] | null;
+  deadline: string | null;
+  university: University | University[] | null;
+  program: Program | Program[] | null;
   student: { full_name: string } | { full_name: string }[] | null;
 };
 
@@ -21,82 +26,42 @@ export default async function ApplicationsBoardPage() {
   const { data: applications, error } = await supabase
     .from("applications")
     .select(
-      "id, student_id, current_stage, university:universities(destination:destinations(display_name, pipeline_stages)), student:leads(full_name)"
+      `id, student_id, current_stage, deadline,
+       university:universities(name, city, destination:destinations(display_name)),
+       program:programs(name),
+       student:leads(full_name)`
     )
     .returns<Row[]>();
 
   const { data: students } = await supabase.from("students").select("id, full_name").order("full_name");
 
-  const byStudent = new Map<string, { name: string; rows: Row[] }>();
+  const byStudent = new Map<string, StudentApplicationGroup>();
   (applications ?? []).forEach((app) => {
     const name = one(app.student)?.full_name ?? "Unknown";
-    if (!byStudent.has(app.student_id)) byStudent.set(app.student_id, { name, rows: [] });
-    byStudent.get(app.student_id)!.rows.push(app);
+    const university = one(app.university);
+    const destination = university ? one(university.destination) : null;
+    const program = one(app.program);
+    const country = destination?.display_name ?? "—";
+
+    if (!byStudent.has(app.student_id)) {
+      byStudent.set(app.student_id, { id: app.student_id, name, countries: [], apps: [] });
+    }
+    const group = byStudent.get(app.student_id)!;
+    if (!group.countries.includes(country)) group.countries.push(country);
+    group.apps.push({
+      id: app.id,
+      university: university?.name ?? "Unknown university",
+      city: university?.city ?? null,
+      country,
+      program: program?.name ?? "No program selected",
+      stage: app.current_stage,
+      deadline: app.deadline,
+      href: `/students/${app.student_id}/applications/${app.id}`,
+    });
   });
 
-  function counts(rows: Row[]) {
-    let submitted = 0;
-    let pending = 0;
-    let offer = 0;
-    for (const r of rows) {
-      const uni = one(r.university as never) as { destination?: unknown } | null;
-      const dest = uni?.destination ? (one(uni.destination as never) as { pipeline_stages?: string[] } | null) : null;
-      const firstStage = dest?.pipeline_stages?.[0];
-      if (r.current_stage === firstStage) pending++;
-      else submitted++;
-      if (r.current_stage.includes("offer")) offer++;
-    }
-    return { total: rows.length, submitted, pending, offer };
-  }
-
-  function countries(rows: Row[]) {
-    const names = new Set<string>();
-    for (const r of rows) {
-      const uni = one(r.university as never) as { destination?: unknown } | null;
-      const dest = uni?.destination ? (one(uni.destination as never) as { display_name?: string } | null) : null;
-      if (dest?.display_name) names.add(dest.display_name);
-    }
-    return Array.from(names);
-  }
-
-  const columns = [
-    { key: "student", header: "Student" },
-    { key: "countries", header: "Countries" },
-    { key: "total", header: "Total", align: "right" as const },
-    { key: "submitted", header: "Submitted", align: "right" as const },
-    { key: "pending", header: "Pending submission", align: "right" as const },
-    { key: "offer", header: "With offer letters", align: "right" as const },
-  ];
-
-  const rows = [...byStudent.entries()].map(([studentId, { name, rows: appRows }]) => {
-    const c = counts(appRows);
-    const countryNames = countries(appRows);
-    return {
-      id: studentId,
-      cells: {
-        student: (
-          <Link href={`/students/${studentId}/applications`} className="font-medium text-ink hover:text-primary">
-            {name}
-          </Link>
-        ),
-        countries: countryNames.join(", ") || "—",
-        total: c.total,
-        submitted: c.submitted,
-        pending: c.pending,
-        offer: c.offer,
-      },
-      csv: {
-        student: name,
-        countries: countryNames.join(", "),
-        total: String(c.total),
-        submitted: String(c.submitted),
-        pending: String(c.pending),
-        offer: String(c.offer),
-      },
-    };
-  });
-
-  const allCountries = Array.from(new Set(rows.flatMap((r) => r.csv.countries.split(", ").filter(Boolean)))).sort();
+  const groups = [...byStudent.values()].sort((a, b) => a.name.localeCompare(b.name));
+  const allCountries = Array.from(new Set(groups.flatMap((g) => g.countries).filter((c) => c !== "—"))).sort();
 
   return (
     <div className="w-full">
@@ -105,17 +70,7 @@ export default async function ApplicationsBoardPage() {
         <NewApplicationForStudent students={students ?? []} />
       </div>
       {error && <p className="text-sm text-danger">{error.message}</p>}
-
-      {!error && (
-        <DataTable
-          exportFilename="applications"
-          rows={rows}
-          columns={columns}
-          searchable
-          searchPlaceholder="Search student…"
-          filters={allCountries.length > 0 ? [{ key: "countries", label: "Country", options: allCountries }] : []}
-        />
-      )}
+      {!error && <ApplicationsByStudent groups={groups} allCountries={allCountries} />}
     </div>
   );
 }
