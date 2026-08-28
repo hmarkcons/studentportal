@@ -9,6 +9,7 @@ import { LEAD_STATUS_LABELS, LEAD_STATUS_TONE } from "@/lib/constants";
 import { CallLogForm } from "./CallLogForm";
 import { registerLead } from "@/lib/actions/leads";
 import { LeadEditForm } from "@/components/LeadEditForm";
+import { DeleteStudentButton } from "../../students/[id]/DeleteStudentButton";
 
 type CallLog = { id: string; status_at_time: string; remark: string; created_at: string; counselor: { full_name: string } | { full_name: string }[] | null };
 
@@ -19,6 +20,12 @@ function one<T>(v: T | T[] | null) {
 export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
   const { id } = await props.params;
   const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  const canDeleteLead = staffRow?.role === "super_admin" || staffRow?.role === "processing";
 
   const { data: lead, error } = await supabase
     .from("leads")
@@ -52,9 +59,14 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
             {lead.email ?? "No email"} · {lead.contact_number ?? "No phone"}
           </p>
         </div>
-        <Badge tone={LEAD_STATUS_TONE[lead.status as never] ?? "neutral"}>
-          {LEAD_STATUS_LABELS[lead.status as never] ?? lead.status}
-        </Badge>
+        <div className="flex flex-col items-end gap-2">
+          <Badge tone={LEAD_STATUS_TONE[lead.status as never] ?? "neutral"}>
+            {LEAD_STATUS_LABELS[lead.status as never] ?? lead.status}
+          </Badge>
+          {canDeleteLead && (
+            <DeleteStudentButton studentId={id} studentName={lead.full_name} redirectTo="/leads" label="🗑️ Delete lead" />
+          )}
+        </div>
       </div>
 
       {lead.registered_at ? (

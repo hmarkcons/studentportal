@@ -9,7 +9,7 @@ import { InlineRegistrationStatusCell } from "../InlineRegistrationStatusCell";
 export default async function StudentLayout({ children, params }: { children: React.ReactNode; params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { supabase, staff: staffRow } = await getStaffSession();
-  const isSuperAdmin = staffRow?.role === "super_admin";
+  const canDeleteStudent = staffRow?.role === "super_admin" || staffRow?.role === "processing";
 
   const [{ data: student, error }, { data: italyApp }] = await Promise.all([
     supabase
@@ -48,7 +48,7 @@ export default async function StudentLayout({ children, params }: { children: Re
             <Badge tone={student.portal_active ? "success" : "neutral"}>{student.portal_active ? "Portal active" : "Portal inactive"}</Badge>
             <InlineRegistrationStatusCell studentId={id} status={student.registration_status} />
           </div>
-          {isSuperAdmin && <DeleteStudentButton studentId={id} studentName={student.full_name} />}
+          {canDeleteStudent && <DeleteStudentButton studentId={id} studentName={student.full_name} />}
         </div>
       </div>
 

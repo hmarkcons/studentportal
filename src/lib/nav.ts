@@ -1,6 +1,7 @@
 import type { NavItem } from "@/components/AppShell";
 
 export const STAFF_NAV: NavItem[] = [
+  { label: "Dashboard", href: "/dashboard", icon: "🏠" },
   { label: "Leads", href: "/leads", icon: "📇" },
   { label: "Students", href: "/students", icon: "🎓" },
   { label: "Applications", href: "/applications", icon: "🗂️" },

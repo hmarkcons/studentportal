@@ -2,6 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+const REFUND_PERCENT: Record<string, number> = {
+  no_admission: 100,
+  visa_refusal: 50,
+};
 
 async function requireSuperAdmin(supabase: Awaited<ReturnType<typeof createClient>>) {
   const {
@@ -17,6 +23,86 @@ async function requireFinance(supabase: Awaited<ReturnType<typeof createClient>>
   } = await supabase.auth.getUser();
   const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
   return staffRow?.role === "finance" || staffRow?.role === "super_admin";
+}
+
+async function requireFinanceOrManagement(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  return staffRow?.role === "finance" || staffRow?.role === "management" || staffRow?.role === "super_admin";
+}
+
+// Any registered student whose visa was refused for a private-university-
+// track destination is entitled to a 50% consultancy refund, due within 90
+// days of the refusal notice -- surface these automatically instead of
+// requiring a manual entry. Idempotent: only inserts rows that don't already
+// exist for a given application.
+export async function syncVisaRefusalRefunds() {
+  const admin = createAdminClient();
+
+  const { data: refusals } = await admin
+    .from("visa_records")
+    .select(
+      "application_id, updated_at, application:applications(student_id, university:universities(destination:destinations(track)))"
+    )
+    .eq("outcome", "rejected");
+
+  if (!refusals || refusals.length === 0) return;
+
+  function one<T>(v: T | T[] | null) {
+    return Array.isArray(v) ? (v[0] ?? null) : v;
+  }
+
+  const privateApplicationIds = refusals
+    .filter((r) => {
+      const app = one(r.application as never) as { university?: unknown } | null;
+      const uni = app ? (one(app.university as never) as { destination?: unknown } | null) : null;
+      const dest = uni ? (one(uni.destination as never) as { track?: string } | null) : null;
+      return dest?.track === "private";
+    })
+    .map((r) => ({ applicationId: r.application_id, refusalDate: r.updated_at }));
+
+  if (privateApplicationIds.length === 0) return;
+
+  const { data: existing } = await admin
+    .from("refund_requests")
+    .select("application_id")
+    .eq("trigger_type", "visa_refusal")
+    .in(
+      "application_id",
+      privateApplicationIds.map((p) => p.applicationId)
+    );
+  const existingIds = new Set((existing ?? []).map((e) => e.application_id));
+
+  const toCreate = privateApplicationIds.filter((p) => !existingIds.has(p.applicationId));
+  if (toCreate.length === 0) return;
+
+  for (const { applicationId, refusalDate } of toCreate) {
+    const { data: app } = await admin.from("applications").select("student_id").eq("id", applicationId).maybeSingle();
+    if (!app) continue;
+
+    const { data: invoice } = await admin
+      .from("invoices")
+      .select("consultancy_fee, currency")
+      .eq("student_id", app.student_id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const amount = invoice?.consultancy_fee != null ? Math.round(invoice.consultancy_fee * 0.5 * 100) / 100 : null;
+
+    await admin.from("refund_requests").insert({
+      student_id: app.student_id,
+      application_id: applicationId,
+      trigger_type: "visa_refusal",
+      refund_percent: 50,
+      refusal_notice_date: String(refusalDate).slice(0, 10),
+      reason: "Visa refusal — private-university destination (auto-detected, 50% consultancy refund)",
+      amount,
+      currency: invoice?.currency ?? null,
+    });
+  }
 }
 
 export async function createStaffCommission(revalidateTo: string, _prevState: unknown, formData: FormData) {
@@ -118,11 +204,39 @@ export async function createRefundRequest(_prevState: unknown, formData: FormDat
 
   const student_id = String(formData.get("student_id") ?? "");
   const reason = String(formData.get("reason") ?? "").trim();
-  const amount = formData.get("amount") ? Number(formData.get("amount")) : null;
+  const trigger_type = String(formData.get("trigger_type") ?? "manual");
+  const refusal_notice_date = String(formData.get("refusal_notice_date") ?? "").trim() || null;
+  let amount = formData.get("amount") ? Number(formData.get("amount")) : null;
 
   if (!student_id || !reason) return { error: "Student and reason are required." };
 
-  const { error } = await supabase.from("refund_requests").insert({ student_id, reason, amount, requested_by: user?.id });
+  const refund_percent = REFUND_PERCENT[trigger_type] ?? null;
+  let currency: string | null = null;
+
+  if (refund_percent != null) {
+    const { data: invoice } = await supabase
+      .from("invoices")
+      .select("consultancy_fee, currency")
+      .eq("student_id", student_id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    currency = invoice?.currency ?? null;
+    if (amount == null && invoice?.consultancy_fee != null) {
+      amount = Math.round(invoice.consultancy_fee * (refund_percent / 100) * 100) / 100;
+    }
+  }
+
+  const { error } = await supabase.from("refund_requests").insert({
+    student_id,
+    reason,
+    amount,
+    currency,
+    trigger_type,
+    refund_percent,
+    refusal_notice_date,
+    requested_by: user?.id,
+  });
   if (error) return { error: error.message };
 
   revalidatePath("/finance/refunds");
@@ -359,9 +473,42 @@ export async function uploadPartnerCommissionProof(id: string, revalidateTo: str
 
 export async function updateRefundStatus(id: string, revalidateTo: string, status: string) {
   const supabase = await createClient();
+  if (!(await requireFinanceOrManagement(supabase))) return { error: "Only Finance/Management/Super Admin can update refund status." };
+
+  const { data: refund } = await supabase.from("refund_requests").select("eligibility_status").eq("id", id).maybeSingle();
+  if (refund?.eligibility_status === "ineligible_reapplying" && (status === "approved" || status === "processed")) {
+    return { error: "This student is marked ineligible for a refund (reapplying for a later intake)." };
+  }
+
   const patch: Record<string, unknown> = { status };
   if (status === "approved") patch.approved_at = new Date().toISOString();
   if (status === "processed") patch.processed_at = new Date().toISOString();
-  await supabase.from("refund_requests").update(patch).eq("id", id);
+  const { error } = await supabase.from("refund_requests").update(patch).eq("id", id);
+  if (error) return { error: error.message };
   revalidatePath(revalidateTo);
+  return { success: true };
+}
+
+export async function updateRefundEligibility(revalidateTo: string, _prevState: unknown, formData: FormData) {
+  const supabase = await createClient();
+  if (!(await requireFinanceOrManagement(supabase))) return { error: "Only Finance/Management/Super Admin can update refund eligibility." };
+
+  const id = String(formData.get("id") ?? "");
+  const eligibility_status = String(formData.get("eligibility_status") ?? "eligible");
+  const next_intake_note = String(formData.get("next_intake_note") ?? "").trim() || null;
+  const next_intake_country_id = String(formData.get("next_intake_country_id") ?? "").trim() || null;
+
+  if (!id) return { error: "Missing refund record." };
+  if (eligibility_status === "ineligible_reapplying" && !next_intake_country_id) {
+    return { error: "Select the destination country for the next intake." };
+  }
+
+  const { error } = await supabase
+    .from("refund_requests")
+    .update({ eligibility_status, next_intake_note, next_intake_country_id })
+    .eq("id", id);
+  if (error) return { error: error.message };
+
+  revalidatePath(revalidateTo);
+  return { success: true };
 }

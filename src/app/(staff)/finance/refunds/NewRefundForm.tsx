@@ -18,7 +18,13 @@ export function NewRefundForm({ students }: { students: { id: string; full_name:
           </option>
         ))}
       </Select>
-      <Input name="amount" type="number" step="0.01" placeholder="Amount" className="w-32" />
+      <Select name="trigger_type" defaultValue="manual">
+        <option value="manual">Manual</option>
+        <option value="no_admission">No admission — 100%</option>
+        <option value="visa_refusal">Visa refusal (private) — 50%</option>
+      </Select>
+      <Input name="refusal_notice_date" type="date" className="w-40" title="Refusal notice date" />
+      <Input name="amount" type="number" step="0.01" placeholder="Amount (auto if blank)" className="w-40" />
       <Input name="reason" placeholder="Reason" required className="min-w-[200px] flex-1" />
       <Button type="submit" variant="primary" pending={pending}>
         Add refund

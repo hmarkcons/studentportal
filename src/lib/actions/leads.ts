@@ -337,7 +337,8 @@ export async function deleteStudent(studentId: string) {
     data: { user },
   } = await supabase.auth.getUser();
   const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  if (staffRow?.role !== "super_admin") return { error: "Only Super Admin can delete a student record." };
+  if (staffRow?.role !== "super_admin" && staffRow?.role !== "processing")
+    return { error: "Only Super Admin or Processing can delete a lead/student record." };
 
   const { data: lead } = await supabase.from("leads").select("auth_user_id").eq("id", studentId).maybeSingle();
   const { data: apps } = await supabase.from("applications").select("id").eq("student_id", studentId);

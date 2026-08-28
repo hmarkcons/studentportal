@@ -4,7 +4,17 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { deleteStudent } from "@/lib/actions/leads";
 
-export function DeleteStudentButton({ studentId, studentName }: { studentId: string; studentName: string }) {
+export function DeleteStudentButton({
+  studentId,
+  studentName,
+  redirectTo = "/students",
+  label = "🗑️ Delete student",
+}: {
+  studentId: string;
+  studentName: string;
+  redirectTo?: string;
+  label?: string;
+}) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,7 +34,7 @@ export function DeleteStudentButton({ studentId, studentName }: { studentId: str
       setError(result.error);
       setPending(false);
     } else {
-      router.push("/students");
+      router.push(redirectTo);
     }
   }
 
@@ -35,7 +45,7 @@ export function DeleteStudentButton({ studentId, studentName }: { studentId: str
         disabled={pending}
         className="text-xs text-danger hover:underline disabled:opacity-50"
       >
-        {pending ? "Deleting…" : "🗑️ Delete student"}
+        {pending ? "Deleting…" : label}
       </button>
       {error && <p className="mt-1 text-xs text-danger">{error}</p>}
     </div>
