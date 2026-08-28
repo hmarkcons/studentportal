@@ -4,6 +4,7 @@ import { DataTable } from "@/components/ui/DataTable";
 import { LEAD_STATUS_LABELS } from "@/lib/constants";
 import { ImportLeadsForm } from "./ImportLeadsForm";
 import { InlineStatusCell } from "./InlineStatusCell";
+import { RowActionsMenu } from "@/components/RowActionsMenu";
 
 type LeadRow = {
   id: string;
@@ -23,6 +24,12 @@ function one<T>(v: T | T[] | null) {
 export default async function LeadsPage() {
   const supabase = await createClient();
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  const canDelete = staffRow?.role === "super_admin" || staffRow?.role === "processing";
+
   const { data: leads, error } = await supabase
     .from("leads")
     .select(
@@ -38,6 +45,7 @@ export default async function LeadsPage() {
     { key: "status", header: "Status" },
     { key: "counselor", header: "Counselor" },
     { key: "date", header: "Inquiry date" },
+    { key: "actions", header: "", align: "right" as const },
   ];
 
   const rows = (leads ?? []).map((r) => ({
@@ -53,6 +61,9 @@ export default async function LeadsPage() {
       status: <InlineStatusCell leadId={r.id} currentStatus={r.status} />,
       counselor: one(r.assigned_counselor)?.full_name ?? "Unassigned",
       date: new Date(r.date_of_inquiry).toLocaleDateString(),
+      actions: (
+        <RowActionsMenu id={r.id} name={r.full_name} editHref={`/leads/${r.id}`} canDelete={canDelete} deleteLabel="Delete lead" />
+      ),
     },
     csv: {
       name: r.full_name,

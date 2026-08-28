@@ -4,6 +4,7 @@ import { DataTable } from "@/components/ui/DataTable";
 import { Badge } from "@/components/ui/Badge";
 import { ImportRegisteredStudentsForm } from "./ImportRegisteredStudentsForm";
 import { InlineRegistrationStatusCell } from "./InlineRegistrationStatusCell";
+import { RowActionsMenu } from "@/components/RowActionsMenu";
 
 type StudentRow = {
   id: string;
@@ -24,6 +25,12 @@ function one<T>(v: T | T[] | null) {
 export default async function StudentsPage() {
   const supabase = await createClient();
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  const canDelete = staffRow?.role === "super_admin" || staffRow?.role === "processing";
+
   const { data: students, error } = await supabase
     .from("students")
     .select(
@@ -40,6 +47,7 @@ export default async function StudentsPage() {
     { key: "regStatus", header: "Registration status" },
     { key: "portal", header: "Portal" },
     { key: "date", header: "Registered" },
+    { key: "actions", header: "", align: "right" as const },
   ];
 
   const rows = (students ?? []).map((r) => ({
@@ -56,6 +64,9 @@ export default async function StudentsPage() {
       regStatus: <InlineRegistrationStatusCell studentId={r.id} status={r.registration_status} />,
       portal: <Badge tone={r.portal_active ? "success" : "neutral"}>{r.portal_active ? "Active" : "Inactive"}</Badge>,
       date: new Date(r.registered_at).toLocaleDateString(),
+      actions: (
+        <RowActionsMenu id={r.id} name={r.full_name} editHref={`/students/${r.id}`} canDelete={canDelete} deleteLabel="Delete student" />
+      ),
     },
     csv: {
       name: r.full_name,
