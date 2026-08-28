@@ -24,29 +24,36 @@ export async function createLead(_prevState: unknown, formData: FormData) {
     return { error: "Name is required." };
   }
 
-  const { data, error } = await supabase
-    .from("leads")
-    .insert({
-      full_name,
-      contact_number,
-      email,
-      platform_source,
-      current_qualification,
-      level_applying_for,
-      course_of_interest,
-      country_of_interest,
-      assigned_counselor_id,
-    })
-    .select("id")
-    .single();
+  // Insert without .select() — chaining .select() makes PostgREST append a
+  // RETURNING clause, and Postgres additionally requires the returned row to
+  // satisfy the table's SELECT policy. leads_select falls back to
+  // staff_can_view_student(), which does its own nested lookup against
+  // `leads` — a lookup that can't yet see a row inserted earlier in the same
+  // command, so it always evaluates false and the whole insert is rejected
+  // for any role that isn't covered by a direct, tuple-local leads_select
+  // clause (i.e. every role except the assigned counselor). Generating the
+  // id ourselves sidesteps RETURNING entirely.
+  const id = crypto.randomUUID();
+  const { error } = await supabase.from("leads").insert({
+    id,
+    full_name,
+    contact_number,
+    email,
+    platform_source,
+    current_qualification,
+    level_applying_for,
+    course_of_interest,
+    country_of_interest,
+    assigned_counselor_id,
+  });
 
   if (error) return { error: error.message };
 
   if (destination_ids.length > 0) {
-    await supabase.from("lead_destinations").insert(destination_ids.map((destination_id) => ({ lead_id: data.id, destination_id })));
+    await supabase.from("lead_destinations").insert(destination_ids.map((destination_id) => ({ lead_id: id, destination_id })));
   }
 
-  redirect(`/leads/${data.id}`);
+  redirect(`/leads/${id}`);
 }
 
 export async function updateLead(leadId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
@@ -204,30 +211,36 @@ export async function registerStudentManually(_prevState: unknown, formData: For
   const destination_names = formData.getAll("destination_names").map(String).filter(Boolean);
   const assigned_counselor_id = String(formData.get("assigned_counselor_id") ?? "") || null;
 
-  const { data, error } = await supabase
-    .from("leads")
-    .insert({
-      full_name,
-      contact_number,
-      email,
-      current_qualification,
-      level_applying_for,
-      course_of_interest,
-      country_of_interest: destination_names.join(", ") || null,
-      assigned_counselor_id,
-      status: "registered",
-    })
-    .select("id")
-    .single();
+  // See createLead's comment above — inserting without .select() avoids the
+  // RETURNING+RLS interaction that otherwise rejects this insert for any
+  // role not directly covered by leads_select's tuple-local clauses.
+  const id = crypto.randomUUID();
+  const { error } = await supabase.from("leads").insert({
+    id,
+    full_name,
+    contact_number,
+    email,
+    current_qualification,
+    level_applying_for,
+    course_of_interest,
+    country_of_interest: destination_names.join(", ") || null,
+    assigned_counselor_id,
+    status: "registered",
+    // handle_lead_registration() only stamps this on UPDATE (status
+    // transitioning into 'registered'), not on INSERT — without it here,
+    // this row would never satisfy the students view's `registered_at is
+    // not null` filter and would silently never appear as a student.
+    registered_at: new Date().toISOString(),
+  });
 
   if (error) return { error: error.message };
 
   if (destination_ids.length > 0) {
-    await supabase.from("lead_destinations").insert(destination_ids.map((destination_id) => ({ lead_id: data.id, destination_id })));
+    await supabase.from("lead_destinations").insert(destination_ids.map((destination_id) => ({ lead_id: id, destination_id })));
   }
 
   revalidatePath("/students");
-  redirect(`/students/${data.id}`);
+  redirect(`/students/${id}`);
 }
 
 export async function updateRegistrationStatus(studentId: string, _prevState: unknown, formData: FormData) {
