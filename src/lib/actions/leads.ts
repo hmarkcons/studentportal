@@ -183,6 +183,10 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
       address: r.address || null,
       home_phone: r.home_phone || null,
       status: "registered" as const,
+      // See registerStudentManually's comment — handle_lead_registration()
+      // only stamps this on UPDATE, not INSERT, so it must be set explicitly
+      // or these rows would never satisfy the students view's filter.
+      registered_at: new Date().toISOString(),
     }));
 
   if (records.length === 0) {
