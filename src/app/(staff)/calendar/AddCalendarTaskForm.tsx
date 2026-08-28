@@ -6,7 +6,13 @@ import { Input, Select } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 
-export function AddCalendarTaskForm({ applications }: { applications: { id: string; label: string }[] }) {
+export function AddCalendarTaskForm({
+  applications,
+  defaultDate,
+}: {
+  applications: { id: string; label: string }[];
+  defaultDate?: string;
+}) {
   const [applicationId, setApplicationId] = useState(applications[0]?.id ?? "");
   const action = addApplicationTask.bind(null, applicationId, "", "/calendar");
   const [state, formAction, pending] = useActionState(action, undefined);
@@ -25,7 +31,7 @@ export function AddCalendarTaskForm({ applications }: { applications: { id: stri
         ))}
       </Select>
       <Input name="description" placeholder="Task" required className="min-w-[200px] flex-1" />
-      <Input name="due_date" type="date" required />
+      <Input name="due_date" type="date" defaultValue={defaultDate} required />
       <Select name="priority" defaultValue="medium">
         <option value="urgent">Urgent</option>
         <option value="medium">Medium</option>

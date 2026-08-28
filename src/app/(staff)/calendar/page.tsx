@@ -1,41 +1,44 @@
-import { createClient } from "@/lib/supabase/server";
-import { Card } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
-import { CalendarTaskRow } from "./CalendarTaskRow";
-import { AddCalendarTaskForm } from "./AddCalendarTaskForm";
+import { getStaffSession } from "@/lib/auth/session";
+import { toYMD, parseYMD, getMonthGridDays, getWeekDays } from "@/lib/calendarDates";
+import { CalendarShell } from "./CalendarShell";
+import type { CalendarEvent, CalendarTone } from "./types";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
 }
 
-type Event = {
-  date: string;
-  type: string;
-  label: string;
-  tone: "warning" | "danger" | "info";
-  taskId?: string;
-  priority?: string;
-  description?: string;
+const PRIORITY_TONE: Record<string, CalendarTone> = {
+  urgent: "danger",
+  medium: "warning",
+  low: "neutral",
 };
 
-function groupByDay(events: Event[]) {
-  const groups = new Map<string, Event[]>();
-  for (const e of events) {
-    const day = e.date.slice(0, 10);
-    groups.set(day, [...(groups.get(day) ?? []), e]);
-  }
-  return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
-}
+export default async function CalendarPage(props: {
+  searchParams: Promise<{ view?: string; date?: string; staff?: string }>;
+}) {
+  const { view: viewParam, date: dateParam, staff: staffParam } = await props.searchParams;
+  const view = viewParam === "week" ? "week" : "month";
 
-export default async function CalendarPage() {
-  const supabase = await createClient();
-  const today = new Date().toISOString().slice(0, 10);
+  const { supabase, staff: viewerStaff } = await getStaffSession();
+  const viewerId = viewerStaff?.id ?? "";
+  const canViewOthers = viewerStaff?.role === "management" || viewerStaff?.role === "super_admin";
+  const targetStaffId = canViewOthers && staffParam ? staffParam : viewerId;
+
+  const today = new Date();
+  const todayStr = toYMD(today);
+  const referenceDate = dateParam ? parseYMD(dateParam) : today;
+
+  const rangeDays = view === "month" ? getMonthGridDays(referenceDate) : getWeekDays(referenceDate);
+  const rangeStartStr = toYMD(rangeDays[0]);
+  const rangeEndStr = toYMD(rangeDays[rangeDays.length - 1]);
 
   const { data: tasks } = await supabase
     .from("application_tasks")
-    .select("id, description, due_date, priority, application:applications(student:leads(full_name))")
+    .select("id, description, due_date, priority, status, application:applications(student:leads(full_name))")
     .eq("status", "pending")
     .not("due_date", "is", null)
+    .gte("due_date", rangeStartStr)
+    .lte("due_date", rangeEndStr)
     .order("due_date");
 
   const { data: reminders } = await supabase
@@ -43,6 +46,8 @@ export default async function CalendarPage() {
     .select("id, type, due_date, student:leads(full_name)")
     .eq("resolved", false)
     .not("due_date", "is", null)
+    .gte("due_date", rangeStartStr)
+    .lte("due_date", rangeEndStr)
     .order("due_date");
 
   const { data: visaRecords } = await supabase
@@ -51,137 +56,137 @@ export default async function CalendarPage() {
 
   const { data: programDeadlines } = await supabase
     .from("applications")
-    .select("id, intake, program:programs(name, application_deadline), student:leads(full_name)")
+    .select("id, program:programs(name, application_deadline), student:leads(full_name)")
     .not("program_id", "is", null);
 
-  const events: Event[] = [];
+  const { data: personalTasks } = targetStaffId
+    ? await supabase
+        .from("personal_tasks")
+        .select("id, title, description, due_date, due_time, priority, status")
+        .eq("owner_id", targetStaffId)
+        .gte("due_date", rangeStartStr)
+        .lte("due_date", rangeEndStr)
+        .order("due_date")
+    : { data: [] };
+
+  const events: CalendarEvent[] = [];
 
   (tasks ?? []).forEach((t) => {
     events.push({
+      id: `task-${t.id}`,
       date: t.due_date!,
-      type: "Task",
+      time: null,
+      kind: "task",
       label: `${t.description} — ${one(one(t.application)?.student)?.full_name ?? "?"}`,
-      tone: t.due_date! < today ? "danger" : "warning",
-      taskId: t.id,
+      tone: t.status === "done" ? "neutral" : (PRIORITY_TONE[t.priority] ?? "warning"),
       priority: t.priority,
+      done: t.status === "done",
+      taskId: t.id,
       description: t.description,
     });
   });
 
   (reminders ?? []).forEach((r) => {
     events.push({
+      id: `reminder-${r.id}`,
       date: r.due_date!,
-      type: r.type.replace(/_/g, " "),
-      label: `${one(r.student)?.full_name ?? "?"}`,
-      tone: r.due_date! < today ? "danger" : "info",
+      time: null,
+      kind: "reminder",
+      label: `${r.type.replace(/_/g, " ")} — ${one(r.student)?.full_name ?? "?"}`,
+      tone: "info",
     });
   });
 
   (visaRecords ?? []).forEach((v) => {
     const name = one(one(v.application)?.student)?.full_name ?? "?";
-    if (v.biometric_appointment) events.push({ date: v.biometric_appointment, type: "Biometric appointment", label: name, tone: "info" });
-    if (v.interview_appointment) events.push({ date: v.interview_appointment, type: "Visa interview", label: name, tone: "info" });
-    if (v.medical_appointment) events.push({ date: v.medical_appointment, type: "Medical exam", label: name, tone: "info" });
+    const items: [string | null, string][] = [
+      [v.biometric_appointment, "Biometric appointment"],
+      [v.interview_appointment, "Visa interview"],
+      [v.medical_appointment, "Medical exam"],
+    ];
+    items.forEach(([ts, label], i) => {
+      if (!ts) return;
+      const d = new Date(ts);
+      const dateStr = d.toISOString().slice(0, 10);
+      if (dateStr < rangeStartStr || dateStr > rangeEndStr) return;
+      events.push({
+        id: `visa-${i}-${ts}-${name}`,
+        date: dateStr,
+        time: d.toISOString().slice(11, 16),
+        kind: "visa",
+        label: `${label} — ${name}`,
+        tone: "info",
+      });
+    });
   });
 
   (programDeadlines ?? []).forEach((a) => {
     const deadline = one(a.program)?.application_deadline;
-    if (deadline) {
-      events.push({
-        date: deadline,
-        type: "Application deadline",
-        label: `${one(a.program)?.name} — ${one(a.student)?.full_name ?? "?"}`,
-        tone: deadline < today ? "danger" : "warning",
-      });
-    }
+    if (!deadline) return;
+    if (deadline < rangeStartStr || deadline > rangeEndStr) return;
+    events.push({
+      id: `deadline-${a.id}`,
+      date: deadline,
+      time: null,
+      kind: "deadline",
+      label: `${one(a.program)?.name} deadline — ${one(a.student)?.full_name ?? "?"}`,
+      tone: deadline < todayStr ? "danger" : "warning",
+    });
   });
 
-  events.sort((a, b) => a.date.localeCompare(b.date));
-  const upcoming = events.filter((e) => e.date >= today);
-  const overdue = events.filter((e) => e.date < today);
+  (personalTasks ?? []).forEach((p) => {
+    events.push({
+      id: `personal-${p.id}`,
+      date: p.due_date,
+      time: p.due_time ? p.due_time.slice(0, 5) : null,
+      kind: "personal",
+      label: p.title,
+      tone: p.status === "done" ? "neutral" : "primary",
+      priority: p.priority,
+      done: p.status === "done",
+      personalTaskId: p.id,
+      description: p.description ?? "",
+    });
+  });
+
+  const eventsByDate: Record<string, CalendarEvent[]> = {};
+  for (const e of events) {
+    (eventsByDate[e.date] ??= []).push(e);
+  }
+  for (const key in eventsByDate) {
+    eventsByDate[key].sort((a, b) => (a.time ?? "99:99").localeCompare(b.time ?? "99:99"));
+  }
 
   const { data: applications } = await supabase
     .from("applications")
     .select("id, student:leads(full_name), university:universities(name)")
     .order("created_at", { ascending: false });
-
   const applicationOptions = (applications ?? []).map((a) => ({
     id: a.id,
     label: `${one(a.student)?.full_name ?? "Student"} — ${one(a.university)?.name ?? "University"}`,
   }));
 
+  const { data: staffList } = canViewOthers
+    ? await supabase.from("staff").select("id, full_name").eq("status", "active").order("full_name")
+    : { data: [] };
+
   return (
     <div className="w-full">
       <h2 className="mb-1 text-lg font-semibold text-ink">Calendar</h2>
-      <p className="mb-6 text-sm text-muted">Intake/application deadlines, visa appointments, tasks, and reminders across your students.</p>
-
-      <Card className="mb-6">
-        <h3 className="mb-3 text-sm font-medium text-ink">Add task</h3>
-        <AddCalendarTaskForm applications={applicationOptions} />
-      </Card>
-
-      {overdue.length > 0 && (
-        <Card className="mb-6 border-danger/40">
-          <h3 className="mb-3 text-sm font-medium text-danger">Overdue ({overdue.length})</h3>
-          <div className="flex flex-col divide-y divide-border">
-            {overdue.map((e, i) =>
-              e.taskId ? (
-                <div key={i} className="py-2">
-                  <CalendarTaskRow
-                    taskId={e.taskId}
-                    label={e.label}
-                    description={e.description ?? ""}
-                    dueDate={e.date}
-                    priority={e.priority ?? "medium"}
-                    tone={e.tone}
-                  />
-                </div>
-              ) : (
-                <div key={i} className="flex items-center justify-between py-2 text-sm">
-                  <span className="text-ink">
-                    {e.label} <span className="text-muted">· {e.type}</span>
-                  </span>
-                  <span className="text-xs text-muted">{new Date(e.date).toLocaleDateString()}</span>
-                </div>
-              )
-            )}
-          </div>
-        </Card>
-      )}
-
-      <Card>
-        <h3 className="mb-3 text-sm font-medium text-ink">Upcoming</h3>
-        <div className="flex flex-col divide-y divide-border">
-          {groupByDay(upcoming).map(([day, dayEvents]) => (
-            <div key={day} className="py-3">
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
-                {new Date(day).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
-              </p>
-              <div className="flex flex-col gap-1.5">
-                {dayEvents.map((e, i) =>
-                  e.taskId ? (
-                    <CalendarTaskRow
-                      key={i}
-                      taskId={e.taskId}
-                      label={e.label}
-                      description={e.description ?? ""}
-                      dueDate={e.date}
-                      priority={e.priority ?? "medium"}
-                      tone={e.tone}
-                    />
-                  ) : (
-                    <div key={i} className="flex items-center justify-between text-sm">
-                      <span className="text-ink">{e.label}</span>
-                      <Badge tone={e.tone}>{e.type}</Badge>
-                    </div>
-                  )
-                )}
-              </div>
-            </div>
-          ))}
-          {upcoming.length === 0 && <p className="py-4 text-sm text-muted">Nothing scheduled.</p>}
-        </div>
-      </Card>
+      <p className="mb-4 text-sm text-muted">
+        Weekly/monthly view of tasks, reminders, deadlines, and visa appointments — plus your own personal reminders.
+      </p>
+      <CalendarShell
+        view={view}
+        referenceDate={toYMD(referenceDate)}
+        todayStr={todayStr}
+        eventsByDate={eventsByDate}
+        applicationOptions={applicationOptions}
+        staffOptions={staffList ?? []}
+        canViewOthers={canViewOthers}
+        selectedStaffId={targetStaffId}
+        viewerStaffId={viewerId}
+      />
     </div>
   );
 }
