@@ -83,7 +83,7 @@ export type AgreementPdfData = {
   };
   agreementDate: string;
   signatureDataUri: string | null;
-  consultantName: string | null;
+  signatoryName: string | null;
 };
 
 function money(symbol: string, n: number) {
@@ -243,7 +243,7 @@ export function AgreementDocument({ data }: { data: AgreementPdfData }) {
             <View style={styles.signLine}>{data.signatureDataUri && <Image src={data.signatureDataUri} style={styles.signImg} />}</View>
             <Text style={styles.signCaption}>(Signature) HMARK Consultants</Text>
             <View style={styles.signNameLine}>
-              <Text style={styles.signNameText}>{data.consultantName ?? ""}</Text>
+              <Text style={styles.signNameText}>{data.signatoryName ?? ""}</Text>
             </View>
             <Text style={styles.signNameCaption}>[Consultant Full Name]</Text>
           </View>

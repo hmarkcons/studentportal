@@ -64,7 +64,7 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
 
   const { data: agreement, error: agreementError } = await supabase
     .from("agreements")
-    .select("id, template_id, admin_charge_override, consultancy_fee_override, discount_amount, generated_by, created_at")
+    .select("id, template_id, admin_charge_override, consultancy_fee_override, discount_amount, created_at")
     .eq("id", agreementId)
     .single();
   if (agreementError || !agreement) return { error: agreementError?.message ?? "Agreement not found." };
@@ -72,7 +72,7 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
 
   const { data: template } = await supabase
     .from("agreement_templates")
-    .select("destination:destinations(country_code, track, display_name, admin_charge, consultancy_fee, consultancy_fee_currency)")
+    .select("signatory_name, destination:destinations(country_code, track, display_name, admin_charge, consultancy_fee, consultancy_fee_currency)")
     .eq("id", agreement.template_id)
     .maybeSingle();
   const destination = template?.destination
@@ -105,11 +105,10 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
     .eq("student_id", studentId)
     .maybeSingle();
 
-  let consultantName: string | null = null;
-  if (agreement.generated_by) {
-    const { data: staffRow } = await supabase.from("staff").select("full_name").eq("id", agreement.generated_by).maybeSingle();
-    consultantName = staffRow?.full_name ?? null;
-  }
+  // The doc's rule: the agreement's signatory is always the one fixed
+  // authorized person on the template, never the staff member who
+  // generated it (that's tracked separately via agreements.generated_by).
+  const signatoryName = template?.signatory_name ?? null;
 
   const { data: sigFile } = await supabase.storage.from("documents").download("branding/hmark-signature.png");
   const signatureDataUri = sigFile ? `data:image/png;base64,${Buffer.from(await sigFile.arrayBuffer()).toString("base64")}` : null;
@@ -148,7 +147,7 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
       },
       agreementDate: formatAgreementDate(new Date(agreement.created_at)),
       signatureDataUri,
-      consultantName,
+      signatoryName,
     },
   });
 
