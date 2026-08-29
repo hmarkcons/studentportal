@@ -146,12 +146,24 @@ export async function importUniversities(_prevState: unknown, formData: FormData
 
   if (records.length === 0) return { error: "No valid rows — 'name' and 'city' columns are both required." };
 
-  const { error } = await supabase.from("universities").insert(records);
+  // universities has no unique constraint on name — without this check,
+  // re-uploading the same (or an overlapping) file would silently create
+  // duplicate reference rows every time.
+  const { data: existing } = await supabase.from("universities").select("name").eq("destination_id", destinationId);
+  const existingNames = new Set((existing ?? []).map((u) => u.name.trim().toLowerCase()));
+  const toInsert = records.filter((r) => !existingNames.has(r.name.trim().toLowerCase()));
+  const skipped = records.length - toInsert.length;
+
+  if (toInsert.length === 0) {
+    return { error: "Every row's name already matches an existing university for this destination — nothing new to import." };
+  }
+
+  const { error } = await supabase.from("universities").insert(toInsert);
   if (error) return { error: error.message };
 
   revalidatePath("/setup/universities");
   revalidateTag("universities", { expire: 0 });
-  return { success: true, count: records.length };
+  return { success: true, count: toInsert.length, skipped };
 }
 
 // Program bulk import — one university per file. Expected CSV columns
@@ -194,9 +206,21 @@ export async function importPrograms(universityId: string, _prevState: unknown, 
 
   if (records.length === 0) return { error: "No rows had valid 'name' and 'level' (bachelors/masters/phd) columns." };
 
-  const { error } = await supabase.from("programs").insert(records);
+  // programs has no unique constraint on (name, level) — without this
+  // check, re-uploading the same (or an overlapping) file would silently
+  // create duplicate program rows every time.
+  const { data: existing } = await supabase.from("programs").select("name, level").eq("university_id", universityId);
+  const existingKeys = new Set((existing ?? []).map((p) => `${p.name.trim().toLowerCase()}__${p.level}`));
+  const toInsert = records.filter((r) => !existingKeys.has(`${r.name.trim().toLowerCase()}__${r.level}`));
+  const skipped = records.length - toInsert.length;
+
+  if (toInsert.length === 0) {
+    return { error: "Every row's name+level already matches an existing program — nothing new to import." };
+  }
+
+  const { error } = await supabase.from("programs").insert(toInsert);
   if (error) return { error: error.message };
 
   revalidatePath(`/setup/universities/${universityId}`);
-  return { success: true, count: records.length };
+  return { success: true, count: toInsert.length, skipped };
 }

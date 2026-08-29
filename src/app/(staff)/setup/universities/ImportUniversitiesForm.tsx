@@ -36,7 +36,11 @@ export function ImportUniversitiesForm({ destinations }: { destinations: { id: s
         within a cell).
       </p>
       {state?.error && <p className="mt-2 text-xs text-danger">{state.error}</p>}
-      {state?.success && <p className="mt-2 text-xs text-success">Imported {state.count} universities.</p>}
+      {state?.success && (
+        <p className="mt-2 text-xs text-success">
+          Imported {state.count} universities.{state.skipped ? ` Skipped ${state.skipped} already in this destination.` : ""}
+        </p>
+      )}
     </details>
   );
 }

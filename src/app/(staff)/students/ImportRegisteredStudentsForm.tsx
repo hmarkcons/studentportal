@@ -50,7 +50,11 @@ export function ImportRegisteredStudentsForm() {
         inserted as already-registered students.
       </p>
       {state?.error && <p className="mt-2 text-xs text-danger">{state.error}</p>}
-      {state?.success && <p className="mt-2 text-xs text-success">Imported {state.count} students.</p>}
+      {state?.success && (
+        <p className="mt-2 text-xs text-success">
+          Imported {state.count} students.{state.skipped ? ` Skipped ${state.skipped} already matching an existing student's email.` : ""}
+        </p>
+      )}
     </details>
   );
 }

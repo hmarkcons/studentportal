@@ -65,7 +65,11 @@ export function ImportProgramsForm({ universityId }: { universityId: string }) {
         <code>tuition_fee</code>, <code>duration</code>, <code>language_requirement</code>.
       </p>
       {state?.error && <p className="mt-2 text-xs text-danger">{state.error}</p>}
-      {state?.success && <p className="mt-2 text-xs text-success">Imported {state.count} programs.</p>}
+      {state?.success && (
+        <p className="mt-2 text-xs text-success">
+          Imported {state.count} programs.{state.skipped ? ` Skipped ${state.skipped} already in this university.` : ""}
+        </p>
+      )}
     </details>
   );
 }

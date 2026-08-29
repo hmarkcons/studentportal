@@ -193,11 +193,27 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
     return { error: "No valid rows found — the full_name column is required." };
   }
 
-  const { error } = await supabase.from("leads").insert(records);
+  // No unique constraint on leads.email — without this check, re-uploading
+  // the same (or an overlapping) file would silently create duplicate
+  // student records every time.
+  const emailsInFile = [...new Set(records.map((r) => r.email).filter((e): e is string => !!e).map((e) => e.toLowerCase()))];
+  let existingEmails = new Set<string>();
+  if (emailsInFile.length > 0) {
+    const { data: existing } = await supabase.from("leads").select("email").not("email", "is", null);
+    existingEmails = new Set((existing ?? []).map((e) => (e.email as string).toLowerCase()));
+  }
+  const toInsert = records.filter((r) => !r.email || !existingEmails.has(r.email.toLowerCase()));
+  const skipped = records.length - toInsert.length;
+
+  if (toInsert.length === 0) {
+    return { error: "Every row's email already matches an existing student — nothing new to import." };
+  }
+
+  const { error } = await supabase.from("leads").insert(toInsert);
   if (error) return { error: error.message };
 
   revalidatePath("/students");
-  return { success: true, count: records.length };
+  return { success: true, count: toInsert.length, skipped };
 }
 
 export async function registerStudentManually(_prevState: unknown, formData: FormData) {
