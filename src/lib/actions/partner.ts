@@ -60,8 +60,10 @@ export async function partnerUploadCommissionProof(commissionId: string, _prevSt
 
 export async function partnerDisputeCommission(commissionId: string) {
   const supabase = await createClient();
-  await supabase.from("partner_commissions").update({ status: "disputed" }).eq("id", commissionId);
+  const { error } = await supabase.from("partner_commissions").update({ status: "disputed" }).eq("id", commissionId);
+  if (error) return { error: error.message };
   revalidatePath("/partner/commissions");
+  return { success: true };
 }
 
 export async function partnerUploadDocument(universityId: string, _prevState: unknown, formData: FormData) {
@@ -138,6 +140,8 @@ export async function partnerAddProgram(_prevState: unknown, formData: FormData)
 
 export async function partnerDeleteProgram(programId: string) {
   const supabase = await createClient();
-  await supabase.from("programs").delete().eq("id", programId);
+  const { error } = await supabase.from("programs").delete().eq("id", programId);
+  if (error) return { error: error.message };
   revalidatePath("/partner/programs");
+  return { success: true };
 }

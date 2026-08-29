@@ -50,8 +50,10 @@ export async function createSocialPost(_prevState: unknown, formData: FormData) 
 
 export async function advanceSocialPostStatus(id: string, status: string) {
   const supabase = await createClient();
-  await supabase.from("social_calendar_posts").update({ status }).eq("id", id);
+  const { error } = await supabase.from("social_calendar_posts").update({ status }).eq("id", id);
+  if (error) return { error: error.message };
   revalidatePath("/marketing/social-calendar");
+  return { success: true };
 }
 
 export async function createReferral(_prevState: unknown, formData: FormData) {
@@ -72,8 +74,10 @@ export async function createReferral(_prevState: unknown, formData: FormData) {
 
 export async function updateReferralIncentiveStatus(id: string, status: string) {
   const supabase = await createClient();
-  await supabase.from("referrals").update({ incentive_status: status }).eq("id", id);
+  const { error } = await supabase.from("referrals").update({ incentive_status: status }).eq("id", id);
+  if (error) return { error: error.message };
   revalidatePath("/marketing/referrals");
+  return { success: true };
 }
 
 export async function createAdCampaign(_prevState: unknown, formData: FormData) {
@@ -100,6 +104,8 @@ export async function createAdCampaign(_prevState: unknown, formData: FormData) 
 
 export async function updateAdCampaignActualSpend(id: string, actual_spend: number) {
   const supabase = await createClient();
-  await supabase.from("ad_campaigns").update({ actual_spend }).eq("id", id);
+  const { error } = await supabase.from("ad_campaigns").update({ actual_spend }).eq("id", id);
+  if (error) return { error: error.message };
   revalidatePath("/marketing/ad-campaigns");
+  return { success: true };
 }

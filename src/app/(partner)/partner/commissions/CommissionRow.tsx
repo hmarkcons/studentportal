@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { partnerUploadCommissionProof, partnerDisputeCommission } from "@/lib/actions/partner";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -13,6 +13,17 @@ export function CommissionRow({
   const action = partnerUploadCommissionProof.bind(null, commission.id);
   const [state, formAction, pending] = useActionState(action, undefined);
   const student = Array.isArray(commission.student) ? commission.student[0] : commission.student;
+
+  const [disputeError, setDisputeError] = useState<string | null>(null);
+  const [disputePending, setDisputePending] = useState(false);
+
+  async function handleDispute() {
+    setDisputePending(true);
+    setDisputeError(null);
+    const result = await partnerDisputeCommission(commission.id);
+    if (result?.error) setDisputeError(result.error);
+    setDisputePending(false);
+  }
 
   return (
     <div className="flex items-center justify-between gap-3 py-3 text-sm">
@@ -32,11 +43,12 @@ export function CommissionRow({
             Upload proof
           </Button>
         </form>
-        <Button onClick={() => partnerDisputeCommission(commission.id)} variant="danger" size="sm">
+        <Button onClick={handleDispute} variant="danger" size="sm" pending={disputePending}>
           Dispute
         </Button>
       </div>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
+      {disputeError && <p className="text-xs text-danger">{disputeError}</p>}
     </div>
   );
 }
