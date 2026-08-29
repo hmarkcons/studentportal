@@ -54,6 +54,7 @@ export function expandRecurrence(
 ): string[] {
   if (recurrence === "none") return [];
   let cur = parseYMD(startStr);
+  const anchorDay = cur.getUTCDate();
   const hardEndStr = recurrenceEndStr && recurrenceEndStr < rangeEndStr ? recurrenceEndStr : rangeEndStr;
   const dates: string[] = [];
   let guard = 0;
@@ -62,7 +63,17 @@ export function expandRecurrence(
     if (curStr >= rangeStartStr && curStr <= rangeEndStr) dates.push(curStr);
     if (recurrence === "daily") cur = addDays(cur, 1);
     else if (recurrence === "weekly") cur = addDays(cur, 7);
-    else cur = new Date(Date.UTC(cur.getUTCFullYear(), cur.getUTCMonth() + 1, cur.getUTCDate()));
+    else {
+      // Clamp to the target month's actual last day instead of letting
+      // Date.UTC roll an out-of-range day into the following month (e.g.
+      // Jan 31 -> Feb 31 would silently normalize to Mar 3) — clamping
+      // still restores the original anchor day (e.g. back to the 31st)
+      // as soon as a long-enough month comes around, instead of the
+      // series permanently drifting to a different day forever.
+      const nextMonthFirst = new Date(Date.UTC(cur.getUTCFullYear(), cur.getUTCMonth() + 1, 1));
+      const daysInNextMonth = new Date(Date.UTC(nextMonthFirst.getUTCFullYear(), nextMonthFirst.getUTCMonth() + 1, 0)).getUTCDate();
+      cur = new Date(Date.UTC(nextMonthFirst.getUTCFullYear(), nextMonthFirst.getUTCMonth(), Math.min(anchorDay, daysInNextMonth)));
+    }
     guard++;
   }
   return dates;
