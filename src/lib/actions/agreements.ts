@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { CURRENCY_SYMBOLS } from "@/lib/constants";
 import { getAgreementContent } from "@/lib/pdf/agreementContent";
+import { wordingToBlocks, DEFAULT_OFFICE_LINE } from "@/lib/pdf/templateWording";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -72,7 +73,9 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
 
   const { data: template } = await supabase
     .from("agreement_templates")
-    .select("signatory_name, destination:destinations(country_code, track, display_name, admin_charge, consultancy_fee, consultancy_fee_currency)")
+    .select(
+      "signatory_name, wording, destination:destinations(country_code, track, display_name, admin_charge, consultancy_fee, consultancy_fee_currency)"
+    )
     .eq("id", agreement.template_id)
     .maybeSingle();
   const destination = template?.destination
@@ -86,11 +89,6 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
       } | null)
     : null;
   if (!destination?.country_code || !destination.track) return { error: "This agreement's destination could not be resolved." };
-
-  const content = getAgreementContent(destination.country_code, destination.track);
-  if (!content) {
-    return { error: `No agreement wording is configured yet for ${destination.display_name ?? destination.country_code} — ask a developer to add it.` };
-  }
 
   const { data: student } = await supabase
     .from("students")
@@ -116,9 +114,34 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
   const adminCharge = agreement.admin_charge_override ?? destination.admin_charge ?? 0;
   const consultancyFee = agreement.consultancy_fee_override ?? destination.consultancy_fee ?? 0;
   const currencySymbol = CURRENCY_SYMBOLS[destination.consultancy_fee_currency ?? "EUR"] ?? destination.consultancy_fee_currency ?? "€";
+  const totalFee = adminCharge + consultancyFee - (agreement.discount_amount ?? 0);
+  const agreementDateStr = formatAgreementDate(new Date(agreement.created_at));
 
   const { renderToBuffer } = await import("@react-pdf/renderer");
-  const { AgreementDocument } = await import("@/lib/pdf/AgreementDocument");
+  const { AgreementDocument, money } = await import("@/lib/pdf/AgreementDocument");
+
+  // Super-admin-authored wording (the agreement builder) takes priority over
+  // the legacy hardcoded per-country content — falls back to the latter only
+  // for templates that haven't had their wording filled in yet.
+  const content = template?.wording?.trim()
+    ? {
+        officeLine: DEFAULT_OFFICE_LINE,
+        blocks: wordingToBlocks(template.wording, {
+          student_name: student.full_name ?? "",
+          destination: destination.display_name ?? "",
+          admin_charge: money(currencySymbol, adminCharge),
+          consultancy_fee: money(currencySymbol, consultancyFee),
+          discount: agreement.discount_amount ? money(currencySymbol, agreement.discount_amount) : "",
+          total_fee: money(currencySymbol, totalFee),
+          currency: destination.consultancy_fee_currency ?? "EUR",
+          agreement_date: agreementDateStr,
+          signatory_name: signatoryName ?? "",
+        }),
+      }
+    : getAgreementContent(destination.country_code, destination.track);
+  if (!content) {
+    return { error: `No agreement wording is configured yet for ${destination.display_name ?? destination.country_code} — ask a developer to add it.` };
+  }
 
   const element = createElement(AgreementDocument, {
     data: {
@@ -143,9 +166,9 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
         adminCharge,
         consultancyFee,
         discount: agreement.discount_amount,
-        total: adminCharge + consultancyFee - (agreement.discount_amount ?? 0),
+        total: totalFee,
       },
-      agreementDate: formatAgreementDate(new Date(agreement.created_at)),
+      agreementDate: agreementDateStr,
       signatureDataUri,
       signatoryName,
     },

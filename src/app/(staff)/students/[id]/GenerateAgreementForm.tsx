@@ -10,7 +10,7 @@ export function GenerateAgreementForm({
   templates,
 }: {
   studentId: string;
-  templates: { id: string; signatory_name: string; destination: { display_name: string } | { display_name: string }[] | null }[];
+  templates: { id: string; name: string; signatory_name: string; destination: { display_name: string } | { display_name: string }[] | null }[];
 }) {
   const action = generateAgreement.bind(null, studentId);
   const [state, formAction, pending] = useActionState(action, undefined);
@@ -25,7 +25,7 @@ export function GenerateAgreementForm({
         <option value="">Template…</option>
         {templates.map((t) => (
           <option key={t.id} value={t.id}>
-            {destName(t.destination)}
+            {destName(t.destination)} — {t.name}
           </option>
         ))}
       </Select>

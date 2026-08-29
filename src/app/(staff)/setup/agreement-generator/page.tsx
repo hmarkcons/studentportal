@@ -53,7 +53,7 @@ export default async function AgreementGeneratorPage(props: { searchParams: Prom
 
     const { data: templates } = await supabase
       .from("agreement_templates")
-      .select("id, signatory_name, destination:destinations(display_name)");
+      .select("id, name, signatory_name, destination:destinations(display_name)");
 
     const { data: agreements } = await supabase
       .from("agreements")

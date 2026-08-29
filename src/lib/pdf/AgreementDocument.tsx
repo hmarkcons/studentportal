@@ -86,7 +86,7 @@ export type AgreementPdfData = {
   signatoryName: string | null;
 };
 
-function money(symbol: string, n: number) {
+export function money(symbol: string, n: number) {
   return `${symbol}${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 

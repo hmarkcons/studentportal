@@ -46,7 +46,7 @@ export const getCachedFeeProducts = unstable_cache(
 export const getCachedAgreementTemplates = unstable_cache(
   async () => {
     const supabase = createAdminClient();
-    const { data } = await supabase.from("agreement_templates").select("id, signatory_name, destination:destinations(display_name)");
+    const { data } = await supabase.from("agreement_templates").select("id, name, signatory_name, destination:destinations(display_name)");
     return data ?? [];
   },
   ["agreement-templates-list"],

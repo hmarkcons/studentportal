@@ -1,15 +1,22 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { createAgreementTemplate } from "@/lib/actions/agreementTemplates";
+import { updateAgreementTemplate, deleteAgreementTemplate } from "@/lib/actions/agreementTemplates";
 import { extractDocxText } from "@/lib/extractDocxText";
 import { MERGE_FIELDS } from "@/lib/pdf/templateWording";
 import { Button } from "@/components/ui/Button";
 import { Input, Select, Textarea } from "@/components/ui/Input";
 
-export function NewAgreementTemplateForm({ destinations }: { destinations: { id: string; display_name: string }[] }) {
-  const [state, formAction, pending] = useActionState(createAgreementTemplate, undefined);
-  const [wording, setWording] = useState("");
+export function EditAgreementTemplateForm({
+  template,
+  destinations,
+}: {
+  template: { id: string; name: string; signatory_name: string; wording: string; destination_id: string; file_path: string | null };
+  destinations: { id: string; display_name: string }[];
+}) {
+  const action = updateAgreementTemplate.bind(null, template.id);
+  const [state, formAction, pending] = useActionState(action, undefined);
+  const [wording, setWording] = useState(template.wording);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
 
@@ -30,20 +37,25 @@ export function NewAgreementTemplateForm({ destinations }: { destinations: { id:
   return (
     <form action={formAction} className="flex flex-col gap-2">
       <div className="flex flex-wrap items-end gap-2">
-        <Select name="destination_id" required>
-          <option value="">Destination…</option>
+        <Select name="destination_id" defaultValue={template.destination_id} required>
           {destinations.map((d) => (
             <option key={d.id} value={d.id}>
               {d.display_name}
             </option>
           ))}
         </Select>
-        <Input name="name" placeholder="Template name (e.g. Standard, Scholarship variant)" required className="min-w-[220px] flex-1" />
-        <Input name="signatory_name" placeholder="Authorized signatory name" required className="min-w-[220px] flex-1" />
+        <Input name="name" defaultValue={template.name} placeholder="Template name" required className="min-w-[220px] flex-1" />
+        <Input
+          name="signatory_name"
+          defaultValue={template.signatory_name}
+          placeholder="Authorized signatory name"
+          required
+          className="min-w-[220px] flex-1"
+        />
       </div>
       <div className="flex flex-col gap-1">
         <label className="text-xs text-muted">
-          Upload a .docx to auto-fill the wording below (optional), or just type/paste it directly.
+          Replace with a new .docx to re-fill the wording below (optional), or edit the text directly.
         </label>
         <input
           name="file"
@@ -55,13 +67,7 @@ export function NewAgreementTemplateForm({ destinations }: { destinations: { id:
         {extracting && <p className="text-xs text-muted">Reading document…</p>}
         {extractError && <p className="text-xs text-danger">{extractError}</p>}
       </div>
-      <Textarea
-        name="wording"
-        value={wording}
-        onChange={(e) => setWording(e.target.value)}
-        placeholder="Agreement wording — separate paragraphs with a blank line. Use merge fields like {{student_name}} for per-student data."
-        rows={10}
-      />
+      <Textarea name="wording" value={wording} onChange={(e) => setWording(e.target.value)} rows={16} />
       <details className="text-xs text-muted">
         <summary className="cursor-pointer">Available merge fields</summary>
         <ul className="mt-1 list-disc pl-5">
@@ -72,10 +78,19 @@ export function NewAgreementTemplateForm({ destinations }: { destinations: { id:
           ))}
         </ul>
       </details>
-      <div>
+      <div className="flex items-center gap-3">
         <Button type="submit" variant="primary" disabled={pending}>
-          {pending ? "Saving…" : "Add template"}
+          {pending ? "Saving…" : "Save changes"}
         </Button>
+        <button
+          type="button"
+          className="text-xs text-danger hover:underline"
+          onClick={() => {
+            if (confirm("Delete this agreement template? This cannot be undone.")) deleteAgreementTemplate(template.id);
+          }}
+        >
+          Delete template
+        </button>
       </div>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
