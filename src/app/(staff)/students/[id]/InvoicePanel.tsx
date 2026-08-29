@@ -175,7 +175,15 @@ function EditInstallmentForm({
   revalidateTo,
   onDone,
 }: {
-  installment: { id: string; amount: number; status: string; due_date: string | null; payment_method?: string | null; paid_date?: string | null };
+  installment: {
+    id: string;
+    amount: number;
+    amount_paid?: number | null;
+    status: string;
+    due_date: string | null;
+    payment_method?: string | null;
+    paid_date?: string | null;
+  };
   studentId: string;
   revalidateTo: string;
   onDone: () => void;
@@ -192,6 +200,14 @@ function EditInstallmentForm({
         <option value="paid">paid</option>
         <option value="partial">partial</option>
       </Select>
+      <Input
+        name="amount_paid"
+        type="number"
+        step="0.01"
+        placeholder="Amount paid (if partial)"
+        defaultValue={installment.amount_paid ?? 0}
+        className="w-36"
+      />
       <Select name="payment_method" defaultValue={installment.payment_method ?? ""}>
         <option value="">Method…</option>
         <option value="Cash">Cash</option>
@@ -417,7 +433,16 @@ export function InvoiceCard({
     admin_fee_paid_date?: string | null;
     admin_fee_payment_method?: string | null;
   };
-  installments: { id: string; installment_no: number; amount: number; status: string; due_date: string | null; payment_method?: string | null; paid_date?: string | null }[];
+  installments: {
+    id: string;
+    installment_no: number;
+    amount: number;
+    amount_paid?: number | null;
+    status: string;
+    due_date: string | null;
+    payment_method?: string | null;
+    paid_date?: string | null;
+  }[];
   lineItems?: { id: string; name: string; amount: number }[];
   feeProducts?: { id: string; name: string; default_amount: number | null; default_currency: string }[];
   studentId: string;
@@ -487,6 +512,7 @@ export function InvoiceCard({
               <span>
                 Installment {i.installment_no} — {invoice.currency} {i.amount.toFixed(2)}
                 {i.due_date && ` · due ${new Date(i.due_date).toLocaleDateString()}`}
+                {i.status === "partial" && ` · paid ${invoice.currency} ${(i.amount_paid ?? 0).toFixed(2)}`}
               </span>
               <div className="flex items-center gap-1">
                 {i.status === "paid" ? (

@@ -132,10 +132,18 @@ export async function updateInstallment(installmentId: string, studentId: string
   const status = String(formData.get("status") ?? "unpaid");
   const payment_method = String(formData.get("payment_method") ?? "").trim() || null;
   const paid_date = String(formData.get("paid_date") ?? "") || null;
+  const amount_paid = status === "paid" ? amount : status === "partial" ? Number(formData.get("amount_paid") ?? 0) : 0;
 
   const { error } = await supabase
     .from("invoice_installments")
-    .update({ amount, due_date, status, payment_method, paid_date: status === "paid" ? paid_date ?? new Date().toISOString().slice(0, 10) : paid_date })
+    .update({
+      amount,
+      due_date,
+      status,
+      payment_method,
+      amount_paid,
+      paid_date: status === "paid" ? paid_date ?? new Date().toISOString().slice(0, 10) : paid_date,
+    })
     .eq("id", installmentId);
   if (error) return { error: error.message };
 
@@ -148,9 +156,11 @@ export async function markInstallmentPaid(installmentId: string, studentId: stri
   const paid_date = String(formData.get("paid_date") ?? new Date().toISOString().slice(0, 10));
   const payment_method = String(formData.get("payment_method") ?? "").trim() || null;
 
+  const { data: installment } = await supabase.from("invoice_installments").select("amount").eq("id", installmentId).maybeSingle();
+
   const { error } = await supabase
     .from("invoice_installments")
-    .update({ status: "paid", paid_date, payment_method })
+    .update({ status: "paid", paid_date, payment_method, amount_paid: installment?.amount ?? 0 })
     .eq("id", installmentId);
 
   if (error) return { error: error.message };
@@ -197,7 +207,7 @@ export async function buildAndStoreInvoicePdf(
 
   const { data: installments } = await supabase
     .from("invoice_installments")
-    .select("installment_no, amount, status, due_date, paid_date, payment_method")
+    .select("installment_no, amount, amount_paid, status, due_date, paid_date, payment_method")
     .eq("invoice_id", invoiceId)
     .order("installment_no", { ascending: true });
 
@@ -212,7 +222,7 @@ export async function buildAndStoreInvoicePdf(
   }
 
   const subtotal = invoice.admin_charge + invoice.consultancy_fee;
-  const amountPaid = (installments ?? []).filter((i) => i.status === "paid").reduce((sum, i) => sum + i.amount, 0);
+  const amountPaid = (installments ?? []).reduce((sum, i) => sum + i.amount_paid, 0);
   const balanceDue = Math.round((subtotal - amountPaid) * 100) / 100;
   const status: "paid" | "partially_paid" | "unpaid" = balanceDue <= 0 ? "paid" : amountPaid > 0 ? "partially_paid" : "unpaid";
 

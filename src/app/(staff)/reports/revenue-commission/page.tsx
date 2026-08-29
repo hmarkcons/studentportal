@@ -33,7 +33,7 @@ export default async function RevenueCommissionPage() {
   const { data: invoices } = await supabase.from("invoices").select("admin_charge, consultancy_fee, currency");
   const { data: installments } = await supabase
     .from("invoice_installments")
-    .select("amount, status, invoice:invoices(currency)");
+    .select("amount_paid, invoice:invoices(currency)");
   const { data: staffCommissions } = await supabase.from("staff_commissions").select("amount, status, currency");
   const { data: partnerCommissions } = await supabase.from("partner_commissions").select("expected_amount, status, currency");
 
@@ -41,9 +41,7 @@ export default async function RevenueCommissionPage() {
     (invoices ?? []).map((i) => ({ amount: i.admin_charge + i.consultancy_fee, currency: i.currency }))
   );
   const totalCollected = sumByCurrency(
-    (installments ?? [])
-      .filter((i) => i.status === "paid")
-      .map((i) => ({ amount: i.amount, currency: one(i.invoice)?.currency ?? "EUR" }))
+    (installments ?? []).map((i) => ({ amount: i.amount_paid, currency: one(i.invoice)?.currency ?? "EUR" }))
   );
   const outstanding = new Map(
     [...totalInvoiced.entries()].map(([currency, invoiced]) => [currency, invoiced - (totalCollected.get(currency) ?? 0)])
