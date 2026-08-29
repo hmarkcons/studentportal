@@ -368,9 +368,11 @@ export async function deleteStudent(studentId: string) {
 
   // encrypted_credentials has no FK at all (owner_id is generic) — clean up
   // explicitly so deleting the lead doesn't leave orphaned encrypted rows.
-  await supabase.from("encrypted_credentials").delete().eq("owner_type", "student").eq("owner_id", studentId);
-  if (appIds.length > 0) {
-    await supabase.from("encrypted_credentials").delete().eq("owner_type", "application").in("owner_id", appIds);
+  // Must go through the RPC, not a direct delete: the table has no RLS
+  // policies of its own by design (see 0012/0076).
+  await supabase.rpc("delete_owned_credentials", { p_owner_type: "student", p_owner_id: studentId });
+  for (const appId of appIds) {
+    await supabase.rpc("delete_owned_credentials", { p_owner_type: "application", p_owner_id: appId });
   }
 
   const { error } = await supabase.from("leads").delete().eq("id", studentId);
