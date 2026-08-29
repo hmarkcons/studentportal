@@ -36,7 +36,7 @@ export function AddPartnerCommissionForm({
       </label>
       <label className="flex flex-col gap-1 text-xs text-muted">
         University (application)
-        <Select name="application_id" defaultValue="" disabled={!studentId} className="w-56">
+        <Select name="application_id" defaultValue="" disabled={!studentId} required className="w-56">
           <option value="">
             {studentId ? (studentApplications.length ? "Choose application…" : "No applications for this student") : "Choose a student first"}
           </option>

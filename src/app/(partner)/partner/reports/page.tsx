@@ -30,13 +30,20 @@ export default async function PartnerReportsPage() {
     byIntake.set(intakeKey, (byIntake.get(intakeKey) ?? 0) + 1);
   });
 
-  const revenueByProgram = new Map<string, { expected: number; paid: number; currency: string }>();
+  // partner_commissions.currency is a free-typed field per row — group by
+  // program AND currency instead of summing across currencies, same fix
+  // already applied to the staff-side revenue/commission reports this
+  // session (a mixed-currency program would otherwise silently label a
+  // PKR total under whichever currency happened to be recorded first).
+  const revenueByProgram = new Map<string, { programName: string; currency: string; expected: number; paid: number }>();
   (commissions ?? []).forEach((c) => {
     const programName = one(one(c.application)?.program)?.name ?? "Unassigned program";
-    const entry = revenueByProgram.get(programName) ?? { expected: 0, paid: 0, currency: c.currency ?? "EUR" };
+    const currency = c.currency ?? "EUR";
+    const key = `${programName}__${currency}`;
+    const entry = revenueByProgram.get(key) ?? { programName, currency, expected: 0, paid: 0 };
     entry.expected += c.expected_amount ?? 0;
     entry.paid += c.status === "received" ? (c.paid_fee ?? c.expected_amount ?? 0) : 0;
-    revenueByProgram.set(programName, entry);
+    revenueByProgram.set(key, entry);
   });
 
   return (
@@ -74,9 +81,9 @@ export default async function PartnerReportsPage() {
       <Card>
         <h3 className="mb-3 text-sm font-medium text-ink">Revenue & commission by program</h3>
         <div className="flex flex-col divide-y divide-border">
-          {[...revenueByProgram.entries()].map(([name, v]) => (
-            <div key={name} className="flex items-center justify-between py-2 text-sm">
-              <span className="text-ink">{name}</span>
+          {[...revenueByProgram.entries()].map(([key, v]) => (
+            <div key={key} className="flex items-center justify-between py-2 text-sm">
+              <span className="text-ink">{v.programName}</span>
               <span className="text-muted">
                 {v.currency} {v.paid.toFixed(0)} received / {v.expected.toFixed(0)} expected
               </span>

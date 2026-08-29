@@ -267,6 +267,11 @@ export async function createPartnerCommission(revalidateTo: string, _prevState: 
   const channel = String(formData.get("channel") ?? "") || null;
 
   if (!student_id) return { error: "Choose a student." };
+  // documents_storage_commission_proof's storage policy inner-joins
+  // applications via this column — a null application_id would make the
+  // resulting row's payment-proof upload permanently unreachable by
+  // anyone, including Finance/Super Admin.
+  if (!application_id) return { error: "Choose the application this commission is tied to." };
 
   const { data: lead } = await supabase.from("leads").select("assigned_counselor_id").eq("id", student_id).maybeSingle();
 
