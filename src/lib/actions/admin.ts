@@ -126,21 +126,25 @@ export async function clockInOut(action: "in" | "out") {
 
   const today = new Date().toISOString().slice(0, 10);
 
+  // The open-shift lookup must NOT scope by today's work_date — a shift
+  // left open from a prior day (a forgotten clock-out) would otherwise
+  // never be found, leaving it permanently open while a fresh clock-in
+  // stacks a second simultaneously-open record on top.
+  const { data: open } = await supabase
+    .from("attendance_records")
+    .select("id")
+    .eq("staff_id", user.id)
+    .is("clock_out", null)
+    .order("clock_in", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   if (action === "in") {
-    await supabase.from("attendance_records").insert({ staff_id: user.id, work_date: today, clock_in: new Date().toISOString() });
-  } else {
-    const { data: open } = await supabase
-      .from("attendance_records")
-      .select("id")
-      .eq("staff_id", user.id)
-      .eq("work_date", today)
-      .is("clock_out", null)
-      .order("clock_in", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (open) {
-      await supabase.from("attendance_records").update({ clock_out: new Date().toISOString() }).eq("id", open.id);
+    if (!open) {
+      await supabase.from("attendance_records").insert({ staff_id: user.id, work_date: today, clock_in: new Date().toISOString() });
     }
+  } else if (open) {
+    await supabase.from("attendance_records").update({ clock_out: new Date().toISOString() }).eq("id", open.id);
   }
 
   revalidatePath("/admin/attendance");
@@ -164,12 +168,14 @@ export async function checkinViaQr(token: string): Promise<{ status: "in" | "out
   const { data: staffRow } = await supabase.from("staff").select("id").eq("id", user.id).eq("status", "active").maybeSingle();
   if (!staffRow) return { status: "not_staff" };
 
-  const today = new Date().toISOString().slice(0, 10);
+  // Same fix as clockInOut: must not scope the open-shift lookup by
+  // today's work_date, or a forgotten clock-out from a prior day is never
+  // found — it stays open forever and a fresh scan creates a second
+  // simultaneously-open record instead of closing the real one.
   const { data: open } = await supabase
     .from("attendance_records")
     .select("id")
     .eq("staff_id", user.id)
-    .eq("work_date", today)
     .is("clock_out", null)
     .order("clock_in", { ascending: false })
     .limit(1)
@@ -181,6 +187,7 @@ export async function checkinViaQr(token: string): Promise<{ status: "in" | "out
     return { status: "out" };
   }
 
+  const today = new Date().toISOString().slice(0, 10);
   await supabase
     .from("attendance_records")
     .insert({ staff_id: user.id, work_date: today, clock_in: new Date().toISOString(), method: "qr" });
