@@ -2,6 +2,7 @@
 
 import { useActionState, useMemo, useState } from "react";
 import { upsertStaffPayroll } from "@/lib/actions/finance";
+import { toPKR } from "@/lib/constants";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 
@@ -11,6 +12,7 @@ export function PayrollForm({
   staffId,
   payrollMonth,
   revalidateTo,
+  currency,
   currencySymbol,
   initial,
   canManage,
@@ -18,6 +20,7 @@ export function PayrollForm({
   staffId: string;
   payrollMonth: string;
   revalidateTo: string;
+  currency: string;
   currencySymbol: string;
   canManage: boolean;
   initial: {
@@ -44,13 +47,24 @@ export function PayrollForm({
   const [deductionOther, setDeductionOther] = useState(initial.deduction_other);
   const [tax, setTax] = useState(initial.tax);
 
+  // basic_salary/allowances/overtime/tax/deductions are in the staff's own
+  // pay currency (per the (currencySymbol) labels below), but
+  // total_commission is always PKR-normalized (see toPKR usage on the
+  // server page) — summing them raw silently treated e.g. 2000 EUR as
+  // equal to 2000 PKR. Gross/Net are computed here only, never stored, so
+  // converting to PKR for this calculation doesn't touch what's saved.
   const grossTotal = useMemo(
-    () => basicSalary + allowances + totalCommission + overtime,
-    [basicSalary, allowances, totalCommission, overtime]
+    () => toPKR(basicSalary, currency) + toPKR(allowances, currency) + totalCommission + toPKR(overtime, currency),
+    [basicSalary, allowances, totalCommission, overtime, currency]
   );
   const netPay = useMemo(
-    () => grossTotal - deductionAbsent - deductionLate - deductionOther - tax,
-    [grossTotal, deductionAbsent, deductionLate, deductionOther, tax]
+    () =>
+      grossTotal -
+      toPKR(deductionAbsent, currency) -
+      toPKR(deductionLate, currency) -
+      toPKR(deductionOther, currency) -
+      toPKR(tax, currency),
+    [grossTotal, deductionAbsent, deductionLate, deductionOther, tax, currency]
   );
 
   return (
@@ -104,7 +118,7 @@ export function PayrollForm({
       <hr className="my-3 border-border" />
 
       <div className={`${rowClass} font-semibold`}>
-        <span className="text-ink">Gross Total</span>
+        <span className="text-ink">Gross Total (PKR)</span>
         <span className="text-ink">{grossTotal.toLocaleString()}</span>
       </div>
 
@@ -153,7 +167,7 @@ export function PayrollForm({
       <hr className="my-3 border-border" />
 
       <div className={`${rowClass} text-base font-semibold`}>
-        <span className="text-ink">Net Pay (Total)</span>
+        <span className="text-ink">Net Pay (Total, PKR)</span>
         <span className="text-primary">{netPay.toLocaleString()}</span>
       </div>
 

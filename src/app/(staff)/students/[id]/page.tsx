@@ -273,7 +273,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       <Card className="mt-6">
         <h3 className="mb-3 text-sm font-medium text-ink">Agreement</h3>
         {(role === "super_admin" || role === "processing") && (
-          <GenerateAgreementForm studentId={id} templates={templates ?? []} />
+          <GenerateAgreementForm studentId={id} templates={templates ?? []} discountAmount={leadRegistration?.discount_amount ?? null} />
         )}
         {agreements && agreements.length > 0 && (
           <div className="mt-4 flex flex-col gap-3 border-t border-border pt-3">

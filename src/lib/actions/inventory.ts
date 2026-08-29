@@ -86,8 +86,25 @@ export async function updateInventoryRequestStatus(requestId: string, status: "f
   const supabase = await createClient();
   if (!(await requireManagement(supabase))) return { error: "Only Management/Super Admin can update requests." };
 
+  const { data: request } = await supabase.from("inventory_requests").select("status, item_id, quantity").eq("id", requestId).maybeSingle();
+  if (!request) return { error: "Request not found." };
+  if (request.status !== "pending") return { error: "This request has already been decided." };
+
   const { error } = await supabase.from("inventory_requests").update({ status }).eq("id", requestId);
   if (error) return { error: error.message };
+
+  // Fulfilling a request never actually reduced the tracked stock count —
+  // the whole point of a request→fulfillment flow tied to quantity_on_hand
+  // was defeated, since nothing else ever decrements it from real usage.
+  if (status === "fulfilled" && request.item_id) {
+    const { data: item } = await supabase.from("inventory_items").select("quantity_on_hand").eq("id", request.item_id).maybeSingle();
+    if (item) {
+      await supabase
+        .from("inventory_items")
+        .update({ quantity_on_hand: item.quantity_on_hand - request.quantity })
+        .eq("id", request.item_id);
+    }
+  }
 
   revalidatePath("/inventory");
   return { success: true };

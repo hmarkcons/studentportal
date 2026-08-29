@@ -164,6 +164,7 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
                 staffId={staffId}
                 payrollMonth={monthStart}
                 revalidateTo={revalidateTo}
+                currency={staff.currency}
                 currencySymbol={currencySymbol}
                 canManage={canManage}
                 initial={{

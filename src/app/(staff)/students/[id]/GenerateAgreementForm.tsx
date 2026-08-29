@@ -8,9 +8,11 @@ import { Input, Select } from "@/components/ui/Input";
 export function GenerateAgreementForm({
   studentId,
   templates,
+  discountAmount,
 }: {
   studentId: string;
   templates: { id: string; name: string; signatory_name: string; destination: { display_name: string } | { display_name: string }[] | null }[];
+  discountAmount?: number | null;
 }) {
   const action = generateAgreement.bind(null, studentId);
   const [state, formAction, pending] = useActionState(action, undefined);
@@ -35,7 +37,14 @@ export function GenerateAgreementForm({
       </Select>
       <Input name="admin_charge_override" type="number" step="0.01" placeholder="Admin charge override" className="w-40" />
       <Input name="consultancy_fee_override" type="number" step="0.01" placeholder="Consultancy fee override" className="w-44" />
-      <Input name="discount_amount" type="number" step="0.01" placeholder="Discount amount" className="w-36" />
+      <Input
+        name="discount_amount"
+        type="number"
+        step="0.01"
+        placeholder="Discount amount"
+        defaultValue={discountAmount ?? ""}
+        className="w-36"
+      />
       <Button type="submit" variant="primary" pending={pending}>
         Generate agreement
       </Button>
