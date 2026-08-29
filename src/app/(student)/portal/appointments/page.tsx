@@ -8,8 +8,11 @@ function one<T>(v: T | T[] | null) {
 }
 
 function daysUntil(dateStr: string) {
-  const diffMs = new Date(dateStr).getTime() - Date.now();
-  return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  // Compare calendar days, not raw elapsed milliseconds — a Math.ceil on
+  // the millisecond diff rounded any same-day future appointment (e.g.
+  // 3pm when it's 9am) up to "in 1 day", never "Today".
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  return Math.round((startOfDay(new Date(dateStr)) - startOfDay(new Date())) / (1000 * 60 * 60 * 24));
 }
 
 function CountdownBadge({ dateStr }: { dateStr: string }) {

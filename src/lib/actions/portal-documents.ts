@@ -12,6 +12,11 @@ export async function studentUploadDocument(documentId: string, studentId: strin
   const validationError = validateDocumentFile(file);
   if (validationError) return { error: validationError };
 
+  const { data: existing } = await supabase.from("student_documents").select("status").eq("id", documentId).maybeSingle();
+  if (existing?.status === "verified") {
+    return { error: "This document is already verified and can't be replaced — ask staff to reopen it first." };
+  }
+
   const path = `${studentId}/${documentId}-${sanitizeFilename(file.name)}`;
   const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: true });
   if (uploadError) return { error: uploadError.message };
