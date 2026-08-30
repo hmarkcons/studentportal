@@ -180,10 +180,23 @@ export async function importDestinations(_prevState: unknown, formData: FormData
     return { error: "No valid rows found — check country, country_code, track (public/private), and currency columns." };
   }
 
-  const { error } = await supabase.from("destinations").insert(records);
+  // destinations has a real unique(country_code, track) constraint — without
+  // this check, re-uploading a file containing even one row that already
+  // exists would fail the entire batch insert with a unique-violation error,
+  // importing none of the file's rows, including genuinely new ones.
+  const { data: existing } = await supabase.from("destinations").select("country_code, track");
+  const existingKeys = new Set((existing ?? []).map((d) => `${d.country_code}__${d.track}`));
+  const toInsert = records.filter((r) => !existingKeys.has(`${r.country_code}__${r.track}`));
+  const skipped = records.length - toInsert.length;
+
+  if (toInsert.length === 0) {
+    return { error: "Every row already matches an existing destination (same country + track) — nothing new to import." };
+  }
+
+  const { error } = await supabase.from("destinations").insert(toInsert);
   if (error) return { error: error.message };
 
   revalidatePath("/setup/destinations");
   revalidateTag("destinations", { expire: 0 });
-  return { success: true, count: records.length };
+  return { success: true, count: toInsert.length, skipped };
 }

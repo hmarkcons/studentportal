@@ -27,7 +27,11 @@ export function ImportDestinationsForm() {
         <code>consultancy_fee</code>, <code>consultancy_fee_currency</code>.
       </p>
       {state?.error && <p className="mt-2 text-xs text-danger">{state.error}</p>}
-      {state?.success && <p className="mt-2 text-xs text-success">Imported {state.count} destinations.</p>}
+      {state?.success && (
+        <p className="mt-2 text-xs text-success">
+          Imported {state.count} destinations.{state.skipped ? ` Skipped ${state.skipped} already existing (same country + track).` : ""}
+        </p>
+      )}
     </details>
   );
 }
