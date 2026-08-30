@@ -60,11 +60,11 @@ export function DestinationEditForm({ destination }: { destination: Destination 
       <div className="grid grid-cols-3 gap-4">
         <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
           Admin charge
-          <Input name="admin_charge" type="number" step="0.01" defaultValue={destination.admin_charge} />
+          <Input name="admin_charge" type="number" step="0.01" min="0" defaultValue={destination.admin_charge} />
         </label>
         <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
           Consultancy fee
-          <Input name="consultancy_fee" type="number" step="0.01" defaultValue={destination.consultancy_fee} />
+          <Input name="consultancy_fee" type="number" step="0.01" min="0" defaultValue={destination.consultancy_fee} />
         </label>
         <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
           Fee currency

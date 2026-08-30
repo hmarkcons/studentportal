@@ -40,11 +40,11 @@ export function NewDestinationForm() {
       <div className="grid grid-cols-3 gap-4">
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-ink">Admin charge</label>
-          <Input name="admin_charge" type="number" step="0.01" defaultValue={0} />
+          <Input name="admin_charge" type="number" step="0.01" min="0" defaultValue={0} />
         </div>
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-ink">Consultancy fee</label>
-          <Input name="consultancy_fee" type="number" step="0.01" defaultValue={0} />
+          <Input name="consultancy_fee" type="number" step="0.01" min="0" defaultValue={0} />
         </div>
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-ink">Fee currency</label>

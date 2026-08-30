@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { MANUAL_APPLICATION_STATUSES } from "@/lib/constants";
 
 function slugifyStages(raw: string) {
   return raw
@@ -27,6 +28,9 @@ export async function createDestination(_prevState: unknown, formData: FormData)
 
   if (!country || !country_code || !["public", "private"].includes(track) || !currency) {
     return { error: "Fill in all required fields." };
+  }
+  if (admin_charge < 0 || consultancy_fee < 0) {
+    return { error: "Admin charge and consultancy fee can't be negative." };
   }
 
   const pipeline_stages = stagesRaw ? slugifyStages(stagesRaw) : undefined;
@@ -61,6 +65,25 @@ export async function updateDestinationStages(destinationId: string, _prevState:
 
   if (pipeline_stages.length === 0) return { error: "Enter at least one stage." };
 
+  // Removing a stage some existing application currently sits at would
+  // silently leave that application's current_stage pointing at a value
+  // no longer in the pipeline — validate_application_stage() (0080) then
+  // rejects the NEXT edit to that application with a confusing error that
+  // gives staff no link back to this pipeline change as the actual cause.
+  const { data: universities } = await supabase.from("universities").select("id").eq("destination_id", destinationId);
+  const universityIds = (universities ?? []).map((u) => u.id);
+  if (universityIds.length > 0) {
+    const { data: applications } = await supabase.from("applications").select("current_stage").in("university_id", universityIds);
+    const allowedStages = new Set<string>([...pipeline_stages, ...MANUAL_APPLICATION_STATUSES]);
+    const affected = (applications ?? []).filter((a) => !allowedStages.has(a.current_stage));
+    if (affected.length > 0) {
+      const orphanedStages = [...new Set(affected.map((a) => a.current_stage))];
+      return {
+        error: `Can't save — ${affected.length} existing application(s) are currently at a stage this pipeline no longer includes: ${orphanedStages.join(", ")}. Add those stages back, or move those applications first.`,
+      };
+    }
+  }
+
   const { error } = await supabase.from("destinations").update({ pipeline_stages }).eq("id", destinationId);
   if (error) return { error: error.message };
 
@@ -85,6 +108,9 @@ export async function updateDestination(destinationId: string, _prevState: unkno
 
   if (!country || !country_code || !["public", "private"].includes(track) || !currency || !display_name) {
     return { error: "Fill in all required fields." };
+  }
+  if (admin_charge < 0 || consultancy_fee < 0) {
+    return { error: "Admin charge and consultancy fee can't be negative." };
   }
 
   const { error } = await supabase
