@@ -3,6 +3,9 @@ import { getStaffSession } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { StatCard } from "@/components/ui/StatCard";
+import { BoardingPassTracker } from "@/components/ui/BoardingPassTracker";
+import { categorizeApplicationStage } from "@/lib/applicationStage";
 import { DocumentChecklist, type DocRow } from "@/components/DocumentChecklist";
 import { CountryTrackerForm } from "@/components/CountryTrackerForm";
 import { listTrackerDefinitions } from "@/lib/actions/countryTracker";
@@ -80,7 +83,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         .from("applications")
         .select(
           `id, current_stage, intake, deadline,
-           university:universities(name, destination:destinations(country_code, display_name)),
+           university:universities(name, destination:destinations(country_code, display_name, pipeline_stages)),
            program:programs(name)`
         )
         .eq("student_id", id)
@@ -130,6 +133,34 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       primaryAppByCountry.set(code, { id: a.id, countryCode: code, displayName: dest?.display_name ?? code });
     }
     (appsByCountry.get(code) ?? appsByCountry.set(code, []).get(code)!).push({ id: a.id, name: uni?.name ?? "University" });
+  }
+
+  // ---- Pipeline trackers + application-status stat tiles, shown at the
+  // top of the dashboard ----
+  const appTrackerRows = (applications ?? []).map((a) => {
+    const uni = one(a.university as never) as {
+      name?: string;
+      destination?:
+        | { country_code?: string; display_name?: string; pipeline_stages?: string[] }
+        | { country_code?: string; display_name?: string; pipeline_stages?: string[] }[];
+    } | null;
+    const dest = uni?.destination ? (one(uni.destination as never) as { pipeline_stages?: string[] } | null) : null;
+    const program = one(a.program as never) as { name?: string } | null;
+    return {
+      id: a.id,
+      universityName: uni?.name ?? "University",
+      programName: program?.name ?? null,
+      intake: a.intake,
+      currentStage: a.current_stage,
+      pipelineStages: dest?.pipeline_stages ?? [],
+    };
+  });
+
+  const applicationStats = { total: appTrackerRows.length, pending: 0, submitted: 0, with_offer: 0, rejected: 0, not_eligible: 0 };
+  for (const row of appTrackerRows) {
+    const category = categorizeApplicationStage(row.currentStage, row.pipelineStages);
+    if (category === "withdrawn") continue;
+    applicationStats[category] += 1;
   }
 
   // ---- Level 2: each of these depends only on level-1 results, and is
@@ -243,6 +274,32 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
 
   return (
     <div>
+      {appTrackerRows.length > 0 && (
+        <>
+          <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6">
+            <StatCard label="Applications" value={applicationStats.total} />
+            <StatCard label="With Offer" value={applicationStats.with_offer} tone="success" />
+            <StatCard label="Submitted" value={applicationStats.submitted} />
+            <StatCard label="Pending" value={applicationStats.pending} tone="warning" />
+            <StatCard label="Rejected" value={applicationStats.rejected} tone="danger" />
+            <StatCard label="Not Eligible" value={applicationStats.not_eligible} tone="danger" />
+          </div>
+
+          <div className="mb-6 flex flex-col gap-4">
+            {appTrackerRows.map((row) => (
+              <BoardingPassTracker
+                key={row.id}
+                universityName={row.universityName}
+                programName={row.programName}
+                intake={row.intake}
+                currentStage={row.currentStage}
+                pipelineStages={row.pipelineStages}
+              />
+            ))}
+          </div>
+        </>
+      )}
+
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <Card>
           <div className="mb-3 flex items-center justify-between">
