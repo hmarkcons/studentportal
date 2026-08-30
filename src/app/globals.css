@@ -92,3 +92,53 @@ body {
 * {
   border-color: var(--border);
 }
+
+/* Agreement builder rich-text editor content (TipTap output) */
+.prose-agreement h1 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0.75rem 0 0.5rem;
+}
+.prose-agreement h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0.75rem 0 0.5rem;
+}
+.prose-agreement h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0.5rem 0 0.35rem;
+}
+.prose-agreement p {
+  margin: 0.35rem 0;
+}
+.prose-agreement strong {
+  font-weight: 700;
+}
+.prose-agreement em {
+  font-style: italic;
+}
+.prose-agreement u {
+  text-decoration: underline;
+}
+.prose-agreement ul,
+.prose-agreement ol {
+  padding-left: 1.25rem;
+  margin: 0.35rem 0;
+}
+.prose-agreement table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5rem 0;
+}
+.prose-agreement th,
+.prose-agreement td {
+  border: 1px solid var(--border);
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+  vertical-align: top;
+}
+.prose-agreement th {
+  background: var(--bg);
+  font-weight: 600;
+}

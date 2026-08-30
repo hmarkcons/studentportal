@@ -15,13 +15,23 @@
 // in their source docs at all, so they use kind: "heading" instead (same
 // rendering, no number prefix).
 
+export type TextRun = { text: string; bold?: boolean; italic?: boolean; underline?: boolean };
+
 export type AgreementBlock =
   | { kind: "clause"; number: string; heading: string; intro?: string }
   | { kind: "heading"; heading: string; intro?: string } // like "clause" but the source document has no numbering at all (private-track destinations)
   | { kind: "bullet"; text: string }
   | { kind: "subheading"; text: string }
   | { kind: "paragraph"; text: string }
-  | { kind: "feeTable" };
+  | { kind: "feeTable" }
+  // Rich blocks — produced by parsing a super-admin-authored (or
+  // Word-upload-derived) HTML wording via templateWording.ts, preserving
+  // headings/bold/italic/underline/tables instead of collapsing to plain
+  // text like the legacy `paragraph` kind above.
+  | { kind: "richHeading"; level: 1 | 2 | 3; runs: TextRun[] }
+  | { kind: "richParagraph"; runs: TextRun[] }
+  | { kind: "richList"; ordered: boolean; items: TextRun[][] }
+  | { kind: "richTable"; rows: { cells: TextRun[][]; header: boolean }[] };
 
 export type AgreementContent = {
   officeLine: string;

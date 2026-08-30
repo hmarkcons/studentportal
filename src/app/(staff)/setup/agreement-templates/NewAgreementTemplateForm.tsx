@@ -2,10 +2,11 @@
 
 import { useActionState, useState } from "react";
 import { createAgreementTemplate } from "@/lib/actions/agreementTemplates";
-import { extractDocxText } from "@/lib/extractDocxText";
+import { extractDocxHtml } from "@/lib/extractDocxText";
 import { MERGE_FIELDS } from "@/lib/pdf/templateWording";
+import { RichTextEditor } from "@/components/RichTextEditor";
 import { Button } from "@/components/ui/Button";
-import { Input, Select, Textarea } from "@/components/ui/Input";
+import { Input, Select } from "@/components/ui/Input";
 
 export function NewAgreementTemplateForm({ destinations }: { destinations: { id: string; display_name: string }[] }) {
   const [state, formAction, pending] = useActionState(createAgreementTemplate, undefined);
@@ -18,8 +19,8 @@ export function NewAgreementTemplateForm({ destinations }: { destinations: { id:
     setExtracting(true);
     setExtractError(null);
     try {
-      const text = await extractDocxText(file);
-      setWording(text);
+      const html = await extractDocxHtml(file);
+      setWording(html);
     } catch {
       setExtractError("Couldn't read that .docx file — you can still type/paste the wording below.");
     } finally {
@@ -43,7 +44,8 @@ export function NewAgreementTemplateForm({ destinations }: { destinations: { id:
       </div>
       <div className="flex flex-col gap-1">
         <label className="text-xs text-muted">
-          Upload a .docx to auto-fill the wording below (optional), or just type/paste it directly.
+          Upload a .docx to auto-fill the wording below with its headings/bold/italic/underline/tables preserved (optional), or
+          type/paste and format it directly.
         </label>
         <input
           name="file"
@@ -55,13 +57,7 @@ export function NewAgreementTemplateForm({ destinations }: { destinations: { id:
         {extracting && <p className="text-xs text-muted">Reading document…</p>}
         {extractError && <p className="text-xs text-danger">{extractError}</p>}
       </div>
-      <Textarea
-        name="wording"
-        value={wording}
-        onChange={(e) => setWording(e.target.value)}
-        placeholder="Agreement wording — separate paragraphs with a blank line. Use merge fields like {{student_name}} for per-student data."
-        rows={10}
-      />
+      <RichTextEditor name="wording" content={wording} onChangeHtml={setWording} />
       <details className="text-xs text-muted">
         <summary className="cursor-pointer">Available merge fields</summary>
         <ul className="mt-1 list-disc pl-5">

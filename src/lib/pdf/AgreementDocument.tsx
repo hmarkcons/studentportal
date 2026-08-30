@@ -1,5 +1,5 @@
 import { Document, Page, Text, View, Image, StyleSheet } from "@react-pdf/renderer";
-import type { AgreementBlock } from "./agreementContent";
+import type { AgreementBlock, TextRun } from "./agreementContent";
 
 const GREEN = "#146856";
 const INK = "#1B2420";
@@ -37,6 +37,20 @@ const styles = StyleSheet.create({
   feeRowLast: { borderBottomWidth: 0 },
   feeLabel: { flex: 4, padding: 5, fontSize: 8.5, fontFamily: "Helvetica-Bold" },
   feeValue: { flex: 1, padding: 5, fontSize: 8.5, fontFamily: "Helvetica-Bold", textAlign: "right", borderLeftWidth: 1, borderColor: INK },
+
+  richHeading1: { fontFamily: "Times-Bold", fontSize: 12, marginTop: 8, marginBottom: 3, lineHeight: 1.35 },
+  richHeading2: { fontFamily: "Times-Bold", fontSize: 10.5, marginTop: 7, marginBottom: 3, lineHeight: 1.35 },
+  richHeading3: { fontFamily: "Times-Bold", fontSize: 9.5, marginTop: 6, marginBottom: 2, lineHeight: 1.35 },
+  richParagraph: { fontSize: 9, marginBottom: 4, textAlign: "justify", lineHeight: 1.35 },
+  richListItemRow: { flexDirection: "row", marginBottom: 3 },
+  richListMarker: { width: 14, fontSize: 9, lineHeight: 1.35 },
+  richListText: { flex: 1, fontSize: 9, textAlign: "justify", lineHeight: 1.35 },
+  richTable: { borderWidth: 1, borderColor: INK, marginVertical: 8 },
+  richTableRow: { flexDirection: "row", borderBottomWidth: 1, borderColor: INK },
+  richTableRowLast: { borderBottomWidth: 0 },
+  richTableCell: { flex: 1, padding: 4, fontSize: 8.5, borderRightWidth: 1, borderColor: INK },
+  richTableCellLast: { borderRightWidth: 0 },
+  richTableHeaderCell: { fontFamily: "Helvetica-Bold" },
 
   and: { textAlign: "center", fontFamily: "Helvetica-Bold", fontSize: 11, marginVertical: 8 },
   clauseHead: { fontFamily: "Helvetica-Bold", fontSize: 9.5, marginTop: 8, marginBottom: 2, lineHeight: 1.35 },
@@ -169,6 +183,33 @@ function FeeTable({ fee }: { fee: AgreementPdfData["fee"] }) {
   );
 }
 
+function runFontFamily(run: TextRun) {
+  if (run.bold && run.italic) return "Times-BoldItalic";
+  if (run.bold) return "Times-Bold";
+  if (run.italic) return "Times-Italic";
+  return undefined;
+}
+
+// Renders a rich-text run array (bold/italic/underline preserved from the
+// builder's HTML wording) as nested inline <Text> spans within one parent.
+function RichRuns({ runs }: { runs: TextRun[] }) {
+  return (
+    <>
+      {runs.map((run, i) => (
+        <Text
+          key={i}
+          style={{
+            fontFamily: runFontFamily(run),
+            textDecoration: run.underline ? "underline" : undefined,
+          }}
+        >
+          {run.text}
+        </Text>
+      ))}
+    </>
+  );
+}
+
 function Block({ block, fee }: { block: AgreementBlock; fee: AgreementPdfData["fee"] }) {
   switch (block.kind) {
     case "clause":
@@ -210,6 +251,54 @@ function Block({ block, fee }: { block: AgreementBlock; fee: AgreementPdfData["f
       );
     case "feeTable":
       return <FeeTable fee={fee} />;
+    case "richHeading": {
+      const style = block.level === 1 ? styles.richHeading1 : block.level === 2 ? styles.richHeading2 : styles.richHeading3;
+      return (
+        <Text style={style}>
+          <RichRuns runs={block.runs} />
+        </Text>
+      );
+    }
+    case "richParagraph":
+      return (
+        <Text style={styles.richParagraph}>
+          <RichRuns runs={block.runs} />
+        </Text>
+      );
+    case "richList":
+      return (
+        <View>
+          {block.items.map((runs, i) => (
+            <View key={i} style={styles.richListItemRow}>
+              <Text style={styles.richListMarker}>{block.ordered ? `${i + 1}.` : "•"}</Text>
+              <Text style={styles.richListText}>
+                <RichRuns runs={runs} />
+              </Text>
+            </View>
+          ))}
+        </View>
+      );
+    case "richTable":
+      return (
+        <View style={styles.richTable}>
+          {block.rows.map((row, ri) => (
+            <View key={ri} style={ri === block.rows.length - 1 ? [styles.richTableRow, styles.richTableRowLast] : styles.richTableRow}>
+              {row.cells.map((cellRuns, ci) => (
+                <Text
+                  key={ci}
+                  style={[
+                    styles.richTableCell,
+                    ci === row.cells.length - 1 ? styles.richTableCellLast : {},
+                    row.header ? styles.richTableHeaderCell : {},
+                  ]}
+                >
+                  <RichRuns runs={cellRuns} />
+                </Text>
+              ))}
+            </View>
+          ))}
+        </View>
+      );
     default:
       return null;
   }
