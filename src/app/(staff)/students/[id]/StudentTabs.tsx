@@ -9,6 +9,7 @@ export function StudentTabs({ studentId, showScholarship }: { studentId: string;
   const tabs = [
     { label: "Dashboard", href: `/students/${studentId}` },
     { label: "Applications", href: `/students/${studentId}/applications` },
+    { label: "Education", href: `/students/${studentId}/education` },
     { label: "Documents", href: `/students/${studentId}/documents` },
     { label: "Visa", href: `/students/${studentId}/visa` },
     ...(showScholarship ? [{ label: "Scholarship", href: `/students/${studentId}/scholarship` }] : []),
