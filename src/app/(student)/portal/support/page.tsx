@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -57,10 +58,12 @@ export default async function SupportPage() {
 
       <div className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
         {(tickets ?? []).map((t) => (
-          <div key={t.id} className="flex items-center justify-between px-4 py-3 text-sm">
+          <Link key={t.id} href={`/portal/support/${t.id}`} className="flex items-center justify-between px-4 py-3 text-sm hover:bg-bg">
             <span className="text-ink">{t.subject}</span>
-            <Badge tone={t.status === "resolved" ? "success" : "warning"}>{t.status.replace("_", " ")}</Badge>
-          </div>
+            <Badge tone={t.status === "resolved" ? "success" : t.status === "in_progress" ? "info" : "warning"}>
+              {t.status.replace("_", " ")}
+            </Badge>
+          </Link>
         ))}
         {(!tickets || tickets.length === 0) && (
           <div className="px-4 py-6">
