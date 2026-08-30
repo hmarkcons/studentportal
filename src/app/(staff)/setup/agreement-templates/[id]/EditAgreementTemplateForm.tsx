@@ -19,6 +19,16 @@ export function EditAgreementTemplateForm({
   const [wording, setWording] = useState(template.wording);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  async function handleDelete() {
+    if (!confirm("Delete this agreement template? This cannot be undone.")) return;
+    setDeleteError(null);
+    // deleteAgreementTemplate redirects on success (it throws internally,
+    // it never returns) — this only resolves to a value on the error path.
+    const result = await deleteAgreementTemplate(template.id);
+    if (result?.error) setDeleteError(result.error);
+  }
 
   async function handleFile(file: File | null) {
     if (!file || !file.name.toLowerCase().endsWith(".docx")) return;
@@ -82,17 +92,12 @@ export function EditAgreementTemplateForm({
         <Button type="submit" variant="primary" disabled={pending}>
           {pending ? "Saving…" : "Save changes"}
         </Button>
-        <button
-          type="button"
-          className="text-xs text-danger hover:underline"
-          onClick={() => {
-            if (confirm("Delete this agreement template? This cannot be undone.")) deleteAgreementTemplate(template.id);
-          }}
-        >
+        <button type="button" className="text-xs text-danger hover:underline" onClick={handleDelete}>
           Delete template
         </button>
       </div>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
+      {deleteError && <p className="text-xs text-danger">{deleteError}</p>}
     </form>
   );
 }
