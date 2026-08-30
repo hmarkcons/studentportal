@@ -312,6 +312,17 @@ function LineItemsSection({
     if (result?.error) setDeleteError(result.error);
   }
 
+  const selectedFeeProduct = feeProducts.find((p) => p.id === selectedProduct) ?? null;
+  // invoice_line_items has no currency column of its own — every line item's
+  // amount is implicitly in the invoice's currency. A fee product's own
+  // default_amount is priced in its own default_currency, which can differ
+  // from the invoice's — auto-filling it in that case would silently insert
+  // a number that looks plausible but is in the wrong currency, with the
+  // invoice total then wrong by whatever the currency delta is. Only
+  // auto-fill when the currencies actually match; otherwise leave the amount
+  // blank and warn so staff consciously enter the correct converted amount.
+  const currencyMismatch = selectedFeeProduct != null && selectedFeeProduct.default_currency !== currency;
+
   return (
     <div className="flex flex-col gap-1">
       {lineItems.map((li) => (
@@ -336,7 +347,7 @@ function LineItemsSection({
           <option value="">Custom item…</option>
           {feeProducts.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.name}
+              {p.name} ({p.default_currency})
             </option>
           ))}
         </Select>
@@ -353,8 +364,8 @@ function LineItemsSection({
           name="amount"
           type="number"
           step="0.01"
-          placeholder="Amount"
-          defaultValue={feeProducts.find((p) => p.id === selectedProduct)?.default_amount ?? ""}
+          placeholder={currencyMismatch ? `Amount (in ${currency})` : "Amount"}
+          defaultValue={currencyMismatch ? "" : (selectedFeeProduct?.default_amount ?? "")}
           key={`${selectedProduct}-amount`}
           required
           className="w-24"
@@ -362,6 +373,12 @@ function LineItemsSection({
         <Button type="submit" variant="outline-primary" size="sm" pending={pending}>
           + Add item
         </Button>
+        {currencyMismatch && (
+          <p className="w-full text-xs text-warning">
+            {selectedFeeProduct?.name} is priced in {selectedFeeProduct?.default_currency}, but this invoice is in {currency} — enter
+            the equivalent amount in {currency} manually.
+          </p>
+        )}
         {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
       </form>
       )}
