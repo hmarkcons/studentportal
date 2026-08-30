@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { formatDateOnly } from "@/lib/formatDate";
 import { Card } from "@/components/ui/Card";
 import { AddProgramForm } from "./AddProgramForm";
 import { DeleteProgramButton } from "./DeleteProgramButton";
@@ -38,7 +39,7 @@ export default async function PartnerProgramsPage() {
               <p className="text-xs text-muted">
                 {p.duration ?? "—"} · {p.language_requirement ?? "—"}
                 {p.tuition_fee != null ? ` · ${p.tuition_fee}` : ""}
-                {p.application_deadline ? ` · deadline ${new Date(p.application_deadline).toLocaleDateString()}` : ""}
+                {p.application_deadline ? ` · deadline ${formatDateOnly(p.application_deadline)}` : ""}
               </p>
             </div>
             <DeleteProgramButton id={p.id} />

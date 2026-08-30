@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { addApplicationTask, toggleApplicationTask, deleteApplicationTask } from "@/lib/actions/applications";
+import { formatDateOnly } from "@/lib/formatDate";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input, Select } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -46,7 +47,7 @@ function TaskRow({ task, revalidateTo }: { task: DashboardTaskRow; revalidateTo:
         <span className={`rounded-full border px-1.5 py-0.5 text-[10px] uppercase ${PRIORITY_TONE[task.priority] ?? PRIORITY_TONE.medium}`}>
           {task.priority}
         </span>
-        {task.due_date && <span className="text-xs text-muted">due {new Date(task.due_date).toLocaleDateString()}</span>}
+        {task.due_date && <span className="text-xs text-muted">due {formatDateOnly(task.due_date)}</span>}
         <button onClick={handleDelete} className="text-xs text-muted hover:text-danger">
           🗑️
         </button>

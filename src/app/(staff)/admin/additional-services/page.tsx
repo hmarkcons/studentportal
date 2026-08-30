@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { formatDateOnly } from "@/lib/formatDate";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { NewServiceRequestForm } from "./NewServiceRequestForm";
@@ -51,7 +52,7 @@ export default async function AdditionalServicesPage() {
                 </p>
                 <p className="text-xs text-muted">
                   {r.country_applying_to ?? "—"}
-                  {r.delivery_date ? ` · Delivery ${new Date(r.delivery_date).toLocaleDateString()}` : ""}
+                  {r.delivery_date ? ` · Delivery ${formatDateOnly(r.delivery_date)}` : ""}
                   {r.total_fee_paid ? ` · Rs ${r.total_fee_paid}` : ""}
                 </p>
               </div>

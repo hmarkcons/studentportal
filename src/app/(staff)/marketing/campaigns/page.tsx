@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { formatDateOnly } from "@/lib/formatDate";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -25,7 +26,7 @@ export default async function CampaignsPage() {
               <Badge tone={c.type === "event" ? "info" : "primary"}>{c.type}</Badge>
             </div>
             <p className="mt-1 text-xs text-muted">
-              {c.city ?? "—"} {c.event_date_start && `· ${new Date(c.event_date_start).toLocaleDateString()}`}
+              {c.city ?? "—"} {c.event_date_start && `· ${formatDateOnly(c.event_date_start)}`}
             </p>
             {c.budget != null && (
               <p className="mt-2 text-xs text-muted">

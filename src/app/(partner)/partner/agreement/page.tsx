@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { formatDateOnly } from "@/lib/formatDate";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 
@@ -32,7 +33,7 @@ export default async function PartnerAgreementPage() {
     <div className="mx-auto max-w-2xl">
       <h2 className="mb-4 text-lg font-semibold text-ink">Partnership Agreement</h2>
       <Card>
-        {agreement.expiry_date && <p className="text-sm text-muted">Expires: {new Date(agreement.expiry_date).toLocaleDateString()}</p>}
+        {agreement.expiry_date && <p className="text-sm text-muted">Expires: {formatDateOnly(agreement.expiry_date)}</p>}
         {data?.signedUrl && (
           <a href={data.signedUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm text-primary underline">
             View agreement

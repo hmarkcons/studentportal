@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { CURRENCY_SYMBOLS } from "@/lib/constants";
+import { formatDateOnly } from "@/lib/formatDate";
 import { getAgreementContent } from "@/lib/pdf/agreementContent";
 import { wordingToBlocks, DEFAULT_OFFICE_LINE } from "@/lib/pdf/templateWording";
 
@@ -150,7 +151,7 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
       blocks: content.blocks,
       student: {
         fullName: student.full_name,
-        dob: student.date_of_birth ? new Date(student.date_of_birth).toLocaleDateString() : null,
+        dob: student.date_of_birth ? formatDateOnly(student.date_of_birth) : null,
         email: student.email,
         address: student.address,
         mobile: student.contact_number,

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { formatDateOnly } from "@/lib/formatDate";
 import { DataTable } from "@/components/ui/DataTable";
 import { LEAD_STATUS_LABELS } from "@/lib/constants";
 import { ImportLeadsForm } from "./ImportLeadsForm";
@@ -60,7 +61,7 @@ export default async function LeadsPage() {
       country: r.country_of_interest ?? "—",
       status: <InlineStatusCell leadId={r.id} currentStatus={r.status} />,
       counselor: one(r.assigned_counselor)?.full_name ?? "Unassigned",
-      date: new Date(r.date_of_inquiry).toLocaleDateString(),
+      date: formatDateOnly(r.date_of_inquiry),
       actions: (
         <RowActionsMenu id={r.id} name={r.full_name} editHref={`/leads/${r.id}`} canDelete={canDelete} deleteLabel="Delete lead" />
       ),

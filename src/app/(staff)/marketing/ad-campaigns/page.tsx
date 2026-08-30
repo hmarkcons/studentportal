@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { formatDateOnly } from "@/lib/formatDate";
 import { Card } from "@/components/ui/Card";
 import { NewAdCampaignForm } from "./NewAdCampaignForm";
 import { ActualSpendInput } from "./ActualSpendInput";
@@ -46,8 +47,8 @@ export default async function AdCampaignsPage() {
                   <ActualSpendInput id={c.id} actualSpend={c.actual_spend} />
                 </td>
                 <td className="px-4 py-3 text-xs text-muted">
-                  {c.start_date ? new Date(c.start_date).toLocaleDateString() : "—"}
-                  {c.end_date && ` – ${new Date(c.end_date).toLocaleDateString()}`}
+                  {c.start_date ? formatDateOnly(c.start_date) : "—"}
+                  {c.end_date && ` – ${formatDateOnly(c.end_date)}`}
                 </td>
               </tr>
             ))}

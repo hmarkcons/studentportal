@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { formatDateOnly } from "@/lib/formatDate";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -121,7 +122,7 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
             </div>
             <div className="flex justify-between">
               <dt className="text-muted">Inquiry date</dt>
-              <dd className="text-ink">{new Date(lead.date_of_inquiry).toLocaleDateString()}</dd>
+              <dd className="text-ink">{formatDateOnly(lead.date_of_inquiry)}</dd>
             </div>
           </dl>
         </Card>

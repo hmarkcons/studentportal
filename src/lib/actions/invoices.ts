@@ -3,6 +3,7 @@
 import { createElement } from "react";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { formatDateOnly } from "@/lib/formatDate";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -244,9 +245,9 @@ export async function buildAndStoreInvoicePdf(
   const payments = (installments ?? []).map((i) => ({
     date:
       i.status === "paid" && i.paid_date
-        ? new Date(i.paid_date).toLocaleDateString()
+        ? formatDateOnly(i.paid_date)
         : i.due_date
-          ? new Date(i.due_date).toLocaleDateString()
+          ? formatDateOnly(i.due_date)
           : "—",
     method: i.payment_method,
     amount: i.amount,
@@ -270,7 +271,7 @@ export async function buildAndStoreInvoicePdf(
       invoiceNumber,
       status,
       issuedDate: new Date(invoice.created_at).toLocaleDateString(),
-      dueDate: nextDue ? new Date(nextDue).toLocaleDateString() : null,
+      dueDate: nextDue ? formatDateOnly(nextDue) : null,
       currencySymbol,
       studentName: student?.full_name ?? "—",
       studentPhone: student?.contact_number ?? null,

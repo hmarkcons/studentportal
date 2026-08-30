@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { formatDateOnly } from "@/lib/formatDate";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { NewSocialPostForm } from "./NewSocialPostForm";
@@ -23,7 +24,7 @@ export default async function SocialCalendarPage() {
             <div>
               <p className="text-ink">{p.theme}</p>
               <p className="text-xs text-muted">
-                {new Date(p.post_date).toLocaleDateString()} · {(p.platforms ?? []).join(", ")}
+                {formatDateOnly(p.post_date)} · {(p.platforms ?? []).join(", ")}
               </p>
             </div>
             <StatusAdvance id={p.id} status={p.status} />

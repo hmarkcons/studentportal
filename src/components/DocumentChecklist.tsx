@@ -2,6 +2,7 @@
 
 import { useActionState, useState, useTransition } from "react";
 import { uploadDocument, reviewDocument, addDocumentRequirement, deleteDocumentRequirement } from "@/lib/actions/documents";
+import { formatDateOnly } from "@/lib/formatDate";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
@@ -98,7 +99,7 @@ function UploadRow({ doc, studentId, revalidateTo }: { doc: DocRow; studentId: s
         <p className="text-sm text-ink">{doc.name ?? doc.category ?? "Document"}</p>
         <div className="mt-1 flex items-center gap-2">
           <Badge tone={DOCUMENT_STATUS_TONE[doc.status] ?? "neutral"}>{doc.status.replace("_", " ")}</Badge>
-          {doc.deadline && <span className="text-xs text-muted">Due {new Date(doc.deadline).toLocaleDateString()}</span>}
+          {doc.deadline && <span className="text-xs text-muted">Due {formatDateOnly(doc.deadline)}</span>}
           {doc.fileUrl && (
             <a href={doc.fileUrl} target="_blank" rel="noreferrer" className="text-xs text-primary underline">
               View file

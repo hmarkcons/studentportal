@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import QRCode from "qrcode";
 import { createClient } from "@/lib/supabase/server";
+import { formatDateOnly } from "@/lib/formatDate";
 import { Card } from "@/components/ui/Card";
 import { ClockButtons } from "./ClockButtons";
 import { RotateQrButton } from "./RotateQrButton";
@@ -74,7 +75,7 @@ export default async function AttendancePage() {
             {(records ?? []).map((r) => (
               <tr key={r.id} className="border-b border-border last:border-0">
                 <td className="px-4 py-3">{one(r.staff)?.full_name}</td>
-                <td className="px-4 py-3">{new Date(r.work_date).toLocaleDateString()}</td>
+                <td className="px-4 py-3">{formatDateOnly(r.work_date)}</td>
                 <td className="px-4 py-3">{r.clock_in ? new Date(r.clock_in).toLocaleTimeString() : "—"}</td>
                 <td className="px-4 py-3">{r.clock_out ? new Date(r.clock_out).toLocaleTimeString() : "—"}</td>
               </tr>

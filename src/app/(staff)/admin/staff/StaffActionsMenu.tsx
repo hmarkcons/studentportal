@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { deleteStaffAccount } from "@/lib/actions/admin";
+import { formatDateOnly } from "@/lib/formatDate";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { STAFF_ROLE_LABELS, CURRENCY_SYMBOLS } from "@/lib/constants";
 import { StaffForm, type StaffRecord } from "./StaffForm";
@@ -69,7 +70,7 @@ export function StaffActionsMenu({ staff }: { staff: StaffRecord }) {
           <Row label="Designation" value={staff.designation} />
           <Row label="Role" value={STAFF_ROLE_LABELS[staff.role as never] ?? staff.role} />
           <Row label="Gender" value={staff.gender} />
-          <Row label="Date of birth" value={staff.date_of_birth ? new Date(staff.date_of_birth).toLocaleDateString() : null} />
+          <Row label="Date of birth" value={staff.date_of_birth ? formatDateOnly(staff.date_of_birth) : null} />
           <Row label="Marital status" value={staff.marital_status} />
           <Row label="CNIC" value={staff.cnic} />
           <Row label="Address" value={staff.address} />

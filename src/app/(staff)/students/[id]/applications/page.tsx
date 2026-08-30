@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getStaffSession } from "@/lib/auth/session";
+import { formatDateOnly } from "@/lib/formatDate";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -76,7 +77,7 @@ export default async function StudentApplicationsTab(props: PageProps<"/students
                   </Link>
                   <div className="mt-1 flex items-center justify-between px-1">
                     <span className="text-xs text-muted">
-                      {a.deadline ? `Deadline: ${new Date(a.deadline).toLocaleDateString()}` : "No deadline set"}
+                      {a.deadline ? `Deadline: ${formatDateOnly(a.deadline)}` : "No deadline set"}
                       {" · "}
                       <Badge tone="info">{a.current_stage.replace(/_/g, " ")}</Badge>
                       {a.is_finalized && (

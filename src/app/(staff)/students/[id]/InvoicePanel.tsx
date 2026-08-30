@@ -12,6 +12,7 @@ import {
 } from "@/lib/actions/invoices";
 import { updateAdminFeeStatus, addLineItem, deleteLineItem, sendInvoiceEmail } from "@/lib/actions/consultancyFee";
 import { computeInvoiceStatus, INVOICE_STATUS_LABELS } from "@/lib/invoiceStatus";
+import { formatDateOnly } from "@/lib/formatDate";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input, Select, Textarea } from "@/components/ui/Input";
@@ -245,7 +246,7 @@ function AdminFeeSection({
       <div className="flex items-center justify-between text-xs">
         <span className="text-muted">
           Administrative fee
-          {invoice.admin_fee_paid_date && ` · paid ${new Date(invoice.admin_fee_paid_date).toLocaleDateString()}`}
+          {invoice.admin_fee_paid_date && ` · paid ${formatDateOnly(invoice.admin_fee_paid_date)}`}
           {invoice.admin_fee_payment_method && ` via ${invoice.admin_fee_payment_method}`}
         </span>
         <div className="flex items-center gap-1">
@@ -530,7 +531,7 @@ export function InvoiceCard({
             <div key={i.id} className="flex items-center justify-between text-xs text-muted">
               <span>
                 Installment {i.installment_no} — {invoice.currency} {i.amount.toFixed(2)}
-                {i.due_date && ` · due ${new Date(i.due_date).toLocaleDateString()}`}
+                {i.due_date && ` · due ${formatDateOnly(i.due_date)}`}
                 {i.status === "partial" && ` · paid ${invoice.currency} ${(i.amount_paid ?? 0).toFixed(2)}`}
               </span>
               <div className="flex items-center gap-1">

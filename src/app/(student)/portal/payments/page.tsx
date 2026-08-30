@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { formatDateOnly } from "@/lib/formatDate";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -53,7 +54,7 @@ export default async function PortalPaymentsPage() {
                 <div key={i.id} className="flex items-center justify-between text-sm">
                   <span className="text-ink">
                     Installment {i.installment_no} — {inv.currency} {i.amount}
-                    {i.due_date && ` · due ${new Date(i.due_date).toLocaleDateString()}`}
+                    {i.due_date && ` · due ${formatDateOnly(i.due_date)}`}
                   </span>
                   <Badge tone={i.status === "paid" ? "success" : "warning"}>{i.status}</Badge>
                 </div>

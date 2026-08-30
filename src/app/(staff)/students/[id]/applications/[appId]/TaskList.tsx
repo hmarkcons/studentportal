@@ -7,6 +7,7 @@ import {
   updateApplicationTask,
   deleteApplicationTask,
 } from "@/lib/actions/applications";
+import { formatDateOnly } from "@/lib/formatDate";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -69,7 +70,7 @@ function TaskRowView({ task, revalidateTo }: { task: TaskRow; revalidateTo: stri
         <span className={`rounded-full border px-1.5 py-0.5 text-[10px] uppercase ${PRIORITY_TONE[task.priority] ?? PRIORITY_TONE.medium}`}>
           {task.priority}
         </span>
-        {task.due_date && <span className="text-xs text-muted">due {new Date(task.due_date).toLocaleDateString()}</span>}
+        {task.due_date && <span className="text-xs text-muted">due {formatDateOnly(task.due_date)}</span>}
         <button onClick={() => setEditing(true)} className="text-xs text-muted hover:text-primary">
           ✏️
         </button>
