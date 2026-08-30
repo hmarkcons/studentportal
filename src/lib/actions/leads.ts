@@ -5,6 +5,30 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { LEAD_STATUSES } from "@/lib/constants";
 
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+
+// Manual single-entry creation (unlike the CSV bulk-import paths, which
+// already dedupe by email) had no duplicate check at all — a counselor
+// re-entering a lead they forgot they'd already added would silently get a
+// second row. Checked by email first (more likely to be unique/typo-free),
+// then phone.
+async function findDuplicateLead(supabase: SupabaseServerClient, email: string | null, contact_number: string | null) {
+  if (email) {
+    const { data } = await supabase.from("leads").select("id, full_name, status").ilike("email", email).limit(1).maybeSingle();
+    if (data) return data;
+  }
+  if (contact_number) {
+    const { data } = await supabase.from("leads").select("id, full_name, status").eq("contact_number", contact_number).limit(1).maybeSingle();
+    if (data) return data;
+  }
+  return null;
+}
+
+function duplicateLeadError(existing: { full_name: string; status: string }) {
+  const where = existing.status === "registered" ? "registered students" : "leads";
+  return `A matching record already exists in ${where}: ${existing.full_name}. Check for a duplicate before creating a new one.`;
+}
+
 export async function createLead(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
 
@@ -23,6 +47,9 @@ export async function createLead(_prevState: unknown, formData: FormData) {
   if (!full_name) {
     return { error: "Name is required." };
   }
+
+  const duplicate = await findDuplicateLead(supabase, email, contact_number);
+  if (duplicate) return { error: duplicateLeadError(duplicate) };
 
   // Insert without .select() — chaining .select() makes PostgREST append a
   // RETURNING clause, and Postgres additionally requires the returned row to
@@ -231,6 +258,9 @@ export async function registerStudentManually(_prevState: unknown, formData: For
   const destination_names = formData.getAll("destination_names").map(String).filter(Boolean);
   const assigned_counselor_id = String(formData.get("assigned_counselor_id") ?? "") || null;
 
+  const duplicate = await findDuplicateLead(supabase, email, contact_number);
+  if (duplicate) return { error: duplicateLeadError(duplicate) };
+
   // See createLead's comment above — inserting without .select() avoids the
   // RETURNING+RLS interaction that otherwise rejects this insert for any
   // role not directly covered by leads_select's tuple-local clauses.
@@ -291,19 +321,10 @@ export async function updateLeadStatus(leadId: string, _prevState: unknown, form
     return { error: "A remark is required for every status update (call log)." };
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const { error: logError } = await supabase.from("lead_call_logs").insert({
-    lead_id: leadId,
-    counselor_id: user?.id,
-    status_at_time: status,
-    remark,
-  });
-  if (logError) return { error: logError.message };
-
-  const { error } = await supabase.from("leads").update({ status }).eq("id", leadId);
+  // Single security-definer RPC — the call log entry and the status change
+  // commit or fail together (see migration 0089), rather than as two
+  // separate client-side writes that could disagree if the second one failed.
+  const { error } = await supabase.rpc("update_lead_status", { p_lead_id: leadId, p_status: status, p_remark: remark });
   if (error) return { error: error.message };
 
   revalidatePath(`/leads/${leadId}`);
