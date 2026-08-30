@@ -5,7 +5,7 @@ import { inviteStudentToPortal, resetStudentPortalPassword } from "@/lib/actions
 import { readCredentialAction } from "@/lib/actions/countryTracker";
 import { Button } from "@/components/ui/Button";
 
-type ActionState = { error?: string; success?: boolean; email?: string; password?: string } | undefined;
+type ActionState = { error?: string; success?: boolean; email?: string; password?: string; warning?: string } | undefined;
 
 export function PortalAccessPanel({ studentId, enabled }: { studentId: string; enabled: boolean }) {
   const action = enabled ? resetStudentPortalPassword.bind(null, studentId) : inviteStudentToPortal.bind(null, studentId);
@@ -47,6 +47,7 @@ export function PortalAccessPanel({ studentId, enabled }: { studentId: string; e
           <p className="text-amber-800 dark:text-amber-300">Credentials (also revealable anytime via the button above):</p>
           {state.email && <p className="mt-1 font-mono text-xs text-zinc-700 dark:text-zinc-300">{state.email}</p>}
           <p className="font-mono text-xs text-zinc-700 dark:text-zinc-300">{state.password}</p>
+          {state.warning && <p className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">{state.warning}</p>}
         </div>
       )}
 

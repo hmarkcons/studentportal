@@ -56,7 +56,7 @@ export async function inviteStudentToPortal(studentId: string, _prevState: unkno
     return { error: linkError.message };
   }
 
-  await supabase.rpc("store_credential", {
+  const { error: storeError } = await supabase.rpc("store_credential", {
     p_owner_type: "student",
     p_owner_id: studentId,
     p_credential_type: "portal_login",
@@ -64,7 +64,16 @@ export async function inviteStudentToPortal(studentId: string, _prevState: unkno
   });
 
   revalidatePath(`/students/${studentId}`, "layout");
-  return { success: true, email: student.email, password };
+  // The portal account itself is already created and usable — this is a
+  // best-effort copy for later retrieval, so a failure here doesn't fail the
+  // whole action, but staff need to know the password below won't be
+  // revealable again if they don't copy it down now.
+  return {
+    success: true,
+    email: student.email,
+    password,
+    warning: storeError ? "Couldn't save a retrievable copy of this password — copy it down now, it won't be revealable later." : undefined,
+  };
 }
 
 export async function resetStudentPortalPassword(studentId: string, _prevState: unknown, _formData: FormData) {
@@ -88,7 +97,7 @@ export async function resetStudentPortalPassword(studentId: string, _prevState: 
     return { error: updateError.message };
   }
 
-  await supabase.rpc("store_credential", {
+  const { error: storeError } = await supabase.rpc("store_credential", {
     p_owner_type: "student",
     p_owner_id: studentId,
     p_credential_type: "portal_login",
@@ -96,5 +105,9 @@ export async function resetStudentPortalPassword(studentId: string, _prevState: 
   });
 
   revalidatePath(`/students/${studentId}`, "layout");
-  return { success: true, password };
+  return {
+    success: true,
+    password,
+    warning: storeError ? "Couldn't save a retrievable copy of this password — copy it down now, it won't be revealable later." : undefined,
+  };
 }
