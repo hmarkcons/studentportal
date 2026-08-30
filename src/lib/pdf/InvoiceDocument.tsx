@@ -1,5 +1,5 @@
 import { Document, Page, Text, View, Image, StyleSheet } from "@react-pdf/renderer";
-import { getBrandLogoDataUri, BRAND_LOGO_RATIO } from "./brandLogo";
+import { BRAND_LOGO_DATA_URI, BRAND_LOGO_RATIO } from "./brandLogo";
 
 const GREEN = "#146856";
 const GREEN_SOFT = "#E4F2ED";
@@ -103,7 +103,7 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
     <Document>
       <Page size="A4" style={styles.page}>
         <View style={styles.head}>
-          <Image src={getBrandLogoDataUri()} style={styles.brandLogo} />
+          <Image src={BRAND_LOGO_DATA_URI} style={styles.brandLogo} />
           <View style={styles.companyBlock}>
             <Text style={styles.companyBold}>HMARK Consultants</Text>
             <Text>Suite 101, Dashityar Chambers, University Road</Text>

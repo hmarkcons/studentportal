@@ -1,6 +1,6 @@
 import { Document, Page, Text, View, Image, StyleSheet } from "@react-pdf/renderer";
 import type { AgreementBlock, TextRun } from "./agreementContent";
-import { getBrandLogoDataUri, BRAND_LOGO_RATIO } from "./brandLogo";
+import { BRAND_LOGO_DATA_URI, BRAND_LOGO_RATIO } from "./brandLogo";
 
 const GREEN = "#146856";
 const INK = "#1B2420";
@@ -108,7 +108,7 @@ function Header() {
   return (
     <View style={styles.header} fixed>
       <View style={styles.brand}>
-        <Image src={getBrandLogoDataUri()} style={styles.brandLogo} />
+        <Image src={BRAND_LOGO_DATA_URI} style={styles.brandLogo} />
       </View>
       <Text style={styles.headerTitle}>HMARK Consultants{"\n"}Retainer Agreement</Text>
       <Text style={styles.headerPage} render={({ pageNumber }) => `${pageNumber}`} fixed />
