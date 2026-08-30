@@ -37,9 +37,13 @@ async function requireFinanceOrManagement(supabase: Awaited<ReturnType<typeof cr
 // track destination is entitled to a 50% consultancy refund, due within 90
 // days of the refusal notice -- surface these automatically instead of
 // requiring a manual entry. Idempotent: only inserts rows that don't already
-// exist for a given application.
-export async function syncVisaRefusalRefunds() {
+// exist for a given application. Runs on every load of the Refunds page (not
+// a background job) — returned errors surface as a banner there so a
+// persistent failure (as opposed to a transient one, which self-heals on the
+// next page load) doesn't silently drop a student's refund entitlement.
+export async function syncVisaRefusalRefunds(): Promise<{ errors: string[] }> {
   const admin = createAdminClient();
+  const errors: string[] = [];
 
   const { data: refusals } = await admin
     .from("visa_records")
@@ -48,7 +52,7 @@ export async function syncVisaRefusalRefunds() {
     )
     .eq("outcome", "rejected");
 
-  if (!refusals || refusals.length === 0) return;
+  if (!refusals || refusals.length === 0) return { errors };
 
   function one<T>(v: T | T[] | null) {
     return Array.isArray(v) ? (v[0] ?? null) : v;
@@ -63,7 +67,7 @@ export async function syncVisaRefusalRefunds() {
     })
     .map((r) => ({ applicationId: r.application_id, refusalDate: r.updated_at }));
 
-  if (privateApplicationIds.length === 0) return;
+  if (privateApplicationIds.length === 0) return { errors };
 
   const { data: existing } = await admin
     .from("refund_requests")
@@ -76,7 +80,7 @@ export async function syncVisaRefusalRefunds() {
   const existingIds = new Set((existing ?? []).map((e) => e.application_id));
 
   const toCreate = privateApplicationIds.filter((p) => !existingIds.has(p.applicationId));
-  if (toCreate.length === 0) return;
+  if (toCreate.length === 0) return { errors };
 
   for (const { applicationId, refusalDate } of toCreate) {
     const { data: app } = await admin.from("applications").select("student_id").eq("id", applicationId).maybeSingle();
@@ -92,7 +96,7 @@ export async function syncVisaRefusalRefunds() {
 
     const amount = invoice?.consultancy_fee != null ? Math.round(invoice.consultancy_fee * 0.5 * 100) / 100 : null;
 
-    await admin.from("refund_requests").insert({
+    const { error: insertError } = await admin.from("refund_requests").insert({
       student_id: app.student_id,
       application_id: applicationId,
       trigger_type: "visa_refusal",
@@ -102,7 +106,10 @@ export async function syncVisaRefusalRefunds() {
       amount,
       currency: invoice?.currency ?? null,
     });
+    if (insertError) errors.push(`Application ${applicationId}: ${insertError.message}`);
   }
+
+  return { errors };
 }
 
 export async function createStaffCommission(revalidateTo: string, _prevState: unknown, formData: FormData) {
@@ -111,44 +118,27 @@ export async function createStaffCommission(revalidateTo: string, _prevState: un
 
   const staff_id = String(formData.get("staff_id") ?? "");
   const student_id = String(formData.get("student_id") ?? "");
-  let amount = Number(formData.get("amount") ?? 0);
+  const amount = Number(formData.get("amount") ?? 0);
   const currency = String(formData.get("currency") ?? "EUR");
   const registration_date = String(formData.get("registration_date") ?? "") || null;
   const apply_credit_id = String(formData.get("apply_credit_id") ?? "") || null;
 
   if (!staff_id || !student_id || !amount) return { error: "Staff, student, and amount are required." };
 
-  let creditToApply: { id: string; amount: number } | null = null;
-  if (apply_credit_id) {
-    const { data: credit } = await supabase
-      .from("staff_commission_credits")
-      .select("id, staff_id, amount, currency, status")
-      .eq("id", apply_credit_id)
-      .maybeSingle();
-    if (!credit || credit.status !== "available" || credit.staff_id !== staff_id) {
-      return { error: "That credit is no longer available." };
-    }
-    if (credit.currency !== currency) {
-      return { error: `Credit is in ${credit.currency}, but this commission is in ${currency} — match the currency to apply it.` };
-    }
-    creditToApply = { id: credit.id, amount: credit.amount };
-    amount = Math.max(0, amount - credit.amount);
-  }
-
-  const { data: newCommission, error } = await supabase
-    .from("staff_commissions")
-    .insert({ staff_id, student_id, amount, currency, registration_date })
-    .select("id")
-    .single();
+  // Single security-definer RPC — the credit-consume and the commission
+  // insert commit or fail together and the credit row is locked for the
+  // duration (see migration 0090), closing a race where two concurrent
+  // requests could both read the same credit as "available" and double-
+  // apply its discount before either write landed.
+  const { error } = await supabase.rpc("create_staff_commission", {
+    p_staff_id: staff_id,
+    p_student_id: student_id,
+    p_amount: amount,
+    p_currency: currency,
+    p_registration_date: registration_date,
+    p_apply_credit_id: apply_credit_id,
+  });
   if (error) return { error: error.message };
-
-  if (creditToApply) {
-    const { error: creditError } = await supabase
-      .from("staff_commission_credits")
-      .update({ status: "applied", applied_to_commission_id: newCommission.id, applied_at: new Date().toISOString() })
-      .eq("id", creditToApply.id);
-    if (creditError) return { error: creditError.message };
-  }
 
   revalidatePath(revalidateTo);
   return { success: true };
@@ -304,6 +294,8 @@ export async function deletePartnerCommission(id: string, revalidateTo: string) 
 
 export async function markStaffCommissionPaid(id: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
+  if (!(await requireFinance(supabase))) return { error: "Only Finance/Super Admin can mark commissions paid." };
+
   const file = formData.get("file") as File | null;
   let payment_proof_path: string | undefined;
 

@@ -10,6 +10,21 @@ function one<T>(v: T | T[] | null) {
 
 const CURRENCY_SYMBOLS: Record<string, string> = { PKR: "₨", USD: "$", EUR: "€" };
 
+// Date.setMonth() overflows past month-end for short target months (e.g. 31
+// Jan + 1 month rolls over to 3 March, not the intended end of February) —
+// done entirely in UTC, independent of `date.setMonth`, so it's also immune
+// to the timezone-dependent day-shift that mixing a UTC-parsed date string
+// with local-time Date methods would otherwise introduce.
+function addMonthsClampedUTC(dateStr: string, months: number): string {
+  const [y, m, day] = dateStr.split("-").map(Number);
+  const totalMonths = m - 1 + months;
+  const targetYear = y + Math.floor(totalMonths / 12);
+  const targetMonthIndex = ((totalMonths % 12) + 12) % 12;
+  const daysInTargetMonth = new Date(Date.UTC(targetYear, targetMonthIndex + 1, 0)).getUTCDate();
+  const targetDay = Math.min(day, daysInTargetMonth);
+  return new Date(Date.UTC(targetYear, targetMonthIndex, targetDay)).toISOString().slice(0, 10);
+}
+
 const DEFAULT_TERMS =
   "Only upon refusal from the university, 100% of the paid consultancy charges only will be refundable. There is no refund on withdrawal or rejection from the embassy or on failing the admission test, or under any other condition. Refunds are processed within 90 working days of the refusal notice.";
 
@@ -26,38 +41,30 @@ export async function generateInvoice(studentId: string, agreementId: string, _p
   const firstDueDate = String(formData.get("first_due_date") ?? "") || null;
   const installment_plan = String(formData.get("installment_plan") ?? "").trim() || null;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const { data: invoice, error } = await supabase
-    .from("invoices")
-    .insert({ student_id: studentId, agreement_id: agreementId, admin_charge, consultancy_fee, currency, intake, terms, invoice_number, installment_plan, generated_by: user?.id })
-    .select("id")
-    .single();
-
-  if (error) return { error: error.message };
-
   const total = admin_charge + consultancy_fee;
   const perInstallment = Math.round((total / installmentCount) * 100) / 100;
-  const installments = Array.from({ length: installmentCount }, (_, i) => {
-    let due_date: string | null = null;
-    if (firstDueDate) {
-      const d = new Date(firstDueDate);
-      d.setMonth(d.getMonth() + i);
-      due_date = d.toISOString().slice(0, 10);
-    }
-    return {
-      invoice_id: invoice.id,
-      installment_no: i + 1,
-      amount: i === installmentCount - 1 ? total - perInstallment * (installmentCount - 1) : perInstallment,
-      status: "unpaid" as const,
-      due_date,
-    };
-  });
+  const installments = Array.from({ length: installmentCount }, (_, i) => ({
+    installment_no: i + 1,
+    amount: i === installmentCount - 1 ? total - perInstallment * (installmentCount - 1) : perInstallment,
+    due_date: firstDueDate ? addMonthsClampedUTC(firstDueDate, i) : null,
+  }));
 
-  const { error: instError } = await supabase.from("invoice_installments").insert(installments);
-  if (instError) return { error: instError.message };
+  // Single security-definer RPC — the invoice and its installments commit or
+  // fail together (see migration 0090), rather than as two separate writes
+  // that could leave a zero-installment invoice behind if the second failed.
+  const { error } = await supabase.rpc("generate_invoice", {
+    p_student_id: studentId,
+    p_agreement_id: agreementId,
+    p_admin_charge: admin_charge,
+    p_consultancy_fee: consultancy_fee,
+    p_currency: currency,
+    p_intake: intake,
+    p_terms: terms,
+    p_invoice_number: invoice_number,
+    p_installment_plan: installment_plan,
+    p_installments: installments,
+  });
+  if (error) return { error: error.message };
 
   revalidatePath(`/students/${studentId}`);
   return { success: true };

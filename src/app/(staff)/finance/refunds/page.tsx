@@ -42,7 +42,7 @@ export default async function RefundsPage() {
   const isSuperAdmin = staffRow?.role === "super_admin";
   const canManage = staffRow?.role === "finance" || staffRow?.role === "management" || staffRow?.role === "super_admin";
 
-  await syncVisaRefusalRefunds();
+  const { errors: syncErrors } = await syncVisaRefusalRefunds();
 
   const { data: refunds } = await supabase
     .from("refund_requests")
@@ -67,6 +67,16 @@ export default async function RefundsPage() {
         private-university country: 50% within 90 days — those appear below automatically once a visa is marked
         refused.
       </p>
+      {syncErrors.length > 0 && (
+        <div className="mb-4 rounded-lg border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
+          <p className="font-medium">Some visa-refusal refunds couldn&apos;t be auto-created:</p>
+          <ul className="mt-1 list-disc pl-5">
+            {syncErrors.map((e, i) => (
+              <li key={i}>{e}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       {isSuperAdmin && <NewRefundForm students={students ?? []} />}
       <div className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
         {(refunds ?? []).map((r) => {
