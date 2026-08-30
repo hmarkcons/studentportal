@@ -152,16 +152,18 @@ export function DocumentChecklist({
   studentId,
   applicationId = null,
   revalidateTo,
+  emptyMessage = "No documents required yet.",
 }: {
   docs: DocRow[];
   studentId: string;
   applicationId?: string | null;
   revalidateTo: string;
+  emptyMessage?: string;
 }) {
   return (
     <div>
       {docs.length === 0 ? (
-        <EmptyState>No documents required yet.</EmptyState>
+        <EmptyState>{emptyMessage}</EmptyState>
       ) : (
         <div className="flex flex-col divide-y divide-border">
           {docs.map((doc) => (

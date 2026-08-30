@@ -346,8 +346,19 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       )}
 
       <Card className="mt-6">
-        <h3 className="mb-3 text-sm font-medium text-ink">Documents</h3>
-        <DocumentChecklist docs={docsWithUrls} studentId={id} applicationId={null} revalidateTo={`/students/${id}`} />
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-medium text-ink">Missing Documents</h3>
+          <Link href={`/students/${id}/documents`} className="text-xs text-primary hover:underline">
+            View all documents →
+          </Link>
+        </div>
+        <DocumentChecklist
+          docs={docsWithUrls.filter((d) => d.status === "missing")}
+          studentId={id}
+          applicationId={null}
+          revalidateTo={`/students/${id}`}
+          emptyMessage={docsWithUrls.length === 0 ? "No documents required yet." : "Nothing missing — all required documents submitted."}
+        />
       </Card>
 
       <Card className="mt-6">
