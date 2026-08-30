@@ -34,6 +34,36 @@ const REQUIREMENT_CATEGORIES = [
   "other",
 ];
 
+// Section order/labels for the grouped checklist view. "interview" has no
+// document rows of its own (it's a separate scheduling feature rendered via
+// the `interviewSection` prop) but still occupies its place in the order.
+const CATEGORY_ORDER = [
+  "admission",
+  "interview",
+  "attestation",
+  "visa",
+  "scholarship_documents",
+  "italian_translations",
+  "visa_sticker",
+  "travel",
+  "enrollment",
+  "scholarship",
+  "other",
+] as const;
+
+const CATEGORY_LABELS: Record<string, string> = {
+  admission: "Admission Documents",
+  attestation: "Attestation",
+  visa: "Visa Application Requirements",
+  scholarship_documents: "Scholarship Documents",
+  italian_translations: "Italian Translations",
+  visa_sticker: "Visa Sticker",
+  travel: "Travel",
+  enrollment: "Enrollment",
+  scholarship: "Scholarship",
+  other: "Other",
+};
+
 function UploadRow({ doc, studentId, revalidateTo }: { doc: DocRow; studentId: string; revalidateTo: string }) {
   const action = uploadDocument.bind(null, doc.id, studentId, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
@@ -153,22 +183,50 @@ export function DocumentChecklist({
   applicationId = null,
   revalidateTo,
   emptyMessage = "No documents required yet.",
+  interviewSection = null,
 }: {
   docs: DocRow[];
   studentId: string;
   applicationId?: string | null;
   revalidateTo: string;
   emptyMessage?: string;
+  interviewSection?: React.ReactNode;
 }) {
+  const grouped = new Map<string, DocRow[]>();
+  for (const doc of docs) {
+    const cat = doc.category ?? "other";
+    (grouped.get(cat) ?? grouped.set(cat, []).get(cat)!).push(doc);
+  }
+  const uncategorized = docs.filter((d) => !d.category || !(CATEGORY_ORDER as readonly string[]).includes(d.category));
+
   return (
     <div>
-      {docs.length === 0 ? (
+      {docs.length === 0 && !interviewSection ? (
         <EmptyState>{emptyMessage}</EmptyState>
       ) : (
-        <div className="flex flex-col divide-y divide-border">
-          {docs.map((doc) => (
-            <UploadRow key={doc.id} doc={doc} studentId={studentId} revalidateTo={revalidateTo} />
-          ))}
+        <div className="flex flex-col gap-6">
+          {CATEGORY_ORDER.map((cat) => {
+            if (cat === "interview") {
+              return interviewSection ? (
+                <div key="interview">
+                  <h4 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">Interview</h4>
+                  {interviewSection}
+                </div>
+              ) : null;
+            }
+            const catDocs = cat === "other" ? [...(grouped.get("other") ?? []), ...uncategorized] : (grouped.get(cat) ?? []);
+            if (catDocs.length === 0) return null;
+            return (
+              <div key={cat}>
+                <h4 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">{CATEGORY_LABELS[cat] ?? cat}</h4>
+                <div className="flex flex-col divide-y divide-border">
+                  {catDocs.map((doc) => (
+                    <UploadRow key={doc.id} doc={doc} studentId={studentId} revalidateTo={revalidateTo} />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
       <AddRequirementForm studentId={studentId} applicationId={applicationId} revalidateTo={revalidateTo} />

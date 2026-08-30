@@ -10,6 +10,7 @@ import { ApplicationDetailsForm } from "./ApplicationDetailsForm";
 import { listTrackerDefinitions } from "@/lib/actions/countryTracker";
 import { DocumentChecklist, type DocRow } from "@/components/DocumentChecklist";
 import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
+import { InterviewSection } from "@/components/InterviewSection";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -44,7 +45,7 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
 
   await ensureStudentDocumentRequirements(id);
 
-  const [{ data: tasks }, { data: rawDocs }] = await Promise.all([
+  const [{ data: tasks }, { data: rawDocs }, { data: interview }] = await Promise.all([
     supabase
       .from("application_tasks")
       .select("id, description, due_date, status, priority")
@@ -56,6 +57,11 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
       .eq("student_id", id)
       .or(`application_id.eq.${appId},application_id.is.null`)
       .returns<(DocRow & { custom_name: string | null; application_id: string | null; template: { name: string } | { name: string }[] | null })[]>(),
+    supabase
+      .from("application_interviews")
+      .select("university_name, program_name, interview_details, interview_link, available_slots, confirmed_datetime")
+      .eq("application_id", appId)
+      .maybeSingle(),
   ]);
 
   function one2<T>(v: T | T[] | null) {
@@ -118,7 +124,23 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
 
       <Card className="mb-6">
         <h3 className="mb-3 text-sm font-medium text-ink">Documents</h3>
-        <DocumentChecklist docs={docsWithUrls} studentId={id} applicationId={appId} revalidateTo={revalidateTo} />
+        <DocumentChecklist
+          docs={docsWithUrls}
+          studentId={id}
+          applicationId={appId}
+          revalidateTo={revalidateTo}
+          interviewSection={
+            <InterviewSection
+              applicationId={appId}
+              revalidateTo={revalidateTo}
+              data={
+                interview
+                  ? interview
+                  : { university_name: university?.name ?? null, program_name: program?.name ?? null, interview_details: null, interview_link: null, available_slots: [], confirmed_datetime: null }
+              }
+            />
+          }
+        />
       </Card>
 
       <Card className="mb-6">
