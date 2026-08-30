@@ -1,5 +1,6 @@
 import { Document, Page, Text, View, Image, StyleSheet } from "@react-pdf/renderer";
 import type { AgreementBlock, TextRun } from "./agreementContent";
+import { getBrandLogoDataUri, BRAND_LOGO_RATIO } from "./brandLogo";
 
 const GREEN = "#146856";
 const INK = "#1B2420";
@@ -11,8 +12,7 @@ const styles = StyleSheet.create({
 
   header: { flexDirection: "row", alignItems: "center", paddingBottom: 8, marginBottom: 10, borderBottomWidth: 2, borderBottomColor: GREEN },
   brand: { flex: 1 },
-  brandWord: { fontFamily: "Times-Bold", fontSize: 15, color: GREEN },
-  brandSub: { fontSize: 6, letterSpacing: 1.5, color: INK_SOFT },
+  brandLogo: { height: 26, width: 26 * BRAND_LOGO_RATIO },
   headerTitle: { textAlign: "right", fontFamily: "Helvetica-Bold", fontSize: 9, color: INK, marginRight: 8 },
   headerPage: { width: 24, textAlign: "center", fontFamily: "Helvetica-Bold", fontSize: 11, color: GREEN, borderLeftWidth: 1, borderLeftColor: RULE, paddingLeft: 8 },
 
@@ -108,8 +108,7 @@ function Header() {
   return (
     <View style={styles.header} fixed>
       <View style={styles.brand}>
-        <Text style={styles.brandWord}>HMARK</Text>
-        <Text style={styles.brandSub}>CONSULTANTS</Text>
+        <Image src={getBrandLogoDataUri()} style={styles.brandLogo} />
       </View>
       <Text style={styles.headerTitle}>HMARK Consultants{"\n"}Retainer Agreement</Text>
       <Text style={styles.headerPage} render={({ pageNumber }) => `${pageNumber}`} fixed />

@@ -46,8 +46,11 @@ export function AppShell({
     <div className="flex min-h-screen">
       <aside className="flex w-64 flex-shrink-0 flex-col border-r border-sidebar-border bg-sidebar-bg">
         <div className="border-b border-sidebar-border px-5 py-5">
-          <p className="text-lg font-semibold text-sidebar-ink">{brand}</p>
-          <p className="text-xs text-sidebar-muted">HMARK Consultants</p>
+          <div className="inline-block rounded-md bg-white px-2 py-1.5">
+            {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset, not worth next/image's overhead in a fixed-size sidebar header */}
+            <img src="/hmark-logo.png" alt="HMARK Consultants" className="h-6 w-auto" />
+          </div>
+          <p className="mt-2 text-xs font-medium text-sidebar-ink">{brand}</p>
         </div>
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           {nav.map((item) =>

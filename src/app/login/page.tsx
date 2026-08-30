@@ -66,8 +66,11 @@ function LoginFormWithNext() {
 
       <div className="flex flex-1 items-center justify-center bg-bg px-6">
         <div className="w-full max-w-sm">
-          <h1 className="text-2xl font-semibold text-ink">HMARK Consultants</h1>
-          <p className="mt-1 text-sm text-muted">Sign in to your account.</p>
+          <div className="inline-block rounded-md bg-white px-3 py-2">
+            {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset on a one-off login screen */}
+            <img src="/hmark-logo.png" alt="HMARK Consultants" className="h-9 w-auto" />
+          </div>
+          <p className="mt-3 text-sm text-muted">Sign in to your account.</p>
 
           <form action={formAction} className="mt-6 flex flex-col gap-4">
             <input type="hidden" name="next" value={next} />

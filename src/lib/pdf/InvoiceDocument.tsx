@@ -1,4 +1,5 @@
-import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
+import { Document, Page, Text, View, Image, StyleSheet } from "@react-pdf/renderer";
+import { getBrandLogoDataUri, BRAND_LOGO_RATIO } from "./brandLogo";
 
 const GREEN = "#146856";
 const GREEN_SOFT = "#E4F2ED";
@@ -12,8 +13,7 @@ const DUE_BG = "#F3E7D6";
 const styles = StyleSheet.create({
   page: { padding: 44, fontSize: 9.5, color: INK, fontFamily: "Helvetica" },
   head: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", paddingBottom: 14, borderBottomWidth: 2, borderBottomColor: GREEN },
-  brandWord: { fontFamily: "Times-Bold", fontSize: 20, color: GREEN },
-  brandSub: { fontSize: 7.5, letterSpacing: 2, color: INK_SOFT, marginTop: 2 },
+  brandLogo: { height: 32, width: 32 * BRAND_LOGO_RATIO },
   companyBlock: { textAlign: "right", fontSize: 8, color: INK_FAINT, lineHeight: 1.5 },
   companyBold: { color: INK_SOFT, fontFamily: "Helvetica-Bold" },
 
@@ -103,10 +103,7 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
     <Document>
       <Page size="A4" style={styles.page}>
         <View style={styles.head}>
-          <View>
-            <Text style={styles.brandWord}>HMARK</Text>
-            <Text style={styles.brandSub}>CONSULTANTS</Text>
-          </View>
+          <Image src={getBrandLogoDataUri()} style={styles.brandLogo} />
           <View style={styles.companyBlock}>
             <Text style={styles.companyBold}>HMARK Consultants</Text>
             <Text>Suite 101, Dashityar Chambers, University Road</Text>
