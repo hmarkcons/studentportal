@@ -303,6 +303,13 @@ function LineItemsSection({
   const action = addLineItem.bind(null, invoiceId, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
   const [selectedProduct, setSelectedProduct] = useState("");
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  async function handleDeleteLineItem(lineItemId: string) {
+    setDeleteError(null);
+    const result = await deleteLineItem(lineItemId, revalidateTo);
+    if (result?.error) setDeleteError(result.error);
+  }
 
   return (
     <div className="flex flex-col gap-1">
@@ -312,12 +319,13 @@ function LineItemsSection({
             {li.name} — {currency} {li.amount.toFixed(2)}
           </span>
           {canManage && (
-            <button type="button" onClick={() => deleteLineItem(li.id, revalidateTo)} className="text-danger hover:underline">
+            <button type="button" onClick={() => handleDeleteLineItem(li.id)} className="text-danger hover:underline">
               Remove
             </button>
           )}
         </div>
       ))}
+      {deleteError && <p className="text-xs text-danger">{deleteError}</p>}
       {canManage && (
       <form action={formAction} className="flex flex-wrap items-center gap-1">
         <Select
@@ -454,10 +462,20 @@ export function InvoiceCard({
 }) {
   const [editingInvoice, setEditingInvoice] = useState(false);
   const [editingInstallmentId, setEditingInstallmentId] = useState<string | null>(null);
+  const [receiptError, setReceiptError] = useState<string | null>(null);
+  const [receiptPending, setReceiptPending] = useState(false);
 
   const lineItemsTotal = lineItems.reduce((sum, li) => sum + li.amount, 0);
   const total = invoice.admin_charge + invoice.consultancy_fee + lineItemsTotal;
   const status = computeInvoiceStatus(invoice.admin_fee_status ?? "unpaid", installments);
+
+  async function handleSendReceipt() {
+    setReceiptPending(true);
+    setReceiptError(null);
+    const result = await sendReceipt(invoice.id, studentId);
+    if (result?.error) setReceiptError(result.error);
+    setReceiptPending(false);
+  }
 
   return (
     <div className="rounded-md border border-border p-3">
@@ -468,12 +486,13 @@ export function InvoiceCard({
           {invoice.currency} {total.toFixed(2)}
           {invoice.installment_plan && <span className="ml-2 text-xs font-normal text-muted">· {invoice.installment_plan}</span>}
         </p>
+        {receiptError && <p className="text-xs text-danger">{receiptError}</p>}
         <div className="flex items-center gap-2">
           <Badge tone={STATUS_TONE[status]}>{INVOICE_STATUS_LABELS[status]}</Badge>
           <Badge tone={invoice.sent_status === "sent" ? "success" : "neutral"}>{invoice.sent_status}</Badge>
           {canManage && (
             <>
-              <Button type="button" onClick={() => sendReceipt(invoice.id, studentId)} size="sm">
+              <Button type="button" onClick={handleSendReceipt} size="sm" pending={receiptPending}>
                 Send receipt
               </Button>
               <Button type="button" onClick={() => setEditingInvoice((v) => !v)} size="sm">

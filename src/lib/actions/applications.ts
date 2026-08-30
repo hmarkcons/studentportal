@@ -138,8 +138,10 @@ export async function addApplicationTask(applicationId: string, studentId: strin
 
 export async function toggleApplicationTask(taskId: string, revalidateTo: string, done: boolean) {
   const supabase = await createClient();
-  await supabase.from("application_tasks").update({ status: done ? "done" : "pending" }).eq("id", taskId);
+  const { error } = await supabase.from("application_tasks").update({ status: done ? "done" : "pending" }).eq("id", taskId);
+  if (error) return { error: error.message };
   revalidatePath(revalidateTo);
+  return { success: true };
 }
 
 export async function updateApplicationTask(taskId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
@@ -159,8 +161,10 @@ export async function updateApplicationTask(taskId: string, revalidateTo: string
 
 export async function deleteApplicationTask(taskId: string, revalidateTo: string) {
   const supabase = await createClient();
-  await supabase.from("application_tasks").delete().eq("id", taskId);
+  const { error } = await supabase.from("application_tasks").delete().eq("id", taskId);
+  if (error) return { error: error.message };
   revalidatePath(revalidateTo);
+  return { success: true };
 }
 
 export async function updateVisaRecord(applicationId: string, studentId: string, _prevState: unknown, formData: FormData) {

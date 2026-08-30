@@ -21,6 +21,41 @@ const PRIORITY_TONE: Record<string, string> = {
   low: "border-border text-muted",
 };
 
+function TaskRow({ task, revalidateTo }: { task: DashboardTaskRow; revalidateTo: string }) {
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleToggle(checked: boolean) {
+    setError(null);
+    const result = await toggleApplicationTask(task.id, revalidateTo, checked);
+    if (result?.error) setError(result.error);
+  }
+
+  async function handleDelete() {
+    setError(null);
+    const result = await deleteApplicationTask(task.id, revalidateTo);
+    if (result?.error) setError(result.error);
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={task.status === "done"} onChange={(e) => handleToggle(e.target.checked)} />
+        <span className={task.status === "done" ? "flex-1 text-muted line-through" : "flex-1 text-ink"}>
+          {task.description} <span className="text-muted">· {task.applicationLabel}</span>
+        </span>
+        <span className={`rounded-full border px-1.5 py-0.5 text-[10px] uppercase ${PRIORITY_TONE[task.priority] ?? PRIORITY_TONE.medium}`}>
+          {task.priority}
+        </span>
+        {task.due_date && <span className="text-xs text-muted">due {new Date(task.due_date).toLocaleDateString()}</span>}
+        <button onClick={handleDelete} className="text-xs text-muted hover:text-danger">
+          🗑️
+        </button>
+      </div>
+      {error && <p className="text-xs text-danger">{error}</p>}
+    </div>
+  );
+}
+
 export function DashboardTaskList({
   tasks,
   applications,
@@ -40,23 +75,7 @@ export function DashboardTaskList({
       <div className="flex flex-col gap-2">
         {tasks.length === 0 && <EmptyState>No tasks yet.</EmptyState>}
         {tasks.map((t) => (
-          <div key={t.id} className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={t.status === "done"}
-              onChange={(e) => toggleApplicationTask(t.id, revalidateTo, e.target.checked)}
-            />
-            <span className={t.status === "done" ? "flex-1 text-muted line-through" : "flex-1 text-ink"}>
-              {t.description} <span className="text-muted">· {t.applicationLabel}</span>
-            </span>
-            <span className={`rounded-full border px-1.5 py-0.5 text-[10px] uppercase ${PRIORITY_TONE[t.priority] ?? PRIORITY_TONE.medium}`}>
-              {t.priority}
-            </span>
-            {t.due_date && <span className="text-xs text-muted">due {new Date(t.due_date).toLocaleDateString()}</span>}
-            <button onClick={() => deleteApplicationTask(t.id, revalidateTo)} className="text-xs text-muted hover:text-danger">
-              🗑️
-            </button>
-          </div>
+          <TaskRow key={t.id} task={t} revalidateTo={revalidateTo} />
         ))}
       </div>
 

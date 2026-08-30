@@ -21,8 +21,21 @@ const PRIORITY_TONE: Record<string, string> = {
 
 function TaskRowView({ task, revalidateTo }: { task: TaskRow; revalidateTo: string }) {
   const [editing, setEditing] = useState(false);
+  const [rowError, setRowError] = useState<string | null>(null);
   const action = updateApplicationTask.bind(null, task.id, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
+
+  async function handleToggle(checked: boolean) {
+    setRowError(null);
+    const result = await toggleApplicationTask(task.id, revalidateTo, checked);
+    if (result?.error) setRowError(result.error);
+  }
+
+  async function handleDelete() {
+    setRowError(null);
+    const result = await deleteApplicationTask(task.id, revalidateTo);
+    if (result?.error) setRowError(result.error);
+  }
 
   if (editing) {
     return (
@@ -46,26 +59,25 @@ function TaskRowView({ task, revalidateTo }: { task: TaskRow; revalidateTo: stri
   }
 
   return (
-    <div className="flex items-center gap-2 text-sm">
-      <input
-        type="checkbox"
-        checked={task.status === "done"}
-        onChange={(e) => toggleApplicationTask(task.id, revalidateTo, e.target.checked)}
-      />
-      <span className={task.status === "done" ? "flex-1 text-muted line-through" : "flex-1 text-ink"}>
-        {task.description}
-        {task.label && <span className="text-muted"> · {task.label}</span>}
-      </span>
-      <span className={`rounded-full border px-1.5 py-0.5 text-[10px] uppercase ${PRIORITY_TONE[task.priority] ?? PRIORITY_TONE.medium}`}>
-        {task.priority}
-      </span>
-      {task.due_date && <span className="text-xs text-muted">due {new Date(task.due_date).toLocaleDateString()}</span>}
-      <button onClick={() => setEditing(true)} className="text-xs text-muted hover:text-primary">
-        ✏️
-      </button>
-      <button onClick={() => deleteApplicationTask(task.id, revalidateTo)} className="text-xs text-muted hover:text-danger">
-        🗑️
-      </button>
+    <div>
+      <div className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={task.status === "done"} onChange={(e) => handleToggle(e.target.checked)} />
+        <span className={task.status === "done" ? "flex-1 text-muted line-through" : "flex-1 text-ink"}>
+          {task.description}
+          {task.label && <span className="text-muted"> · {task.label}</span>}
+        </span>
+        <span className={`rounded-full border px-1.5 py-0.5 text-[10px] uppercase ${PRIORITY_TONE[task.priority] ?? PRIORITY_TONE.medium}`}>
+          {task.priority}
+        </span>
+        {task.due_date && <span className="text-xs text-muted">due {new Date(task.due_date).toLocaleDateString()}</span>}
+        <button onClick={() => setEditing(true)} className="text-xs text-muted hover:text-primary">
+          ✏️
+        </button>
+        <button onClick={handleDelete} className="text-xs text-muted hover:text-danger">
+          🗑️
+        </button>
+      </div>
+      {rowError && <p className="text-xs text-danger">{rowError}</p>}
     </div>
   );
 }

@@ -79,6 +79,7 @@ export function DayPanel({
                   priority={e.priority ?? "medium"}
                   tone={e.tone === "danger" || e.tone === "warning" ? e.tone : "info"}
                   notes={e.notes}
+                  done={Boolean(e.done)}
                   allDay={e.allDay}
                   time={e.time}
                   endDate={e.endDate}

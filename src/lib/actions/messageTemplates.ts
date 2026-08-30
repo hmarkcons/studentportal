@@ -18,12 +18,14 @@ export async function createMessageTemplate(_prevState: unknown, formData: FormD
   const { error } = await supabase.from("message_templates").insert({ purpose, channel, subject, body });
   if (error) return { error: error.message };
 
-  revalidatePath("/marketing/message-templates");
+  revalidatePath("/admin/message-templates");
   return { success: true };
 }
 
 export async function deleteMessageTemplate(id: string) {
   const supabase = await createClient();
-  await supabase.from("message_templates").delete().eq("id", id);
-  revalidatePath("/marketing/message-templates");
+  const { error } = await supabase.from("message_templates").delete().eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/admin/message-templates");
+  return { success: true };
 }

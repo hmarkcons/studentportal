@@ -16,8 +16,15 @@ function ScholarshipRow({
   isSuperAdmin: boolean;
 }) {
   const [editing, setEditing] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const action = updateStudentScholarship.bind(null, s.id, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
+
+  async function handleDelete() {
+    setDeleteError(null);
+    const result = await deleteStudentScholarship(s.id, revalidateTo);
+    if (result?.error) setDeleteError(result.error);
+  }
 
   if (editing) {
     return (
@@ -43,21 +50,24 @@ function ScholarshipRow({
   }
 
   return (
-    <div className="flex items-center justify-between text-sm">
-      <span className="text-ink">{s.name ?? "Scholarship"}</span>
-      <span className="flex items-center gap-2 text-muted">
-        {s.status} {s.award_amount != null && `· €${s.award_amount}`}
-        {isSuperAdmin && (
-          <>
-            <button onClick={() => setEditing(true)} className="text-xs text-muted hover:text-primary">
-              ✏️
-            </button>
-            <button onClick={() => deleteStudentScholarship(s.id, revalidateTo)} className="text-xs text-muted hover:text-danger">
-              🗑️
-            </button>
-          </>
-        )}
-      </span>
+    <div>
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-ink">{s.name ?? "Scholarship"}</span>
+        <span className="flex items-center gap-2 text-muted">
+          {s.status} {s.award_amount != null && `· €${s.award_amount}`}
+          {isSuperAdmin && (
+            <>
+              <button onClick={() => setEditing(true)} className="text-xs text-muted hover:text-primary">
+                ✏️
+              </button>
+              <button onClick={handleDelete} className="text-xs text-muted hover:text-danger">
+                🗑️
+              </button>
+            </>
+          )}
+        </span>
+      </div>
+      {deleteError && <p className="text-xs text-danger">{deleteError}</p>}
     </div>
   );
 }

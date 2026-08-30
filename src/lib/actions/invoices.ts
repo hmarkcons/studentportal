@@ -174,14 +174,19 @@ export async function sendReceipt(invoiceId: string, studentId: string) {
 
   const { data: existing } = await supabase.from("receipts").select("id").eq("invoice_id", invoiceId).maybeSingle();
 
-  if (existing) {
-    await supabase.from("receipts").update({ sent_status: "sent", sent_at: new Date().toISOString() }).eq("id", existing.id);
-  } else {
-    await supabase.from("receipts").insert({ invoice_id: invoiceId, sent_status: "sent", sent_at: new Date().toISOString() });
-  }
-  await supabase.from("invoices").update({ sent_status: "sent", sent_at: new Date().toISOString() }).eq("id", invoiceId);
+  const { error: receiptError } = existing
+    ? await supabase.from("receipts").update({ sent_status: "sent", sent_at: new Date().toISOString() }).eq("id", existing.id)
+    : await supabase.from("receipts").insert({ invoice_id: invoiceId, sent_status: "sent", sent_at: new Date().toISOString() });
+  if (receiptError) return { error: receiptError.message };
+
+  const { error: invoiceError } = await supabase
+    .from("invoices")
+    .update({ sent_status: "sent", sent_at: new Date().toISOString() })
+    .eq("id", invoiceId);
+  if (invoiceError) return { error: invoiceError.message };
 
   revalidatePath(`/students/${studentId}`);
+  return { success: true };
 }
 
 // Shared by the interactive (staff-triggered) generateInvoicePdf below and

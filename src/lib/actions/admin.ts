@@ -113,8 +113,10 @@ export async function updateStaffStatus(staffId: string, status: string) {
 
 export async function approvePartnerAccount(accountId: string, status: string) {
   const supabase = await createClient();
-  await supabase.from("partner_university_accounts").update({ status }).eq("id", accountId);
+  const { error } = await supabase.from("partner_university_accounts").update({ status }).eq("id", accountId);
+  if (error) return { error: error.message };
   revalidatePath("/admin/staff");
+  return { success: true };
 }
 
 export async function clockInOut(action: "in" | "out") {

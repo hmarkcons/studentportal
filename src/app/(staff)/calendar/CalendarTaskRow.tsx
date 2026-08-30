@@ -37,6 +37,7 @@ export function CalendarTaskRow({
   recurrence = "none",
   recurrenceEndDate,
   isRecurrenceInstance,
+  done: initialDone = false,
 }: {
   taskId: string;
   label: string;
@@ -53,9 +54,12 @@ export function CalendarTaskRow({
   recurrence?: CalendarRecurrence;
   recurrenceEndDate?: string | null;
   isRecurrenceInstance?: boolean;
+  done?: boolean;
 }) {
-  const [done, setDone] = useState(false);
+  const [done, setDone] = useState(initialDone);
   const [editing, setEditing] = useState(false);
+  const [toggleError, setToggleError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const action = updateCalendarTask.bind(null, taskId, "/calendar");
   const [state, formAction, pending] = useActionState(action, undefined);
 
@@ -97,42 +101,59 @@ export function CalendarTaskRow({
     );
   }
 
+  async function handleDelete() {
+    setDeleteError(null);
+    const result = await deleteApplicationTask(taskId, "/calendar");
+    if (result?.error) setDeleteError(result.error);
+  }
+
   return (
-    <div className="flex items-center justify-between text-sm">
-      <label className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          checked={done}
-          onChange={(e) => {
-            setDone(e.target.checked);
-            toggleApplicationTask(taskId, "/calendar", e.target.checked);
-          }}
-        />
-        <span className={done ? "text-muted line-through" : "text-ink"}>
-          {!allDay && time && <span className="mr-1 font-mono text-xs text-muted">{time}</span>}
-          {label}
-        </span>
-        {recurrence !== "none" && (
-          <span title={RECURRENCE_LABEL[recurrence]} className="text-xs text-muted">
-            🔁
+    <div>
+      <div className="flex items-center justify-between text-sm">
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={done}
+            onChange={async (e) => {
+              const checked = e.target.checked;
+              const previous = done;
+              setDone(checked);
+              setToggleError(null);
+              const result = await toggleApplicationTask(taskId, "/calendar", checked);
+              if (result?.error) {
+                setToggleError(result.error);
+                setDone(previous);
+              }
+            }}
+          />
+          <span className={done ? "text-muted line-through" : "text-ink"}>
+            {!allDay && time && <span className="mr-1 font-mono text-xs text-muted">{time}</span>}
+            {label}
           </span>
-        )}
-        {guestEmails.length > 0 && (
-          <span title={`Guests: ${guestEmails.join(", ")}`} className="text-xs text-muted">
-            👥
-          </span>
-        )}
-      </label>
-      <div className="flex items-center gap-2">
-        <Badge tone={PRIORITY_TONE[priority] ?? "neutral"}>{priority}</Badge>
-        <Badge tone={tone}>Task</Badge>
-        <button onClick={() => setEditing(true)} className="text-xs text-muted hover:text-primary">
-          ✏️
-        </button>
-        <button onClick={() => deleteApplicationTask(taskId, "/calendar")} className="text-xs text-muted hover:text-danger">
-          🗑️
-        </button>
+          {recurrence !== "none" && (
+            <span title={RECURRENCE_LABEL[recurrence]} className="text-xs text-muted">
+              🔁
+            </span>
+          )}
+          {guestEmails.length > 0 && (
+            <span title={`Guests: ${guestEmails.join(", ")}`} className="text-xs text-muted">
+              👥
+            </span>
+          )}
+        </label>
+        <div className="flex items-center gap-2">
+          <Badge tone={PRIORITY_TONE[priority] ?? "neutral"}>{priority}</Badge>
+          <Badge tone={tone}>Task</Badge>
+          <button onClick={() => setEditing(true)} className="text-xs text-muted hover:text-primary">
+            ✏️
+          </button>
+          <button onClick={handleDelete} className="text-xs text-muted hover:text-danger">
+            🗑️
+          </button>
+        </div>
       </div>
+      {toggleError && <p className="text-xs text-danger">{toggleError}</p>}
+      {deleteError && <p className="text-xs text-danger">{deleteError}</p>}
     </div>
   );
 }

@@ -55,8 +55,16 @@ export function PersonalTaskRow({
 }) {
   const [checked, setChecked] = useState(done);
   const [editing, setEditing] = useState(false);
+  const [toggleError, setToggleError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const action = updatePersonalTask.bind(null, taskId, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
+
+  async function handleDelete() {
+    setDeleteError(null);
+    const result = await deletePersonalTask(taskId, revalidateTo);
+    if (result?.error) setDeleteError(result.error);
+  }
 
   if (editing) {
     return (
@@ -97,41 +105,52 @@ export function PersonalTaskRow({
   }
 
   return (
-    <div className="flex items-center justify-between text-sm">
-      <label className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={(e) => {
-            setChecked(e.target.checked);
-            togglePersonalTask(taskId, revalidateTo, e.target.checked);
-          }}
-        />
-        <span className={checked ? "text-muted line-through" : "text-ink"}>
-          {!allDay && dueTime && <span className="mr-1 font-mono text-xs text-muted">{dueTime}</span>}
-          {title}
-        </span>
-        {recurrence !== "none" && (
-          <span title={RECURRENCE_LABEL[recurrence]} className="text-xs text-muted">
-            🔁
+    <div>
+      <div className="flex items-center justify-between text-sm">
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={async (e) => {
+              const next = e.target.checked;
+              const previous = checked;
+              setChecked(next);
+              setToggleError(null);
+              const result = await togglePersonalTask(taskId, revalidateTo, next);
+              if (result?.error) {
+                setToggleError(result.error);
+                setChecked(previous);
+              }
+            }}
+          />
+          <span className={checked ? "text-muted line-through" : "text-ink"}>
+            {!allDay && dueTime && <span className="mr-1 font-mono text-xs text-muted">{dueTime}</span>}
+            {title}
           </span>
-        )}
-        {guestEmails.length > 0 && (
-          <span title={`Guests: ${guestEmails.join(", ")}`} className="text-xs text-muted">
-            👥
-          </span>
-        )}
-      </label>
-      <div className="flex items-center gap-2">
-        <Badge tone={PRIORITY_TONE[priority] ?? "neutral"}>{priority}</Badge>
-        <Badge tone="primary">Personal</Badge>
-        <button onClick={() => setEditing(true)} className="text-xs text-muted hover:text-primary">
-          ✏️
-        </button>
-        <button onClick={() => deletePersonalTask(taskId, revalidateTo)} className="text-xs text-muted hover:text-danger">
-          🗑️
-        </button>
+          {recurrence !== "none" && (
+            <span title={RECURRENCE_LABEL[recurrence]} className="text-xs text-muted">
+              🔁
+            </span>
+          )}
+          {guestEmails.length > 0 && (
+            <span title={`Guests: ${guestEmails.join(", ")}`} className="text-xs text-muted">
+              👥
+            </span>
+          )}
+        </label>
+        <div className="flex items-center gap-2">
+          <Badge tone={PRIORITY_TONE[priority] ?? "neutral"}>{priority}</Badge>
+          <Badge tone="primary">Personal</Badge>
+          <button onClick={() => setEditing(true)} className="text-xs text-muted hover:text-primary">
+            ✏️
+          </button>
+          <button onClick={handleDelete} className="text-xs text-muted hover:text-danger">
+            🗑️
+          </button>
+        </div>
       </div>
+      {toggleError && <p className="text-xs text-danger">{toggleError}</p>}
+      {deleteError && <p className="text-xs text-danger">{deleteError}</p>}
     </div>
   );
 }
