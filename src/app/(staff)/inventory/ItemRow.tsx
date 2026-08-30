@@ -17,8 +17,16 @@ type Item = {
 
 export function ItemRow({ item, canManage }: { item: Item; canManage: boolean }) {
   const [editing, setEditing] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const action = updateInventoryItem.bind(null, item.id);
   const [state, formAction, pending] = useActionState(action, undefined);
+
+  async function handleDelete() {
+    if (!confirm(`Delete ${item.name}?`)) return;
+    setDeleteError(null);
+    const result = await deleteInventoryItem(item.id);
+    if (result?.error) setDeleteError(result.error);
+  }
 
   const low = item.low_stock_threshold != null && item.quantity_on_hand <= item.low_stock_threshold;
 
@@ -59,17 +67,12 @@ export function ItemRow({ item, canManage }: { item: Item; canManage: boolean })
             <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
               ✏️
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                if (confirm(`Delete ${item.name}?`)) deleteInventoryItem(item.id);
-              }}
-            >
+            <Button variant="ghost" size="sm" onClick={handleDelete}>
               🗑️
             </Button>
           </div>
         )}
+        {deleteError && <p className="mt-1 text-xs text-danger">{deleteError}</p>}
       </td>
     </tr>
   );
