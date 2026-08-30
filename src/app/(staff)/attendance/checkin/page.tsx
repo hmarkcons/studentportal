@@ -5,13 +5,14 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { checkinViaQr } from "@/lib/actions/admin";
 
-type Status = "checking" | "in" | "out" | "invalid_token" | "not_staff";
+type Status = "checking" | "in" | "out" | "invalid_token" | "not_staff" | "error";
 
 const MESSAGES: Record<Exclude<Status, "checking">, string> = {
   in: "Clocked in. Have a great day!",
   out: "Clocked out. See you tomorrow!",
   invalid_token: "This QR code is no longer valid — ask a Super Admin to reprint it.",
   not_staff: "This login isn't an active staff account, so it can't be used to clock in.",
+  error: "Something went wrong recording your attendance — please try scanning again.",
 };
 
 export default function OfficeCheckinPage() {

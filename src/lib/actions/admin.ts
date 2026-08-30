@@ -104,15 +104,10 @@ export async function deleteStaffAccount(staffId: string) {
   return { success: true };
 }
 
-export async function updateStaffStatus(staffId: string, status: string) {
-  const supabase = await createClient();
-  await supabase.from("staff").update({ status }).eq("id", staffId);
-  revalidatePath("/admin/staff");
-  revalidateTag("staff-directory", { expire: 0 });
-}
-
 export async function approvePartnerAccount(accountId: string, status: string) {
   const supabase = await createClient();
+  if (!(await requireSuperAdmin(supabase))) return { error: "Only Super Admin can approve partner accounts." };
+
   const { error } = await supabase.from("partner_university_accounts").update({ status }).eq("id", accountId);
   if (error) return { error: error.message };
   revalidatePath("/admin/staff");
@@ -124,7 +119,7 @@ export async function clockInOut(action: "in" | "out") {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  if (!user) return { error: "Not signed in." };
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -143,13 +138,18 @@ export async function clockInOut(action: "in" | "out") {
 
   if (action === "in") {
     if (!open) {
-      await supabase.from("attendance_records").insert({ staff_id: user.id, work_date: today, clock_in: new Date().toISOString() });
+      const { error } = await supabase
+        .from("attendance_records")
+        .insert({ staff_id: user.id, work_date: today, clock_in: new Date().toISOString() });
+      if (error) return { error: error.message };
     }
   } else if (open) {
-    await supabase.from("attendance_records").update({ clock_out: new Date().toISOString() }).eq("id", open.id);
+    const { error } = await supabase.from("attendance_records").update({ clock_out: new Date().toISOString() }).eq("id", open.id);
+    if (error) return { error: error.message };
   }
 
   revalidatePath("/admin/attendance");
+  return { success: true };
 }
 
 // QR check-in (Module 1M): a fixed QR code posted at the office encodes
@@ -157,7 +157,7 @@ export async function clockInOut(action: "in" | "out") {
 // this to record arrival/departure tied to whichever staff account is
 // currently logged in — same clock-in/out toggle as the manual button,
 // just method: 'qr' and no button press required.
-export async function checkinViaQr(token: string): Promise<{ status: "in" | "out" | "invalid_token" | "not_staff" }> {
+export async function checkinViaQr(token: string): Promise<{ status: "in" | "out" | "invalid_token" | "not_staff" | "error" }> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -184,15 +184,17 @@ export async function checkinViaQr(token: string): Promise<{ status: "in" | "out
     .maybeSingle();
 
   if (open) {
-    await supabase.from("attendance_records").update({ clock_out: new Date().toISOString() }).eq("id", open.id);
+    const { error } = await supabase.from("attendance_records").update({ clock_out: new Date().toISOString() }).eq("id", open.id);
+    if (error) return { status: "error" };
     revalidatePath("/admin/attendance");
     return { status: "out" };
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  await supabase
+  const { error } = await supabase
     .from("attendance_records")
     .insert({ staff_id: user.id, work_date: today, clock_in: new Date().toISOString(), method: "qr" });
+  if (error) return { status: "error" };
   revalidatePath("/admin/attendance");
   return { status: "in" };
 }
