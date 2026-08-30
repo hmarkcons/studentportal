@@ -69,10 +69,11 @@ export async function deleteApplication(applicationId: string, revalidateTo: str
 export async function finalizeApplication(applicationId: string, studentId: string, revalidateTo: string) {
   const supabase = await createClient();
 
-  const { error: clearError } = await supabase.from("applications").update({ is_finalized: false }).eq("student_id", studentId);
-  if (clearError) return { error: clearError.message };
-
-  const { error } = await supabase.from("applications").update({ is_finalized: true }).eq("id", applicationId);
+  // Single security-definer RPC — clearing every application's flag and
+  // setting the target one commit or fail together (see migration 0091),
+  // rather than as two separate writes that could leave every application
+  // unfinalized if the second one failed.
+  const { error } = await supabase.rpc("finalize_application", { p_application_id: applicationId, p_student_id: studentId });
   if (error) return { error: error.message };
 
   revalidatePath(revalidateTo);
