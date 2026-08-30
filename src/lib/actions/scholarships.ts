@@ -123,6 +123,8 @@ export async function deleteStudentScholarship(scholarshipId: string, revalidate
 
 export async function markPreenrollmentFinalized(applicationId: string, revalidateTo: string, finalized: boolean) {
   const supabase = await createClient();
-  await supabase.from("applications").update({ preenrollment_finalized: finalized }).eq("id", applicationId);
+  const { error } = await supabase.from("applications").update({ preenrollment_finalized: finalized }).eq("id", applicationId);
+  if (error) return { error: error.message };
   revalidatePath(revalidateTo);
+  return { success: true };
 }

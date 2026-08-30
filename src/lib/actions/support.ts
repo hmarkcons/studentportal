@@ -47,7 +47,10 @@ export async function replyToTicket(
   if (authorType === "staff") {
     const { data: ticket } = await supabase.from("support_tickets").select("status").eq("id", ticketId).maybeSingle();
     if (ticket?.status === "open") {
-      await supabase.from("support_tickets").update({ status: "in_progress" }).eq("id", ticketId);
+      const { error: statusError } = await supabase.from("support_tickets").update({ status: "in_progress" }).eq("id", ticketId);
+      // The reply itself already posted successfully above — don't fail the
+      // whole action over this auto-bump, but don't let it disappear either.
+      if (statusError) console.error(`replyToTicket: failed to auto-bump ticket ${ticketId} to in_progress:`, statusError.message);
     }
   }
 

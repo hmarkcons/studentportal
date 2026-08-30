@@ -91,17 +91,29 @@ export function ScholarshipSection({
 }) {
   const action = addStudentScholarship.bind(null, studentId, applicationId, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
+  const [finalized, setFinalized] = useState(preenrollmentFinalized);
+  const [finalizedError, setFinalizedError] = useState<string | null>(null);
+
+  async function handleFinalizedChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const next = e.target.checked;
+    setFinalized(next);
+    setFinalizedError(null);
+    const result = await markPreenrollmentFinalized(applicationId, revalidateTo, next);
+    if (result?.error) {
+      setFinalized(!next);
+      setFinalizedError(result.error);
+    }
+  }
 
   return (
     <div>
-      <label className="mb-3 flex items-center gap-2 text-sm text-ink">
-        <input
-          type="checkbox"
-          defaultChecked={preenrollmentFinalized}
-          onChange={(e) => markPreenrollmentFinalized(applicationId, revalidateTo, e.target.checked)}
-        />
-        Pre-enrollment finalized on Universitaly.it (controls what the student can see for this application&apos;s Scholarship Region)
-      </label>
+      <div className="mb-3">
+        <label className="flex items-center gap-2 text-sm text-ink">
+          <input type="checkbox" checked={finalized} onChange={handleFinalizedChange} />
+          Pre-enrollment finalized on Universitaly.it (controls what the student can see for this application&apos;s Scholarship Region)
+        </label>
+        {finalizedError && <p className="mt-1 text-xs text-danger">{finalizedError}</p>}
+      </div>
 
       <div className="mb-3 flex flex-col gap-2">
         {scholarships.map((s) => (
