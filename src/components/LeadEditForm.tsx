@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { updateLead } from "@/lib/actions/leads";
-import { STUDY_LEVELS } from "@/lib/constants";
+import { STUDY_LEVELS, QUALIFICATION_LEVELS } from "@/lib/constants";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 
@@ -61,7 +61,17 @@ export function LeadEditForm({
       </label>
       <label className="flex flex-col gap-1 text-xs text-muted">
         Current qualification
-        <Input name="current_qualification" defaultValue={lead.current_qualification ?? ""} />
+        <Select name="current_qualification" defaultValue={lead.current_qualification ?? ""}>
+          <option value="">—</option>
+          {lead.current_qualification && !(QUALIFICATION_LEVELS as readonly string[]).includes(lead.current_qualification) && (
+            <option value={lead.current_qualification}>{lead.current_qualification}</option>
+          )}
+          {QUALIFICATION_LEVELS.map((q) => (
+            <option key={q} value={q}>
+              {q}
+            </option>
+          ))}
+        </Select>
       </label>
       <label className="flex flex-col gap-1 text-xs text-muted">
         Applying for

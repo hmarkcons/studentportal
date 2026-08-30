@@ -40,6 +40,17 @@ export const LEAD_STATUS_TONE: Record<LeadStatus, "success" | "warning" | "dange
 
 export const STUDY_LEVELS = ["bachelors", "masters", "phd"] as const;
 
+export const QUALIFICATION_LEVELS = [
+  "Secondary School",
+  "High School",
+  "Associate Degree (2 Years)",
+  "Bachelors (top-up 2 Years)",
+  "Bachelors (3 Years)",
+  "Bachelors (4 years)",
+  "Masters (16 Years Education)",
+  "Masters (18 years)",
+] as const;
+
 export const STAFF_ROLES = [
   "super_admin",
   "management",

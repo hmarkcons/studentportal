@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { registerStudentManually } from "@/lib/actions/leads";
-import { STUDY_LEVELS } from "@/lib/constants";
+import { STUDY_LEVELS, QUALIFICATION_LEVELS } from "@/lib/constants";
 import { DestinationMultiSelect } from "@/components/DestinationMultiSelect";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
@@ -37,7 +37,14 @@ export function RegisterStudentForm({
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-1.5">
           <label className={labelClass}>Current qualification</label>
-          <Input name="current_qualification" />
+          <Select name="current_qualification">
+            <option value="">—</option>
+            {QUALIFICATION_LEVELS.map((q) => (
+              <option key={q} value={q}>
+                {q}
+              </option>
+            ))}
+          </Select>
         </div>
         <div className="flex flex-col gap-1.5">
           <label className={labelClass}>Applying for</label>
