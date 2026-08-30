@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { updateDestination, deleteDestination } from "@/lib/actions/destinations";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
@@ -23,6 +23,16 @@ type Destination = {
 export function DestinationEditForm({ destination }: { destination: Destination }) {
   const action = updateDestination.bind(null, destination.id);
   const [state, formAction, pending] = useActionState(action, undefined);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  async function handleDelete() {
+    if (!confirm(`Delete ${destination.display_name}? This also deletes all its universities and programs.`)) return;
+    setDeleteError(null);
+    // deleteDestination redirects on success (it throws internally, it
+    // never returns) — this only resolves to a value on the error path.
+    const result = await deleteDestination(destination.id);
+    if (result?.error) setDeleteError(result.error);
+  }
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
@@ -93,18 +103,11 @@ export function DestinationEditForm({ destination }: { destination: Destination 
         <Button type="submit" variant="primary" disabled={pending}>
           {pending ? "Saving…" : "Save changes"}
         </Button>
-        <button
-          type="button"
-          onClick={() => {
-            if (confirm(`Delete ${destination.display_name}? This also deletes all its universities and programs.`)) {
-              deleteDestination(destination.id);
-            }
-          }}
-          className="text-sm text-danger hover:underline"
-        >
+        <button type="button" onClick={handleDelete} className="text-sm text-danger hover:underline">
           Delete destination
         </button>
       </div>
+      {deleteError && <p className="text-sm text-danger">{deleteError}</p>}
     </form>
   );
 }

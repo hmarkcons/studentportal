@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { generateAgreement, uploadSignedAgreement, deleteAgreement } from "@/lib/actions/agreements";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
@@ -54,15 +54,22 @@ export function GenerateAgreementForm({
 }
 
 export function DeleteAgreementButton({ agreementId, studentId }: { agreementId: string; studentId: string }) {
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleDelete() {
+    if (!confirm("Delete this agreement? This cannot be undone.")) return;
+    setError(null);
+    const result = await deleteAgreement(agreementId, studentId);
+    if (result?.error) setError(result.error);
+  }
+
   return (
-    <button
-      onClick={() => {
-        if (confirm("Delete this agreement? This cannot be undone.")) deleteAgreement(agreementId, studentId);
-      }}
-      className="text-xs text-danger hover:underline"
-    >
-      Delete
-    </button>
+    <div>
+      <button onClick={handleDelete} className="text-xs text-danger hover:underline">
+        Delete
+      </button>
+      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
+    </div>
   );
 }
 

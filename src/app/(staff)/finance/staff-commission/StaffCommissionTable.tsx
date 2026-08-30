@@ -212,6 +212,29 @@ function CarryForwardButton({ id, studentName }: { id: string; studentName: stri
   );
 }
 
+function DeleteCommissionButton({ id, studentName }: { id: string; studentName: string }) {
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function handleDelete() {
+    if (!confirm(`Delete this commission record for ${studentName}?`)) return;
+    setPending(true);
+    setError(null);
+    const result = await deleteStaffCommission(id, REVALIDATE_TO);
+    if (result?.error) setError(result.error);
+    setPending(false);
+  }
+
+  return (
+    <div>
+      <Button type="button" variant="outline" size="sm" onClick={handleDelete} pending={pending}>
+        🗑️
+      </Button>
+      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
+    </div>
+  );
+}
+
 function feeStatusTone(status: string | null) {
   if (status === "paid" || status === "registered") return "success" as const;
   if (status === "overdue" || status === "withdrawn") return "danger" as const;
@@ -453,16 +476,7 @@ export function StaffCommissionTable({
                         <Button type="button" variant="outline" size="sm" onClick={() => setEditingId(r.id)}>
                           ✏️ Edit
                         </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            if (confirm(`Delete this commission record for ${r.studentName}?`)) deleteStaffCommission(r.id, REVALIDATE_TO);
-                          }}
-                        >
-                          🗑️
-                        </Button>
+                        <DeleteCommissionButton id={r.id} studentName={r.studentName} />
                       </div>
                     </td>
                   </>

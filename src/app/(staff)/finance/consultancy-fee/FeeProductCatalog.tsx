@@ -29,8 +29,16 @@ function NewProductForm() {
 
 function ProductRow({ product, canManage }: { product: Product; canManage: boolean }) {
   const [editing, setEditing] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const action = updateFeeProduct.bind(null, product.id);
   const [state, formAction, pending] = useActionState(action, undefined);
+
+  async function handleDelete() {
+    if (!confirm(`Delete "${product.name}" from the fee catalog?`)) return;
+    setDeleteError(null);
+    const result = await deleteFeeProduct(product.id);
+    if (result?.error) setDeleteError(result.error);
+  }
 
   if (editing) {
     return (
@@ -54,27 +62,24 @@ function ProductRow({ product, canManage }: { product: Product; canManage: boole
   }
 
   return (
-    <div className="flex items-center justify-between border-b border-border py-2 text-sm last:border-0">
-      <span className="text-ink">
-        {product.name}
-        {product.default_amount != null && <span className="text-muted"> · {product.default_currency} {product.default_amount}</span>}
-      </span>
-      {canManage && (
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={() => setEditing(true)} className="text-xs text-primary hover:underline">
-            Edit
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (confirm(`Delete "${product.name}" from the fee catalog?`)) deleteFeeProduct(product.id);
-            }}
-            className="text-xs text-danger hover:underline"
-          >
-            Delete
-          </button>
-        </div>
-      )}
+    <div className="border-b border-border py-2 text-sm last:border-0">
+      <div className="flex items-center justify-between">
+        <span className="text-ink">
+          {product.name}
+          {product.default_amount != null && <span className="text-muted"> · {product.default_currency} {product.default_amount}</span>}
+        </span>
+        {canManage && (
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setEditing(true)} className="text-xs text-primary hover:underline">
+              Edit
+            </button>
+            <button type="button" onClick={handleDelete} className="text-xs text-danger hover:underline">
+              Delete
+            </button>
+          </div>
+        )}
+      </div>
+      {deleteError && <p className="mt-1 text-xs text-danger">{deleteError}</p>}
     </div>
   );
 }

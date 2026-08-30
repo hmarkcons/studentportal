@@ -16,8 +16,16 @@ type Body = {
 
 export function ScholarshipBodyRow({ body, isSuperAdmin }: { body: Body; isSuperAdmin: boolean }) {
   const [editing, setEditing] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const action = updateScholarshipBody.bind(null, body.id);
   const [state, formAction, pending] = useActionState(action, undefined);
+
+  async function handleDelete() {
+    if (!confirm(`Delete ${body.name}?`)) return;
+    setDeleteError(null);
+    const result = await deleteScholarshipBody(body.id);
+    if (result?.error) setDeleteError(result.error);
+  }
 
   if (editing) {
     return (
@@ -55,17 +63,12 @@ export function ScholarshipBodyRow({ body, isSuperAdmin }: { body: Body; isSuper
             <button onClick={() => setEditing(true)} title="Edit" className="rounded p-1 text-muted hover:text-primary">
               ✏️
             </button>
-            <button
-              onClick={() => {
-                if (confirm(`Delete ${body.name}?`)) deleteScholarshipBody(body.id);
-              }}
-              title="Delete"
-              className="rounded p-1 text-muted hover:text-danger"
-            >
+            <button onClick={handleDelete} title="Delete" className="rounded p-1 text-muted hover:text-danger">
               🗑️
             </button>
           </div>
         )}
+        {deleteError && <p className="mt-1 text-xs text-danger">{deleteError}</p>}
       </td>
     </tr>
   );

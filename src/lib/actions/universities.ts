@@ -81,8 +81,10 @@ export async function updateProgram(programId: string, universityId: string, _pr
 
 export async function deleteProgram(programId: string, universityId: string) {
   const supabase = await createClient();
-  await supabase.from("programs").delete().eq("id", programId);
+  const { error } = await supabase.from("programs").delete().eq("id", programId);
+  if (error) return { error: error.message };
   revalidatePath(`/setup/universities/${universityId}`);
+  return { success: true };
 }
 
 export async function addProgram(universityId: string, _prevState: unknown, formData: FormData) {

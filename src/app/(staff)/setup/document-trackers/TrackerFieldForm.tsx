@@ -84,35 +84,39 @@ export function NewTrackerFieldForm({ countryCode }: { countryCode: string }) {
 
 export function TrackerFieldRow({ field }: { field: TrackerFieldDef }) {
   const [editing, setEditing] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const action = updateTrackerField.bind(null, field.id!);
   const [state, formAction, pending] = useActionState(action, undefined);
   const [fieldType, setFieldType] = useState(field.type);
 
+  async function handleDelete() {
+    if (!confirm(`Delete field "${field.label}"? Any saved values for it will remain in the database but stop showing.`)) return;
+    setDeleteError(null);
+    const result = await deleteTrackerField(field.id!);
+    if (result?.error) setDeleteError(result.error);
+  }
+
   if (!editing) {
     return (
-      <div className="flex items-center justify-between border-b border-border py-2 text-sm last:border-0">
-        <div>
-          <span className="font-medium text-ink">{field.label}</span>{" "}
-          <span className="text-xs text-muted">
-            ({field.key} · {field.type}
-            {field.options && field.options.length > 0 ? ` · ${field.options.join(", ")}` : ""})
-          </span>
+      <div className="border-b border-border py-2 text-sm last:border-0">
+        <div className="flex items-center justify-between">
+          <div>
+            <span className="font-medium text-ink">{field.label}</span>{" "}
+            <span className="text-xs text-muted">
+              ({field.key} · {field.type}
+              {field.options && field.options.length > 0 ? ` · ${field.options.join(", ")}` : ""})
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setEditing(true)} className="text-xs text-primary hover:underline">
+              Edit
+            </button>
+            <button onClick={handleDelete} className="text-xs text-danger hover:underline">
+              Delete
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setEditing(true)} className="text-xs text-primary hover:underline">
-            Edit
-          </button>
-          <button
-            onClick={() => {
-              if (confirm(`Delete field "${field.label}"? Any saved values for it will remain in the database but stop showing.`)) {
-                deleteTrackerField(field.id!);
-              }
-            }}
-            className="text-xs text-danger hover:underline"
-          >
-            Delete
-          </button>
-        </div>
+        {deleteError && <p className="mt-1 text-xs text-danger">{deleteError}</p>}
       </div>
     );
   }
