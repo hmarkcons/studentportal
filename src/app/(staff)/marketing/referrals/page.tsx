@@ -8,14 +8,27 @@ import { IncentiveStatusButton } from "./IncentiveStatusButton";
 
 export default async function ReferralsPage() {
   const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  const orgWideRoles = ["management", "super_admin", "marketing", "digital_marketing"];
+
   // Referral tracking is org-wide — logging who referred a lead isn't a
-  // case-ownership action, so it shouldn't be limited by the regular leads
-  // RLS (assigned counselor, or Management/Super Admin/Marketing only).
-  // Any active staff can already log/mark-paid a referral for any lead per
-  // referrals_write's RLS; only the read side needs the same breadth, so
-  // this page reads leads via the admin client instead of the session one.
-  const admin = createAdminClient();
-  const { data: leads } = await admin.from("leads").select("id, full_name").order("full_name");
+  // case-ownership action, so the "referred lead" picker shouldn't be
+  // limited to a Counselor's own assigned leads the way leads_select
+  // normally restricts it. But that breadth is only warranted for the
+  // roles leads_select's own org-wide clause already grants it to
+  // (management/super_admin/marketing/digital_marketing) — going through
+  // the admin client unconditionally for every role would let e.g. a
+  // Counselor or Finance staffer browse every other counselor's leads by
+  // full name just by opening this page, which leads_select was
+  // specifically built to prevent. Any other role falls back to the
+  // session client, correctly scoped by RLS to their own visibility.
+  const { data: leads } = staffRow && orgWideRoles.includes(staffRow.role)
+    ? await createAdminClient().from("leads").select("id, full_name").order("full_name")
+    : await supabase.from("leads").select("id, full_name").order("full_name");
   const { data: referrals } = await supabase
     .from("referrals")
     .select("id, referrer_name, incentive_owed, incentive_status, created_at, lead_id")
