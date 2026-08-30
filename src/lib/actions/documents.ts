@@ -125,12 +125,19 @@ export async function deleteDocumentRequirement(documentId: string, revalidateTo
   const supabase = await createClient();
 
   const { data: doc } = await supabase.from("student_documents").select("file_path").eq("id", documentId).maybeSingle();
+
+  // Delete the DB row (the source of truth for what's shown as "on record")
+  // before touching storage — if storage cleanup below fails, the worst
+  // case is a harmless orphaned file with nothing left pointing at it. Doing
+  // it in the other order risks the opposite: a row that still claims to
+  // have a file on record after that file's already gone, 404ing on view
+  // with no indication why.
+  const { error } = await supabase.from("student_documents").delete().eq("id", documentId);
+  if (error) return { error: error.message };
+
   if (doc?.file_path) {
     await supabase.storage.from("documents").remove([doc.file_path]);
   }
-
-  const { error } = await supabase.from("student_documents").delete().eq("id", documentId);
-  if (error) return { error: error.message };
 
   revalidatePath(revalidateTo);
   return { success: true };
