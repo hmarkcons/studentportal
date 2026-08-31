@@ -20,10 +20,10 @@ const styles = StyleSheet.create({
   footerDate: { fontSize: 9, color: INK_SOFT },
   sigBox: { width: 220, borderWidth: 1, borderColor: INK },
   sigBoxLabel: { textAlign: "center", fontSize: 7.5, fontFamily: "Helvetica-Bold", paddingVertical: 2, borderBottomWidth: 1, borderBottomColor: INK },
-  sigBoxCells: { flexDirection: "row", height: 60 },
+  sigBoxCells: { flexDirection: "row", height: 42 },
   sigBoxCell: { flex: 1, alignItems: "center", justifyContent: "center" },
   sigBoxCellDivider: { borderLeftWidth: 1, borderLeftColor: INK },
-  sigBoxImg: { maxWidth: 130, maxHeight: 54 },
+  sigBoxImg: { maxWidth: 140, maxHeight: 48 },
 
   table: { borderWidth: 1, borderColor: INK, marginBottom: 10 },
   tRow: { flexDirection: "row" },
@@ -63,8 +63,8 @@ const styles = StyleSheet.create({
 
   signGrid: { flexDirection: "row", justifyContent: "space-between", marginTop: 30 },
   signCol: { width: "45%" },
-  signLine: { borderBottomWidth: 1, borderColor: INK, height: 50, justifyContent: "flex-end" },
-  signImg: { maxWidth: 140, maxHeight: 46, alignSelf: "center" },
+  signLine: { borderBottomWidth: 1, borderColor: INK, height: 26, justifyContent: "flex-end" },
+  signImg: { maxWidth: 130, maxHeight: 40, alignSelf: "center" },
   signCaption: { fontFamily: "Helvetica-Bold", fontSize: 8, marginTop: 3 },
   signNameLine: { borderBottomWidth: 1, borderColor: INK, height: 20, marginTop: 16, justifyContent: "flex-end", alignItems: "center" },
   signNameText: { fontSize: 9 },
