@@ -123,8 +123,13 @@ export function RichTextEditor({
         </ToolbarButton>
       </div>
       <EditorContent editor={editor} />
-      {/* Server actions read this hidden field's value as the submitted wording. */}
-      <input type="hidden" name={name} value={editor.getHTML()} readOnly />
+      {/* Server actions read this hidden field's value as the submitted wording.
+          Reads `content` (kept in sync via onUpdate/setContent below) rather than
+          editor.getHTML() directly: tiptap v3's useEditor no longer re-renders on
+          every transaction by default, so a content push that lands outside a
+          keystroke (e.g. a .docx upload calling setContent in an effect) would
+          otherwise never make it into this input. */}
+      <input type="hidden" name={name} value={content} readOnly />
     </div>
   );
 }
