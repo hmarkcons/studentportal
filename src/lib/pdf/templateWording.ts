@@ -14,6 +14,7 @@ export const MERGE_FIELDS: { key: string; label: string }[] = [
   { key: "currency", label: "Currency code (e.g. \"EUR\")" },
   { key: "agreement_date", label: "The date the agreement was generated" },
   { key: "signatory_name", label: "The template's fixed authorized signatory" },
+  { key: "fee_table", label: "The itemized fee table — put this on its own paragraph where you want it to appear (otherwise it's added automatically after the last clause)" },
 ];
 
 export function renderMergeFields(text: string, vars: Record<string, string>): string {
@@ -38,12 +39,18 @@ function extractRuns(node: Node, active: { bold: boolean; italic: boolean; under
   return el.childNodes.flatMap((child) => extractRuns(child, next));
 }
 
+// A paragraph containing nothing but the {{fee_table}} placeholder marks
+// where the itemized fee table should be inserted, so authors can place it
+// inside a billing clause instead of always at the end.
+const isFeeTablePlaceholder = (text: string) => text.trim().toLowerCase() === "{{fee_table}}";
+
 // Converts a super-admin-authored wording blob (rich HTML from the TipTap
 // editor, or from a Word-upload's mammoth.convertToHtml output) into the
 // same AgreementBlock[] shape AgreementDocument already renders — so no
 // separate rendering path is needed for template-driven wording. The
-// itemized fee table always renders as its own fixed section straight
-// after the narrative, regardless of what the wording says.
+// itemized fee table renders wherever the wording places a {{fee_table}}
+// placeholder, or as its own fixed section straight after the narrative if
+// the wording never mentions it.
 export function wordingToBlocks(wording: string, vars: Record<string, string>): AgreementBlock[] {
   const rendered = renderMergeFields(wording, vars);
 
@@ -56,7 +63,11 @@ export function wordingToBlocks(wording: string, vars: Record<string, string>): 
       .split(/\n\s*\n/)
       .map((p) => p.trim())
       .filter(Boolean);
-    return [...paragraphs.map((text): AgreementBlock => ({ kind: "richParagraph", runs: [{ text }] })), { kind: "feeTable" }];
+    const blocks: AgreementBlock[] = paragraphs.map(
+      (text): AgreementBlock => (isFeeTablePlaceholder(text) ? { kind: "feeTable" } : { kind: "richParagraph", runs: [{ text }] })
+    );
+    if (!blocks.some((b) => b.kind === "feeTable")) blocks.push({ kind: "feeTable" });
+    return blocks;
   }
 
   const root = parse(rendered);
@@ -73,7 +84,10 @@ export function wordingToBlocks(wording: string, vars: Record<string, string>): 
       if (runs.length) blocks.push({ kind: "richHeading", level, runs });
     } else if (tag === "p") {
       const runs = extractRuns(el);
-      if (runs.length) blocks.push({ kind: "richParagraph", runs });
+      if (runs.length) {
+        const text = runs.map((r) => r.text).join("");
+        blocks.push(isFeeTablePlaceholder(text) ? { kind: "feeTable" } : { kind: "richParagraph", runs });
+      }
     } else if (tag === "ul" || tag === "ol") {
       const items = el.childNodes
         .filter((c) => c.nodeType === NodeType.ELEMENT_NODE && (c as HTMLElement).tagName?.toLowerCase() === "li")
@@ -96,11 +110,15 @@ export function wordingToBlocks(wording: string, vars: Record<string, string>): 
       // Any other block-level tag (div, blockquote, etc.) — treat its text
       // content as a plain paragraph rather than silently dropping it.
       const runs = extractRuns(el);
-      if (runs.length) blocks.push({ kind: "richParagraph", runs });
+      if (runs.length) {
+        const text = runs.map((r) => r.text).join("");
+        blocks.push(isFeeTablePlaceholder(text) ? { kind: "feeTable" } : { kind: "richParagraph", runs });
+      }
     }
   }
 
-  return [...blocks, { kind: "feeTable" }];
+  if (!blocks.some((b) => b.kind === "feeTable")) blocks.push({ kind: "feeTable" });
+  return blocks;
 }
 
 export const DEFAULT_OFFICE_LINE =
