@@ -314,9 +314,15 @@ export function AgreementDocument({ data }: { data: AgreementPdfData }) {
 
         <Text style={styles.paragraph}>{data.officeLine}</Text>
 
-        {data.blocks.map((block, i) => (
-          <Block key={i} block={block} fee={data.fee} />
-        ))}
+        {data.blocks.map((block, i) =>
+          i === data.blocks.length - 1 ? (
+            <View key={i} minPresenceAhead={150}>
+              <Block block={block} fee={data.fee} />
+            </View>
+          ) : (
+            <Block key={i} block={block} fee={data.fee} />
+          )
+        )}
 
         <View style={styles.signGrid}>
           <View style={styles.signCol}>
