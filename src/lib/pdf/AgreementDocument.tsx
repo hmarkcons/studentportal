@@ -23,7 +23,7 @@ const styles = StyleSheet.create({
   sigBoxCells: { flexDirection: "row", height: 42 },
   sigBoxCell: { flex: 1, alignItems: "center", justifyContent: "center" },
   sigBoxCellDivider: { borderLeftWidth: 1, borderLeftColor: INK },
-  sigBoxImg: { position: "absolute", width: 80, height: 100.5, top: -42, left: 15 },
+  sigBoxImg: { position: "absolute", width: 80, height: 100.5, top: -28, left: 15 },
 
   table: { borderWidth: 1, borderColor: INK, marginBottom: 10 },
   tRow: { flexDirection: "row" },
