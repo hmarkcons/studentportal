@@ -23,7 +23,7 @@ const styles = StyleSheet.create({
   sigBoxCells: { flexDirection: "row", height: 42 },
   sigBoxCell: { flex: 1, alignItems: "center", justifyContent: "center" },
   sigBoxCellDivider: { borderLeftWidth: 1, borderLeftColor: INK },
-  sigBoxImg: { maxWidth: 140, maxHeight: 48 },
+  sigBoxImg: { position: "absolute", width: 80, height: 100.5, top: -42, left: 15 },
 
   table: { borderWidth: 1, borderColor: INK, marginBottom: 10 },
   tRow: { flexDirection: "row" },
@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
   signGrid: { flexDirection: "row", justifyContent: "space-between", marginTop: 30 },
   signCol: { width: "45%" },
   signLine: { borderBottomWidth: 1, borderColor: INK, height: 26, justifyContent: "flex-end" },
-  signImg: { maxWidth: 130, maxHeight: 40, alignSelf: "center" },
+  signImg: { position: "absolute", width: 56, height: 70.3, top: -30, left: 34 },
   signCaption: { fontFamily: "Helvetica-Bold", fontSize: 8, marginTop: 3 },
   signNameLine: { borderBottomWidth: 1, borderColor: INK, height: 20, marginTop: 16, justifyContent: "flex-end", alignItems: "center" },
   signNameText: { fontSize: 9 },
