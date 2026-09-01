@@ -174,8 +174,8 @@ function FeeTable({ fee }: { fee: AgreementPdfData["fee"] }) {
     ["First Installment", fee.adminCharge],
     ["Second Installment", fee.consultancyFee],
     ["Administrative Fee", fee.adminCharge],
-    ["Discount", fee.discount ?? 0],
   ];
+  if (fee.discount && fee.discount > 0) rows.push(["Discount", fee.discount]);
 
   return (
     <View style={styles.feeTable}>
