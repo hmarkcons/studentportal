@@ -101,6 +101,18 @@ export function RichTextEditor({
         </ToolbarButton>
         <span className="mx-1 h-4 w-px bg-border" />
         <ToolbarButton
+          title="Insert the itemized payment chart — auto-filled with this student's actual fee, installments, and discount at generation time. Use this instead of typing your own fee table."
+          onClick={() =>
+            editor
+              .chain()
+              .focus()
+              .insertContent({ type: "paragraph", content: [{ type: "text", text: "{{fee_table}}" }] })
+              .run()
+          }
+        >
+          + Payment Chart
+        </ToolbarButton>
+        <ToolbarButton
           title="Insert table"
           onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
         >

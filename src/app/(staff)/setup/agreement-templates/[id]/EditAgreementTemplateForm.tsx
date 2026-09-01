@@ -92,6 +92,10 @@ export function EditAgreementTemplateForm({
         {extracting && <p className="text-xs text-muted">Reading document…</p>}
         {extractError && <p className="text-xs text-danger">{extractError}</p>}
       </div>
+      <p className="text-xs text-muted">
+        Wherever the fee, installments, and discount should appear, click <strong>+ Payment Chart</strong> in the toolbar below —
+        don&apos;t type your own table with sample numbers, since only the chart button fills in each student&apos;s actual figures.
+      </p>
       <RichTextEditor name="wording" content={wording} onChangeHtml={setWording} />
       <details className="text-xs text-muted">
         <summary className="cursor-pointer">Available merge fields</summary>
