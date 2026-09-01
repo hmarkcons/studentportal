@@ -162,13 +162,20 @@ function StudentDetailsChart({ student, destinationLabel }: { student: Agreement
   );
 }
 
+// The Client(s) pay in two installments — registration (the administrative
+// fee) and issuance of the acceptance letter (the consultancy fee) — so
+// those two amounts are shown twice: once as the payment schedule the
+// client follows, and again broken out by what each covers, since the
+// administrative portion is called out elsewhere in the wording as
+// non-refundable.
 function FeeTable({ fee }: { fee: AgreementPdfData["fee"] }) {
   const rows: [string, number][] = [
     ["Total Professional Fee", fee.total],
-    ["Administrative fee", fee.adminCharge],
-    ["Consultancy fee", fee.consultancyFee],
+    ["First Installment", fee.adminCharge],
+    ["Second Installment", fee.consultancyFee],
+    ["Administrative Fee", fee.adminCharge],
+    ["Discount", fee.discount ?? 0],
   ];
-  if (fee.discount && fee.discount > 0) rows.push(["Discount", fee.discount]);
 
   return (
     <View style={styles.feeTable}>
