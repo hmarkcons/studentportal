@@ -92,6 +92,7 @@ export type AgreementPdfData = {
     currencySymbol: string;
     adminCharge: number;
     consultancyFee: number;
+    installmentAmounts: number[];
     discount: number | null;
     total: number;
   };
@@ -162,19 +163,22 @@ function StudentDetailsChart({ student, destinationLabel }: { student: Agreement
   );
 }
 
-// The Client(s) pay in two installments — registration (the administrative
-// fee) and issuance of the acceptance letter (the consultancy fee) — so
-// those two amounts are shown twice: once as the payment schedule the
-// client follows, and again broken out by what each covers, since the
-// administrative portion is called out elsewhere in the wording as
-// non-refundable.
+const INSTALLMENT_ORDINALS = ["First", "Second", "Third"];
+
+// The administrative fee is a single flat, non-refundable charge — only the
+// consultancy fee is split into the staff-chosen number of installments
+// (agreements.installment_count, 1-3), matching the invoice module's
+// installment-count dropdown (see generateInvoice in src/lib/actions/invoices.ts).
 function FeeTable({ fee }: { fee: AgreementPdfData["fee"] }) {
-  const rows: [string, number][] = [
-    ["Total Professional Fee", fee.total],
-    ["First Installment", fee.adminCharge],
-    ["Second Installment", fee.consultancyFee],
-    ["Administrative Fee", fee.adminCharge],
-  ];
+  const rows: [string, number][] = [["Total Professional Fee", fee.total]];
+  if (fee.installmentAmounts.length <= 1) {
+    rows.push(["Consultancy Fee", fee.installmentAmounts[0] ?? fee.consultancyFee]);
+  } else {
+    fee.installmentAmounts.forEach((amount, i) => {
+      rows.push([`${INSTALLMENT_ORDINALS[i] ?? `${i + 1}th`} Installment`, amount]);
+    });
+  }
+  rows.push(["Administrative Fee", fee.adminCharge]);
   if (fee.discount && fee.discount > 0) rows.push(["Discount", fee.discount]);
 
   return (

@@ -30,6 +30,8 @@ export async function generateAgreement(studentId: string, _prevState: unknown, 
     ? Number(formData.get("consultancy_fee_override"))
     : null;
   const discount_amount = formData.get("discount_amount") ? Number(formData.get("discount_amount")) : null;
+  const installmentCountRaw = Number(formData.get("installment_count") ?? 1);
+  const installment_count = [1, 2, 3].includes(installmentCountRaw) ? installmentCountRaw : 1;
 
   if (!["paper", "e_signature"].includes(signing_method)) {
     return { error: "Choose a signing method." };
@@ -46,6 +48,7 @@ export async function generateAgreement(studentId: string, _prevState: unknown, 
     admin_charge_override,
     consultancy_fee_override,
     discount_amount,
+    installment_count,
     generated_by: user?.id,
     status: "pending_signature",
   });
@@ -66,7 +69,7 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
 
   const { data: agreement, error: agreementError } = await supabase
     .from("agreements")
-    .select("id, template_id, admin_charge_override, consultancy_fee_override, discount_amount, created_at")
+    .select("id, template_id, admin_charge_override, consultancy_fee_override, discount_amount, installment_count, created_at")
     .eq("id", agreementId)
     .single();
   if (agreementError || !agreement) return { error: agreementError?.message ?? "Agreement not found." };
@@ -118,6 +121,15 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
   const totalFee = adminCharge + consultancyFee - (agreement.discount_amount ?? 0);
   const agreementDateStr = formatAgreementDate(new Date(agreement.created_at));
 
+  // Split the consultancy fee into equal installments per the staff's choice
+  // at generation time (installment_count), with any rounding remainder
+  // folded into the last installment so the parts always sum to the whole.
+  const installmentCount = agreement.installment_count ?? 1;
+  const perInstallment = Math.round((consultancyFee / installmentCount) * 100) / 100;
+  const installmentAmounts = Array.from({ length: installmentCount }, (_, i) =>
+    i === installmentCount - 1 ? consultancyFee - perInstallment * (installmentCount - 1) : perInstallment
+  );
+
   const { renderToBuffer } = await import("@react-pdf/renderer");
   const { AgreementDocument, money } = await import("@/lib/pdf/AgreementDocument");
 
@@ -166,6 +178,7 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
         currencySymbol,
         adminCharge,
         consultancyFee,
+        installmentAmounts,
         discount: agreement.discount_amount,
         total: totalFee,
       },

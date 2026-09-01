@@ -45,6 +45,11 @@ export function GenerateAgreementForm({
         defaultValue={discountAmount ?? ""}
         className="w-36"
       />
+      <Select name="installment_count" defaultValue="1">
+        <option value="1">1 consultancy fee installment</option>
+        <option value="2">2 consultancy fee installments</option>
+        <option value="3">3 consultancy fee installments</option>
+      </Select>
       <Button type="submit" variant="primary" pending={pending}>
         Generate agreement
       </Button>
