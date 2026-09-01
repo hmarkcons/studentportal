@@ -89,11 +89,34 @@ export function wordingToBlocks(wording: string, vars: Record<string, string>): 
         blocks.push(isFeeTablePlaceholder(text) ? { kind: "feeTable" } : { kind: "richParagraph", runs });
       }
     } else if (tag === "ul" || tag === "ol") {
-      const items = el.childNodes
-        .filter((c) => c.nodeType === NodeType.ELEMENT_NODE && (c as HTMLElement).tagName?.toLowerCase() === "li")
-        .map((li) => extractRuns(li))
-        .filter((runs) => runs.length > 0);
-      if (items.length) blocks.push({ kind: "richList", ordered: tag === "ol", items });
+      // Rich text editors turn Enter-inside-a-list-item into a new list
+      // item, so a {{fee_table}} placeholder typed there ends up nested in
+      // an <li> rather than breaking out to its own paragraph. Split the
+      // list around it instead of rendering the token as inert list text,
+      // continuing the numbering across the split so clause numbers don't
+      // reset back to 1 partway through.
+      const ordered = tag === "ol";
+      const liEls = el.childNodes.filter(
+        (c) => c.nodeType === NodeType.ELEMENT_NODE && (c as HTMLElement).tagName?.toLowerCase() === "li"
+      ) as HTMLElement[];
+      let items: TextRun[][] = [];
+      let start = 1;
+      for (const li of liEls) {
+        const runs = extractRuns(li);
+        if (!runs.length) continue;
+        const text = runs.map((r) => r.text).join("");
+        if (isFeeTablePlaceholder(text)) {
+          if (items.length) {
+            blocks.push({ kind: "richList", ordered, items, start });
+            start += items.length;
+            items = [];
+          }
+          blocks.push({ kind: "feeTable" });
+        } else {
+          items.push(runs);
+        }
+      }
+      if (items.length) blocks.push({ kind: "richList", ordered, items, start });
     } else if (tag === "table") {
       const rows: { cells: TextRun[][]; header: boolean }[] = [];
       const rowEls = el.querySelectorAll("tr");

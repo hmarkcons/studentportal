@@ -30,7 +30,7 @@ export type AgreementBlock =
   // text like the legacy `paragraph` kind above.
   | { kind: "richHeading"; level: 1 | 2 | 3; runs: TextRun[] }
   | { kind: "richParagraph"; runs: TextRun[] }
-  | { kind: "richList"; ordered: boolean; items: TextRun[][] }
+  | { kind: "richList"; ordered: boolean; items: TextRun[][]; start?: number }
   | { kind: "richTable"; rows: { cells: TextRun[][]; header: boolean }[] };
 
 export type AgreementContent = {

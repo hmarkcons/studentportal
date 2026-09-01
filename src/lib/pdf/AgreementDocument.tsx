@@ -269,7 +269,7 @@ function Block({ block, fee }: { block: AgreementBlock; fee: AgreementPdfData["f
         <View>
           {block.items.map((runs, i) => (
             <View key={i} style={styles.richListItemRow}>
-              <Text style={styles.richListMarker}>{block.ordered ? `${i + 1}.` : "•"}</Text>
+              <Text style={styles.richListMarker}>{block.ordered ? `${(block.start ?? 1) + i}.` : "•"}</Text>
               <Text style={styles.richListText}>
                 <RichRuns runs={runs} />
               </Text>
