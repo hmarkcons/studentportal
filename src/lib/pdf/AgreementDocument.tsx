@@ -36,6 +36,7 @@ const styles = StyleSheet.create({
   feeRow: { flexDirection: "row", borderBottomWidth: 1, borderColor: INK },
   feeRowLast: { borderBottomWidth: 0 },
   feeLabel: { flex: 4, padding: 5, fontSize: 8.5, fontFamily: "Helvetica-Bold" },
+  feeLabelNote: { fontSize: 7.5, fontFamily: "Helvetica" },
   feeValue: { flex: 1, padding: 5, fontSize: 8.5, fontFamily: "Helvetica-Bold", textAlign: "right", borderLeftWidth: 1, borderColor: INK },
 
   richHeading1: { fontFamily: "Times-Bold", fontSize: 12, marginTop: 8, marginBottom: 3, lineHeight: 1.35 },
@@ -163,30 +164,46 @@ function StudentDetailsChart({ student, destinationLabel }: { student: Agreement
   );
 }
 
-const INSTALLMENT_ORDINALS = ["First", "Second", "Third"];
+// Each installment's due point is fixed by its position in the business's
+// payment schedule: 1st at signing, 2nd the following month, 3rd on
+// acceptance from the first university.
+const INSTALLMENT_SCHEDULE: { label: string; note: string }[] = [
+  { label: "First Installment", note: "Pay at the time of signing the agreement" },
+  { label: "Second Installment", note: "Pay in the next month" },
+  { label: "Third Installment", note: "Pay at the time of acceptance from the first university" },
+];
 
 // The administrative fee is a single flat, non-refundable charge — only the
 // consultancy fee is split into the staff-chosen number of installments
 // (agreements.installment_count, 1-3), matching the invoice module's
 // installment-count dropdown (see generateInvoice in src/lib/actions/invoices.ts).
+// Row order and due-date notes follow the business's fixed payment
+// schedule: admin charge and the first installment at signing, further
+// installments later, with the discount and grand total shown last.
 function FeeTable({ fee }: { fee: AgreementPdfData["fee"] }) {
-  const rows: [string, number][] = [["Total Professional Fee", fee.total]];
+  const rows: { label: string; note?: string; value: number }[] = [
+    { label: "Administrative Charges (Non-Refundable)", note: "Pay at the time of signing the agreement", value: fee.adminCharge },
+  ];
   if (fee.installmentAmounts.length <= 1) {
-    rows.push(["Consultancy Fee", fee.installmentAmounts[0] ?? fee.consultancyFee]);
+    rows.push({ label: "Consultancy Fee", value: fee.installmentAmounts[0] ?? fee.consultancyFee });
   } else {
     fee.installmentAmounts.forEach((amount, i) => {
-      rows.push([`${INSTALLMENT_ORDINALS[i] ?? `${i + 1}th`} Installment`, amount]);
+      const schedule = INSTALLMENT_SCHEDULE[i] ?? { label: `Installment ${i + 1}`, note: undefined };
+      rows.push({ label: schedule.label, note: schedule.note, value: amount });
     });
   }
-  rows.push(["Administrative Fee", fee.adminCharge]);
-  if (fee.discount && fee.discount > 0) rows.push(["Discount", fee.discount]);
+  if (fee.discount && fee.discount > 0) rows.push({ label: "Discount", value: fee.discount });
+  rows.push({ label: "Total Professional Fee", value: fee.total });
 
   return (
     <View style={styles.feeTable}>
-      {rows.map(([label, value], i) => (
-        <View key={label} style={[styles.feeRow, i === rows.length - 1 ? styles.feeRowLast : {}]}>
-          <Text style={styles.feeLabel}>{label}</Text>
-          <Text style={styles.feeValue}>{money(fee.currencySymbol, value)}</Text>
+      {rows.map((row, i) => (
+        <View key={row.label} style={[styles.feeRow, i === rows.length - 1 ? styles.feeRowLast : {}]}>
+          <Text style={styles.feeLabel}>
+            {row.label}
+            {row.note && <Text style={styles.feeLabelNote}>{"\n"}{row.note}</Text>}
+          </Text>
+          <Text style={styles.feeValue}>{money(fee.currencySymbol, row.value)}</Text>
         </View>
       ))}
     </View>
