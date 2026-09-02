@@ -1,6 +1,12 @@
 import type { NavItem } from "@/components/AppShell";
 
-export const STAFF_NAV: NavItem[] = [
+// Every item below is visible to every active staff role today — the app's
+// real access control lives in per-page/per-action permission checks (see
+// src/lib/auth/permissions.ts), not the nav. The two exceptions are wired up
+// explicitly in buildStaffNav below: Staff Management (needs staff.manage)
+// and Role Permissions (Super Admin only, hardcoded so it can never be
+// overridden away and lock every admin out of the permissions screen).
+const BASE_STAFF_NAV: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: "🏠" },
   { label: "Leads", href: "/leads", icon: "📇" },
   { label: "Students", href: "/students", icon: "🎓" },
@@ -61,6 +67,19 @@ export const STAFF_NAV: NavItem[] = [
     ],
   },
 ];
+
+export function buildStaffNav({ canManageStaff, isSuperAdmin }: { canManageStaff: boolean; isSuperAdmin: boolean }): NavItem[] {
+  return BASE_STAFF_NAV.map((item) => {
+    if (item.label === "HR" && item.children) {
+      const children = canManageStaff ? item.children : item.children.filter((c) => c.label !== "Staff Management");
+      return { ...item, children };
+    }
+    if (item.label === "Admin" && item.children && isSuperAdmin) {
+      return { ...item, children: [...item.children, { label: "Role Permissions", href: "/admin/permissions" }] };
+    }
+    return item;
+  });
+}
 
 export const STUDENT_NAV: NavItem[] = [
   { label: "Dashboard", href: "/portal", icon: "🏠" },

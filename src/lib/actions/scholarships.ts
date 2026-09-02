@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { requirePermission } from "@/lib/auth/permissions";
 
 export async function createScholarshipBody(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
@@ -26,11 +27,7 @@ export async function createScholarshipBody(_prevState: unknown, formData: FormD
 
 export async function updateScholarshipBody(bodyId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  if (staffRow?.role !== "super_admin") return { error: "Only Super Admin can modify scholarship bodies." };
+  const denied = await requirePermission("scholarships.manage", "Only Super Admin can modify scholarship bodies."); if (denied) return { error: denied.error };
 
   const name = String(formData.get("name") ?? "").trim();
   const region = String(formData.get("region") ?? "").trim() || null;
@@ -55,11 +52,7 @@ export async function updateScholarshipBody(bodyId: string, _prevState: unknown,
 
 export async function deleteScholarshipBody(bodyId: string) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  if (staffRow?.role !== "super_admin") return { error: "Only Super Admin can delete scholarship bodies." };
+  const denied = await requirePermission("scholarships.manage", "Only Super Admin can delete scholarship bodies."); if (denied) return { error: denied.error };
 
   const { error } = await supabase.from("scholarship_bodies").delete().eq("id", bodyId);
   if (error) return { error: error.message };
@@ -89,11 +82,7 @@ export async function addStudentScholarship(studentId: string, applicationId: st
 
 export async function updateStudentScholarship(scholarshipId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  if (staffRow?.role !== "super_admin") return { error: "Only Super Admin can modify scholarship records." };
+  const denied = await requirePermission("scholarships.manage", "Only Super Admin can modify scholarship records."); if (denied) return { error: denied.error };
 
   const name = String(formData.get("name") ?? "").trim() || null;
   const award_amount = formData.get("award_amount") ? Number(formData.get("award_amount")) : null;
@@ -108,11 +97,7 @@ export async function updateStudentScholarship(scholarshipId: string, revalidate
 
 export async function deleteStudentScholarship(scholarshipId: string, revalidateTo: string) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  if (staffRow?.role !== "super_admin") return { error: "Only Super Admin can delete scholarship records." };
+  const denied = await requirePermission("scholarships.manage", "Only Super Admin can delete scholarship records."); if (denied) return { error: denied.error };
 
   const { error } = await supabase.from("student_scholarships").delete().eq("id", scholarshipId);
   if (error) return { error: error.message };

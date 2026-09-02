@@ -7,6 +7,7 @@ import { CURRENCY_SYMBOLS } from "@/lib/constants";
 import { formatDateOnly } from "@/lib/formatDate";
 import { getAgreementContent } from "@/lib/pdf/agreementContent";
 import { wordingToBlocks, DEFAULT_OFFICE_LINE } from "@/lib/pdf/templateWording";
+import { requirePermission } from "@/lib/auth/permissions";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -67,11 +68,8 @@ export async function generateAgreement(studentId: string, _prevState: unknown, 
 export async function updateAgreement(agreementId: string, studentId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  if (staffRow?.role !== "super_admin") return { error: "Only Super Admin can edit an agreement." };
+  const denied = await requirePermission("agreements.edit_delete", "Only Super Admin can edit an agreement.");
+  if (denied) return { error: denied.error };
 
   const { data: existing } = await supabase.from("agreements").select("status").eq("id", agreementId).maybeSingle();
   if (existing?.status === "signed") return { error: "This agreement is already signed and can no longer be edited." };
@@ -95,6 +93,8 @@ export async function updateAgreement(agreementId: string, studentId: string, _p
 // to sign after printing/e-signing.
 export async function generateAgreementPdf(agreementId: string, studentId: string, revalidateTo: string) {
   const supabase = await createClient();
+  const denied = await requirePermission("agreements.process", "Only Super Admin/Processing can regenerate an agreement PDF.");
+  if (denied) return { error: denied.error };
 
   const { data: agreement, error: agreementError } = await supabase
     .from("agreements")
@@ -235,11 +235,8 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
 
 export async function deleteAgreement(agreementId: string, studentId: string) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  if (staffRow?.role !== "super_admin") return { error: "Only Super Admin can delete an agreement." };
+  const denied = await requirePermission("agreements.edit_delete", "Only Super Admin can delete an agreement.");
+  if (denied) return { error: denied.error };
 
   const { error } = await supabase.from("agreements").delete().eq("id", agreementId);
   if (error) return { error: error.message };
@@ -250,6 +247,9 @@ export async function deleteAgreement(agreementId: string, studentId: string) {
 
 export async function uploadSignedAgreement(agreementId: string, studentId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
+  const denied = await requirePermission("agreements.process", "Only Super Admin/Processing can upload a signed agreement.");
+  if (denied) return { error: denied.error };
+
   const file = formData.get("file") as File | null;
   const email_verified = formData.get("email_verified") === "on";
   const video_recording_path = String(formData.get("video_recording_path") ?? "") || null;

@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { formatDateOnly } from "@/lib/formatDate";
+import { requirePermission } from "@/lib/auth/permissions";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -71,25 +72,10 @@ export async function generateInvoice(studentId: string, agreementId: string, _p
   return { success: true };
 }
 
-async function requireFinance(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  return staffRow?.role === "finance" || staffRow?.role === "super_admin";
-}
-
-async function requireSuperAdmin(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  return staffRow?.role === "super_admin";
-}
-
 export async function updateInvoice(invoiceId: string, studentId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  if (!(await requireFinance(supabase))) return { error: "Only Finance/Super Admin can edit invoices." };
+  const denied = await requirePermission("finance.invoices.manage", "Only Finance/Super Admin can edit invoices.");
+  if (denied) return { error: denied.error };
 
   const admin_charge = Number(formData.get("admin_charge") ?? 0);
   const consultancy_fee = Number(formData.get("consultancy_fee") ?? 0);
@@ -111,7 +97,8 @@ export async function updateInvoice(invoiceId: string, studentId: string, revali
 
 export async function deleteInvoice(invoiceId: string, studentId: string, revalidateTo: string) {
   const supabase = await createClient();
-  if (!(await requireSuperAdmin(supabase))) return { error: "Only Super Admin can delete invoices." };
+  const denied = await requirePermission("finance.invoices.delete", "Only Super Admin can delete invoices.");
+  if (denied) return { error: denied.error };
 
   const { data: invoice } = await supabase.from("invoices").select("pdf_path").eq("id", invoiceId).maybeSingle();
 
@@ -133,7 +120,8 @@ export async function deleteInvoice(invoiceId: string, studentId: string, revali
 
 export async function updateInstallment(installmentId: string, studentId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  if (!(await requireFinance(supabase))) return { error: "Only Finance/Super Admin can edit installments." };
+  const denied = await requirePermission("finance.invoices.manage", "Only Finance/Super Admin can edit installments.");
+  if (denied) return { error: denied.error };
 
   const amount = Number(formData.get("amount") ?? 0);
   const due_date = String(formData.get("due_date") ?? "") || null;

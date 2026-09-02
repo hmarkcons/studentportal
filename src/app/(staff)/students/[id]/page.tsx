@@ -21,6 +21,7 @@ import { listCredentialTypesAction } from "@/lib/actions/countryTracker";
 import { LeadEditForm } from "@/components/LeadEditForm";
 import { RegistrationEditForm } from "./RegistrationEditForm";
 import { getCachedDestinations, getCachedCounselors, getCachedAgreementTemplates, getCachedFeeProducts } from "@/lib/cachedQueries";
+import { getEffectivePermissions } from "@/lib/auth/permissions";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -28,11 +29,12 @@ function one<T>(v: T | T[] | null) {
 
 export default async function StudentDashboardPage(props: PageProps<"/students/[id]">) {
   const { id } = await props.params;
-  const { supabase, staff: staffRow } = await getStaffSession();
-  const role = staffRow?.role;
-  const isSuperAdmin = role === "super_admin";
-  const canModifyAgreement = role === "super_admin" || role === "processing";
-  const canManageInvoice = role === "super_admin" || role === "finance" || role === "processing";
+  const { supabase } = await getStaffSession();
+  const perms = await getEffectivePermissions();
+  const isSuperAdmin = perms["agreements.edit_delete"] === true;
+  const canModifyAgreement = perms["agreements.process"] === true;
+  const canManageInvoice = perms["finance.invoices.manage"] === true;
+  const canDeleteInvoice = perms["finance.invoices.delete"] === true;
 
   await ensureStudentDocumentRequirements(id);
 
@@ -329,7 +331,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
 
       <Card className="mt-6">
         <h3 className="mb-3 text-sm font-medium text-ink">Agreement</h3>
-        {(role === "super_admin" || role === "processing") && (
+        {canModifyAgreement && (
           <GenerateAgreementForm studentId={id} templates={templates ?? []} discountAmount={leadRegistration?.discount_amount ?? null} />
         )}
         {agreements && agreements.length > 0 && (
@@ -398,7 +400,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                 pdfUrl={invoicePdfUrls.get(inv.id)}
                 revalidateTo={`/students/${id}`}
                 canManage={canManageInvoice}
-                isSuperAdmin={isSuperAdmin}
+                isSuperAdmin={canDeleteInvoice}
               />
             ))}
           </div>

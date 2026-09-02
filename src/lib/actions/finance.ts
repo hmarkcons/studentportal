@@ -3,35 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requirePermission } from "@/lib/auth/permissions";
 
 const REFUND_PERCENT: Record<string, number> = {
   no_admission: 100,
   visa_refusal: 50,
 };
-
-async function requireSuperAdmin(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  return staffRow?.role === "super_admin";
-}
-
-async function requireFinance(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  return staffRow?.role === "finance" || staffRow?.role === "super_admin";
-}
-
-async function requireFinanceOrManagement(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  return staffRow?.role === "finance" || staffRow?.role === "management" || staffRow?.role === "super_admin";
-}
 
 // Any registered student whose visa was refused for a private-university-
 // track destination is entitled to a 50% consultancy refund, due within 90
@@ -114,7 +91,7 @@ export async function syncVisaRefusalRefunds(): Promise<{ errors: string[] }> {
 
 export async function createStaffCommission(revalidateTo: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  if (!(await requireFinance(supabase))) return { error: "Only Finance/Super Admin can add commission records." };
+  const denied = await requirePermission("finance.commissions.manage", "Only Finance/Super Admin can add commission records."); if (denied) return { error: denied.error };
 
   const staff_id = String(formData.get("staff_id") ?? "");
   const student_id = String(formData.get("student_id") ?? "");
@@ -151,7 +128,7 @@ export async function createStaffCommission(revalidateTo: string, _prevState: un
 // member (see createStaffCommission's apply_credit_id handling).
 export async function carryForwardCommissionCredit(commissionId: string, revalidateTo: string) {
   const supabase = await createClient();
-  if (!(await requireFinance(supabase))) return { error: "Only Finance/Super Admin can adjust commissions." };
+  const denied = await requirePermission("finance.commissions.manage", "Only Finance/Super Admin can adjust commissions."); if (denied) return { error: denied.error };
 
   const { data: commission } = await supabase
     .from("staff_commissions")
@@ -175,7 +152,7 @@ export async function carryForwardCommissionCredit(commissionId: string, revalid
 
 export async function deleteStaffCommission(id: string, revalidateTo: string) {
   const supabase = await createClient();
-  if (!(await requireFinance(supabase))) return { error: "Only Finance/Super Admin can delete commission records." };
+  const denied = await requirePermission("finance.commissions.manage", "Only Finance/Super Admin can delete commission records."); if (denied) return { error: denied.error };
 
   const { error } = await supabase.from("staff_commissions").delete().eq("id", id);
   if (error) return { error: error.message };
@@ -186,7 +163,7 @@ export async function deleteStaffCommission(id: string, revalidateTo: string) {
 
 export async function createRefundRequest(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  if (!(await requireSuperAdmin(supabase))) return { error: "Only Super Admin can add refund records." };
+  const denied = await requirePermission("finance.refunds.manage", "Only Super Admin can add refund records."); if (denied) return { error: denied.error };
 
   const {
     data: { user },
@@ -235,7 +212,7 @@ export async function createRefundRequest(_prevState: unknown, formData: FormDat
 
 export async function deleteRefundRequest(id: string) {
   const supabase = await createClient();
-  if (!(await requireSuperAdmin(supabase))) return { error: "Only Super Admin can delete refund records." };
+  const denied = await requirePermission("finance.refunds.manage", "Only Super Admin can delete refund records."); if (denied) return { error: denied.error };
 
   const { error } = await supabase.from("refund_requests").delete().eq("id", id);
   if (error) return { error: error.message };
@@ -246,7 +223,7 @@ export async function deleteRefundRequest(id: string) {
 
 export async function createPartnerCommission(revalidateTo: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  if (!(await requireFinance(supabase))) return { error: "Only Finance/Super Admin can add commission records." };
+  const denied = await requirePermission("finance.commissions.manage", "Only Finance/Super Admin can add commission records."); if (denied) return { error: denied.error };
 
   const student_id = String(formData.get("student_id") ?? "");
   const application_id = String(formData.get("application_id") ?? "") || null;
@@ -283,7 +260,7 @@ export async function createPartnerCommission(revalidateTo: string, _prevState: 
 
 export async function deletePartnerCommission(id: string, revalidateTo: string) {
   const supabase = await createClient();
-  if (!(await requireSuperAdmin(supabase))) return { error: "Only Super Admin can delete partner commission records." };
+  const denied = await requirePermission("finance.partner_commissions.delete", "Only Super Admin can delete partner commission records."); if (denied) return { error: denied.error };
 
   const { error } = await supabase.from("partner_commissions").delete().eq("id", id);
   if (error) return { error: error.message };
@@ -294,7 +271,7 @@ export async function deletePartnerCommission(id: string, revalidateTo: string) 
 
 export async function markStaffCommissionPaid(id: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  if (!(await requireFinance(supabase))) return { error: "Only Finance/Super Admin can mark commissions paid." };
+  const denied = await requirePermission("finance.commissions.manage", "Only Finance/Super Admin can mark commissions paid."); if (denied) return { error: denied.error };
 
   const file = formData.get("file") as File | null;
   let payment_proof_path: string | undefined;
@@ -318,7 +295,7 @@ export async function markStaffCommissionPaid(id: string, revalidateTo: string, 
 
 export async function updatePartnerCommissionStatus(id: string, revalidateTo: string, status: string) {
   const supabase = await createClient();
-  if (!(await requireFinance(supabase))) return { error: "Only Finance/Super Admin can change commission status." };
+  const denied = await requirePermission("finance.commissions.manage", "Only Finance/Super Admin can change commission status."); if (denied) return { error: denied.error };
 
   const { error } = await supabase.from("partner_commissions").update({ status }).eq("id", id);
   if (error) return { error: error.message };
@@ -329,7 +306,7 @@ export async function updatePartnerCommissionStatus(id: string, revalidateTo: st
 
 export async function upsertStaffPayroll(staffId: string, payrollMonth: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  if (!(await requireFinance(supabase))) return { error: "Only Finance/Super Admin can update payroll." };
+  const denied = await requirePermission("finance.commissions.manage", "Only Finance/Super Admin can update payroll."); if (denied) return { error: denied.error };
 
   const {
     data: { user },
@@ -370,7 +347,7 @@ export async function upsertStaffPayroll(staffId: string, payrollMonth: string, 
 
 export async function updateStaffCommission(id: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  if (!(await requireFinance(supabase))) return { error: "Only Finance/Super Admin can edit commission records." };
+  const denied = await requirePermission("finance.commissions.manage", "Only Finance/Super Admin can edit commission records."); if (denied) return { error: denied.error };
 
   const amount = Number(formData.get("amount") ?? 0);
   const currency = String(formData.get("currency") ?? "").trim();
@@ -393,7 +370,7 @@ export async function updateStaffCommission(id: string, revalidateTo: string, _p
 
 export async function uploadStaffCommissionProof(id: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  if (!(await requireFinance(supabase))) return { error: "Only Finance/Super Admin can upload proof." };
+  const denied = await requirePermission("finance.commissions.manage", "Only Finance/Super Admin can upload proof."); if (denied) return { error: denied.error };
 
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) return { error: "Choose a file to upload." };
@@ -411,7 +388,7 @@ export async function uploadStaffCommissionProof(id: string, revalidateTo: strin
 
 export async function updatePartnerCommission(id: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  if (!(await requireFinance(supabase))) return { error: "Only Finance/Super Admin can edit partner commission records." };
+  const denied = await requirePermission("finance.commissions.manage", "Only Finance/Super Admin can edit partner commission records."); if (denied) return { error: denied.error };
 
   const paid_fee = formData.get("paid_fee") ? Number(formData.get("paid_fee")) : null;
   const fee_payment_date = String(formData.get("fee_payment_date") ?? "") || null;
@@ -452,7 +429,7 @@ export async function updatePartnerCommission(id: string, revalidateTo: string, 
 
 export async function uploadPartnerCommissionProof(id: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  if (!(await requireFinance(supabase))) return { error: "Only Finance/Super Admin can upload proof." };
+  const denied = await requirePermission("finance.commissions.manage", "Only Finance/Super Admin can upload proof."); if (denied) return { error: denied.error };
 
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) return { error: "Choose a file to upload." };
@@ -470,7 +447,7 @@ export async function uploadPartnerCommissionProof(id: string, revalidateTo: str
 
 export async function updateRefundStatus(id: string, revalidateTo: string, status: string) {
   const supabase = await createClient();
-  if (!(await requireFinanceOrManagement(supabase))) return { error: "Only Finance/Management/Super Admin can update refund status." };
+  const denied = await requirePermission("finance.refunds.review", "Only Finance/Management/Super Admin can update refund status."); if (denied) return { error: denied.error };
 
   const { data: refund } = await supabase.from("refund_requests").select("eligibility_status").eq("id", id).maybeSingle();
   if (refund?.eligibility_status === "ineligible_reapplying" && (status === "approved" || status === "processed")) {
@@ -488,7 +465,7 @@ export async function updateRefundStatus(id: string, revalidateTo: string, statu
 
 export async function updateRefundEligibility(revalidateTo: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  if (!(await requireFinanceOrManagement(supabase))) return { error: "Only Finance/Management/Super Admin can update refund eligibility." };
+  const denied = await requirePermission("finance.refunds.review", "Only Finance/Management/Super Admin can update refund eligibility."); if (denied) return { error: denied.error };
 
   const id = String(formData.get("id") ?? "");
   const eligibility_status = String(formData.get("eligibility_status") ?? "eligible");

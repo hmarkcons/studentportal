@@ -6,6 +6,7 @@ import { LEAD_STATUS_LABELS } from "@/lib/constants";
 import { ImportLeadsForm } from "./ImportLeadsForm";
 import { InlineStatusCell } from "./InlineStatusCell";
 import { RowActionsMenu } from "@/components/RowActionsMenu";
+import { hasPermission } from "@/lib/auth/permissions";
 
 type LeadRow = {
   id: string;
@@ -24,12 +25,7 @@ function one<T>(v: T | T[] | null) {
 
 export default async function LeadsPage() {
   const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  const canDelete = staffRow?.role === "super_admin" || staffRow?.role === "processing";
+  const canDelete = await hasPermission("leads.delete");
 
   const { data: leads, error } = await supabase
     .from("leads")

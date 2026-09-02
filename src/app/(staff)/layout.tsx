@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { getStaffSession } from "@/lib/auth/session";
+import { getEffectivePermissions } from "@/lib/auth/permissions";
 import { AppShell } from "@/components/AppShell";
-import { STAFF_NAV } from "@/lib/nav";
+import { buildStaffNav } from "@/lib/nav";
 
 const ROLE_LABELS: Record<string, string> = {
   super_admin: "Super Admin",
@@ -20,10 +21,14 @@ export default async function StaffLayout({ children }: { children: React.ReactN
     redirect("/");
   }
 
+  const isSuperAdmin = staffRow.role === "super_admin";
+  const perms = await getEffectivePermissions();
+  const nav = buildStaffNav({ canManageStaff: perms["staff.manage"] === true, isSuperAdmin });
+
   return (
     <AppShell
       brand="HMARK CRM"
-      nav={STAFF_NAV}
+      nav={nav}
       userName={staffRow.full_name}
       userSubtitle={ROLE_LABELS[staffRow.role] ?? staffRow.role}
       showSearch

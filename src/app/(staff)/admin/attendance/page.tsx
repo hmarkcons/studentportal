@@ -5,6 +5,7 @@ import { formatDateOnly } from "@/lib/formatDate";
 import { Card } from "@/components/ui/Card";
 import { ClockButtons } from "./ClockButtons";
 import { RotateQrButton } from "./RotateQrButton";
+import { hasPermission } from "@/lib/auth/permissions";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -18,15 +19,12 @@ export default async function AttendancePage() {
     .order("work_date", { ascending: false })
     .limit(100);
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
   const { data: qr } = await supabase.from("office_qr_tokens").select("token").eq("id", true).maybeSingle();
+  const canAdminQr = await hasPermission("attendance.qr_admin");
 
   let qrImage: string | null = null;
   let checkinUrl: string | null = null;
-  if (staffRow?.role === "super_admin" && qr) {
+  if (canAdminQr && qr) {
     const h = await headers();
     const origin = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}`;
     checkinUrl = `${origin}/attendance/checkin?token=${qr.token}`;

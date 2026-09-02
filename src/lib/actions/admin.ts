@@ -3,6 +3,7 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requirePermission } from "@/lib/auth/permissions";
 
 function staffFieldsFromFormData(formData: FormData) {
   return {
@@ -33,17 +34,10 @@ function staffFieldsFromFormData(formData: FormData) {
   };
 }
 
-async function requireSuperAdmin(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  return staffRow?.role === "super_admin";
-}
-
 export async function createStaffAccount(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  if (!(await requireSuperAdmin(supabase))) return { error: "Only Super Admin can add staff." };
+  const denied = await requirePermission("staff.manage", "Only Super Admin can add staff.");
+  if (denied) return { error: denied.error };
 
   const email = String(formData.get("email_official") ?? "").trim();
   const fields = staffFieldsFromFormData(formData);
@@ -70,7 +64,8 @@ export async function createStaffAccount(_prevState: unknown, formData: FormData
 
 export async function updateStaffDetails(staffId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  if (!(await requireSuperAdmin(supabase))) return { error: "Only Super Admin can edit staff." };
+  const denied = await requirePermission("staff.manage", "Only Super Admin can edit staff.");
+  if (denied) return { error: denied.error };
 
   const fields = staffFieldsFromFormData(formData);
   if (!fields.full_name || !fields.role) return { error: "Name and role are required." };
@@ -85,7 +80,8 @@ export async function updateStaffDetails(staffId: string, _prevState: unknown, f
 
 export async function deleteStaffAccount(staffId: string) {
   const supabase = await createClient();
-  if (!(await requireSuperAdmin(supabase))) return { error: "Only Super Admin can delete staff." };
+  const denied = await requirePermission("staff.manage", "Only Super Admin can delete staff.");
+  if (denied) return { error: denied.error };
 
   const { error } = await supabase.from("staff").delete().eq("id", staffId);
   if (error) {
@@ -106,7 +102,8 @@ export async function deleteStaffAccount(staffId: string) {
 
 export async function approvePartnerAccount(accountId: string, status: string) {
   const supabase = await createClient();
-  if (!(await requireSuperAdmin(supabase))) return { error: "Only Super Admin can approve partner accounts." };
+  const denied = await requirePermission("partners.approve", "Only Super Admin can approve partner accounts.");
+  if (denied) return { error: denied.error };
 
   const { error } = await supabase.from("partner_university_accounts").update({ status }).eq("id", accountId);
   if (error) return { error: error.message };
@@ -201,6 +198,9 @@ export async function checkinViaQr(token: string): Promise<{ status: "in" | "out
 
 export async function rotateOfficeQrToken(_prevState: unknown, _formData: FormData) {
   const supabase = await createClient();
+  const denied = await requirePermission("attendance.qr_admin", "Only Super Admin can rotate the office QR code.");
+  if (denied) return { error: denied.error };
+
   const { error } = await supabase
     .from("office_qr_tokens")
     .update({ token: crypto.randomUUID(), updated_at: new Date().toISOString() })

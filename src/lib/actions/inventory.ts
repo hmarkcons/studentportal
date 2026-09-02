@@ -2,18 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-
-async function requireManagement(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  return staffRow?.role === "super_admin" || staffRow?.role === "management";
-}
+import { requirePermission } from "@/lib/auth/permissions";
 
 export async function createInventoryItem(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  if (!(await requireManagement(supabase))) return { error: "Only Management/Super Admin can add inventory items." };
+  const denied = await requirePermission("inventory.manage", "Only Management/Super Admin can add inventory items.");
+  if (denied) return { error: denied.error };
 
   const name = String(formData.get("name") ?? "").trim();
   const category = String(formData.get("category") ?? "").trim() || null;
@@ -32,7 +26,8 @@ export async function createInventoryItem(_prevState: unknown, formData: FormDat
 
 export async function updateInventoryItem(itemId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  if (!(await requireManagement(supabase))) return { error: "Only Management/Super Admin can edit inventory items." };
+  const denied = await requirePermission("inventory.manage", "Only Management/Super Admin can edit inventory items.");
+  if (denied) return { error: denied.error };
 
   const name = String(formData.get("name") ?? "").trim();
   const category = String(formData.get("category") ?? "").trim() || null;
@@ -54,7 +49,8 @@ export async function updateInventoryItem(itemId: string, _prevState: unknown, f
 
 export async function deleteInventoryItem(itemId: string) {
   const supabase = await createClient();
-  if (!(await requireManagement(supabase))) return { error: "Only Management/Super Admin can delete inventory items." };
+  const denied = await requirePermission("inventory.manage", "Only Management/Super Admin can delete inventory items.");
+  if (denied) return { error: denied.error };
 
   const { error } = await supabase.from("inventory_items").delete().eq("id", itemId);
   if (error) return { error: error.message };

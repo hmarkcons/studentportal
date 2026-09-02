@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { TrackerFieldDef, TrackerFieldType } from "@/lib/countryTrackers";
+import { requirePermission } from "@/lib/auth/permissions";
 
 type TrackerDefinitionRow = {
   id: string;
@@ -55,17 +56,10 @@ export async function listTrackerCountries(): Promise<string[]> {
   return Array.from(new Set((data ?? []).map((r) => r.country_code))).sort();
 }
 
-async function requireSuperAdmin(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  return staffRow?.role === "super_admin";
-}
-
 export async function createTrackerField(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  if (!(await requireSuperAdmin(supabase))) return { error: "Only Super Admin can edit document trackers." };
+  const denied = await requirePermission("document_trackers.manage", "Only Super Admin can edit document trackers.");
+  if (denied) return { error: denied.error };
 
   const country_code = String(formData.get("country_code") ?? "").trim().toUpperCase();
   const field_key = String(formData.get("field_key") ?? "").trim();
@@ -113,7 +107,7 @@ export async function createTrackerField(_prevState: unknown, formData: FormData
 
 export async function updateTrackerField(id: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  if (!(await requireSuperAdmin(supabase))) return { error: "Only Super Admin can edit document trackers." };
+  const denied = await requirePermission("document_trackers.manage", "Only Super Admin can edit document trackers."); if (denied) return { error: denied.error };
 
   const label = String(formData.get("label") ?? "").trim();
   const field_type = String(formData.get("field_type") ?? "");
@@ -146,7 +140,7 @@ export async function updateTrackerField(id: string, _prevState: unknown, formDa
 
 export async function deleteTrackerField(id: string) {
   const supabase = await createClient();
-  if (!(await requireSuperAdmin(supabase))) return { error: "Only Super Admin can edit document trackers." };
+  const denied = await requirePermission("document_trackers.manage", "Only Super Admin can edit document trackers."); if (denied) return { error: denied.error };
 
   const { error } = await supabase.from("tracker_definitions").delete().eq("id", id);
   if (error) return { error: error.message };
