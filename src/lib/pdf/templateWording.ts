@@ -44,6 +44,19 @@ function extractRuns(node: Node, active: { bold: boolean; italic: boolean; under
 // inside a billing clause instead of always at the end.
 const isFeeTablePlaceholder = (text: string) => text.trim().toLowerCase() === "{{fee_table}}";
 
+// Staff repeatedly pasted/typed a literal table of sample fee figures
+// (typed by hand, or carried over from a .docx upload) instead of using the
+// {{fee_table}} placeholder or the editor's "+ Payment Chart" button — every
+// one of those tables, and every one of HMARK's real contracts, opens with a
+// "Total Professional Fee" row, so a table matching that heading is treated
+// as the fee table's intended position and replaced with the real one
+// automatically, with no action required from whoever authored the wording.
+function looksLikeFeeTable(rows: { cells: TextRun[][] }[]): boolean {
+  return rows.some((row) =>
+    row.cells.some((cell) => /professional fee/i.test(cell.map((run) => run.text).join("")))
+  );
+}
+
 // Converts a super-admin-authored wording blob (rich HTML from the TipTap
 // editor, or from a Word-upload's mammoth.convertToHtml output) into the
 // same AgreementBlock[] shape AgreementDocument already renders — so no
@@ -128,7 +141,7 @@ export function wordingToBlocks(wording: string, vars: Record<string, string>): 
         const header = cellEls.every((c) => c.tagName?.toLowerCase() === "th");
         rows.push({ cells: cellEls.map((c) => extractRuns(c)), header });
       }
-      if (rows.length) blocks.push({ kind: "richTable", rows });
+      if (rows.length) blocks.push(looksLikeFeeTable(rows) ? { kind: "feeTable" } : { kind: "richTable", rows });
     } else {
       // Any other block-level tag (div, blockquote, etc.) — treat its text
       // content as a plain paragraph rather than silently dropping it.
