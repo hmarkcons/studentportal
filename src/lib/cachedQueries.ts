@@ -56,7 +56,12 @@ export const getCachedAgreementTemplates = unstable_cache(
 export const getCachedCounselors = unstable_cache(
   async () => {
     const supabase = createAdminClient();
-    const { data } = await supabase.from("staff").select("id, full_name").order("full_name");
+    const { data } = await supabase
+      .from("staff")
+      .select("id, full_name")
+      .eq("role", "counselor")
+      .eq("status", "active")
+      .order("full_name");
     return data ?? [];
   },
   ["counselors-list"],
