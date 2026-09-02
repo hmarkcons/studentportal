@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { getStaffSession } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { StatCard } from "@/components/ui/StatCard";
@@ -12,7 +12,8 @@ function one<T>(v: T | T[] | null) {
 }
 
 export default async function StaffAdminPage() {
-  const supabase = await createClient();
+  const { supabase, staff: viewer } = await getStaffSession();
+  const isSuperAdminViewer = viewer?.role === "super_admin";
 
   const { data: staff } = await supabase
     .from("staff")
@@ -29,6 +30,14 @@ export default async function StaffAdminPage() {
     .from("partner_university_accounts")
     .select("id, staff_name, status, university:universities(name)")
     .eq("status", "pending");
+
+  const [{ data: permissionDefs }, { data: roleOverrides }, { data: staffOverrides }] = isSuperAdminViewer
+    ? await Promise.all([
+        supabase.from("permission_definitions").select("key, category, label, description, default_roles"),
+        supabase.from("role_permission_overrides").select("role, permission_key, allowed"),
+        supabase.from("staff_permission_overrides").select("staff_id, permission_key, allowed"),
+      ])
+    : [{ data: null }, { data: null }, { data: null }];
 
   const total = staff?.length ?? 0;
   const active = (staff ?? []).filter((s) => s.status === "active").length;
@@ -48,7 +57,13 @@ export default async function StaffAdminPage() {
         <StatCard label="Inactive" value={inactive} tone="warning" icon="⏸️" />
       </div>
 
-      <StaffTable staff={staff ?? []} />
+      <StaffTable
+        staff={staff ?? []}
+        canManagePermissions={isSuperAdminViewer}
+        permissionDefs={permissionDefs ?? []}
+        roleOverrides={roleOverrides ?? []}
+        staffOverrides={staffOverrides ?? []}
+      />
 
       {pendingPartners && pendingPartners.length > 0 && (
         <Card className="mt-6">

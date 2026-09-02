@@ -47,3 +47,40 @@ export async function resetRolePermissionOverride(role: StaffRole, key: Permissi
   revalidatePath("/admin/permissions");
   return { success: true };
 }
+
+async function assertNotSuperAdmin(supabase: Awaited<ReturnType<typeof createClient>>, staffId: string) {
+  const { data: row } = await supabase.from("staff").select("role").eq("id", staffId).maybeSingle();
+  return row?.role !== "super_admin";
+}
+
+export async function setStaffPermissionOverride(staffId: string, key: PermissionKey, allowed: boolean) {
+  const supabase = await createClient();
+  if (!(await requireSuperAdmin(supabase))) return { error: "Only Super Admin can change staff permissions." };
+  if (!(await assertNotSuperAdmin(supabase, staffId))) return { error: "Super Admin always has full access and can't be changed." };
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { error } = await supabase.from("staff_permission_overrides").upsert(
+    { staff_id: staffId, permission_key: key, allowed, updated_by: user?.id ?? null, updated_at: new Date().toISOString() },
+    { onConflict: "staff_id,permission_key" }
+  );
+  if (error) return { error: error.message };
+
+  revalidatePath("/admin/permissions");
+  revalidatePath("/admin/staff");
+  return { success: true };
+}
+
+export async function resetStaffPermissionOverride(staffId: string, key: PermissionKey) {
+  const supabase = await createClient();
+  if (!(await requireSuperAdmin(supabase))) return { error: "Only Super Admin can change staff permissions." };
+
+  const { error } = await supabase.from("staff_permission_overrides").delete().eq("staff_id", staffId).eq("permission_key", key);
+  if (error) return { error: error.message };
+
+  revalidatePath("/admin/permissions");
+  revalidatePath("/admin/staff");
+  return { success: true };
+}

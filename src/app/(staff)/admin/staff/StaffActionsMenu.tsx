@@ -6,6 +6,11 @@ import { formatDateOnly } from "@/lib/formatDate";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { STAFF_ROLE_LABELS, CURRENCY_SYMBOLS } from "@/lib/constants";
 import { StaffForm, type StaffRecord } from "./StaffForm";
+import { StaffPermissionsPanel } from "../permissions/StaffPermissionsPanel";
+
+type PermissionDef = { key: string; category: string; label: string; description: string; default_roles: string[] };
+type RoleOverrideRow = { role: string; permission_key: string; allowed: boolean };
+type StaffOverrideRow = { staff_id: string; permission_key: string; allowed: boolean };
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -16,11 +21,25 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-export function StaffActionsMenu({ staff }: { staff: StaffRecord }) {
+export function StaffActionsMenu({
+  staff,
+  canManagePermissions = false,
+  permissionDefs = [],
+  roleOverrides = [],
+  staffOverrides = [],
+}: {
+  staff: StaffRecord;
+  canManagePermissions?: boolean;
+  permissionDefs?: PermissionDef[];
+  roleOverrides?: RoleOverrideRow[];
+  staffOverrides?: StaffOverrideRow[];
+}) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [permissionsOpen, setPermissionsOpen] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const showPermissions = canManagePermissions && staff.role !== "super_admin";
 
   async function handleDelete() {
     if (!confirm(`Delete ${staff.full_name}? This fails if they have historical records — use Inactive status instead if so.`)) return;
@@ -56,6 +75,17 @@ export function StaffActionsMenu({ staff }: { staff: StaffRecord }) {
             >
               ✏️ Edit
             </button>
+            {showPermissions && (
+              <button
+                onClick={() => {
+                  setPermissionsOpen(true);
+                  setMenuOpen(false);
+                }}
+                className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
+              >
+                🔑 Permissions
+              </button>
+            )}
             <button onClick={handleDelete} className="block w-full px-3 py-1.5 text-left text-sm text-danger hover:bg-bg">
               🗑️ Delete
             </button>
@@ -105,6 +135,22 @@ export function StaffActionsMenu({ staff }: { staff: StaffRecord }) {
       <SlideOver open={editOpen} onClose={() => setEditOpen(false)} title={`Edit — ${staff.full_name}`}>
         <StaffForm staff={staff} onSuccess={() => setEditOpen(false)} />
       </SlideOver>
+
+      {showPermissions && (
+        <SlideOver open={permissionsOpen} onClose={() => setPermissionsOpen(false)} title={`Permissions — ${staff.full_name}`}>
+          <p className="mb-4 text-xs text-muted">
+            Overrides set here apply only to {staff.full_name} and win over their role&apos;s ({STAFF_ROLE_LABELS[staff.role as never] ?? staff.role})
+            standard or overridden permissions.
+          </p>
+          <StaffPermissionsPanel
+            staffId={staff.id}
+            staffRole={staff.role}
+            definitions={permissionDefs}
+            roleOverrides={Object.fromEntries(roleOverrides.map((o) => [o.permission_key, o.allowed]))}
+            staffOverrides={Object.fromEntries(staffOverrides.map((o) => [o.permission_key, o.allowed]))}
+          />
+        </SlideOver>
+      )}
     </div>
   );
 }

@@ -8,7 +8,23 @@ import { STAFF_ROLE_LABELS } from "@/lib/constants";
 import { StaffActionsMenu } from "./StaffActionsMenu";
 import type { StaffRecord } from "./StaffForm";
 
-export function StaffTable({ staff }: { staff: StaffRecord[] }) {
+type PermissionDef = { key: string; category: string; label: string; description: string; default_roles: string[] };
+type RoleOverrideRow = { role: string; permission_key: string; allowed: boolean };
+type StaffOverrideRow = { staff_id: string; permission_key: string; allowed: boolean };
+
+export function StaffTable({
+  staff,
+  canManagePermissions = false,
+  permissionDefs = [],
+  roleOverrides = [],
+  staffOverrides = [],
+}: {
+  staff: StaffRecord[];
+  canManagePermissions?: boolean;
+  permissionDefs?: PermissionDef[];
+  roleOverrides?: RoleOverrideRow[];
+  staffOverrides?: StaffOverrideRow[];
+}) {
   const [nameInput, setNameInput] = useState("");
   const [statusInput, setStatusInput] = useState("all");
   const [appliedName, setAppliedName] = useState("");
@@ -81,7 +97,13 @@ export function StaffTable({ staff }: { staff: StaffRecord[] }) {
                   <Badge tone={s.status === "active" ? "success" : "neutral"}>{s.status === "active" ? "Active" : "Inactive"}</Badge>
                 </td>
                 <td className="px-4 py-3">
-                  <StaffActionsMenu staff={s} />
+                  <StaffActionsMenu
+                    staff={s}
+                    canManagePermissions={canManagePermissions}
+                    permissionDefs={permissionDefs}
+                    roleOverrides={roleOverrides.filter((o) => o.role === s.role)}
+                    staffOverrides={staffOverrides.filter((o) => o.staff_id === s.id)}
+                  />
                 </td>
               </tr>
             ))}

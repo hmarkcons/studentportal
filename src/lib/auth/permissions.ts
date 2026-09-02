@@ -2,11 +2,12 @@ import { cache } from "react";
 import { getStaffSession } from "./session";
 import type { PermissionKey } from "@/lib/permissions";
 
-// Effective permissions for the CURRENT staff member's role: Super Admin
-// always gets everything; anyone else gets the seeded default_roles for
-// each key, unless Super Admin has set an explicit override for their role
-// (see /admin/permissions). Cached per request the same way getStaffSession
-// is, since a page can need several of these checks.
+// Effective permissions for the CURRENT staff member: Super Admin always
+// gets everything; anyone else gets the seeded default_roles for each key,
+// unless Super Admin has set a role-level override (see /admin/permissions)
+// — and a staff-level override, set for that one person specifically, wins
+// over both. Cached per request the same way getStaffSession is, since a
+// page can need several of these checks.
 export const getEffectivePermissions = cache(async (): Promise<Record<string, boolean>> => {
   const { supabase, staff } = await getStaffSession();
   if (!staff) return {};
@@ -18,15 +19,20 @@ export const getEffectivePermissions = cache(async (): Promise<Record<string, bo
     return Object.fromEntries(defs.map((d) => [d.key, true]));
   }
 
-  const { data: overrides } = await supabase
-    .from("role_permission_overrides")
-    .select("permission_key, allowed")
-    .eq("role", staff.role);
-  const overrideMap = new Map((overrides ?? []).map((o) => [o.permission_key, o.allowed]));
+  const [{ data: roleOverrides }, { data: staffOverrides }] = await Promise.all([
+    supabase.from("role_permission_overrides").select("permission_key, allowed").eq("role", staff.role),
+    supabase.from("staff_permission_overrides").select("permission_key, allowed").eq("staff_id", staff.id),
+  ]);
+  const roleOverrideMap = new Map((roleOverrides ?? []).map((o) => [o.permission_key, o.allowed]));
+  const staffOverrideMap = new Map((staffOverrides ?? []).map((o) => [o.permission_key, o.allowed]));
 
   const result: Record<string, boolean> = {};
   for (const d of defs) {
-    result[d.key] = overrideMap.has(d.key) ? overrideMap.get(d.key)! : (d.default_roles as string[]).includes(staff.role);
+    result[d.key] = staffOverrideMap.has(d.key)
+      ? staffOverrideMap.get(d.key)!
+      : roleOverrideMap.has(d.key)
+        ? roleOverrideMap.get(d.key)!
+        : (d.default_roles as string[]).includes(staff.role);
   }
   return result;
 });
