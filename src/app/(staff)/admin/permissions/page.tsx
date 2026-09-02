@@ -6,6 +6,7 @@ import { STAFF_ROLES, STAFF_ROLE_LABELS, type StaffRole } from "@/lib/constants"
 import type { PermissionKey } from "@/lib/permissions";
 import { PermissionToggle } from "./PermissionToggle";
 import { StaffPermissionsPanel } from "./StaffPermissionsPanel";
+import { StaffPicker } from "./StaffPicker";
 
 type PermissionDefRow = {
   key: string;
@@ -112,26 +113,12 @@ export default async function RolePermissionsPage(props: { searchParams: Promise
       </p>
 
       <Card>
-        <form method="GET" className="mb-4 flex items-center gap-2">
-          <select
-            name="staff"
-            defaultValue={selectedStaffId ?? ""}
-            onChange={(e) => e.currentTarget.form?.submit()}
-            className="rounded-md border border-border bg-card px-3 py-1.5 text-sm text-ink"
-          >
-            <option value="">Choose a staff member…</option>
-            {(allStaff ?? []).map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.full_name} · {STAFF_ROLE_LABELS[s.role as StaffRole] ?? s.role}
-              </option>
-            ))}
-          </select>
-          <noscript>
-            <button type="submit" className="rounded-md border border-border px-3 py-1.5 text-sm text-ink">
-              Go
-            </button>
-          </noscript>
-        </form>
+        <div className="mb-4">
+          <StaffPicker
+            staffList={(allStaff ?? []).map((s) => ({ id: s.id, label: `${s.full_name} · ${STAFF_ROLE_LABELS[s.role as StaffRole] ?? s.role}` }))}
+            selectedStaffId={selectedStaffId ?? null}
+          />
+        </div>
 
         {selectedStaff ? (
           <StaffPermissionsPanel
