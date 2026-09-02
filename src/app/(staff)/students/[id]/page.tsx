@@ -11,7 +11,7 @@ import { CountryTrackerForm } from "@/components/CountryTrackerForm";
 import { listTrackerDefinitions } from "@/lib/actions/countryTracker";
 import { PortalAccessPanel } from "./PortalAccessPanel";
 import { StudentProfileForm } from "./StudentProfileForm";
-import { GenerateAgreementForm, UploadSignedAgreementForm, DeleteAgreementButton } from "./GenerateAgreementForm";
+import { GenerateAgreementForm, EditAgreementForm, UploadSignedAgreementForm, DeleteAgreementButton } from "./GenerateAgreementForm";
 import { GenerateAgreementPdfButton } from "./GenerateAgreementPdfButton";
 import { GenerateInvoiceForm, InvoiceCard } from "./InvoicePanel";
 import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
@@ -69,7 +69,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       supabase
         .from("agreements")
         .select(
-          "id, status, signing_method, signed_file_path, pdf_path, email_verified, discount_amount, created_at, template:agreement_templates(file_path, destination_id)"
+          "id, status, signing_method, signed_file_path, pdf_path, email_verified, discount_amount, created_at, template_id, admin_charge_override, consultancy_fee_override, installment_count, template:agreement_templates(file_path, destination_id)"
         )
         .eq("student_id", id)
         .order("created_at", { ascending: false }),
@@ -337,35 +337,38 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
             {agreements.map((a) => {
               const links = agreementLinks.get(a.id);
               return (
-                <div key={a.id} className="flex items-center justify-between text-sm">
-                  <span className="text-ink">
-                    v{a.status === "signed" ? "signed" : "pending"} · {a.signing_method ?? "—"} ·{" "}
-                    {new Date(a.created_at).toLocaleDateString()}
-                    {a.discount_amount != null && ` · discount ${a.discount_amount}`}
-                  </span>
-                  <div className="flex items-center gap-3">
-                    {links?.signedUrl ? (
-                      <a href={links.signedUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
-                        View signed copy
-                      </a>
-                    ) : (
-                      !links?.pdfUrl &&
-                      links?.templateUrl && (
-                        <a href={links.templateUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
-                          View template
+                <div key={a.id} className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-ink">
+                      v{a.status === "signed" ? "signed" : "pending"} · {a.signing_method ?? "—"} ·{" "}
+                      {new Date(a.created_at).toLocaleDateString()}
+                      {a.discount_amount != null && ` · discount ${a.discount_amount}`}
+                    </span>
+                    <div className="flex flex-wrap items-center justify-end gap-3">
+                      {links?.signedUrl ? (
+                        <a href={links.signedUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
+                          View signed copy
                         </a>
-                      )
-                    )}
-                    {links?.pdfUrl && (
-                      <a href={links.pdfUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
-                        View generated agreement
-                      </a>
-                    )}
-                    {canModifyAgreement && a.status !== "signed" && (
-                      <GenerateAgreementPdfButton agreementId={a.id} studentId={id} revalidateTo={`/students/${id}`} hasPdf={Boolean(links?.pdfUrl)} />
-                    )}
-                    <Badge tone={a.status === "signed" ? "success" : "warning"}>{a.status}</Badge>
-                    {isSuperAdmin && <DeleteAgreementButton agreementId={a.id} studentId={id} />}
+                      ) : (
+                        !links?.pdfUrl &&
+                        links?.templateUrl && (
+                          <a href={links.templateUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
+                            View template
+                          </a>
+                        )
+                      )}
+                      {links?.pdfUrl && (
+                        <a href={links.pdfUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
+                          View generated agreement
+                        </a>
+                      )}
+                      {canModifyAgreement && a.status !== "signed" && (
+                        <GenerateAgreementPdfButton agreementId={a.id} studentId={id} revalidateTo={`/students/${id}`} hasPdf={Boolean(links?.pdfUrl)} />
+                      )}
+                      <Badge tone={a.status === "signed" ? "success" : "warning"}>{a.status}</Badge>
+                      {isSuperAdmin && a.status !== "signed" && <EditAgreementForm agreement={a} studentId={id} templates={templates ?? []} />}
+                      {isSuperAdmin && <DeleteAgreementButton agreementId={a.id} studentId={id} />}
+                    </div>
                   </div>
                 </div>
               );

@@ -18,9 +18,7 @@ function formatAgreementDate(d: Date) {
   return `${day}-${month}-${d.getFullYear()}`;
 }
 
-export async function generateAgreement(studentId: string, _prevState: unknown, formData: FormData) {
-  const supabase = await createClient();
-
+function parseAgreementFields(formData: FormData) {
   const template_id = String(formData.get("template_id") ?? "") || null;
   const signing_method = String(formData.get("signing_method") ?? "");
   const admin_charge_override = formData.get("admin_charge_override")
@@ -32,8 +30,14 @@ export async function generateAgreement(studentId: string, _prevState: unknown, 
   const discount_amount = formData.get("discount_amount") ? Number(formData.get("discount_amount")) : null;
   const installmentCountRaw = Number(formData.get("installment_count") ?? 1);
   const installment_count = [1, 2, 3].includes(installmentCountRaw) ? installmentCountRaw : 1;
+  return { template_id, signing_method, admin_charge_override, consultancy_fee_override, discount_amount, installment_count };
+}
 
-  if (!["paper", "e_signature"].includes(signing_method)) {
+export async function generateAgreement(studentId: string, _prevState: unknown, formData: FormData) {
+  const supabase = await createClient();
+  const fields = parseAgreementFields(formData);
+
+  if (!["paper", "e_signature"].includes(fields.signing_method)) {
     return { error: "Choose a signing method." };
   }
 
@@ -43,16 +47,41 @@ export async function generateAgreement(studentId: string, _prevState: unknown, 
 
   const { error } = await supabase.from("agreements").insert({
     student_id: studentId,
-    template_id,
-    signing_method,
-    admin_charge_override,
-    consultancy_fee_override,
-    discount_amount,
-    installment_count,
+    ...fields,
     generated_by: user?.id,
     status: "pending_signature",
   });
 
+  if (error) return { error: error.message };
+
+  revalidatePath(`/students/${studentId}`);
+  return { success: true };
+}
+
+// Lets Super Admin correct an already-created (unsigned) agreement's
+// template/fees/installments/signing method without deleting and
+// re-creating it — e.g. a wrong override typed at generation time.
+// Regenerating the PDF afterward is a separate, explicit step (the
+// existing "Regenerate PDF" button) so an edit here never silently
+// invalidates a PDF the student may already be reviewing.
+export async function updateAgreement(agreementId: string, studentId: string, _prevState: unknown, formData: FormData) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  if (staffRow?.role !== "super_admin") return { error: "Only Super Admin can edit an agreement." };
+
+  const { data: existing } = await supabase.from("agreements").select("status").eq("id", agreementId).maybeSingle();
+  if (existing?.status === "signed") return { error: "This agreement is already signed and can no longer be edited." };
+
+  const fields = parseAgreementFields(formData);
+  if (!["paper", "e_signature"].includes(fields.signing_method)) {
+    return { error: "Choose a signing method." };
+  }
+
+  const { error } = await supabase.from("agreements").update(fields).eq("id", agreementId);
   if (error) return { error: error.message };
 
   revalidatePath(`/students/${studentId}`);
