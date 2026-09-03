@@ -102,6 +102,10 @@ export async function createStaffCommission(revalidateTo: string, _prevState: un
   const shared_with_staff_id = String(formData.get("shared_with_staff_id") ?? "") || null;
 
   if (!staff_id || !student_id || !amount) return { error: "Staff, student, and amount are required." };
+  // A commission with no registration date never matches any month's date
+  // range filter on the Payroll/Staff Commission pages, so it would be
+  // silently invisible everywhere — not just missing a nice-to-have field.
+  if (!registration_date) return { error: "Registration date is required." };
   if (shared_with_staff_id === staff_id) return { error: "Choose a different staff member to share this commission with." };
 
   // Single security-definer RPC — the credit-consume and the commission
@@ -361,6 +365,7 @@ export async function updateStaffCommission(id: string, revalidateTo: string, _p
   const payment_method = String(formData.get("payment_method") ?? "").trim() || null;
 
   if (!amount || !currency) return { error: "Amount and currency are required." };
+  if (!registration_date) return { error: "Registration date is required." };
   if (!["unpaid", "paid"].includes(status)) return { error: "Choose a valid status." };
 
   const { error } = await supabase

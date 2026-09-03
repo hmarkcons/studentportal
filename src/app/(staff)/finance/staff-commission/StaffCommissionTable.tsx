@@ -183,7 +183,7 @@ function AddCommissionForm({
           <option value="EUR">EUR</option>
           <option value="USD">USD</option>
         </Select>
-        <Input name="registration_date" type="date" />
+        <Input name="registration_date" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required />
         <Button type="submit" variant="primary" size="sm" disabled={pending}>
           {pending ? "Adding…" : "+ Add commission"}
         </Button>
@@ -263,7 +263,7 @@ function EditRow({ row, onDone }: { row: CommissionRow; onDone: () => void }) {
     <form action={formAction} className="flex flex-wrap items-center gap-1 rounded-md border border-border p-2">
       <Input name="amount" type="number" step="0.01" defaultValue={row.amount} required className="w-24" />
       <Input name="currency" defaultValue={row.currency} required className="w-16" />
-      <Input name="registration_date" type="date" defaultValue={row.registration_date ?? ""} />
+      <Input name="registration_date" type="date" defaultValue={row.registration_date ?? ""} required />
       <Select name="status" defaultValue={row.status}>
         <option value="unpaid">unpaid</option>
         <option value="paid">paid</option>

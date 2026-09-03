@@ -43,7 +43,7 @@ function EditCommissionForm({ record, revalidateTo }: { record: CommissionRecord
     <form action={formAction} className="flex flex-wrap items-center gap-1">
       <Input name="amount" type="number" step="0.01" defaultValue={record.amount} required className="w-24" />
       <Input name="currency" defaultValue={record.currency} required className="w-16" />
-      <Input name="registration_date" type="date" defaultValue={record.registration_date ?? ""} />
+      <Input name="registration_date" type="date" defaultValue={record.registration_date ?? ""} required />
       <Select name="status" defaultValue={record.status}>
         <option value="unpaid">unpaid</option>
         <option value="paid">paid</option>
@@ -169,7 +169,7 @@ function AddCommissionForm({
           <option value="EUR">EUR</option>
           <option value="USD">USD</option>
         </Select>
-        <Input name="registration_date" type="date" defaultValue={defaultDate} />
+        <Input name="registration_date" type="date" defaultValue={defaultDate} required />
         <Button type="submit" variant="primary" size="sm" disabled={pending}>
           {pending ? "Adding…" : "+ Add commission record"}
         </Button>
