@@ -16,6 +16,7 @@ export function PayrollForm({
   currencySymbol,
   initial,
   canManage,
+  liveTotalCommission,
 }: {
   staffId: string;
   payrollMonth: string;
@@ -34,6 +35,13 @@ export function PayrollForm({
     tax: number;
     payment_status: string;
   };
+  // The live, freshly-computed commission ledger total (with bonus applied)
+  // as of this render — independent of whatever total_commission was saved
+  // last time. Once a payroll row exists, its total_commission is a frozen
+  // snapshot that a later-added commission or a bonus target crossed after
+  // saving won't update on its own, so this is surfaced as a one-click
+  // refresh rather than silently overwritten.
+  liveTotalCommission: number;
 }) {
   const action = upsertStaffPayroll.bind(null, staffId, payrollMonth, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
@@ -103,6 +111,14 @@ export function PayrollForm({
           className="w-32 text-right"
         />
       </div>
+      {Math.round(liveTotalCommission * 100) / 100 !== Math.round(totalCommission * 100) / 100 && (
+        <p className="pb-1.5 text-right text-xs text-warning">
+          Ledger total is now ₨ {liveTotalCommission.toLocaleString()} (with bonus) —{" "}
+          <button type="button" onClick={() => setTotalCommission(liveTotalCommission)} className="text-primary hover:underline">
+            refresh
+          </button>
+        </p>
+      )}
       <div className={rowClass}>
         <label className="text-ink">Overtime ({currencySymbol})</label>
         <Input

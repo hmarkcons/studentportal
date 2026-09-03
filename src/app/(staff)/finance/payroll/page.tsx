@@ -250,6 +250,7 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
                   tax: existingPayroll?.tax ?? 0,
                   payment_status: existingPayroll?.payment_status ?? "pending",
                 }}
+                liveTotalCommission={totalCommissionWithBonus}
               />
             </Card>
 
