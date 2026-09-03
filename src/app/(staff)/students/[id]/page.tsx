@@ -10,7 +10,6 @@ import { DocumentChecklist, type DocRow } from "@/components/DocumentChecklist";
 import { CountryTrackerForm } from "@/components/CountryTrackerForm";
 import { listTrackerDefinitions } from "@/lib/actions/countryTracker";
 import { PortalAccessPanel } from "./PortalAccessPanel";
-import { StudentProfileForm } from "./StudentProfileForm";
 import { GenerateAgreementForm, UploadSignedAgreementForm } from "./GenerateAgreementForm";
 import { GenerateAgreementPdfButton } from "./GenerateAgreementPdfButton";
 import { AgreementActionsMenu } from "./AgreementActionsMenu";
@@ -19,7 +18,6 @@ import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
 import { PortalCredentialsSection } from "./PortalCredentialsSection";
 import { DashboardTaskList, type DashboardTaskRow } from "./DashboardTaskList";
 import { listCredentialTypesAction } from "@/lib/actions/countryTracker";
-import { LeadEditForm } from "@/components/LeadEditForm";
 import { RegistrationEditForm } from "./RegistrationEditForm";
 import { getCachedDestinations, getCachedCounselors, getCachedAgreementTemplates, getCachedFeeProducts } from "@/lib/cachedQueries";
 import { getEffectivePermissions } from "@/lib/auth/permissions";
@@ -60,7 +58,6 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   const [
     [
       { data: student },
-      { data: profile },
       { data: leadRegistration },
       { data: selectedDestinations },
       { data: agreements },
@@ -77,12 +74,9 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     Promise.all([
       supabase
         .from("students")
-        .select(
-          "auth_user_id, full_name, contact_number, email, platform_source, current_qualification, level_applying_for, course_of_interest, date_of_birth, address, home_phone"
-        )
+        .select("auth_user_id, full_name")
         .eq("id", id)
         .maybeSingle(),
-      supabase.from("student_profiles").select("*").eq("student_id", id).maybeSingle(),
       supabase.from("leads").select("assigned_counselor_id, discount_amount, discount_reason").eq("id", id).maybeSingle(),
       supabase.from("lead_destinations").select("destination_id").eq("lead_id", id),
       supabase
@@ -339,23 +333,17 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <Card>
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-medium text-ink">Profile</h3>
-            {student && <LeadEditForm lead={{ id, ...student }} revalidateTo={`/students/${id}`} showRegistrationFields />}
-          </div>
-          <StudentProfileForm studentId={id} profile={profile} address={student?.address} />
-          <div className="mt-4 border-t border-border pt-3">
-            <RegistrationEditForm
-              studentId={id}
-              revalidateTo={`/students/${id}`}
-              destinations={allDestinations ?? []}
-              selectedDestinationIds={(selectedDestinations ?? []).map((d) => d.destination_id)}
-              counselors={counselors ?? []}
-              assignedCounselorId={leadRegistration?.assigned_counselor_id ?? null}
-              discountAmount={leadRegistration?.discount_amount ?? null}
-              discountReason={leadRegistration?.discount_reason ?? null}
-            />
-          </div>
+          <h3 className="mb-3 text-sm font-medium text-ink">Registration</h3>
+          <RegistrationEditForm
+            studentId={id}
+            revalidateTo={`/students/${id}`}
+            destinations={allDestinations ?? []}
+            selectedDestinationIds={(selectedDestinations ?? []).map((d) => d.destination_id)}
+            counselors={counselors ?? []}
+            assignedCounselorId={leadRegistration?.assigned_counselor_id ?? null}
+            discountAmount={leadRegistration?.discount_amount ?? null}
+            discountReason={leadRegistration?.discount_reason ?? null}
+          />
         </Card>
 
         <Card>

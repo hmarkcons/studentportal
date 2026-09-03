@@ -1,4 +1,3 @@
-import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import {
@@ -7,24 +6,25 @@ import {
   qualificationChecklist,
   type QualificationType,
 } from "@/lib/qualifications";
-import { QualificationRow, type QualificationRowData } from "./QualificationRow";
-import { AddQualificationButton } from "./AddQualificationButton";
+import { QualificationRow, type QualificationRowData } from "@/components/QualificationRow";
+import { AddQualificationButton } from "@/components/AddQualificationButton";
 
-export default async function StudentEducationTab(props: PageProps<"/students/[id]/education">) {
-  const { id } = await props.params;
-  const supabase = await createClient();
-
-  const [{ data: student }, { data: qualifications }] = await Promise.all([
-    supabase.from("students").select("level_applying_for").eq("id", id).maybeSingle(),
-    supabase.from("student_qualifications").select("*").eq("student_id", id),
-  ]);
-
+export function AcademicsSection({
+  studentId,
+  revalidateTo,
+  levelApplyingFor,
+  qualifications,
+}: {
+  studentId: string;
+  revalidateTo: string;
+  levelApplyingFor: string | null;
+  qualifications: { qualification_type: string; [key: string]: unknown }[];
+}) {
   const byType = new Map<QualificationType, QualificationRowData>(
-    (qualifications ?? []).map((q) => [q.qualification_type as QualificationType, q as QualificationRowData])
+    qualifications.map((q) => [q.qualification_type as QualificationType, q as QualificationRowData])
   );
   const presentTypes = new Set<QualificationType>(byType.keys());
-  const checklist = qualificationChecklist(student?.level_applying_for ?? null, presentTypes);
-  const revalidateTo = `/students/${id}/education`;
+  const checklist = qualificationChecklist(levelApplyingFor, presentTypes);
 
   const availableAdditionalTypes = ADDITIONAL_QUALIFICATION_TYPES.filter((t) => !presentTypes.has(t));
   const existingAdditional = ADDITIONAL_QUALIFICATION_TYPES.filter((t) => presentTypes.has(t));
@@ -46,16 +46,16 @@ export default async function StudentEducationTab(props: PageProps<"/students/[i
       <div>
         <h3 className="mb-3 text-sm font-medium text-ink">Standard qualifications</h3>
         {STANDARD_QUALIFICATION_TYPES.map((type) => (
-          <QualificationRow key={type} studentId={id} revalidateTo={revalidateTo} type={type} data={byType.get(type) ?? null} />
+          <QualificationRow key={type} studentId={studentId} revalidateTo={revalidateTo} type={type} data={byType.get(type) ?? null} />
         ))}
       </div>
 
       <div>
         <h3 className="mb-3 text-sm font-medium text-ink">Additional qualifications</h3>
         {existingAdditional.map((type) => (
-          <QualificationRow key={type} studentId={id} revalidateTo={revalidateTo} type={type} data={byType.get(type) ?? null} deletable />
+          <QualificationRow key={type} studentId={studentId} revalidateTo={revalidateTo} type={type} data={byType.get(type) ?? null} deletable />
         ))}
-        <AddQualificationButton studentId={id} revalidateTo={revalidateTo} availableTypes={[...availableAdditionalTypes]} />
+        <AddQualificationButton studentId={studentId} revalidateTo={revalidateTo} availableTypes={[...availableAdditionalTypes]} />
       </div>
     </div>
   );

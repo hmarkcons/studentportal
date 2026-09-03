@@ -17,7 +17,6 @@ export async function updateStudentProfile(studentId: string, _prevState: unknow
   const qualification_grade = String(formData.get("qualification_grade") ?? "").trim() || null;
   const financial_sponsor_name = String(formData.get("financial_sponsor_name") ?? "").trim() || null;
   const financial_sponsor_relation = String(formData.get("financial_sponsor_relation") ?? "").trim() || null;
-  const address = String(formData.get("address") ?? "").trim() || null;
 
   const { error } = await supabase.from("student_profiles").upsert(
     {
@@ -39,14 +38,7 @@ export async function updateStudentProfile(studentId: string, _prevState: unknow
 
   if (error) return { error: error.message };
 
-  // address lives on leads (shared with the student's own self-edit form),
-  // not student_profiles — updated alongside it here so staff have one
-  // visible field instead of it being buried behind the separate "Edit
-  // details" lead-edit toggle.
-  const { error: addressError } = await supabase.from("leads").update({ address }).eq("id", studentId);
-  if (addressError) return { error: addressError.message };
-
-  revalidatePath(`/students/${studentId}`);
+  revalidatePath(`/students/${studentId}/profile`);
   return { success: true };
 }
 

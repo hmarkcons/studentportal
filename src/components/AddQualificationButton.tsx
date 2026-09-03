@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ADDITIONAL_QUALIFICATION_TYPES, QUALIFICATION_TYPE_LABELS, type QualificationType } from "@/lib/qualifications";
-import { QualificationRow } from "./QualificationRow";
+import { QUALIFICATION_TYPE_LABELS, type QualificationType } from "@/lib/qualifications";
+import { QualificationRow } from "@/components/QualificationRow";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Input";
 
