@@ -43,6 +43,12 @@ export async function generateInvoice(studentId: string, agreementId: string, _p
   const firstDueDate = String(formData.get("first_due_date") ?? "") || null;
   const installment_plan = String(formData.get("installment_plan") ?? "").trim() || null;
 
+  // An installment with no due date never counts as overdue (see
+  // computeInvoiceStatus) — that's not just a missing display detail, it
+  // means the daily overdue-invoices cron never reminds the student and no
+  // report ever flags it, silently, forever.
+  if (!firstDueDate) return { error: "First installment due date is required." };
+
   const total = admin_charge + consultancy_fee;
   const perInstallment = Math.round((total / installmentCount) * 100) / 100;
   const installments = Array.from({ length: installmentCount }, (_, i) => ({
@@ -129,6 +135,11 @@ export async function updateInstallment(installmentId: string, studentId: string
   const payment_method = String(formData.get("payment_method") ?? "").trim() || null;
   const paid_date = String(formData.get("paid_date") ?? "") || null;
   const amount_paid = status === "paid" ? amount : status === "partial" ? Number(formData.get("amount_paid") ?? 0) : 0;
+
+  // Same reasoning as generateInvoice: a null due_date makes this
+  // installment invisible to computeInvoiceStatus's overdue check and the
+  // daily reminder cron, permanently, with no error shown anywhere.
+  if (!due_date) return { error: "Due date is required." };
 
   const { error } = await supabase
     .from("invoice_installments")

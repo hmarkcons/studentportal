@@ -78,7 +78,7 @@ export function GenerateInvoiceForm({
         <Input name="intake" placeholder="Intake (e.g. Winter 2026)" className="w-44" />
         <label className="flex flex-col gap-0.5 text-xs text-muted">
           First installment due date
-          <Input name="first_due_date" type="date" />
+          <Input name="first_due_date" type="date" required />
         </label>
         <label className="flex flex-col gap-0.5 text-xs text-muted">
           Installment plan
@@ -220,7 +220,7 @@ function EditInstallmentForm({
   return (
     <form action={formAction} className="flex flex-wrap items-center gap-1 rounded-md border border-border p-2">
       <Input name="amount" type="number" step="0.01" defaultValue={installment.amount} required className="w-24" />
-      <Input name="due_date" type="date" defaultValue={installment.due_date ?? ""} />
+      <Input name="due_date" type="date" defaultValue={installment.due_date ?? ""} required />
       <Select name="status" defaultValue={installment.status}>
         <option value="unpaid">unpaid</option>
         <option value="paid">paid</option>
