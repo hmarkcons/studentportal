@@ -4,15 +4,24 @@ import { createClient } from "@/lib/supabase/server";
 export default async function DocumentTurnaroundPage() {
   const supabase = await createClient();
 
+  // Turnaround is meant to measure how long STAFF took to review a document
+  // once it was actually submitted — created_at is when the checklist row
+  // itself was made, which for most rows is ensureStudentDocumentRequirements
+  // auto-creating a "missing" placeholder at registration, often long before
+  // the student ever uploaded anything. uploaded_at (set only by
+  // uploadDocument) is the real submission time; the checklist only lets a
+  // document be verified once it has a file_path, so every verified row has
+  // one.
   const { data: docs } = await supabase
     .from("student_documents")
-    .select("category, created_at, verified_at")
-    .not("verified_at", "is", null);
+    .select("category, uploaded_at, verified_at")
+    .not("verified_at", "is", null)
+    .not("uploaded_at", "is", null);
 
   const byCategory = new Map<string, { totalDays: number; count: number }>();
   (docs ?? []).forEach((d) => {
     const key = d.category ?? "other";
-    const days = (new Date(d.verified_at!).getTime() - new Date(d.created_at).getTime()) / 86_400_000;
+    const days = (new Date(d.verified_at!).getTime() - new Date(d.uploaded_at!).getTime()) / 86_400_000;
     const entry = byCategory.get(key) ?? { totalDays: 0, count: 0 };
     entry.totalDays += days;
     entry.count += 1;
