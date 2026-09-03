@@ -94,24 +94,55 @@ function DeleteCommissionButton({ id, revalidateTo }: { id: string; revalidateTo
   );
 }
 
+export type StudentCommissionBasis = { track: string | null; consultancyFee: number | null; currency: string | null };
+
 function AddCommissionForm({
   staffId,
   students,
   defaultDate,
   revalidateTo,
+  commissionRateGeneral,
+  commissionRatePublicUniversities,
+  studentCommissionBasis,
 }: {
   staffId: string;
   students: { id: string; full_name: string }[];
   defaultDate: string;
   revalidateTo: string;
+  commissionRateGeneral: number | null;
+  commissionRatePublicUniversities: number | null;
+  studentCommissionBasis: Record<string, StudentCommissionBasis>;
 }) {
   const action = createStaffCommission.bind(null, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
+  const [studentId, setStudentId] = useState("");
+  const [amount, setAmount] = useState("");
+  const [currency, setCurrency] = useState("PKR");
+  const [amountEdited, setAmountEdited] = useState(false);
+  const [suggestionKey, setSuggestionKey] = useState<string | null>(null);
+
+  const basis = studentCommissionBasis[studentId] ?? null;
+  // Public/private destination track picks which of this staff member's two
+  // commission rates applies — matches the Commission Rate Reference card
+  // shown alongside this form.
+  const rate = basis ? (basis.track === "public" ? commissionRatePublicUniversities : commissionRateGeneral) : null;
+  const suggestedAmount = rate != null && basis?.consultancyFee != null ? Math.round(basis.consultancyFee * (rate / 100) * 100) / 100 : null;
+
+  // Adjusting state during render (React's documented pattern for this)
+  // rather than in an effect, so a new student pick takes effect in the same
+  // render. Never re-applied without a new pick, so a real correction the
+  // user typed is never silently overwritten.
+  if (studentId !== suggestionKey) {
+    setSuggestionKey(studentId);
+    setAmountEdited(false);
+    setAmount(suggestedAmount != null ? String(suggestedAmount) : "");
+    setCurrency(basis?.currency ?? "PKR");
+  }
 
   return (
     <form action={formAction} className="mb-3 flex flex-wrap items-end gap-2">
       <input type="hidden" name="staff_id" value={staffId} />
-      <Select name="student_id" required>
+      <Select name="student_id" required value={studentId} onChange={(e) => setStudentId(e.target.value)}>
         <option value="">Student…</option>
         {students.map((s) => (
           <option key={s.id} value={s.id}>
@@ -119,8 +150,20 @@ function AddCommissionForm({
           </option>
         ))}
       </Select>
-      <Input name="amount" type="number" step="0.01" placeholder="Amount" required className="w-24" />
-      <Select name="currency" defaultValue="PKR">
+      <Input
+        name="amount"
+        type="number"
+        step="0.01"
+        placeholder="Amount"
+        required
+        className="w-24"
+        value={amount}
+        onChange={(e) => {
+          setAmount(e.target.value);
+          setAmountEdited(true);
+        }}
+      />
+      <Select name="currency" value={currency} onChange={(e) => setCurrency(e.target.value)}>
         <option value="PKR">PKR</option>
         <option value="EUR">EUR</option>
         <option value="USD">USD</option>
@@ -129,6 +172,15 @@ function AddCommissionForm({
       <Button type="submit" variant="primary" size="sm" disabled={pending}>
         {pending ? "Adding…" : "+ Add commission record"}
       </Button>
+      {suggestedAmount != null && !amountEdited && (
+        <p className="w-full text-xs text-muted">
+          Suggested: {rate}% of {basis?.currency} {basis?.consultancyFee?.toFixed(2)} ({basis?.track} track consultancy fee, discount already
+          applied) — adjust if needed.
+        </p>
+      )}
+      {studentId && suggestedAmount == null && (
+        <p className="w-full text-xs text-muted">No suggestion available — this student has no signed agreement on file yet.</p>
+      )}
       {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
     </form>
   );
@@ -142,6 +194,9 @@ export function CommissionLedgerTable({
   defaultDate,
   revalidateTo,
   canManage,
+  commissionRateGeneral,
+  commissionRatePublicUniversities,
+  studentCommissionBasis,
 }: {
   staffId: string;
   records: CommissionRecord[];
@@ -150,11 +205,22 @@ export function CommissionLedgerTable({
   defaultDate: string;
   revalidateTo: string;
   canManage: boolean;
+  commissionRateGeneral: number | null;
+  commissionRatePublicUniversities: number | null;
+  studentCommissionBasis: Record<string, StudentCommissionBasis>;
 }) {
   return (
     <div>
       {canManage && (
-        <AddCommissionForm staffId={staffId} students={students} defaultDate={defaultDate} revalidateTo={revalidateTo} />
+        <AddCommissionForm
+          staffId={staffId}
+          students={students}
+          defaultDate={defaultDate}
+          revalidateTo={revalidateTo}
+          commissionRateGeneral={commissionRateGeneral}
+          commissionRatePublicUniversities={commissionRatePublicUniversities}
+          studentCommissionBasis={studentCommissionBasis}
+        />
       )}
       {records.length === 0 ? (
         <EmptyState>No commission records for this staff member in the selected month.</EmptyState>

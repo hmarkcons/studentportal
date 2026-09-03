@@ -113,6 +113,37 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
 
       const { data: allStudents } = await supabase.from("students").select("id, full_name").order("full_name");
 
+      // Same discount-adjusted commission-suggestion basis as the Staff
+      // Commission page's own "Add commission" form — each student's SIGNED
+      // agreement, resolved to consultancy fee net of discount plus the
+      // destination's track, so this staff member's matching commission rate
+      // (public-university vs general) can be suggested here too.
+      const allStudentIds = (allStudents ?? []).map((s) => s.id);
+      const { data: signedAgreements } = allStudentIds.length
+        ? await supabase
+            .from("agreements")
+            .select(
+              "student_id, discount_amount, consultancy_fee_override, template:agreement_templates(destination:destinations(track, consultancy_fee, consultancy_fee_currency))"
+            )
+            .eq("status", "signed")
+            .in("student_id", allStudentIds)
+        : { data: [] };
+
+      const commissionBasisByStudent: Record<string, { track: string | null; consultancyFee: number | null; currency: string | null }> = {};
+      for (const a of signedAgreements ?? []) {
+        const template = one(a.template as never) as { destination?: unknown } | null;
+        const destination = template?.destination
+          ? (one(template.destination as never) as { track?: string; consultancy_fee?: number; consultancy_fee_currency?: string } | null)
+          : null;
+        if (!destination) continue;
+        const consultancyFee = (a.consultancy_fee_override ?? destination.consultancy_fee ?? 0) - (a.discount_amount ?? 0);
+        commissionBasisByStudent[a.student_id] = {
+          track: destination.track ?? null,
+          consultancyFee,
+          currency: destination.consultancy_fee_currency ?? null,
+        };
+      }
+
       const currencySymbol = CURRENCY_SYMBOLS[staff.currency] ?? staff.currency;
       const revalidateTo = `/finance/payroll?staff=${staffId}&month=${month}`;
 
@@ -154,6 +185,9 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
               defaultDate={monthStart}
               revalidateTo={revalidateTo}
               canManage={canManage}
+              commissionRateGeneral={staff.commission_rate_general}
+              commissionRatePublicUniversities={staff.commission_rate_public_universities}
+              studentCommissionBasis={commissionBasisByStudent}
             />
           </Card>
 
