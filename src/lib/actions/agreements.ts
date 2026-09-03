@@ -125,7 +125,7 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
 
   const { data: student } = await supabase
     .from("students")
-    .select("full_name, date_of_birth, email, address, contact_number, home_phone, current_qualification, course_of_interest")
+    .select("full_name, date_of_birth, email, address, contact_number, current_qualification, course_of_interest")
     .eq("id", studentId)
     .maybeSingle();
   if (!student) return { error: "Student not found." };
@@ -140,6 +140,7 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
   // below) — generating it with any of them blank would hand the student a
   // legal document with empty fields instead of failing loudly here.
   const missingProfileFields = [
+    !student.date_of_birth && "date of birth",
     !student.address?.trim() && "address",
     !profile?.emergency_contact_name?.trim() && "emergency contact name",
     !profile?.emergency_contact_relation?.trim() && "emergency contact relation",
@@ -215,7 +216,6 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
         email: student.email,
         address: student.address,
         mobile: student.contact_number,
-        home: student.home_phone,
         currentEducation: student.current_qualification,
         courseOfInterest: student.course_of_interest,
         emergencyContactName: profile?.emergency_contact_name ?? null,

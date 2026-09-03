@@ -91,7 +91,6 @@ export type AgreementPdfData = {
     email: string | null;
     address: string | null;
     mobile: string | null;
-    home: string | null;
     currentEducation: string | null;
     courseOfInterest: string | null;
     emergencyContactName: string | null;
@@ -157,12 +156,12 @@ function StudentDetailsChart({ student, destinationLabel }: { student: Agreement
       </View>
       <View style={styles.tRow}>
         <Text style={styles.tCell}><Text style={styles.tLabel}>Mobile: </Text>{student.mobile ?? ""}</Text>
-        <Text style={[styles.tCell, styles.tCellLast]}><Text style={styles.tLabel}>Home: </Text>{student.home ?? ""}</Text>
-      </View>
-      <View style={styles.tRow}>
-        <Text style={styles.tCell}><Text style={styles.tLabel}>Emergency Contact: </Text>{student.emergencyContactName ?? ""}</Text>
-        <Text style={styles.tCell}><Text style={styles.tLabel}>Relation: </Text>{student.emergencyContactRelation ?? ""}</Text>
-        <Text style={[styles.tCell, styles.tCellLast]}><Text style={styles.tLabel}>Contact Number: </Text>{student.emergencyContactNumber ?? ""}</Text>
+        <Text style={[styles.tCell, styles.tCellLast]}>
+          <Text style={styles.tLabel}>Emergency Contact: </Text>
+          {student.emergencyContactName ?? ""}
+          {student.emergencyContactRelation ? ` (${student.emergencyContactRelation})` : ""}
+          {student.emergencyContactNumber ? ` — ${student.emergencyContactNumber}` : ""}
+        </Text>
       </View>
       <View style={styles.tRow}>
         <Text style={styles.tCell}><Text style={styles.tLabel}>Current Education: </Text>{student.currentEducation ?? ""}</Text>

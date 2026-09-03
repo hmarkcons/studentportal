@@ -99,6 +99,13 @@ export async function updateLead(leadId: string, revalidateTo: string, _prevStat
   const address = String(formData.get("address") ?? "").trim() || null;
   const home_phone = String(formData.get("home_phone") ?? "").trim() || null;
 
+  // date_of_birth is only ever submitted from the registered-student edit
+  // form (LeadEditForm's showRegistrationFields — the plain lead-editing
+  // form doesn't render this field at all, so formData.has() is false
+  // there) — the agreement PDF needs it, so it's required in that context
+  // specifically, not for a lead who hasn't registered yet.
+  if (formData.has("date_of_birth") && !date_of_birth) return { error: "Date of birth is required." };
+
   const { error } = await supabase
     .from("leads")
     .update({

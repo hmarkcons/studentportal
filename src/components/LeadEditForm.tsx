@@ -92,7 +92,7 @@ export function LeadEditForm({
         <>
           <label className="flex flex-col gap-1 text-xs text-muted">
             Date of birth
-            <Input name="date_of_birth" type="date" defaultValue={lead.date_of_birth ?? ""} />
+            <Input name="date_of_birth" type="date" defaultValue={lead.date_of_birth ?? ""} required />
           </label>
           <label className="flex flex-col gap-1 text-xs text-muted">
             Home phone
