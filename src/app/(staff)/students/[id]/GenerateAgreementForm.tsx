@@ -69,6 +69,7 @@ export function EditAgreementForm({
   agreement,
   studentId,
   templates,
+  onSuccess,
 }: {
   agreement: {
     id: string;
@@ -81,22 +82,14 @@ export function EditAgreementForm({
   };
   studentId: string;
   templates: AgreementTemplateOption[];
+  onSuccess: () => void;
 }) {
-  const [editing, setEditing] = useState(false);
   const action = updateAgreement.bind(null, agreement.id, studentId);
   const [state, formAction, pending] = useActionState(action, undefined);
 
-  if (!editing) {
-    return (
-      <button type="button" onClick={() => setEditing(true)} className="text-xs text-primary hover:underline">
-        Edit
-      </button>
-    );
-  }
-
   return (
-    <form action={formAction} className="mt-2 flex w-full flex-wrap items-end gap-2 rounded-md border border-border p-2">
-      <Select name="template_id" defaultValue={agreement.template_id ?? ""} required>
+    <form action={formAction} className="flex w-full flex-col flex-wrap items-end gap-2">
+      <Select name="template_id" defaultValue={agreement.template_id ?? ""} required className="w-full">
         <option value="">Template…</option>
         {templates.map((t) => (
           <option key={t.id} value={t.id}>
@@ -104,7 +97,7 @@ export function EditAgreementForm({
           </option>
         ))}
       </Select>
-      <Select name="signing_method" defaultValue={agreement.signing_method ?? "paper"} required>
+      <Select name="signing_method" defaultValue={agreement.signing_method ?? "paper"} required className="w-full">
         <option value="paper">Paper (Karachi)</option>
         <option value="e_signature">E-signature (outside Karachi)</option>
       </Select>
@@ -114,7 +107,7 @@ export function EditAgreementForm({
         step="0.01"
         placeholder="Admin charge override"
         defaultValue={agreement.admin_charge_override ?? ""}
-        className="w-40"
+        className="w-full"
       />
       <Input
         name="consultancy_fee_override"
@@ -122,7 +115,7 @@ export function EditAgreementForm({
         step="0.01"
         placeholder="Consultancy fee override"
         defaultValue={agreement.consultancy_fee_override ?? ""}
-        className="w-44"
+        className="w-full"
       />
       <Input
         name="discount_amount"
@@ -130,20 +123,23 @@ export function EditAgreementForm({
         step="0.01"
         placeholder="Discount amount"
         defaultValue={agreement.discount_amount ?? ""}
-        className="w-36"
+        className="w-full"
       />
-      <Select name="installment_count" defaultValue={String(agreement.installment_count ?? 1)}>
+      <Select name="installment_count" defaultValue={String(agreement.installment_count ?? 1)} className="w-full">
         <option value="1">1 consultancy fee installment</option>
         <option value="2">2 consultancy fee installments</option>
         <option value="3">3 consultancy fee installments</option>
       </Select>
-      <Button type="submit" variant="primary" size="sm" pending={pending}>
-        Save
-      </Button>
-      <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>
-        Cancel
-      </Button>
+      <div className="flex w-full items-center gap-2">
+        <Button type="submit" variant="primary" size="sm" pending={pending}>
+          Save
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={onSuccess}>
+          {state?.success ? "Close" : "Cancel"}
+        </Button>
+      </div>
       {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
+      {state?.success && <p className="w-full text-xs text-success">Saved.</p>}
       <p className="w-full text-xs text-muted">
         Saving does not regenerate the PDF — use &quot;Regenerate PDF&quot; afterward to apply these changes to the document.
       </p>

@@ -11,8 +11,9 @@ import { CountryTrackerForm } from "@/components/CountryTrackerForm";
 import { listTrackerDefinitions } from "@/lib/actions/countryTracker";
 import { PortalAccessPanel } from "./PortalAccessPanel";
 import { StudentProfileForm } from "./StudentProfileForm";
-import { GenerateAgreementForm, EditAgreementForm, UploadSignedAgreementForm, DeleteAgreementButton } from "./GenerateAgreementForm";
+import { GenerateAgreementForm, UploadSignedAgreementForm } from "./GenerateAgreementForm";
 import { GenerateAgreementPdfButton } from "./GenerateAgreementPdfButton";
+import { AgreementActionsMenu } from "./AgreementActionsMenu";
 import { GenerateInvoiceForm, InvoiceCard } from "./InvoicePanel";
 import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
 import { PortalCredentialsSection } from "./PortalCredentialsSection";
@@ -380,30 +381,19 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                       {new Date(a.created_at).toLocaleDateString()}
                       {a.discount_amount != null && ` · discount ${a.discount_amount}`}
                     </span>
-                    <div className="flex flex-wrap items-center justify-end gap-3">
-                      {links?.signedUrl ? (
-                        <a href={links.signedUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
-                          View signed copy
-                        </a>
-                      ) : (
-                        !links?.pdfUrl &&
-                        links?.templateUrl && (
-                          <a href={links.templateUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
-                            View template
-                          </a>
-                        )
-                      )}
-                      {links?.pdfUrl && (
-                        <a href={links.pdfUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
-                          View generated agreement
-                        </a>
-                      )}
+                    <div className="flex flex-wrap items-center justify-end gap-2">
                       {canModifyAgreement && a.status !== "signed" && (
                         <GenerateAgreementPdfButton agreementId={a.id} studentId={id} revalidateTo={`/students/${id}`} hasPdf={Boolean(links?.pdfUrl)} />
                       )}
                       <Badge tone={a.status === "signed" ? "success" : "warning"}>{a.status}</Badge>
-                      {isSuperAdmin && a.status !== "signed" && <EditAgreementForm agreement={a} studentId={id} templates={templates ?? []} />}
-                      {isSuperAdmin && <DeleteAgreementButton agreementId={a.id} studentId={id} />}
+                      <AgreementActionsMenu
+                        agreement={a}
+                        studentId={id}
+                        templates={templates ?? []}
+                        links={links}
+                        canEdit={isSuperAdmin && a.status !== "signed"}
+                        canDelete={isSuperAdmin}
+                      />
                     </div>
                   </div>
                 </div>

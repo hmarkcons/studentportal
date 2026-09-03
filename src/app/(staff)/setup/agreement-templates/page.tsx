@@ -1,8 +1,7 @@
-import Link from "next/link";
 import { getStaffSession } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { NewAgreementTemplateForm } from "./NewAgreementTemplateForm";
-import { DeleteTemplateButton } from "./DeleteTemplateButton";
+import { TemplateActionsMenu } from "./TemplateActionsMenu";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -15,7 +14,7 @@ export default async function AgreementTemplatesPage() {
   const { data: destinations } = await supabase.from("destinations").select("id, display_name").order("display_name");
   const { data: templates } = await supabase
     .from("agreement_templates")
-    .select("id, name, signatory_name, destination:destinations(display_name)")
+    .select("id, name, signatory_name, wording, destination:destinations(display_name)")
     .order("created_at", { ascending: false });
 
   return (
@@ -36,10 +35,13 @@ export default async function AgreementTemplatesPage() {
           const destination = one(t.destination as never) as { display_name?: string } | null;
           return (
             <div key={t.id} className="flex items-center justify-between px-4 py-3 text-sm">
-              <Link href={`/setup/agreement-templates/${t.id}`} className="text-ink hover:underline">
+              <span className="text-ink">
                 {t.name} <span className="text-muted">· {destination?.display_name ?? "—"} · {t.signatory_name}</span>
-              </Link>
-              {isSuperAdmin && <DeleteTemplateButton id={t.id} />}
+              </span>
+              <TemplateActionsMenu
+                template={{ id: t.id, name: t.name, signatory_name: t.signatory_name, wording: t.wording, destinationName: destination?.display_name ?? null }}
+                canManage={isSuperAdmin}
+              />
             </div>
           );
         })}
