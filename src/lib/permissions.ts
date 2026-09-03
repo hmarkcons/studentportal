@@ -9,6 +9,7 @@ export const PERMISSION_KEYS = [
   "attendance.qr_admin",
   "finance.commissions.manage",
   "finance.partner_commissions.delete",
+  "finance.program_rates.manage",
   "finance.invoices.manage",
   "finance.invoices.delete",
   "finance.refunds.manage",

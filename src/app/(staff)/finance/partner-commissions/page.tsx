@@ -30,15 +30,27 @@ export default async function PartnerCommissionsPage() {
   const isSuperAdmin = staffRow?.role === "super_admin";
   const canManage = staffRow?.role === "finance" || staffRow?.role === "super_admin";
 
-  const { data: rows } = await supabase
+  const { data: rowsRaw } = await supabase
     .from("partner_commissions")
     .select(
-      "id, paid_fee, fee_payment_date, rate_percent, fixed_amount, expected_amount, currency, channel, wallet_platform, received_date, hmark_bank_account, payment_proof_path, status, student:leads(full_name), application:applications(university:universities(name))"
+      "id, paid_fee, fee_payment_date, rate_percent, fixed_amount, expected_amount, currency, channel, wallet_platform, received_date, hmark_bank_account, payment_proof_path, status, student:leads(full_name), application:applications(university:universities(name), program:programs(tuition_fee, rate:program_commission_rates(rate_percent, fixed_amount, currency)))"
     );
+  const rows = (rowsRaw ?? []).map((r) => {
+    const app = one(r.application);
+    const program = app ? (one(app.program as never) as { tuition_fee: number | null; rate: unknown } | null) : null;
+    const configuredRate = program ? (one(program.rate as never) as { rate_percent: number | null; fixed_amount: number | null; currency: string } | null) : null;
+    return {
+      ...r,
+      tuitionFee: program?.tuition_fee ?? null,
+      configuredRatePercent: configuredRate?.rate_percent ?? null,
+      configuredFixedAmount: configuredRate?.fixed_amount ?? null,
+      configuredRateCurrency: configuredRate?.currency ?? null,
+    };
+  });
 
   const proofUrls = new Map<string, string>();
   await Promise.all(
-    (rows ?? [])
+    rows
       .filter((r) => r.payment_proof_path)
       .map(async (r) => {
         const { data } = await supabase.storage.from("documents").createSignedUrl(r.payment_proof_path!, 3600);
@@ -49,13 +61,23 @@ export default async function PartnerCommissionsPage() {
   const { data: students } = await supabase.from("students").select("id, full_name").order("full_name");
   const { data: rawApplications } = await supabase
     .from("applications")
-    .select("id, student_id, university:universities(name)")
+    .select(
+      "id, student_id, university:universities(name), program:programs(tuition_fee, rate:program_commission_rates(rate_percent, fixed_amount, currency))"
+    )
     .order("created_at", { ascending: false });
-  const applications = (rawApplications ?? []).map((a) => ({
-    id: a.id,
-    student_id: a.student_id,
-    universityName: (one(a.university as never) as { name?: string } | null)?.name ?? "Unknown university",
-  }));
+  const applications = (rawApplications ?? []).map((a) => {
+    const program = one(a.program as never) as { tuition_fee: number | null; rate: unknown } | null;
+    const rate = program ? (one(program.rate as never) as { rate_percent: number | null; fixed_amount: number | null; currency: string } | null) : null;
+    return {
+      id: a.id,
+      student_id: a.student_id,
+      universityName: (one(a.university as never) as { name?: string } | null)?.name ?? "Unknown university",
+      tuitionFee: program?.tuition_fee ?? null,
+      ratePercent: rate?.rate_percent ?? null,
+      fixedAmount: rate?.fixed_amount ?? null,
+      rateCurrency: rate?.currency ?? null,
+    };
+  });
 
   return (
     <div className="w-full">
@@ -74,7 +96,7 @@ export default async function PartnerCommissionsPage() {
             </tr>
           </thead>
           <tbody>
-            {(rows ?? []).map((r) => {
+            {rows.map((r) => {
               const app = one(r.application);
               const uni = app ? one(app.university as never) : null;
               return (
@@ -117,7 +139,7 @@ export default async function PartnerCommissionsPage() {
                 </tr>
               );
             })}
-            {(!rows || rows.length === 0) && (
+            {rows.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-10 text-center text-muted">
                   No partner commission records.

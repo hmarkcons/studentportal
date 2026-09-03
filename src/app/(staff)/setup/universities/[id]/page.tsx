@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { hasPermission } from "@/lib/auth/permissions";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AddProgramForm } from "./AddProgramForm";
@@ -17,6 +18,8 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
   } = await supabase.auth.getUser();
   const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
   const isSuperAdmin = staffRow?.role === "super_admin";
+  const canManageRates = await hasPermission("finance.program_rates.manage");
+  const canViewRates = canManageRates || staffRow?.role === "management" || staffRow?.role === "finance";
 
   const { data: university, error } = await supabase
     .from("universities")
@@ -26,15 +29,19 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
 
   if (error || !university) notFound();
 
-  const { data: programs } = await supabase
+  const { data: programsRaw } = await supabase
     .from("programs")
-    .select("id, level, name, core_field, sub_field, tuition_fee, duration, language_requirement, application_deadline")
+    .select(
+      "id, level, name, core_field, sub_field, tuition_fee, duration, language_requirement, application_deadline, commission_rate:program_commission_rates(rate_percent, fixed_amount, currency)"
+    )
     .eq("university_id", id)
     .order("level");
 
   function one<T>(v: T | T[] | null) {
     return Array.isArray(v) ? v[0] ?? null : v;
   }
+
+  const programs = (programsRaw ?? []).map((p) => ({ ...p, commission_rate: one(p.commission_rate) }));
 
   return (
     <div className="w-full">
@@ -61,10 +68,17 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
       <Card>
         <h3 className="mb-3 text-sm font-medium text-ink">Programs</h3>
         <div className="mb-4 flex flex-col divide-y divide-border">
-          {(programs ?? []).map((p) => (
-            <ProgramRow key={p.id} program={p} universityId={id} canEdit={isSuperAdmin} />
+          {programs.map((p) => (
+            <ProgramRow
+              key={p.id}
+              program={p}
+              universityId={id}
+              canEdit={isSuperAdmin}
+              canViewRate={canViewRates}
+              canManageRate={canManageRates}
+            />
           ))}
-          {(!programs || programs.length === 0) && (
+          {programs.length === 0 && (
             <div className="py-2">
               <EmptyState>No programs added yet.</EmptyState>
             </div>

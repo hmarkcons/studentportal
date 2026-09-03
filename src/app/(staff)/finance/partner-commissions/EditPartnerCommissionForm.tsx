@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { updatePartnerCommission } from "@/lib/actions/finance";
+import { suggestPartnerCommission } from "./AddPartnerCommissionForm";
 import { Input, Select } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 
@@ -20,6 +21,10 @@ type Row = {
   received_date: string | null;
   hmark_bank_account: string | null;
   status: string;
+  tuitionFee: number | null;
+  configuredRatePercent: number | null;
+  configuredFixedAmount: number | null;
+  configuredRateCurrency: string | null;
 };
 
 const STATUSES = ["not_yet_due", "pending", "received", "partially_received", "overdue", "disputed"];
@@ -28,6 +33,27 @@ export function EditPartnerCommissionForm({ row }: { row: Row }) {
   const [editing, setEditing] = useState(false);
   const action = updatePartnerCommission.bind(null, row.id, "/finance/partner-commissions");
   const [state, formAction, pending] = useActionState(action, undefined);
+  const [expectedAmount, setExpectedAmount] = useState(String(row.expected_amount ?? ""));
+  const [ratePercent, setRatePercent] = useState(String(row.rate_percent ?? ""));
+  const [fixedAmount, setFixedAmount] = useState(String(row.fixed_amount ?? ""));
+  const [currency, setCurrency] = useState(row.currency);
+
+  const suggestion = suggestPartnerCommission({
+    id: row.id,
+    student_id: "",
+    universityName: "",
+    tuitionFee: row.tuitionFee,
+    ratePercent: row.configuredRatePercent,
+    fixedAmount: row.configuredFixedAmount,
+    rateCurrency: row.configuredRateCurrency,
+  });
+
+  function applySuggestion() {
+    if (suggestion.amount != null) setExpectedAmount(String(suggestion.amount));
+    if (suggestion.ratePercent != null) setRatePercent(String(suggestion.ratePercent));
+    if (suggestion.fixedAmount != null) setFixedAmount(String(suggestion.fixedAmount));
+    if (suggestion.currency) setCurrency(suggestion.currency);
+  }
 
   if (!editing) {
     return (
@@ -41,7 +67,7 @@ export function EditPartnerCommissionForm({ row }: { row: Row }) {
     <form action={formAction} className="grid grid-cols-2 gap-1 rounded-md border border-border p-2 sm:grid-cols-4">
       <label className="flex flex-col gap-0.5 text-[10px] text-muted">
         Expected
-        <Input name="expected_amount" type="number" step="0.01" defaultValue={row.expected_amount ?? ""} className={inputClass} />
+        <Input name="expected_amount" type="number" step="0.01" value={expectedAmount} onChange={(e) => setExpectedAmount(e.target.value)} className={inputClass} />
       </label>
       <label className="flex flex-col gap-0.5 text-[10px] text-muted">
         Paid fee
@@ -53,15 +79,15 @@ export function EditPartnerCommissionForm({ row }: { row: Row }) {
       </label>
       <label className="flex flex-col gap-0.5 text-[10px] text-muted">
         Currency
-        <Input name="currency" defaultValue={row.currency} className={inputClass} />
+        <Input name="currency" value={currency} onChange={(e) => setCurrency(e.target.value)} className={inputClass} />
       </label>
       <label className="flex flex-col gap-0.5 text-[10px] text-muted">
         Rate %
-        <Input name="rate_percent" type="number" step="0.01" defaultValue={row.rate_percent ?? ""} className={inputClass} />
+        <Input name="rate_percent" type="number" step="0.01" value={ratePercent} onChange={(e) => setRatePercent(e.target.value)} className={inputClass} />
       </label>
       <label className="flex flex-col gap-0.5 text-[10px] text-muted">
         Fixed amount
-        <Input name="fixed_amount" type="number" step="0.01" defaultValue={row.fixed_amount ?? ""} className={inputClass} />
+        <Input name="fixed_amount" type="number" step="0.01" value={fixedAmount} onChange={(e) => setFixedAmount(e.target.value)} className={inputClass} />
       </label>
       <label className="flex flex-col gap-0.5 text-[10px] text-muted">
         Channel
@@ -93,6 +119,15 @@ export function EditPartnerCommissionForm({ row }: { row: Row }) {
           ))}
         </Select>
       </label>
+      {suggestion.amount != null && (
+        <p className="col-span-full text-[10px] text-muted">
+          Configured rate: {suggestion.fixedAmount != null ? `flat ${suggestion.currency} ${suggestion.fixedAmount}` : `${suggestion.ratePercent}% of ${suggestion.currency} ${row.tuitionFee?.toFixed(2)} tuition`} (
+          {suggestion.currency} {suggestion.amount}) —{" "}
+          <button type="button" onClick={applySuggestion} className="text-primary hover:underline">
+            use this
+          </button>
+        </p>
+      )}
       <div className="col-span-full flex items-center gap-2">
         <Button type="submit" variant="primary" size="sm" pending={pending}>
           Save

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { parseCsvWithHeader } from "@/lib/csv";
+import { requirePermission } from "@/lib/auth/permissions";
 
 export async function createUniversity(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
@@ -73,6 +74,36 @@ export async function updateProgram(programId: string, universityId: string, _pr
     .from("programs")
     .update({ level, name, core_field, sub_field, tuition_fee, duration, language_requirement, application_deadline })
     .eq("id", programId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/setup/universities/${universityId}`);
+  return { success: true };
+}
+
+export async function upsertProgramCommissionRate(programId: string, universityId: string, _prevState: unknown, formData: FormData) {
+  const supabase = await createClient();
+  const denied = await requirePermission("finance.program_rates.manage", "Only Finance/Super Admin can set commission rates."); if (denied) return { error: denied.error };
+
+  const rate_percent = formData.get("rate_percent") ? Number(formData.get("rate_percent")) : null;
+  const fixed_amount = formData.get("fixed_amount") ? Number(formData.get("fixed_amount")) : null;
+  const currency = String(formData.get("currency") ?? "").trim() || "EUR";
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Clearing both fields removes the row rather than violating the table's
+  // "rate_percent or fixed_amount" check constraint.
+  if (rate_percent == null && fixed_amount == null) {
+    const { error } = await supabase.from("program_commission_rates").delete().eq("program_id", programId);
+    if (error) return { error: error.message };
+    revalidatePath(`/setup/universities/${universityId}`);
+    return { success: true };
+  }
+
+  const { error } = await supabase
+    .from("program_commission_rates")
+    .upsert({ program_id: programId, rate_percent, fixed_amount, currency, updated_by: user?.id }, { onConflict: "program_id" });
   if (error) return { error: error.message };
 
   revalidatePath(`/setup/universities/${universityId}`);
