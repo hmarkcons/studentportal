@@ -370,6 +370,16 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                       {a.discount_amount != null && ` · discount ${a.discount_amount}`}
                     </span>
                     <div className="flex flex-wrap items-center justify-end gap-2">
+                      {(links?.signedUrl || links?.pdfUrl || links?.templateUrl) && (
+                        <a
+                          href={links?.signedUrl ?? links?.pdfUrl ?? links?.templateUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                        >
+                          👁️ View agreement
+                        </a>
+                      )}
                       {canModifyAgreement && a.status !== "signed" && (
                         <GenerateAgreementPdfButton agreementId={a.id} studentId={id} revalidateTo={`/students/${id}`} hasPdf={Boolean(links?.pdfUrl)} />
                       )}
