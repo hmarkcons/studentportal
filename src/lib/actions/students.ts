@@ -17,6 +17,13 @@ export async function updateStudentProfile(studentId: string, _prevState: unknow
   const qualification_grade = String(formData.get("qualification_grade") ?? "").trim() || null;
   const financial_sponsor_name = String(formData.get("financial_sponsor_name") ?? "").trim() || null;
   const financial_sponsor_relation = String(formData.get("financial_sponsor_relation") ?? "").trim() || null;
+  const financial_details = {
+    sponsor_contact_number: String(formData.get("sponsor_contact_number") ?? "").trim() || null,
+    sponsor_occupation: String(formData.get("sponsor_occupation") ?? "").trim() || null,
+    sponsor_cnic: String(formData.get("sponsor_cnic") ?? "").trim() || null,
+    monthly_income: String(formData.get("monthly_income") ?? "").trim() || null,
+    income_currency: String(formData.get("income_currency") ?? "").trim() || null,
+  };
 
   const { error } = await supabase.from("student_profiles").upsert(
     {
@@ -32,6 +39,7 @@ export async function updateStudentProfile(studentId: string, _prevState: unknow
       qualification_grade,
       financial_sponsor_name,
       financial_sponsor_relation,
+      financial_details,
     },
     { onConflict: "student_id" }
   );
@@ -39,20 +47,5 @@ export async function updateStudentProfile(studentId: string, _prevState: unknow
   if (error) return { error: error.message };
 
   revalidatePath(`/students/${studentId}/profile`);
-  return { success: true };
-}
-
-export async function addTestScore(studentId: string, _prevState: unknown, formData: FormData) {
-  const supabase = await createClient();
-  const test_type = String(formData.get("test_type") ?? "");
-  const score = String(formData.get("score") ?? "").trim();
-  const test_date = String(formData.get("test_date") ?? "") || null;
-
-  if (!test_type || !score) return { error: "Test type and score are required." };
-
-  const { error } = await supabase.from("student_test_scores").insert({ student_id: studentId, test_type, score, test_date });
-  if (error) return { error: error.message };
-
-  revalidatePath(`/students/${studentId}`);
   return { success: true };
 }

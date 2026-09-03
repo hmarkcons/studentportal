@@ -297,7 +297,11 @@ export async function registerStudentManually(_prevState: unknown, formData: For
   }
 
   revalidatePath("/students");
-  redirect(`/students/${id}`);
+  // Same reasoning as registerLead: this form only captures a handful of
+  // lead-level fields, none of the registration-specific ones (DOB,
+  // address, home phone, emergency contact, ...) — send staff straight to
+  // the Profile tab to finish the rest.
+  redirect(`/students/${id}/profile`);
 }
 
 export async function updateRegistrationStatus(studentId: string, _prevState: unknown, formData: FormData) {
@@ -442,5 +446,10 @@ export async function registerLead(leadId: string, _formData: FormData) {
   revalidatePath(`/leads/${leadId}`);
   revalidatePath("/leads");
   revalidatePath("/students");
-  redirect(`/students/${leadId}`);
+  // Straight to the Profile tab, not the Dashboard — registration only
+  // flips status; none of date of birth/address/home phone/emergency
+  // contact/passport/etc. get captured by this one-click action, so land
+  // staff exactly where those need to be filled in next, not on a
+  // Dashboard that still looks empty.
+  redirect(`/students/${leadId}/profile`);
 }

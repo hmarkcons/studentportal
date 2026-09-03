@@ -1,6 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { AcademicsSection } from "@/components/AcademicsSection";
+import { PhotoUpload } from "@/components/PhotoUpload";
+import { TestScoresSection } from "@/components/TestScoresSection";
+import { TravelHistorySection } from "@/components/TravelHistorySection";
+import { VisaRefusalHistorySection } from "@/components/VisaRefusalHistorySection";
 import { PersonalDetailsForm } from "./PersonalDetailsForm";
 import { ProfileDetailsForm } from "./ProfileDetailsForm";
 
@@ -17,14 +21,19 @@ export default async function PortalProfilePage() {
     .maybeSingle();
   if (!student) return null;
 
-  const [{ data: profile }, { data: qualifications }] = await Promise.all([
-    supabase
-      .from("student_profiles")
-      .select("passport_number, passport_expiry, cnic, financial_sponsor_name, financial_sponsor_relation, emergency_contact_name, emergency_contact_relation, emergency_contact_number")
-      .eq("student_id", student.id)
-      .maybeSingle(),
+  const [{ data: profile }, { data: qualifications }, { data: testScores }] = await Promise.all([
+    supabase.from("student_profiles").select("*").eq("student_id", student.id).maybeSingle(),
     supabase.from("student_qualifications").select("*").eq("student_id", student.id),
+    supabase.from("student_test_scores").select("id, test_type, score, test_date").eq("student_id", student.id).order("test_date", { ascending: false }),
   ]);
+
+  const revalidateTo = "/portal/profile";
+
+  let photoUrl: string | null = null;
+  if (profile?.photo_path) {
+    const { data } = await supabase.storage.from("documents").createSignedUrl(profile.photo_path, 3600);
+    photoUrl = data?.signedUrl ?? null;
+  }
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -33,6 +42,11 @@ export default async function PortalProfilePage() {
       <Card className="mb-6">
         <h3 className="mb-3 text-sm font-medium text-ink">Personal details</h3>
         <p className="mb-4 text-xs text-muted">Your email and case status can only be changed by your counselor.</p>
+
+        <div className="mb-4">
+          <PhotoUpload studentId={student.id} revalidateTo={revalidateTo} photoUrl={photoUrl} />
+        </div>
+
         <PersonalDetailsForm
           studentId={student.id}
           student={{
@@ -49,6 +63,21 @@ export default async function PortalProfilePage() {
         <div className="mt-4 border-t border-border pt-4">
           <h4 className="mb-3 text-sm font-medium text-ink">Passport & sponsor details</h4>
           <ProfileDetailsForm studentId={student.id} profile={profile} />
+        </div>
+
+        <div className="mt-6 border-t border-border pt-4">
+          <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Test scores</h4>
+          <TestScoresSection studentId={student.id} revalidateTo={revalidateTo} scores={testScores ?? []} />
+        </div>
+
+        <div className="mt-6 border-t border-border pt-4">
+          <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Travel history</h4>
+          <TravelHistorySection studentId={student.id} revalidateTo={revalidateTo} records={(profile?.travel_history ?? []) as never} />
+        </div>
+
+        <div className="mt-6 border-t border-border pt-4">
+          <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Visa refusal / deportation history</h4>
+          <VisaRefusalHistorySection studentId={student.id} revalidateTo={revalidateTo} records={(profile?.visa_refusal_history ?? []) as never} />
         </div>
       </Card>
 
