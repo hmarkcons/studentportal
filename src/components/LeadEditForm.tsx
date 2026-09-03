@@ -24,12 +24,18 @@ export function LeadEditForm({
   lead,
   revalidateTo,
   showRegistrationFields = false,
+  alwaysEditing = false,
 }: {
   lead: LeadEditable;
   revalidateTo: string;
   showRegistrationFields?: boolean;
+  // The Profile tab treats these fields as a permanent, always-visible part
+  // of "Personal details" (same as every other field group there) rather
+  // than something tucked behind an "Edit details" toggle — so no Cancel
+  // to hide them again either.
+  alwaysEditing?: boolean;
 }) {
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(alwaysEditing);
   const action = updateLead.bind(null, lead.id, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
 
@@ -108,9 +114,11 @@ export function LeadEditForm({
         <Button type="submit" variant="primary" size="sm" pending={pending}>
           Save
         </Button>
-        <button type="button" onClick={() => setEditing(false)} className="text-xs text-muted hover:underline">
-          Cancel
-        </button>
+        {!alwaysEditing && (
+          <button type="button" onClick={() => setEditing(false)} className="text-xs text-muted hover:underline">
+            Cancel
+          </button>
+        )}
       </div>
       {state?.error && <p className="col-span-full text-xs text-danger">{state.error}</p>}
     </form>

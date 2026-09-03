@@ -42,8 +42,9 @@ export default async function StudentProfileTab(props: PageProps<"/students/[id]
           <PhotoUpload studentId={id} revalidateTo={revalidateTo} photoUrl={photoUrl} />
         </div>
 
-        <div className="mb-4 flex justify-end">
-          {student && <LeadEditForm lead={{ id, ...student }} revalidateTo={revalidateTo} showRegistrationFields />}
+        <div className="mb-4">
+          <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Core details</h4>
+          {student && <LeadEditForm lead={{ id, ...student }} revalidateTo={revalidateTo} showRegistrationFields alwaysEditing />}
         </div>
         <StudentProfileForm studentId={id} profile={profile} />
 
