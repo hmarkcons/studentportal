@@ -187,6 +187,12 @@ export async function createRefundRequest(_prevState: unknown, formData: FormDat
   if (!student_id || !reason) return { error: "Student and reason are required." };
 
   const refund_percent = REFUND_PERCENT[trigger_type] ?? null;
+  // The 90-day refund window is measured from this date (see the Refunds
+  // page's deadline badge) — only meaningful for the two trigger types that
+  // actually carry that rule; "manual" refunds aren't on that clock.
+  if (refund_percent != null && !refusal_notice_date) {
+    return { error: "Refusal notice date is required for a No Admission or Visa Refusal refund." };
+  }
   let currency: string | null = null;
 
   if (refund_percent != null) {
