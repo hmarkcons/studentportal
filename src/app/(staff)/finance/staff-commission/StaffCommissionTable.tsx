@@ -44,21 +44,28 @@ export type CommissionRow = {
 };
 
 export type AvailableCredit = { id: string; staff_id: string; amount: number; currency: string };
+export type StudentCommissionBasis = { track: string | null; consultancyFee: number | null; currency: string | null };
 
 function AddCommissionForm({
   staffList,
   students,
   availableCredits,
+  studentCommissionBasis,
 }: {
-  staffList: { id: string; full_name: string }[];
+  staffList: { id: string; full_name: string; commission_rate_general: number | null; commission_rate_public_universities: number | null }[];
   students: { id: string; full_name: string; assigned_counselor_id: string | null }[];
   availableCredits: AvailableCredit[];
+  studentCommissionBasis: Record<string, StudentCommissionBasis>;
 }) {
   const action = createStaffCommission.bind(null, REVALIDATE_TO);
   const [state, formAction, pending] = useActionState(action, undefined);
   const [staffId, setStaffId] = useState("");
+  const [studentId, setStudentId] = useState("");
   const [applyCredit, setApplyCredit] = useState(false);
   const [amount, setAmount] = useState("");
+  const [currency, setCurrency] = useState("PKR");
+  const [amountEdited, setAmountEdited] = useState(false);
+  const [suggestionKey, setSuggestionKey] = useState<string | null>(null);
 
   // Only students assigned to the selected staff member show up — matches
   // the same staff member who'll actually be credited/paid for them.
@@ -68,6 +75,28 @@ function AddCommissionForm({
   );
 
   const credit = useMemo(() => availableCredits.find((c) => c.staff_id === staffId) ?? null, [availableCredits, staffId]);
+
+  const staff = staffList.find((s) => s.id === staffId) ?? null;
+  const basis = studentCommissionBasis[studentId] ?? null;
+  // Public/private destination track picks which of the staff member's two
+  // commission rates applies — matches how the staff record's own two rate
+  // fields are named and shown on the payroll page.
+  const rate = staff && basis ? (basis.track === "public" ? staff.commission_rate_public_universities : staff.commission_rate_general) : null;
+  const suggestedAmount =
+    rate != null && basis?.consultancyFee != null ? Math.round(basis.consultancyFee * (rate / 100) * 100) / 100 : null;
+
+  // Auto-fill on each new staff/student pick — adjusting state during render
+  // (React's documented pattern for this) rather than in an effect, so it
+  // takes effect in the same render instead of flashing the old value first.
+  // Never re-applied afterward without a new pick, so a real correction the
+  // user typed is never silently overwritten.
+  const currentSuggestionKey = `${staffId}|${studentId}`;
+  if (currentSuggestionKey !== suggestionKey) {
+    setSuggestionKey(currentSuggestionKey);
+    setAmountEdited(false);
+    setAmount(suggestedAmount != null ? String(suggestedAmount) : "");
+    setCurrency(basis?.currency ?? "PKR");
+  }
 
   const amountNum = Number(amount) || 0;
   const amountAfterCredit = credit && applyCredit ? Math.max(0, amountNum - credit.amount) : amountNum;
@@ -81,6 +110,7 @@ function AddCommissionForm({
           value={staffId}
           onChange={(e) => {
             setStaffId(e.target.value);
+            setStudentId("");
             setApplyCredit(false);
           }}
         >
@@ -91,7 +121,13 @@ function AddCommissionForm({
             </option>
           ))}
         </Select>
-        <Select name="student_id" required disabled={!staffId} defaultValue="">
+        <Select
+          name="student_id"
+          required
+          disabled={!staffId}
+          value={studentId}
+          onChange={(e) => setStudentId(e.target.value)}
+        >
           <option value="">{staffId ? (eligibleStudents.length ? "Student…" : "No students assigned to this staff member") : "Choose staff first"}</option>
           {eligibleStudents.map((s) => (
             <option key={s.id} value={s.id}>
@@ -107,9 +143,12 @@ function AddCommissionForm({
           required
           className="w-32"
           value={amount}
-          onChange={(e) => setAmount(e.target.value)}
+          onChange={(e) => {
+            setAmount(e.target.value);
+            setAmountEdited(true);
+          }}
         />
-        <Select name="currency" defaultValue="PKR">
+        <Select name="currency" value={currency} onChange={(e) => setCurrency(e.target.value)}>
           <option value="PKR">PKR</option>
           <option value="EUR">EUR</option>
           <option value="USD">USD</option>
@@ -119,6 +158,18 @@ function AddCommissionForm({
           {pending ? "Adding…" : "+ Add commission"}
         </Button>
       </div>
+      {suggestedAmount != null && !amountEdited && (
+        <p className="text-xs text-muted">
+          Suggested: {rate}% of {basis?.currency} {basis?.consultancyFee?.toFixed(2)} ({basis?.track} track consultancy fee, discount already
+          applied) — adjust if needed.
+        </p>
+      )}
+      {staffId && studentId && suggestedAmount == null && (
+        <p className="text-xs text-muted">
+          No suggestion available — this student has no signed agreement on file, or {staff?.full_name ?? "this staff member"} has no commission
+          rate set for a {basis?.track ?? "this"} track destination.
+        </p>
+      )}
       {credit && (
         <div className="flex items-center gap-2 rounded-md bg-warning/10 px-3 py-2 text-xs text-ink">
           <input
@@ -280,12 +331,14 @@ export function StaffCommissionTable({
   students,
   proofUrls,
   availableCredits,
+  studentCommissionBasis,
 }: {
   rows: CommissionRow[];
-  staffList: { id: string; full_name: string }[];
+  staffList: { id: string; full_name: string; commission_rate_general: number | null; commission_rate_public_universities: number | null }[];
   students: { id: string; full_name: string; assigned_counselor_id: string | null }[];
   proofUrls: Record<string, string>;
   availableCredits: AvailableCredit[];
+  studentCommissionBasis: Record<string, StudentCommissionBasis>;
 }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [nameInput, setNameInput] = useState("");
@@ -359,7 +412,14 @@ export function StaffCommissionTable({
         </Button>
       </div>
 
-      {showAddForm && <AddCommissionForm staffList={staffList} students={students} availableCredits={availableCredits} />}
+      {showAddForm && (
+        <AddCommissionForm
+          staffList={staffList}
+          students={students}
+          availableCredits={availableCredits}
+          studentCommissionBasis={studentCommissionBasis}
+        />
+      )}
 
       <div className="mb-3 flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-1 text-xs text-muted">

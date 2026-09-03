@@ -157,8 +157,44 @@ export default async function StaffCommissionPage() {
     };
   });
 
-  const { data: staffList } = await supabase.from("staff").select("id, full_name").order("full_name");
+  const { data: staffList } = await supabase
+    .from("staff")
+    .select("id, full_name, commission_rate_general, commission_rate_public_universities")
+    .order("full_name");
   const { data: students } = await supabase.from("students").select("id, full_name, assigned_counselor_id").order("full_name");
+
+  // Suggested-commission data: each student's SIGNED agreement (if any),
+  // resolved to the same discount-adjusted consultancy fee the invoice form
+  // already uses, plus the destination's track (public/private) so the "Add
+  // commission" form can pick the matching staff commission rate.
+  const allStudentIds = (students ?? []).map((s) => s.id);
+  const { data: signedAgreements } = allStudentIds.length
+    ? await supabase
+        .from("agreements")
+        .select(
+          "student_id, discount_amount, consultancy_fee_override, created_at, template:agreement_templates(destination:destinations(track, consultancy_fee, consultancy_fee_currency))"
+        )
+        .eq("status", "signed")
+        .in("student_id", allStudentIds)
+    : { data: [] };
+
+  type StudentCommissionBasis = { track: string | null; consultancyFee: number | null; currency: string | null };
+  const commissionBasisByStudent = new Map<string, StudentCommissionBasis>();
+  for (const a of signedAgreements ?? []) {
+    const template = one(a.template as never) as { destination?: unknown } | null;
+    const destination = template?.destination
+      ? (one(template.destination as never) as { track?: string; consultancy_fee?: number; consultancy_fee_currency?: string } | null)
+      : null;
+    if (!destination) continue;
+    const consultancyFee = (a.consultancy_fee_override ?? destination.consultancy_fee ?? 0) - (a.discount_amount ?? 0);
+    // A student could have more than one signed agreement in theory — last one wins.
+    commissionBasisByStudent.set(a.student_id, {
+      track: destination.track ?? null,
+      consultancyFee,
+      currency: destination.consultancy_fee_currency ?? null,
+    });
+  }
+  const studentCommissionBasis = Object.fromEntries(commissionBasisByStudent);
 
   return (
     <div className="w-full">
@@ -172,6 +208,7 @@ export default async function StaffCommissionPage() {
         students={students ?? []}
         proofUrls={proofUrls}
         availableCredits={availableCredits ?? []}
+        studentCommissionBasis={studentCommissionBasis}
       />
     </div>
   );
