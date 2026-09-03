@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Input, Select } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { STAFF_ROLE_LABELS } from "@/lib/constants";
+import { STAFF_ROLE_LABELS, CURRENCY_SYMBOLS } from "@/lib/constants";
 import { StaffActionsMenu } from "./StaffActionsMenu";
 import type { StaffRecord } from "./StaffForm";
 
@@ -92,7 +92,13 @@ export function StaffTable({
                 </td>
                 <td className="px-4 py-3 text-ink">{s.designation ?? "—"}</td>
                 <td className="px-4 py-3 text-ink">{s.mobile_official ?? "—"}</td>
-                <td className="px-4 py-3 text-ink">{s.commission_rate_general != null ? `${s.commission_rate_general}%` : "—"}</td>
+                <td className="px-4 py-3 text-ink">
+                  {s.commission_rate_general != null
+                    ? s.commission_type_general === "flat"
+                      ? `${CURRENCY_SYMBOLS[s.currency] ?? s.currency} ${s.commission_rate_general}`
+                      : `${s.commission_rate_general}%`
+                    : "—"}
+                </td>
                 <td className="px-4 py-3">
                   <Badge tone={s.status === "active" ? "success" : "neutral"}>{s.status === "active" ? "Active" : "Inactive"}</Badge>
                 </td>

@@ -72,6 +72,18 @@ export const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
   digital_marketing: "Digital Marketing",
 };
 
+export const COMMISSION_TYPES = ["percentage", "flat"] as const;
+export type CommissionType = (typeof COMMISSION_TYPES)[number];
+export const COMMISSION_TYPE_LABELS: Record<CommissionType, string> = {
+  percentage: "Percentage",
+  flat: "Flat Rate",
+};
+
+// Monthly bonus increment options — a bonus-eligible staff member's whole
+// month's earned commission is multiplied by (1 + this/100) once they reach
+// their monthly_target (applied on the Payroll page, not stored computed).
+export const BONUS_RATE_OPTIONS = [25, 50, 75, 100] as const;
+
 export const DOCUMENT_STATUSES = ["missing", "submitted", "under_review", "verified", "rejected"] as const;
 
 export const DOCUMENT_STATUS_TONE: Record<string, "success" | "warning" | "danger" | "neutral" | "info"> = {

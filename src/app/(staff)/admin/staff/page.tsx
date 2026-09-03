@@ -21,7 +21,8 @@ export default async function StaffAdminPage() {
       `id, full_name, role, designation, status, gender, date_of_birth, marital_status, cnic, address,
        mobile_personal, mobile_official, email_personal, email_official,
        emergency_contact_number, emergency_contact_name, emergency_contact_relation,
-       monthly_salary, currency, allowance, commission_rate_general, commission_rate_public_universities, monthly_target`
+       monthly_salary, currency, allowance, commission_rate_general, commission_rate_public_universities,
+       commission_type_general, commission_type_public_universities, monthly_target, bonus_eligible, bonus_rate_percent`
     )
     .order("full_name")
     .returns<StaffRecord[]>();

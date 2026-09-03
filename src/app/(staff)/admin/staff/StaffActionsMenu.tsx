@@ -120,12 +120,31 @@ export function StaffActionsMenu({
             value={staff.monthly_salary != null ? `${CURRENCY_SYMBOLS[staff.currency] ?? staff.currency} ${staff.monthly_salary}` : null}
           />
           <Row label="Allowance" value={staff.allowance != null ? `${CURRENCY_SYMBOLS[staff.currency] ?? staff.currency} ${staff.allowance}` : null} />
-          <Row label="Commission rate (general)" value={staff.commission_rate_general != null ? `${staff.commission_rate_general}%` : null} />
           <Row
-            label="Commission rate (public universities)"
-            value={staff.commission_rate_public_universities != null ? `${staff.commission_rate_public_universities}%` : null}
+            label="Commission — private universities"
+            value={
+              staff.commission_rate_general != null
+                ? staff.commission_type_general === "flat"
+                  ? `${CURRENCY_SYMBOLS[staff.currency] ?? staff.currency} ${staff.commission_rate_general} (flat)`
+                  : `${staff.commission_rate_general}%`
+                : null
+            }
+          />
+          <Row
+            label="Commission — public universities"
+            value={
+              staff.commission_rate_public_universities != null
+                ? staff.commission_type_public_universities === "flat"
+                  ? `${CURRENCY_SYMBOLS[staff.currency] ?? staff.currency} ${staff.commission_rate_public_universities} (flat)`
+                  : `${staff.commission_rate_public_universities}%`
+                : null
+            }
           />
           <Row label="Monthly target" value={staff.monthly_target} />
+          <Row
+            label="Monthly bonus"
+            value={staff.bonus_eligible ? `Eligible — ${staff.bonus_rate_percent}% increment when target is hit` : "Not eligible"}
+          />
 
           <h4 className="mt-4 mb-2 border-b border-border pb-1 text-xs font-semibold uppercase tracking-wide text-primary">Status</h4>
           <Row label="Status" value={staff.status === "active" ? "Active" : "Inactive"} />

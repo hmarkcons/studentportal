@@ -99,14 +99,18 @@ export async function createStaffCommission(revalidateTo: string, _prevState: un
   const currency = String(formData.get("currency") ?? "EUR");
   const registration_date = String(formData.get("registration_date") ?? "") || null;
   const apply_credit_id = String(formData.get("apply_credit_id") ?? "") || null;
+  const shared_with_staff_id = String(formData.get("shared_with_staff_id") ?? "") || null;
 
   if (!staff_id || !student_id || !amount) return { error: "Staff, student, and amount are required." };
+  if (shared_with_staff_id === staff_id) return { error: "Choose a different staff member to share this commission with." };
 
   // Single security-definer RPC — the credit-consume and the commission
-  // insert commit or fail together and the credit row is locked for the
-  // duration (see migration 0090), closing a race where two concurrent
+  // insert(s) commit or fail together and the credit row is locked for the
+  // duration (see migrations 0090/0096), closing a race where two concurrent
   // requests could both read the same credit as "available" and double-
-  // apply its discount before either write landed.
+  // apply its discount before either write landed. When shared_with_staff_id
+  // is set, the RPC splits `amount` 50/50 into two commission rows instead
+  // of crediting it all to one staff member (equal-effort registration).
   const { error } = await supabase.rpc("create_staff_commission", {
     p_staff_id: staff_id,
     p_student_id: student_id,
@@ -114,6 +118,7 @@ export async function createStaffCommission(revalidateTo: string, _prevState: un
     p_currency: currency,
     p_registration_date: registration_date,
     p_apply_credit_id: apply_credit_id,
+    p_shared_with_staff_id: shared_with_staff_id,
   });
   if (error) return { error: error.message };
 

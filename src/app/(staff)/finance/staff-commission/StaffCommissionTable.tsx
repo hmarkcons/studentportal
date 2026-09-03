@@ -41,10 +41,38 @@ export type CommissionRow = {
   consultancyFeeStatus: InvoiceStatus | null;
   adminFeeStatus: "paid" | "unpaid" | null;
   hasCredit: boolean;
+  sharedWithName: string | null;
 };
 
 export type AvailableCredit = { id: string; staff_id: string; amount: number; currency: string };
 export type StudentCommissionBasis = { track: string | null; consultancyFee: number | null; currency: string | null };
+export type CommissionStaffOption = {
+  id: string;
+  full_name: string;
+  role: string;
+  currency: string;
+  commission_rate_general: number | null;
+  commission_rate_public_universities: number | null;
+  commission_type_general: string;
+  commission_type_public_universities: string;
+};
+
+// Shared by both "Add commission" forms (this page's and the payroll page's)
+// — resolves which of a staff member's two rates/types applies for a given
+// student's destination track, and the resulting suggested amount + its
+// currency (the destination's fee currency for a percentage rate, since it's
+// a cut of that fee; the staff member's own salary currency for a flat rate,
+// since that's a fixed number Super Admin set independent of any fee).
+export function suggestCommission(staff: CommissionStaffOption | null, basis: StudentCommissionBasis | null) {
+  if (!staff || !basis?.track) return { amount: null as number | null, currency: null as string | null, rate: null as number | null, type: null as string | null };
+  const isPublic = basis.track === "public";
+  const rate = isPublic ? staff.commission_rate_public_universities : staff.commission_rate_general;
+  const type = isPublic ? staff.commission_type_public_universities : staff.commission_type_general;
+  if (rate == null) return { amount: null, currency: null, rate: null, type };
+  if (type === "flat") return { amount: rate, currency: staff.currency, rate, type };
+  if (basis.consultancyFee == null) return { amount: null, currency: null, rate, type };
+  return { amount: Math.round(basis.consultancyFee * (rate / 100) * 100) / 100, currency: basis.currency, rate, type };
+}
 
 function AddCommissionForm({
   staffList,
@@ -52,7 +80,7 @@ function AddCommissionForm({
   availableCredits,
   studentCommissionBasis,
 }: {
-  staffList: { id: string; full_name: string; commission_rate_general: number | null; commission_rate_public_universities: number | null }[];
+  staffList: CommissionStaffOption[];
   students: { id: string; full_name: string; assigned_counselor_id: string | null }[];
   availableCredits: AvailableCredit[];
   studentCommissionBasis: Record<string, StudentCommissionBasis>;
@@ -66,6 +94,8 @@ function AddCommissionForm({
   const [currency, setCurrency] = useState("PKR");
   const [amountEdited, setAmountEdited] = useState(false);
   const [suggestionKey, setSuggestionKey] = useState<string | null>(null);
+  const [isShared, setIsShared] = useState(false);
+  const [sharedWithStaffId, setSharedWithStaffId] = useState("");
 
   // Only students assigned to the selected staff member show up — matches
   // the same staff member who'll actually be credited/paid for them.
@@ -78,12 +108,11 @@ function AddCommissionForm({
 
   const staff = staffList.find((s) => s.id === staffId) ?? null;
   const basis = studentCommissionBasis[studentId] ?? null;
-  // Public/private destination track picks which of the staff member's two
-  // commission rates applies — matches how the staff record's own two rate
-  // fields are named and shown on the payroll page.
-  const rate = staff && basis ? (basis.track === "public" ? staff.commission_rate_public_universities : staff.commission_rate_general) : null;
-  const suggestedAmount =
-    rate != null && basis?.consultancyFee != null ? Math.round(basis.consultancyFee * (rate / 100) * 100) / 100 : null;
+  const suggestion = suggestCommission(staff, basis);
+
+  // The share-with dropdown excludes Super Admin (not a commission-earning
+  // sales role) and whoever is already picked as the primary staff member.
+  const shareableStaff = staffList.filter((s) => s.id !== staffId && s.role !== "super_admin");
 
   // Auto-fill on each new staff/student pick — adjusting state during render
   // (React's documented pattern for this) rather than in an effect, so it
@@ -94,8 +123,8 @@ function AddCommissionForm({
   if (currentSuggestionKey !== suggestionKey) {
     setSuggestionKey(currentSuggestionKey);
     setAmountEdited(false);
-    setAmount(suggestedAmount != null ? String(suggestedAmount) : "");
-    setCurrency(basis?.currency ?? "PKR");
+    setAmount(suggestion.amount != null ? String(suggestion.amount) : "");
+    setCurrency(suggestion.currency ?? "PKR");
   }
 
   const amountNum = Number(amount) || 0;
@@ -112,6 +141,7 @@ function AddCommissionForm({
             setStaffId(e.target.value);
             setStudentId("");
             setApplyCredit(false);
+            if (e.target.value === sharedWithStaffId) setSharedWithStaffId("");
           }}
         >
           <option value="">Staff…</option>
@@ -158,16 +188,51 @@ function AddCommissionForm({
           {pending ? "Adding…" : "+ Add commission"}
         </Button>
       </div>
-      {suggestedAmount != null && !amountEdited && (
+      {suggestion.amount != null && !amountEdited && (
         <p className="text-xs text-muted">
-          Suggested: {rate}% of {basis?.currency} {basis?.consultancyFee?.toFixed(2)} ({basis?.track} track consultancy fee, discount already
-          applied) — adjust if needed.
+          Suggested: {suggestion.type === "flat" ? `flat ${suggestion.currency} ${suggestion.rate}` : `${suggestion.rate}% of ${basis?.currency} ${basis?.consultancyFee?.toFixed(2)}`}{" "}
+          ({basis?.track} track{suggestion.type !== "flat" ? ", discount already applied" : ""}) — adjust if needed.
         </p>
       )}
-      {staffId && studentId && suggestedAmount == null && (
+      {staffId && studentId && suggestion.amount == null && (
         <p className="text-xs text-muted">
           No suggestion available — this student has no signed agreement on file, or {staff?.full_name ?? "this staff member"} has no commission
           rate set for a {basis?.track ?? "this"} track destination.
+        </p>
+      )}
+      <div className="flex flex-wrap items-center gap-2 text-xs text-ink">
+        <label className="flex items-center gap-1.5">
+          <input
+            type="checkbox"
+            checked={isShared}
+            onChange={(e) => {
+              setIsShared(e.target.checked);
+              if (!e.target.checked) setSharedWithStaffId("");
+            }}
+          />
+          Shared commission — this student was registered through the equal effort of another staff member
+        </label>
+        {isShared && (
+          <Select
+            value={sharedWithStaffId}
+            onChange={(e) => setSharedWithStaffId(e.target.value)}
+            disabled={!staffId}
+          >
+            <option value="">Share with…</option>
+            {shareableStaff.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.full_name}
+              </option>
+            ))}
+          </Select>
+        )}
+        <input type="hidden" name="shared_with_staff_id" value={isShared ? sharedWithStaffId : ""} />
+      </div>
+      {isShared && sharedWithStaffId && (
+        <p className="text-xs text-muted">
+          {staff?.full_name ?? "This staff member"}&apos;s commission rate is used to work out the total, then split 50/50 between them and{" "}
+          {shareableStaff.find((s) => s.id === sharedWithStaffId)?.full_name} — each will show roughly {currency} {(amountNum / 2).toFixed(2)}{" "}
+          in their own ledger.
         </p>
       )}
       {credit && (
@@ -334,7 +399,7 @@ export function StaffCommissionTable({
   studentCommissionBasis,
 }: {
   rows: CommissionRow[];
-  staffList: { id: string; full_name: string; commission_rate_general: number | null; commission_rate_public_universities: number | null }[];
+  staffList: CommissionStaffOption[];
   students: { id: string; full_name: string; assigned_counselor_id: string | null }[];
   proofUrls: Record<string, string>;
   availableCredits: AvailableCredit[];
@@ -521,6 +586,7 @@ export function StaffCommissionTable({
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-ink">
                       {r.currency} {r.amount}
+                      {r.sharedWithName && <div className="text-[10px] font-normal text-muted">shared w/ {r.sharedWithName}</div>}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
                       <Badge tone={r.status === "paid" ? "success" : "warning"}>{r.status}</Badge>

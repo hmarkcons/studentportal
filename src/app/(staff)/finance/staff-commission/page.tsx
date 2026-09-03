@@ -32,7 +32,7 @@ export default async function StaffCommissionPage() {
   const { data: commissions } = await supabase
     .from("staff_commissions")
     .select(
-      "id, amount, currency, status, payment_method, registration_date, payment_proof_path, staff_id, student_id, staff:staff(full_name), student:leads(full_name, email, registered_at, registration_status)"
+      "id, amount, currency, status, payment_method, registration_date, payment_proof_path, staff_id, student_id, shared_with_staff_id, staff:staff(full_name), student:leads(full_name, email, registered_at, registration_status), shared_with:staff!staff_commissions_shared_with_staff_id_fkey(full_name)"
     )
     .order("registration_date", { ascending: false });
 
@@ -154,12 +154,13 @@ export default async function StaffCommissionPage() {
       consultancyFeeStatus: latestInvoice ? computeInvoiceStatus(latestInvoice.admin_fee_status, invInstallments) : null,
       adminFeeStatus: (latestInvoice?.admin_fee_status as "paid" | "unpaid" | undefined) ?? null,
       hasCredit: creditedCommissionIds.has(c.id),
+      sharedWithName: (one(c.shared_with as never) as { full_name?: string } | null)?.full_name ?? null,
     };
   });
 
   const { data: staffList } = await supabase
     .from("staff")
-    .select("id, full_name, commission_rate_general, commission_rate_public_universities")
+    .select("id, full_name, role, currency, commission_rate_general, commission_rate_public_universities, commission_type_general, commission_type_public_universities")
     .order("full_name");
   const { data: students } = await supabase.from("students").select("id, full_name, assigned_counselor_id").order("full_name");
 

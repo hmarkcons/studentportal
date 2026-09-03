@@ -13,6 +13,7 @@ import {
   updateStaffCommission,
   uploadStaffCommissionProof,
 } from "@/lib/actions/finance";
+import { suggestCommission, type CommissionStaffOption } from "@/app/(staff)/finance/staff-commission/StaffCommissionTable";
 
 export type CommissionRecord = {
   id: string;
@@ -22,6 +23,7 @@ export type CommissionRecord = {
   registration_date: string | null;
   payment_proof_path: string | null;
   student_name: string;
+  shared_with_name: string | null;
 };
 
 function EditCommissionForm({ record, revalidateTo }: { record: CommissionRecord; revalidateTo: string }) {
@@ -97,20 +99,18 @@ function DeleteCommissionButton({ id, revalidateTo }: { id: string; revalidateTo
 export type StudentCommissionBasis = { track: string | null; consultancyFee: number | null; currency: string | null };
 
 function AddCommissionForm({
-  staffId,
+  currentStaff,
+  shareableStaff,
   students,
   defaultDate,
   revalidateTo,
-  commissionRateGeneral,
-  commissionRatePublicUniversities,
   studentCommissionBasis,
 }: {
-  staffId: string;
+  currentStaff: CommissionStaffOption;
+  shareableStaff: CommissionStaffOption[];
   students: { id: string; full_name: string }[];
   defaultDate: string;
   revalidateTo: string;
-  commissionRateGeneral: number | null;
-  commissionRatePublicUniversities: number | null;
   studentCommissionBasis: Record<string, StudentCommissionBasis>;
 }) {
   const action = createStaffCommission.bind(null, revalidateTo);
@@ -120,13 +120,11 @@ function AddCommissionForm({
   const [currency, setCurrency] = useState("PKR");
   const [amountEdited, setAmountEdited] = useState(false);
   const [suggestionKey, setSuggestionKey] = useState<string | null>(null);
+  const [isShared, setIsShared] = useState(false);
+  const [sharedWithStaffId, setSharedWithStaffId] = useState("");
 
   const basis = studentCommissionBasis[studentId] ?? null;
-  // Public/private destination track picks which of this staff member's two
-  // commission rates applies — matches the Commission Rate Reference card
-  // shown alongside this form.
-  const rate = basis ? (basis.track === "public" ? commissionRatePublicUniversities : commissionRateGeneral) : null;
-  const suggestedAmount = rate != null && basis?.consultancyFee != null ? Math.round(basis.consultancyFee * (rate / 100) * 100) / 100 : null;
+  const suggestion = suggestCommission(currentStaff, basis);
 
   // Adjusting state during render (React's documented pattern for this)
   // rather than in an effect, so a new student pick takes effect in the same
@@ -135,51 +133,86 @@ function AddCommissionForm({
   if (studentId !== suggestionKey) {
     setSuggestionKey(studentId);
     setAmountEdited(false);
-    setAmount(suggestedAmount != null ? String(suggestedAmount) : "");
-    setCurrency(basis?.currency ?? "PKR");
+    setAmount(suggestion.amount != null ? String(suggestion.amount) : "");
+    setCurrency(suggestion.currency ?? "PKR");
   }
 
+  const amountNum = Number(amount) || 0;
+
   return (
-    <form action={formAction} className="mb-3 flex flex-wrap items-end gap-2">
-      <input type="hidden" name="staff_id" value={staffId} />
-      <Select name="student_id" required value={studentId} onChange={(e) => setStudentId(e.target.value)}>
-        <option value="">Student…</option>
-        {students.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.full_name}
-          </option>
-        ))}
-      </Select>
-      <Input
-        name="amount"
-        type="number"
-        step="0.01"
-        placeholder="Amount"
-        required
-        className="w-24"
-        value={amount}
-        onChange={(e) => {
-          setAmount(e.target.value);
-          setAmountEdited(true);
-        }}
-      />
-      <Select name="currency" value={currency} onChange={(e) => setCurrency(e.target.value)}>
-        <option value="PKR">PKR</option>
-        <option value="EUR">EUR</option>
-        <option value="USD">USD</option>
-      </Select>
-      <Input name="registration_date" type="date" defaultValue={defaultDate} />
-      <Button type="submit" variant="primary" size="sm" disabled={pending}>
-        {pending ? "Adding…" : "+ Add commission record"}
-      </Button>
-      {suggestedAmount != null && !amountEdited && (
+    <form action={formAction} className="mb-3 flex flex-col gap-2">
+      <input type="hidden" name="staff_id" value={currentStaff.id} />
+      <div className="flex flex-wrap items-end gap-2">
+        <Select name="student_id" required value={studentId} onChange={(e) => setStudentId(e.target.value)}>
+          <option value="">Student…</option>
+          {students.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.full_name}
+            </option>
+          ))}
+        </Select>
+        <Input
+          name="amount"
+          type="number"
+          step="0.01"
+          placeholder="Amount"
+          required
+          className="w-24"
+          value={amount}
+          onChange={(e) => {
+            setAmount(e.target.value);
+            setAmountEdited(true);
+          }}
+        />
+        <Select name="currency" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+          <option value="PKR">PKR</option>
+          <option value="EUR">EUR</option>
+          <option value="USD">USD</option>
+        </Select>
+        <Input name="registration_date" type="date" defaultValue={defaultDate} />
+        <Button type="submit" variant="primary" size="sm" disabled={pending}>
+          {pending ? "Adding…" : "+ Add commission record"}
+        </Button>
+      </div>
+      {suggestion.amount != null && !amountEdited && (
         <p className="w-full text-xs text-muted">
-          Suggested: {rate}% of {basis?.currency} {basis?.consultancyFee?.toFixed(2)} ({basis?.track} track consultancy fee, discount already
-          applied) — adjust if needed.
+          Suggested: {suggestion.type === "flat" ? `flat ${suggestion.currency} ${suggestion.rate}` : `${suggestion.rate}% of ${basis?.currency} ${basis?.consultancyFee?.toFixed(2)}`}{" "}
+          ({basis?.track} track{suggestion.type !== "flat" ? ", discount already applied" : ""}) — adjust if needed.
         </p>
       )}
-      {studentId && suggestedAmount == null && (
+      {studentId && suggestion.amount == null && (
         <p className="w-full text-xs text-muted">No suggestion available — this student has no signed agreement on file yet.</p>
+      )}
+      <div className="flex flex-wrap items-center gap-2 text-xs text-ink">
+        <label className="flex items-center gap-1.5">
+          <input
+            type="checkbox"
+            checked={isShared}
+            onChange={(e) => {
+              setIsShared(e.target.checked);
+              if (!e.target.checked) setSharedWithStaffId("");
+            }}
+          />
+          Shared commission — this student was registered through the equal effort of another staff member
+        </label>
+        {isShared && (
+          <Select value={sharedWithStaffId} onChange={(e) => setSharedWithStaffId(e.target.value)}>
+            <option value="">Share with…</option>
+            {shareableStaff.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.full_name}
+              </option>
+            ))}
+          </Select>
+        )}
+        <input type="hidden" name="shared_with_staff_id" value={isShared ? sharedWithStaffId : ""} />
+      </div>
+      {isShared && sharedWithStaffId && (
+        <p className="text-xs text-muted">
+          {currentStaff.full_name}&apos;s commission rate is used to work out the total, then split 50/50 between them and{" "}
+          {shareableStaff.find((s) => s.id === sharedWithStaffId)?.full_name} — each will show roughly {currency} {(amountNum / 2).toFixed(2)} in
+          their own ledger.
+        </p>
       )}
       {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
     </form>
@@ -187,38 +220,35 @@ function AddCommissionForm({
 }
 
 export function CommissionLedgerTable({
-  staffId,
+  currentStaff,
+  shareableStaff,
   records,
   students,
   proofUrls,
   defaultDate,
   revalidateTo,
   canManage,
-  commissionRateGeneral,
-  commissionRatePublicUniversities,
   studentCommissionBasis,
 }: {
-  staffId: string;
+  currentStaff: CommissionStaffOption;
+  shareableStaff: CommissionStaffOption[];
   records: CommissionRecord[];
   students: { id: string; full_name: string }[];
   proofUrls: Record<string, string>;
   defaultDate: string;
   revalidateTo: string;
   canManage: boolean;
-  commissionRateGeneral: number | null;
-  commissionRatePublicUniversities: number | null;
   studentCommissionBasis: Record<string, StudentCommissionBasis>;
 }) {
   return (
     <div>
       {canManage && (
         <AddCommissionForm
-          staffId={staffId}
+          currentStaff={currentStaff}
+          shareableStaff={shareableStaff}
           students={students}
           defaultDate={defaultDate}
           revalidateTo={revalidateTo}
-          commissionRateGeneral={commissionRateGeneral}
-          commissionRatePublicUniversities={commissionRatePublicUniversities}
           studentCommissionBasis={studentCommissionBasis}
         />
       )}
@@ -232,6 +262,7 @@ export function CommissionLedgerTable({
                 <span className="text-ink">{r.student_name}</span>{" "}
                 <span className="text-muted">
                   · {r.currency} {r.amount}
+                  {r.shared_with_name && ` (shared w/ ${r.shared_with_name})`}
                 </span>
               </div>
               <div className="flex items-center gap-2">

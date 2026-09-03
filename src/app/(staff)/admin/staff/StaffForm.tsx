@@ -1,8 +1,20 @@
 "use client";
 
+import { useState } from "react";
 import { useActionState } from "react";
 import { createStaffAccount, updateStaffDetails } from "@/lib/actions/admin";
-import { STAFF_ROLES, STAFF_ROLE_LABELS, STAFF_DESIGNATIONS, GENDERS, MARITAL_STATUSES, STAFF_CURRENCIES, CURRENCY_SYMBOLS } from "@/lib/constants";
+import {
+  STAFF_ROLES,
+  STAFF_ROLE_LABELS,
+  STAFF_DESIGNATIONS,
+  GENDERS,
+  MARITAL_STATUSES,
+  STAFF_CURRENCIES,
+  CURRENCY_SYMBOLS,
+  COMMISSION_TYPES,
+  COMMISSION_TYPE_LABELS,
+  BONUS_RATE_OPTIONS,
+} from "@/lib/constants";
 import { Input, Select } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 
@@ -31,7 +43,11 @@ export type StaffRecord = {
   allowance: number | null;
   commission_rate_general: number | null;
   commission_rate_public_universities: number | null;
+  commission_type_general: string;
+  commission_type_public_universities: string;
   monthly_target: number | null;
+  bonus_eligible: boolean;
+  bonus_rate_percent: number | null;
 };
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -57,6 +73,9 @@ export function StaffForm({ staff, onSuccess }: { staff?: StaffRecord; onSuccess
   const action = isEdit ? updateStaffDetails.bind(null, staff!.id) : createStaffAccount;
   const [state, formAction, pending] = useActionState(action, undefined);
   const currency = staff?.currency ?? "PKR";
+  const [typeGeneral, setTypeGeneral] = useState(staff?.commission_type_general ?? "percentage");
+  const [typePublic, setTypePublic] = useState(staff?.commission_type_public_universities ?? "percentage");
+  const [bonusEligible, setBonusEligible] = useState(staff?.bonus_eligible ?? false);
 
   return (
     <form action={formAction} className="flex flex-col">
@@ -155,10 +174,40 @@ export function StaffForm({ staff, onSuccess }: { staff?: StaffRecord; onSuccess
         <Field label={`Allowance (${CURRENCY_SYMBOLS[currency] ?? currency})`}>
           <Input name="allowance" type="number" step="0.01" defaultValue={staff?.allowance ?? ""} />
         </Field>
-        <Field label="Commission rate — general (%)">
+        <Field label="Private Universities — Commission Type">
+          <Select name="commission_type_general" value={typeGeneral} onChange={(e) => setTypeGeneral(e.target.value)}>
+            {COMMISSION_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {COMMISSION_TYPE_LABELS[t]}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field
+          label={
+            typeGeneral === "flat"
+              ? `Private Universities — Flat Amount (${CURRENCY_SYMBOLS[currency] ?? currency})`
+              : "Private Universities — Rate (%)"
+          }
+        >
           <Input name="commission_rate_general" type="number" step="0.01" defaultValue={staff?.commission_rate_general ?? ""} />
         </Field>
-        <Field label="Commission rate — public universities (%)">
+        <Field label="Public Universities — Commission Type">
+          <Select name="commission_type_public_universities" value={typePublic} onChange={(e) => setTypePublic(e.target.value)}>
+            {COMMISSION_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {COMMISSION_TYPE_LABELS[t]}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field
+          label={
+            typePublic === "flat"
+              ? `Public Universities — Flat Amount (${CURRENCY_SYMBOLS[currency] ?? currency})`
+              : "Public Universities — Rate (%)"
+          }
+        >
           <Input
             name="commission_rate_public_universities"
             type="number"
@@ -169,6 +218,29 @@ export function StaffForm({ staff, onSuccess }: { staff?: StaffRecord; onSuccess
         <Field label="Monthly target">
           <Input name="monthly_target" type="number" step="1" defaultValue={staff?.monthly_target ?? ""} />
         </Field>
+        <Field label="Monthly bonus" full>
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <input
+              type="checkbox"
+              name="bonus_eligible"
+              checked={bonusEligible}
+              onChange={(e) => setBonusEligible(e.target.checked)}
+              className="h-4 w-4"
+            />
+            Eligible for a bonus when this staff member hits their monthly target
+          </label>
+        </Field>
+        {bonusEligible && (
+          <Field label="Bonus Rate">
+            <Select name="bonus_rate_percent" defaultValue={String(staff?.bonus_rate_percent ?? BONUS_RATE_OPTIONS[0])}>
+              {BONUS_RATE_OPTIONS.map((r) => (
+                <option key={r} value={r}>
+                  {r}% increment in commission
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
       </Section>
 
       <Section title="Status">

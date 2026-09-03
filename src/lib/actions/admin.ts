@@ -30,7 +30,13 @@ function staffFieldsFromFormData(formData: FormData) {
     commission_rate_public_universities: formData.get("commission_rate_public_universities")
       ? Number(formData.get("commission_rate_public_universities"))
       : null,
+    commission_type_general: String(formData.get("commission_type_general") ?? "percentage") === "flat" ? "flat" : "percentage",
+    commission_type_public_universities:
+      String(formData.get("commission_type_public_universities") ?? "percentage") === "flat" ? "flat" : "percentage",
     monthly_target: formData.get("monthly_target") ? Number(formData.get("monthly_target")) : null,
+    bonus_eligible: formData.get("bonus_eligible") === "on",
+    bonus_rate_percent:
+      formData.get("bonus_eligible") === "on" && formData.get("bonus_rate_percent") ? Number(formData.get("bonus_rate_percent")) : null,
   };
 }
 
