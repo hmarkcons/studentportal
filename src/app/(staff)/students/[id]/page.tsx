@@ -27,6 +27,22 @@ function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
 }
 
+function slugForFilename(value: string) {
+  return value.trim().replace(/\s+/g, "_");
+}
+
+// The download filename shown to whoever opens a generated agreement's PDF
+// link — built from the destination's actual country/track columns (not the
+// free-text display_name, which isn't guaranteed to follow "Country
+// (Track)" for a hand-typed/test destination) so it's always predictable.
+function generatedAgreementFilename(studentName: string | undefined | null, destination: { country?: string; track?: string } | null) {
+  const country = destination?.country
+    ? slugForFilename(`${destination.country} (${destination.track === "public" ? "Public" : "Private"})`)
+    : "Destination";
+  const student = studentName ? slugForFilename(studentName) : "Student";
+  return `HMC-Student-Agreement-${country}-${student}.pdf`;
+}
+
 export default async function StudentDashboardPage(props: PageProps<"/students/[id]">) {
   const { id } = await props.params;
   const { supabase } = await getStaffSession();
@@ -71,7 +87,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       supabase
         .from("agreements")
         .select(
-          "id, status, signing_method, signed_file_path, pdf_path, email_verified, discount_amount, created_at, template_id, admin_charge_override, consultancy_fee_override, installment_count, template:agreement_templates(file_path, destination_id)"
+          "id, status, signing_method, signed_file_path, pdf_path, email_verified, discount_amount, created_at, template_id, admin_charge_override, consultancy_fee_override, installment_count, template:agreement_templates(file_path, destination_id, destination:destinations(country, track))"
         )
         .eq("student_id", id)
         .order("created_at", { ascending: false }),
@@ -194,7 +210,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     Promise.all(
       (agreements ?? []).map(async (a) => {
         const links: { templateUrl?: string; signedUrl?: string; pdfUrl?: string } = {};
-        const tmpl = one(a.template as never) as { file_path?: string } | null;
+        const tmpl = one(a.template as never) as { file_path?: string; destination?: unknown } | null;
         if (tmpl?.file_path) {
           const { data } = await supabase.storage.from("documents").createSignedUrl(tmpl.file_path, 3600);
           if (data?.signedUrl) links.templateUrl = data.signedUrl;
@@ -204,7 +220,10 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
           if (data?.signedUrl) links.signedUrl = data.signedUrl;
         }
         if (a.pdf_path) {
-          const { data } = await supabase.storage.from("documents").createSignedUrl(a.pdf_path, 3600);
+          const destination = tmpl?.destination ? (one(tmpl.destination as never) as { country?: string; track?: string } | null) : null;
+          const { data } = await supabase.storage
+            .from("documents")
+            .createSignedUrl(a.pdf_path, 3600, { download: generatedAgreementFilename(student?.full_name, destination) });
           if (data?.signedUrl) links.pdfUrl = data.signedUrl;
         }
         return [a.id, links] as const;

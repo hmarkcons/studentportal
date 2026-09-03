@@ -136,6 +136,19 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
     .eq("student_id", studentId)
     .maybeSingle();
 
+  // The agreement PDF prints these fields directly (see StudentDetailsChart
+  // below) — generating it with any of them blank would hand the student a
+  // legal document with empty fields instead of failing loudly here.
+  const missingProfileFields = [
+    !student.address?.trim() && "address",
+    !profile?.emergency_contact_name?.trim() && "emergency contact name",
+    !profile?.emergency_contact_relation?.trim() && "emergency contact relation",
+    !profile?.emergency_contact_number?.trim() && "emergency contact number",
+  ].filter((f): f is string => Boolean(f));
+  if (missingProfileFields.length > 0) {
+    return { error: `Complete the student's profile before generating the agreement — missing: ${missingProfileFields.join(", ")}.` };
+  }
+
   // The doc's rule: the agreement's signatory is always the one fixed
   // authorized person on the template, never the staff member who
   // generated it (that's tracked separately via agreements.generated_by).
