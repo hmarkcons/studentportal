@@ -111,9 +111,24 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   const signedAgreementTemplate = signedAgreement
     ? (one(signedAgreement.template as never) as { destination_id?: string } | null)
     : null;
-  const defaultInstallmentPlan = signedAgreementTemplate?.destination_id
-    ? (allDestinations.find((d) => d.id === signedAgreementTemplate.destination_id)?.installment_plan ?? null)
+  const signedAgreementDestination = signedAgreementTemplate?.destination_id
+    ? allDestinations.find((d) => d.id === signedAgreementTemplate.destination_id)
     : null;
+  const defaultInstallmentPlan = signedAgreementDestination?.installment_plan ?? null;
+  // Pre-fill the invoice form with the SIGNED agreement's actual figures
+  // (override if set, else the destination's default) so staff no longer
+  // have to remember and retype them by hand — the consultancy fee already
+  // has the agreement's discount subtracted, same as the agreement PDF's fee
+  // table, so the invoice and the signed agreement always agree on what the
+  // client actually owes.
+  const defaultInvoiceAdminCharge = signedAgreement
+    ? (signedAgreement.admin_charge_override ?? signedAgreementDestination?.admin_charge ?? null)
+    : null;
+  const defaultInvoiceConsultancyFee =
+    signedAgreement && signedAgreementDestination
+      ? (signedAgreement.consultancy_fee_override ?? signedAgreementDestination.consultancy_fee ?? 0) - (signedAgreement.discount_amount ?? 0)
+      : null;
+  const defaultInvoiceCurrency = signedAgreementDestination?.consultancy_fee_currency ?? null;
   const invoiceIds = (invoices ?? []).map((i) => i.id);
   const appIds = (applications ?? []).map((a) => a.id);
   const appLabel = new Map((applications ?? []).map((a) => [a.id, one(a.university as never) as { name?: string } | null]));
@@ -386,7 +401,14 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         <Card className="mt-6">
           <h3 className="mb-3 text-sm font-medium text-ink">Invoice</h3>
           {canManageInvoice && (
-            <GenerateInvoiceForm studentId={id} agreementId={signedAgreement.id} defaultInstallmentPlan={defaultInstallmentPlan} />
+            <GenerateInvoiceForm
+              studentId={id}
+              agreementId={signedAgreement.id}
+              defaultInstallmentPlan={defaultInstallmentPlan}
+              defaultAdminCharge={defaultInvoiceAdminCharge}
+              defaultConsultancyFee={defaultInvoiceConsultancyFee}
+              defaultCurrency={defaultInvoiceCurrency}
+            />
           )}
           <div className="mt-4 flex flex-col gap-3">
             {(invoices ?? []).map((inv) => (

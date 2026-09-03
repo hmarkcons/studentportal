@@ -24,20 +24,45 @@ export function GenerateInvoiceForm({
   studentId,
   agreementId,
   defaultInstallmentPlan,
+  defaultAdminCharge,
+  defaultConsultancyFee,
+  defaultCurrency,
 }: {
   studentId: string;
   agreementId: string;
   defaultInstallmentPlan?: string | null;
+  defaultAdminCharge?: number | null;
+  defaultConsultancyFee?: number | null;
+  defaultCurrency?: string | null;
 }) {
   const action = generateInvoice.bind(null, studentId, agreementId);
   const [state, formAction, pending] = useActionState(action, undefined);
 
   return (
     <form action={formAction} className="flex flex-col gap-2">
+      {(defaultAdminCharge != null || defaultConsultancyFee != null) && (
+        <p className="text-xs text-muted">Pre-filled from the signed agreement (discount already applied) — adjust if needed.</p>
+      )}
       <div className="flex flex-wrap items-end gap-2">
-        <Input name="admin_charge" type="number" step="0.01" placeholder="Admin charge" required className="w-32" />
-        <Input name="consultancy_fee" type="number" step="0.01" placeholder="Consultancy fee" required className="w-36" />
-        <Select name="currency">
+        <Input
+          name="admin_charge"
+          type="number"
+          step="0.01"
+          placeholder="Admin charge"
+          defaultValue={defaultAdminCharge ?? undefined}
+          required
+          className="w-32"
+        />
+        <Input
+          name="consultancy_fee"
+          type="number"
+          step="0.01"
+          placeholder="Consultancy fee"
+          defaultValue={defaultConsultancyFee ?? undefined}
+          required
+          className="w-36"
+        />
+        <Select name="currency" defaultValue={defaultCurrency ?? "EUR"}>
           <option value="EUR">EUR</option>
           <option value="PKR">PKR</option>
           <option value="USD">USD</option>
