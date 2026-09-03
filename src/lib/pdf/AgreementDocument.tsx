@@ -183,12 +183,18 @@ const INSTALLMENT_SCHEDULE: { label: string; note: string }[] = [
 ];
 
 // The administrative fee is a single flat, non-refundable charge — only the
-// consultancy fee is split into the staff-chosen number of installments
-// (agreements.installment_count, 1-3), matching the invoice module's
-// installment-count dropdown (see generateInvoice in src/lib/actions/invoices.ts).
-// Row order and due-date notes follow the business's fixed payment
-// schedule: admin charge and the first installment at signing, further
-// installments later, with the discount and grand total shown last.
+// consultancy fee (and any discount, which only ever applies to the
+// consultancy fee, never the admin charge) is split into the staff-chosen
+// number of installments (agreements.installment_count, 1-3), matching the
+// invoice module's installment-count dropdown (see generateInvoice in
+// src/lib/actions/invoices.ts). Row order and due-date notes follow the
+// business's fixed payment schedule: admin charge and the first installment
+// at signing, further installments later, with the grand total shown last.
+// There's deliberately no separate "Discount" row: each installment amount
+// passed in is already net of the discount (see generateAgreementPdf), so a
+// standalone discount line would make the rows overshoot the stated total by
+// double-counting it — the discount is called out as a note on the total
+// instead, which keeps every row adding up correctly.
 function FeeTable({ fee }: { fee: AgreementPdfData["fee"] }) {
   const rows: { label: string; note?: string; value: number }[] = [
     { label: "Administrative Charges (Non-Refundable)", note: "Pay at the time of signing the agreement", value: fee.adminCharge },
@@ -201,8 +207,11 @@ function FeeTable({ fee }: { fee: AgreementPdfData["fee"] }) {
       rows.push({ label: schedule.label, note: schedule.note, value: amount });
     });
   }
-  if (fee.discount && fee.discount > 0) rows.push({ label: "Discount", value: fee.discount });
-  rows.push({ label: "Total Professional Fee", value: fee.total });
+  rows.push({
+    label: "Total Professional Fee",
+    note: fee.discount && fee.discount > 0 ? `Includes a discount of ${money(fee.currencySymbol, fee.discount)}, already applied above` : undefined,
+    value: fee.total,
+  });
 
   return (
     <View style={styles.feeTable}>

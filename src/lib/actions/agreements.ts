@@ -146,17 +146,23 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
 
   const adminCharge = agreement.admin_charge_override ?? destination.admin_charge ?? 0;
   const consultancyFee = agreement.consultancy_fee_override ?? destination.consultancy_fee ?? 0;
+  const discountAmount = agreement.discount_amount ?? 0;
   const currencySymbol = CURRENCY_SYMBOLS[destination.consultancy_fee_currency ?? "EUR"] ?? destination.consultancy_fee_currency ?? "€";
-  const totalFee = adminCharge + consultancyFee - (agreement.discount_amount ?? 0);
+  const totalFee = adminCharge + consultancyFee - discountAmount;
   const agreementDateStr = formatAgreementDate(new Date(agreement.created_at));
 
-  // Split the consultancy fee into equal installments per the staff's choice
-  // at generation time (installment_count), with any rounding remainder
-  // folded into the last installment so the parts always sum to the whole.
+  // Split the discounted consultancy fee (the discount only ever applies to
+  // the consultancy fee, never the non-refundable admin charge) into equal
+  // installments per the staff's choice at generation time (installment_count),
+  // with any rounding remainder folded into the last installment so the parts
+  // always sum to the whole. Splitting the discount across every installment
+  // this way means what the client actually owes at each payment point is
+  // already net of the discount, instead of only reconciling in the total row.
+  const discountedConsultancyFee = consultancyFee - discountAmount;
   const installmentCount = agreement.installment_count ?? 1;
-  const perInstallment = Math.round((consultancyFee / installmentCount) * 100) / 100;
+  const perInstallment = Math.round((discountedConsultancyFee / installmentCount) * 100) / 100;
   const installmentAmounts = Array.from({ length: installmentCount }, (_, i) =>
-    i === installmentCount - 1 ? consultancyFee - perInstallment * (installmentCount - 1) : perInstallment
+    i === installmentCount - 1 ? discountedConsultancyFee - perInstallment * (installmentCount - 1) : perInstallment
   );
 
   const { renderToBuffer } = await import("@react-pdf/renderer");
@@ -208,7 +214,7 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
         adminCharge,
         consultancyFee,
         installmentAmounts,
-        discount: agreement.discount_amount,
+        discount: discountAmount,
         total: totalFee,
       },
       agreementDate: agreementDateStr,
