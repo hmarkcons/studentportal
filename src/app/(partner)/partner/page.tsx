@@ -18,11 +18,15 @@ type PartnerApplicationRow = {
   documents_summary: Record<string, string> | null;
 };
 
-// Trend "enrolled" year is approximated from the application's creation year
-// (submitted_at) rather than the actual date it reached 'enrolled', since
-// application_stage_history isn't exposed to partner accounts. Good enough
-// for a year-over-year shape; not a precise enrollment date.
-function trendYear(row: PartnerApplicationRow): number {
+// Approximates the year an application reached 'enrolled', since
+// application_stage_history isn't exposed to partner accounts — the intake
+// term (e.g. "Fall 2027") is a much closer proxy for enrollment year than
+// when the application was submitted, since a student can be referred well
+// before the intake they're actually enrolling for. Good enough for a
+// year-over-year shape; not a precise enrollment date. Only ever used for
+// enrolled rows — referrals themselves are always bucketed by the real
+// submission date (see trendData below), never by intake.
+function enrolledYearApprox(row: PartnerApplicationRow): number {
   const fromIntake = row.intake?.match(/\d{4}/)?.[0];
   return fromIntake ? Number(fromIntake) : new Date(row.submitted_at).getFullYear();
 }
@@ -55,13 +59,25 @@ export default async function PartnerDashboardPage() {
     .sort((a, b) => (a.application_deadline! < b.application_deadline! ? -1 : 1))
     .slice(0, 10);
 
+  // A referral counts toward the year it actually happened (submitted_at),
+  // never the intake year it's targeting — those two years legitimately
+  // differ whenever a student is referred ahead of a future intake, which is
+  // routine. Enrollment year is a separate, independent approximation (see
+  // enrolledYearApprox) and can land in a different bucket than the same
+  // application's own referral year.
   const trendMap = new Map<number, { referred: number; enrolled: number }>();
   applications.forEach((a) => {
-    const year = trendYear(a);
-    const entry = trendMap.get(year) ?? { referred: 0, enrolled: 0 };
-    entry.referred += 1;
-    if (a.current_stage === "enrolled") entry.enrolled += 1;
-    trendMap.set(year, entry);
+    const referredYear = new Date(a.submitted_at).getFullYear();
+    const referredEntry = trendMap.get(referredYear) ?? { referred: 0, enrolled: 0 };
+    referredEntry.referred += 1;
+    trendMap.set(referredYear, referredEntry);
+
+    if (a.current_stage === "enrolled") {
+      const enrolledYear = enrolledYearApprox(a);
+      const enrolledEntry = trendMap.get(enrolledYear) ?? { referred: 0, enrolled: 0 };
+      enrolledEntry.enrolled += 1;
+      trendMap.set(enrolledYear, enrolledEntry);
+    }
   });
   const trendData = [...trendMap.entries()].sort((a, b) => a[0] - b[0]).map(([year, v]) => ({ year, ...v }));
 
