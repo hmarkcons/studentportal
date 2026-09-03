@@ -17,6 +17,14 @@
 
 export type TextRun = { text: string; bold?: boolean; italic?: boolean; underline?: boolean };
 
+// One list item, flattened out of however deeply it was nested (a Tab
+// press in the builder sinks an item into a sub-list — see RichTextEditor's
+// indent/sinkListItem handling). `indent` is the nesting depth (0 = top
+// level); `number` is only meaningful when `ordered` is true and is computed
+// once, up front, per sub-list (so it stays correct even if the block gets
+// split around a {{fee_table}} placeholder later).
+export type RichListItem = { runs: TextRun[]; indent: number; ordered: boolean; number?: number };
+
 export type AgreementBlock =
   | { kind: "clause"; number: string; heading: string; intro?: string }
   | { kind: "heading"; heading: string; intro?: string } // like "clause" but the source document has no numbering at all (private-track destinations)
@@ -27,10 +35,12 @@ export type AgreementBlock =
   // Rich blocks — produced by parsing a super-admin-authored (or
   // Word-upload-derived) HTML wording via templateWording.ts, preserving
   // headings/bold/italic/underline/tables instead of collapsing to plain
-  // text like the legacy `paragraph` kind above.
-  | { kind: "richHeading"; level: 1 | 2 | 3; runs: TextRun[] }
-  | { kind: "richParagraph"; runs: TextRun[] }
-  | { kind: "richList"; ordered: boolean; items: TextRun[][]; start?: number }
+  // text like the legacy `paragraph` kind above. `indent` (richHeading /
+  // richParagraph) is the builder's Increase/Decrease Indent level, 0 if
+  // never indented.
+  | { kind: "richHeading"; level: 1 | 2 | 3; runs: TextRun[]; indent?: number }
+  | { kind: "richParagraph"; runs: TextRun[]; indent?: number }
+  | { kind: "richList"; items: RichListItem[] }
   | { kind: "richTable"; rows: { cells: TextRun[][]; header: boolean }[] };
 
 export type AgreementContent = {

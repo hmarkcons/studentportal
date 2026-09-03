@@ -1,17 +1,91 @@
 "use client";
 
 import { useEditor, EditorContent } from "@tiptap/react";
+import { Extension } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { Table, TableRow, TableHeader, TableCell } from "@tiptap/extension-table";
 import { useEffect } from "react";
 
+// Matches INDENT_STEP_PX in src/lib/pdf/templateWording.ts, which reads this
+// same margin-left back out when converting wording to PDF blocks.
+const INDENT_STEP_PX = 24;
+const MAX_INDENT = 8;
+
+declare module "@tiptap/core" {
+  interface Commands<ReturnType> {
+    indent: {
+      /** Increase the current paragraph/heading's left margin one step. */
+      indent: () => ReturnType;
+      /** Decrease the current paragraph/heading's left margin one step. */
+      outdent: () => ReturnType;
+    };
+  }
+}
+
+// Word-style "Increase/Decrease Indent" for a whole paragraph or heading —
+// distinct from list nesting (sinkListItem/liftListItem below), which moves
+// a list item into/out of a sub-list instead of just shifting its margin.
+const Indent = Extension.create({
+  name: "indent",
+  addGlobalAttributes() {
+    return [
+      {
+        types: ["paragraph", "heading"],
+        attributes: {
+          indent: {
+            default: 0,
+            parseHTML: (element: HTMLElement) => {
+              const level = Math.round(parseInt(element.style.marginLeft || "0", 10) / INDENT_STEP_PX);
+              return Number.isFinite(level) && level > 0 ? level : 0;
+            },
+            renderHTML: (attributes: { indent?: number }) =>
+              attributes.indent ? { style: `margin-left: ${attributes.indent * INDENT_STEP_PX}px` } : {},
+          },
+        },
+      },
+    ];
+  },
+  addCommands() {
+    return {
+      indent:
+        () =>
+        ({ editor, chain }) => {
+          const type = ["paragraph", "heading"].find((t) => editor.isActive(t));
+          if (!type) return false;
+          const current = Number(editor.getAttributes(type).indent ?? 0);
+          if (current >= MAX_INDENT) return false;
+          return chain().updateAttributes(type, { indent: current + 1 }).run();
+        },
+      outdent:
+        () =>
+        ({ editor, chain }) => {
+          const type = ["paragraph", "heading"].find((t) => editor.isActive(t));
+          if (!type) return false;
+          const current = Number(editor.getAttributes(type).indent ?? 0);
+          if (current <= 0) return false;
+          return chain().updateAttributes(type, { indent: current - 1 }).run();
+        },
+    };
+  },
+  addKeyboardShortcuts() {
+    return {
+      // Inside a list, Tab/Shift-Tab nests the item into/out of a sub-list
+      // (same as MS Word); otherwise they shift the whole paragraph's margin.
+      Tab: () => (this.editor.isActive("listItem") ? this.editor.commands.sinkListItem("listItem") : this.editor.commands.indent()),
+      "Shift-Tab": () => (this.editor.isActive("listItem") ? this.editor.commands.liftListItem("listItem") : this.editor.commands.outdent()),
+    };
+  },
+});
+
 function ToolbarButton({
   active,
+  disabled,
   onClick,
   children,
   title,
 }: {
   active?: boolean;
+  disabled?: boolean;
   onClick: () => void;
   children: React.ReactNode;
   title: string;
@@ -20,8 +94,9 @@ function ToolbarButton({
     <button
       type="button"
       title={title}
+      disabled={disabled}
       onClick={onClick}
-      className={`rounded px-2 py-1 text-xs font-medium ${
+      className={`rounded px-2 py-1 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-40 ${
         active ? "bg-primary text-primary-ink" : "border border-border text-ink hover:bg-bg"
       }`}
     >
@@ -41,7 +116,7 @@ export function RichTextEditor({
 }) {
   const editor = useEditor({
     immediatelyRender: false,
-    extensions: [StarterKit, Table.configure({ resizable: false }), TableRow, TableHeader, TableCell],
+    extensions: [StarterKit, Table.configure({ resizable: false }), TableRow, TableHeader, TableCell, Indent],
     content,
     editorProps: {
       attributes: {
@@ -62,9 +137,17 @@ export function RichTextEditor({
 
   if (!editor) return null;
 
+  // Inserted content can land outside the currently visible area (e.g. the
+  // cursor was left scrolled off-screen) — without this, clicking a toolbar
+  // button can look like it did nothing even though it worked.
+  function insertAndReveal(run: () => boolean) {
+    run();
+    requestAnimationFrame(() => editor!.commands.scrollIntoView());
+  }
+
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-1 rounded-t-md border border-border bg-bg p-1.5">
+      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-1 rounded-t-md border border-border bg-bg p-1.5">
         <ToolbarButton title="Bold" active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()}>
           B
         </ToolbarButton>
@@ -101,36 +184,67 @@ export function RichTextEditor({
         </ToolbarButton>
         <span className="mx-1 h-4 w-px bg-border" />
         <ToolbarButton
+          title="Bulleted list — press Tab on an item to make it a sub-bullet, Shift+Tab to bring it back out"
+          active={editor.isActive("bulletList")}
+          onClick={() => editor.chain().focus().toggleBulletList().run()}
+        >
+          • List
+        </ToolbarButton>
+        <ToolbarButton
+          title="Numbered list — press Tab on an item to make it a sub-item, Shift+Tab to bring it back out"
+          active={editor.isActive("orderedList")}
+          onClick={() => editor.chain().focus().toggleOrderedList().run()}
+        >
+          1. List
+        </ToolbarButton>
+        <ToolbarButton
+          title="Decrease indent"
+          disabled={!editor.can().outdent()}
+          onClick={() => editor.chain().focus().outdent().run()}
+        >
+          ← Indent
+        </ToolbarButton>
+        <ToolbarButton
+          title="Increase indent"
+          disabled={!editor.can().indent()}
+          onClick={() => editor.chain().focus().indent().run()}
+        >
+          → Indent
+        </ToolbarButton>
+        <span className="mx-1 h-4 w-px bg-border" />
+        <ToolbarButton
           title="Insert the itemized payment chart — auto-filled with this student's actual fee, installments, and discount at generation time. Use this instead of typing your own fee table."
           onClick={() =>
-            editor
-              .chain()
-              .focus()
-              .insertContent({ type: "paragraph", content: [{ type: "text", text: "{{fee_table}}" }] })
-              .run()
+            insertAndReveal(() =>
+              editor
+                .chain()
+                .focus()
+                .insertContent({ type: "paragraph", content: [{ type: "text", text: "{{fee_table}}" }] })
+                .run()
+            )
           }
         >
           + Payment Chart
         </ToolbarButton>
         <ToolbarButton
           title="Insert table"
-          onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+          onClick={() => insertAndReveal(() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run())}
         >
           + Table
         </ToolbarButton>
-        <ToolbarButton title="Add row" onClick={() => editor.chain().focus().addRowAfter().run()}>
+        <ToolbarButton title="Add row" disabled={!editor.can().addRowAfter()} onClick={() => editor.chain().focus().addRowAfter().run()}>
           +Row
         </ToolbarButton>
-        <ToolbarButton title="Add column" onClick={() => editor.chain().focus().addColumnAfter().run()}>
+        <ToolbarButton title="Add column" disabled={!editor.can().addColumnAfter()} onClick={() => editor.chain().focus().addColumnAfter().run()}>
           +Col
         </ToolbarButton>
-        <ToolbarButton title="Delete row" onClick={() => editor.chain().focus().deleteRow().run()}>
+        <ToolbarButton title="Delete row" disabled={!editor.can().deleteRow()} onClick={() => editor.chain().focus().deleteRow().run()}>
           −Row
         </ToolbarButton>
-        <ToolbarButton title="Delete column" onClick={() => editor.chain().focus().deleteColumn().run()}>
+        <ToolbarButton title="Delete column" disabled={!editor.can().deleteColumn()} onClick={() => editor.chain().focus().deleteColumn().run()}>
           −Col
         </ToolbarButton>
-        <ToolbarButton title="Delete table" onClick={() => editor.chain().focus().deleteTable().run()}>
+        <ToolbarButton title="Delete table" disabled={!editor.can().deleteTable()} onClick={() => editor.chain().focus().deleteTable().run()}>
           −Table
         </ToolbarButton>
       </div>

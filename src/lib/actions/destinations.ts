@@ -4,6 +4,28 @@ import { redirect } from "next/navigation";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { MANUAL_APPLICATION_STATUSES } from "@/lib/constants";
+import { DEFAULT_AGREEMENT_WORDING } from "@/lib/pdf/defaultAgreementWording";
+
+// Every destination needs an agreement it can actually generate — without a
+// template, generateAgreementPdf has no legacy hardcoded content for a new
+// destination either, so PDF generation would fail outright with "no
+// agreement wording configured" until Super Admin manually built one. Seeded
+// with the same real retainer-agreement text Super Admin has always
+// hand-pasted into every new destination's template (the {{fee_table}}
+// placeholder already sits in the same clause position that wording has
+// always used), so the payment chart lands in the same spot as every
+// existing template with zero manual setup. Not fatal if it fails — the
+// destination itself is already created and Super Admin can always add a
+// template by hand from /setup/agreement-templates.
+async function seedStandardAgreementTemplate(supabase: Awaited<ReturnType<typeof createClient>>, destinationId: string) {
+  const { error } = await supabase.from("agreement_templates").insert({
+    destination_id: destinationId,
+    name: "Standard",
+    signatory_name: "Muhammad Abdul Hadi",
+    wording: DEFAULT_AGREEMENT_WORDING,
+  });
+  if (error) console.error(`Auto-creating agreement template for destination ${destinationId} failed:`, error.message);
+}
 
 function slugifyStages(raw: string) {
   return raw
@@ -54,7 +76,10 @@ export async function createDestination(_prevState: unknown, formData: FormData)
 
   if (error) return { error: error.message };
 
+  await seedStandardAgreementTemplate(supabase, data.id);
+
   revalidateTag("destinations", { expire: 0 });
+  revalidateTag("agreement-templates", { expire: 0 });
   redirect(`/setup/destinations/${data.id}`);
 }
 
@@ -193,10 +218,15 @@ export async function importDestinations(_prevState: unknown, formData: FormData
     return { error: "Every row already matches an existing destination (same country + track) — nothing new to import." };
   }
 
-  const { error } = await supabase.from("destinations").insert(toInsert);
+  const { data: inserted, error } = await supabase.from("destinations").insert(toInsert).select("id");
   if (error) return { error: error.message };
+
+  for (const row of inserted ?? []) {
+    await seedStandardAgreementTemplate(supabase, row.id);
+  }
 
   revalidatePath("/setup/destinations");
   revalidateTag("destinations", { expire: 0 });
+  revalidateTag("agreement-templates", { expire: 0 });
   return { success: true, count: toInsert.length, skipped };
 }

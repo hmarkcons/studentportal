@@ -2,6 +2,15 @@ import { Document, Page, Text, View, Image, StyleSheet } from "@react-pdf/render
 import type { AgreementBlock, TextRun } from "./agreementContent";
 import { BRAND_LOGO_DATA_URI, BRAND_LOGO_RATIO } from "./brandLogo";
 
+// Points of left margin per builder Increase-Indent level / list nesting
+// depth — a design choice (there's no pixel-for-pixel need to match the
+// editor's own 24px-per-level CSS), just enough to read clearly as nested.
+const INDENT_UNIT_PT = 14;
+// Matches Word's convention of alternating bullet glyphs per nesting depth
+// (solid disc, then hollow circle, then square) instead of repeating the
+// same dot at every level.
+const BULLET_GLYPHS = ["•", "◦", "▪"];
+
 const GREEN = "#146856";
 const INK = "#1B2420";
 const INK_SOFT = "#4A544E";
@@ -281,25 +290,25 @@ function Block({ block, fee }: { block: AgreementBlock; fee: AgreementPdfData["f
     case "richHeading": {
       const style = block.level === 1 ? styles.richHeading1 : block.level === 2 ? styles.richHeading2 : styles.richHeading3;
       return (
-        <Text style={style}>
+        <Text style={[style, block.indent ? { marginLeft: block.indent * INDENT_UNIT_PT } : {}]}>
           <RichRuns runs={block.runs} />
         </Text>
       );
     }
     case "richParagraph":
       return (
-        <Text style={styles.richParagraph}>
+        <Text style={[styles.richParagraph, block.indent ? { marginLeft: block.indent * INDENT_UNIT_PT } : {}]}>
           <RichRuns runs={block.runs} />
         </Text>
       );
     case "richList":
       return (
         <View>
-          {block.items.map((runs, i) => (
-            <View key={i} style={styles.richListItemRow}>
-              <Text style={styles.richListMarker}>{block.ordered ? `${(block.start ?? 1) + i}.` : "•"}</Text>
+          {block.items.map((item, i) => (
+            <View key={i} style={[styles.richListItemRow, { marginLeft: item.indent * INDENT_UNIT_PT }]}>
+              <Text style={styles.richListMarker}>{item.ordered ? `${item.number ?? i + 1}.` : BULLET_GLYPHS[item.indent % BULLET_GLYPHS.length]}</Text>
               <Text style={styles.richListText}>
-                <RichRuns runs={runs} />
+                <RichRuns runs={item.runs} />
               </Text>
             </View>
           ))}

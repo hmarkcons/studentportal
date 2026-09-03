@@ -1,5 +1,17 @@
 import { parse, type Node, HTMLElement, NodeType } from "node-html-parser";
-import type { AgreementBlock, TextRun } from "./agreementContent";
+import type { AgreementBlock, RichListItem, TextRun } from "./agreementContent";
+
+// Matches the px-per-level the builder's Increase/Decrease Indent buttons
+// write via the `indent` node attribute's renderHTML (see the Indent
+// extension in RichTextEditor.tsx) — must stay in sync with that value.
+const INDENT_STEP_PX = 24;
+
+function readIndentLevel(el: HTMLElement): number | undefined {
+  const match = /margin-left:\s*(\d+)px/.exec(el.getAttribute("style") ?? "");
+  if (!match) return undefined;
+  const level = Math.round(Number(match[1]) / INDENT_STEP_PX);
+  return level > 0 ? level : undefined;
+}
 
 // Every super-admin-authored template's wording can reference these via
 // {{fieldName}} — substituted per student at generation time. Keep this in
@@ -57,6 +69,43 @@ function looksLikeFeeTable(rows: { cells: TextRun[][] }[]): boolean {
   );
 }
 
+const LIST_TAGS = new Set(["ul", "ol"]);
+
+// Walks a <ul>/<ol> depth-first, flattening every nested sub-list (produced
+// by pressing Tab on a list item in the builder — see RichTextEditor's
+// sinkListItem wiring) into one ordered sequence of items carrying their own
+// nesting depth, so a multi-level outline round-trips correctly into the
+// PDF. Each sub-list gets its own fresh 1-based counter when ordered,
+// matching Word's own behavior (numbering restarts under each parent item
+// rather than continuing across siblings).
+function flattenListItems(listEl: HTMLElement, ordered: boolean, depth: number): RichListItem[] {
+  const items: RichListItem[] = [];
+  const startAttr = Number(listEl.getAttribute("start") ?? "1");
+  let nextNumber = Number.isFinite(startAttr) && startAttr > 0 ? startAttr : 1;
+
+  const liEls = listEl.childNodes.filter(
+    (c) => c.nodeType === NodeType.ELEMENT_NODE && (c as HTMLElement).tagName?.toLowerCase() === "li"
+  ) as HTMLElement[];
+
+  for (const li of liEls) {
+    const isNestedList = (c: Node) => c.nodeType === NodeType.ELEMENT_NODE && LIST_TAGS.has((c as HTMLElement).tagName?.toLowerCase() ?? "");
+    const ownRuns = li.childNodes.filter((c) => !isNestedList(c)).flatMap((c) => extractRuns(c));
+    if (ownRuns.length) {
+      // A {{fee_table}} placeholder occupying its own <li> (see wordingToBlocks'
+      // list-splitting below) isn't a real clause — it shouldn't consume a
+      // number, so real items keep counting up sequentially around it.
+      const isPlaceholder = isFeeTablePlaceholder(ownRuns.map((r) => r.text).join(""));
+      items.push({ runs: ownRuns, indent: depth, ordered, number: ordered && !isPlaceholder ? nextNumber : undefined });
+      if (ordered && !isPlaceholder) nextNumber += 1;
+    }
+    for (const nested of li.childNodes.filter(isNestedList) as HTMLElement[]) {
+      items.push(...flattenListItems(nested, nested.tagName?.toLowerCase() === "ol", depth + 1));
+    }
+  }
+
+  return items;
+}
+
 // Converts a super-admin-authored wording blob (rich HTML from the TipTap
 // editor, or from a Word-upload's mammoth.convertToHtml output) into the
 // same AgreementBlock[] shape AgreementDocument already renders — so no
@@ -94,42 +143,36 @@ export function wordingToBlocks(wording: string, vars: Record<string, string>): 
     if (tag === "h1" || tag === "h2" || tag === "h3" || tag === "h4" || tag === "h5" || tag === "h6") {
       const level = Math.min(3, Number(tag[1])) as 1 | 2 | 3;
       const runs = extractRuns(el);
-      if (runs.length) blocks.push({ kind: "richHeading", level, runs });
+      if (runs.length) blocks.push({ kind: "richHeading", level, runs, indent: readIndentLevel(el) });
     } else if (tag === "p") {
       const runs = extractRuns(el);
       if (runs.length) {
         const text = runs.map((r) => r.text).join("");
-        blocks.push(isFeeTablePlaceholder(text) ? { kind: "feeTable" } : { kind: "richParagraph", runs });
+        blocks.push(isFeeTablePlaceholder(text) ? { kind: "feeTable" } : { kind: "richParagraph", runs, indent: readIndentLevel(el) });
       }
     } else if (tag === "ul" || tag === "ol") {
       // Rich text editors turn Enter-inside-a-list-item into a new list
       // item, so a {{fee_table}} placeholder typed there ends up nested in
       // an <li> rather than breaking out to its own paragraph. Split the
-      // list around it instead of rendering the token as inert list text,
-      // continuing the numbering across the split so clause numbers don't
-      // reset back to 1 partway through.
-      const ordered = tag === "ol";
-      const liEls = el.childNodes.filter(
-        (c) => c.nodeType === NodeType.ELEMENT_NODE && (c as HTMLElement).tagName?.toLowerCase() === "li"
-      ) as HTMLElement[];
-      let items: TextRun[][] = [];
-      let start = 1;
-      for (const li of liEls) {
-        const runs = extractRuns(li);
-        if (!runs.length) continue;
-        const text = runs.map((r) => r.text).join("");
+      // list around it instead of rendering the token as inert list text —
+      // each item already carries its own correct number (computed while
+      // flattening, before any splitting), so no numbering continuity logic
+      // is needed here.
+      const flatItems = flattenListItems(el, tag === "ol", 0);
+      let items: RichListItem[] = [];
+      for (const item of flatItems) {
+        const text = item.runs.map((r) => r.text).join("");
         if (isFeeTablePlaceholder(text)) {
           if (items.length) {
-            blocks.push({ kind: "richList", ordered, items, start });
-            start += items.length;
+            blocks.push({ kind: "richList", items });
             items = [];
           }
           blocks.push({ kind: "feeTable" });
         } else {
-          items.push(runs);
+          items.push(item);
         }
       }
-      if (items.length) blocks.push({ kind: "richList", ordered, items, start });
+      if (items.length) blocks.push({ kind: "richList", items });
     } else if (tag === "table") {
       const rows: { cells: TextRun[][]; header: boolean }[] = [];
       const rowEls = el.querySelectorAll("tr");
