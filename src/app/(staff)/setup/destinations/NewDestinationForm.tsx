@@ -56,8 +56,25 @@ export function NewDestinationForm() {
         <Input name="installment_plan" placeholder="e.g. 2 installments" />
       </div>
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-ink">Pipeline stages (comma-separated, in order — leave blank for the standard default)</label>
+        <label className="text-sm font-medium text-ink">
+          University application pipeline stages (comma-separated, in order — leave blank for the standard default)
+        </label>
+        <p className="text-xs text-muted">Tracks a single application&apos;s progress at one university (Documents Pending → ... → Enrolled).</p>
         <Textarea name="pipeline_stages" rows={2} placeholder="documents pending, documents verified, application submitted, ..." />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium text-ink">
+          Dashboard pipeline stages (one per line, as &quot;Label: option1/option2&quot; — leave blank for the standard default)
+        </label>
+        <p className="text-xs text-muted">
+          Tracks the registered student&apos;s overall progress toward this country, shown on their Dashboard. A single option (e.g.
+          &quot;Completed&quot;) is a checkbox; &quot;Date&quot; is a date field; 2+ options is a dropdown staff picks from.
+        </p>
+        <Textarea
+          name="dashboard_pipeline_stages"
+          rows={6}
+          placeholder={"Admission Docs: Completed\nAdmission: In process/Issued\nVisa Status: Granted/Rejected\nTravel: Date"}
+        />
       </div>
       {state?.error && <p className="text-sm text-danger">{state.error}</p>}
       <Button type="submit" variant="primary" disabled={pending}>

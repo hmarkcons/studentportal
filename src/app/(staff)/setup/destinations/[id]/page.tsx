@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { StagesForm } from "./StagesForm";
+import { DashboardStagesForm } from "./DashboardStagesForm";
 import { DestinationEditForm } from "./DestinationEditForm";
+import { formatDashboardStagesText, type DashboardStageDef } from "@/lib/dashboardPipeline";
 
 export default async function DestinationDetailPage(props: PageProps<"/setup/destinations/[id]">) {
   const { id } = await props.params;
@@ -45,11 +47,22 @@ export default async function DestinationDetailPage(props: PageProps<"/setup/des
       </Card>
 
       <Card className="mb-6">
-        <h3 className="mb-3 text-sm font-medium text-ink">Application pipeline stages</h3>
+        <h3 className="mb-3 text-sm font-medium text-ink">University application pipeline stages</h3>
+        <p className="mb-3 text-xs text-muted">Tracks a single application&apos;s progress at one university.</p>
         {isSuperAdmin ? (
           <StagesForm destinationId={id} stages={destination.pipeline_stages as string[]} />
         ) : (
           <p className="text-sm text-muted">{(destination.pipeline_stages as string[]).join(", ")}</p>
+        )}
+      </Card>
+
+      <Card className="mb-6">
+        <h3 className="mb-3 text-sm font-medium text-ink">Dashboard pipeline stages</h3>
+        <p className="mb-3 text-xs text-muted">Tracks a registered student&apos;s overall progress toward this country, shown on their Dashboard.</p>
+        {isSuperAdmin ? (
+          <DashboardStagesForm destinationId={id} stages={(destination.dashboard_pipeline_stages as DashboardStageDef[]) ?? []} />
+        ) : (
+          <p className="text-sm text-muted">{formatDashboardStagesText((destination.dashboard_pipeline_stages as DashboardStageDef[]) ?? [])}</p>
         )}
       </Card>
 

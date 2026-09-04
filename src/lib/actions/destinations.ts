@@ -5,6 +5,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { MANUAL_APPLICATION_STATUSES } from "@/lib/constants";
 import { DEFAULT_AGREEMENT_WORDING } from "@/lib/pdf/defaultAgreementWording";
+import { parseDashboardStagesText } from "@/lib/dashboardPipeline";
 
 // Every destination needs an agreement it can actually generate — without a
 // template, generateAgreementPdf has no legacy hardcoded content for a new
@@ -47,6 +48,7 @@ export async function createDestination(_prevState: unknown, formData: FormData)
   const consultancy_fee_currency = String(formData.get("consultancy_fee_currency") ?? "EUR");
   const installment_plan = String(formData.get("installment_plan") ?? "").trim() || null;
   const stagesRaw = String(formData.get("pipeline_stages") ?? "");
+  const dashboardStagesRaw = String(formData.get("dashboard_pipeline_stages") ?? "");
 
   if (!country || !country_code || !["public", "private"].includes(track) || !currency) {
     return { error: "Fill in all required fields." };
@@ -56,6 +58,7 @@ export async function createDestination(_prevState: unknown, formData: FormData)
   }
 
   const pipeline_stages = stagesRaw ? slugifyStages(stagesRaw) : undefined;
+  const dashboard_pipeline_stages = dashboardStagesRaw ? parseDashboardStagesText(dashboardStagesRaw) : undefined;
 
   const { data, error } = await supabase
     .from("destinations")
@@ -70,6 +73,7 @@ export async function createDestination(_prevState: unknown, formData: FormData)
       consultancy_fee_currency,
       installment_plan,
       ...(pipeline_stages ? { pipeline_stages } : {}),
+      ...(dashboard_pipeline_stages ? { dashboard_pipeline_stages } : {}),
     })
     .select("id")
     .single();
@@ -110,6 +114,25 @@ export async function updateDestinationStages(destinationId: string, _prevState:
   }
 
   const { error } = await supabase.from("destinations").update({ pipeline_stages }).eq("id", destinationId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/setup/destinations/${destinationId}`);
+  return { success: true };
+}
+
+// The Dashboard pipeline (Admission Docs, Visa Status, Travel, ...) shown on
+// a registered student's own Dashboard — a separate, country-level pipeline
+// from the university-application one above. Staff types each stage as
+// "Label: option1/option2" (the same notation the source reference doc
+// itself uses), one per line — see parseDashboardStagesText.
+export async function updateDashboardPipelineStages(destinationId: string, _prevState: unknown, formData: FormData) {
+  const supabase = await createClient();
+  const stagesRaw = String(formData.get("dashboard_pipeline_stages") ?? "");
+  const dashboard_pipeline_stages = parseDashboardStagesText(stagesRaw);
+
+  if (dashboard_pipeline_stages.length === 0) return { error: "Enter at least one stage." };
+
+  const { error } = await supabase.from("destinations").update({ dashboard_pipeline_stages }).eq("id", destinationId);
   if (error) return { error: error.message };
 
   revalidatePath(`/setup/destinations/${destinationId}`);

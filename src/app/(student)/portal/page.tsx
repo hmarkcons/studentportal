@@ -3,6 +3,8 @@ import { getStudentUser } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { BoardingPassTracker } from "@/components/ui/BoardingPassTracker";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { DestinationPipelineCard } from "@/components/DestinationPipelineCard";
+import type { DashboardStageDef } from "@/lib/dashboardPipeline";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -19,10 +21,12 @@ export default async function PortalDashboardPage() {
 
   if (!student) return null;
 
-  const [{ data: applications }, { count: pendingDocs }, { count: unassignedDocs }] = await Promise.all([
+  const [{ data: applications }, { count: pendingDocs }, { count: unassignedDocs }, { data: leadDestinations }] = await Promise.all([
     supabase
       .from("applications")
-      .select("id, current_stage, intake, university:universities(name, destination:destinations(pipeline_stages)), program:programs(name)")
+      .select(
+        "id, current_stage, intake, university:universities(name, destination:destinations(id, display_name, pipeline_stages, dashboard_pipeline_stages)), program:programs(name)"
+      )
       .eq("student_id", student.id),
     supabase
       .from("student_documents")
@@ -35,9 +39,47 @@ export default async function PortalDashboardPage() {
       .eq("student_id", student.id)
       .is("application_id", null)
       .in("status", ["missing", "rejected"]),
+    supabase.from("lead_destinations").select("destination_id, dashboard_stage_values").eq("lead_id", student.id),
   ]);
 
   const counselor = one(student.assigned_counselor);
+
+  // Same destination-level grouping as the staff Dashboard (see
+  // students/[id]/page.tsx) — one card per destination the student has a
+  // real application to, read-only here.
+  const savedValuesByDestinationId = new Map<string, Record<string, string>>(
+    (leadDestinations ?? []).map((sd) => [sd.destination_id, (sd.dashboard_stage_values as Record<string, string> | null) ?? {}])
+  );
+  const destinationGroups = new Map<string, { destinationName: string; stages: DashboardStageDef[]; universityNames: string[] }>();
+  for (const app of applications ?? []) {
+    const uni = one(app.university as never) as {
+      name?: string;
+      destination?:
+        | { id?: string; display_name?: string; dashboard_pipeline_stages?: DashboardStageDef[] }
+        | { id?: string; display_name?: string; dashboard_pipeline_stages?: DashboardStageDef[] }[];
+    } | null;
+    const dest = uni?.destination
+      ? (one(uni.destination as never) as { id?: string; display_name?: string; dashboard_pipeline_stages?: DashboardStageDef[] } | null)
+      : null;
+    if (!dest?.id) continue;
+    if (!destinationGroups.has(dest.id)) {
+      destinationGroups.set(dest.id, {
+        destinationName: dest.display_name ?? "Destination",
+        stages: dest.dashboard_pipeline_stages ?? [],
+        universityNames: [],
+      });
+    }
+    destinationGroups.get(dest.id)!.universityNames.push(uni?.name ?? "University");
+  }
+  const destinationPipelineRows = Array.from(destinationGroups.entries())
+    .filter(([, group]) => group.stages.length > 0)
+    .map(([destinationId, group]) => ({
+      destinationId,
+      destinationName: group.destinationName,
+      applicationSummary: group.universityNames.length === 1 ? group.universityNames[0] : `${group.universityNames.length} applications`,
+      stages: group.stages,
+      values: savedValuesByDestinationId.get(destinationId) ?? {},
+    }));
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -62,6 +104,24 @@ export default async function PortalDashboardPage() {
             </p>
           </Card>
         </Link>
+      )}
+
+      {destinationPipelineRows.length > 0 && (
+        <div className="mb-6 flex flex-col gap-4">
+          {destinationPipelineRows.map((row) => (
+            <DestinationPipelineCard
+              key={row.destinationId}
+              leadId={student.id}
+              destinationId={row.destinationId}
+              destinationName={row.destinationName}
+              subtitle={row.applicationSummary}
+              stages={row.stages}
+              values={row.values}
+              editable={false}
+              revalidateTo="/portal"
+            />
+          ))}
+        </div>
       )}
 
       <h3 className="mb-3 text-sm font-medium text-ink">Your applications</h3>

@@ -3,12 +3,13 @@ import { getStaffSession } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { StatCard } from "@/components/ui/StatCard";
-import { BoardingPassTracker } from "@/components/ui/BoardingPassTracker";
 import { categorizeApplicationStage } from "@/lib/applicationStage";
 import type { DocRow } from "@/components/DocumentChecklist";
 import { CATEGORY_LABELS, CATEGORY_ORDER } from "@/lib/documentCategories";
 import { CountryTrackerForm } from "@/components/CountryTrackerForm";
 import { listTrackerDefinitions } from "@/lib/actions/countryTracker";
+import { DestinationPipelineCard } from "@/components/DestinationPipelineCard";
+import type { DashboardStageDef } from "@/lib/dashboardPipeline";
 import { PortalAccessPanel } from "./PortalAccessPanel";
 import { GenerateAgreementForm, UploadSignedAgreementForm } from "./GenerateAgreementForm";
 import { GenerateAgreementPdfButton } from "./GenerateAgreementPdfButton";
@@ -78,7 +79,10 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         .eq("id", id)
         .maybeSingle(),
       supabase.from("leads").select("assigned_counselor_id, discount_amount, discount_reason").eq("id", id).maybeSingle(),
-      supabase.from("lead_destinations").select("destination_id").eq("lead_id", id),
+      supabase
+        .from("lead_destinations")
+        .select("destination_id, dashboard_stage_values, destination:destinations(display_name, dashboard_pipeline_stages)")
+        .eq("lead_id", id),
       supabase
         .from("agreements")
         .select(
@@ -96,7 +100,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         .from("applications")
         .select(
           `id, current_stage, intake, deadline,
-           university:universities(name, destination:destinations(country_code, display_name, pipeline_stages)),
+           university:universities(name, destination:destinations(id, country_code, display_name, pipeline_stages, dashboard_pipeline_stages)),
            program:programs(name)`
         )
         .eq("student_id", id)
@@ -189,58 +193,53 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   }
 
   // ---- Pipeline visualization, shown at the very top of the dashboard —
-  // one bar per DESTINATION (not per application/university): a student
-  // with two applications to the same country would otherwise show two
-  // near-identical bars. Within a destination, the displayed stage is
-  // whichever application is furthest along — a manual/terminal status
-  // (rejected/withdrawn/declined) only wins if every application to that
-  // destination ended that way, so one rejection doesn't hide real
-  // progress happening at another university in the same country. ----
-  const MANUAL_STAGE_STATUSES = new Set(["rejected", "declined", "withdrawn"]);
-  const destinationGroups = new Map<
+  // one card per destination the student actually has an application to
+  // (not lead_destinations/"countries of interest": many existing students
+  // have real applications with no lead_destinations row at all, since that
+  // table is only populated via the Registration form's destination
+  // checkboxes, a separate, optional step). Each card is driven by that
+  // destination's own dashboard_pipeline_stages and this student's saved
+  // dashboard_stage_values (from lead_destinations, defaulting to none set
+  // — setDashboardStageValue upserts that row on first edit if it's
+  // missing). The subtitle names the university/ies applied to. ----
+  const savedStageValuesByDestinationId = new Map<string, Record<string, string>>(
+    (selectedDestinations ?? []).map((sd) => [sd.destination_id, (sd.dashboard_stage_values as Record<string, string> | null) ?? {}])
+  );
+
+  const destinationPipelineGroups = new Map<
     string,
-    { displayName: string; pipelineStages: string[]; applications: { currentStage: string; intake: string | null; universityName: string }[] }
+    { destinationName: string; stages: DashboardStageDef[]; universityNames: string[] }
   >();
   for (const a of applications ?? []) {
     const uni = one(a.university as never) as {
       name?: string;
       destination?:
-        | { country_code?: string; display_name?: string; pipeline_stages?: string[] }
-        | { country_code?: string; display_name?: string; pipeline_stages?: string[] }[];
+        | { id?: string; display_name?: string; dashboard_pipeline_stages?: DashboardStageDef[] }
+        | { id?: string; display_name?: string; dashboard_pipeline_stages?: DashboardStageDef[] }[];
     } | null;
-    const dest = uni?.destination ? (one(uni.destination as never) as { country_code?: string; display_name?: string; pipeline_stages?: string[] } | null) : null;
-    const code = dest?.country_code;
-    if (!code) continue;
-    if (!destinationGroups.has(code)) {
-      destinationGroups.set(code, { displayName: dest?.display_name ?? code, pipelineStages: dest?.pipeline_stages ?? [], applications: [] });
+    const dest = uni?.destination
+      ? (one(uni.destination as never) as { id?: string; display_name?: string; dashboard_pipeline_stages?: DashboardStageDef[] } | null)
+      : null;
+    if (!dest?.id) continue;
+    if (!destinationPipelineGroups.has(dest.id)) {
+      destinationPipelineGroups.set(dest.id, {
+        destinationName: dest.display_name ?? "Destination",
+        stages: dest.dashboard_pipeline_stages ?? [],
+        universityNames: [],
+      });
     }
-    destinationGroups.get(code)!.applications.push({ currentStage: a.current_stage, intake: a.intake, universityName: uni?.name ?? "University" });
+    destinationPipelineGroups.get(dest.id)!.universityNames.push(uni?.name ?? "University");
   }
 
-  const destinationPipelineRows = Array.from(destinationGroups.entries()).map(([code, group]) => {
-    let best = group.applications[0];
-    let bestIndex = group.pipelineStages.indexOf(best.currentStage);
-    for (const app of group.applications.slice(1)) {
-      const bestIsManual = MANUAL_STAGE_STATUSES.has(best.currentStage);
-      const appIsManual = MANUAL_STAGE_STATUSES.has(app.currentStage);
-      const appIndex = group.pipelineStages.indexOf(app.currentStage);
-      if (bestIsManual && !appIsManual) {
-        best = app;
-        bestIndex = appIndex;
-      } else if (!bestIsManual && !appIsManual && appIndex > bestIndex) {
-        best = app;
-        bestIndex = appIndex;
-      }
-    }
-    return {
-      id: code,
-      destinationName: group.displayName,
-      applicationSummary: group.applications.length > 1 ? `${group.applications.length} applications` : best.universityName,
-      intake: best.intake,
-      currentStage: best.currentStage,
-      pipelineStages: group.pipelineStages,
-    };
-  });
+  const destinationPipelineRows = Array.from(destinationPipelineGroups.entries())
+    .filter(([, group]) => group.stages.length > 0)
+    .map(([destinationId, group]) => ({
+      destinationId,
+      destinationName: group.destinationName,
+      applicationSummary: group.universityNames.length === 1 ? group.universityNames[0] : `${group.universityNames.length} applications`,
+      stages: group.stages,
+      values: savedStageValuesByDestinationId.get(destinationId) ?? {},
+    }));
 
   // ---- Level 2: each of these depends only on level-1 results, and is
   // independent of every other level-2 query — fetch concurrently again. ----
@@ -408,13 +407,16 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         <>
           <div className="mb-6 flex flex-col gap-4">
             {destinationPipelineRows.map((row) => (
-              <BoardingPassTracker
-                key={row.id}
-                universityName={row.destinationName}
-                programName={row.applicationSummary}
-                intake={row.intake}
-                currentStage={row.currentStage}
-                pipelineStages={row.pipelineStages}
+              <DestinationPipelineCard
+                key={row.destinationId}
+                leadId={id}
+                destinationId={row.destinationId}
+                destinationName={row.destinationName}
+                subtitle={row.applicationSummary}
+                stages={row.stages}
+                values={row.values}
+                editable
+                revalidateTo={`/students/${id}`}
               />
             ))}
           </div>
