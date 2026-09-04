@@ -163,9 +163,10 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     (appsByCountry.get(code) ?? appsByCountry.set(code, []).get(code)!).push({ id: a.id, name: uni?.name ?? "University" });
   }
 
-  // ---- Pipeline trackers + application-status stat tiles, shown at the
-  // top of the dashboard ----
-  const appTrackerRows = (applications ?? []).map((a) => {
+  // ---- Application-status stat tiles (Applications/With Offer/Submitted/
+  // Pending/Rejected/Not Eligible) — one row per real application, never
+  // deduplicated, since these are meant to count actual applications. ----
+  const applicationStatusRows = (applications ?? []).map((a) => {
     const uni = one(a.university as never) as {
       name?: string;
       destination?:
@@ -173,23 +174,73 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         | { country_code?: string; display_name?: string; pipeline_stages?: string[] }[];
     } | null;
     const dest = uni?.destination ? (one(uni.destination as never) as { pipeline_stages?: string[] } | null) : null;
-    const program = one(a.program as never) as { name?: string } | null;
     return {
       id: a.id,
-      universityName: uni?.name ?? "University",
-      programName: program?.name ?? null,
-      intake: a.intake,
       currentStage: a.current_stage,
       pipelineStages: dest?.pipeline_stages ?? [],
     };
   });
 
-  const applicationStats = { total: appTrackerRows.length, pending: 0, submitted: 0, with_offer: 0, rejected: 0, not_eligible: 0 };
-  for (const row of appTrackerRows) {
+  const applicationStats = { total: applicationStatusRows.length, pending: 0, submitted: 0, with_offer: 0, rejected: 0, not_eligible: 0 };
+  for (const row of applicationStatusRows) {
     const category = categorizeApplicationStage(row.currentStage, row.pipelineStages);
     if (category === "withdrawn") continue;
     applicationStats[category] += 1;
   }
+
+  // ---- Pipeline visualization, shown at the very top of the dashboard —
+  // one bar per DESTINATION (not per application/university): a student
+  // with two applications to the same country would otherwise show two
+  // near-identical bars. Within a destination, the displayed stage is
+  // whichever application is furthest along — a manual/terminal status
+  // (rejected/withdrawn/declined) only wins if every application to that
+  // destination ended that way, so one rejection doesn't hide real
+  // progress happening at another university in the same country. ----
+  const MANUAL_STAGE_STATUSES = new Set(["rejected", "declined", "withdrawn"]);
+  const destinationGroups = new Map<
+    string,
+    { displayName: string; pipelineStages: string[]; applications: { currentStage: string; intake: string | null; universityName: string }[] }
+  >();
+  for (const a of applications ?? []) {
+    const uni = one(a.university as never) as {
+      name?: string;
+      destination?:
+        | { country_code?: string; display_name?: string; pipeline_stages?: string[] }
+        | { country_code?: string; display_name?: string; pipeline_stages?: string[] }[];
+    } | null;
+    const dest = uni?.destination ? (one(uni.destination as never) as { country_code?: string; display_name?: string; pipeline_stages?: string[] } | null) : null;
+    const code = dest?.country_code;
+    if (!code) continue;
+    if (!destinationGroups.has(code)) {
+      destinationGroups.set(code, { displayName: dest?.display_name ?? code, pipelineStages: dest?.pipeline_stages ?? [], applications: [] });
+    }
+    destinationGroups.get(code)!.applications.push({ currentStage: a.current_stage, intake: a.intake, universityName: uni?.name ?? "University" });
+  }
+
+  const destinationPipelineRows = Array.from(destinationGroups.entries()).map(([code, group]) => {
+    let best = group.applications[0];
+    let bestIndex = group.pipelineStages.indexOf(best.currentStage);
+    for (const app of group.applications.slice(1)) {
+      const bestIsManual = MANUAL_STAGE_STATUSES.has(best.currentStage);
+      const appIsManual = MANUAL_STAGE_STATUSES.has(app.currentStage);
+      const appIndex = group.pipelineStages.indexOf(app.currentStage);
+      if (bestIsManual && !appIsManual) {
+        best = app;
+        bestIndex = appIndex;
+      } else if (!bestIsManual && !appIsManual && appIndex > bestIndex) {
+        best = app;
+        bestIndex = appIndex;
+      }
+    }
+    return {
+      id: code,
+      destinationName: group.displayName,
+      applicationSummary: group.applications.length > 1 ? `${group.applications.length} applications` : best.universityName,
+      intake: best.intake,
+      currentStage: best.currentStage,
+      pipelineStages: group.pipelineStages,
+    };
+  });
 
   // ---- Level 2: each of these depends only on level-1 results, and is
   // independent of every other level-2 query — fetch concurrently again. ----
@@ -353,14 +404,14 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
 
   return (
     <div>
-      {appTrackerRows.length > 0 && (
+      {destinationPipelineRows.length > 0 && (
         <>
           <div className="mb-6 flex flex-col gap-4">
-            {appTrackerRows.map((row) => (
+            {destinationPipelineRows.map((row) => (
               <BoardingPassTracker
                 key={row.id}
-                universityName={row.universityName}
-                programName={row.programName}
+                universityName={row.destinationName}
+                programName={row.applicationSummary}
                 intake={row.intake}
                 currentStage={row.currentStage}
                 pipelineStages={row.pipelineStages}
