@@ -369,21 +369,36 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                       {new Date(a.created_at).toLocaleDateString()}
                       {a.discount_amount != null && ` · discount ${a.discount_amount}`}
                     </span>
-                    <div className="flex flex-wrap items-center justify-end gap-3">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
                       {links?.signedUrl ? (
-                        <a href={links.signedUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
+                        <a
+                          href={links.signedUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                        >
                           View signed copy
                         </a>
                       ) : (
                         !links?.pdfUrl &&
                         links?.templateUrl && (
-                          <a href={links.templateUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
+                          <a
+                            href={links.templateUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                          >
                             View template
                           </a>
                         )
                       )}
                       {links?.pdfUrl && (
-                        <a href={links.pdfUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
+                        <a
+                          href={links.pdfUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                        >
                           View generated agreement
                         </a>
                       )}
