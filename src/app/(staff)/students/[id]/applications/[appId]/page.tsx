@@ -145,37 +145,52 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
 
       <Card className="mb-6">
         <h3 className="mb-3 text-sm font-medium text-ink">Links & contact</h3>
-        <div className="flex flex-col gap-1 text-sm text-ink">
-          <p>
-            Course page:{" "}
+        <div className="flex flex-col gap-3 text-sm text-ink">
+          <div className="flex items-center gap-2">
+            <span>Course page:</span>
             {program?.page_link ? (
-              <a href={program.page_link} target="_blank" rel="noreferrer" className="text-primary hover:underline">
-                {program.page_link}
+              <a
+                href={program.page_link}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+              >
+                👁️ View course page
               </a>
             ) : (
               <span className="text-muted">—</span>
             )}
-          </p>
-          <p>
-            Requirements:{" "}
+          </div>
+          <div className="flex items-center gap-2">
+            <span>Requirements:</span>
             {program?.requirements_link ? (
-              <a href={program.requirements_link} target="_blank" rel="noreferrer" className="text-primary hover:underline">
-                {program.requirements_link}
+              <a
+                href={program.requirements_link}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+              >
+                👁️ View requirements
               </a>
             ) : (
               <span className="text-muted">—</span>
             )}
-          </p>
-          <p>
-            Application portal:{" "}
+          </div>
+          <div className="flex items-center gap-2">
+            <span>Application portal:</span>
             {program?.application_portal_link ? (
-              <a href={program.application_portal_link} target="_blank" rel="noreferrer" className="text-primary hover:underline">
-                {program.application_portal_link}
+              <a
+                href={program.application_portal_link}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+              >
+                👁️ View application portal
               </a>
             ) : (
               <span className="text-muted">—</span>
             )}
-          </p>
+          </div>
           <p>University email: {university?.contact_email ?? <span className="text-muted">—</span>}</p>
         </div>
         <div className="mt-3">
