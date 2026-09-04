@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Card } from "@/components/ui/Card";
@@ -47,7 +48,10 @@ export default async function ReferralsPage() {
           <div key={r.id} className="flex items-center justify-between px-4 py-3 text-sm">
             <div>
               <p className="text-ink">
-                {leadNameById.get(r.lead_id) ?? "Unknown lead"} <span className="text-muted">referred by {r.referrer_name}</span>
+                <Link href={`/leads/${r.lead_id}`} className="font-medium text-primary hover:underline">
+                  {leadNameById.get(r.lead_id) ?? "Unknown lead"}
+                </Link>{" "}
+                <span className="text-muted">referred by {r.referrer_name}</span>
               </p>
               <p className="text-xs text-muted">{new Date(r.created_at).toLocaleDateString()}</p>
             </div>
