@@ -15,8 +15,14 @@ type StudentRow = {
   registered_at: string;
   registration_status: string;
   portal_active: boolean;
+  intake: string | null;
   assigned_counselor: { full_name: string } | { full_name: string }[] | null;
 };
+
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -34,7 +40,7 @@ export default async function StudentsPage() {
   const { data: students, error } = await supabase
     .from("students")
     .select(
-      "id, full_name, email, contact_number, country_of_interest, registered_at, registration_status, portal_active, assigned_counselor:staff(full_name)"
+      "id, full_name, email, contact_number, country_of_interest, registered_at, registration_status, portal_active, intake, assigned_counselor:staff(full_name)"
     )
     .order("registered_at", { ascending: false })
     .returns<StudentRow[]>();
@@ -44,45 +50,58 @@ export default async function StudentsPage() {
     { key: "contact", header: "Contact" },
     { key: "country", header: "Country" },
     { key: "counselor", header: "Counselor" },
+    { key: "intake", header: "Intake" },
     { key: "regStatus", header: "Registration status" },
     { key: "portal", header: "Portal" },
     { key: "date", header: "Registered" },
     { key: "actions", header: "", align: "right" as const, exportable: false },
   ];
 
-  const rows = (students ?? []).map((r) => ({
-    id: r.id,
-    cells: {
-      name: (
-        <Link href={`/students/${r.id}`} className="font-medium text-ink hover:underline">
-          {r.full_name}
-        </Link>
-      ),
-      contact: r.email ?? r.contact_number ?? "—",
-      country: r.country_of_interest ?? "—",
-      counselor: one(r.assigned_counselor)?.full_name ?? "—",
-      regStatus: <InlineRegistrationStatusCell studentId={r.id} status={r.registration_status} />,
-      portal: <Badge tone={r.portal_active ? "success" : "neutral"}>{r.portal_active ? "Active" : "Inactive"}</Badge>,
-      date: new Date(r.registered_at).toLocaleDateString(),
-      actions: (
-        <RowActionsMenu id={r.id} name={r.full_name} editHref={`/students/${r.id}`} canDelete={canDelete} deleteLabel="Delete student" />
-      ),
-    },
-    csv: {
-      name: r.full_name,
-      contact: r.email ?? "",
-      country: r.country_of_interest ?? "",
-      counselor: one(r.assigned_counselor)?.full_name ?? "",
-      regStatus: r.registration_status,
-      portal: r.portal_active ? "active" : "inactive",
-      date: r.registered_at,
-    },
-  }));
+  const rows = (students ?? []).map((r) => {
+    const registeredDate = new Date(r.registered_at);
+    const month = MONTH_NAMES[registeredDate.getMonth()];
+    const year = String(registeredDate.getFullYear());
+    return {
+      id: r.id,
+      cells: {
+        name: (
+          <Link href={`/students/${r.id}`} className="font-medium text-ink hover:underline">
+            {r.full_name}
+          </Link>
+        ),
+        contact: r.email ?? r.contact_number ?? "—",
+        country: r.country_of_interest ?? "—",
+        counselor: one(r.assigned_counselor)?.full_name ?? "—",
+        intake: r.intake ?? "—",
+        regStatus: <InlineRegistrationStatusCell studentId={r.id} status={r.registration_status} />,
+        portal: <Badge tone={r.portal_active ? "success" : "neutral"}>{r.portal_active ? "Active" : "Inactive"}</Badge>,
+        date: registeredDate.toLocaleDateString(),
+        actions: (
+          <RowActionsMenu id={r.id} name={r.full_name} editHref={`/students/${r.id}`} canDelete={canDelete} deleteLabel="Delete student" />
+        ),
+      },
+      csv: {
+        name: r.full_name,
+        contact: r.email ?? "",
+        country: r.country_of_interest ?? "",
+        counselor: one(r.assigned_counselor)?.full_name ?? "",
+        intake: r.intake ?? "",
+        regStatus: r.registration_status,
+        portal: r.portal_active ? "active" : "inactive",
+        date: r.registered_at,
+        month,
+        year,
+      },
+    };
+  });
 
   const countryOptions = Array.from(new Set((students ?? []).map((r) => r.country_of_interest).filter(Boolean))).sort() as string[];
   const counselorOptions = Array.from(
     new Set((students ?? []).map((r) => one(r.assigned_counselor)?.full_name).filter(Boolean))
   ).sort() as string[];
+  const intakeOptions = Array.from(new Set((students ?? []).map((r) => r.intake).filter(Boolean))).sort() as string[];
+  const monthOptions = MONTH_NAMES.filter((m) => rows.some((r) => r.csv.month === m));
+  const yearOptions = Array.from(new Set(rows.map((r) => r.csv.year))).sort((a, b) => Number(b) - Number(a));
 
   return (
     <div className="w-full">
@@ -113,6 +132,9 @@ export default async function StudentsPage() {
               { key: "portal", label: "Portal", options: ["active", "inactive"] },
               { key: "country", label: "Country", options: countryOptions },
               { key: "counselor", label: "Counselor", options: counselorOptions },
+              { key: "intake", label: "Intake", options: intakeOptions },
+              { key: "month", label: "Month", options: monthOptions },
+              { key: "year", label: "Year", options: yearOptions },
             ]}
           />
         </div>

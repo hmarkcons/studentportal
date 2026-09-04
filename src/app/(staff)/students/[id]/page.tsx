@@ -45,7 +45,8 @@ function generatedAgreementFilename(studentName: string | undefined | null, dest
 
 export default async function StudentDashboardPage(props: PageProps<"/students/[id]">) {
   const { id } = await props.params;
-  const { supabase } = await getStaffSession();
+  const { supabase, staff: viewerStaff } = await getStaffSession();
+  const isSuperAdminRole = viewerStaff?.role === "super_admin";
   const perms = await getEffectivePermissions();
   const isSuperAdmin = perms["agreements.edit_delete"] === true;
   const canModifyAgreement = perms["agreements.process"] === true;
@@ -75,10 +76,10 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     Promise.all([
       supabase
         .from("students")
-        .select("auth_user_id, full_name")
+        .select("auth_user_id, full_name, portal_active")
         .eq("id", id)
         .maybeSingle(),
-      supabase.from("leads").select("assigned_counselor_id, discount_amount, discount_reason").eq("id", id).maybeSingle(),
+      supabase.from("leads").select("assigned_counselor_id, intake, discount_amount, discount_reason").eq("id", id).maybeSingle(),
       supabase
         .from("lead_destinations")
         .select("destination_id, dashboard_stage_values, destination:destinations(display_name, dashboard_pipeline_stages)")
@@ -457,13 +458,19 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
             selectedDestinationIds={(selectedDestinations ?? []).map((d) => d.destination_id)}
             counselors={counselors ?? []}
             assignedCounselorId={leadRegistration?.assigned_counselor_id ?? null}
+            intake={leadRegistration?.intake ?? null}
             discountAmount={leadRegistration?.discount_amount ?? null}
             discountReason={leadRegistration?.discount_reason ?? null}
           />
         </div>
         <div className="border-t border-border pt-4">
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Portal access</p>
-          <PortalAccessPanel studentId={id} enabled={Boolean(student?.auth_user_id)} />
+          <PortalAccessPanel
+            studentId={id}
+            enabled={Boolean(student?.auth_user_id)}
+            portalActive={Boolean(student?.portal_active)}
+            isSuperAdmin={isSuperAdminRole}
+          />
         </div>
       </Card>
 

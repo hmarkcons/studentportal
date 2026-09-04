@@ -15,6 +15,7 @@ export function RegistrationEditForm({
   assignedCounselorId,
   discountAmount,
   discountReason,
+  intake,
 }: {
   studentId: string;
   revalidateTo: string;
@@ -24,6 +25,7 @@ export function RegistrationEditForm({
   assignedCounselorId: string | null;
   discountAmount: number | null;
   discountReason: string | null;
+  intake: string | null;
 }) {
   const [editing, setEditing] = useState(false);
   const action = updateRegistrationDetails.bind(null, studentId, revalidateTo);
@@ -43,7 +45,7 @@ export function RegistrationEditForm({
         <label className="mb-1 block text-xs text-muted">Countries</label>
         <DestinationMultiSelect destinations={destinations} defaultSelected={selectedDestinationIds} />
       </div>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
         <label className="flex flex-col gap-1 text-xs text-muted">
           Assigned counselor
           <Select name="assigned_counselor_id" defaultValue={assignedCounselorId ?? ""}>
@@ -54,6 +56,10 @@ export function RegistrationEditForm({
               </option>
             ))}
           </Select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-muted">
+          Intake
+          <Input name="intake" placeholder="e.g. Fall 2026" defaultValue={intake ?? ""} />
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
           Discount amount

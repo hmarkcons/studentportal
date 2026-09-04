@@ -66,16 +66,22 @@ export function RegisterStudentForm({
         <label className={labelClass}>Countries of interest</label>
         <DestinationMultiSelect destinations={destinations} />
       </div>
-      <div className="flex flex-col gap-1.5">
-        <label className={labelClass}>Assigned counselor</label>
-        <Select name="assigned_counselor_id">
-          <option value="">Unassigned</option>
-          {counselors.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.full_name}
-            </option>
-          ))}
-        </Select>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="flex flex-col gap-1.5">
+          <label className={labelClass}>Assigned counselor</label>
+          <Select name="assigned_counselor_id">
+            <option value="">Unassigned</option>
+            {counselors.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.full_name}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className={labelClass}>Intake</label>
+          <Input name="intake" placeholder="e.g. Fall 2026" />
+        </div>
       </div>
 
       {state?.error && <p className="text-sm text-danger">{state.error}</p>}

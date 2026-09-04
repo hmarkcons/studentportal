@@ -264,6 +264,7 @@ export async function registerStudentManually(_prevState: unknown, formData: For
   const destination_ids = formData.getAll("destination_ids").map(String).filter(Boolean);
   const destination_names = formData.getAll("destination_names").map(String).filter(Boolean);
   const assigned_counselor_id = String(formData.get("assigned_counselor_id") ?? "") || null;
+  const intake = String(formData.get("intake") ?? "").trim() || null;
 
   const duplicate = await findDuplicateLead(supabase, email, contact_number);
   if (duplicate) return { error: duplicateLeadError(duplicate) };
@@ -282,6 +283,7 @@ export async function registerStudentManually(_prevState: unknown, formData: For
     course_of_interest,
     country_of_interest: destination_names.join(", ") || null,
     assigned_counselor_id,
+    intake,
     status: "registered",
     // handle_lead_registration() only stamps this on UPDATE (status
     // transitioning into 'registered'), not on INSERT — without it here,
@@ -360,6 +362,7 @@ export async function updateRegistrationDetails(studentId: string, revalidateTo:
   const destination_ids = formData.getAll("destination_ids").map(String).filter(Boolean);
   const destination_names = formData.getAll("destination_names").map(String).filter(Boolean);
   const assigned_counselor_id = String(formData.get("assigned_counselor_id") ?? "") || null;
+  const intake = String(formData.get("intake") ?? "").trim() || null;
   const discount_amount = formData.get("discount_amount") ? Number(formData.get("discount_amount")) : null;
   const discount_reason = String(formData.get("discount_reason") ?? "").trim() || null;
 
@@ -383,7 +386,7 @@ export async function updateRegistrationDetails(studentId: string, revalidateTo:
     }
   }
 
-  const patch: Record<string, unknown> = { assigned_counselor_id, discount_amount, discount_reason };
+  const patch: Record<string, unknown> = { assigned_counselor_id, intake, discount_amount, discount_reason };
   if (destination_ids.length > 0 || hadExistingDestinations) {
     patch.country_of_interest = destination_names.join(", ") || null;
   }

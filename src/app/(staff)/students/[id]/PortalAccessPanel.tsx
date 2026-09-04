@@ -1,13 +1,62 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { inviteStudentToPortal, resetStudentPortalPassword } from "@/lib/actions/portal";
+import {
+  inviteStudentToPortal,
+  resetStudentPortalPassword,
+  suspendStudentPortalAccess,
+  activateStudentPortalAccess,
+  deleteStudentPortalAccess,
+} from "@/lib/actions/portal";
 import { readCredentialAction } from "@/lib/actions/countryTracker";
 import { Button } from "@/components/ui/Button";
 
 type ActionState = { error?: string; success?: boolean; email?: string; password?: string; warning?: string } | undefined;
 
-export function PortalAccessPanel({ studentId, enabled }: { studentId: string; enabled: boolean }) {
+function ToggleButton({
+  action,
+  label,
+  variant,
+  confirmMessage,
+}: {
+  action: () => Promise<{ error?: string } | undefined>;
+  label: string;
+  variant: "outline" | "danger";
+  confirmMessage?: string;
+}) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleClick() {
+    if (confirmMessage && !confirm(confirmMessage)) return;
+    setPending(true);
+    setError(null);
+    const result = await action();
+    if (result?.error) setError(result.error);
+    setPending(false);
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <Button type="button" variant={variant} onClick={handleClick} pending={pending}>
+        {label}
+      </Button>
+      {error && <p className="text-xs text-danger">{error}</p>}
+    </div>
+  );
+}
+
+export function PortalAccessPanel({
+  studentId,
+  enabled,
+  portalActive,
+  isSuperAdmin,
+}: {
+  studentId: string;
+  enabled: boolean;
+  portalActive: boolean;
+  isSuperAdmin: boolean;
+}) {
   const action = enabled ? resetStudentPortalPassword.bind(null, studentId) : inviteStudentToPortal.bind(null, studentId);
   const [state, formAction, pending] = useActionState<ActionState, FormData>(action, undefined);
   const [revealed, setRevealed] = useState<{ username: string; password: string } | null>(null);
@@ -22,9 +71,16 @@ export function PortalAccessPanel({ studentId, enabled }: { studentId: string; e
 
   return (
     <div>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-zinc-700 dark:text-zinc-300">
-          Portal access: {enabled ? <span className="text-emerald-600 dark:text-emerald-400">enabled</span> : <span className="text-zinc-400 dark:text-zinc-600">not set up</span>}
+          Portal access:{" "}
+          {!enabled ? (
+            <span className="text-zinc-400 dark:text-zinc-600">not set up</span>
+          ) : portalActive ? (
+            <span className="text-emerald-600 dark:text-emerald-400">enabled</span>
+          ) : (
+            <span className="text-amber-600 dark:text-amber-400">suspended</span>
+          )}
         </p>
         <div className="flex items-center gap-2">
           {enabled && (
@@ -37,6 +93,25 @@ export function PortalAccessPanel({ studentId, enabled }: { studentId: string; e
               {enabled ? "Reset password" : "Create portal login"}
             </Button>
           </form>
+          {isSuperAdmin && enabled && portalActive && (
+            <ToggleButton
+              action={() => suspendStudentPortalAccess(studentId)}
+              label="Suspend"
+              variant="outline"
+              confirmMessage="Suspend this student's portal access? They'll be signed out immediately and can't log back in until reactivated."
+            />
+          )}
+          {isSuperAdmin && enabled && !portalActive && (
+            <ToggleButton action={() => activateStudentPortalAccess(studentId)} label="Activate" variant="outline" />
+          )}
+          {isSuperAdmin && enabled && (
+            <ToggleButton
+              action={() => deleteStudentPortalAccess(studentId)}
+              label="Delete portal access"
+              variant="danger"
+              confirmMessage="Delete this student's portal login entirely? Their saved credentials will be removed and they'll need a brand new portal login created from scratch. This can't be undone."
+            />
+          )}
         </div>
       </div>
 
