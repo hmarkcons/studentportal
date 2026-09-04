@@ -51,7 +51,19 @@ export function InterviewSection({
       </label>
       <label className="flex flex-col gap-1 text-xs text-muted">
         Link (program page / interview details)
-        <Input name="interview_link" type="url" defaultValue={data?.interview_link ?? ""} placeholder="https://…" />
+        <div className="flex items-center gap-2">
+          <Input name="interview_link" type="url" defaultValue={data?.interview_link ?? ""} placeholder="https://…" className="flex-1" />
+          {data?.interview_link && (
+            <a
+              href={data.interview_link}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+            >
+              👁️ View
+            </a>
+          )}
+        </div>
       </label>
 
       <div>
