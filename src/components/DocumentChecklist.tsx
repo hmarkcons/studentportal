@@ -9,6 +9,7 @@ import { Input, Select } from "@/components/ui/Input";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DOCUMENT_STATUS_TONE } from "@/lib/constants";
 import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
+import { CATEGORY_ORDER, CATEGORY_LABELS } from "@/lib/documentCategories";
 
 export type DocRow = {
   id: string;
@@ -34,36 +35,6 @@ const REQUIREMENT_CATEGORIES = [
   "enrollment",
   "other",
 ];
-
-// Section order/labels for the grouped checklist view. "interview" has no
-// document rows of its own (it's a separate scheduling feature rendered via
-// the `interviewSection` prop) but still occupies its place in the order.
-const CATEGORY_ORDER = [
-  "admission",
-  "interview",
-  "attestation",
-  "visa",
-  "scholarship_documents",
-  "italian_translations",
-  "visa_sticker",
-  "travel",
-  "enrollment",
-  "scholarship",
-  "other",
-] as const;
-
-const CATEGORY_LABELS: Record<string, string> = {
-  admission: "Admission Documents",
-  attestation: "Attestation",
-  visa: "Visa Application Requirements",
-  scholarship_documents: "Scholarship Documents",
-  italian_translations: "Italian Translations",
-  visa_sticker: "Visa Sticker",
-  travel: "Travel",
-  enrollment: "Enrollment",
-  scholarship: "Scholarship",
-  other: "Other",
-};
 
 function UploadRow({ doc, studentId, revalidateTo }: { doc: DocRow; studentId: string; revalidateTo: string }) {
   const action = uploadDocument.bind(null, doc.id, studentId, revalidateTo);

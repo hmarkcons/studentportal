@@ -2,11 +2,10 @@ import Link from "next/link";
 import { getStaffSession } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { EmptyState } from "@/components/ui/EmptyState";
 import { StatCard } from "@/components/ui/StatCard";
-import { BoardingPassTracker } from "@/components/ui/BoardingPassTracker";
 import { categorizeApplicationStage } from "@/lib/applicationStage";
-import { DocumentChecklist, type DocRow } from "@/components/DocumentChecklist";
+import type { DocRow } from "@/components/DocumentChecklist";
+import { CATEGORY_LABELS, CATEGORY_ORDER } from "@/lib/documentCategories";
 import { CountryTrackerForm } from "@/components/CountryTrackerForm";
 import { listTrackerDefinitions } from "@/lib/actions/countryTracker";
 import { PortalAccessPanel } from "./PortalAccessPanel";
@@ -201,6 +200,8 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     docsWithUrls,
     { data: rawTasks },
     trackerDefsByCountry,
+    { data: assignedCounselorStaff },
+    { data: processingOfficers },
   ] = await Promise.all([
     Promise.all(
       (agreements ?? []).map(async (a) => {
@@ -254,6 +255,23 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
           .order("due_date", { ascending: true })
       : Promise.resolve({ data: [] }),
     listTrackerDefinitions(Array.from(primaryAppByCountry.keys())),
+    leadRegistration?.assigned_counselor_id
+      ? supabase
+          .from("staff")
+          .select("full_name, designation, mobile_official, mobile_personal, email_official")
+          .eq("id", leadRegistration.assigned_counselor_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    // Not a per-student assignment — every active Processing-role staff
+    // member is shown here, since ownership of processing work transfers to
+    // the whole Processing Team (not one named person) once a lead
+    // registers, per the doc's handoff rule.
+    supabase
+      .from("staff")
+      .select("full_name, designation, mobile_official, mobile_personal, email_official")
+      .eq("role", "processing")
+      .eq("status", "active")
+      .order("full_name"),
   ]);
 
   const agreementLinks = new Map(agreementLinkEntries);
@@ -271,6 +289,20 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   const applicationOptions = (applications ?? []).map((a) => ({
     id: a.id,
     label: (one(a.university as never) as { name?: string } | null)?.name ?? "University",
+  }));
+
+  // ---- Missing documents, collapsed to a per-category count for the
+  // Dashboard summary — the full checklist (upload/accept/reject) stays on
+  // the dedicated Documents tab, linked below. ----
+  const missingDocCountsByCategory = new Map<string, number>();
+  for (const d of docsWithUrls) {
+    if (d.status !== "missing") continue;
+    const key = d.category && (CATEGORY_ORDER as readonly string[]).includes(d.category) ? d.category : "other";
+    missingDocCountsByCategory.set(key, (missingDocCountsByCategory.get(key) ?? 0) + 1);
+  }
+  const missingDocSummary = CATEGORY_ORDER.filter((cat) => cat !== "interview" && (missingDocCountsByCategory.get(cat) ?? 0) > 0).map((cat) => ({
+    label: CATEGORY_LABELS[cat] ?? cat,
+    count: missingDocCountsByCategory.get(cat) ?? 0,
   }));
 
   // ---- Level 3: per-country tracker sections — each country's fields fetch
@@ -306,29 +338,14 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   return (
     <div>
       {appTrackerRows.length > 0 && (
-        <>
-          <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6">
-            <StatCard label="Applications" value={applicationStats.total} />
-            <StatCard label="With Offer" value={applicationStats.with_offer} tone="success" />
-            <StatCard label="Submitted" value={applicationStats.submitted} />
-            <StatCard label="Pending" value={applicationStats.pending} tone="warning" />
-            <StatCard label="Rejected" value={applicationStats.rejected} tone="danger" />
-            <StatCard label="Not Eligible" value={applicationStats.not_eligible} tone="danger" />
-          </div>
-
-          <div className="mb-6 flex flex-col gap-4">
-            {appTrackerRows.map((row) => (
-              <BoardingPassTracker
-                key={row.id}
-                universityName={row.universityName}
-                programName={row.programName}
-                intake={row.intake}
-                currentStage={row.currentStage}
-                pipelineStages={row.pipelineStages}
-              />
-            ))}
-          </div>
-        </>
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6">
+          <StatCard label="Applications" value={applicationStats.total} />
+          <StatCard label="With Offer" value={applicationStats.with_offer} tone="success" />
+          <StatCard label="Submitted" value={applicationStats.submitted} />
+          <StatCard label="Pending" value={applicationStats.pending} tone="warning" />
+          <StatCard label="Rejected" value={applicationStats.rejected} tone="danger" />
+          <StatCard label="Not Eligible" value={applicationStats.not_eligible} tone="danger" />
+        </div>
       )}
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -349,6 +366,36 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         <Card>
           <h3 className="mb-3 text-sm font-medium text-ink">Portal access</h3>
           <PortalAccessPanel studentId={id} enabled={Boolean(student?.auth_user_id)} />
+        </Card>
+      </div>
+
+      <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
+        <Card>
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-medium text-ink">Missing Documents</h3>
+            <Link href={`/students/${id}/documents`} className="text-xs text-primary hover:underline">
+              View all documents →
+            </Link>
+          </div>
+          {missingDocSummary.length === 0 ? (
+            <p className="text-sm text-muted">
+              {docsWithUrls.length === 0 ? "No documents required yet." : "Nothing missing — all required documents submitted."}
+            </p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {missingDocSummary.map((s) => (
+                <div key={s.label} className="flex items-center justify-between text-sm">
+                  <span className="text-ink">{s.label}</span>
+                  <span className="font-semibold text-danger">{s.count}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card>
+          <h3 className="mb-3 text-sm font-medium text-ink">Tasks</h3>
+          <DashboardTaskList tasks={taskRows} applications={applicationOptions} studentId={id} />
         </Card>
       </div>
 
@@ -458,27 +505,6 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         </Card>
       )}
 
-      <Card className="mt-6">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-sm font-medium text-ink">Missing Documents</h3>
-          <Link href={`/students/${id}/documents`} className="text-xs text-primary hover:underline">
-            View all documents →
-          </Link>
-        </div>
-        <DocumentChecklist
-          docs={docsWithUrls.filter((d) => d.status === "missing")}
-          studentId={id}
-          applicationId={null}
-          revalidateTo={`/students/${id}`}
-          emptyMessage={docsWithUrls.length === 0 ? "No documents required yet." : "Nothing missing — all required documents submitted."}
-        />
-      </Card>
-
-      <Card className="mt-6">
-        <h3 className="mb-3 text-sm font-medium text-ink">Tasks</h3>
-        <DashboardTaskList tasks={taskRows} applications={applicationOptions} studentId={id} />
-      </Card>
-
       {trackerSections.length > 0 && (
         <Card className="mt-6">
           <h3 className="mb-3 text-sm font-medium text-ink">Documentation tracker</h3>
@@ -506,28 +532,44 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       </Card>
 
       <Card className="mt-6">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-sm font-medium text-ink">Applications</h3>
-          <Link href={`/students/${id}/applications`} className="text-sm font-medium text-primary hover:underline">
-            View all →
-          </Link>
-        </div>
-        {!applications || applications.length === 0 ? (
-          <EmptyState>No applications yet.</EmptyState>
-        ) : (
-          <div className="flex flex-col divide-y divide-border">
-            {applications.map((app) => (
-              <Link
-                key={app.id}
-                href={`/students/${id}/applications/${app.id}`}
-                className="flex items-center justify-between py-3 text-sm hover:text-primary"
-              >
-                <span>{(one(app.university as never) as { name?: string } | null)?.name ?? "University"}</span>
-                <Badge tone="info">{app.current_stage.replace(/_/g, " ")}</Badge>
-              </Link>
-            ))}
+        <h3 className="mb-3 text-sm font-medium text-ink">Assigned Counselor & Processing Officer</h3>
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+          <div>
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">Assigned Counselor</p>
+            {assignedCounselorStaff ? (
+              <div className="text-sm text-ink">
+                <p className="font-medium">{assignedCounselorStaff.full_name}</p>
+                {assignedCounselorStaff.designation && <p className="text-muted">{assignedCounselorStaff.designation}</p>}
+                {(assignedCounselorStaff.mobile_official ?? assignedCounselorStaff.mobile_personal) && (
+                  <p className="text-muted">{assignedCounselorStaff.mobile_official ?? assignedCounselorStaff.mobile_personal}</p>
+                )}
+                {assignedCounselorStaff.email_official && <p className="text-muted">{assignedCounselorStaff.email_official}</p>}
+              </div>
+            ) : (
+              <p className="text-sm text-muted">Not assigned yet — set one from the Registration card above.</p>
+            )}
           </div>
-        )}
+
+          <div>
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">Processing Officer</p>
+            {processingOfficers && processingOfficers.length > 0 ? (
+              <div className="flex flex-col gap-3">
+                {processingOfficers.map((officer) => (
+                  <div key={officer.full_name} className="text-sm text-ink">
+                    <p className="font-medium">{officer.full_name}</p>
+                    {officer.designation && <p className="text-muted">{officer.designation}</p>}
+                    {(officer.mobile_official ?? officer.mobile_personal) && (
+                      <p className="text-muted">{officer.mobile_official ?? officer.mobile_personal}</p>
+                    )}
+                    {officer.email_official && <p className="text-muted">{officer.email_official}</p>}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted">No processing officer on file.</p>
+            )}
+          </div>
+        </div>
       </Card>
     </div>
   );
