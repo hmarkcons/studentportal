@@ -39,14 +39,18 @@ export default async function PortalDashboardPage() {
       .eq("student_id", student.id)
       .is("application_id", null)
       .in("status", ["missing", "rejected"]),
-    supabase.from("lead_destinations").select("destination_id, dashboard_stage_values").eq("lead_id", student.id),
+    supabase
+      .from("lead_destinations")
+      .select("destination_id, dashboard_stage_values, destination:destinations(display_name, dashboard_pipeline_stages)")
+      .eq("lead_id", student.id),
   ]);
 
   const counselor = one(student.assigned_counselor);
 
   // Same destination-level grouping as the staff Dashboard (see
   // students/[id]/page.tsx) — one card per destination the student has a
-  // real application to, read-only here.
+  // real application to, OR selected as a country of interest at
+  // registration with no application yet, read-only here.
   const savedValuesByDestinationId = new Map<string, Record<string, string>>(
     (leadDestinations ?? []).map((sd) => [sd.destination_id, (sd.dashboard_stage_values as Record<string, string> | null) ?? {}])
   );
@@ -71,12 +75,26 @@ export default async function PortalDashboardPage() {
     }
     destinationGroups.get(dest.id)!.universityNames.push(uni?.name ?? "University");
   }
+  for (const sd of leadDestinations ?? []) {
+    if (destinationGroups.has(sd.destination_id)) continue;
+    const dest = one(sd.destination as never) as { display_name?: string; dashboard_pipeline_stages?: DashboardStageDef[] } | null;
+    if (!dest) continue;
+    destinationGroups.set(sd.destination_id, {
+      destinationName: dest.display_name ?? "Destination",
+      stages: dest.dashboard_pipeline_stages ?? [],
+      universityNames: [],
+    });
+  }
   const destinationPipelineRows = Array.from(destinationGroups.entries())
     .filter(([, group]) => group.stages.length > 0)
     .map(([destinationId, group]) => ({
       destinationId,
       destinationName: group.destinationName,
-      applicationSummary: group.universityNames.length === 1 ? group.universityNames[0] : `${group.universityNames.length} applications`,
+      applicationSummary: group.universityNames.length === 0
+        ? "No application yet"
+        : group.universityNames.length === 1
+          ? group.universityNames[0]
+          : `${group.universityNames.length} applications`,
       stages: group.stages,
       values: savedValuesByDestinationId.get(destinationId) ?? {},
     }));

@@ -193,15 +193,15 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   }
 
   // ---- Pipeline visualization, shown at the very top of the dashboard —
-  // one card per destination the student actually has an application to
-  // (not lead_destinations/"countries of interest": many existing students
-  // have real applications with no lead_destinations row at all, since that
-  // table is only populated via the Registration form's destination
-  // checkboxes, a separate, optional step). Each card is driven by that
-  // destination's own dashboard_pipeline_stages and this student's saved
-  // dashboard_stage_values (from lead_destinations, defaulting to none set
-  // — setDashboardStageValue upserts that row on first edit if it's
-  // missing). The subtitle names the university/ies applied to. ----
+  // one card per destination the student either has a real application to,
+  // OR selected as a country of interest at registration (lead_destinations)
+  // with no application yet — so staff can start tracking a destination's
+  // progress before any university application exists. Each card is driven
+  // by that destination's own dashboard_pipeline_stages and this student's
+  // saved dashboard_stage_values (from lead_destinations, defaulting to none
+  // set — setDashboardStageValue upserts that row on first edit if it's
+  // missing). The subtitle names the university/ies applied to, or "No
+  // application yet" when there are none. ----
   const savedStageValuesByDestinationId = new Map<string, Record<string, string>>(
     (selectedDestinations ?? []).map((sd) => [sd.destination_id, (sd.dashboard_stage_values as Record<string, string> | null) ?? {}])
   );
@@ -230,13 +230,27 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     }
     destinationPipelineGroups.get(dest.id)!.universityNames.push(uni?.name ?? "University");
   }
+  for (const sd of selectedDestinations ?? []) {
+    if (destinationPipelineGroups.has(sd.destination_id)) continue;
+    const dest = one(sd.destination as never) as { display_name?: string; dashboard_pipeline_stages?: DashboardStageDef[] } | null;
+    if (!dest) continue;
+    destinationPipelineGroups.set(sd.destination_id, {
+      destinationName: dest.display_name ?? "Destination",
+      stages: dest.dashboard_pipeline_stages ?? [],
+      universityNames: [],
+    });
+  }
 
   const destinationPipelineRows = Array.from(destinationPipelineGroups.entries())
     .filter(([, group]) => group.stages.length > 0)
     .map(([destinationId, group]) => ({
       destinationId,
       destinationName: group.destinationName,
-      applicationSummary: group.universityNames.length === 1 ? group.universityNames[0] : `${group.universityNames.length} applications`,
+      applicationSummary: group.universityNames.length === 0
+        ? "No application yet"
+        : group.universityNames.length === 1
+          ? group.universityNames[0]
+          : `${group.universityNames.length} applications`,
       stages: group.stages,
       values: savedStageValuesByDestinationId.get(destinationId) ?? {},
     }));
