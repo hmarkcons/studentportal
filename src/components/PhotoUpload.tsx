@@ -1,11 +1,20 @@
 "use client";
 
 import { useActionState } from "react";
-import { uploadStudentPhoto } from "@/lib/actions/studentProfileExtras";
 import { Button } from "@/components/ui/Button";
 
-export function PhotoUpload({ studentId, revalidateTo, photoUrl }: { studentId: string; revalidateTo: string; photoUrl: string | null }) {
-  const action = uploadStudentPhoto.bind(null, studentId, revalidateTo);
+type PhotoUploadState = { error?: string; success?: boolean } | undefined;
+
+export function PhotoUpload({
+  action,
+  photoUrl,
+}: {
+  // A bound server action (studentId/staffId + revalidateTo already applied)
+  // — shared by the student Profile pages and the staff Admin form so both
+  // get the same upload UI without duplicating it.
+  action: (prevState: PhotoUploadState, formData: FormData) => Promise<PhotoUploadState>;
+  photoUrl: string | null;
+}) {
   const [state, formAction, pending] = useActionState(action, undefined);
 
   return (

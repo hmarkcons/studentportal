@@ -258,7 +258,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     leadRegistration?.assigned_counselor_id
       ? supabase
           .from("staff")
-          .select("full_name, designation, mobile_official, mobile_personal, email_official")
+          .select("full_name, designation, mobile_official, mobile_personal, email_official, photo_path")
           .eq("id", leadRegistration.assigned_counselor_id)
           .maybeSingle()
       : Promise.resolve({ data: null }),
@@ -268,11 +268,26 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     // registers, per the doc's handoff rule.
     supabase
       .from("staff")
-      .select("full_name, designation, mobile_official, mobile_personal, email_official")
+      .select("id, full_name, designation, mobile_official, mobile_personal, email_official, photo_path")
       .eq("role", "processing")
       .eq("status", "active")
       .order("full_name"),
   ]);
+
+  let assignedCounselorPhotoUrl: string | null = null;
+  if (assignedCounselorStaff?.photo_path) {
+    const { data } = await supabase.storage.from("documents").createSignedUrl(assignedCounselorStaff.photo_path, 3600);
+    assignedCounselorPhotoUrl = data?.signedUrl ?? null;
+  }
+  const processingOfficerPhotoUrls = new Map<string, string>();
+  await Promise.all(
+    (processingOfficers ?? [])
+      .filter((o) => o.photo_path)
+      .map(async (o) => {
+        const { data } = await supabase.storage.from("documents").createSignedUrl(o.photo_path!, 3600);
+        if (data?.signedUrl) processingOfficerPhotoUrls.set(o.id, data.signedUrl);
+      })
+  );
 
   const agreementLinks = new Map(agreementLinkEntries);
   const invoicePdfUrls = new Map(invoicePdfEntries.filter((e): e is readonly [string, string] => Boolean(e[1])));
@@ -537,13 +552,23 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
           <div>
             <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">Assigned Counselor</p>
             {assignedCounselorStaff ? (
-              <div className="text-sm text-ink">
-                <p className="font-medium">{assignedCounselorStaff.full_name}</p>
-                {assignedCounselorStaff.designation && <p className="text-muted">{assignedCounselorStaff.designation}</p>}
-                {(assignedCounselorStaff.mobile_official ?? assignedCounselorStaff.mobile_personal) && (
-                  <p className="text-muted">{assignedCounselorStaff.mobile_official ?? assignedCounselorStaff.mobile_personal}</p>
+              <div className="flex items-start gap-3 text-sm text-ink">
+                {assignedCounselorPhotoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={assignedCounselorPhotoUrl} alt="" className="h-12 w-12 shrink-0 rounded-full border border-border object-cover" />
+                ) : (
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-dashed border-border text-[10px] text-muted">
+                    —
+                  </div>
                 )}
-                {assignedCounselorStaff.email_official && <p className="text-muted">{assignedCounselorStaff.email_official}</p>}
+                <div>
+                  <p className="font-medium">{assignedCounselorStaff.full_name}</p>
+                  {assignedCounselorStaff.designation && <p className="text-muted">{assignedCounselorStaff.designation}</p>}
+                  {(assignedCounselorStaff.mobile_official ?? assignedCounselorStaff.mobile_personal) && (
+                    <p className="text-muted">{assignedCounselorStaff.mobile_official ?? assignedCounselorStaff.mobile_personal}</p>
+                  )}
+                  {assignedCounselorStaff.email_official && <p className="text-muted">{assignedCounselorStaff.email_official}</p>}
+                </div>
               </div>
             ) : (
               <p className="text-sm text-muted">Not assigned yet — set one from the Registration card above.</p>
@@ -555,13 +580,23 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
             {processingOfficers && processingOfficers.length > 0 ? (
               <div className="flex flex-col gap-3">
                 {processingOfficers.map((officer) => (
-                  <div key={officer.full_name} className="text-sm text-ink">
-                    <p className="font-medium">{officer.full_name}</p>
-                    {officer.designation && <p className="text-muted">{officer.designation}</p>}
-                    {(officer.mobile_official ?? officer.mobile_personal) && (
-                      <p className="text-muted">{officer.mobile_official ?? officer.mobile_personal}</p>
+                  <div key={officer.id} className="flex items-start gap-3 text-sm text-ink">
+                    {processingOfficerPhotoUrls.has(officer.id) ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={processingOfficerPhotoUrls.get(officer.id)} alt="" className="h-12 w-12 shrink-0 rounded-full border border-border object-cover" />
+                    ) : (
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-dashed border-border text-[10px] text-muted">
+                        —
+                      </div>
                     )}
-                    {officer.email_official && <p className="text-muted">{officer.email_official}</p>}
+                    <div>
+                      <p className="font-medium">{officer.full_name}</p>
+                      {officer.designation && <p className="text-muted">{officer.designation}</p>}
+                      {(officer.mobile_official ?? officer.mobile_personal) && (
+                        <p className="text-muted">{officer.mobile_official ?? officer.mobile_personal}</p>
+                      )}
+                      {officer.email_official && <p className="text-muted">{officer.email_official}</p>}
+                    </div>
                   </div>
                 ))}
               </div>

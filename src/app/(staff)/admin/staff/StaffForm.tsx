@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useActionState } from "react";
-import { createStaffAccount, updateStaffDetails } from "@/lib/actions/admin";
+import { createStaffAccount, updateStaffDetails, uploadStaffPhoto } from "@/lib/actions/admin";
+import { PhotoUpload } from "@/components/PhotoUpload";
 import {
   STAFF_ROLES,
   STAFF_ROLE_LABELS,
@@ -68,7 +69,15 @@ function Field({ label, children, full }: { label: string; children: React.React
   );
 }
 
-export function StaffForm({ staff, onSuccess }: { staff?: StaffRecord; onSuccess: () => void }) {
+export function StaffForm({
+  staff,
+  photoUrl,
+  onSuccess,
+}: {
+  staff?: StaffRecord;
+  photoUrl?: string | null;
+  onSuccess: () => void;
+}) {
   const isEdit = Boolean(staff);
   const action = isEdit ? updateStaffDetails.bind(null, staff!.id) : createStaffAccount;
   const [state, formAction, pending] = useActionState(action, undefined);
@@ -78,8 +87,19 @@ export function StaffForm({ staff, onSuccess }: { staff?: StaffRecord; onSuccess
   const [bonusEligible, setBonusEligible] = useState(staff?.bonus_eligible ?? false);
 
   return (
-    <form action={formAction} className="flex flex-col">
-      <Section title="Personal Information">
+    <div className="flex flex-col">
+      {/* Its own form — a file input can't live inside the main form below
+          without nesting <form> tags, which browsers don't support. */}
+      {isEdit && (
+        <div className="mb-6">
+          <span className={labelClass}>Photo</span>
+          <div className="mt-1">
+            <PhotoUpload action={uploadStaffPhoto.bind(null, staff!.id)} photoUrl={photoUrl ?? null} />
+          </div>
+        </div>
+      )}
+      <form action={formAction} className="flex flex-col">
+        <Section title="Personal Information">
         <Field label="Staff name">
           <Input name="full_name" defaultValue={staff?.full_name ?? ""} required />
         </Field>
@@ -274,6 +294,7 @@ export function StaffForm({ staff, onSuccess }: { staff?: StaffRecord; onSuccess
           {state?.success ? "Close" : "Cancel"}
         </Button>
       </div>
-    </form>
+      </form>
+    </div>
   );
 }

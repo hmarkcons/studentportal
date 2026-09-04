@@ -23,12 +23,14 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 
 export function StaffActionsMenu({
   staff,
+  photoUrl,
   canManagePermissions = false,
   permissionDefs = [],
   roleOverrides = [],
   staffOverrides = [],
 }: {
   staff: StaffRecord;
+  photoUrl?: string | null;
   canManagePermissions?: boolean;
   permissionDefs?: PermissionDef[];
   roleOverrides?: RoleOverrideRow[];
@@ -96,6 +98,10 @@ export function StaffActionsMenu({
 
       <SlideOver open={viewOpen} onClose={() => setViewOpen(false)} title={staff.full_name}>
         <div className="flex flex-col">
+          {photoUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={photoUrl} alt="" className="mb-4 h-20 w-20 rounded-full border border-border object-cover" />
+          )}
           <h4 className="mb-2 border-b border-border pb-1 text-xs font-semibold uppercase tracking-wide text-primary">Personal Information</h4>
           <Row label="Designation" value={staff.designation} />
           <Row label="Role" value={STAFF_ROLE_LABELS[staff.role as never] ?? staff.role} />
@@ -152,7 +158,7 @@ export function StaffActionsMenu({
       </SlideOver>
 
       <SlideOver open={editOpen} onClose={() => setEditOpen(false)} title={`Edit — ${staff.full_name}`}>
-        <StaffForm staff={staff} onSuccess={() => setEditOpen(false)} />
+        <StaffForm staff={staff} photoUrl={photoUrl} onSuccess={() => setEditOpen(false)} />
       </SlideOver>
 
       {showPermissions && (

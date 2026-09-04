@@ -7,6 +7,7 @@ import { TravelHistorySection } from "@/components/TravelHistorySection";
 import { VisaRefusalHistorySection } from "@/components/VisaRefusalHistorySection";
 import { PersonalDetailsForm } from "./PersonalDetailsForm";
 import { ProfileDetailsForm } from "./ProfileDetailsForm";
+import { uploadStudentPhoto } from "@/lib/actions/studentProfileExtras";
 
 export default async function PortalProfilePage() {
   const supabase = await createClient();
@@ -44,7 +45,7 @@ export default async function PortalProfilePage() {
         <p className="mb-4 text-xs text-muted">Your email and case status can only be changed by your counselor.</p>
 
         <div className="mb-4">
-          <PhotoUpload studentId={student.id} revalidateTo={revalidateTo} photoUrl={photoUrl} />
+          <PhotoUpload action={uploadStudentPhoto.bind(null, student.id, revalidateTo)} photoUrl={photoUrl} />
         </div>
 
         <PersonalDetailsForm

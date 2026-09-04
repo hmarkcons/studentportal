@@ -7,6 +7,7 @@ import { TravelHistorySection } from "@/components/TravelHistorySection";
 import { VisaRefusalHistorySection } from "@/components/VisaRefusalHistorySection";
 import { LeadEditForm } from "@/components/LeadEditForm";
 import { StudentProfileForm } from "../StudentProfileForm";
+import { uploadStudentPhoto } from "@/lib/actions/studentProfileExtras";
 
 export default async function StudentProfileTab(props: PageProps<"/students/[id]/profile">) {
   const { id } = await props.params;
@@ -39,7 +40,7 @@ export default async function StudentProfileTab(props: PageProps<"/students/[id]
         <h3 className="mb-3 text-sm font-medium text-ink">Personal details</h3>
 
         <div className="mb-4">
-          <PhotoUpload studentId={id} revalidateTo={revalidateTo} photoUrl={photoUrl} />
+          <PhotoUpload action={uploadStudentPhoto.bind(null, id, revalidateTo)} photoUrl={photoUrl} />
         </div>
 
         <div className="mb-4">

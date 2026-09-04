@@ -14,12 +14,14 @@ type StaffOverrideRow = { staff_id: string; permission_key: string; allowed: boo
 
 export function StaffTable({
   staff,
+  photoUrls = {},
   canManagePermissions = false,
   permissionDefs = [],
   roleOverrides = [],
   staffOverrides = [],
 }: {
   staff: StaffRecord[];
+  photoUrls?: Record<string, string>;
   canManagePermissions?: boolean;
   permissionDefs?: PermissionDef[];
   roleOverrides?: RoleOverrideRow[];
@@ -87,8 +89,20 @@ export function StaffTable({
             {rows.map((s) => (
               <tr key={s.id} className="border-b border-border last:border-0">
                 <td className="px-4 py-3">
-                  <span className="font-medium text-ink">{s.full_name}</span>{" "}
-                  <span className="text-xs text-muted">· {STAFF_ROLE_LABELS[s.role as never] ?? s.role}</span>
+                  <div className="flex items-center gap-2">
+                    {photoUrls[s.id] ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={photoUrls[s.id]} alt="" className="h-7 w-7 rounded-full border border-border object-cover" />
+                    ) : (
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full border border-dashed border-border text-[10px] text-muted">
+                        —
+                      </div>
+                    )}
+                    <div>
+                      <span className="font-medium text-ink">{s.full_name}</span>{" "}
+                      <span className="text-xs text-muted">· {STAFF_ROLE_LABELS[s.role as never] ?? s.role}</span>
+                    </div>
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-ink">{s.designation ?? "—"}</td>
                 <td className="px-4 py-3 text-ink">{s.mobile_official ?? "—"}</td>
@@ -105,6 +119,7 @@ export function StaffTable({
                 <td className="px-4 py-3">
                   <StaffActionsMenu
                     staff={s}
+                    photoUrl={photoUrls[s.id]}
                     canManagePermissions={canManagePermissions}
                     permissionDefs={permissionDefs}
                     roleOverrides={roleOverrides.filter((o) => o.role === s.role)}

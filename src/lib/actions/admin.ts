@@ -84,6 +84,27 @@ export async function updateStaffDetails(staffId: string, _prevState: unknown, f
   return { success: true };
 }
 
+export async function uploadStaffPhoto(staffId: string, _prevState: unknown, formData: FormData) {
+  const supabase = await createClient();
+  const denied = await requirePermission("staff.manage", "Only Super Admin can set a staff member's photo.");
+  if (denied) return { error: denied.error };
+
+  const file = formData.get("file") as File | null;
+  if (!file || file.size === 0) return { error: "Choose a photo to upload." };
+  if (!file.type.startsWith("image/")) return { error: "Choose an image file." };
+
+  const path = `staff-photos/${staffId}/photo-${Date.now()}-${file.name}`;
+  const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: true });
+  if (uploadError) return { error: uploadError.message };
+
+  const { error } = await supabase.from("staff").update({ photo_path: path }).eq("id", staffId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/admin/staff");
+  revalidateTag("staff-directory", { expire: 0 });
+  return { success: true };
+}
+
 export async function deleteStaffAccount(staffId: string) {
   const supabase = await createClient();
   const denied = await requirePermission("staff.manage", "Only Super Admin can delete staff.");

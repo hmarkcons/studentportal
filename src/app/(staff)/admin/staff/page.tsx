@@ -22,10 +22,21 @@ export default async function StaffAdminPage() {
        mobile_personal, mobile_official, email_personal, email_official,
        emergency_contact_number, emergency_contact_name, emergency_contact_relation,
        monthly_salary, currency, allowance, commission_rate_general, commission_rate_public_universities,
-       commission_type_general, commission_type_public_universities, monthly_target, bonus_eligible, bonus_rate_percent`
+       commission_type_general, commission_type_public_universities, monthly_target, bonus_eligible, bonus_rate_percent,
+       photo_path`
     )
     .order("full_name")
-    .returns<StaffRecord[]>();
+    .returns<(StaffRecord & { photo_path: string | null })[]>();
+
+  const photoUrls: Record<string, string> = {};
+  await Promise.all(
+    (staff ?? [])
+      .filter((s) => s.photo_path)
+      .map(async (s) => {
+        const { data } = await supabase.storage.from("documents").createSignedUrl(s.photo_path!, 3600);
+        if (data?.signedUrl) photoUrls[s.id] = data.signedUrl;
+      })
+  );
 
   const { data: pendingPartners } = await supabase
     .from("partner_university_accounts")
@@ -60,6 +71,7 @@ export default async function StaffAdminPage() {
 
       <StaffTable
         staff={staff ?? []}
+        photoUrls={photoUrls}
         canManagePermissions={isSuperAdminViewer}
         permissionDefs={permissionDefs ?? []}
         roleOverrides={roleOverrides ?? []}
