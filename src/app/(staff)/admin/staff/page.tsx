@@ -43,6 +43,14 @@ export default async function StaffAdminPage() {
     .select("id, staff_name, status, university:universities(name)")
     .eq("status", "pending");
 
+  // Powers the "you must pick a replacement" prompt when deactivating a
+  // staff member who still has students pointed at them.
+  const { data: assignedLeads } = await supabase.from("leads").select("assigned_counselor_id").not("assigned_counselor_id", "is", null);
+  const assignedStudentCounts: Record<string, number> = {};
+  for (const l of assignedLeads ?? []) {
+    if (l.assigned_counselor_id) assignedStudentCounts[l.assigned_counselor_id] = (assignedStudentCounts[l.assigned_counselor_id] ?? 0) + 1;
+  }
+
   const [{ data: permissionDefs }, { data: roleOverrides }, { data: staffOverrides }] = isSuperAdminViewer
     ? await Promise.all([
         supabase.from("permission_definitions").select("key, category, label, description, default_roles"),
@@ -76,6 +84,7 @@ export default async function StaffAdminPage() {
         permissionDefs={permissionDefs ?? []}
         roleOverrides={roleOverrides ?? []}
         staffOverrides={staffOverrides ?? []}
+        assignedStudentCounts={assignedStudentCounts}
       />
 
       {pendingPartners && pendingPartners.length > 0 && (

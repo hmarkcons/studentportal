@@ -73,10 +73,14 @@ export function StaffForm({
   staff,
   photoUrl,
   onSuccess,
+  allStaff = [],
+  assignedStudentCount = 0,
 }: {
   staff?: StaffRecord;
   photoUrl?: string | null;
   onSuccess: () => void;
+  allStaff?: StaffRecord[];
+  assignedStudentCount?: number;
 }) {
   const isEdit = Boolean(staff);
   const action = isEdit ? updateStaffDetails.bind(null, staff!.id) : createStaffAccount;
@@ -85,6 +89,10 @@ export function StaffForm({
   const [typeGeneral, setTypeGeneral] = useState(staff?.commission_type_general ?? "percentage");
   const [typePublic, setTypePublic] = useState(staff?.commission_type_public_universities ?? "percentage");
   const [bonusEligible, setBonusEligible] = useState(staff?.bonus_eligible ?? false);
+  const [statusValue, setStatusValue] = useState(staff ? (staff.status === "active" ? "active" : "inactive") : "active");
+
+  const needsReplacement = isEdit && statusValue === "inactive" && assignedStudentCount > 0;
+  const replacementOptions = allStaff.filter((s) => s.id !== staff?.id && s.status === "active");
 
   return (
     <div className="flex flex-col">
@@ -265,11 +273,29 @@ export function StaffForm({
 
       <Section title="Status">
         <Field label="Status">
-          <Select name="status" defaultValue={staff ? (staff.status === "active" ? "active" : "inactive") : "active"}>
+          <Select name="status" value={statusValue} onChange={(e) => setStatusValue(e.target.value)}>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
           </Select>
         </Field>
+        {needsReplacement && (
+          <Field label="Reassign their students to" full>
+            <Select name="reassign_to_staff_id" required defaultValue="">
+              <option value="" disabled>
+                Choose a replacement…
+              </option>
+              {replacementOptions.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.full_name}
+                </option>
+              ))}
+            </Select>
+            <p className="mt-1 text-xs text-muted">
+              {staff!.full_name} has {assignedStudentCount} assigned student{assignedStudentCount === 1 ? "" : "s"}. Choose who takes over before
+              deactivating.
+            </p>
+          </Field>
+        )}
       </Section>
 
       {state?.error && <p className="mb-3 text-sm text-danger">{state.error}</p>}

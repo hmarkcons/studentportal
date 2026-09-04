@@ -19,6 +19,7 @@ export function StaffTable({
   permissionDefs = [],
   roleOverrides = [],
   staffOverrides = [],
+  assignedStudentCounts = {},
 }: {
   staff: StaffRecord[];
   photoUrls?: Record<string, string>;
@@ -26,6 +27,7 @@ export function StaffTable({
   permissionDefs?: PermissionDef[];
   roleOverrides?: RoleOverrideRow[];
   staffOverrides?: StaffOverrideRow[];
+  assignedStudentCounts?: Record<string, number>;
 }) {
   const [nameInput, setNameInput] = useState("");
   const [statusInput, setStatusInput] = useState("all");
@@ -124,6 +126,8 @@ export function StaffTable({
                     permissionDefs={permissionDefs}
                     roleOverrides={roleOverrides.filter((o) => o.role === s.role)}
                     staffOverrides={staffOverrides.filter((o) => o.staff_id === s.id)}
+                    allStaff={staff}
+                    assignedStudentCount={assignedStudentCounts[s.id] ?? 0}
                   />
                 </td>
               </tr>

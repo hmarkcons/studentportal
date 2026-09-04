@@ -76,10 +76,45 @@ export async function updateStaffDetails(staffId: string, _prevState: unknown, f
   const fields = staffFieldsFromFormData(formData);
   if (!fields.full_name || !fields.role) return { error: "Name and role are required." };
 
+  // Deactivating a staff member must not silently strand their students with
+  // a counselor nobody can see any more (is_active_staff() already hides an
+  // inactive counselor from role-filtered pickers everywhere else) — so a
+  // replacement is required up front and the handover happens before the
+  // status flip itself, never after, so a failed reassignment can't leave
+  // the staff member deactivated with orphaned assignments.
+  if (fields.status === "deactivated") {
+    const { count } = await supabase
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .eq("assigned_counselor_id", staffId);
+
+    if ((count ?? 0) > 0) {
+      const reassignToStaffId = String(formData.get("reassign_to_staff_id") ?? "") || null;
+      if (!reassignToStaffId) {
+        return { error: `This staff member has ${count} assigned student(s). Choose a replacement staff member before deactivating.` };
+      }
+      if (reassignToStaffId === staffId) {
+        return { error: "Choose a different staff member to reassign to." };
+      }
+      const { data: replacement } = await supabase.from("staff").select("id, status").eq("id", reassignToStaffId).maybeSingle();
+      if (!replacement || replacement.status !== "active") {
+        return { error: "The chosen replacement staff member must be active." };
+      }
+
+      const { error: reassignError } = await supabase
+        .from("leads")
+        .update({ assigned_counselor_id: reassignToStaffId })
+        .eq("assigned_counselor_id", staffId);
+      if (reassignError) return { error: reassignError.message };
+    }
+  }
+
   const { error } = await supabase.from("staff").update(fields).eq("id", staffId);
   if (error) return { error: error.message };
 
   revalidatePath("/admin/staff");
+  revalidatePath("/students");
+  revalidatePath("/leads");
   revalidateTag("staff-directory", { expire: 0 });
   return { success: true };
 }
