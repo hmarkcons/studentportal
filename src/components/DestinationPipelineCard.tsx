@@ -112,19 +112,15 @@ export function DestinationPipelineCard({
             const negative = isNegativeValue(value);
             const filled = i < idx || (i === idx && Boolean(value));
             return (
-              <div key={stage.key} className="flex min-w-[110px] flex-1 flex-col gap-1">
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className={`shrink-0 whitespace-nowrap text-[10px] leading-tight ${i === idx ? "font-medium text-ink" : "text-muted"}`}
-                  >
-                    {stage.label}
-                  </span>
-                  <div
-                    className={`h-1.5 flex-1 rounded-full ${
-                      filled ? (i === idx && negative ? "bg-danger" : "bg-primary") : "bg-border"
-                    }`}
-                  />
-                </div>
+              <div key={stage.key} className="flex min-w-[72px] flex-1 flex-col items-center gap-1">
+                <span className={`text-center text-[10px] leading-tight ${i === idx ? "font-medium text-ink" : "text-muted"}`}>
+                  {stage.label}
+                </span>
+                <div
+                  className={`h-1.5 w-full rounded-full ${
+                    filled ? (i === idx && negative ? "bg-danger" : "bg-primary") : "bg-border"
+                  }`}
+                />
                 <span className={`text-center text-[9px] leading-tight ${negative ? "text-danger" : "text-muted"}`}>{value ?? "—"}</span>
               </div>
             );
