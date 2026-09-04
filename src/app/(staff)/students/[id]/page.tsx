@@ -363,9 +363,10 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <Card>
-          <h3 className="mb-3 text-sm font-medium text-ink">Registration</h3>
+      <Card>
+        <h3 className="mb-3 text-sm font-medium text-ink">Registration & Portal Access</h3>
+        <div className="mb-4">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Registration</p>
           <RegistrationEditForm
             studentId={id}
             revalidateTo={`/students/${id}`}
@@ -376,13 +377,12 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
             discountAmount={leadRegistration?.discount_amount ?? null}
             discountReason={leadRegistration?.discount_reason ?? null}
           />
-        </Card>
-
-        <Card>
-          <h3 className="mb-3 text-sm font-medium text-ink">Portal access</h3>
+        </div>
+        <div className="border-t border-border pt-4">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Portal access</p>
           <PortalAccessPanel studentId={id} enabled={Boolean(student?.auth_user_id)} />
-        </Card>
-      </div>
+        </div>
+      </Card>
 
       <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
         <Card>
