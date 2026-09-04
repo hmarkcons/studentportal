@@ -608,7 +608,12 @@ export function InvoiceCard({
 
       <div className="mt-3 flex items-center gap-2 border-t border-border pt-2">
         {pdfUrl && (
-          <a href={pdfUrl} target="_blank" rel="noreferrer" className="rounded-md border border-primary px-2 py-0.5 text-xs font-medium text-primary hover:bg-bg">
+          <a
+            href={pdfUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+          >
             👁️ View invoice
           </a>
         )}

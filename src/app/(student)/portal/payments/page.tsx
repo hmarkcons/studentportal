@@ -65,7 +65,7 @@ export default async function PortalPaymentsPage() {
               href={pdfUrls.get(inv.id)}
               target="_blank"
               rel="noreferrer"
-              className="mt-3 inline-block rounded-md border border-primary px-3 py-1.5 text-xs font-medium text-primary hover:bg-bg"
+              className="mt-3 inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
             >
               👁️ View invoice
             </a>
