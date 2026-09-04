@@ -276,8 +276,13 @@ export function CommissionLedgerTable({
                   </>
                 ) : (
                   proofUrls[r.id] && (
-                    <a href={proofUrls[r.id]} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
-                      View proof
+                    <a
+                      href={proofUrls[r.id]}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                    >
+                      👁️ View proof
                     </a>
                   )
                 )}

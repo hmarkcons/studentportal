@@ -101,8 +101,13 @@ function UploadRow({ doc, studentId, revalidateTo }: { doc: DocRow; studentId: s
           <Badge tone={DOCUMENT_STATUS_TONE[doc.status] ?? "neutral"}>{doc.status.replace("_", " ")}</Badge>
           {doc.deadline && <span className="text-xs text-muted">Due {formatDateOnly(doc.deadline)}</span>}
           {doc.fileUrl && (
-            <a href={doc.fileUrl} target="_blank" rel="noreferrer" className="text-xs text-primary underline">
-              View file
+            <a
+              href={doc.fileUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+            >
+              👁️ View file
             </a>
           )}
         </div>

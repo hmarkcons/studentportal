@@ -60,7 +60,7 @@ export function ScholarshipBodyRow({ body, isSuperAdmin }: { body: Body; isSuper
             href={body.source_url}
             target="_blank"
             rel="noreferrer"
-            className="ml-2 text-xs text-primary hover:underline"
+            className="ml-2 inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
           >
             🔗 View source
           </a>

@@ -17,8 +17,13 @@ export function ProofFileCell({
   return (
     <div className="flex flex-col gap-1">
       {viewUrl && (
-        <a href={viewUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
-          View proof
+        <a
+          href={viewUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex w-fit items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+        >
+          👁️ View proof
         </a>
       )}
       <form action={formAction} className="flex items-center gap-1">
