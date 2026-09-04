@@ -3,6 +3,7 @@ import { getStaffSession } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { StatCard } from "@/components/ui/StatCard";
+import { BoardingPassTracker } from "@/components/ui/BoardingPassTracker";
 import { categorizeApplicationStage } from "@/lib/applicationStage";
 import type { DocRow } from "@/components/DocumentChecklist";
 import { CATEGORY_LABELS, CATEGORY_ORDER } from "@/lib/documentCategories";
@@ -353,14 +354,29 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   return (
     <div>
       {appTrackerRows.length > 0 && (
-        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6">
-          <StatCard label="Applications" value={applicationStats.total} />
-          <StatCard label="With Offer" value={applicationStats.with_offer} tone="success" />
-          <StatCard label="Submitted" value={applicationStats.submitted} />
-          <StatCard label="Pending" value={applicationStats.pending} tone="warning" />
-          <StatCard label="Rejected" value={applicationStats.rejected} tone="danger" />
-          <StatCard label="Not Eligible" value={applicationStats.not_eligible} tone="danger" />
-        </div>
+        <>
+          <div className="mb-6 flex flex-col gap-4">
+            {appTrackerRows.map((row) => (
+              <BoardingPassTracker
+                key={row.id}
+                universityName={row.universityName}
+                programName={row.programName}
+                intake={row.intake}
+                currentStage={row.currentStage}
+                pipelineStages={row.pipelineStages}
+              />
+            ))}
+          </div>
+
+          <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6">
+            <StatCard label="Applications" value={applicationStats.total} />
+            <StatCard label="With Offer" value={applicationStats.with_offer} tone="success" />
+            <StatCard label="Submitted" value={applicationStats.submitted} />
+            <StatCard label="Pending" value={applicationStats.pending} tone="warning" />
+            <StatCard label="Rejected" value={applicationStats.rejected} tone="danger" />
+            <StatCard label="Not Eligible" value={applicationStats.not_eligible} tone="danger" />
+          </div>
+        </>
       )}
 
       <Card>
