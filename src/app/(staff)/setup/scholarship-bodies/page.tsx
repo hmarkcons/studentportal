@@ -14,7 +14,7 @@ export default async function ScholarshipBodiesPage() {
 
   const { data: bodies } = await supabase
     .from("scholarship_bodies")
-    .select("id, name, region, academic_year, covers, stipend_amount, last_updated_year")
+    .select("id, name, region, academic_year, covers, stipend_amount, source_url, last_updated_year")
     .order("name");
 
   return (

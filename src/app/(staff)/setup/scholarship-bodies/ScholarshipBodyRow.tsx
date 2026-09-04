@@ -12,6 +12,7 @@ type Body = {
   academic_year: string;
   covers: string[];
   stipend_amount: string | null;
+  source_url: string | null;
 };
 
 export function ScholarshipBodyRow({ body, isSuperAdmin }: { body: Body; isSuperAdmin: boolean }) {
@@ -52,7 +53,19 @@ export function ScholarshipBodyRow({ body, isSuperAdmin }: { body: Body; isSuper
 
   return (
     <tr className="border-b border-border last:border-0">
-      <td className="px-4 py-3">{body.name}</td>
+      <td className="px-4 py-3">
+        {body.name}
+        {body.source_url && (
+          <a
+            href={body.source_url}
+            target="_blank"
+            rel="noreferrer"
+            className="ml-2 text-xs text-primary hover:underline"
+          >
+            🔗 View source
+          </a>
+        )}
+      </td>
       <td className="px-4 py-3">{body.region ?? "—"}</td>
       <td className="px-4 py-3">{body.covers.join(", ") || "—"}</td>
       <td className="px-4 py-3">{body.academic_year}</td>
