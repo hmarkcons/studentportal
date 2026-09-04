@@ -106,7 +106,15 @@ export function StaffForm({
           </div>
         </div>
       )}
-      <form action={formAction} className="flex flex-col">
+      {/* React resets a form's native DOM controls after every action
+          completion (success or error) unless this is blocked — for the
+          Status <select>, that silently reverts its underlying DOM value
+          back to "Active" after any failed submission (e.g. deactivating
+          without picking a replacement), even though the controlled
+          `statusValue` state React thinks is still current says
+          "Inactive". A resubmission then submits status=active, silently
+          skipping the reassignment guard and reporting a false "Saved." */}
+      <form action={formAction} onReset={(e) => e.preventDefault()} className="flex flex-col">
         <Section title="Personal Information">
         <Field label="Staff name">
           <Input name="full_name" defaultValue={staff?.full_name ?? ""} required />
