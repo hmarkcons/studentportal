@@ -20,6 +20,9 @@ export type StudentApplicationGroup = {
   name: string;
   countries: string[];
   apps: StudentApplicationRow[];
+  counselorName: string | null;
+  counselorInitials: string | null;
+  registeredMonth: string | null;
 };
 
 function Chevron({ open }: { open: boolean }) {
@@ -67,10 +70,10 @@ export function ApplicationsByStudent({
   }
 
   function exportCsv() {
-    const header = ["Student", "Country", "University", "Program", "Stage", "Deadline"].join(",");
+    const header = ["Student", "Counselor", "Registered", "Country", "University", "Program", "Stage", "Deadline"].join(",");
     const lines = visible.flatMap((g) =>
       g.apps.map((a) =>
-        [g.name, a.country, a.university, a.program, a.stage.replace(/_/g, " "), a.deadline ?? ""]
+        [g.name, g.counselorName ?? "", g.registeredMonth ?? "", a.country, a.university, a.program, a.stage.replace(/_/g, " "), a.deadline ?? ""]
           .map((v) => `"${v.replace(/"/g, '""')}"`)
           .join(",")
       )
@@ -135,8 +138,21 @@ export function ApplicationsByStudent({
                 className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-bg/60"
               >
                 <div>
-                  <p className="font-medium text-ink">{g.name}</p>
-                  <p className="text-xs text-muted">{g.countries.join(", ") || "—"}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-ink">{g.name}</p>
+                    {g.counselorInitials && (
+                      <span
+                        title={g.counselorName ?? undefined}
+                        className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-[11px] font-medium text-primary"
+                      >
+                        {g.counselorInitials}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted">
+                    {g.countries.join(", ") || "—"}
+                    {g.registeredMonth && ` · Registered ${g.registeredMonth}`}
+                  </p>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-muted">
