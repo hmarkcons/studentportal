@@ -36,15 +36,15 @@ export default async function StudentLayout({ children, params }: { children: Re
       <Link href="/students" className="text-sm text-muted hover:text-ink">
         &larr; Back to students
       </Link>
-      <div className="mt-2 mb-4 flex items-center justify-between">
-        <div>
+      <div className="mt-2 mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
           <h2 className="text-xl font-semibold text-ink">{student.full_name}</h2>
           <p className="text-sm text-muted">
             {student.email ?? "No email"} · {student.contact_number ?? "No phone"} · {student.country_of_interest ?? "—"}
           </p>
         </div>
         <div className="flex flex-col items-end gap-2">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <Badge tone={student.portal_active ? "success" : "neutral"}>{student.portal_active ? "Portal active" : "Portal inactive"}</Badge>
             <InlineRegistrationStatusCell studentId={id} status={student.registration_status} />
           </div>
