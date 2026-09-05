@@ -34,6 +34,7 @@ export function DataTable({
   searchPlaceholder = "Search…",
   filters = [],
   minTableWidthClassName = "min-w-[640px]",
+  pageSize,
 }: {
   columns: Column[];
   rows: Row[];
@@ -46,10 +47,20 @@ export function DataTable({
   // toolbar) — spreads columns out instead of squeezing their content, at the
   // cost of a horizontal scrollbar on narrower screens.
   minTableWidthClassName?: string;
+  // Opt-in: when set, only this many matching rows are rendered at once, with
+  // Prev/Next controls below the table — every other DataTable caller keeps
+  // rendering every row exactly as before. Search/filter/export still run
+  // over the full `rows` array regardless, only which rows get mounted into
+  // the DOM changes — the actual problem this solves is that Next.js
+  // prefetches every visible row's own <Link>, each one a real page's worth
+  // of server-side data fetching, so a long unpaginated list turns into that
+  // many prefetch round trips the moment the page paints.
+  pageSize?: number;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [filterValues, setFilterValues] = useState<Record<string, string>>({});
+  const [page, setPage] = useState(1);
 
   const visibleRows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -68,6 +79,29 @@ export function DataTable({
       return true;
     });
   }, [rows, search, filterValues, filters]);
+
+  const pageCount = pageSize ? Math.max(1, Math.ceil(visibleRows.length / pageSize)) : 1;
+  // Search/filter changes can shrink the result set below the current page
+  // (or the underlying data can too) — clamp rather than strand the user on
+  // a blank page they'd otherwise have to manually back out of.
+  const currentPage = Math.min(page, pageCount);
+  const pagedRows = pageSize ? visibleRows.slice((currentPage - 1) * pageSize, currentPage * pageSize) : visibleRows;
+
+  function updateSearch(value: string) {
+    setSearch(value);
+    setPage(1);
+  }
+
+  function updateFilter(key: string, value: string) {
+    setFilterValues((prev) => ({ ...prev, [key]: value }));
+    setPage(1);
+  }
+
+  function clearSearchAndFilters() {
+    setSearch("");
+    setFilterValues({});
+    setPage(1);
+  }
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -107,7 +141,7 @@ export function DataTable({
             {searchable && (
               <input
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => updateSearch(e.target.value)}
                 placeholder={searchPlaceholder}
                 className="rounded-md border border-border bg-card px-2 py-1 text-xs"
               />
@@ -116,7 +150,7 @@ export function DataTable({
               <select
                 key={f.key}
                 value={filterValues[f.key] ?? ""}
-                onChange={(e) => setFilterValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                onChange={(e) => updateFilter(f.key, e.target.value)}
                 className="rounded-md border border-border bg-card px-2 py-1 text-xs"
               >
                 <option value="">{f.label}: all</option>
@@ -128,13 +162,7 @@ export function DataTable({
               </select>
             ))}
             {(search || Object.values(filterValues).some(Boolean)) && (
-              <button
-                onClick={() => {
-                  setSearch("");
-                  setFilterValues({});
-                }}
-                className="text-xs text-muted hover:text-ink"
-              >
+              <button onClick={clearSearchAndFilters} className="text-xs text-muted hover:text-ink">
                 Clear
               </button>
             )}
@@ -169,7 +197,7 @@ export function DataTable({
           </tr>
         </thead>
         <tbody>
-          {visibleRows.map((row) => (
+          {pagedRows.map((row) => (
             <tr key={row.id} className="border-b border-border last:border-0 hover:bg-bg/60">
               {selectable && (
                 <td className="px-4 py-3">
@@ -195,6 +223,32 @@ export function DataTable({
           )}
         </tbody>
       </table>
+      {pageSize && pageCount > 1 && (
+        <div className="flex items-center justify-between border-t border-border bg-bg px-3 py-2 text-xs text-muted">
+          <span>
+            Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, visibleRows.length)} of {visibleRows.length}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage <= 1}
+              className="rounded-md border border-border px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Previous
+            </button>
+            <span>
+              Page {currentPage} of {pageCount}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+              disabled={currentPage >= pageCount}
+              className="rounded-md border border-border px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

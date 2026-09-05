@@ -142,6 +142,7 @@ export default async function LeadsPage() {
             searchable
             searchPlaceholder="Search name, contact…"
             minTableWidthClassName="min-w-[640px] lg:min-w-[950px]"
+            pageSize={25}
             filters={[
               { key: "status", label: "Status", options: Object.values(LEAD_STATUS_LABELS) },
               { key: "country", label: "Country", options: countryOptions },
