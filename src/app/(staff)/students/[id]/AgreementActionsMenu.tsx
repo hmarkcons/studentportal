@@ -9,7 +9,7 @@ type AgreementTemplateOption = {
   id: string;
   name: string;
   signatory_name: string;
-  destination: { display_name: string } | { display_name: string }[] | null;
+  destination: { id: string; display_name: string } | { id: string; display_name: string }[] | null;
 };
 
 type AgreementRecord = {
@@ -37,6 +37,7 @@ export function AgreementActionsMenu({
   agreement,
   studentId,
   templates,
+  backupDestinationIds = [],
   links,
   canEdit,
   canDelete,
@@ -44,6 +45,7 @@ export function AgreementActionsMenu({
   agreement: AgreementRecord;
   studentId: string;
   templates: AgreementTemplateOption[];
+  backupDestinationIds?: string[];
   links?: { templateUrl?: string; signedUrl?: string; pdfUrl?: string };
   canEdit: boolean;
   canDelete: boolean;
@@ -133,7 +135,13 @@ export function AgreementActionsMenu({
 
       {canEdit && (
         <SlideOver open={editOpen} onClose={() => setEditOpen(false)} title="Edit agreement">
-          <EditAgreementForm agreement={agreement} studentId={studentId} templates={templates} onSuccess={() => setEditOpen(false)} />
+          <EditAgreementForm
+            agreement={agreement}
+            studentId={studentId}
+            templates={templates}
+            backupDestinationIds={backupDestinationIds}
+            onSuccess={() => setEditOpen(false)}
+          />
         </SlideOver>
       )}
     </div>

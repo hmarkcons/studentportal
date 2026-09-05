@@ -82,7 +82,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       supabase.from("leads").select("assigned_counselor_id, intake, discount_amount, discount_reason").eq("id", id).maybeSingle(),
       supabase
         .from("lead_destinations")
-        .select("destination_id, dashboard_stage_values, destination:destinations(display_name, dashboard_pipeline_stages)")
+        .select("destination_id, is_backup, created_at, dashboard_stage_values, destination:destinations(display_name, dashboard_pipeline_stages)")
         .eq("lead_id", id),
       supabase
         .from("agreements")
@@ -206,6 +206,21 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   const savedStageValuesByDestinationId = new Map<string, Record<string, string>>(
     (selectedDestinations ?? []).map((sd) => [sd.destination_id, (sd.dashboard_stage_values as Record<string, string> | null) ?? {}])
   );
+
+  // Registration edit form's primary/backup resolution. Normal case: exactly
+  // one non-backup row (the primary) plus 0-3 backup rows, matching what
+  // PrimaryBackupDestinationSelect writes. Legacy case: a student registered
+  // before this feature may have 2+ non-backup rows from the old unlimited
+  // multi-select — pick the earliest-added as primary and demote the rest
+  // (up to the 3-backup cap) to backup slots for display only; nothing is
+  // written to the DB until the form is actually saved.
+  const nonBackupDestinations = (selectedDestinations ?? [])
+    .filter((d) => !d.is_backup)
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  const explicitBackupIds = (selectedDestinations ?? []).filter((d) => d.is_backup).map((d) => d.destination_id);
+  const primaryDestinationId = nonBackupDestinations[0]?.destination_id ?? null;
+  const legacyExtraDestinationIds = nonBackupDestinations.slice(1).map((d) => d.destination_id);
+  const resolvedBackupDestinationIds = [...explicitBackupIds, ...legacyExtraDestinationIds].slice(0, 3);
 
   const destinationPipelineGroups = new Map<
     string,
@@ -455,7 +470,8 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
             studentId={id}
             revalidateTo={`/students/${id}`}
             destinations={allDestinations ?? []}
-            selectedDestinationIds={(selectedDestinations ?? []).map((d) => d.destination_id)}
+            defaultPrimaryId={primaryDestinationId}
+            defaultBackupIds={resolvedBackupDestinationIds}
             counselors={counselors ?? []}
             assignedCounselorId={leadRegistration?.assigned_counselor_id ?? null}
             intake={leadRegistration?.intake ?? null}
@@ -507,7 +523,12 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       <Card className="mt-6">
         <h3 className="mb-3 text-sm font-medium text-ink">Agreement</h3>
         {canModifyAgreement && (
-          <GenerateAgreementForm studentId={id} templates={templates ?? []} discountAmount={leadRegistration?.discount_amount ?? null} />
+          <GenerateAgreementForm
+            studentId={id}
+            templates={templates ?? []}
+            discountAmount={leadRegistration?.discount_amount ?? null}
+            backupDestinationIds={explicitBackupIds}
+          />
         )}
         {agreements && agreements.length > 0 && (
           <div className="mt-4 flex flex-col gap-3 border-t border-border pt-3">
@@ -562,6 +583,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                         agreement={a}
                         studentId={id}
                         templates={templates ?? []}
+                        backupDestinationIds={explicitBackupIds}
                         links={links}
                         canEdit={isSuperAdmin && a.status !== "signed"}
                         canDelete={isSuperAdmin}

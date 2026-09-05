@@ -54,11 +54,30 @@ export default async function StudentsPage() {
     .order("registered_at", { ascending: false })
     .returns<StudentRow[]>();
 
+  const studentIds = (students ?? []).map((r) => r.id);
+  const { data: backupRows } =
+    studentIds.length > 0
+      ? await supabase
+          .from("lead_destinations")
+          .select("lead_id, destination:destinations(display_name)")
+          .eq("is_backup", true)
+          .in("lead_id", studentIds)
+      : { data: [] as { lead_id: string; destination: { display_name: string } | { display_name: string }[] | null }[] };
+  const backupNamesByLead = new Map<string, string[]>();
+  for (const row of backupRows ?? []) {
+    const dest = one(row.destination);
+    if (!dest?.display_name) continue;
+    const list = backupNamesByLead.get(row.lead_id) ?? [];
+    list.push(dest.display_name);
+    backupNamesByLead.set(row.lead_id, list);
+  }
+
   const columns = [
     { key: "month", header: "Month" },
     { key: "name", header: "Name" },
     { key: "contact", header: "Contact" },
     { key: "country", header: "Country" },
+    { key: "backupCountry", header: "Backup Country" },
     { key: "counselor", header: "Counselor", align: "center" as const },
     { key: "intake", header: "Intake" },
     { key: "regStatus", header: "Registration status" },
@@ -83,6 +102,7 @@ export default async function StudentsPage() {
         ),
         contact: r.contact_number ?? r.email ?? "—",
         country: r.country_of_interest ?? "—",
+        backupCountry: (backupNamesByLead.get(r.id) ?? []).join(", ") || "—",
         counselor: one(r.assigned_counselor)?.full_name ? (
           <span
             title={one(r.assigned_counselor)!.full_name}
@@ -105,6 +125,7 @@ export default async function StudentsPage() {
         name: r.full_name,
         contact: r.contact_number ?? r.email ?? "",
         country: r.country_of_interest ?? "",
+        backupCountry: (backupNamesByLead.get(r.id) ?? []).join(", "),
         counselor: one(r.assigned_counselor)?.full_name ?? "",
         intake: r.intake ?? "",
         regStatus: r.registration_status,
@@ -148,7 +169,7 @@ export default async function StudentsPage() {
             columns={columns}
             searchable
             searchPlaceholder="Search name, contact…"
-            minTableWidthClassName="min-w-[640px] lg:min-w-[1100px]"
+            minTableWidthClassName="min-w-[640px] lg:min-w-[1250px]"
             filters={[
               { key: "regStatus", label: "Registration", options: ["registered", "withdrawn", "ghost"] },
               { key: "portal", label: "Portal", options: ["active", "inactive"] },

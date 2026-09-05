@@ -104,6 +104,13 @@ export type AgreementPdfData = {
     installmentAmounts: number[];
     discount: number | null;
     total: number;
+    // A backup-country agreement (a destination the student added as a
+    // hedge, not their main pick — see PrimaryBackupDestinationSelect)
+    // charges only that destination's administrative fee, so its fee table
+    // has no consultancy/installment rows and labels the admin fee with the
+    // country name instead of the generic heading a primary agreement uses.
+    isBackup: boolean;
+    destinationLabel: string;
   };
   agreementDate: string;
   signatureDataUri: string | null;
@@ -196,15 +203,21 @@ const INSTALLMENT_SCHEDULE: { label: string; note: string }[] = [
 // instead, which keeps every row adding up correctly.
 function FeeTable({ fee }: { fee: AgreementPdfData["fee"] }) {
   const rows: { label: string; note?: string; value: number }[] = [
-    { label: "Administrative Charges (Non-Refundable)", note: "Pay at the time of signing the agreement", value: fee.adminCharge },
+    {
+      label: fee.isBackup ? `Administrative Fee (${fee.destinationLabel})` : "Administrative Charges (Non-Refundable)",
+      note: "Pay at the time of signing the agreement",
+      value: fee.adminCharge,
+    },
   ];
-  if (fee.installmentAmounts.length <= 1) {
-    rows.push({ label: "Consultancy Fee", value: fee.installmentAmounts[0] ?? fee.consultancyFee });
-  } else {
-    fee.installmentAmounts.forEach((amount, i) => {
-      const schedule = INSTALLMENT_SCHEDULE[i] ?? { label: `Installment ${i + 1}`, note: undefined };
-      rows.push({ label: schedule.label, note: schedule.note, value: amount });
-    });
+  if (!fee.isBackup) {
+    if (fee.installmentAmounts.length <= 1) {
+      rows.push({ label: "Consultancy Fee", value: fee.installmentAmounts[0] ?? fee.consultancyFee });
+    } else {
+      fee.installmentAmounts.forEach((amount, i) => {
+        const schedule = INSTALLMENT_SCHEDULE[i] ?? { label: `Installment ${i + 1}`, note: undefined };
+        rows.push({ label: schedule.label, note: schedule.note, value: amount });
+      });
+    }
   }
   rows.push({
     label: "Total Professional Fee",

@@ -29,6 +29,37 @@ function duplicateLeadError(existing: { full_name: string; status: string }) {
   return `A matching record already exists in ${where}: ${existing.full_name}. Check for a duplicate before creating a new one.`;
 }
 
+// Shared by registerStudentManually/updateRegistrationDetails — reads the
+// primary + backup destination fields posted by PrimaryBackupDestinationSelect
+// and validates them server-side (the picker's own UI already prevents these,
+// but a form can always be resubmitted with stale/tampered fields).
+function parseDestinationSelection(formData: FormData) {
+  const primaryDestinationId = String(formData.get("destination_id") ?? "") || null;
+  const primaryDestinationName = String(formData.get("destination_name") ?? "").trim() || null;
+  const backupDestinationIds = formData.getAll("backup_destination_ids").map(String).filter(Boolean);
+  const backupDestinationNames = formData.getAll("backup_destination_names").map(String).filter(Boolean);
+
+  if (backupDestinationIds.length > 3) {
+    return { error: "You can add at most 3 backup countries." } as const;
+  }
+  if (primaryDestinationId && backupDestinationIds.includes(primaryDestinationId)) {
+    return { error: "A backup country can't be the same as the primary country." } as const;
+  }
+  if (new Set(backupDestinationIds).size !== backupDestinationIds.length) {
+    return { error: "The same backup country was selected twice." } as const;
+  }
+
+  return { primaryDestinationId, primaryDestinationName, backupDestinationIds, backupDestinationNames } as const;
+}
+
+function destinationSelectionRows(leadId: string, selection: ReturnType<typeof parseDestinationSelection>) {
+  if ("error" in selection) return [];
+  return [
+    ...(selection.primaryDestinationId ? [{ lead_id: leadId, destination_id: selection.primaryDestinationId, is_backup: false }] : []),
+    ...selection.backupDestinationIds.map((destination_id) => ({ lead_id: leadId, destination_id, is_backup: true })),
+  ];
+}
+
 export async function createLead(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
 
@@ -261,8 +292,8 @@ export async function registerStudentManually(_prevState: unknown, formData: For
   const current_qualification = String(formData.get("current_qualification") ?? "").trim() || null;
   const level_applying_for = String(formData.get("level_applying_for") ?? "") || null;
   const course_of_interest = String(formData.get("course_of_interest") ?? "").trim() || null;
-  const destination_ids = formData.getAll("destination_ids").map(String).filter(Boolean);
-  const destination_names = formData.getAll("destination_names").map(String).filter(Boolean);
+  const selection = parseDestinationSelection(formData);
+  if ("error" in selection) return selection;
   const assigned_counselor_id = String(formData.get("assigned_counselor_id") ?? "") || null;
   const intake = String(formData.get("intake") ?? "").trim() || null;
 
@@ -281,7 +312,7 @@ export async function registerStudentManually(_prevState: unknown, formData: For
     current_qualification,
     level_applying_for,
     course_of_interest,
-    country_of_interest: destination_names.join(", ") || null,
+    country_of_interest: [selection.primaryDestinationName, ...selection.backupDestinationNames].filter(Boolean).join(", ") || null,
     assigned_counselor_id,
     intake,
     status: "registered",
@@ -294,8 +325,9 @@ export async function registerStudentManually(_prevState: unknown, formData: For
 
   if (error) return { error: error.message };
 
-  if (destination_ids.length > 0) {
-    await supabase.from("lead_destinations").insert(destination_ids.map((destination_id) => ({ lead_id: id, destination_id })));
+  const destinationRows = destinationSelectionRows(id, selection);
+  if (destinationRows.length > 0) {
+    await supabase.from("lead_destinations").insert(destinationRows);
   }
 
   revalidatePath("/students");
@@ -359,36 +391,36 @@ export async function reassignLead(leadId: string, _prevState: unknown, formData
 
 export async function updateRegistrationDetails(studentId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  const destination_ids = formData.getAll("destination_ids").map(String).filter(Boolean);
-  const destination_names = formData.getAll("destination_names").map(String).filter(Boolean);
+  const selection = parseDestinationSelection(formData);
+  if ("error" in selection) return selection;
   const assigned_counselor_id = String(formData.get("assigned_counselor_id") ?? "") || null;
   const intake = String(formData.get("intake") ?? "").trim() || null;
   const discount_amount = formData.get("discount_amount") ? Number(formData.get("discount_amount")) : null;
   const discount_reason = String(formData.get("discount_reason") ?? "").trim() || null;
+  const hasNewSelection = Boolean(selection.primaryDestinationId) || selection.backupDestinationIds.length > 0;
 
   // Older records may predate lead_destinations and only carry the legacy
-  // country_of_interest text — the checkbox list then starts with nothing
-  // checked. Only touch destinations/country_of_interest when the form
-  // actually has a destination selection, or this student already had real
-  // lead_destinations rows (an explicit "uncheck everything" submit) — never
-  // silently wipe the legacy text field just because the widget started empty.
+  // country_of_interest text — the picker then starts with nothing selected.
+  // Only touch destinations/country_of_interest when the form actually has a
+  // destination selection, or this student already had real lead_destinations
+  // rows (an explicit "clear everything" submit) — never silently wipe the
+  // legacy text field just because the widget started empty.
   const { data: existingDestinations } = await supabase.from("lead_destinations").select("destination_id").eq("lead_id", studentId);
   const hadExistingDestinations = (existingDestinations?.length ?? 0) > 0;
 
-  if (destination_ids.length > 0 || hadExistingDestinations) {
+  if (hasNewSelection || hadExistingDestinations) {
     const { error: delErr } = await supabase.from("lead_destinations").delete().eq("lead_id", studentId);
     if (delErr) return { error: delErr.message };
-    if (destination_ids.length > 0) {
-      const { error: destErr } = await supabase
-        .from("lead_destinations")
-        .insert(destination_ids.map((destination_id) => ({ lead_id: studentId, destination_id })));
+    const destinationRows = destinationSelectionRows(studentId, selection);
+    if (destinationRows.length > 0) {
+      const { error: destErr } = await supabase.from("lead_destinations").insert(destinationRows);
       if (destErr) return { error: destErr.message };
     }
   }
 
   const patch: Record<string, unknown> = { assigned_counselor_id, intake, discount_amount, discount_reason };
-  if (destination_ids.length > 0 || hadExistingDestinations) {
-    patch.country_of_interest = destination_names.join(", ") || null;
+  if (hasNewSelection || hadExistingDestinations) {
+    patch.country_of_interest = [selection.primaryDestinationName, ...selection.backupDestinationNames].filter(Boolean).join(", ") || null;
   }
 
   const { error } = await supabase.from("leads").update(patch).eq("id", studentId);

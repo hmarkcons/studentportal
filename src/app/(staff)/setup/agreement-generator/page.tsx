@@ -54,7 +54,14 @@ export default async function AgreementGeneratorPage(props: { searchParams: Prom
 
     const { data: templates } = await supabase
       .from("agreement_templates")
-      .select("id, name, signatory_name, destination:destinations(display_name)");
+      .select("id, name, signatory_name, destination:destinations(id, display_name)");
+
+    const { data: backupDestinations } = await supabase
+      .from("lead_destinations")
+      .select("destination_id")
+      .eq("lead_id", selected.id)
+      .eq("is_backup", true);
+    const backupDestinationIds = (backupDestinations ?? []).map((d) => d.destination_id);
 
     const { data: agreements } = await supabase
       .from("agreements")
@@ -96,7 +103,12 @@ export default async function AgreementGeneratorPage(props: { searchParams: Prom
           </Link>
         </div>
         {(role === "super_admin" || role === "processing") && (
-          <GenerateAgreementForm studentId={selected.id} templates={templates ?? []} discountAmount={selected.discount_amount ?? null} />
+          <GenerateAgreementForm
+            studentId={selected.id}
+            templates={templates ?? []}
+            discountAmount={selected.discount_amount ?? null}
+            backupDestinationIds={backupDestinationIds}
+          />
         )}
         {agreements && agreements.length > 0 && (
           <div className="mt-4 flex flex-col gap-3 border-t border-border pt-3">

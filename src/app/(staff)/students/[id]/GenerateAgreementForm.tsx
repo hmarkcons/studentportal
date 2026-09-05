@@ -9,32 +9,45 @@ type AgreementTemplateOption = {
   id: string;
   name: string;
   signatory_name: string;
-  destination: { display_name: string } | { display_name: string }[] | null;
+  destination: { id: string; display_name: string } | { id: string; display_name: string }[] | null;
 };
 
-function templateDestName(d: AgreementTemplateOption["destination"]) {
-  return Array.isArray(d) ? d[0]?.display_name : d?.display_name;
+function templateDest(d: AgreementTemplateOption["destination"]) {
+  return Array.isArray(d) ? d[0] : d;
 }
 
+// A backup-country destination (per this student's lead_destinations —
+// see students/[id]/page.tsx) only ever gets an administrative-fee-only
+// agreement (no consultancy fee, see generateAgreement/generateAgreementPdf),
+// so once staff picks such a template the consultancy/discount/installment
+// fields would just be silently ignored server-side — hiding them here
+// instead of letting staff fill in values that go nowhere.
 export function GenerateAgreementForm({
   studentId,
   templates,
   discountAmount,
+  backupDestinationIds = [],
 }: {
   studentId: string;
   templates: AgreementTemplateOption[];
   discountAmount?: number | null;
+  backupDestinationIds?: string[];
 }) {
   const action = generateAgreement.bind(null, studentId);
   const [state, formAction, pending] = useActionState(action, undefined);
+  const [templateId, setTemplateId] = useState("");
+  const isBackup = backupDestinationIds.includes(
+    templateDest(templates.find((t) => t.id === templateId)?.destination ?? null)?.id ?? ""
+  );
 
   return (
     <form action={formAction} className="flex flex-wrap items-end gap-2">
-      <Select name="template_id" required>
+      <Select name="template_id" required value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
         <option value="">Template…</option>
         {templates.map((t) => (
           <option key={t.id} value={t.id}>
-            {templateDestName(t.destination)} — {t.name}
+            {templateDest(t.destination)?.display_name} — {t.name}
+            {backupDestinationIds.includes(templateDest(t.destination)?.id ?? "") ? " (Backup)" : ""}
           </option>
         ))}
       </Select>
@@ -43,23 +56,30 @@ export function GenerateAgreementForm({
         <option value="e_signature">E-signature (outside Karachi)</option>
       </Select>
       <Input name="admin_charge_override" type="number" step="0.01" placeholder="Admin charge override" className="w-40" />
-      <Input name="consultancy_fee_override" type="number" step="0.01" placeholder="Consultancy fee override" className="w-44" />
-      <Input
-        name="discount_amount"
-        type="number"
-        step="0.01"
-        placeholder="Discount amount"
-        defaultValue={discountAmount ?? ""}
-        className="w-36"
-      />
-      <Select name="installment_count" defaultValue="1">
-        <option value="1">1 consultancy fee installment</option>
-        <option value="2">2 consultancy fee installments</option>
-        <option value="3">3 consultancy fee installments</option>
-      </Select>
+      {!isBackup && (
+        <>
+          <Input name="consultancy_fee_override" type="number" step="0.01" placeholder="Consultancy fee override" className="w-44" />
+          <Input
+            name="discount_amount"
+            type="number"
+            step="0.01"
+            placeholder="Discount amount"
+            defaultValue={discountAmount ?? ""}
+            className="w-36"
+          />
+          <Select name="installment_count" defaultValue="1">
+            <option value="1">1 consultancy fee installment</option>
+            <option value="2">2 consultancy fee installments</option>
+            <option value="3">3 consultancy fee installments</option>
+          </Select>
+        </>
+      )}
       <Button type="submit" variant="primary" pending={pending}>
         Generate agreement
       </Button>
+      {isBackup && (
+        <p className="w-full text-xs text-muted">Backup country — this agreement will show the administrative fee only, no consultancy fee.</p>
+      )}
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
   );
@@ -69,6 +89,7 @@ export function EditAgreementForm({
   agreement,
   studentId,
   templates,
+  backupDestinationIds = [],
   onSuccess,
 }: {
   agreement: {
@@ -82,18 +103,24 @@ export function EditAgreementForm({
   };
   studentId: string;
   templates: AgreementTemplateOption[];
+  backupDestinationIds?: string[];
   onSuccess: () => void;
 }) {
   const action = updateAgreement.bind(null, agreement.id, studentId);
   const [state, formAction, pending] = useActionState(action, undefined);
+  const [templateId, setTemplateId] = useState(agreement.template_id ?? "");
+  const isBackup = backupDestinationIds.includes(
+    templateDest(templates.find((t) => t.id === templateId)?.destination ?? null)?.id ?? ""
+  );
 
   return (
     <form action={formAction} className="flex w-full flex-col flex-wrap items-end gap-2">
-      <Select name="template_id" defaultValue={agreement.template_id ?? ""} required className="w-full">
+      <Select name="template_id" value={templateId} onChange={(e) => setTemplateId(e.target.value)} required className="w-full">
         <option value="">Template…</option>
         {templates.map((t) => (
           <option key={t.id} value={t.id}>
-            {templateDestName(t.destination)} — {t.name}
+            {templateDest(t.destination)?.display_name} — {t.name}
+            {backupDestinationIds.includes(templateDest(t.destination)?.id ?? "") ? " (Backup)" : ""}
           </option>
         ))}
       </Select>
@@ -109,27 +136,34 @@ export function EditAgreementForm({
         defaultValue={agreement.admin_charge_override ?? ""}
         className="w-full"
       />
-      <Input
-        name="consultancy_fee_override"
-        type="number"
-        step="0.01"
-        placeholder="Consultancy fee override"
-        defaultValue={agreement.consultancy_fee_override ?? ""}
-        className="w-full"
-      />
-      <Input
-        name="discount_amount"
-        type="number"
-        step="0.01"
-        placeholder="Discount amount"
-        defaultValue={agreement.discount_amount ?? ""}
-        className="w-full"
-      />
-      <Select name="installment_count" defaultValue={String(agreement.installment_count ?? 1)} className="w-full">
-        <option value="1">1 consultancy fee installment</option>
-        <option value="2">2 consultancy fee installments</option>
-        <option value="3">3 consultancy fee installments</option>
-      </Select>
+      {isBackup && (
+        <p className="w-full text-xs text-muted">Backup country — this agreement will show the administrative fee only, no consultancy fee.</p>
+      )}
+      {!isBackup && (
+        <>
+          <Input
+            name="consultancy_fee_override"
+            type="number"
+            step="0.01"
+            placeholder="Consultancy fee override"
+            defaultValue={agreement.consultancy_fee_override ?? ""}
+            className="w-full"
+          />
+          <Input
+            name="discount_amount"
+            type="number"
+            step="0.01"
+            placeholder="Discount amount"
+            defaultValue={agreement.discount_amount ?? ""}
+            className="w-full"
+          />
+          <Select name="installment_count" defaultValue={String(agreement.installment_count ?? 1)} className="w-full">
+            <option value="1">1 consultancy fee installment</option>
+            <option value="2">2 consultancy fee installments</option>
+            <option value="3">3 consultancy fee installments</option>
+          </Select>
+        </>
+      )}
       <div className="flex w-full items-center gap-2">
         <Button type="submit" variant="primary" size="sm" pending={pending}>
           Save

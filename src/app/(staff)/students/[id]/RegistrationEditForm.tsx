@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { updateRegistrationDetails } from "@/lib/actions/leads";
-import { DestinationMultiSelect } from "@/components/DestinationMultiSelect";
+import { PrimaryBackupDestinationSelect } from "@/components/PrimaryBackupDestinationSelect";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 
@@ -10,7 +10,8 @@ export function RegistrationEditForm({
   studentId,
   revalidateTo,
   destinations,
-  selectedDestinationIds,
+  defaultPrimaryId,
+  defaultBackupIds,
   counselors,
   assignedCounselorId,
   discountAmount,
@@ -20,7 +21,8 @@ export function RegistrationEditForm({
   studentId: string;
   revalidateTo: string;
   destinations: { id: string; display_name: string }[];
-  selectedDestinationIds: string[];
+  defaultPrimaryId: string | null;
+  defaultBackupIds: string[];
   counselors: { id: string; full_name: string }[];
   assignedCounselorId: string | null;
   discountAmount: number | null;
@@ -42,8 +44,8 @@ export function RegistrationEditForm({
   return (
     <form action={formAction} className="flex flex-col gap-3 rounded-md border border-border p-3">
       <div>
-        <label className="mb-1 block text-xs text-muted">Countries</label>
-        <DestinationMultiSelect destinations={destinations} defaultSelected={selectedDestinationIds} />
+        <label className="mb-1 block text-xs text-muted">Country</label>
+        <PrimaryBackupDestinationSelect destinations={destinations} defaultPrimaryId={defaultPrimaryId} defaultBackupIds={defaultBackupIds} />
       </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
         <label className="flex flex-col gap-1 text-xs text-muted">

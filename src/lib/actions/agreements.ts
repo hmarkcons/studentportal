@@ -9,6 +9,8 @@ import { getAgreementContent } from "@/lib/pdf/agreementContent";
 import { wordingToBlocks, DEFAULT_OFFICE_LINE } from "@/lib/pdf/templateWording";
 import { requirePermission } from "@/lib/auth/permissions";
 
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
 }
@@ -34,12 +36,38 @@ function parseAgreementFields(formData: FormData) {
   return { template_id, signing_method, admin_charge_override, consultancy_fee_override, discount_amount, installment_count };
 }
 
+// A destination is a "backup" for this student when its lead_destinations
+// row has is_backup=true (see PrimaryBackupDestinationSelect) — such an
+// agreement gets an administrative-fee-only fee table (no consultancy fee),
+// so any consultancy/discount/installment values submitted for it are
+// dropped rather than stored, keeping the row consistent with what
+// generateAgreementPdf will actually render.
+async function resolveIsBackup(supabase: SupabaseServerClient, studentId: string, templateId: string | null) {
+  if (!templateId) return false;
+  const { data: template } = await supabase.from("agreement_templates").select("destination_id").eq("id", templateId).maybeSingle();
+  if (!template?.destination_id) return false;
+  const { data: destRow } = await supabase
+    .from("lead_destinations")
+    .select("is_backup")
+    .eq("lead_id", studentId)
+    .eq("destination_id", template.destination_id)
+    .maybeSingle();
+  return destRow?.is_backup ?? false;
+}
+
 export async function generateAgreement(studentId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
   const fields = parseAgreementFields(formData);
 
   if (!["paper", "e_signature"].includes(fields.signing_method)) {
     return { error: "Choose a signing method." };
+  }
+
+  const is_backup = await resolveIsBackup(supabase, studentId, fields.template_id);
+  if (is_backup) {
+    fields.consultancy_fee_override = null;
+    fields.discount_amount = null;
+    fields.installment_count = 1;
   }
 
   const {
@@ -49,6 +77,7 @@ export async function generateAgreement(studentId: string, _prevState: unknown, 
   const { error } = await supabase.from("agreements").insert({
     student_id: studentId,
     ...fields,
+    is_backup,
     generated_by: user?.id,
     status: "pending_signature",
   });
@@ -79,7 +108,16 @@ export async function updateAgreement(agreementId: string, studentId: string, _p
     return { error: "Choose a signing method." };
   }
 
-  const { error } = await supabase.from("agreements").update(fields).eq("id", agreementId);
+  // Re-resolve is_backup here too — staff may have switched the template to
+  // a different destination since the agreement was first generated.
+  const is_backup = await resolveIsBackup(supabase, studentId, fields.template_id);
+  if (is_backup) {
+    fields.consultancy_fee_override = null;
+    fields.discount_amount = null;
+    fields.installment_count = 1;
+  }
+
+  const { error } = await supabase.from("agreements").update({ ...fields, is_backup }).eq("id", agreementId);
   if (error) return { error: error.message };
 
   revalidatePath(`/students/${studentId}`);
@@ -98,7 +136,7 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
 
   const { data: agreement, error: agreementError } = await supabase
     .from("agreements")
-    .select("id, template_id, admin_charge_override, consultancy_fee_override, discount_amount, installment_count, created_at")
+    .select("id, template_id, admin_charge_override, consultancy_fee_override, discount_amount, installment_count, is_backup, created_at")
     .eq("id", agreementId)
     .single();
   if (agreementError || !agreement) return { error: agreementError?.message ?? "Agreement not found." };
@@ -158,9 +196,16 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
   const { data: sigFile } = await supabase.storage.from("documents").download("branding/hmark-signature.png");
   const signatureDataUri = sigFile ? `data:image/png;base64,${Buffer.from(await sigFile.arrayBuffer()).toString("base64")}` : null;
 
+  // A backup-country agreement (see resolveIsBackup/PrimaryBackupDestinationSelect)
+  // never carries a consultancy fee or discount — it exists purely to charge
+  // this destination's administrative fee — so both are forced to zero here
+  // regardless of what's stored, even though generateAgreement/updateAgreement
+  // already null them out at write time (this is the belt to that suspenders,
+  // for any agreement row written before that enforcement existed).
+  const isBackup = agreement.is_backup ?? false;
   const adminCharge = agreement.admin_charge_override ?? destination.admin_charge ?? 0;
-  const consultancyFee = agreement.consultancy_fee_override ?? destination.consultancy_fee ?? 0;
-  const discountAmount = agreement.discount_amount ?? 0;
+  const consultancyFee = isBackup ? 0 : (agreement.consultancy_fee_override ?? destination.consultancy_fee ?? 0);
+  const discountAmount = isBackup ? 0 : (agreement.discount_amount ?? 0);
   const currencySymbol = CURRENCY_SYMBOLS[destination.consultancy_fee_currency ?? "EUR"] ?? destination.consultancy_fee_currency ?? "€";
   const totalFee = adminCharge + consultancyFee - discountAmount;
   const agreementDateStr = formatAgreementDate(new Date(agreement.created_at));
@@ -173,7 +218,7 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
   // this way means what the client actually owes at each payment point is
   // already net of the discount, instead of only reconciling in the total row.
   const discountedConsultancyFee = consultancyFee - discountAmount;
-  const installmentCount = agreement.installment_count ?? 1;
+  const installmentCount = isBackup ? 1 : (agreement.installment_count ?? 1);
   const perInstallment = Math.round((discountedConsultancyFee / installmentCount) * 100) / 100;
   const installmentAmounts = Array.from({ length: installmentCount }, (_, i) =>
     i === installmentCount - 1 ? discountedConsultancyFee - perInstallment * (installmentCount - 1) : perInstallment
@@ -229,6 +274,8 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
         installmentAmounts,
         discount: discountAmount,
         total: totalFee,
+        isBackup,
+        destinationLabel: destination.display_name ?? "",
       },
       agreementDate: agreementDateStr,
       signatureDataUri,

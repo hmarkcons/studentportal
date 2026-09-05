@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { registerStudentManually } from "@/lib/actions/leads";
 import { STUDY_LEVELS, QUALIFICATION_LEVELS } from "@/lib/constants";
-import { DestinationMultiSelect } from "@/components/DestinationMultiSelect";
+import { PrimaryBackupDestinationSelect } from "@/components/PrimaryBackupDestinationSelect";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 
@@ -63,8 +63,8 @@ export function RegisterStudentForm({
         <Input name="course_of_interest" />
       </div>
       <div className="flex flex-col gap-1.5">
-        <label className={labelClass}>Countries of interest</label>
-        <DestinationMultiSelect destinations={destinations} />
+        <label className={labelClass}>Country of interest</label>
+        <PrimaryBackupDestinationSelect destinations={destinations} />
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-1.5">
