@@ -17,14 +17,14 @@ export function StudentTabs({ studentId, showScholarship }: { studentId: string;
   ];
 
   return (
-    <div className="mb-6 flex gap-1 border-b border-border">
+    <div className="mb-6 flex gap-1 overflow-x-auto border-b border-border">
       {tabs.map((t) => {
         const active = t.href === `/students/${studentId}` ? pathname === t.href : pathname.startsWith(t.href);
         return (
           <Link
             key={t.href}
             href={t.href}
-            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
+            className={`-mb-px flex-shrink-0 border-b-2 px-3 py-2 text-sm font-medium ${
               active ? "border-primary text-primary" : "border-transparent text-muted hover:text-ink"
             }`}
           >
