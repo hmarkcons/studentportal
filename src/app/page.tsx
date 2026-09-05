@@ -16,6 +16,21 @@ export default async function Home() {
     .eq("id", user.id)
     .maybeSingle();
   if (staffRow && staffRow.status === "active") redirect("/reports");
+  if (staffRow && staffRow.status === "suspended") {
+    return (
+      <div className="flex flex-1 items-center justify-center bg-bg px-4">
+        <div className="w-full max-w-sm rounded-lg border border-border bg-card p-8 text-center">
+          <h1 className="text-lg font-semibold text-ink">Account suspended</h1>
+          <p className="mt-2 text-sm text-muted">Your account has been temporarily suspended. Contact HMARK Consultants for details.</p>
+          <form action={signOut} className="mt-6">
+            <button type="submit" className="text-sm text-primary hover:underline">
+              Sign out
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   const { data: studentRow } = await supabase
     .from("leads")

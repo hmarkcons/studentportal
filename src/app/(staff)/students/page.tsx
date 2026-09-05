@@ -28,6 +28,15 @@ function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
 }
 
+function initials(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join("");
+}
+
 export default async function StudentsPage() {
   const supabase = await createClient();
 
@@ -71,7 +80,16 @@ export default async function StudentsPage() {
         ),
         contact: r.email ?? r.contact_number ?? "—",
         country: r.country_of_interest ?? "—",
-        counselor: one(r.assigned_counselor)?.full_name ?? "—",
+        counselor: one(r.assigned_counselor)?.full_name ? (
+          <span
+            title={one(r.assigned_counselor)!.full_name}
+            className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-[11px] font-medium text-primary"
+          >
+            {initials(one(r.assigned_counselor)!.full_name)}
+          </span>
+        ) : (
+          "—"
+        ),
         intake: r.intake ?? "—",
         regStatus: <InlineRegistrationStatusCell studentId={r.id} status={r.registration_status} />,
         portal: <Badge tone={r.portal_active ? "success" : "neutral"}>{r.portal_active ? "Active" : "Inactive"}</Badge>,
@@ -127,6 +145,7 @@ export default async function StudentsPage() {
             columns={columns}
             searchable
             searchPlaceholder="Search name, contact…"
+            minTableWidthClassName="min-w-[1100px]"
             filters={[
               { key: "regStatus", label: "Registration", options: ["registered", "withdrawn", "ghost"] },
               { key: "portal", label: "Portal", options: ["active", "inactive"] },

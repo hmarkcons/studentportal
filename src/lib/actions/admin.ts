@@ -5,12 +5,22 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePermission } from "@/lib/auth/permissions";
 
+// "Suspended" just freezes the account (blocked from every staff route by
+// the (staff) layout's `status !== "active"` check, same as deactivated) —
+// unlike Inactive, it never triggers the reassignment flow below, since a
+// suspension is meant to be a temporary hold, not a handover.
+function statusFromFormValue(value: string): "active" | "suspended" | "deactivated" {
+  if (value === "suspended") return "suspended";
+  if (value === "inactive") return "deactivated";
+  return "active";
+}
+
 function staffFieldsFromFormData(formData: FormData) {
   return {
     full_name: String(formData.get("full_name") ?? "").trim(),
     role: String(formData.get("role") ?? ""),
     designation: String(formData.get("designation") ?? "").trim() || null,
-    status: String(formData.get("status") ?? "active") === "inactive" ? "deactivated" : "active",
+    status: statusFromFormValue(String(formData.get("status") ?? "active")),
     gender: String(formData.get("gender") ?? "").trim() || null,
     date_of_birth: String(formData.get("date_of_birth") ?? "") || null,
     marital_status: String(formData.get("marital_status") ?? "").trim() || null,
@@ -81,17 +91,18 @@ export async function updateStaffDetails(staffId: string, _prevState: unknown, f
   // inactive counselor from role-filtered pickers everywhere else) — so a
   // replacement is required up front and the handover happens before the
   // status flip itself, never after, so a failed reassignment can't leave
-  // the staff member deactivated with orphaned assignments.
+  // the staff member deactivated with orphaned assignments. Every handed-over
+  // student is logged in staff_reassignment_log so reactivating this same
+  // staff member later can hand them back automatically (see below).
   if (fields.status === "deactivated") {
-    const { count } = await supabase
-      .from("leads")
-      .select("id", { count: "exact", head: true })
-      .eq("assigned_counselor_id", staffId);
+    const { data: assignedLeads } = await supabase.from("leads").select("id").eq("assigned_counselor_id", staffId);
 
-    if ((count ?? 0) > 0) {
+    if (assignedLeads && assignedLeads.length > 0) {
       const reassignToStaffId = String(formData.get("reassign_to_staff_id") ?? "") || null;
       if (!reassignToStaffId) {
-        return { error: `This staff member has ${count} assigned student(s). Choose a replacement staff member before deactivating.` };
+        return {
+          error: `This staff member has ${assignedLeads.length} assigned student(s). Choose a replacement staff member before deactivating.`,
+        };
       }
       if (reassignToStaffId === staffId) {
         return { error: "Choose a different staff member to reassign to." };
@@ -106,6 +117,39 @@ export async function updateStaffDetails(staffId: string, _prevState: unknown, f
         .update({ assigned_counselor_id: reassignToStaffId })
         .eq("assigned_counselor_id", staffId);
       if (reassignError) return { error: reassignError.message };
+
+      const { error: logError } = await supabase.from("staff_reassignment_log").insert(
+        assignedLeads.map((l) => ({ from_staff_id: staffId, to_staff_id: reassignToStaffId, student_id: l.id }))
+      );
+      if (logError) return { error: logError.message };
+    }
+  }
+
+  // Reactivating a staff member hands back any student that was moved to
+  // their stand-in on deactivation and hasn't been reassigned again since
+  // (checked against the student's CURRENT assigned_counselor_id, not the
+  // log row itself) — so a student someone else has since taken over stays
+  // put instead of being yanked back.
+  let restoredCount = 0;
+  if (fields.status === "active") {
+    const { data: pendingReversals } = await supabase
+      .from("staff_reassignment_log")
+      .select("id, to_staff_id, student_id")
+      .eq("from_staff_id", staffId)
+      .is("reversed_at", null);
+
+    for (const entry of pendingReversals ?? []) {
+      const { data: student } = await supabase.from("leads").select("assigned_counselor_id").eq("id", entry.student_id).maybeSingle();
+      if (student?.assigned_counselor_id !== entry.to_staff_id) continue;
+
+      const { error: revertError } = await supabase
+        .from("leads")
+        .update({ assigned_counselor_id: staffId })
+        .eq("id", entry.student_id);
+      if (revertError) continue;
+
+      await supabase.from("staff_reassignment_log").update({ reversed_at: new Date().toISOString() }).eq("id", entry.id);
+      restoredCount++;
     }
   }
 
@@ -116,7 +160,7 @@ export async function updateStaffDetails(staffId: string, _prevState: unknown, f
   revalidatePath("/students");
   revalidatePath("/leads");
   revalidateTag("staff-directory", { expire: 0 });
-  return { success: true };
+  return { success: true, ...(restoredCount > 0 ? { restoredCount } : {}) };
 }
 
 export async function uploadStaffPhoto(staffId: string, _prevState: unknown, formData: FormData) {

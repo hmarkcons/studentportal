@@ -157,7 +157,7 @@ export function StaffActionsMenu({
           />
 
           <h4 className="mt-4 mb-2 border-b border-border pb-1 text-xs font-semibold uppercase tracking-wide text-primary">Status</h4>
-          <Row label="Status" value={staff.status === "active" ? "Active" : "Inactive"} />
+          <Row label="Status" value={staff.status === "active" ? "Active" : staff.status === "suspended" ? "Suspended" : "Inactive"} />
         </div>
       </SlideOver>
 

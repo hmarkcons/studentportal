@@ -33,6 +33,7 @@ export function DataTable({
   searchable = false,
   searchPlaceholder = "Search…",
   filters = [],
+  minTableWidthClassName = "min-w-[640px]",
 }: {
   columns: Column[];
   rows: Row[];
@@ -41,6 +42,10 @@ export function DataTable({
   searchable?: boolean;
   searchPlaceholder?: string;
   filters?: FilterDef[];
+  // A wider floor for tables with many columns (or many filters, crowding the
+  // toolbar) — spreads columns out instead of squeezing their content, at the
+  // cost of a horizontal scrollbar on narrower screens.
+  minTableWidthClassName?: string;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
@@ -141,7 +146,7 @@ export function DataTable({
           )}
         </div>
       )}
-      <table className="w-full min-w-[640px] text-sm">
+      <table className={`w-full ${minTableWidthClassName} text-sm`}>
         <thead>
           <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-muted">
             {selectable && (

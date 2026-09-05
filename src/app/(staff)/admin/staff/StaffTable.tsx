@@ -116,7 +116,9 @@ export function StaffTable({
                     : "—"}
                 </td>
                 <td className="px-4 py-3">
-                  <Badge tone={s.status === "active" ? "success" : "neutral"}>{s.status === "active" ? "Active" : "Inactive"}</Badge>
+                  <Badge tone={s.status === "active" ? "success" : s.status === "suspended" ? "warning" : "neutral"}>
+                    {s.status === "active" ? "Active" : s.status === "suspended" ? "Suspended" : "Inactive"}
+                  </Badge>
                 </td>
                 <td className="px-4 py-3">
                   <StaffActionsMenu

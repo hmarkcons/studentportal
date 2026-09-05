@@ -21,6 +21,11 @@ import { Button } from "@/components/ui/Button";
 
 const labelClass = "text-xs font-medium text-muted";
 
+type ActionState =
+  | { error: string; success?: undefined; email?: undefined; password?: undefined; restoredCount?: undefined }
+  | { success: boolean; error?: undefined; email?: string; password?: string; restoredCount?: number }
+  | undefined;
+
 export type StaffRecord = {
   id: string;
   full_name: string;
@@ -84,12 +89,14 @@ export function StaffForm({
 }) {
   const isEdit = Boolean(staff);
   const action = isEdit ? updateStaffDetails.bind(null, staff!.id) : createStaffAccount;
-  const [state, formAction, pending] = useActionState(action, undefined);
+  const [state, formAction, pending] = useActionState<ActionState, FormData>(action, undefined);
   const currency = staff?.currency ?? "PKR";
   const [typeGeneral, setTypeGeneral] = useState(staff?.commission_type_general ?? "percentage");
   const [typePublic, setTypePublic] = useState(staff?.commission_type_public_universities ?? "percentage");
   const [bonusEligible, setBonusEligible] = useState(staff?.bonus_eligible ?? false);
-  const [statusValue, setStatusValue] = useState(staff ? (staff.status === "active" ? "active" : "inactive") : "active");
+  const [statusValue, setStatusValue] = useState(
+    staff ? (staff.status === "suspended" ? "suspended" : staff.status === "active" ? "active" : "inactive") : "active"
+  );
 
   const needsReplacement = isEdit && statusValue === "inactive" && assignedStudentCount > 0;
   const replacementOptions = allStaff.filter((s) => s.id !== staff?.id && s.status === "active");
@@ -283,8 +290,15 @@ export function StaffForm({
         <Field label="Status">
           <Select name="status" value={statusValue} onChange={(e) => setStatusValue(e.target.value)}>
             <option value="active">Active</option>
+            <option value="suspended">Suspended</option>
             <option value="inactive">Inactive</option>
           </Select>
+          {statusValue === "suspended" && (
+            <p className="mt-1 text-xs text-muted">
+              Freezes the account — {staff?.full_name ?? "this staff member"} won&apos;t be able to log in, but nothing is reassigned. Their
+              students and data stay exactly as they are.
+            </p>
+          )}
         </Field>
         {needsReplacement && (
           <Field label="Reassign their students to" full>
@@ -310,11 +324,13 @@ export function StaffForm({
       {state?.success && (
         <div className="mb-3 rounded-md border border-success bg-success-bg px-3 py-2 text-sm text-success">
           {isEdit ? (
-            "Saved."
+            <>
+              Saved.
+              {state?.restoredCount ? ` ${state.restoredCount} student(s) reassigned back to them.` : ""}
+            </>
           ) : (
             <>
-              Staff account created. Temp password:{" "}
-              <code>{typeof state === "object" && state && "password" in state ? String((state as { password: unknown }).password) : ""}</code>
+              Staff account created. Temp password: <code>{state?.password ?? ""}</code>
             </>
           )}
         </div>
