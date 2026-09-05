@@ -5,8 +5,7 @@ import { PhotoUpload } from "@/components/PhotoUpload";
 import { TestScoresSection } from "@/components/TestScoresSection";
 import { TravelHistorySection } from "@/components/TravelHistorySection";
 import { VisaRefusalHistorySection } from "@/components/VisaRefusalHistorySection";
-import { PersonalDetailsForm } from "./PersonalDetailsForm";
-import { ProfileDetailsForm } from "./ProfileDetailsForm";
+import { ProfileForm } from "./ProfileForm";
 import { uploadStudentPhoto } from "@/lib/actions/studentProfileExtras";
 
 export default async function PortalProfilePage() {
@@ -48,7 +47,7 @@ export default async function PortalProfilePage() {
           <PhotoUpload action={uploadStudentPhoto.bind(null, student.id, revalidateTo)} photoUrl={photoUrl} />
         </div>
 
-        <PersonalDetailsForm
+        <ProfileForm
           studentId={student.id}
           student={{
             full_name: student.full_name,
@@ -60,11 +59,8 @@ export default async function PortalProfilePage() {
             emergency_contact_relation: profile?.emergency_contact_relation ?? null,
             emergency_contact_number: profile?.emergency_contact_number ?? null,
           }}
+          profile={profile}
         />
-        <div className="mt-4 border-t border-border pt-4">
-          <h4 className="mb-3 text-sm font-medium text-ink">Passport & sponsor details</h4>
-          <ProfileDetailsForm studentId={student.id} profile={profile} />
-        </div>
 
         <div className="mt-6 border-t border-border pt-4">
           <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Test scores</h4>

@@ -5,8 +5,7 @@ import { PhotoUpload } from "@/components/PhotoUpload";
 import { TestScoresSection } from "@/components/TestScoresSection";
 import { TravelHistorySection } from "@/components/TravelHistorySection";
 import { VisaRefusalHistorySection } from "@/components/VisaRefusalHistorySection";
-import { LeadEditForm } from "@/components/LeadEditForm";
-import { StudentProfileForm } from "../StudentProfileForm";
+import { RegisteredStudentProfileForm } from "../RegisteredStudentProfileForm";
 import { uploadStudentPhoto } from "@/lib/actions/studentProfileExtras";
 
 export default async function StudentProfileTab(props: PageProps<"/students/[id]/profile">) {
@@ -43,11 +42,7 @@ export default async function StudentProfileTab(props: PageProps<"/students/[id]
           <PhotoUpload action={uploadStudentPhoto.bind(null, id, revalidateTo)} photoUrl={photoUrl} />
         </div>
 
-        <div className="mb-4">
-          <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Core details</h4>
-          {student && <LeadEditForm lead={{ id, ...student }} revalidateTo={revalidateTo} showRegistrationFields alwaysEditing />}
-        </div>
-        <StudentProfileForm studentId={id} profile={profile} />
+        {student && <RegisteredStudentProfileForm studentId={id} revalidateTo={revalidateTo} lead={student} profile={profile} />}
 
         <div className="mt-6 border-t border-border pt-4">
           <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Test scores</h4>
