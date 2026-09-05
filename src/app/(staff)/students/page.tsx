@@ -145,7 +145,7 @@ export default async function StudentsPage() {
             columns={columns}
             searchable
             searchPlaceholder="Search name, contact…"
-            minTableWidthClassName="min-w-[1100px]"
+            minTableWidthClassName="min-w-[640px] lg:min-w-[1100px]"
             filters={[
               { key: "regStatus", label: "Registration", options: ["registered", "withdrawn", "ghost"] },
               { key: "portal", label: "Portal", options: ["active", "inactive"] },
