@@ -53,7 +53,7 @@ export default async function CalendarPage(props: {
 
   const { data: reminders } = await supabase
     .from("reminders")
-    .select("id, type, due_date, note, created_by, student:leads(full_name, assigned_counselor_id)")
+    .select("id, type, due_date, note, created_by, student:leads(full_name, assigned_counselor_id, contact_number)")
     .eq("resolved", false)
     .not("due_date", "is", null)
     .gte("due_date", rangeStartStr)
@@ -117,12 +117,17 @@ export default async function CalendarPage(props: {
       const ownerId = student?.assigned_counselor_id ?? r.created_by;
       if (ownerId !== targetStaffId) return;
     }
+    const label =
+      r.type === "follow_up"
+        ? `${student?.full_name ?? "?"} - Follow-up${student?.contact_number ? ` (${student.contact_number})` : ""}${r.note ? `: ${r.note}` : ""}`
+        : `${r.type.replace(/_/g, " ")} — ${student?.full_name ?? "?"}${r.note ? `: ${r.note}` : ""}`;
+
     events.push({
       id: `reminder-${r.id}`,
       date: r.due_date!,
       time: null,
       kind: "reminder",
-      label: `${r.type.replace(/_/g, " ")} — ${student?.full_name ?? "?"}${r.note ? `: ${r.note}` : ""}`,
+      label,
       tone: "info",
     });
   });
