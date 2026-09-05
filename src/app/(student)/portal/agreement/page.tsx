@@ -35,7 +35,7 @@ export default async function PortalAgreementPage() {
         {(agreements ?? []).map((a) => (
           <Card key={a.id}>
             <div className="overflow-x-auto">
-              <div className="flex min-w-[320px] items-center justify-between gap-4">
+              <div className="flex items-center justify-between gap-4">
                 <p className="whitespace-nowrap text-sm text-ink">
                   Version {a.version} · {new Date(a.created_at).toLocaleDateString()}
                 </p>

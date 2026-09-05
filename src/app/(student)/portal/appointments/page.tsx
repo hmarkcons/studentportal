@@ -57,7 +57,7 @@ export default async function PortalAppointmentsPage() {
 
       <Card>
         <div className="overflow-x-auto">
-          <div className="flex min-w-[420px] flex-col divide-y divide-border">
+          <div className="flex flex-col divide-y divide-border">
             {appointments.map((a, i) => (
               <div key={i} className="flex items-center justify-between gap-4 py-3 text-sm">
                 <div className="whitespace-nowrap">

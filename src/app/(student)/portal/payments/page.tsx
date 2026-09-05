@@ -48,7 +48,7 @@ export default async function PortalPaymentsPage() {
             Administrative charge: {inv.currency} {inv.admin_charge} · Consultancy fee: {inv.currency} {inv.consultancy_fee}
           </p>
           <div className="mt-3 overflow-x-auto border-t border-border pt-3">
-            <div className="flex min-w-[420px] flex-col gap-2">
+            <div className="flex flex-col gap-2">
               {(installments ?? [])
                 .filter((i) => i.invoice_id === inv.id)
                 .map((i) => (

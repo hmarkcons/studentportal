@@ -57,7 +57,7 @@ export default async function SupportPage() {
       </Card>
 
       <div className="overflow-x-auto rounded-lg border border-border bg-card">
-        <div className="flex min-w-[420px] flex-col divide-y divide-border">
+        <div className="flex flex-col divide-y divide-border">
           {(tickets ?? []).map((t) => (
             <Link key={t.id} href={`/portal/support/${t.id}`} className="flex items-center justify-between gap-4 px-4 py-3 text-sm hover:bg-bg">
               <span className="whitespace-nowrap text-ink">{t.subject}</span>
