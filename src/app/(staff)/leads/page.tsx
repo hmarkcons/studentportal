@@ -5,9 +5,11 @@ import { DataTable } from "@/components/ui/DataTable";
 import { LEAD_STATUS_LABELS } from "@/lib/constants";
 import { ImportLeadsForm } from "./ImportLeadsForm";
 import { InlineStatusCell } from "./InlineStatusCell";
+import { InlineCounselorCell } from "./InlineCounselorCell";
 import { FollowUpDateCell } from "./FollowUpDateCell";
 import { RowActionsMenu } from "@/components/RowActionsMenu";
 import { hasPermission } from "@/lib/auth/permissions";
+import { getCachedCounselors } from "@/lib/cachedQueries";
 
 type LeadRow = {
   id: string;
@@ -17,20 +19,12 @@ type LeadRow = {
   country_of_interest: string | null;
   status: string;
   date_of_inquiry: string;
+  assigned_counselor_id: string | null;
   assigned_counselor: { full_name: string } | { full_name: string }[] | null;
 };
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
-}
-
-function initials(name: string) {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 3)
-    .map((p) => p[0]?.toUpperCase())
-    .join("");
 }
 
 export default async function LeadsPage() {
@@ -40,20 +34,36 @@ export default async function LeadsPage() {
   const { data: leads, error } = await supabase
     .from("leads")
     .select(
-      "id, full_name, contact_number, email, country_of_interest, status, date_of_inquiry, assigned_counselor:staff(full_name)"
+      "id, full_name, contact_number, email, country_of_interest, status, date_of_inquiry, assigned_counselor_id, assigned_counselor:staff(full_name)"
     )
     .order("date_of_inquiry", { ascending: false })
     .returns<LeadRow[]>();
+
+  const leadIds = (leads ?? []).map((r) => r.id);
 
   // Powers the Follow-up column — at most one unresolved follow_up reminder
   // per lead (see setLeadFollowUpDate), which the Calendar page also reads
   // directly, so setting a date here surfaces it there automatically.
   const { data: followUps } = await supabase
     .from("reminders")
-    .select("student_id, due_date")
+    .select("student_id, due_date, note")
     .eq("type", "follow_up")
     .eq("resolved", false);
-  const followUpByLead = new Map((followUps ?? []).map((f) => [f.student_id, f.due_date as string | null]));
+  const followUpByLead = new Map((followUps ?? []).map((f) => [f.student_id, { date: f.due_date as string | null, note: f.note as string | null }]));
+
+  // Powers the status button's hover tooltip — the most recent call-log
+  // remark per lead (see update_lead_status). Ordered newest-first so the
+  // first row seen per lead_id is already the latest one.
+  const { data: callLogs } =
+    leadIds.length > 0
+      ? await supabase.from("lead_call_logs").select("lead_id, remark").in("lead_id", leadIds).order("created_at", { ascending: false })
+      : { data: [] as { lead_id: string; remark: string }[] };
+  const latestRemarkByLead = new Map<string, string>();
+  for (const log of callLogs ?? []) {
+    if (!latestRemarkByLead.has(log.lead_id)) latestRemarkByLead.set(log.lead_id, log.remark);
+  }
+
+  const counselors = await getCachedCounselors();
 
   const columns = [
     { key: "month", header: "Month" },
@@ -82,18 +92,23 @@ export default async function LeadsPage() {
         ),
         contact: r.contact_number ?? r.email ?? "—",
         country: r.country_of_interest ?? "—",
-        status: <InlineStatusCell leadId={r.id} currentStatus={r.status} />,
-        counselor: counselorName ? (
-          <span
-            title={counselorName}
-            className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-[11px] font-medium text-primary"
-          >
-            {initials(counselorName)}
-          </span>
-        ) : (
-          "Unassigned"
+        status: <InlineStatusCell leadId={r.id} currentStatus={r.status} latestRemark={latestRemarkByLead.get(r.id)} />,
+        counselor: (
+          <InlineCounselorCell
+            leadId={r.id}
+            currentCounselorId={r.assigned_counselor_id}
+            currentCounselorName={counselorName ?? null}
+            counselors={counselors}
+          />
         ),
-        followUp: <FollowUpDateCell leadId={r.id} initialDate={followUpByLead.get(r.id) ?? null} revalidateTo="/leads" />,
+        followUp: (
+          <FollowUpDateCell
+            leadId={r.id}
+            initialDate={followUpByLead.get(r.id)?.date ?? null}
+            initialNote={followUpByLead.get(r.id)?.note ?? null}
+            revalidateTo="/leads"
+          />
+        ),
         date: formatDateOnly(r.date_of_inquiry),
         actions: (
           <RowActionsMenu id={r.id} name={r.full_name} editHref={`/leads/${r.id}`} canDelete={canDelete} deleteLabel="Delete lead" />
@@ -105,7 +120,7 @@ export default async function LeadsPage() {
         country: r.country_of_interest ?? "",
         status: LEAD_STATUS_LABELS[r.status as keyof typeof LEAD_STATUS_LABELS] ?? r.status,
         counselor: counselorName ?? "",
-        followUp: followUpByLead.get(r.id) ?? "",
+        followUp: followUpByLead.get(r.id)?.date ?? "",
         date: r.date_of_inquiry,
         month: monthYearLabel,
       },

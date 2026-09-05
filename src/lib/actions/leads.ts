@@ -498,7 +498,7 @@ export async function registerLead(leadId: string, _formData: FormData) {
 // per lead: picking a new date updates it in place rather than stacking a
 // second reminder, and clearing the date resolves it (so it drops off the
 // calendar) instead of deleting the historical row.
-export async function setLeadFollowUpDate(leadId: string, revalidateTo: string, dueDate: string | null) {
+export async function setLeadFollowUpDate(leadId: string, revalidateTo: string, dueDate: string | null, note: string | null) {
   const supabase = await createClient();
 
   const { data: existing } = await supabase
@@ -515,7 +515,7 @@ export async function setLeadFollowUpDate(leadId: string, revalidateTo: string, 
       if (error) return { error: error.message };
     }
   } else if (existing) {
-    const { error } = await supabase.from("reminders").update({ due_date: dueDate }).eq("id", existing.id);
+    const { error } = await supabase.from("reminders").update({ due_date: dueDate, note }).eq("id", existing.id);
     if (error) return { error: error.message };
   } else {
     const {
@@ -523,7 +523,7 @@ export async function setLeadFollowUpDate(leadId: string, revalidateTo: string, 
     } = await supabase.auth.getUser();
     const { error } = await supabase
       .from("reminders")
-      .insert({ student_id: leadId, type: "follow_up", due_date: dueDate, created_by: user?.id ?? null });
+      .insert({ student_id: leadId, type: "follow_up", due_date: dueDate, note, created_by: user?.id ?? null });
     if (error) return { error: error.message };
   }
 

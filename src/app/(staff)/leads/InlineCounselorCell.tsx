@@ -2,20 +2,30 @@
 
 import { useState } from "react";
 import { useActionState } from "react";
-import { updateLeadStatus } from "@/lib/actions/leads";
-import { LEAD_STATUSES, LEAD_STATUS_LABELS } from "@/lib/constants";
+import { reassignLead } from "@/lib/actions/leads";
 
-export function InlineStatusCell({
+function initials(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 3)
+    .map((p) => p[0]?.toUpperCase())
+    .join("");
+}
+
+export function InlineCounselorCell({
   leadId,
-  currentStatus,
-  latestRemark,
+  currentCounselorId,
+  currentCounselorName,
+  counselors,
 }: {
   leadId: string;
-  currentStatus: string;
-  latestRemark?: string | null;
+  currentCounselorId: string | null;
+  currentCounselorName: string | null;
+  counselors: { id: string; full_name: string }[];
 }) {
   const [open, setOpen] = useState(false);
-  const action = updateLeadStatus.bind(null, leadId);
+  const action = reassignLead.bind(null, leadId);
   const [state, formAction, pending] = useActionState(action, undefined);
 
   // Close the panel the moment a submit succeeds — adjusted during render
@@ -29,26 +39,28 @@ export function InlineStatusCell({
 
   if (!open) {
     return (
-      <button
-        onClick={() => setOpen(true)}
-        title={latestRemark ?? undefined}
-        className="rounded-full border border-border px-2 py-0.5 text-xs text-ink hover:border-primary"
-      >
-        {LEAD_STATUS_LABELS[currentStatus as never] ?? currentStatus} · change
+      <button onClick={() => setOpen(true)} title={currentCounselorName ?? "Unassigned"} className="inline-flex items-center gap-1">
+        {currentCounselorName ? (
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-[11px] font-medium text-primary">
+            {initials(currentCounselorName)}
+          </span>
+        ) : (
+          <span className="text-xs text-muted hover:text-ink">Unassigned</span>
+        )}
       </button>
     );
   }
 
   return (
     <form action={formAction} className="flex flex-col gap-1 rounded-md border border-border bg-card p-2" onClick={(e) => e.stopPropagation()}>
-      <select name="status" defaultValue={currentStatus} className="rounded border border-border px-1 py-0.5 text-xs">
-        {LEAD_STATUSES.map((s) => (
-          <option key={s} value={s}>
-            {LEAD_STATUS_LABELS[s]}
+      <select name="assigned_counselor_id" defaultValue={currentCounselorId ?? ""} className="rounded border border-border px-1 py-0.5 text-xs">
+        <option value="">Unassigned</option>
+        {counselors.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.full_name}
           </option>
         ))}
       </select>
-      <input name="remark" required placeholder="Remark (required)" className="rounded border border-border px-1 py-0.5 text-xs" />
       <div className="flex gap-1">
         <button type="submit" disabled={pending} className="rounded bg-primary px-2 py-0.5 text-xs text-primary-ink disabled:opacity-50">
           {pending ? "Saving…" : "Save"}
