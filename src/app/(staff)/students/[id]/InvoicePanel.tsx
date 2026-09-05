@@ -522,7 +522,7 @@ export function InvoiceCard({
 
   return (
     <div className="rounded-md border border-border p-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-medium text-ink">
           {studentName && <span className="mr-2">{studentName}</span>}
           {invoice.invoice_number && <span className="mr-2 font-mono text-xs text-muted">{invoice.invoice_number}</span>}
@@ -530,7 +530,7 @@ export function InvoiceCard({
           {invoice.installment_plan && <span className="ml-2 text-xs font-normal text-muted">· {invoice.installment_plan}</span>}
         </p>
         {receiptError && <p className="text-xs text-danger">{receiptError}</p>}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Badge tone={STATUS_TONE[status]}>{INVOICE_STATUS_LABELS[status]}</Badge>
           <Badge tone={invoice.sent_status === "sent" ? "success" : "neutral"}>{invoice.sent_status}</Badge>
           {canManage && (
@@ -606,7 +606,7 @@ export function InvoiceCard({
         />
       </div>
 
-      <div className="mt-3 flex items-center gap-2 border-t border-border pt-2">
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-2">
         {pdfUrl && (
           <a
             href={pdfUrl}
