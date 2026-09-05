@@ -5,6 +5,7 @@ import { DataTable } from "@/components/ui/DataTable";
 import { LEAD_STATUS_LABELS } from "@/lib/constants";
 import { ImportLeadsForm } from "./ImportLeadsForm";
 import { InlineStatusCell } from "./InlineStatusCell";
+import { FollowUpDateCell } from "./FollowUpDateCell";
 import { RowActionsMenu } from "@/components/RowActionsMenu";
 import { hasPermission } from "@/lib/auth/permissions";
 
@@ -44,6 +45,16 @@ export default async function LeadsPage() {
     .order("date_of_inquiry", { ascending: false })
     .returns<LeadRow[]>();
 
+  // Powers the Follow-up column — at most one unresolved follow_up reminder
+  // per lead (see setLeadFollowUpDate), which the Calendar page also reads
+  // directly, so setting a date here surfaces it there automatically.
+  const { data: followUps } = await supabase
+    .from("reminders")
+    .select("student_id, due_date")
+    .eq("type", "follow_up")
+    .eq("resolved", false);
+  const followUpByLead = new Map((followUps ?? []).map((f) => [f.student_id, f.due_date as string | null]));
+
   const columns = [
     { key: "month", header: "Month" },
     { key: "name", header: "Name" },
@@ -51,6 +62,7 @@ export default async function LeadsPage() {
     { key: "country", header: "Country" },
     { key: "status", header: "Status" },
     { key: "counselor", header: "Counselor", align: "center" as const },
+    { key: "followUp", header: "Follow-up" },
     { key: "date", header: "Inquiry date" },
     { key: "actions", header: "", align: "right" as const, exportable: false },
   ];
@@ -81,6 +93,7 @@ export default async function LeadsPage() {
         ) : (
           "Unassigned"
         ),
+        followUp: <FollowUpDateCell leadId={r.id} initialDate={followUpByLead.get(r.id) ?? null} revalidateTo="/leads" />,
         date: formatDateOnly(r.date_of_inquiry),
         actions: (
           <RowActionsMenu id={r.id} name={r.full_name} editHref={`/leads/${r.id}`} canDelete={canDelete} deleteLabel="Delete lead" />
@@ -92,6 +105,7 @@ export default async function LeadsPage() {
         country: r.country_of_interest ?? "",
         status: LEAD_STATUS_LABELS[r.status as keyof typeof LEAD_STATUS_LABELS] ?? r.status,
         counselor: counselorName ?? "",
+        followUp: followUpByLead.get(r.id) ?? "",
         date: r.date_of_inquiry,
         month: monthYearLabel,
       },

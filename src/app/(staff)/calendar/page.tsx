@@ -53,7 +53,7 @@ export default async function CalendarPage(props: {
 
   const { data: reminders } = await supabase
     .from("reminders")
-    .select("id, type, due_date, student:leads(full_name)")
+    .select("id, type, due_date, created_by, student:leads(full_name, assigned_counselor_id)")
     .eq("resolved", false)
     .not("due_date", "is", null)
     .gte("due_date", rangeStartStr)
@@ -109,12 +109,20 @@ export default async function CalendarPage(props: {
   });
 
   (reminders ?? []).forEach((r) => {
+    const student = one(r.student);
+    // Follow-up reminders belong to a specific person — the lead's assigned
+    // counselor, or whoever set the date if the lead isn't assigned yet —
+    // unlike stall/deadline reminders, which stay visible calendar-wide.
+    if (r.type === "follow_up") {
+      const ownerId = student?.assigned_counselor_id ?? r.created_by;
+      if (ownerId !== targetStaffId) return;
+    }
     events.push({
       id: `reminder-${r.id}`,
       date: r.due_date!,
       time: null,
       kind: "reminder",
-      label: `${r.type.replace(/_/g, " ")} — ${one(r.student)?.full_name ?? "?"}`,
+      label: `${r.type.replace(/_/g, " ")} — ${student?.full_name ?? "?"}`,
       tone: "info",
     });
   });

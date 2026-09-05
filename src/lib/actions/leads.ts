@@ -456,3 +456,46 @@ export async function registerLead(leadId: string, _formData: FormData) {
   // Dashboard that still looks empty.
   redirect(`/students/${leadId}/profile`);
 }
+
+// Backs the Leads table's "Follow-up" date picker. Reuses the existing
+// `reminders` table's 'follow_up' type (already in its check constraint,
+// just never wired to a UI) instead of adding a new mechanism — the
+// Calendar page already reads unresolved reminders due within the visible
+// range, so setting a date here surfaces it there automatically with no
+// separate sync step. At most one *unresolved* follow_up reminder is kept
+// per lead: picking a new date updates it in place rather than stacking a
+// second reminder, and clearing the date resolves it (so it drops off the
+// calendar) instead of deleting the historical row.
+export async function setLeadFollowUpDate(leadId: string, revalidateTo: string, dueDate: string | null) {
+  const supabase = await createClient();
+
+  const { data: existing } = await supabase
+    .from("reminders")
+    .select("id")
+    .eq("student_id", leadId)
+    .eq("type", "follow_up")
+    .eq("resolved", false)
+    .maybeSingle();
+
+  if (!dueDate) {
+    if (existing) {
+      const { error } = await supabase.from("reminders").update({ resolved: true }).eq("id", existing.id);
+      if (error) return { error: error.message };
+    }
+  } else if (existing) {
+    const { error } = await supabase.from("reminders").update({ due_date: dueDate }).eq("id", existing.id);
+    if (error) return { error: error.message };
+  } else {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const { error } = await supabase
+      .from("reminders")
+      .insert({ student_id: leadId, type: "follow_up", due_date: dueDate, created_by: user?.id ?? null });
+    if (error) return { error: error.message };
+  }
+
+  revalidatePath(revalidateTo);
+  revalidatePath("/calendar");
+  return { success: true };
+}
