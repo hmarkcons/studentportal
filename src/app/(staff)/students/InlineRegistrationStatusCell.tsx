@@ -10,13 +10,24 @@ const TONE: Record<string, "success" | "warning" | "danger"> = {
   ghost: "danger",
 };
 
-export function InlineRegistrationStatusCell({ studentId, status }: { studentId: string; status: string }) {
+export function InlineRegistrationStatusCell({
+  studentId,
+  status,
+  stacked = false,
+}: {
+  studentId: string;
+  status: string;
+  // Table cells are narrow, so the dropdown goes on its own line below the
+  // badge there — the student dashboard header uses the default side-by-side
+  // layout, where there's plenty of horizontal room.
+  stacked?: boolean;
+}) {
   const action = updateRegistrationStatus.bind(null, studentId);
   const [state, formAction, pending] = useActionState(action, undefined);
 
   return (
     <form action={formAction} className="flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
-      <div className="flex items-center gap-2">
+      <div className={stacked ? "flex flex-col items-start gap-1" : "flex items-center gap-2"}>
         <Badge tone={TONE[status] ?? "neutral"}>{status}</Badge>
         <select
           name="registration_status"

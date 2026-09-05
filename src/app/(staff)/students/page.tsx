@@ -32,7 +32,7 @@ function initials(name: string) {
   return name
     .split(" ")
     .filter(Boolean)
-    .slice(0, 2)
+    .slice(0, 3)
     .map((p) => p[0]?.toUpperCase())
     .join("");
 }
@@ -55,10 +55,11 @@ export default async function StudentsPage() {
     .returns<StudentRow[]>();
 
   const columns = [
+    { key: "month", header: "Month" },
     { key: "name", header: "Name" },
     { key: "contact", header: "Contact" },
     { key: "country", header: "Country" },
-    { key: "counselor", header: "Counselor" },
+    { key: "counselor", header: "Counselor", align: "center" as const },
     { key: "intake", header: "Intake" },
     { key: "regStatus", header: "Registration status" },
     { key: "portal", header: "Portal" },
@@ -70,15 +71,17 @@ export default async function StudentsPage() {
     const registeredDate = new Date(r.registered_at);
     const month = MONTH_NAMES[registeredDate.getMonth()];
     const year = String(registeredDate.getFullYear());
+    const monthYearLabel = registeredDate.toLocaleString("en-US", { month: "short", year: "numeric" });
     return {
       id: r.id,
       cells: {
+        month: monthYearLabel,
         name: (
           <Link href={`/students/${r.id}`} className="font-medium text-ink hover:underline">
             {r.full_name}
           </Link>
         ),
-        contact: r.email ?? r.contact_number ?? "—",
+        contact: r.contact_number ?? r.email ?? "—",
         country: r.country_of_interest ?? "—",
         counselor: one(r.assigned_counselor)?.full_name ? (
           <span
@@ -91,7 +94,7 @@ export default async function StudentsPage() {
           "—"
         ),
         intake: r.intake ?? "—",
-        regStatus: <InlineRegistrationStatusCell studentId={r.id} status={r.registration_status} />,
+        regStatus: <InlineRegistrationStatusCell studentId={r.id} status={r.registration_status} stacked />,
         portal: <Badge tone={r.portal_active ? "success" : "neutral"}>{r.portal_active ? "Active" : "Inactive"}</Badge>,
         date: registeredDate.toLocaleDateString(),
         actions: (
@@ -100,7 +103,7 @@ export default async function StudentsPage() {
       },
       csv: {
         name: r.full_name,
-        contact: r.email ?? "",
+        contact: r.contact_number ?? r.email ?? "",
         country: r.country_of_interest ?? "",
         counselor: one(r.assigned_counselor)?.full_name ?? "",
         intake: r.intake ?? "",

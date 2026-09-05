@@ -9,7 +9,7 @@ import { useMemo, useState } from "react";
 type Column = {
   key: string;
   header: string;
-  align?: "left" | "right";
+  align?: "left" | "right" | "center";
   exportable?: boolean;
 };
 
@@ -159,7 +159,10 @@ export function DataTable({
               </th>
             )}
             {columns.map((c) => (
-              <th key={c.key} className={`px-4 py-3 font-medium ${c.align === "right" ? "text-right" : ""}`}>
+              <th
+                key={c.key}
+                className={`px-4 py-3 font-medium ${c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : ""}`}
+              >
                 {c.header}
               </th>
             ))}
@@ -174,7 +177,10 @@ export function DataTable({
                 </td>
               )}
               {columns.map((c) => (
-                <td key={c.key} className={`px-4 py-3 ${c.align === "right" ? "text-right tabular-nums" : ""}`}>
+                <td
+                  key={c.key}
+                  className={`px-4 py-3 ${c.align === "right" ? "text-right tabular-nums" : c.align === "center" ? "text-center" : ""}`}
+                >
                   {row.cells[c.key]}
                 </td>
               ))}
