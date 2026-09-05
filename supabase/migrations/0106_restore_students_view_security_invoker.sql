@@ -1,0 +1,13 @@
+-- Regression fix: migration 0104 (`create or replace view students as
+-- select * from leads where registered_at is not null;`, done to pick up
+-- the new leads.intake column) silently reset the security_invoker
+-- reloption that 0066 had set on this view — CREATE OR REPLACE VIEW does
+-- not preserve previously-set storage parameters. This reopened the exact
+-- vulnerability 0066 fixed: querying `students` (instead of `leads`
+-- directly) bypassed leads_select's RLS entirely, letting any authenticated
+-- staff member read any registered student's full profile regardless of
+-- role or counselor assignment. Confirmed via `select reloptions from
+-- pg_class where relname = 'students'` returning null (i.e. unset) before
+-- this fix. Any future `create or replace view students as ...` MUST be
+-- followed by this same ALTER, or repeat this regression.
+alter view students set (security_invoker = on);
