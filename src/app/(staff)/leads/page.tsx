@@ -23,6 +23,15 @@ function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
 }
 
+function initials(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 3)
+    .map((p) => p[0]?.toUpperCase())
+    .join("");
+}
+
 export default async function LeadsPage() {
   const supabase = await createClient();
   const canDelete = await hasPermission("leads.delete");
@@ -36,41 +45,58 @@ export default async function LeadsPage() {
     .returns<LeadRow[]>();
 
   const columns = [
+    { key: "month", header: "Month" },
     { key: "name", header: "Name" },
     { key: "contact", header: "Contact" },
     { key: "country", header: "Country" },
     { key: "status", header: "Status" },
-    { key: "counselor", header: "Counselor" },
+    { key: "counselor", header: "Counselor", align: "center" as const },
     { key: "date", header: "Inquiry date" },
     { key: "actions", header: "", align: "right" as const, exportable: false },
   ];
 
-  const rows = (leads ?? []).map((r) => ({
-    id: r.id,
-    cells: {
-      name: (
-        <Link href={`/leads/${r.id}`} className="font-medium text-ink hover:underline">
-          {r.full_name}
-        </Link>
-      ),
-      contact: r.contact_number ?? r.email ?? "—",
-      country: r.country_of_interest ?? "—",
-      status: <InlineStatusCell leadId={r.id} currentStatus={r.status} />,
-      counselor: one(r.assigned_counselor)?.full_name ?? "Unassigned",
-      date: formatDateOnly(r.date_of_inquiry),
-      actions: (
-        <RowActionsMenu id={r.id} name={r.full_name} editHref={`/leads/${r.id}`} canDelete={canDelete} deleteLabel="Delete lead" />
-      ),
-    },
-    csv: {
-      name: r.full_name,
-      contact: r.contact_number ?? r.email ?? "",
-      country: r.country_of_interest ?? "",
-      status: LEAD_STATUS_LABELS[r.status as keyof typeof LEAD_STATUS_LABELS] ?? r.status,
-      counselor: one(r.assigned_counselor)?.full_name ?? "",
-      date: r.date_of_inquiry,
-    },
-  }));
+  const rows = (leads ?? []).map((r) => {
+    const inquiryDate = new Date(r.date_of_inquiry);
+    const monthYearLabel = inquiryDate.toLocaleString("en-US", { month: "short", year: "numeric" });
+    const counselorName = one(r.assigned_counselor)?.full_name;
+    return {
+      id: r.id,
+      cells: {
+        month: monthYearLabel,
+        name: (
+          <Link href={`/leads/${r.id}`} className="font-medium text-ink hover:underline">
+            {r.full_name}
+          </Link>
+        ),
+        contact: r.contact_number ?? r.email ?? "—",
+        country: r.country_of_interest ?? "—",
+        status: <InlineStatusCell leadId={r.id} currentStatus={r.status} />,
+        counselor: counselorName ? (
+          <span
+            title={counselorName}
+            className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-[11px] font-medium text-primary"
+          >
+            {initials(counselorName)}
+          </span>
+        ) : (
+          "Unassigned"
+        ),
+        date: formatDateOnly(r.date_of_inquiry),
+        actions: (
+          <RowActionsMenu id={r.id} name={r.full_name} editHref={`/leads/${r.id}`} canDelete={canDelete} deleteLabel="Delete lead" />
+        ),
+      },
+      csv: {
+        name: r.full_name,
+        contact: r.contact_number ?? r.email ?? "",
+        country: r.country_of_interest ?? "",
+        status: LEAD_STATUS_LABELS[r.status as keyof typeof LEAD_STATUS_LABELS] ?? r.status,
+        counselor: counselorName ?? "",
+        date: r.date_of_inquiry,
+        month: monthYearLabel,
+      },
+    };
+  });
 
   const countryOptions = Array.from(new Set((leads ?? []).map((r) => r.country_of_interest).filter(Boolean))).sort() as string[];
   const counselorOptions = Array.from(
@@ -101,6 +127,7 @@ export default async function LeadsPage() {
             columns={columns}
             searchable
             searchPlaceholder="Search name, contact…"
+            minTableWidthClassName="min-w-[640px] lg:min-w-[950px]"
             filters={[
               { key: "status", label: "Status", options: Object.values(LEAD_STATUS_LABELS) },
               { key: "country", label: "Country", options: countryOptions },
