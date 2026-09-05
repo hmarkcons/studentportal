@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Input";
-import { addDays, parseYMD, toYMD, MONTH_LABELS, WEEKDAY_LABELS, getWeekDays } from "@/lib/calendarDates";
+import { addDays, parseYMD, toYMD, MONTH_LABELS, WEEKDAY_FULL_LABELS, getWeekDays } from "@/lib/calendarDates";
 import { MonthGrid } from "./MonthGrid";
 import { WeekGrid } from "./WeekGrid";
+import { DayView } from "./DayView";
 import { DayPanel } from "./DayPanel";
 import type { CalendarEvent } from "./types";
 
@@ -22,7 +23,7 @@ export function CalendarShell({
   selectedStaffId,
   viewerStaffId,
 }: {
-  view: "month" | "week";
+  view: "month" | "week" | "day";
   referenceDate: string;
   todayStr: string;
   eventsByDate: Record<string, CalendarEvent[]>;
@@ -61,13 +62,17 @@ export function CalendarShell({
   }
 
   function goPrev() {
-    const delta = view === "month" ? -1 : -7;
-    const next = view === "month" ? new Date(Date.UTC(refDate.getUTCFullYear(), refDate.getUTCMonth() + delta, 1)) : addDays(refDate, delta);
+    const next =
+      view === "month"
+        ? new Date(Date.UTC(refDate.getUTCFullYear(), refDate.getUTCMonth() - 1, 1))
+        : addDays(refDate, view === "week" ? -7 : -1);
     navigate(toYMD(next));
   }
   function goNext() {
-    const delta = view === "month" ? 1 : 7;
-    const next = view === "month" ? new Date(Date.UTC(refDate.getUTCFullYear(), refDate.getUTCMonth() + delta, 1)) : addDays(refDate, delta);
+    const next =
+      view === "month"
+        ? new Date(Date.UTC(refDate.getUTCFullYear(), refDate.getUTCMonth() + 1, 1))
+        : addDays(refDate, view === "week" ? 7 : 1);
     navigate(toYMD(next));
   }
   function goToday() {
@@ -77,6 +82,9 @@ export function CalendarShell({
   const headerLabel = useMemo(() => {
     if (view === "month") {
       return `${MONTH_LABELS[refDate.getUTCMonth()]} ${refDate.getUTCFullYear()}`;
+    }
+    if (view === "day") {
+      return `${WEEKDAY_FULL_LABELS[refDate.getUTCDay()]}, ${MONTH_LABELS[refDate.getUTCMonth()]} ${refDate.getUTCDate()}, ${refDate.getUTCFullYear()}`;
     }
     const days = getWeekDays(refDate);
     const start = days[0];
@@ -139,6 +147,13 @@ export function CalendarShell({
               >
                 Week
               </button>
+              <button
+                type="button"
+                onClick={() => navigate(referenceDate, "day")}
+                className={`px-3 py-1.5 text-sm ${view === "day" ? "bg-primary text-primary-ink" : "text-ink hover:bg-bg"}`}
+              >
+                Day
+              </button>
             </div>
           </div>
         </div>
@@ -152,13 +167,20 @@ export function CalendarShell({
           selectedDay={selectedDay}
           onSelectDay={setSelectedDay}
         />
-      ) : (
+      ) : view === "week" ? (
         <WeekGrid
           referenceDate={referenceDate}
           todayStr={todayStr}
           eventsByDate={eventsByDate}
           selectedDay={selectedDay}
           onSelectDay={setSelectedDay}
+        />
+      ) : (
+        <DayView
+          day={referenceDate}
+          events={eventsByDate[referenceDate] ?? []}
+          applicationOptions={applicationOptions}
+          revalidateTo="/calendar"
         />
       )}
 

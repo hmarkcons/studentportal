@@ -28,7 +28,7 @@ export default async function CalendarPage(props: {
   searchParams: Promise<{ view?: string; date?: string; staff?: string }>;
 }) {
   const { view: viewParam, date: dateParam, staff: staffParam } = await props.searchParams;
-  const view = viewParam === "week" ? "week" : "month";
+  const view = viewParam === "week" ? "week" : viewParam === "day" ? "day" : "month";
 
   const { supabase, staff: viewerStaff } = await getStaffSession();
   const viewerId = viewerStaff?.id ?? "";
@@ -39,7 +39,7 @@ export default async function CalendarPage(props: {
   const todayStr = toYMD(today);
   const referenceDate = dateParam ? parseYMD(dateParam) : today;
 
-  const rangeDays = view === "month" ? getMonthGridDays(referenceDate) : getWeekDays(referenceDate);
+  const rangeDays = view === "month" ? getMonthGridDays(referenceDate) : view === "week" ? getWeekDays(referenceDate) : [referenceDate];
   const rangeStartStr = toYMD(rangeDays[0]);
   const rangeEndStr = toYMD(rangeDays[rangeDays.length - 1]);
 
@@ -53,7 +53,7 @@ export default async function CalendarPage(props: {
 
   const { data: reminders } = await supabase
     .from("reminders")
-    .select("id, type, due_date, created_by, student:leads(full_name, assigned_counselor_id)")
+    .select("id, type, due_date, note, created_by, student:leads(full_name, assigned_counselor_id)")
     .eq("resolved", false)
     .not("due_date", "is", null)
     .gte("due_date", rangeStartStr)
@@ -122,7 +122,7 @@ export default async function CalendarPage(props: {
       date: r.due_date!,
       time: null,
       kind: "reminder",
-      label: `${r.type.replace(/_/g, " ")} — ${student?.full_name ?? "?"}`,
+      label: `${r.type.replace(/_/g, " ")} — ${student?.full_name ?? "?"}${r.note ? `: ${r.note}` : ""}`,
       tone: "info",
     });
   });
@@ -216,7 +216,7 @@ export default async function CalendarPage(props: {
     <div className="w-full">
       <h2 className="mb-1 text-lg font-semibold text-ink">Calendar</h2>
       <p className="mb-4 text-sm text-muted">
-        Weekly/monthly view of tasks, reminders, deadlines, and visa appointments — plus your own personal reminders.
+        Daily/weekly/monthly view of tasks, reminders, deadlines, and visa appointments — plus your own personal reminders.
       </p>
       <CalendarShell
         view={view}
