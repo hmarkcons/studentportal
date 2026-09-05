@@ -35,9 +35,24 @@ export function CalendarShell({
   const router = useRouter();
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
+  // The staff-view select needs to show the user's pick immediately: router.push()
+  // is async, and a re-render can land in between (e.g. goPrev/goNext racing the
+  // same navigation) using the still-stale `selectedStaffId` prop, which would
+  // snap the dropdown right back to its old value before the new page even
+  // arrives. Local state absorbs the click instantly; adjusting it during render
+  // (React's documented pattern for "reset state when a prop changes", rather
+  // than a useEffect) keeps it in sync once the server actually confirms the new
+  // value or the URL changes some other way (e.g. back/forward).
+  const [localStaffId, setLocalStaffId] = useState(selectedStaffId);
+  const [prevSelectedStaffId, setPrevSelectedStaffId] = useState(selectedStaffId);
+  if (selectedStaffId !== prevSelectedStaffId) {
+    setPrevSelectedStaffId(selectedStaffId);
+    setLocalStaffId(selectedStaffId);
+  }
+
   const refDate = useMemo(() => parseYMD(referenceDate), [referenceDate]);
 
-  function navigate(nextDate: string, nextView = view, nextStaff = selectedStaffId) {
+  function navigate(nextDate: string, nextView = view, nextStaff = localStaffId) {
     const params = new URLSearchParams();
     params.set("view", nextView);
     params.set("date", nextDate);
@@ -94,8 +109,11 @@ export function CalendarShell({
           <div className="flex flex-wrap items-center gap-2">
             {canViewOthers && (
               <Select
-                value={selectedStaffId}
-                onChange={(e) => navigate(referenceDate, view, e.target.value)}
+                value={localStaffId}
+                onChange={(e) => {
+                  setLocalStaffId(e.target.value);
+                  navigate(referenceDate, view, e.target.value);
+                }}
                 className="w-44"
               >
                 <option value={viewerStaffId}>My calendar</option>
