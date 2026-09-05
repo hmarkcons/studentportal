@@ -1,6 +1,6 @@
 import { forwardRef } from "react";
 
-const VARIANT_CLASSES = {
+export const VARIANT_CLASSES = {
   primary: "border border-transparent bg-primary text-primary-ink hover:opacity-90",
   outline: "border border-border text-ink hover:bg-bg",
   "outline-primary": "border border-primary text-primary hover:bg-primary/10",
@@ -9,7 +9,7 @@ const VARIANT_CLASSES = {
   ghost: "border border-transparent text-muted hover:bg-bg",
 } as const;
 
-const SIZE_CLASSES = {
+export const SIZE_CLASSES = {
   sm: "px-2 py-1 text-xs",
   md: "px-3 py-1.5 text-sm",
   lg: "px-4 py-2 text-sm",

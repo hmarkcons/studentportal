@@ -4,8 +4,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { ThemeToggle } from "./ThemeToggle";
-import { Button } from "./ui/Button";
-import { signOut } from "@/lib/actions/auth";
+import { SignOutButton } from "./SignOutButton";
 
 // Pulls in React Query's client runtime — only staff nav uses search, so
 // student/partner portals never ship this code.
@@ -112,11 +111,7 @@ export function AppShell({
               <p className="text-sm font-medium text-ink">{userName}</p>
               <p className="text-xs text-muted">{userSubtitle}</p>
             </div>
-            <form action={signOut}>
-              <Button type="submit" variant="outline">
-                Sign out
-              </Button>
-            </form>
+            <SignOutButton variant="outline">Sign out</SignOutButton>
           </div>
         </header>
         <main className="flex-1 bg-bg px-6 py-8">{children}</main>

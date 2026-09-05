@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { signOut } from "@/lib/actions/auth";
+import { SignOutButton } from "@/components/SignOutButton";
 
 export default async function Home() {
   const supabase = await createClient();
@@ -22,11 +22,7 @@ export default async function Home() {
         <div className="w-full max-w-sm rounded-lg border border-border bg-card p-8 text-center">
           <h1 className="text-lg font-semibold text-ink">Account suspended</h1>
           <p className="mt-2 text-sm text-muted">Your account has been temporarily suspended. Contact HMARK Consultants for details.</p>
-          <form action={signOut} className="mt-6">
-            <button type="submit" className="text-sm text-primary hover:underline">
-              Sign out
-            </button>
-          </form>
+          <SignOutButton className="mt-6 text-sm text-primary hover:underline">Sign out</SignOutButton>
         </div>
       </div>
     );
@@ -48,11 +44,7 @@ export default async function Home() {
             Your portal access will activate once your signed agreement has been uploaded. Please
             contact the HMARK Consultants team if you&apos;ve already sent it in.
           </p>
-          <form action={signOut} className="mt-6">
-            <button type="submit" className="text-sm text-primary hover:underline">
-              Sign out
-            </button>
-          </form>
+          <SignOutButton className="mt-6 text-sm text-primary hover:underline">Sign out</SignOutButton>
         </div>
       </div>
     );
@@ -72,11 +64,7 @@ export default async function Home() {
           <p className="mt-2 text-sm text-muted">
             Your partner university account is awaiting approval from HMARK Consultants.
           </p>
-          <form action={signOut} className="mt-6">
-            <button type="submit" className="text-sm text-primary hover:underline">
-              Sign out
-            </button>
-          </form>
+          <SignOutButton className="mt-6 text-sm text-primary hover:underline">Sign out</SignOutButton>
         </div>
       </div>
     );
@@ -90,11 +78,7 @@ export default async function Home() {
           This login isn&apos;t linked to a staff, student, or partner account. Contact HMARK
           Consultants for help.
         </p>
-        <form action={signOut} className="mt-6">
-          <button type="submit" className="text-sm text-primary hover:underline">
-            Sign out
-          </button>
-        </form>
+        <SignOutButton className="mt-6 text-sm text-primary hover:underline">Sign out</SignOutButton>
       </div>
     </div>
   );
