@@ -56,23 +56,25 @@ export default async function PortalAppointmentsPage() {
       <p className="mb-4 text-sm text-muted">Upcoming visa biometric, interview, and medical exam appointments.</p>
 
       <Card>
-        <div className="flex flex-col divide-y divide-border">
-          {appointments.map((a, i) => (
-            <div key={i} className="flex items-center justify-between py-3 text-sm">
-              <div>
-                <p className="text-ink">
-                  {a.type} · {a.universityName}
-                </p>
-                <p className="text-xs text-muted">{new Date(a.date).toLocaleString()}</p>
+        <div className="overflow-x-auto">
+          <div className="flex min-w-[420px] flex-col divide-y divide-border">
+            {appointments.map((a, i) => (
+              <div key={i} className="flex items-center justify-between gap-4 py-3 text-sm">
+                <div className="whitespace-nowrap">
+                  <p className="text-ink">
+                    {a.type} · {a.universityName}
+                  </p>
+                  <p className="text-xs text-muted">{new Date(a.date).toLocaleString()}</p>
+                </div>
+                <CountdownBadge dateStr={a.date} />
               </div>
-              <CountdownBadge dateStr={a.date} />
-            </div>
-          ))}
-          {appointments.length === 0 && (
-            <div className="py-4">
-              <EmptyState>No appointments scheduled yet.</EmptyState>
-            </div>
-          )}
+            ))}
+            {appointments.length === 0 && (
+              <div className="py-4">
+                <EmptyState>No appointments scheduled yet.</EmptyState>
+              </div>
+            )}
+          </div>
         </div>
       </Card>
     </div>

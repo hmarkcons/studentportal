@@ -56,20 +56,22 @@ export default async function SupportPage() {
         <NewTicketForm studentId={student.id} />
       </Card>
 
-      <div className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
-        {(tickets ?? []).map((t) => (
-          <Link key={t.id} href={`/portal/support/${t.id}`} className="flex items-center justify-between px-4 py-3 text-sm hover:bg-bg">
-            <span className="text-ink">{t.subject}</span>
-            <Badge tone={t.status === "resolved" ? "success" : t.status === "in_progress" ? "info" : "warning"}>
-              {t.status.replace("_", " ")}
-            </Badge>
-          </Link>
-        ))}
-        {(!tickets || tickets.length === 0) && (
-          <div className="px-4 py-6">
-            <EmptyState>No tickets submitted.</EmptyState>
-          </div>
-        )}
+      <div className="overflow-x-auto rounded-lg border border-border bg-card">
+        <div className="flex min-w-[420px] flex-col divide-y divide-border">
+          {(tickets ?? []).map((t) => (
+            <Link key={t.id} href={`/portal/support/${t.id}`} className="flex items-center justify-between gap-4 px-4 py-3 text-sm hover:bg-bg">
+              <span className="whitespace-nowrap text-ink">{t.subject}</span>
+              <Badge tone={t.status === "resolved" ? "success" : t.status === "in_progress" ? "info" : "warning"}>
+                {t.status.replace("_", " ")}
+              </Badge>
+            </Link>
+          ))}
+          {(!tickets || tickets.length === 0) && (
+            <div className="px-4 py-6">
+              <EmptyState>No tickets submitted.</EmptyState>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

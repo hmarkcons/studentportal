@@ -47,18 +47,20 @@ export default async function PortalPaymentsPage() {
           <p className="mt-1 text-xs text-muted">
             Administrative charge: {inv.currency} {inv.admin_charge} · Consultancy fee: {inv.currency} {inv.consultancy_fee}
           </p>
-          <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3">
-            {(installments ?? [])
-              .filter((i) => i.invoice_id === inv.id)
-              .map((i) => (
-                <div key={i.id} className="flex items-center justify-between text-sm">
-                  <span className="text-ink">
-                    Installment {i.installment_no} — {inv.currency} {i.amount}
-                    {i.due_date && ` · due ${formatDateOnly(i.due_date)}`}
-                  </span>
-                  <Badge tone={i.status === "paid" ? "success" : "warning"}>{i.status}</Badge>
-                </div>
-              ))}
+          <div className="mt-3 overflow-x-auto border-t border-border pt-3">
+            <div className="flex min-w-[420px] flex-col gap-2">
+              {(installments ?? [])
+                .filter((i) => i.invoice_id === inv.id)
+                .map((i) => (
+                  <div key={i.id} className="flex items-center justify-between gap-4 text-sm">
+                    <span className="whitespace-nowrap text-ink">
+                      Installment {i.installment_no} — {inv.currency} {i.amount}
+                      {i.due_date && ` · due ${formatDateOnly(i.due_date)}`}
+                    </span>
+                    <Badge tone={i.status === "paid" ? "success" : "warning"}>{i.status}</Badge>
+                  </div>
+                ))}
+            </div>
           </div>
           {pdfUrls.has(inv.id) && (
             <a

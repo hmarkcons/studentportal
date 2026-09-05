@@ -34,9 +34,13 @@ export default async function PortalAgreementPage() {
       <div className="flex flex-col gap-3">
         {(agreements ?? []).map((a) => (
           <Card key={a.id}>
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-ink">Version {a.version} · {new Date(a.created_at).toLocaleDateString()}</p>
-              <Badge tone={a.status === "signed" ? "success" : "warning"}>{a.status}</Badge>
+            <div className="overflow-x-auto">
+              <div className="flex min-w-[320px] items-center justify-between gap-4">
+                <p className="whitespace-nowrap text-sm text-ink">
+                  Version {a.version} · {new Date(a.created_at).toLocaleDateString()}
+                </p>
+                <Badge tone={a.status === "signed" ? "success" : "warning"}>{a.status}</Badge>
+              </div>
             </div>
             {links.has(a.id) && (
               <a href={links.get(a.id)} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm text-primary underline">
