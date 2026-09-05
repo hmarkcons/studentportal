@@ -148,6 +148,20 @@ export async function activateStudentPortalAccess(studentId: string) {
   const { data: student } = await supabase.from("students").select("auth_user_id").eq("id", studentId).maybeSingle();
   if (!student?.auth_user_id) return { error: "This student has no portal login to activate — create one first." };
 
+  // Same gate the DB trigger (activate_student_portal_on_signed_agreement,
+  // 0010) already applies automatically the moment an agreement is marked
+  // signed — enforced here too since this manual re-activation path doesn't
+  // go through that trigger.
+  const { data: signedAgreement } = await supabase
+    .from("agreements")
+    .select("id")
+    .eq("student_id", studentId)
+    .eq("status", "signed")
+    .not("signed_file_path", "is", null)
+    .limit(1)
+    .maybeSingle();
+  if (!signedAgreement) return { error: "Portal access can only be activated once a signed agreement has been uploaded." };
+
   const { error } = await supabase.from("leads").update({ portal_active: true }).eq("id", studentId);
   if (error) return { error: error.message };
 
