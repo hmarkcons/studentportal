@@ -96,7 +96,7 @@ export default async function StudentsPage() {
       cells: {
         month: monthYearLabel,
         name: (
-          <Link href={`/students/${r.id}`} className="font-medium text-ink hover:underline">
+          <Link href={`/students/${r.id}`} prefetch={false} className="font-medium text-ink hover:underline">
             {r.full_name}
           </Link>
         ),

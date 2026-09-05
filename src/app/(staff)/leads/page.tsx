@@ -76,7 +76,7 @@ export default async function LeadsPage() {
       cells: {
         month: monthYearLabel,
         name: (
-          <Link href={`/leads/${r.id}`} className="font-medium text-ink hover:underline">
+          <Link href={`/leads/${r.id}`} prefetch={false} className="font-medium text-ink hover:underline">
             {r.full_name}
           </Link>
         ),
