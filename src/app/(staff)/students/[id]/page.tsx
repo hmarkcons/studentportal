@@ -12,6 +12,7 @@ import { DestinationPipelineCard } from "@/components/DestinationPipelineCard";
 import type { DashboardStageDef } from "@/lib/dashboardPipeline";
 import { PortalAccessPanel } from "./PortalAccessPanel";
 import { GenerateAgreementForm, UploadSignedAgreementForm } from "./GenerateAgreementForm";
+import { VerifySignedAgreement } from "./VerifySignedAgreement";
 import { GenerateAgreementPdfButton } from "./GenerateAgreementPdfButton";
 import { AgreementActionsMenu } from "./AgreementActionsMenu";
 import { GenerateInvoiceForm, InvoiceCard } from "./InvoicePanel";
@@ -87,7 +88,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       supabase
         .from("agreements")
         .select(
-          "id, status, signing_method, signed_file_path, pdf_path, email_verified, discount_amount, created_at, template_id, admin_charge_override, consultancy_fee_override, installment_count, template:agreement_templates(file_path, destination_id, destination:destinations(country, track))"
+          "id, status, signing_method, signed_file_path, video_recording_path, pdf_path, email_verified, discount_amount, created_at, template_id, admin_charge_override, consultancy_fee_override, installment_count, template:agreement_templates(file_path, destination_id, destination:destinations(country, track))"
         )
         .eq("student_id", id)
         .order("created_at", { ascending: false }),
@@ -379,6 +380,14 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   const agreementLinks = new Map(agreementLinkEntries);
   const invoicePdfUrls = new Map(invoicePdfEntries.filter((e): e is readonly [string, string] => Boolean(e[1])));
 
+  // The consent video a student recorded when e-signing, for staff to watch
+  // before verifying (see VerifySignedAgreement).
+  let consentVideoUrl: string | null = null;
+  if (latestAgreement?.video_recording_path) {
+    const { data } = await supabase.storage.from("documents").createSignedUrl(latestAgreement.video_recording_path, 3600);
+    consentVideoUrl = data?.signedUrl ?? null;
+  }
+
   const taskRows: DashboardTaskRow[] = (rawTasks ?? []).map((t) => ({
     id: t.id,
     description: t.description,
@@ -602,7 +611,16 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
               );
             })}
             {canModifyAgreement && latestAgreement && latestAgreement.status !== "signed" && (
-              <UploadSignedAgreementForm agreementId={latestAgreement.id} studentId={id} />
+              latestAgreement.signing_method === "e_signature" ? (
+                <VerifySignedAgreement
+                  agreementId={latestAgreement.id}
+                  studentId={id}
+                  submitted={Boolean(latestAgreement.signed_file_path)}
+                  videoUrl={consentVideoUrl}
+                />
+              ) : (
+                <UploadSignedAgreementForm agreementId={latestAgreement.id} studentId={id} />
+              )
             )}
           </div>
         )}

@@ -318,10 +318,18 @@ export async function uploadSignedAgreement(agreementId: string, studentId: stri
 
   const file = formData.get("file") as File | null;
   const email_verified = formData.get("email_verified") === "on";
-  const video_recording_path = String(formData.get("video_recording_path") ?? "") || null;
 
   if (!file || file.size === 0) {
     return { error: "Choose a file to upload." };
+  }
+
+  // Paper (Karachi) agreements only. E-signature ones are submitted by the
+  // student with their consent video (student_submit_signed_agreement) and
+  // staff verify those instead — uploading over one here would replace the
+  // signed file while leaving the video pointing at a different submission.
+  const { data: existing } = await supabase.from("agreements").select("signing_method").eq("id", agreementId).maybeSingle();
+  if (existing?.signing_method === "e_signature") {
+    return { error: "E-signature agreements are uploaded by the student from their portal — verify their submission instead." };
   }
 
   const path = `${studentId}/agreements/${agreementId}-${file.name}`;
@@ -330,11 +338,39 @@ export async function uploadSignedAgreement(agreementId: string, studentId: stri
 
   const { error } = await supabase
     .from("agreements")
-    .update({ signed_file_path: path, status: "signed", email_verified, video_recording_path })
+    .update({ signed_file_path: path, status: "signed", email_verified })
     .eq("id", agreementId);
 
   if (error) return { error: error.message };
 
   revalidatePath(`/students/${studentId}`);
+  return { success: true };
+}
+
+// Staff sign-off on a student's e-signed submission: they watch the consent
+// video, check the document, then mark it signed. Refuses until both are
+// actually present so "verified" always means someone saw a video.
+export async function verifySignedAgreement(agreementId: string, studentId: string, emailVerified: boolean) {
+  const supabase = await createClient();
+  const denied = await requirePermission("agreements.process", "Only Super Admin/Processing can verify a signed agreement.");
+  if (denied) return { error: denied.error };
+
+  const { data: agreement } = await supabase
+    .from("agreements")
+    .select("signed_file_path, video_recording_path")
+    .eq("id", agreementId)
+    .maybeSingle();
+
+  if (!agreement?.signed_file_path) return { error: "The student hasn't submitted a signed agreement yet." };
+  if (!agreement.video_recording_path) return { error: "There's no consent video on this submission — it can't be verified." };
+
+  const { error } = await supabase
+    .from("agreements")
+    .update({ status: "signed", email_verified: emailVerified })
+    .eq("id", agreementId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/students/${studentId}`);
+  revalidatePath("/portal/agreement");
   return { success: true };
 }
