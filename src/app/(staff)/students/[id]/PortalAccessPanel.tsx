@@ -82,7 +82,10 @@ export function PortalAccessPanel({
             <span className="text-amber-600 dark:text-amber-400">suspended</span>
           )}
         </p>
-        <div className="flex items-center gap-2">
+        {/* Four buttons appear once portal access exists (reveal / reset /
+            suspend / delete) — together they're wider than a phone, so let
+            them wrap rather than push the page sideways. */}
+        <div className="flex flex-wrap items-center gap-2">
           {enabled && (
             <Button type="button" onClick={reveal} pending={revealing}>
               Reveal credentials
