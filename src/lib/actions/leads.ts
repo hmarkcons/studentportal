@@ -489,45 +489,55 @@ export async function registerLead(leadId: string, _formData: FormData) {
   redirect(`/students/${leadId}/profile`);
 }
 
-// Backs the Leads table's "Follow-up" date picker. Reuses the existing
-// `reminders` table's 'follow_up' type (already in its check constraint,
-// just never wired to a UI) instead of adding a new mechanism — the
-// Calendar page already reads unresolved reminders due within the visible
-// range, so setting a date here surfaces it there automatically with no
-// separate sync step. At most one *unresolved* follow_up reminder is kept
-// per lead: picking a new date updates it in place rather than stacking a
-// second reminder, and clearing the date resolves it (so it drops off the
-// calendar) instead of deleting the historical row.
-export async function setLeadFollowUpDate(leadId: string, revalidateTo: string, dueDate: string | null, note: string | null) {
+// Backs the Leads table's "Follow-up" cell. Reuses the existing `reminders`
+// table's 'follow_up' type (already in its check constraint) — the Calendar
+// page already reads reminders due within the visible range, so adding one
+// here surfaces it there automatically with no separate sync step.
+//
+// Each call inserts a brand-new row rather than overwriting a prior one, so
+// a lead can carry a whole log of dated remarks (past and upcoming) instead
+// of just the single most-recent one; listLeadFollowUpRemarks below reads
+// that whole log back for the "View" panel, and the Calendar shows each row
+// as its own reminder (see calendar/page.tsx and ReminderRow.tsx).
+export async function addLeadFollowUpRemark(
+  leadId: string,
+  revalidateTo: string,
+  dueDate: string,
+  dueTime: string | null,
+  note: string
+) {
   const supabase = await createClient();
 
-  const { data: existing } = await supabase
-    .from("reminders")
-    .select("id")
-    .eq("student_id", leadId)
-    .eq("type", "follow_up")
-    .eq("resolved", false)
-    .maybeSingle();
+  const trimmedNote = note.trim();
+  if (!dueDate) return { error: "A follow-up date is required." };
+  if (!trimmedNote) return { error: "A remark is required." };
 
-  if (!dueDate) {
-    if (existing) {
-      const { error } = await supabase.from("reminders").update({ resolved: true }).eq("id", existing.id);
-      if (error) return { error: error.message };
-    }
-  } else if (existing) {
-    const { error } = await supabase.from("reminders").update({ due_date: dueDate, note }).eq("id", existing.id);
-    if (error) return { error: error.message };
-  } else {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    const { error } = await supabase
-      .from("reminders")
-      .insert({ student_id: leadId, type: "follow_up", due_date: dueDate, note, created_by: user?.id ?? null });
-    if (error) return { error: error.message };
-  }
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { error } = await supabase.from("reminders").insert({
+    student_id: leadId,
+    type: "follow_up",
+    due_date: dueDate,
+    due_time: dueTime || null,
+    note: trimmedNote,
+    created_by: user?.id ?? null,
+  });
+  if (error) return { error: error.message };
 
   revalidatePath(revalidateTo);
   revalidatePath("/calendar");
   return { success: true };
+}
+
+export async function listLeadFollowUpRemarks(leadId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("reminders")
+    .select("id, due_date, due_time, note, resolved")
+    .eq("student_id", leadId)
+    .eq("type", "follow_up")
+    .order("due_date", { ascending: false });
+  if (error) return { error: error.message, remarks: [] };
+  return { remarks: data ?? [] };
 }

@@ -51,10 +51,12 @@ export default async function CalendarPage(props: {
     .eq("status", "pending")
     .not("due_date", "is", null);
 
+  // Resolved reminders are still fetched (not filtered out) — a completed
+  // reminder stays visible on the calendar so staff can uncheck, edit, or
+  // delete it later instead of it just vanishing.
   const { data: reminders } = await supabase
     .from("reminders")
-    .select("id, type, due_date, note, created_by, student:leads(full_name, assigned_counselor_id, contact_number)")
-    .eq("resolved", false)
+    .select("id, type, due_date, due_time, note, resolved, created_by, student:leads(full_name, assigned_counselor_id, contact_number)")
     .not("due_date", "is", null)
     .gte("due_date", rangeStartStr)
     .lte("due_date", rangeEndStr)
@@ -119,16 +121,19 @@ export default async function CalendarPage(props: {
     }
     const label =
       r.type === "follow_up"
-        ? `${student?.full_name ?? "?"} - Follow-up${student?.contact_number ? ` (${student.contact_number})` : ""}${r.note ? `: ${r.note}` : ""}`
-        : `${r.type.replace(/_/g, " ")} — ${student?.full_name ?? "?"}${r.note ? `: ${r.note}` : ""}`;
+        ? `${student?.full_name ?? "?"} - Follow-up${student?.contact_number ? ` (${student.contact_number})` : ""}`
+        : `${r.type.replace(/_/g, " ")} — ${student?.full_name ?? "?"}`;
 
     events.push({
       id: `reminder-${r.id}`,
       date: r.due_date!,
-      time: null,
+      time: r.due_time ? r.due_time.slice(0, 5) : null,
       kind: "reminder",
       label,
       tone: "info",
+      done: r.resolved,
+      reminderId: r.id,
+      notes: r.note,
     });
   });
 

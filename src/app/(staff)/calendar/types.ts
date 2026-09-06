@@ -16,6 +16,7 @@ export type CalendarEvent = {
   done?: boolean;
   taskId?: string;
   personalTaskId?: string;
+  reminderId?: string;
   description?: string;
   notes?: string | null;
   allDay?: boolean;

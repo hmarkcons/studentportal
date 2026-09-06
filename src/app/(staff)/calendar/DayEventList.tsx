@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CalendarTaskRow } from "./CalendarTaskRow";
 import { PersonalTaskRow } from "./PersonalTaskRow";
+import { ReminderRow } from "./ReminderRow";
 import type { CalendarEvent, CalendarTone } from "./types";
 
 const READONLY_TONE: Record<CalendarTone, "success" | "warning" | "danger" | "info" | "primary" | "neutral"> = {
@@ -16,7 +17,6 @@ const READONLY_TONE: Record<CalendarTone, "success" | "warning" | "danger" | "in
 };
 
 const KIND_LABEL: Record<string, string> = {
-  reminder: "Reminder",
   deadline: "Deadline",
   visa: "Visa",
 };
@@ -69,6 +69,20 @@ export function DayEventList({ day, events, revalidateTo }: { day: string; event
               recurrence={e.recurrence}
               recurrenceEndDate={e.recurrenceEndDate}
               isRecurrenceInstance={e.isRecurrenceInstance}
+            />
+          );
+        }
+        if (e.kind === "reminder") {
+          return (
+            <ReminderRow
+              key={e.id}
+              reminderId={e.reminderId!}
+              label={e.label}
+              note={e.notes ?? null}
+              date={e.date}
+              time={e.time}
+              resolved={Boolean(e.done)}
+              revalidateTo={revalidateTo}
             />
           );
         }

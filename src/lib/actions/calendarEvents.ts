@@ -120,3 +120,37 @@ export async function updateCalendarTask(taskId: string, revalidateTo: string, _
   revalidatePath(revalidateTo);
   return { success: true };
 }
+
+// Reminders (stall/deadline/follow_up) stay visible on the calendar once
+// resolved instead of disappearing — resolved just toggles a badge/strike-
+// through, so staff can still uncheck, edit, or delete the row afterward.
+export async function toggleReminderResolved(reminderId: string, revalidateTo: string, resolved: boolean) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("reminders").update({ resolved }).eq("id", reminderId);
+  if (error) return { error: error.message };
+  revalidatePath(revalidateTo);
+  return { success: true };
+}
+
+export async function updateReminder(reminderId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
+  const supabase = await createClient();
+
+  const due_date = String(formData.get("due_date") ?? "");
+  const due_time = String(formData.get("due_time") ?? "").trim() || null;
+  const note = String(formData.get("note") ?? "").trim();
+  if (!due_date) return { error: "A date is required." };
+
+  const { error } = await supabase.from("reminders").update({ due_date, due_time, note: note || null }).eq("id", reminderId);
+  if (error) return { error: error.message };
+
+  revalidatePath(revalidateTo);
+  return { success: true };
+}
+
+export async function deleteReminder(reminderId: string, revalidateTo: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("reminders").delete().eq("id", reminderId);
+  if (error) return { error: error.message };
+  revalidatePath(revalidateTo);
+  return { success: true };
+}
