@@ -85,10 +85,13 @@ export function SubmitSignedAgreementForm({ agreementId, studentId }: { agreemen
       {/* The native file input is styled out and driven by the label so it
           matches the bordered video picker above it — left bare it renders as
           unboxed "Choose File" text and has an intrinsic min width that pushes
-          the submit button onto its own line. */}
+          the submit button onto its own line. The chosen filename sits on the
+          row below rather than between the two: at 768px the sidebar leaves
+          this card barely 440px, and inline it wrapped the button away from
+          the picker it is meant to sit beside. */}
       <div className="flex flex-wrap items-center gap-2">
-        <label className="cursor-pointer rounded-md border border-border px-2 py-1 text-xs text-ink hover:bg-bg">
-          {documentName ? "Change signed agreement" : "Choose signed agreement"}
+        <label className="cursor-pointer whitespace-nowrap rounded-md border border-border px-2 py-1 text-xs text-ink hover:bg-bg">
+          {documentName ? "Change file" : "Choose file"}
           <input
             type="file"
             name="agreement"
@@ -98,7 +101,6 @@ export function SubmitSignedAgreementForm({ agreementId, studentId }: { agreemen
             onChange={(e) => setDocumentName(e.target.files?.[0]?.name ?? null)}
           />
         </label>
-        <span className="max-w-full truncate text-xs text-muted">{documentName ?? "No file chosen"}</span>
         {/* Gated in the button rather than with `required` on the input: a
             visually-hidden required control can't be focused for the native
             validation bubble, and Chrome then blocks submission silently. */}
@@ -106,6 +108,7 @@ export function SubmitSignedAgreementForm({ agreementId, studentId }: { agreemen
           Submit signed agreement
         </Button>
       </div>
+      <p className="truncate text-xs text-muted">{documentName ?? "No file chosen"}</p>
       {(!video || !documentName) && (
         <p className="text-xs text-muted">
           {!video && !documentName
