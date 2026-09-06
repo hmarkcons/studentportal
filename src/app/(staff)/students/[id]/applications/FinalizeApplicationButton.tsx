@@ -10,12 +10,16 @@ export function FinalizeApplicationButton({
   revalidateTo,
   isFinalized,
   countryCode,
+  blockedByOther = false,
 }: {
   applicationId: string;
   studentId: string;
   revalidateTo: string;
   isFinalized: boolean;
   countryCode?: string | null;
+  // True when a different application is the finalized one — that has to be
+  // un-finalized before another can take its place.
+  blockedByOther?: boolean;
 }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +37,19 @@ export function FinalizeApplicationButton({
 
   return (
     <div className="flex flex-col items-end">
-      <Button type="button" onClick={handle} pending={pending} size="sm" variant={isFinalized ? "success" : "outline"}>
+      <Button
+        type="button"
+        onClick={handle}
+        pending={pending}
+        disabled={blockedByOther}
+        title={
+          blockedByOther
+            ? `Another university is already ${isItaly ? "pre-enrolled" : "finalized for visa"} — un-finalize it first to choose a different one.`
+            : undefined
+        }
+        size="sm"
+        variant={isFinalized ? "success" : "outline"}
+      >
         {isItaly
           ? isFinalized
             ? "Un-Pre-Enroll"

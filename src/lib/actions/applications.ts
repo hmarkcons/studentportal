@@ -69,6 +69,22 @@ export async function deleteApplication(applicationId: string, revalidateTo: str
 export async function finalizeApplication(applicationId: string, studentId: string, revalidateTo: string) {
   const supabase = await createClient();
 
+  // Only one university can be finalized at a time. The RPC below would
+  // happily switch the flag to whichever application was clicked last, so
+  // refuse here instead — un-finalizing first has to be a deliberate act,
+  // not a side effect of clicking Finalize on a different application.
+  const { data: alreadyFinalized } = await supabase
+    .from("applications")
+    .select("id")
+    .eq("student_id", studentId)
+    .eq("is_finalized", true)
+    .neq("id", applicationId)
+    .limit(1)
+    .maybeSingle();
+  if (alreadyFinalized) {
+    return { error: "Another university is already finalized for visa. Un-finalize it first to choose a different one." };
+  }
+
   // Single security-definer RPC — clearing every application's flag and
   // setting the target one commit or fail together (see migration 0091),
   // rather than as two separate writes that could leave every application

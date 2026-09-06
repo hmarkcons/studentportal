@@ -11,7 +11,7 @@ export default async function StudentLayout({ children, params }: { children: Re
   const { supabase, staff: staffRow } = await getStaffSession();
   const canDeleteStudent = staffRow?.role === "super_admin" || staffRow?.role === "processing";
 
-  const [{ data: student, error }, { data: italyApp }, { data: profile }] = await Promise.all([
+  const [{ data: student, error }, { data: italyApp }, { data: profile }, { data: finalizedApp }] = await Promise.all([
     supabase
       .from("students")
       .select("id, full_name, email, contact_number, country_of_interest, portal_active, registration_status")
@@ -22,9 +22,28 @@ export default async function StudentLayout({ children, params }: { children: Re
       .select("id, university:universities(destination:destinations(country_code))")
       .eq("student_id", id),
     supabase.from("student_profiles").select("photo_path").eq("student_id", id).maybeSingle(),
+    supabase
+      .from("applications")
+      .select("id, university:universities(name, destination:destinations(country_code))")
+      .eq("student_id", id)
+      .eq("is_finalized", true)
+      .maybeSingle(),
   ]);
 
   if (error || !student) notFound();
+
+  const finalizedUni = finalizedApp
+    ? ((Array.isArray(finalizedApp.university) ? finalizedApp.university[0] : finalizedApp.university) as
+        | { name?: string; destination?: unknown }
+        | null)
+    : null;
+  const finalizedUniversityName = finalizedUni?.name ?? null;
+  const finalizedDest = finalizedUni?.destination
+    ? ((Array.isArray(finalizedUni.destination) ? finalizedUni.destination[0] : finalizedUni.destination) as
+        | { country_code?: string }
+        | null)
+    : null;
+  const finalizedIsItaly = finalizedDest?.country_code === "IT";
 
   let photoUrl: string | null = null;
   if (profile?.photo_path) {
@@ -59,6 +78,12 @@ export default async function StudentLayout({ children, params }: { children: Re
             <p className="text-sm text-muted">
               {student.email ?? "No email"} · {student.contact_number ?? "No phone"} · {student.country_of_interest ?? "—"}
             </p>
+            {finalizedUniversityName && (
+              <p className="mt-1 flex flex-wrap items-center gap-1.5 text-sm">
+                <Badge tone="success">{finalizedIsItaly ? "Pre-Enrolled" : "Finalized for visa"}</Badge>
+                <span className="font-medium text-ink">{finalizedUniversityName}</span>
+              </p>
+            )}
           </div>
         </div>
         <div className="flex flex-col items-end gap-2">
