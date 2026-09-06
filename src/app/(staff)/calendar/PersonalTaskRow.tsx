@@ -106,8 +106,9 @@ export function PersonalTaskRow({
 
   return (
     <div>
-      <div className="flex items-center justify-between text-sm">
-        <label className="flex items-center gap-2">
+      {/* Stacked on a phone — see CalendarTaskRow for why. */}
+      <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+        <label className="flex items-start gap-2 sm:items-center">
           <input
             type="checkbox"
             checked={checked}
@@ -138,7 +139,7 @@ export function PersonalTaskRow({
             </span>
           )}
         </label>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2 pl-6 sm:pl-0">
           <Badge tone={PRIORITY_TONE[priority] ?? "neutral"}>{priority}</Badge>
           <Badge tone="primary">Personal</Badge>
           <button onClick={() => setEditing(true)} className="text-xs text-muted hover:text-primary">

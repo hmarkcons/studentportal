@@ -59,10 +59,13 @@ export function ReminderRow({
 
   return (
     <div>
-      <div className="flex items-center justify-between gap-2 text-sm">
-        <label className="flex min-w-0 items-center gap-2">
+      {/* Stacked on a phone so a long "<student> - Follow-up (<number>)"
+          label wraps in full instead of being truncated by the actions. */}
+      <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+        <label className="flex min-w-0 items-start gap-2 sm:items-center">
           <input
             type="checkbox"
+            className="mt-0.5 sm:mt-0"
             checked={checked}
             onChange={async (e) => {
               const next = e.target.checked;
@@ -76,12 +79,12 @@ export function ReminderRow({
               }
             }}
           />
-          <span className={checked ? "truncate text-muted line-through" : "truncate text-ink"}>
+          <span className={checked ? "min-w-0 text-muted line-through" : "min-w-0 text-ink"}>
             {time && <span className="mr-1 font-mono text-xs text-muted">{time}</span>}
             {label}
           </span>
         </label>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2 pl-6 sm:pl-0">
           <button onClick={() => setEditing(true)} className="text-xs text-muted hover:text-primary">
             ✏️
           </button>
