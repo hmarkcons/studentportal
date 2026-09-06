@@ -79,7 +79,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         .select("auth_user_id, full_name, portal_active")
         .eq("id", id)
         .maybeSingle(),
-      supabase.from("leads").select("assigned_counselor_id, intake, discount_amount, discount_reason").eq("id", id).maybeSingle(),
+      supabase.from("leads").select("assigned_counselor_id, processing_officer_id, intake, discount_amount, discount_reason").eq("id", id).maybeSingle(),
       supabase
         .from("lead_destinations")
         .select("destination_id, is_backup, created_at, dashboard_stage_values, destination:destinations(display_name, dashboard_pipeline_stages)")
@@ -360,6 +360,12 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     const { data } = await supabase.storage.from("documents").createSignedUrl(assignedCounselorStaff.photo_path, 3600);
     assignedCounselorPhotoUrl = data?.signedUrl ?? null;
   }
+  // Show just the assigned officer when there is one; otherwise the whole
+  // processing team, who collectively cover an unassigned student.
+  const shownProcessingOfficers = leadRegistration?.processing_officer_id
+    ? (processingOfficers ?? []).filter((o) => o.id === leadRegistration.processing_officer_id)
+    : (processingOfficers ?? []);
+
   const processingOfficerPhotoUrls = new Map<string, string>();
   await Promise.all(
     (processingOfficers ?? [])
@@ -474,6 +480,8 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
             defaultBackupIds={resolvedBackupDestinationIds}
             counselors={counselors ?? []}
             assignedCounselorId={leadRegistration?.assigned_counselor_id ?? null}
+            processingOfficers={(processingOfficers ?? []).map((o) => ({ id: o.id, full_name: o.full_name }))}
+            processingOfficerId={leadRegistration?.processing_officer_id ?? null}
             intake={leadRegistration?.intake ?? null}
             discountAmount={leadRegistration?.discount_amount ?? null}
             discountReason={leadRegistration?.discount_reason ?? null}
@@ -689,9 +697,14 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
 
           <div>
             <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">Processing Officer</p>
-            {processingOfficers && processingOfficers.length > 0 ? (
+            <p className="mb-2 text-xs text-muted">
+              {leadRegistration?.processing_officer_id
+                ? "Assigned to this student — deadline reminders go to them."
+                : "Nobody assigned yet, so the whole processing team below covers this student. Assign one from the Registration card above."}
+            </p>
+            {shownProcessingOfficers.length > 0 ? (
               <div className="flex flex-col gap-3">
-                {processingOfficers.map((officer) => (
+                {shownProcessingOfficers.map((officer) => (
                   <div key={officer.id} className="flex items-start gap-3 text-sm text-ink">
                     {processingOfficerPhotoUrls.has(officer.id) ? (
                       // eslint-disable-next-line @next/next/no-img-element

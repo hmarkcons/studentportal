@@ -14,6 +14,8 @@ export function RegistrationEditForm({
   defaultBackupIds,
   counselors,
   assignedCounselorId,
+  processingOfficers,
+  processingOfficerId,
   discountAmount,
   discountReason,
   intake,
@@ -25,6 +27,8 @@ export function RegistrationEditForm({
   defaultBackupIds: string[];
   counselors: { id: string; full_name: string }[];
   assignedCounselorId: string | null;
+  processingOfficers: { id: string; full_name: string }[];
+  processingOfficerId: string | null;
   discountAmount: number | null;
   discountReason: string | null;
   intake: string | null;
@@ -55,6 +59,17 @@ export function RegistrationEditForm({
             {counselors.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.full_name}
+              </option>
+            ))}
+          </Select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-muted">
+          Processing officer
+          <Select name="processing_officer_id" defaultValue={processingOfficerId ?? ""}>
+            <option value="">Whole processing team</option>
+            {processingOfficers.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.full_name}
               </option>
             ))}
           </Select>

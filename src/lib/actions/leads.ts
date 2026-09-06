@@ -394,6 +394,7 @@ export async function updateRegistrationDetails(studentId: string, revalidateTo:
   const selection = parseDestinationSelection(formData);
   if ("error" in selection) return selection;
   const assigned_counselor_id = String(formData.get("assigned_counselor_id") ?? "") || null;
+  const processing_officer_id = String(formData.get("processing_officer_id") ?? "") || null;
   const intake = String(formData.get("intake") ?? "").trim() || null;
   const discount_amount = formData.get("discount_amount") ? Number(formData.get("discount_amount")) : null;
   const discount_reason = String(formData.get("discount_reason") ?? "").trim() || null;
@@ -418,7 +419,7 @@ export async function updateRegistrationDetails(studentId: string, revalidateTo:
     }
   }
 
-  const patch: Record<string, unknown> = { assigned_counselor_id, intake, discount_amount, discount_reason };
+  const patch: Record<string, unknown> = { assigned_counselor_id, processing_officer_id, intake, discount_amount, discount_reason };
   if (hasNewSelection || hadExistingDestinations) {
     patch.country_of_interest = [selection.primaryDestinationName, ...selection.backupDestinationNames].filter(Boolean).join(", ") || null;
   }
