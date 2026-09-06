@@ -17,8 +17,12 @@ export function PhotoUpload({
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
 
+  // Photo on top, its controls stacked underneath and matched to the same
+  // column width, so the block reads as one unit wherever it's dropped in
+  // (student header, portal profile, staff admin form) instead of a wide
+  // row that reflows differently on every page.
   return (
-    <div className="flex flex-wrap items-center gap-4">
+    <div className="flex w-52 max-w-full flex-col items-center gap-2">
       {photoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={photoUrl} alt="Profile photo" className="h-20 w-20 flex-shrink-0 rounded-full border border-border object-cover" />
@@ -27,12 +31,17 @@ export function PhotoUpload({
           No photo
         </div>
       )}
-      <form action={formAction} className="flex flex-wrap items-center gap-2">
-        <input type="file" name="file" accept="image/*" className="max-w-full rounded-md border border-border px-2 py-1 text-xs" />
+      <form action={formAction} className="flex w-full min-w-0 flex-col items-stretch gap-1.5">
+        <input
+          type="file"
+          name="file"
+          accept="image/*"
+          className="w-full min-w-0 max-w-full rounded-md border border-border px-2 py-1 text-xs file:mr-2 file:rounded file:border-0 file:bg-bg file:px-1.5 file:py-0.5 file:text-xs file:text-ink"
+        />
         <Button type="submit" variant="outline" size="sm" pending={pending}>
           {photoUrl ? "Replace photo" : "Upload photo"}
         </Button>
-        {state?.error && <p className="text-xs text-danger">{state.error}</p>}
+        {state?.error && <p className="text-center text-xs text-danger">{state.error}</p>}
       </form>
     </div>
   );
