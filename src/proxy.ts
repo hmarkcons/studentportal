@@ -2,6 +2,13 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function proxy(request: NextRequest) {
+  // Cron endpoints authenticate themselves with the CRON_SECRET bearer token
+  // rather than a session cookie. Without this they fall into the redirect
+  // below and Vercel Cron only ever reaches /login, so the jobs never run.
+  if (request.nextUrl.pathname.startsWith("/api/cron/")) {
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
