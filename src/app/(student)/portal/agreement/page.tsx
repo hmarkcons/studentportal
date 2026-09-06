@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SubmitSignedAgreementForm } from "./SubmitSignedAgreementForm";
 
 export default async function PortalAgreementPage() {
   const supabase = await createClient();
@@ -14,7 +15,7 @@ export default async function PortalAgreementPage() {
 
   const { data: agreements } = await supabase
     .from("agreements")
-    .select("id, status, version, signed_file_path, created_at")
+    .select("id, status, version, signed_file_path, video_recording_path, signing_method, created_at")
     .eq("student_id", student.id)
     .order("created_at", { ascending: false });
 
@@ -46,6 +47,18 @@ export default async function PortalAgreementPage() {
               <a href={links.get(a.id)} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm text-primary underline">
                 View / download
               </a>
+            )}
+
+            {/* E-signature agreements are signed and submitted by the student
+                themself; paper ones are handled in the Karachi office. */}
+            {a.signing_method === "e_signature" && a.status !== "signed" && (
+              a.signed_file_path && a.video_recording_path ? (
+                <p className="mt-3 border-t border-border pt-3 text-xs text-muted">
+                  Submitted — waiting for your counselor to verify the video and agreement.
+                </p>
+              ) : (
+                <SubmitSignedAgreementForm agreementId={a.id} studentId={student.id} />
+              )
             )}
           </Card>
         ))}
