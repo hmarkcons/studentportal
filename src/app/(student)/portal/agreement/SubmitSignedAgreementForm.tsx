@@ -45,6 +45,7 @@ export function SubmitSignedAgreementForm({ agreementId, studentId }: { agreemen
   const action = submitSignedAgreement.bind(null, agreementId, studentId);
   const [state, formAction, pending] = useActionState(action, undefined);
   const [video, setVideo] = useState<File | null>(null);
+  const [documentName, setDocumentName] = useState<string | null>(null);
   const [showWhy, setShowWhy] = useState(false);
   const videoInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -81,13 +82,39 @@ export function SubmitSignedAgreementForm({ agreementId, studentId }: { agreemen
       <ConsentVideoRecorder onVideo={attachVideo} disabled={pending} />
       <input ref={videoInputRef} type="file" name="video" accept="video/*" className="sr-only" tabIndex={-1} aria-hidden />
 
+      {/* The native file input is styled out and driven by the label so it
+          matches the bordered video picker above it — left bare it renders as
+          unboxed "Choose File" text and has an intrinsic min width that pushes
+          the submit button onto its own line. */}
       <div className="flex flex-wrap items-center gap-2">
-        <input type="file" name="agreement" accept={ACCEPTED_DOCUMENT_ACCEPT} required className="max-w-full text-xs" />
-        <Button type="submit" variant="primary" size="sm" pending={pending} disabled={!video}>
+        <label className="cursor-pointer rounded-md border border-border px-2 py-1 text-xs text-ink hover:bg-bg">
+          {documentName ? "Change signed agreement" : "Choose signed agreement"}
+          <input
+            type="file"
+            name="agreement"
+            accept={ACCEPTED_DOCUMENT_ACCEPT}
+            className="sr-only"
+            disabled={pending}
+            onChange={(e) => setDocumentName(e.target.files?.[0]?.name ?? null)}
+          />
+        </label>
+        <span className="max-w-full truncate text-xs text-muted">{documentName ?? "No file chosen"}</span>
+        {/* Gated in the button rather than with `required` on the input: a
+            visually-hidden required control can't be focused for the native
+            validation bubble, and Chrome then blocks submission silently. */}
+        <Button type="submit" variant="primary" size="sm" pending={pending} disabled={!video || !documentName}>
           Submit signed agreement
         </Button>
       </div>
-      {!video && <p className="text-xs text-muted">Record or attach the video first — submission stays locked until then.</p>}
+      {(!video || !documentName) && (
+        <p className="text-xs text-muted">
+          {!video && !documentName
+            ? "Record the video and attach your signed agreement — submission stays locked until both are here."
+            : !video
+              ? "Record or attach the video first — submission stays locked until then."
+              : "Attach your signed agreement — submission stays locked until then."}
+        </p>
+      )}
 
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
       {state?.success && (
