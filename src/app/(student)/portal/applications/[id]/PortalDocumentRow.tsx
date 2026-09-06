@@ -49,8 +49,8 @@ export function PortalDocumentRow({
         {doc.status === "rejected" && doc.rejected_reason && <p className="mt-1 text-xs text-danger">Reason: {doc.rejected_reason}</p>}
       </div>
       {doc.status !== "verified" && (
-        <form action={formAction} className="flex items-center gap-2">
-          <input type="file" name="file" accept={ACCEPTED_DOCUMENT_ACCEPT} capture="environment" className="text-xs" />
+        <form action={formAction} className="flex flex-wrap items-center gap-2">
+          <input type="file" name="file" accept={ACCEPTED_DOCUMENT_ACCEPT} capture="environment" className="max-w-full text-xs" />
           <Button type="submit" pending={pending} size="sm">
             Upload
           </Button>
