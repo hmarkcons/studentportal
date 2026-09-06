@@ -49,6 +49,8 @@ export function FinalizeApplicationButton({
         }
         size="sm"
         variant={isFinalized ? "success" : "outline"}
+        // Stops "Un-finalize" breaking at its hyphen when the row is tight.
+        className="whitespace-nowrap"
       >
         {isItaly
           ? isFinalized
