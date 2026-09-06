@@ -206,15 +206,17 @@ export function UploadSignedAgreementForm({ agreementId, studentId }: { agreemen
   const [state, formAction, pending] = useActionState(action, undefined);
 
   return (
-    <form action={formAction} className="mt-2 flex flex-wrap items-center gap-2">
-      <input type="file" name="file" required className="text-xs" />
+    <form action={formAction} className="mt-2 flex flex-col gap-2">
+      {/* File input sits directly next to the button it feeds. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <input type="file" name="file" required className="max-w-full text-xs" />
+        <Button type="submit" variant="outline-primary" size="sm" pending={pending}>
+          Upload signed agreement
+        </Button>
+      </div>
       <label className="flex items-center gap-1 text-xs text-muted">
         <input type="checkbox" name="email_verified" /> Email verified
       </label>
-      <Input name="video_recording_path" placeholder="Video recording path (e-sign only)" className="w-56" />
-      <Button type="submit" variant="outline-primary" size="sm" pending={pending}>
-        Upload signed agreement
-      </Button>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
   );
