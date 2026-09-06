@@ -63,7 +63,7 @@ export default async function DashboardPage() {
           <div className="flex flex-col gap-3">
             {rows.map((r) => (
               <div key={r.id} className="flex items-center gap-3">
-                <span className="w-40 shrink-0 truncate text-sm text-ink">{r.name}</span>
+                <span className="w-24 shrink-0 truncate text-sm text-ink sm:w-40">{r.name}</span>
                 <div className="h-3 flex-1 overflow-hidden rounded-full bg-bg">
                   <div
                     className={`h-full rounded-full ${r.met ? "bg-success" : "bg-warning"}`}
