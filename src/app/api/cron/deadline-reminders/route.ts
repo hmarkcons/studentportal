@@ -23,7 +23,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (!isEmailConfigured()) {
+  // A dry run sends nothing, so it stays useful for checking routing even
+  // where SMTP isn't set up.
+  const dryRun = request.nextUrl.searchParams.get("dry") === "1";
+  if (!dryRun && !isEmailConfigured()) {
     return NextResponse.json({ error: "Email isn't configured.", deadlinesChecked: 0, recipients: 0 });
   }
 
@@ -112,9 +115,10 @@ export async function GET(request: NextRequest) {
   // ?dry=1 reports exactly who would be emailed and with what, without
   // sending anything — safe to run by hand against production to check the
   // routing before or after changing officer assignments.
-  if (request.nextUrl.searchParams.get("dry") === "1") {
+  if (dryRun) {
     return NextResponse.json({
       dryRun: true,
+      emailConfigured: isEmailConfigured(),
       deadlinesChecked: deadlines.length,
       processingStaff: processingStaff.length,
       recipients: Array.from(recipients, ([to, bucket]) => ({
