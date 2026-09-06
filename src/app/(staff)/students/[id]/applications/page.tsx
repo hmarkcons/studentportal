@@ -29,6 +29,15 @@ export default async function StudentApplicationsTab(props: PageProps<"/students
 
   const revalidateTo = `/students/${id}/applications`;
 
+  // One running number across every application (not per country group), so
+  // "application #3" means the same thing wherever it's referred to. Numbered
+  // in creation order, which the query above already sorts by.
+  const numberById = new Map((applications ?? []).map((a, i) => [a.id, i + 1]));
+
+  // Once one university is finalized, Finalize is locked on the rest until
+  // that one is un-finalized.
+  const hasFinalized = (applications ?? []).some((a) => a.is_finalized);
+
   const byCountry = new Map<string, typeof applications>();
   for (const a of applications ?? []) {
     const uni = one(a.university as never) as { destination?: unknown } | null;
@@ -64,8 +73,21 @@ export default async function StudentApplicationsTab(props: PageProps<"/students
                 : null;
               const program = one(a.program as never) as { name?: string } | null;
               const isItaly = dest?.country_code === "IT";
+              const number = numberById.get(a.id) ?? 0;
+              // Banded like a spreadsheet so adjacent applications don't blur
+              // together — tinted with the brand green rather than plain grey.
+              const banded = number % 2 === 0;
               return (
-                <div key={a.id}>
+                <div
+                  key={a.id}
+                  className={`rounded-xl p-2 ${banded ? "bg-[color-mix(in_srgb,var(--primary)_7%,transparent)]" : "bg-transparent"}`}
+                >
+                  <div className="mb-1 flex items-center gap-2 px-1">
+                    <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-ink">
+                      {number}
+                    </span>
+                    <span className="text-xs font-medium text-muted">Application #{number}</span>
+                  </div>
                   <Link href={`/students/${id}/applications/${a.id}`} className="block">
                     <BoardingPassTracker
                       universityName={uni?.name ?? "University"}
@@ -94,6 +116,7 @@ export default async function StudentApplicationsTab(props: PageProps<"/students
                         revalidateTo={revalidateTo}
                         isFinalized={a.is_finalized}
                         countryCode={dest?.country_code}
+                        blockedByOther={hasFinalized && !a.is_finalized}
                       />
                       {canDelete && (
                         <DeleteApplicationButton applicationId={a.id} revalidateTo={revalidateTo} label={uni?.name ?? "this university"} />
