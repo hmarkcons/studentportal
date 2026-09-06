@@ -36,7 +36,10 @@ export default async function PortalAgreementPage() {
         {(agreements ?? []).map((a) => (
           <Card key={a.id}>
             <div className="overflow-x-auto">
-              <div className="flex items-center justify-between gap-4">
+              {/* Wraps rather than scrolls: at 320px the version line and the
+                  status badge don't fit side by side, and inside the scroller
+                  the badge was clipped mid-word instead of moving down. */}
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                 <p className="whitespace-nowrap text-sm text-ink">
                   Version {a.version} · {new Date(a.created_at).toLocaleDateString()}
                 </p>
