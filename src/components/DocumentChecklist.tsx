@@ -65,7 +65,11 @@ function UploadRow({ doc, studentId, revalidateTo }: { doc: DocRow; studentId: s
   }
 
   return (
-    <div className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
+    // Horizontal only from lg. The name block, the upload form and the
+    // Accept/reason/Reject/delete cluster need ~600px between them, and at
+    // 768px the sidebar leaves the content column narrower than it is at
+    // 767px — so switching at sm overflowed exactly where room is tightest.
+    <div className="flex flex-col gap-2 py-3 lg:flex-row lg:items-center lg:justify-between">
       <div className="min-w-[180px] flex-1">
         <p className="text-sm text-ink">{doc.name ?? doc.category ?? "Document"}</p>
         <div className="mt-1 flex items-center gap-2">
@@ -88,8 +92,8 @@ function UploadRow({ doc, studentId, revalidateTo }: { doc: DocRow; studentId: s
       </div>
 
       {showUploadForm ? (
-        <form action={formAction} className="flex items-center gap-2">
-          <input type="file" name="file" accept={ACCEPTED_DOCUMENT_ACCEPT} className="text-xs" />
+        <form action={formAction} className="flex flex-wrap items-center gap-2">
+          <input type="file" name="file" accept={ACCEPTED_DOCUMENT_ACCEPT} className="max-w-full text-xs" />
           <Button type="submit" pending={pending} size="sm">
             Upload
           </Button>
@@ -105,7 +109,7 @@ function UploadRow({ doc, studentId, revalidateTo }: { doc: DocRow; studentId: s
         </Button>
       )}
 
-      <div className="flex items-center gap-1">
+      <div className="flex flex-wrap items-center gap-1">
         <Button type="button" variant="success" size="sm" onClick={() => review("verified")} disabled={!doc.file_path || reviewPending}>
           Accept
         </Button>
