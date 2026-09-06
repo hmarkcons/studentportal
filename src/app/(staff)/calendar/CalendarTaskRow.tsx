@@ -111,8 +111,8 @@ export function CalendarTaskRow({
     <div>
       {/* Stacked on a phone: badges and actions holding the right-hand side
           squeezed a long task title into a narrow column of wrapped text. */}
-      <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-2">
-        <label className="flex items-start gap-2 sm:items-center">
+      <div className="flex flex-col gap-1 text-sm lg:flex-row lg:items-center lg:justify-between lg:gap-2">
+        <label className="flex items-start gap-2 lg:items-center">
           <input
             type="checkbox"
             checked={done}
@@ -143,7 +143,7 @@ export function CalendarTaskRow({
             </span>
           )}
         </label>
-        <div className="flex shrink-0 items-center gap-2 pl-6 sm:pl-0">
+        <div className="flex shrink-0 items-center gap-2 pl-6 lg:pl-0">
           <Badge tone={PRIORITY_TONE[priority] ?? "neutral"}>{priority}</Badge>
           <Badge tone={tone}>Task</Badge>
           <button onClick={() => setEditing(true)} className="text-xs text-muted hover:text-primary">
