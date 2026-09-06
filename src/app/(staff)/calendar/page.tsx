@@ -35,6 +35,15 @@ export default async function CalendarPage(props: {
   const canViewOthers = viewerStaff?.role === "management" || viewerStaff?.role === "super_admin";
   const targetStaffId = canViewOthers && staffParam ? staffParam : viewerId;
 
+  // Whose calendar is actually on screen — deadlines below are scoped to the
+  // student's processing officer, so a management user browsing someone
+  // else's calendar needs that person's role, not their own.
+  const targetRole =
+    targetStaffId === viewerId
+      ? viewerStaff?.role ?? null
+      : (await supabase.from("staff").select("role").eq("id", targetStaffId).maybeSingle()).data?.role ?? null;
+  const targetIsProcessing = targetRole === "processing";
+
   const today = new Date();
   const todayStr = toYMD(today);
   const referenceDate = dateParam ? parseYMD(dateParam) : today;
@@ -68,8 +77,16 @@ export default async function CalendarPage(props: {
 
   const { data: programDeadlines } = await supabase
     .from("applications")
-    .select("id, program:programs(name, application_deadline), student:leads(full_name)")
+    .select("id, program:programs(name, application_deadline), student:leads(full_name, processing_officer_id)")
     .not("program_id", "is", null);
+
+  const { data: documentDeadlines } = await supabase
+    .from("student_documents")
+    .select("id, custom_name, category, deadline, status, student:leads(full_name, processing_officer_id)")
+    .not("deadline", "is", null)
+    .neq("status", "verified")
+    .gte("deadline", rangeStartStr)
+    .lte("deadline", rangeEndStr);
 
   const { data: personalTasks } = targetStaffId
     ? await supabase
@@ -160,16 +177,38 @@ export default async function CalendarPage(props: {
     });
   });
 
+  // A deadline belongs to the student's processing officer. With nobody
+  // assigned it falls back to the whole processing team, so an unassigned
+  // student's deadlines are still on someone's calendar.
+  function deadlineBelongsToTarget(processingOfficerId: string | null | undefined) {
+    return processingOfficerId ? processingOfficerId === targetStaffId : targetIsProcessing;
+  }
+
   (programDeadlines ?? []).forEach((a) => {
     const deadline = one(a.program)?.application_deadline;
     if (!deadline) return;
     if (deadline < rangeStartStr || deadline > rangeEndStr) return;
+    const student = one(a.student);
+    if (!deadlineBelongsToTarget(student?.processing_officer_id)) return;
     events.push({
       id: `deadline-${a.id}`,
       date: deadline,
       time: null,
       kind: "deadline",
-      label: `${one(a.program)?.name} deadline — ${one(a.student)?.full_name ?? "?"}`,
+      label: `${one(a.program)?.name} deadline — ${student?.full_name ?? "?"}`,
+      tone: "danger",
+    });
+  });
+
+  (documentDeadlines ?? []).forEach((d) => {
+    const student = one(d.student);
+    if (!deadlineBelongsToTarget(student?.processing_officer_id)) return;
+    events.push({
+      id: `docdeadline-${d.id}`,
+      date: d.deadline!,
+      time: null,
+      kind: "deadline",
+      label: `${d.custom_name ?? d.category ?? "Document"} due — ${student?.full_name ?? "?"}`,
       tone: "danger",
     });
   });
