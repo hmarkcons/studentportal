@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { AcademicsSection } from "@/components/AcademicsSection";
+import { PhotoUpload } from "@/components/PhotoUpload";
+import { uploadStudentPhoto } from "@/lib/actions/studentProfileExtras";
 import { TestScoresSection } from "@/components/TestScoresSection";
 import { TravelHistorySection } from "@/components/TravelHistorySection";
 import { VisaRefusalHistorySection } from "@/components/VisaRefusalHistorySection";
@@ -29,6 +31,20 @@ export default async function StudentProfileTab(props: PageProps<"/students/[id]
     <div className="flex flex-col gap-6">
       <Card>
         <h3 className="mb-3 text-sm font-medium text-ink">Personal details</h3>
+
+        {/* Controls only — the photo itself is shown in the page header
+            above, which this revalidates ("layout") after an upload. */}
+        <div className="mb-4">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted">Photo</span>
+          <div className="mt-1">
+            <PhotoUpload
+              action={uploadStudentPhoto.bind(null, id, `/students/${id}`)}
+              photoUrl={null}
+              hidePreview
+              hasPhoto={Boolean(profile?.photo_path)}
+            />
+          </div>
+        </div>
 
         {student && <RegisteredStudentProfileForm studentId={id} revalidateTo={revalidateTo} lead={student} profile={profile} />}
 

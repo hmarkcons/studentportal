@@ -2,8 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getStaffSession } from "@/lib/auth/session";
 import { Badge } from "@/components/ui/Badge";
-import { PhotoUpload } from "@/components/PhotoUpload";
-import { uploadStudentPhoto } from "@/lib/actions/studentProfileExtras";
 import { StudentTabs } from "./StudentTabs";
 import { DeleteStudentButton } from "./DeleteStudentButton";
 import { InlineRegistrationStatusCell } from "../InlineRegistrationStatusCell";
@@ -47,7 +45,15 @@ export default async function StudentLayout({ children, params }: { children: Re
       </Link>
       <div className="mt-2 mb-4 flex flex-wrap items-center justify-between gap-4">
         <div className="flex min-w-0 flex-wrap items-center gap-4">
-          <PhotoUpload action={uploadStudentPhoto.bind(null, id, `/students/${id}`)} photoUrl={photoUrl} />
+          {/* Display only — the upload controls live on the Profile tab. */}
+          {photoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={photoUrl} alt={student.full_name} className="h-16 w-16 flex-shrink-0 rounded-full border border-border object-cover" />
+          ) : (
+            <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full border border-dashed border-border text-[10px] text-muted">
+              No photo
+            </div>
+          )}
           <div className="min-w-0">
             <h2 className="text-xl font-semibold text-ink">{student.full_name}</h2>
             <p className="text-sm text-muted">
