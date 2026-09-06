@@ -23,11 +23,15 @@ export function AcademicsSection({
   const byType = new Map<QualificationType, QualificationRowData>(
     qualifications.map((q) => [q.qualification_type as QualificationType, q as QualificationRowData])
   );
-  const presentTypes = new Set<QualificationType>(byType.keys());
+  const presentTypes = new Set<QualificationType>(qualifications.map((q) => q.qualification_type as QualificationType));
   const checklist = qualificationChecklist(levelApplyingFor, presentTypes);
 
-  const availableAdditionalTypes = ADDITIONAL_QUALIFICATION_TYPES.filter((t) => !presentTypes.has(t));
-  const existingAdditional = ADDITIONAL_QUALIFICATION_TYPES.filter((t) => presentTypes.has(t));
+  // Listed per row, not per type — a student can hold two Bachelors from
+  // different institutions, so the same type may legitimately appear twice.
+  const additionalTypes = new Set<string>(ADDITIONAL_QUALIFICATION_TYPES);
+  const existingAdditional = qualifications
+    .filter((q) => additionalTypes.has(q.qualification_type))
+    .map((q) => q as QualificationRowData);
 
   return (
     <div className="flex flex-col gap-6">
@@ -52,10 +56,17 @@ export function AcademicsSection({
 
       <div>
         <h3 className="mb-3 text-sm font-medium text-ink">Additional qualifications</h3>
-        {existingAdditional.map((type) => (
-          <QualificationRow key={type} studentId={studentId} revalidateTo={revalidateTo} type={type} data={byType.get(type) ?? null} deletable />
+        {existingAdditional.map((q) => (
+          <QualificationRow
+            key={q!.id}
+            studentId={studentId}
+            revalidateTo={revalidateTo}
+            type={q!.qualification_type}
+            data={q}
+            deletable
+          />
         ))}
-        <AddQualificationButton studentId={studentId} revalidateTo={revalidateTo} availableTypes={[...availableAdditionalTypes]} />
+        <AddQualificationButton studentId={studentId} revalidateTo={revalidateTo} availableTypes={[...ADDITIONAL_QUALIFICATION_TYPES]} />
       </div>
     </div>
   );

@@ -17,20 +17,32 @@ export async function upsertStudentQualification(
     return { error: "Choose a valid qualification type." };
   }
 
-  const qualification_name = String(formData.get("qualification_name") ?? "").trim() || null;
-  const institution_name = String(formData.get("institution_name") ?? "").trim() || null;
-  const city = String(formData.get("city") ?? "").trim() || null;
-  const country = String(formData.get("country") ?? "").trim() || null;
-  const address = String(formData.get("address") ?? "").trim() || null;
-  const grade_percentage = String(formData.get("grade_percentage") ?? "").trim() || null;
+  const fields = {
+    qualification_name: String(formData.get("qualification_name") ?? "").trim() || null,
+    institution_name: String(formData.get("institution_name") ?? "").trim() || null,
+    city: String(formData.get("city") ?? "").trim() || null,
+    country: String(formData.get("country") ?? "").trim() || null,
+    address: String(formData.get("address") ?? "").trim() || null,
+    grade_percentage: String(formData.get("grade_percentage") ?? "").trim() || null,
+  };
 
-  const { error } = await supabase
-    .from("student_qualifications")
-    .upsert(
-      { student_id: studentId, qualification_type, qualification_name, institution_name, city, country, address, grade_percentage },
-      { onConflict: "student_id,qualification_type" }
-    );
-  if (error) return { error: error.message };
+  // Keyed by row id rather than upserted on (student, type): a student can
+  // now hold several qualifications of the same type, so the type no longer
+  // identifies a row. An id means "edit this one", no id means "add another".
+  const qualificationId = String(formData.get("qualification_id") ?? "");
+
+  if (qualificationId) {
+    const { error } = await supabase
+      .from("student_qualifications")
+      .update({ qualification_type, ...fields })
+      .eq("id", qualificationId);
+    if (error) return { error: error.message };
+  } else {
+    const { error } = await supabase
+      .from("student_qualifications")
+      .insert({ student_id: studentId, qualification_type, ...fields });
+    if (error) return { error: error.message };
+  }
 
   revalidatePath(revalidateTo);
   return { success: true };

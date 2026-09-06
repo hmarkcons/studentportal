@@ -49,6 +49,9 @@ export function QualificationRow({
       <Card className="mb-3">
         <form action={formAction} className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <input type="hidden" name="qualification_type" value={type} />
+          {/* Present only when editing an existing row — its absence is what
+              tells the action to add another entry of this type. */}
+          {data && <input type="hidden" name="qualification_id" value={data.id} />}
           <h4 className="col-span-full text-sm font-medium text-ink">{QUALIFICATION_TYPE_LABELS[type]}</h4>
           <label className="flex flex-col gap-1 text-xs text-muted">
             Qualification name
