@@ -32,7 +32,7 @@ export default async function StaffCommissionPage() {
   const { data: commissions } = await supabase
     .from("staff_commissions")
     .select(
-      "id, amount, currency, status, payment_method, registration_date, payment_proof_path, staff_id, student_id, shared_with_staff_id, staff:staff(full_name), student:leads(full_name, email, registered_at, registration_status), shared_with:staff!staff_commissions_shared_with_staff_id_fkey(full_name)"
+      "id, amount, currency, status, payment_method, registration_date, payment_proof_path, staff_id, student_id, shared_with_staff_id, staff:staff!staff_id(full_name), student:leads(full_name, email, registered_at, registration_status), shared_with:staff!staff_commissions_shared_with_staff_id_fkey(full_name)"
     )
     .order("registration_date", { ascending: false });
 

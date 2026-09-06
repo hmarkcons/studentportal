@@ -49,7 +49,7 @@ export default async function StudentsPage() {
   const { data: students, error } = await supabase
     .from("students")
     .select(
-      "id, full_name, email, contact_number, country_of_interest, registered_at, registration_status, portal_active, intake, assigned_counselor:staff(full_name)"
+      "id, full_name, email, contact_number, country_of_interest, registered_at, registration_status, portal_active, intake, assigned_counselor:staff!assigned_counselor_id(full_name)"
     )
     .order("registered_at", { ascending: false })
     .returns<StudentRow[]>();

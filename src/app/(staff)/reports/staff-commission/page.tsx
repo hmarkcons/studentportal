@@ -25,7 +25,7 @@ export default async function StaffCommissionReportPage() {
 
   const { data: commissions } = await supabase
     .from("staff_commissions")
-    .select("amount, status, currency, staff:staff(id, full_name)");
+    .select("amount, status, currency, staff:staff!staff_id(id, full_name)");
 
   const byStaff = new Map<string, Row>();
   (commissions ?? []).forEach((c) => {

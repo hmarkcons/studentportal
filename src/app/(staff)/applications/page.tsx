@@ -44,7 +44,7 @@ export default async function ApplicationsBoardPage() {
       `id, student_id, current_stage, deadline,
        university:universities(name, city, destination:destinations(display_name)),
        program:programs(name),
-       student:leads(full_name, registered_at, assigned_counselor:staff(full_name))`
+       student:leads(full_name, registered_at, assigned_counselor:staff!assigned_counselor_id(full_name))`
     )
     .returns<Row[]>();
 

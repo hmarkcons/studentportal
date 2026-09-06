@@ -15,7 +15,7 @@ export default async function PortalDashboardPage() {
 
   const { data: student } = await supabase
     .from("students")
-    .select("id, full_name, assigned_counselor:staff(full_name, designation, phone, whatsapp_number)")
+    .select("id, full_name, assigned_counselor:staff!assigned_counselor_id(full_name, designation, phone, whatsapp_number)")
     .eq("auth_user_id", userId ?? "")
     .maybeSingle();
 
