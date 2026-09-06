@@ -1,12 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { AcademicsSection } from "@/components/AcademicsSection";
-import { PhotoUpload } from "@/components/PhotoUpload";
 import { TestScoresSection } from "@/components/TestScoresSection";
 import { TravelHistorySection } from "@/components/TravelHistorySection";
 import { VisaRefusalHistorySection } from "@/components/VisaRefusalHistorySection";
 import { RegisteredStudentProfileForm } from "../RegisteredStudentProfileForm";
-import { uploadStudentPhoto } from "@/lib/actions/studentProfileExtras";
 
 export default async function StudentProfileTab(props: PageProps<"/students/[id]/profile">) {
   const { id } = await props.params;
@@ -27,20 +25,10 @@ export default async function StudentProfileTab(props: PageProps<"/students/[id]
 
   const revalidateTo = `/students/${id}/profile`;
 
-  let photoUrl: string | null = null;
-  if (profile?.photo_path) {
-    const { data } = await supabase.storage.from("documents").createSignedUrl(profile.photo_path, 3600);
-    photoUrl = data?.signedUrl ?? null;
-  }
-
   return (
     <div className="flex flex-col gap-6">
       <Card>
         <h3 className="mb-3 text-sm font-medium text-ink">Personal details</h3>
-
-        <div className="mb-4">
-          <PhotoUpload action={uploadStudentPhoto.bind(null, id, revalidateTo)} photoUrl={photoUrl} />
-        </div>
 
         {student && <RegisteredStudentProfileForm studentId={id} revalidateTo={revalidateTo} lead={student} profile={profile} />}
 

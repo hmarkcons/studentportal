@@ -53,7 +53,9 @@ export async function uploadStudentPhoto(studentId: string, revalidateTo: string
   const { error } = await supabase.from("student_profiles").upsert({ student_id: studentId, photo_path: path }, { onConflict: "student_id" });
   if (error) return { error: error.message };
 
-  revalidatePath(revalidateTo);
+  // "layout" so the header photo (shown on every tab under students/[id])
+  // updates immediately no matter which tab triggered the upload.
+  revalidatePath(revalidateTo, "layout");
   return { success: true };
 }
 

@@ -28,7 +28,7 @@ export function PhotoUpload({
         </div>
       )}
       <form action={formAction} className="flex flex-wrap items-center gap-2">
-        <input type="file" name="file" accept="image/*" className="max-w-full text-xs" />
+        <input type="file" name="file" accept="image/*" className="max-w-full rounded-md border border-border px-2 py-1 text-xs" />
         <Button type="submit" variant="outline" size="sm" pending={pending}>
           {photoUrl ? "Replace photo" : "Upload photo"}
         </Button>

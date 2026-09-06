@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getStaffSession } from "@/lib/auth/session";
 import { Badge } from "@/components/ui/Badge";
+import { PhotoUpload } from "@/components/PhotoUpload";
+import { uploadStudentPhoto } from "@/lib/actions/studentProfileExtras";
 import { StudentTabs } from "./StudentTabs";
 import { DeleteStudentButton } from "./DeleteStudentButton";
 import { InlineRegistrationStatusCell } from "../InlineRegistrationStatusCell";
@@ -11,7 +13,7 @@ export default async function StudentLayout({ children, params }: { children: Re
   const { supabase, staff: staffRow } = await getStaffSession();
   const canDeleteStudent = staffRow?.role === "super_admin" || staffRow?.role === "processing";
 
-  const [{ data: student, error }, { data: italyApp }] = await Promise.all([
+  const [{ data: student, error }, { data: italyApp }, { data: profile }] = await Promise.all([
     supabase
       .from("students")
       .select("id, full_name, email, contact_number, country_of_interest, portal_active, registration_status")
@@ -21,9 +23,16 @@ export default async function StudentLayout({ children, params }: { children: Re
       .from("applications")
       .select("id, university:universities(destination:destinations(country_code))")
       .eq("student_id", id),
+    supabase.from("student_profiles").select("photo_path").eq("student_id", id).maybeSingle(),
   ]);
 
   if (error || !student) notFound();
+
+  let photoUrl: string | null = null;
+  if (profile?.photo_path) {
+    const { data } = await supabase.storage.from("documents").createSignedUrl(profile.photo_path, 3600);
+    photoUrl = data?.signedUrl ?? null;
+  }
 
   const showScholarship = (italyApp ?? []).some((a) => {
     const uni = Array.isArray(a.university) ? a.university[0] : a.university;
@@ -36,12 +45,15 @@ export default async function StudentLayout({ children, params }: { children: Re
       <Link href="/students" className="text-sm text-muted hover:text-ink">
         &larr; Back to students
       </Link>
-      <div className="mt-2 mb-4 flex flex-wrap items-center justify-between gap-2">
-        <div className="min-w-0">
-          <h2 className="text-xl font-semibold text-ink">{student.full_name}</h2>
-          <p className="text-sm text-muted">
-            {student.email ?? "No email"} · {student.contact_number ?? "No phone"} · {student.country_of_interest ?? "—"}
-          </p>
+      <div className="mt-2 mb-4 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex min-w-0 flex-wrap items-center gap-4">
+          <PhotoUpload action={uploadStudentPhoto.bind(null, id, `/students/${id}`)} photoUrl={photoUrl} />
+          <div className="min-w-0">
+            <h2 className="text-xl font-semibold text-ink">{student.full_name}</h2>
+            <p className="text-sm text-muted">
+              {student.email ?? "No email"} · {student.contact_number ?? "No phone"} · {student.country_of_interest ?? "—"}
+            </p>
+          </div>
         </div>
         <div className="flex flex-col items-end gap-2">
           <div className="flex flex-wrap items-center justify-end gap-2">
