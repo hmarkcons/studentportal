@@ -24,12 +24,16 @@ export function QualificationRow({
   type,
   data,
   deletable = false,
+  onCancel,
 }: {
   studentId: string;
   revalidateTo: string;
   type: QualificationType;
   data: QualificationRowData;
   deletable?: boolean;
+  // Supplied for an unsaved draft row, so it can be dismissed without
+  // saving. An existing row cancels back to its read-only view instead.
+  onCancel?: () => void;
 }) {
   const [editing, setEditing] = useState(!data);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -81,8 +85,12 @@ export function QualificationRow({
             <Button type="submit" variant="primary" size="sm" pending={pending}>
               Save
             </Button>
-            {data && (
-              <button type="button" onClick={() => setEditing(false)} className="text-xs text-muted hover:underline">
+            {(data || onCancel) && (
+              <button
+                type="button"
+                onClick={() => (data ? setEditing(false) : onCancel?.())}
+                className="text-xs text-muted hover:underline"
+              >
                 Cancel
               </button>
             )}

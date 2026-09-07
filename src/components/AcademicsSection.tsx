@@ -66,7 +66,15 @@ export function AcademicsSection({
             deletable
           />
         ))}
-        <AddQualificationButton studentId={studentId} revalidateTo={revalidateTo} availableTypes={[...ADDITIONAL_QUALIFICATION_TYPES]} />
+        {existingAdditional.length === 0 && (
+          <p className="mb-3 text-xs text-muted">No additional qualifications yet.</p>
+        )}
+        <AddQualificationButton
+          studentId={studentId}
+          revalidateTo={revalidateTo}
+          availableTypes={[...ADDITIONAL_QUALIFICATION_TYPES]}
+          existingCount={existingAdditional.length}
+        />
       </div>
     </div>
   );
