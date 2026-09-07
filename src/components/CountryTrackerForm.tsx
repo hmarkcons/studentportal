@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useActionState } from "react";
 import { saveTrackerFields } from "@/lib/actions/countryTracker";
 import { CredentialField } from "@/components/CredentialField";
@@ -55,15 +55,14 @@ export function CountryTrackerForm({
   );
   const [state, formAction, pending] = useActionState(action, undefined);
 
-  const visibleFields = useMemo(
-    () =>
-      plainFields.filter((f) => {
-        if (!f.showWhen) return true;
-        const current = live[f.showWhen.key] ?? "";
-        return f.showWhen.equals === "*" ? current.trim().length > 0 : current === f.showWhen.equals;
-      }),
-    [plainFields, live]
-  );
+  // Not memoized: `plainFields` is rebuilt by a filter on every render, so it
+  // was never a stable dependency and the memo could not be preserved. This is
+  // one filter over a handful of field defs — cheaper than the bookkeeping.
+  const visibleFields = plainFields.filter((f) => {
+    if (!f.showWhen) return true;
+    const current = live[f.showWhen.key] ?? "";
+    return f.showWhen.equals === "*" ? current.trim().length > 0 : current === f.showWhen.equals;
+  });
 
   return (
     <div className="flex flex-col gap-6">
