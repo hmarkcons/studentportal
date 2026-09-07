@@ -36,7 +36,19 @@ const REQUIREMENT_CATEGORIES = [
   "other",
 ];
 
-function UploadRow({ doc, studentId, revalidateTo }: { doc: DocRow; studentId: string; revalidateTo: string }) {
+function UploadRow({
+  doc,
+  studentId,
+  revalidateTo,
+  number,
+}: {
+  doc: DocRow;
+  studentId: string;
+  revalidateTo: string;
+  /** Position within the whole checklist, e.g. "2.3" for the third document
+   *  of the second section. */
+  number?: string;
+}) {
   const action = uploadDocument.bind(null, doc.id, studentId, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
   const [reason, setReason] = useState("");
@@ -71,7 +83,10 @@ function UploadRow({ doc, studentId, revalidateTo }: { doc: DocRow; studentId: s
     // 767px — so switching at sm overflowed exactly where room is tightest.
     <div className="flex flex-col gap-2 py-3 lg:flex-row lg:items-center lg:justify-between">
       <div className="min-w-[180px] flex-1">
-        <p className="text-sm text-ink">{doc.name ?? doc.category ?? "Document"}</p>
+        <p className="text-sm text-ink">
+          {number && <span className="mr-1.5 font-mono text-xs text-muted">{number}</span>}
+          {doc.name ?? doc.category ?? "Document"}
+        </p>
         <div className="mt-1 flex items-center gap-2">
           <Badge tone={DOCUMENT_STATUS_TONE[doc.status] ?? "neutral"}>{doc.status.replace("_", " ")}</Badge>
           {doc.deadline && <span className="text-xs text-muted">Due {formatDateOnly(doc.deadline)}</span>}
@@ -180,32 +195,59 @@ export function DocumentChecklist({
   }
   const uncategorized = docs.filter((d) => !d.category || !(CATEGORY_ORDER as readonly string[]).includes(d.category));
 
+  // Build the sections that will actually render, in CATEGORY_ORDER, so the
+  // numbering below can run 1..n over them without gaps.
+  const visibleSections = CATEGORY_ORDER.flatMap((cat) => {
+    if (cat === "interview") {
+      return interviewSection ? [{ key: "interview", label: "Interview", docs: [] as DocRow[] }] : [];
+    }
+    const catDocs = cat === "other" ? [...(grouped.get("other") ?? []), ...uncategorized] : (grouped.get(cat) ?? []);
+    if (catDocs.length === 0) return [];
+    return [{ key: cat as string, label: CATEGORY_LABELS[cat] ?? cat, docs: catDocs }];
+  });
+
   return (
     <div>
       {docs.length === 0 && !interviewSection ? (
         <EmptyState>{emptyMessage}</EmptyState>
       ) : (
-        <div className="flex flex-col gap-6">
-          {CATEGORY_ORDER.map((cat) => {
-            if (cat === "interview") {
-              return interviewSection ? (
-                <div key="interview">
-                  <h4 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">Interview</h4>
-                  {interviewSection}
-                </div>
-              ) : null;
-            }
-            const catDocs = cat === "other" ? [...(grouped.get("other") ?? []), ...uncategorized] : (grouped.get(cat) ?? []);
-            if (catDocs.length === 0) return null;
+        // Sections are numbered by the order they actually appear, not by
+        // their position in CATEGORY_ORDER — a student with no attestation
+        // documents should read 1, 2, 3 rather than 1, 3, 4.
+        <div className="flex flex-col gap-5">
+          {visibleSections.map((section, i) => {
+            const n = i + 1;
             return (
-              <div key={cat}>
-                <h4 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">{CATEGORY_LABELS[cat] ?? cat}</h4>
-                <div className="flex flex-col divide-y divide-border">
-                  {catDocs.map((doc) => (
-                    <UploadRow key={doc.id} doc={doc} studentId={studentId} revalidateTo={revalidateTo} />
-                  ))}
+              <section key={section.key} className="overflow-hidden rounded-lg border border-border">
+                <header className="flex items-baseline gap-2 border-b border-border bg-bg px-4 py-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-ink">
+                    {n}
+                  </span>
+                  <h3 className="text-base font-semibold text-ink">{section.label}</h3>
+                  {section.docs.length > 0 && (
+                    <span className="ml-auto shrink-0 text-xs text-muted">
+                      {section.docs.filter((d) => d.status === "verified").length}/{section.docs.length} verified
+                    </span>
+                  )}
+                </header>
+                <div className="px-4">
+                  {section.key === "interview" ? (
+                    <div className="py-3">{interviewSection}</div>
+                  ) : (
+                    <div className="flex flex-col divide-y divide-border">
+                      {section.docs.map((doc, j) => (
+                        <UploadRow
+                          key={doc.id}
+                          doc={doc}
+                          studentId={studentId}
+                          revalidateTo={revalidateTo}
+                          number={`${n}.${j + 1}`}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
+              </section>
             );
           })}
         </div>
