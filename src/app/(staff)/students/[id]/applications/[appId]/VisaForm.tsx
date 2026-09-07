@@ -55,6 +55,7 @@ export function VisaForm({
         <Input name="outcome_reason" defaultValue={visa?.outcome_reason ?? ""} />
       </div>
       {state?.error && <p className="col-span-2 text-xs text-danger">{state.error}</p>}
+      {state?.success && <p className="col-span-2 text-xs text-success">Saved.</p>}
       <Button type="submit" variant="primary" pending={pending} className="col-span-2 justify-self-start">
         Save visa record
       </Button>

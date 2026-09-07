@@ -210,6 +210,7 @@ export function RegisteredStudentProfileForm({
       </div>
 
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
+      {state?.success && <p className="text-xs text-success">Saved.</p>}
       <Button type="submit" variant="primary" pending={pending} className="justify-self-start">
         Save
       </Button>

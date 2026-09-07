@@ -57,6 +57,7 @@ export function RefundEligibilityForm({
         Save
       </Button>
       {state?.error && <span className="text-danger">{state.error}</span>}
+      {state?.success && <span className="text-success">Saved.</span>}
     </form>
   );
 }

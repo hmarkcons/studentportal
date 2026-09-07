@@ -134,6 +134,7 @@ export function CountryTrackerForm({
         })}
         <div className="col-span-full">
           {state?.error && <p className="mb-2 text-xs text-danger">{state.error}</p>}
+          {state?.success && <p className="mb-2 text-xs text-success">Saved.</p>}
           <Button type="submit" variant="primary" pending={pending}>
             Save tracker fields
           </Button>

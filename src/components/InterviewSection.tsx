@@ -96,6 +96,7 @@ export function InterviewSection({
         Save
       </Button>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
+      {state?.success && <p className="text-xs text-success">Saved.</p>}
     </form>
   );
 }
