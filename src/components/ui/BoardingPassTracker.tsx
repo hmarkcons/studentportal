@@ -39,9 +39,14 @@ export function BoardingPassTracker({
         {isManual ? (
           <Badge tone="danger">{label(currentStage)}</Badge>
         ) : (
-          <div className="flex items-center gap-1 overflow-x-auto pb-1">
+          // Wraps onto extra rows rather than scrolling: a scroller cut the
+          // last stage by a few pixels at some widths, too small to read as
+          // scrollable, so the stage just looked truncated. Grid rather than
+          // flex-wrap so every row keeps the same column width — wrapped flex
+          // items stretch, leaving a short last row of oversized stages.
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(72px,1fr))] gap-x-1 gap-y-3 pb-1">
             {pipelineStages.map((stage, i) => (
-              <div key={stage} className="flex flex-1 flex-col items-center gap-1">
+              <div key={stage} className="flex flex-col items-center gap-1">
                 <div
                   className={`h-1.5 w-full rounded-full ${i <= currentIndex ? "bg-primary" : "bg-border"}`}
                 />

@@ -106,13 +106,16 @@ export function DestinationPipelineCard({
       </div>
 
       <div className="relative border-t border-dashed border-border px-5 py-4">
-        <div className="flex items-center gap-1 overflow-x-auto pb-1">
+        {/* Wraps rather than scrolls — see BoardingPassTracker: a few pixels
+            of overhang read as a truncated label, not as a scrollable row.
+            Grid keeps the column width equal on every row. */}
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(72px,1fr))] gap-x-1 gap-y-3 pb-1">
           {stages.map((stage, i) => {
             const value = values[stage.key];
             const negative = isNegativeValue(value);
             const filled = i < idx || (i === idx && Boolean(value));
             return (
-              <div key={stage.key} className="flex min-w-[72px] flex-1 flex-col items-center gap-1">
+              <div key={stage.key} className="flex flex-col items-center gap-1">
                 <span className={`text-center text-[10px] leading-tight ${i === idx ? "font-medium text-ink" : "text-muted"}`}>
                   {stage.label}
                 </span>
