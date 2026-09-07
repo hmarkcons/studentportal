@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SubmitSignedAgreementForm } from "./SubmitSignedAgreementForm";
+import { evaluateAgreementGate } from "@/lib/portalGate";
 
 export default async function PortalAgreementPage() {
   const supabase = await createClient();
@@ -29,9 +30,35 @@ export default async function PortalAgreementPage() {
       })
   );
 
+  // While this is outstanding the proxy holds the student here, so say plainly
+  // why the rest of the portal is unavailable and what unlocks it.
+  const gate = evaluateAgreementGate(agreements ?? []);
+
   return (
     <div className="mx-auto max-w-2xl">
       <h2 className="mb-4 text-lg font-semibold text-ink">Agreement Repository</h2>
+
+      {gate.locked && (
+        <Card className="mb-4 bg-warning-bg">
+          <h3 className="mb-1 text-sm font-semibold text-warning">Two things to do before your portal opens</h3>
+          <p className="mb-2 text-sm text-warning">
+            Because you are signing outside Karachi, we need your e-signed agreement and a short video of you confirming
+            you signed it. Until both are here, the rest of your portal stays locked.
+          </p>
+          <ol className="mb-2 flex list-inside list-decimal flex-col gap-1 text-sm text-warning">
+            <li className={gate.needsVideo ? "" : "line-through opacity-70"}>
+              Record the short consent video below {gate.needsVideo ? "" : "— done"}
+            </li>
+            <li className={gate.needsDocument ? "" : "line-through opacity-70"}>
+              Attach your signed agreement {gate.needsDocument ? "" : "— done"}
+            </li>
+          </ol>
+          <p className="text-xs text-warning">
+            Submit both together using the form below. Everything unlocks as soon as they are received — you do not have to
+            wait for us to review them. Stuck? Open a Support ticket and your counselor will help.
+          </p>
+        </Card>
+      )}
       <div className="flex flex-col gap-3">
         {(agreements ?? []).map((a) => (
           <Card key={a.id}>

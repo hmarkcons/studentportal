@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { evaluateAgreementGate, isGateAllowedPath } from "@/lib/portalGate";
 
 export async function proxy(request: NextRequest) {
   // Cron endpoints authenticate themselves with the CRON_SECRET bearer token
@@ -51,6 +52,26 @@ export async function proxy(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);
+  }
+
+  // Hold an e-signature student on the agreement page until they have attached
+  // the signed document and the consent video. Enforced here rather than in
+  // the layout because a layout cannot see the pathname, and redirecting from
+  // one that also wraps /portal/agreement would loop.
+  if (user && request.nextUrl.pathname.startsWith("/portal") && !isGateAllowedPath(request.nextUrl.pathname)) {
+    const { data: lead } = await supabase.from("leads").select("id").eq("auth_user_id", user.id).maybeSingle();
+    if (lead) {
+      const { data: agreements } = await supabase
+        .from("agreements")
+        .select("status, signing_method, signed_file_path, video_recording_path")
+        .eq("student_id", lead.id);
+      if (evaluateAgreementGate(agreements ?? []).locked) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/portal/agreement";
+        url.search = "";
+        return NextResponse.redirect(url);
+      }
+    }
   }
 
   return response;
