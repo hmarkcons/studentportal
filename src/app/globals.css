@@ -89,8 +89,15 @@ body {
   color: var(--ink);
 }
 
-* {
-  border-color: var(--border);
+/* Default border colour, in @layer base so Tailwind's border-* colour
+   utilities (which live in the later utilities layer) can override it.
+   Unlayered, this rule outranked every one of them regardless of
+   specificity, so border-primary / border-transparent silently rendered
+   in this grey. */
+@layer base {
+  * {
+    border-color: var(--border);
+  }
 }
 
 /* Agreement builder rich-text editor content (TipTap output) */
