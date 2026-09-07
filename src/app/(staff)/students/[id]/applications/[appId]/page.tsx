@@ -55,7 +55,10 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
       .from("student_documents")
       .select("id, category, custom_name, status, file_path, deadline, rejected_reason, application_id, template:document_templates(name)")
       .eq("student_id", id)
-      .or(`application_id.eq.${appId},application_id.is.null`)
+      // Only requirements added for THIS application. The standard checklist is
+      // student-level and identical for every university, so pulling it in here
+      // repeated the same documents on every university's application page.
+      .eq("application_id", appId)
       .returns<(DocRow & { custom_name: string | null; application_id: string | null; template: { name: string } | { name: string }[] | null })[]>(),
     supabase
       .from("application_interviews")

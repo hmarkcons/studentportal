@@ -100,6 +100,16 @@ export const DOCUMENT_STATUS_TONE: Record<string, "success" | "warning" | "dange
   rejected: "danger",
 };
 
+// "verified" is the stored value; staff and students read it as Approved,
+// which is the word used on the Accept button that sets it.
+export const DOCUMENT_STATUS_LABELS: Record<string, string> = {
+  missing: "Missing",
+  submitted: "Submitted",
+  under_review: "Under review",
+  verified: "Approved",
+  rejected: "Rejected",
+};
+
 export const MANUAL_APPLICATION_STATUSES = ["rejected", "declined", "withdrawn"] as const;
 
 export const STAFF_DESIGNATIONS = [

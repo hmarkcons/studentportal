@@ -31,7 +31,9 @@ export default async function StudentDocumentsTab(props: PageProps<"/students/[i
     (rawDocs ?? []).map(async (d) => {
       const templateName = one(d.template as never) as { name?: string } | null;
       const uni = d.application_id ? appLabel.get(d.application_id) : null;
-      const name = `${d.custom_name ?? templateName?.name ?? d.category ?? "Document"}${uni?.name ? ` — ${uni.name}` : " — Student-level"}`;
+      // Only application-specific extras carry a university suffix; the standard
+      // checklist is student-level and needs no label of its own.
+      const name = `${d.custom_name ?? templateName?.name ?? d.category ?? "Document"}${uni?.name ? ` — ${uni.name}` : ""}`;
       if (!d.file_path) return { ...d, name };
       const { data } = await supabase.storage.from("documents").createSignedUrl(d.file_path, 3600);
       return { ...d, name, fileUrl: data?.signedUrl ?? null };
