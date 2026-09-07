@@ -60,6 +60,20 @@ export function NewTrackerFieldForm({ countryCode }: { countryCode: string }) {
           <Input name="date_when_status" placeholder="e.g. Booked" />
         </label>
       )}
+      {/* Drives the registered student's Visa tab, which has no data of its
+          own — everything it shows is opted in from here. */}
+      <label className="col-span-full flex items-center gap-2 text-xs text-ink">
+        <input type="checkbox" name="show_on_student_visa" />
+        Show this field on the student&rsquo;s Visa tab
+      </label>
+      <label className="flex flex-col gap-1 text-xs text-muted">
+        Visa role
+        <Select name="visa_role" defaultValue="">
+          <option value="">Not a visa decision field</option>
+          <option value="outcome">Visa outcome (drives the approval / refusal message)</option>
+          <option value="outcome_reason">Reason for the outcome</option>
+        </Select>
+      </label>
       <label className="flex flex-col gap-1 text-xs text-muted">
         Only show when field key…
         <Input name="show_if_key" placeholder="e.g. finalized_university" />
@@ -157,6 +171,20 @@ export function TrackerFieldRow({ field }: { field: TrackerFieldDef }) {
           <Input name="date_when_status" defaultValue={field.dateWhenStatus ?? ""} />
         </label>
       )}
+      {/* Drives the registered student's Visa tab, which has no data of its
+          own — everything it shows is opted in from here. */}
+      <label className="col-span-full flex items-center gap-2 text-xs text-ink">
+        <input type="checkbox" name="show_on_student_visa" defaultChecked={field.showOnStudentVisa ?? false} />
+        Show this field on the student&rsquo;s Visa tab
+      </label>
+      <label className="flex flex-col gap-1 text-xs text-muted">
+        Visa role
+        <Select name="visa_role" defaultValue={field.visaRole ?? ""}>
+          <option value="">Not a visa decision field</option>
+          <option value="outcome">Visa outcome (drives the approval / refusal message)</option>
+          <option value="outcome_reason">Reason for the outcome</option>
+        </Select>
+      </label>
       <label className="flex flex-col gap-1 text-xs text-muted">
         Only show when field key…
         <Input name="show_if_key" defaultValue={field.showWhen?.key ?? ""} />

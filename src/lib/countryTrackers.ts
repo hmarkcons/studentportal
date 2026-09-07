@@ -42,5 +42,10 @@ export type TrackerFieldDef = {
   // For type: 'multi_university_status' — which status value reveals a
   // per-row date input (e.g. "Booked" for a credibility interview).
   dateWhenStatus?: string;
+  /** Mirrored to the registered student on their Visa tab, read-only. */
+  showOnStudentVisa?: boolean;
+  /** Marks the field carrying the visa decision, or the reason for it — used
+   *  to decide whether the student sees an approval or refusal message. */
+  visaRole?: "outcome" | "outcome_reason" | null;
   sortOrder?: number;
 };

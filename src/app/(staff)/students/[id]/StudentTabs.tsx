@@ -11,7 +11,8 @@ export function StudentTabs({ studentId, showScholarship }: { studentId: string;
     { label: "Profile", href: `/students/${studentId}/profile` },
     { label: "Applications", href: `/students/${studentId}/applications` },
     { label: "Documents", href: `/students/${studentId}/documents` },
-    { label: "Visa", href: `/students/${studentId}/visa` },
+    // Visa lives on the student's own portal now and is sourced entirely from
+    // the documentation tracker, which is where staff maintain it.
     ...(showScholarship ? [{ label: "Scholarship", href: `/students/${studentId}/scholarship` }] : []),
     { label: "Communication", href: `/students/${studentId}/communication` },
   ];

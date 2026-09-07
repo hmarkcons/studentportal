@@ -87,6 +87,7 @@ export const STUDENT_NAV: NavItem[] = [
   { label: "Dashboard", href: "/portal", icon: "🏠" },
   { label: "Profile", href: "/portal/profile", icon: "👤" },
   { label: "Documents", href: "/portal/documents", icon: "📁" },
+  { label: "Visa", href: "/portal/visa", icon: "🛂" },
   { label: "Appointments", href: "/portal/appointments", icon: "📅" },
   { label: "Payments", href: "/portal/payments", icon: "💳" },
   { label: "Agreement", href: "/portal/agreement", icon: "📄" },

@@ -13,6 +13,8 @@ type TrackerDefinitionRow = {
   field_type: TrackerFieldType;
   options: string[] | null;
   credential_type: string | null;
+  show_on_student_visa?: boolean | null;
+  visa_role?: string | null;
   show_if_key: string | null;
   show_if_equals: string | null;
   date_when_status: string | null;
@@ -29,6 +31,8 @@ function rowToFieldDef(r: TrackerDefinitionRow): TrackerFieldDef {
     credentialType: r.credential_type ?? undefined,
     showWhen: r.show_if_key ? { key: r.show_if_key, equals: r.show_if_equals ?? "" } : undefined,
     dateWhenStatus: r.date_when_status ?? undefined,
+    showOnStudentVisa: r.show_on_student_visa ?? false,
+    visaRole: (r.visa_role ?? null) as "outcome" | "outcome_reason" | null,
     sortOrder: r.sort_order,
   };
 }
@@ -38,7 +42,7 @@ export async function listTrackerDefinitions(countryCodes: string[]): Promise<Re
   const supabase = await createClient();
   const { data } = await supabase
     .from("tracker_definitions")
-    .select("id, country_code, field_key, label, field_type, options, credential_type, show_if_key, show_if_equals, date_when_status, sort_order")
+    .select("id, country_code, field_key, label, field_type, options, credential_type, show_if_key, show_if_equals, date_when_status, show_on_student_visa, visa_role, sort_order")
     .in("country_code", countryCodes)
     .order("sort_order", { ascending: true })
     .returns<TrackerDefinitionRow[]>();
@@ -70,6 +74,9 @@ export async function createTrackerField(_prevState: unknown, formData: FormData
   const show_if_key = String(formData.get("show_if_key") ?? "").trim() || null;
   const show_if_equals = String(formData.get("show_if_equals") ?? "").trim() || null;
   const date_when_status = String(formData.get("date_when_status") ?? "").trim() || null;
+  const show_on_student_visa = formData.get("show_on_student_visa") === "on";
+  const visaRoleRaw = String(formData.get("visa_role") ?? "").trim();
+  const visa_role = visaRoleRaw === "outcome" || visaRoleRaw === "outcome_reason" ? visaRoleRaw : null;
   const sort_order = Number(formData.get("sort_order") ?? 0);
 
   if (!country_code || !field_key || !label || !field_type) {
@@ -96,6 +103,8 @@ export async function createTrackerField(_prevState: unknown, formData: FormData
     show_if_key,
     show_if_equals,
     date_when_status,
+    show_on_student_visa,
+    visa_role,
     sort_order,
   });
 
@@ -116,6 +125,9 @@ export async function updateTrackerField(id: string, _prevState: unknown, formDa
   const show_if_key = String(formData.get("show_if_key") ?? "").trim() || null;
   const show_if_equals = String(formData.get("show_if_equals") ?? "").trim() || null;
   const date_when_status = String(formData.get("date_when_status") ?? "").trim() || null;
+  const show_on_student_visa = formData.get("show_on_student_visa") === "on";
+  const visaRoleRaw = String(formData.get("visa_role") ?? "").trim();
+  const visa_role = visaRoleRaw === "outcome" || visaRoleRaw === "outcome_reason" ? visaRoleRaw : null;
   const sort_order = Number(formData.get("sort_order") ?? 0);
 
   if (!label || !field_type) return { error: "Label and type are required." };
@@ -129,7 +141,7 @@ export async function updateTrackerField(id: string, _prevState: unknown, formDa
 
   const { error } = await supabase
     .from("tracker_definitions")
-    .update({ label, field_type, options, credential_type, show_if_key, show_if_equals, date_when_status, sort_order })
+    .update({ label, field_type, options, credential_type, show_if_key, show_if_equals, date_when_status, show_on_student_visa, visa_role, sort_order })
     .eq("id", id);
 
   if (error) return { error: error.message };
