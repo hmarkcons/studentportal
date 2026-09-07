@@ -11,6 +11,8 @@ export type InvoiceBankSettings = {
   branch: string | null;
   swift_code: string | null;
   payment_note: string | null;
+  /** Currency the account itself is held in — drives the conversion note. */
+  account_currency: string | null;
 };
 
 /** Read the singleton bank block. Any active staff member may read it — it is
@@ -20,13 +22,13 @@ export async function getInvoiceBankSettings(): Promise<InvoiceBankSettings | nu
   const supabase = await createClient();
   const { data } = await supabase
     .from("invoice_settings")
-    .select("bank_name, account_title, account_number, iban, branch, swift_code, payment_note")
+    .select("bank_name, account_title, account_number, iban, branch, swift_code, payment_note, account_currency")
     .eq("id", true)
     .maybeSingle();
   return data ?? null;
 }
 
-const FIELDS = ["bank_name", "account_title", "account_number", "iban", "branch", "swift_code", "payment_note"] as const;
+const FIELDS = ["bank_name", "account_title", "account_number", "iban", "branch", "swift_code", "payment_note", "account_currency"] as const;
 
 export async function updateInvoiceBankSettings(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();

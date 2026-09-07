@@ -138,3 +138,19 @@ export const PAYMENT_STATUS_LABELS: Record<PaymentProgress["status"] | "withdraw
   payment_pending: "Payment pending",
   withdrawn: "Withdrawn",
 };
+
+/**
+ * The conversion note shown when an invoice is denominated in one currency but
+ * HMARK's account is held in another (EU destinations bill in EUR while the
+ * account is PKR). Returns null when they match, so a same-currency invoice
+ * never carries an irrelevant line.
+ *
+ * Lives here so the PDF, the email and the on-screen preview all print the
+ * same sentence.
+ */
+export function conversionNote(invoiceCurrency: string, accountCurrency: string | null | undefined): string | null {
+  const acct = (accountCurrency ?? "").trim().toUpperCase();
+  const inv = (invoiceCurrency ?? "").trim().toUpperCase();
+  if (!acct || !inv || acct === inv) return null;
+  return `Invoiced in ${inv} but payable into a ${acct} account: the ${acct} amount depends on the exchange rate on the transfer date. Please confirm the exact figure with our accounts team before paying.`;
+}

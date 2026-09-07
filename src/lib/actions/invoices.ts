@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { formatDateOnly } from "@/lib/formatDate";
 import { requirePermission } from "@/lib/auth/permissions";
-import { computeInvoiceMath, splitIntoInstallments, SRB_TAX_RATE } from "@/lib/invoiceMath";
+import { computeInvoiceMath, splitIntoInstallments, SRB_TAX_RATE, conversionNote } from "@/lib/invoiceMath";
 import { getInvoiceBankSettings } from "@/lib/actions/invoiceSettings";
 import { buildInvoiceEmail } from "@/lib/invoiceEmail";
 import { sendEmail } from "@/lib/email";
@@ -15,7 +15,11 @@ function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
 }
 
-const CURRENCY_SYMBOLS: Record<string, string> = { PKR: "₨", USD: "$", EUR: "€" };
+// PDF-safe currency prefixes. The base PDF fonts cover WinAnsi, which has €
+// and $ but NOT ₨ (U+20A8) — using it printed a stray glyph instead of a
+// currency on every PKR invoice, i.e. the whole private-university track.
+// The ISO code is unambiguous and always renders.
+const CURRENCY_SYMBOLS: Record<string, string> = { PKR: "PKR ", USD: "$", EUR: "€" };
 
 // Date.setMonth() overflows past month-end for short target months (e.g. 31
 // Jan + 1 month rolls over to 3 March, not the intended end of February) —
@@ -289,6 +293,7 @@ export async function sendInvoiceToStudent(
     amountPaid,
     balanceDue,
     receiptUrl: `${getSiteUrl()}/receipt/${token}`,
+    conversionNote: conversionNote(invoice.currency, bankRow?.account_currency),
     bank: bankRow
       ? {
           bankName: bankRow.bank_name,
@@ -418,7 +423,7 @@ export async function buildAndStoreInvoicePdf(
   // would print "bank details not configured" on every cron-generated copy.
   const { data: bankRow } = await supabase
     .from("invoice_settings")
-    .select("bank_name, account_title, account_number, iban, branch, swift_code, payment_note")
+    .select("bank_name, account_title, account_number, iban, branch, swift_code, payment_note, account_currency")
     .eq("id", true)
     .maybeSingle();
   const bank = bankRow
@@ -468,6 +473,7 @@ export async function buildAndStoreInvoicePdf(
       balanceDue,
       signatoryName: template?.signatory_name ?? null,
       bank,
+      conversionNote: conversionNote(invoice.currency, bankRow?.account_currency),
     },
   });
 

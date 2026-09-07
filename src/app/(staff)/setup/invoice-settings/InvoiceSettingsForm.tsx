@@ -11,7 +11,8 @@ const FIELDS: { name: keyof InvoiceBankSettings; label: string; placeholder: str
   { name: "branch", label: "Branch", placeholder: "e.g. Shahrah-e-Faisal" },
   { name: "account_number", label: "Account number", placeholder: "e.g. 0123456789" },
   { name: "iban", label: "IBAN", placeholder: "PK.. .... .... .... ....", wide: true },
-  { name: "swift_code", label: "SWIFT / BIC", placeholder: "e.g. MEZNPKKA" },
+  { name: "swift_code", label: "SWIFT / BIC", placeholder: "e.g. HABBPKKA" },
+  { name: "account_currency", label: "Account currency", placeholder: "e.g. PKR" },
   { name: "payment_note", label: "Note shown under the bank block", placeholder: "e.g. Email proof of payment to accounts@…", wide: true },
 ];
 

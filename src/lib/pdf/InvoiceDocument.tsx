@@ -57,14 +57,15 @@ const styles = StyleSheet.create({
   balanceLabel: { fontFamily: "Helvetica-Bold", fontSize: 11 },
   balanceNum: { fontFamily: "Courier-Bold", fontSize: 13, color: GREEN },
 
-  foot: { flexDirection: "row", marginTop: 26, justifyContent: "space-between" },
+  foot: { flexDirection: "row", marginTop: 16, justifyContent: "space-between" },
   payInstr: { fontSize: 8, color: INK_SOFT, lineHeight: 1.8, maxWidth: 260 },
   payCode: { fontFamily: "Courier", fontSize: 8, color: INK },
   signBlock: { alignItems: "flex-end" },
   signName: { fontFamily: "Times-Bold", fontSize: 11 },
   signLine: { borderTopWidth: 1, borderTopColor: INK_FAINT, paddingTop: 4, marginTop: 30, fontSize: 7.5, color: INK_FAINT },
 
-  legal: { marginTop: 22, paddingTop: 10, borderTopWidth: 1, borderTopColor: RULE, fontSize: 7.5, color: INK_FAINT, lineHeight: 1.6, textAlign: "center" },
+  currencyNote: { marginTop: 10, paddingTop: 6, borderTopWidth: 1, borderTopColor: RULE, fontSize: 7.5, color: INK_SOFT, lineHeight: 1.5 },
+  legal: { marginTop: 10, paddingTop: 7, borderTopWidth: 1, borderTopColor: RULE, fontSize: 7.5, color: INK_FAINT, lineHeight: 1.6, textAlign: "center" },
   legalItalic: { fontFamily: "Helvetica-Oblique", marginTop: 3 },
 });
 
@@ -108,6 +109,8 @@ export type InvoicePdfData = {
     swiftCode: string | null;
     paymentNote: string | null;
   } | null;
+  /** Set when the invoice currency differs from the account currency. */
+  conversionNote: string | null;
 };
 
 function money(symbol: string, n: number) {
@@ -269,6 +272,14 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
             </View>
           )}
         </View>
+
+        {/* Full width: inside the narrow payment-instructions column this ran
+            past the page edge and was cut off mid-sentence. */}
+        {data.conversionNote && (
+          <View style={styles.currencyNote}>
+            <Text>{data.conversionNote}</Text>
+          </View>
+        )}
 
         <View style={styles.legal}>
           <Text>Instalments unpaid past their due date may delay document submission on the student&apos;s application. For queries, contact accounts@hmarkconsultants.com.</Text>

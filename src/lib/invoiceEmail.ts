@@ -16,6 +16,8 @@ export type InvoiceEmailData = {
   amountPaid: number;
   balanceDue: number;
   receiptUrl: string;
+  /** Set when the invoice currency differs from the account currency. */
+  conversionNote?: string | null;
   bank: {
     bankName: string | null;
     accountTitle: string | null;
@@ -93,6 +95,7 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
           data.bank.swiftCode ? `  SWIFT: ${data.bank.swiftCode}` : "",
           `  Payment reference: ${data.invoiceNumber}`,
           data.bank.paymentNote ? `  ${data.bank.paymentNote}` : "",
+          data.conversionNote ? `  ${data.conversionNote}` : "",
         ]
       : []),
     ``,
@@ -139,6 +142,7 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
            ${data.bank.swiftCode ? `SWIFT ${esc(data.bank.swiftCode)}<br>` : ""}
            Payment reference <strong>${esc(data.invoiceNumber)}</strong>
            ${data.bank.paymentNote ? `<br><span style="color:${SOFT}">${esc(data.bank.paymentNote)}</span>` : ""}
+           ${data.conversionNote ? `<br><br><span style="color:${SOFT}">${esc(data.conversionNote)}</span>` : ""}
          </td></tr>
        </table>`
     : "";
