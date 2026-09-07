@@ -24,6 +24,7 @@ import { listCredentialTypesAction } from "@/lib/actions/countryTracker";
 import { RegistrationEditForm } from "./RegistrationEditForm";
 import { getCachedDestinations, getCachedCounselors, getCachedAgreementTemplates, getCachedFeeProducts } from "@/lib/cachedQueries";
 import { getEffectivePermissions } from "@/lib/auth/permissions";
+import { CollapsibleCard } from "@/components/CollapsibleCard";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -459,7 +460,19 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         const values: Record<string, string> = {};
         (extras ?? []).forEach((e) => (values[e.field_key] = e.field_value ?? ""));
 
-        const universityOptions = (appsByCountry.get(entry.countryCode) ?? []).map((a) => ({ value: a.id, label: a.name }));
+        // One entry per university, not per application: a student with two
+        // programmes at the same university produced the same university twice
+        // in this picker. Keyed by name, and when an application id for that
+        // university is already stored in this tracker we keep that exact id so
+        // an existing saved answer does not silently lose its selection.
+        const savedIds = new Set(Object.values(values));
+        const byUniversity = new Map<string, { value: string; label: string }>();
+        for (const a of appsByCountry.get(entry.countryCode) ?? []) {
+          const existing = byUniversity.get(a.name);
+          if (!existing) byUniversity.set(a.name, { value: a.id, label: a.name });
+          else if (savedIds.has(a.id)) byUniversity.set(a.name, { value: a.id, label: a.name });
+        }
+        const universityOptions = Array.from(byUniversity.values());
         const regionByUniversityValue: Record<string, string> = {};
 
         if (needsScholarshipBodies) {
@@ -504,8 +517,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         </>
       )}
 
-      <Card>
-        <h3 className="mb-3 text-sm font-medium text-ink">Registration & Portal Access</h3>
+      <CollapsibleCard id="registration-portal-access" title="Registration & Portal Access">
         <div className="mb-4">
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Registration</p>
           <RegistrationEditForm
@@ -532,7 +544,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
             isSuperAdmin={isSuperAdminRole}
           />
         </div>
-      </Card>
+      </CollapsibleCard>
 
       <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
         <Card>
@@ -564,8 +576,28 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         </Card>
       </div>
 
-      <Card className="mt-6">
-        <h3 className="mb-3 text-sm font-medium text-ink">Agreement</h3>
+      {trackerSections.length > 0 && (
+        <Card className="mt-6">
+          <h3 className="mb-3 text-sm font-medium text-ink">Documentation tracker</h3>
+          <div className="flex flex-col gap-6">
+            {trackerSections.map(({ entry, values, fields, universityOptions, regionByUniversityValue }) => (
+              <div key={entry.countryCode}>
+                <p className="mb-2 text-xs font-medium text-muted">{entry.displayName}</p>
+                <CountryTrackerForm
+                  applicationId={entry.id}
+                  fields={fields}
+                  values={values}
+                  revalidateTo={`/students/${id}`}
+                  universityOptions={universityOptions}
+                  regionByUniversityValue={regionByUniversityValue}
+                />
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      <CollapsibleCard id="agreement" title="Agreement" className="mt-6">
         {canModifyAgreement && (
           <GenerateAgreementForm
             studentId={id}
@@ -654,11 +686,10 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
             )}
           </div>
         )}
-      </Card>
+      </CollapsibleCard>
 
       {signedAgreement && (
-        <Card className="mt-6">
-          <h3 className="mb-3 text-sm font-medium text-ink">Invoice</h3>
+        <CollapsibleCard id="invoice" title="Invoice" className="mt-6">
           {canManageInvoice && (
             <GenerateInvoiceForm
               studentId={id}
@@ -685,34 +716,13 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
               />
             ))}
           </div>
-        </Card>
+        </CollapsibleCard>
       )}
 
-      {trackerSections.length > 0 && (
-        <Card className="mt-6">
-          <h3 className="mb-3 text-sm font-medium text-ink">Documentation tracker</h3>
-          <div className="flex flex-col gap-6">
-            {trackerSections.map(({ entry, values, fields, universityOptions, regionByUniversityValue }) => (
-              <div key={entry.countryCode}>
-                <p className="mb-2 text-xs font-medium text-muted">{entry.displayName}</p>
-                <CountryTrackerForm
-                  applicationId={entry.id}
-                  fields={fields}
-                  values={values}
-                  revalidateTo={`/students/${id}`}
-                  universityOptions={universityOptions}
-                  regionByUniversityValue={regionByUniversityValue}
-                />
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
 
-      <Card className="mt-6">
-        <h3 className="mb-3 text-sm font-medium text-ink">Portal credentials</h3>
+      <CollapsibleCard id="portal-credentials" title="Portal credentials" className="mt-6">
         <PortalCredentialsSection studentId={id} existingTypes={existingCredentialTypes} />
-      </Card>
+      </CollapsibleCard>
 
       <Card className="mt-6">
         <h3 className="mb-3 text-sm font-medium text-ink">Assigned Counselor & Processing Officer</h3>
