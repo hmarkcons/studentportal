@@ -16,7 +16,7 @@ export default async function PortalAgreementPage() {
 
   const { data: agreements } = await supabase
     .from("agreements")
-    .select("id, status, version, signed_file_path, video_recording_path, signing_method, created_at")
+    .select("id, status, version, signed_file_path, video_recording_path, signing_method, created_at, document_status, video_status, document_review_note, video_review_note")
     .eq("student_id", student.id)
     .order("created_at", { ascending: false });
 
@@ -87,7 +87,30 @@ export default async function PortalAgreementPage() {
                   Submitted — waiting for your counselor to verify the video and agreement.
                 </p>
               ) : (
-                <SubmitSignedAgreementForm agreementId={a.id} studentId={student.id} />
+                <>
+                  {/* Say what was wrong before showing the form again — being
+                      asked to redo something with no reason is the most
+                      frustrating version of this. */}
+                  {(a.document_status === "rejected" || a.video_status === "rejected") && (
+                    <div className="mt-3 rounded-md bg-warning-bg p-3">
+                      <p className="mb-1 text-sm font-medium text-warning">Your counselor has asked you to redo this</p>
+                      {a.video_status === "rejected" && (
+                        <p className="text-sm text-warning">
+                          <strong>Video:</strong> {a.video_review_note ?? "please record it again."}
+                        </p>
+                      )}
+                      {a.document_status === "rejected" && (
+                        <p className="text-sm text-warning">
+                          <strong>Signed agreement:</strong> {a.document_review_note ?? "please upload it again."}
+                        </p>
+                      )}
+                      <p className="mt-1 text-xs text-warning">
+                        What you sent before is still on file — just submit a replacement below.
+                      </p>
+                    </div>
+                  )}
+                  <SubmitSignedAgreementForm agreementId={a.id} studentId={student.id} />
+                </>
               )
             )}
           </Card>

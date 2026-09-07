@@ -90,7 +90,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       supabase
         .from("agreements")
         .select(
-          "id, status, version, signing_method, signed_file_path, video_recording_path, pdf_path, email_verified, discount_amount, created_at, template_id, admin_charge_override, consultancy_fee_override, installment_count, template:agreement_templates(file_path, destination_id, destination:destinations(country, track))"
+          "id, status, version, signing_method, signed_file_path, video_recording_path, pdf_path, email_verified, document_status, video_status, document_review_note, video_review_note, discount_amount, created_at, template_id, admin_charge_override, consultancy_fee_override, installment_count, template:agreement_templates(file_path, destination_id, destination:destinations(country, track))"
         )
         .eq("student_id", id)
         .order("created_at", { ascending: false }),
@@ -679,6 +679,10 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                   studentId={id}
                   submitted={Boolean(latestAgreement.signed_file_path)}
                   videoUrl={consentVideoUrl}
+                  documentStatus={latestAgreement.document_status}
+                  videoStatus={latestAgreement.video_status}
+                  documentNote={latestAgreement.document_review_note}
+                  videoNote={latestAgreement.video_review_note}
                 />
               ) : (
                 <UploadSignedAgreementForm agreementId={latestAgreement.id} studentId={id} />

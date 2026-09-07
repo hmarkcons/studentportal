@@ -350,7 +350,19 @@ export async function uploadSignedAgreement(agreementId: string, studentId: stri
 // Staff sign-off on a student's e-signed submission: they watch the consent
 // video, check the document, then mark it signed. Refuses until both are
 // actually present so "verified" always means someone saw a video.
-export async function verifySignedAgreement(agreementId: string, studentId: string, emailVerified: boolean) {
+/**
+ * Approves an e-signed submission. Both halves must be ticked: the document
+ * and the consent video are judged separately, since the video is what makes
+ * the signature attributable and a glance at the PDF alone does not establish
+ * that.
+ */
+export async function verifySignedAgreement(
+  agreementId: string,
+  studentId: string,
+  emailVerified: boolean,
+  documentApproved = true,
+  videoApproved = true
+): Promise<{ error?: string; success?: boolean }> {
   const supabase = await createClient();
   const denied = await requirePermission("agreements.process", "Only Super Admin/Processing can verify a signed agreement.");
   if (denied) return { error: denied.error };
@@ -363,11 +375,52 @@ export async function verifySignedAgreement(agreementId: string, studentId: stri
 
   if (!agreement?.signed_file_path) return { error: "The student hasn't submitted a signed agreement yet." };
   if (!agreement.video_recording_path) return { error: "There's no consent video on this submission — it can't be verified." };
+  if (!documentApproved || !videoApproved) {
+    return { error: "Tick both the agreement and the video to approve. If either is wrong, reject that one instead." };
+  }
 
   const { error } = await supabase
     .from("agreements")
-    .update({ status: "signed", email_verified: emailVerified })
+    .update({
+      status: "signed",
+      email_verified: emailVerified,
+      document_status: "approved",
+      video_status: "approved",
+      document_review_note: null,
+      video_review_note: null,
+      reviewed_at: new Date().toISOString(),
+    })
     .eq("id", agreementId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/students/${studentId}`);
+  revalidatePath("/portal/agreement");
+  return { success: true };
+}
+
+/**
+ * Sends one half of a submission back to the student to redo. The file is
+ * archived rather than deleted — a rejected consent video is still the record
+ * of what was originally submitted — and the reason is shown to the student so
+ * they know what to fix rather than guessing.
+ */
+export async function rejectAgreementArtifact(
+  agreementId: string,
+  studentId: string,
+  kind: "document" | "video",
+  reason: string
+): Promise<{ error?: string; success?: boolean }> {
+  const denied = await requirePermission("agreements.process", "Only Super Admin/Processing can reject a submission.");
+  if (denied) return { error: denied.error };
+
+  if (!reason.trim()) return { error: "Give the student a reason so they know what to fix." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("reject_agreement_artifact", {
+    p_agreement_id: agreementId,
+    p_kind: kind,
+    p_reason: reason.trim(),
+  });
   if (error) return { error: error.message };
 
   revalidatePath(`/students/${studentId}`);
