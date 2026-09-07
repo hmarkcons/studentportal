@@ -61,7 +61,9 @@ function TaskRowView({ task, revalidateTo }: { task: TaskRow; revalidateTo: stri
 
   return (
     <div>
-      <div className="flex items-center gap-2 text-sm">
+      {/* Wraps: description + priority + due date + edit/delete exceed a
+          320px row, which pushed the delete button off-screen. */}
+      <div className="flex flex-wrap items-center gap-2 text-sm">
         <input type="checkbox" checked={task.status === "done"} onChange={(e) => handleToggle(e.target.checked)} />
         <span className={task.status === "done" ? "flex-1 text-muted line-through" : "flex-1 text-ink"}>
           {task.description}

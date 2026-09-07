@@ -102,7 +102,7 @@ export default async function RefundsPage() {
                     )}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Badge tone={TONE[r.status] ?? "neutral"}>{r.status}</Badge>
                   {ineligible && <Badge tone="danger">Ineligible — reapplying</Badge>}
                   <RefundActions id={r.id} status={r.status} canManage={canManage} isSuperAdmin={isSuperAdmin} ineligible={ineligible} />

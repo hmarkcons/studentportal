@@ -39,7 +39,8 @@ function TaskRow({ task, revalidateTo }: { task: DashboardTaskRow; revalidateTo:
 
   return (
     <div>
-      <div className="flex items-center gap-2 text-sm">
+      {/* Wraps for the same reason as the application TaskList row. */}
+      <div className="flex flex-wrap items-center gap-2 text-sm">
         <input type="checkbox" checked={task.status === "done"} onChange={(e) => handleToggle(e.target.checked)} />
         <span className={task.status === "done" ? "flex-1 text-muted line-through" : "flex-1 text-ink"}>
           {task.description} <span className="text-muted">· {task.applicationLabel}</span>

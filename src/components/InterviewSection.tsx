@@ -70,8 +70,8 @@ export function InterviewSection({
         <p className="mb-1 text-xs text-muted">Available slots (proposed to the student — confirmed over a phone call)</p>
         <div className="flex flex-col gap-1">
           {slots.map((slot, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <Input name="available_slots" type="datetime-local" defaultValue={toLocalInputValue(slot)} className="w-56" />
+            <div key={i} className="flex flex-wrap items-center gap-2">
+              <Input name="available_slots" type="datetime-local" defaultValue={toLocalInputValue(slot)} className="w-56 max-w-full" />
               <button
                 type="button"
                 onClick={() => setSlots((prev) => prev.filter((_, idx) => idx !== i))}
