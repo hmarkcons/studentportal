@@ -65,7 +65,7 @@ export function NewTrackerFieldForm({ countryCode }: { countryCode: string }) {
         <Input name="show_if_key" placeholder="e.g. finalized_university" />
       </label>
       <label className="flex flex-col gap-1 text-xs text-muted">
-        …equals (or * for "any value")
+        …equals (or * for &ldquo;any value&rdquo;)
         <Input name="show_if_equals" placeholder="e.g. Booked or *" />
       </label>
       <label className="flex flex-col gap-1 text-xs text-muted">
@@ -162,7 +162,7 @@ export function TrackerFieldRow({ field }: { field: TrackerFieldDef }) {
         <Input name="show_if_key" defaultValue={field.showWhen?.key ?? ""} />
       </label>
       <label className="flex flex-col gap-1 text-xs text-muted">
-        …equals (or * for "any value")
+        …equals (or * for &ldquo;any value&rdquo;)
         <Input name="show_if_equals" defaultValue={field.showWhen?.equals ?? ""} />
       </label>
       <div className="col-span-full flex items-center gap-2">
