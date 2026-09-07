@@ -83,6 +83,13 @@ export type InvoicePdfData = {
   installmentPlan: string | null;
   adminCharge: number;
   consultancyFee: number;
+  // Discount comes off the consultancy fee, then SRB tax is charged on what
+  // remains — see computeInvoiceMath, which is where these are produced.
+  discountAmount: number;
+  discountReason: string | null;
+  netConsultancyFee: number;
+  taxRate: number;
+  taxAmount: number;
   destinationLabel: string;
   terms: string | null;
   payments: { date: string; method: string | null; amount: number; status: "paid" | "unpaid" }[];
@@ -90,6 +97,17 @@ export type InvoicePdfData = {
   amountPaid: number;
   balanceDue: number;
   signatoryName: string | null;
+  // Where the student actually sends the money. Read from invoice_settings so
+  // it is maintained in Setup rather than hardcoded into this document.
+  bank: {
+    bankName: string | null;
+    accountTitle: string | null;
+    accountNumber: string | null;
+    iban: string | null;
+    branch: string | null;
+    swiftCode: string | null;
+    paymentNote: string | null;
+  } | null;
 };
 
 function money(symbol: string, n: number) {
@@ -198,6 +216,22 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
 
         <View style={styles.totals}>
           <View style={styles.totalsBox}>
+            <View style={styles.totalsRow}><Text style={styles.totalsLabel}>Consultancy fee</Text><Text style={styles.totalsNum}>{money(data.currencySymbol, data.consultancyFee)}</Text></View>
+            {data.discountAmount > 0 && (
+              <View style={styles.totalsRow}>
+                <Text style={styles.totalsLabel}>Discount{data.discountReason ? ` (${data.discountReason})` : ""}</Text>
+                <Text style={styles.totalsNum}>−{money(data.currencySymbol, data.discountAmount)}</Text>
+              </View>
+            )}
+            {data.taxAmount > 0 && (
+              <View style={styles.totalsRow}>
+                <Text style={styles.totalsLabel}>SRB tax ({data.taxRate}% of {money(data.currencySymbol, data.netConsultancyFee)})</Text>
+                <Text style={styles.totalsNum}>{money(data.currencySymbol, data.taxAmount)}</Text>
+              </View>
+            )}
+            {data.adminCharge > 0 && (
+              <View style={styles.totalsRow}><Text style={styles.totalsLabel}>Administrative charge</Text><Text style={styles.totalsNum}>{money(data.currencySymbol, data.adminCharge)}</Text></View>
+            )}
             <View style={styles.totalsRow}><Text style={styles.totalsLabel}>Subtotal</Text><Text style={styles.totalsNum}>{money(data.currencySymbol, data.subtotal)}</Text></View>
             <View style={styles.totalsRow}><Text style={styles.totalsLabel}>Amount paid</Text><Text style={styles.totalsNum}>−{money(data.currencySymbol, data.amountPaid)}</Text></View>
             <View style={styles.balanceRow}><Text style={styles.balanceLabel}>Balance due</Text><Text style={styles.balanceNum}>{money(data.currencySymbol, data.balanceDue)}</Text></View>
@@ -205,12 +239,28 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
         </View>
 
         <View style={styles.foot}>
+          {/* Driven by invoice_settings. Previously hardcoded placeholder
+              account numbers were printed here, which would have sent students
+              to a bank account that does not exist — so when nothing is
+              configured, say so rather than inventing details. */}
           <View style={styles.payInstr}>
             <Text style={styles.infoLabel}>Payment instructions</Text>
-            <Text>Account title <Text style={styles.payCode}>HMARK Consultants (Pvt.) Ltd.</Text></Text>
-            <Text>Bank <Text style={styles.payCode}>Meezan Bank, Shahrah-e-Faisal Br.</Text></Text>
-            <Text>IBAN <Text style={styles.payCode}>PK00 MEZN 0000 0000 1234 5678</Text></Text>
-            <Text>SWIFT <Text style={styles.payCode}>MEZNPKKA</Text> · Ref. <Text style={styles.payCode}>{data.invoiceNumber}</Text></Text>
+            {data.bank?.accountTitle && <Text>Account title <Text style={styles.payCode}>{data.bank.accountTitle}</Text></Text>}
+            {data.bank?.bankName && (
+              <Text>
+                Bank <Text style={styles.payCode}>{data.bank.bankName}{data.bank.branch ? `, ${data.bank.branch}` : ""}</Text>
+              </Text>
+            )}
+            {data.bank?.accountNumber && <Text>Account no. <Text style={styles.payCode}>{data.bank.accountNumber}</Text></Text>}
+            {data.bank?.iban && <Text>IBAN <Text style={styles.payCode}>{data.bank.iban}</Text></Text>}
+            <Text>
+              {data.bank?.swiftCode ? <Text>SWIFT <Text style={styles.payCode}>{data.bank.swiftCode}</Text> · </Text> : null}
+              Ref. <Text style={styles.payCode}>{data.invoiceNumber}</Text>
+            </Text>
+            {data.bank?.paymentNote && <Text>{data.bank.paymentNote}</Text>}
+            {!data.bank?.accountTitle && !data.bank?.bankName && !data.bank?.iban && !data.bank?.accountNumber && (
+              <Text>Bank details not yet configured — set them in Setup › Invoice Settings.</Text>
+            )}
           </View>
           {data.signatoryName && (
             <View style={styles.signBlock}>

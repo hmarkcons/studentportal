@@ -6,6 +6,46 @@ import { MAX_VIDEO_SECONDS, ACCEPTED_VIDEO_ACCEPT, validateVideoFile } from "@/l
 
 type Mode = "idle" | "recording" | "review";
 
+/**
+ * Ask for camera + microphone, but do not fail outright when there is no
+ * usable microphone: a consent clip with picture and no sound is still worth
+ * far more than no clip at all, and a missing/blocked mic was previously
+ * reported to the student as "couldn't access the camera".
+ */
+async function getConsentStream(): Promise<MediaStream> {
+  try {
+    return await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+  } catch (err) {
+    const name = (err as DOMException | undefined)?.name;
+    // Only retry when audio is the plausible culprit. A denied or busy camera
+    // will fail again identically, and retrying just hides the real reason.
+    if (name === "NotFoundError" || name === "OverconstrainedError" || name === "NotReadableError") {
+      return navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    }
+    throw err;
+  }
+}
+
+/** Turn a getUserMedia rejection into something the student can act on. */
+function describeCameraError(err: unknown): string {
+  const name = (err as DOMException | undefined)?.name;
+  switch (name) {
+    case "NotAllowedError":
+    case "SecurityError":
+      return "Camera access was blocked. Click the camera icon in your browser's address bar and allow it for this site, then press Record again — or use “Choose a video file”.";
+    case "NotFoundError":
+      return "No camera was found on this device. Record the clip on your phone and use “Choose a video file” to attach it.";
+    case "NotReadableError":
+      return "Your camera is in use by another app (Zoom, Teams, Meet). Close it and press Record again, or use “Choose a video file”.";
+    case "OverconstrainedError":
+      return "This camera doesn't support the requested settings. Try another camera, or use “Choose a video file”.";
+    case "AbortError":
+      return "The camera stopped unexpectedly. Press Record to try again, or use “Choose a video file”.";
+    default:
+      return "Couldn't start the camera. Allow camera access and press Record again, or use “Choose a video file” instead.";
+  }
+}
+
 // Records a short consent clip in the browser, falling back to picking a
 // video file where the camera is blocked or MediaRecorder is unsupported
 // (older iOS Safari, locked-down devices). Either way the result is handed
@@ -42,12 +82,21 @@ export function ConsentVideoRecorder({ onVideo, disabled }: { onVideo: (file: Fi
 
   async function startRecording() {
     setError(null);
+
+    // getUserMedia only exists in a secure context. Over plain http (or a
+    // stripped-down in-app browser) the API is simply absent, which is not a
+    // permission problem and telling the student to "allow access" sends them
+    // hunting through settings for a switch that will not help.
+    if (typeof window !== "undefined" && !window.isSecureContext) {
+      setError("Recording needs a secure (https) connection. Open the portal at its https address, or use “Choose a video file”.");
+      return;
+    }
     if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia) {
       setError("This browser can't record video — use “Choose a video file” instead.");
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      const stream = await getConsentStream();
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -89,8 +138,8 @@ export function ConsentVideoRecorder({ onVideo, disabled }: { onVideo: (file: Fi
           return next;
         });
       }, 1000);
-    } catch {
-      setError("Couldn't access the camera. Allow camera access, or use “Choose a video file” instead.");
+    } catch (err) {
+      setError(describeCameraError(err));
     }
   }
 

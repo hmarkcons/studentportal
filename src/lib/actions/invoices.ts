@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { formatDateOnly } from "@/lib/formatDate";
 import { requirePermission } from "@/lib/auth/permissions";
+import { computeInvoiceMath, splitIntoInstallments, SRB_TAX_RATE } from "@/lib/invoiceMath";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -33,6 +34,11 @@ const DEFAULT_TERMS =
 export async function generateInvoice(studentId: string, agreementId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
 
+  // A student may have no agreement yet — the invoice is still valid, just
+  // unlinked. An empty string here reaches Postgres as an invalid uuid and the
+  // whole generation fails, so normalise it to null.
+  const agreement_id = agreementId?.trim() ? agreementId.trim() : null;
+
   const admin_charge = Number(formData.get("admin_charge") ?? 0);
   const consultancy_fee = Number(formData.get("consultancy_fee") ?? 0);
   const currency = String(formData.get("currency") ?? "EUR");
@@ -49,11 +55,25 @@ export async function generateInvoice(studentId: string, agreementId: string, _p
   // report ever flags it, silently, forever.
   if (!firstDueDate) return { error: "First installment due date is required." };
 
-  const total = admin_charge + consultancy_fee;
-  const perInstallment = Math.round((total / installmentCount) * 100) / 100;
-  const installments = Array.from({ length: installmentCount }, (_, i) => ({
+  const discount_amount = Number(formData.get("discount_amount") ?? 0);
+  const discount_reason = String(formData.get("discount_reason") ?? "").trim() || null;
+  if (discount_amount > consultancy_fee) {
+    return { error: "Discount cannot exceed the consultancy fee." };
+  }
+
+  // Discount off the fee, SRB tax on what remains, then the admin charge — the
+  // same computation the generator previews and the PDF prints.
+  const math = computeInvoiceMath({
+    consultancyFee: consultancy_fee,
+    adminCharge: admin_charge,
+    discountAmount: discount_amount,
+    taxRate: SRB_TAX_RATE,
+  });
+
+  const amounts = splitIntoInstallments(math.total, installmentCount);
+  const installments = amounts.map((amount, i) => ({
     installment_no: i + 1,
-    amount: i === installmentCount - 1 ? total - perInstallment * (installmentCount - 1) : perInstallment,
+    amount,
     due_date: firstDueDate ? addMonthsClampedUTC(firstDueDate, i) : null,
   }));
 
@@ -62,7 +82,7 @@ export async function generateInvoice(studentId: string, agreementId: string, _p
   // that could leave a zero-installment invoice behind if the second failed.
   const { error } = await supabase.rpc("generate_invoice", {
     p_student_id: studentId,
-    p_agreement_id: agreementId,
+    p_agreement_id: agreement_id,
     p_admin_charge: admin_charge,
     p_consultancy_fee: consultancy_fee,
     p_currency: currency,
@@ -71,10 +91,16 @@ export async function generateInvoice(studentId: string, agreementId: string, _p
     p_invoice_number: invoice_number,
     p_installment_plan: installment_plan,
     p_installments: installments,
+    p_discount_amount: math.discountAmount,
+    p_discount_reason: discount_reason,
+    p_tax_rate: math.taxRate,
+    p_tax_amount: math.taxAmount,
   });
   if (error) return { error: error.message };
 
   revalidatePath(`/students/${studentId}`);
+  revalidatePath("/finance/invoice-generator");
+  revalidatePath("/finance/consultancy-fee");
   return { success: true };
 }
 
@@ -208,6 +234,7 @@ export async function buildAndStoreInvoicePdf(
     .from("invoices")
     .select(
       `id, invoice_number, intake, terms, admin_charge, consultancy_fee, currency, installment_plan, created_at,
+       discount_amount, discount_reason, tax_rate, tax_amount,
        agreement:agreements(generated_by, template:agreement_templates(signatory_name, destination:destinations(display_name)))`
     )
     .eq("id", invoiceId)
@@ -233,7 +260,16 @@ export async function buildAndStoreInvoicePdf(
     counselorName = staffRow?.full_name ?? null;
   }
 
-  const subtotal = invoice.admin_charge + invoice.consultancy_fee;
+  // Recomputed from the figures stored ON THIS INVOICE, using its own stored
+  // tax_rate — never the current SRB rate — so reprinting an old invoice
+  // reproduces the numbers the student was originally billed.
+  const math = computeInvoiceMath({
+    consultancyFee: Number(invoice.consultancy_fee ?? 0),
+    adminCharge: Number(invoice.admin_charge ?? 0),
+    discountAmount: Number(invoice.discount_amount ?? 0),
+    taxRate: Number(invoice.tax_rate ?? 0),
+  });
+  const subtotal = math.total;
   const amountPaid = (installments ?? []).reduce((sum, i) => sum + i.amount_paid, 0);
   const balanceDue = Math.round((subtotal - amountPaid) * 100) / 100;
   const status: "paid" | "partially_paid" | "unpaid" = balanceDue <= 0 ? "paid" : amountPaid > 0 ? "partially_paid" : "unpaid";
@@ -259,6 +295,27 @@ export async function buildAndStoreInvoicePdf(
     ? `${destination.display_name}${invoice.intake ? ` — Intake: ${invoice.intake}` : ""}`
     : "Consultancy fee";
 
+  // Read through the client we were handed, not the session-scoped helper:
+  // the overdue-invoices cron calls this with a service-role client and has no
+  // staff session, so a session-based read would come back empty and the PDF
+  // would print "bank details not configured" on every cron-generated copy.
+  const { data: bankRow } = await supabase
+    .from("invoice_settings")
+    .select("bank_name, account_title, account_number, iban, branch, swift_code, payment_note")
+    .eq("id", true)
+    .maybeSingle();
+  const bank = bankRow
+    ? {
+        bankName: bankRow.bank_name,
+        accountTitle: bankRow.account_title,
+        accountNumber: bankRow.account_number,
+        iban: bankRow.iban,
+        branch: bankRow.branch,
+        swiftCode: bankRow.swift_code,
+        paymentNote: bankRow.payment_note,
+      }
+    : null;
+
   const { renderToBuffer } = await import("@react-pdf/renderer");
   const { InvoiceDocument } = await import("@/lib/pdf/InvoiceDocument");
 
@@ -279,8 +336,13 @@ export async function buildAndStoreInvoicePdf(
       intake: invoice.intake,
       counselor: counselorName,
       installmentPlan: invoice.installment_plan,
-      adminCharge: invoice.admin_charge,
-      consultancyFee: invoice.consultancy_fee,
+      adminCharge: math.adminCharge,
+      consultancyFee: math.consultancyFee,
+      discountAmount: math.discountAmount,
+      discountReason: invoice.discount_reason ?? null,
+      netConsultancyFee: math.netConsultancyFee,
+      taxRate: math.taxRate,
+      taxAmount: math.taxAmount,
       destinationLabel,
       terms: invoice.terms,
       payments,
@@ -288,6 +350,7 @@ export async function buildAndStoreInvoicePdf(
       amountPaid,
       balanceDue,
       signatoryName: template?.signatory_name ?? null,
+      bank,
     },
   });
 

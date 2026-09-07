@@ -24,12 +24,14 @@ const BASE_STAFF_NAV: NavItem[] = [
       { label: "Agreement templates", href: "/setup/agreement-templates" },
       { label: "Agreement generator", href: "/setup/agreement-generator" },
       { label: "Document trackers", href: "/setup/document-trackers" },
+      { label: "Invoice settings", href: "/setup/invoice-settings" },
     ],
   },
   {
     label: "Accounts & Finance",
     icon: "💰",
     children: [
+      { label: "Invoice Generator", href: "/finance/invoice-generator" },
       { label: "Staff Commission", href: "/finance/staff-commission" },
       { label: "Refunds", href: "/finance/refunds" },
       { label: "Consultancy Fee", href: "/finance/consultancy-fee" },
