@@ -7,6 +7,7 @@ import {
   generateInvoicePdf,
   markInstallmentPaid,
   updateInvoice,
+  sendInvoiceToStudent,
 } from "@/lib/actions/invoices";
 import { PAYMENT_STATUS_LABELS, type InvoiceMath } from "@/lib/invoiceMath";
 import { formatDateOnly } from "@/lib/formatDate";
@@ -133,6 +134,34 @@ function InvoiceRow({ inv, canDelete }: { inv: GeneratedInvoice; canDelete: bool
           >
             {inv.hasPdf ? "Rebuild PDF" : "Build PDF"}
           </Button>
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            pending={busy === "send"}
+            disabled={!inv.studentEmail}
+            onClick={async () => {
+              const already = inv.sentStatus === "sent";
+              if (
+                !confirm(
+                  already
+                    ? `This invoice was already emailed. Send it to ${inv.studentEmail} again? The previous receipt link will stop working.`
+                    : `Email this invoice to ${inv.studentEmail}?`
+                )
+              )
+                return;
+              setBusy("send");
+              setError(null);
+              setNotice(null);
+              const r = await sendInvoiceToStudent(inv.id, inv.studentId);
+              if (r?.error) setError(r.error);
+              else setNotice(`Emailed to ${r?.sentTo ?? inv.studentEmail}.`);
+              setBusy(null);
+            }}
+          >
+            {inv.sentStatus === "sent" ? "Resend email" : "Send to student"}
+          </Button>
+          {!inv.studentEmail && <span className="text-xs text-warning">No email on record</span>}
           {canDelete && (
             <Button
               type="button"

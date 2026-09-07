@@ -220,7 +220,7 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
             {data.discountAmount > 0 && (
               <View style={styles.totalsRow}>
                 <Text style={styles.totalsLabel}>Discount{data.discountReason ? ` (${data.discountReason})` : ""}</Text>
-                <Text style={styles.totalsNum}>−{money(data.currencySymbol, data.discountAmount)}</Text>
+                <Text style={styles.totalsNum}>-{money(data.currencySymbol, data.discountAmount)}</Text>
               </View>
             )}
             {data.taxAmount > 0 && (
@@ -233,7 +233,7 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
               <View style={styles.totalsRow}><Text style={styles.totalsLabel}>Administrative charge</Text><Text style={styles.totalsNum}>{money(data.currencySymbol, data.adminCharge)}</Text></View>
             )}
             <View style={styles.totalsRow}><Text style={styles.totalsLabel}>Subtotal</Text><Text style={styles.totalsNum}>{money(data.currencySymbol, data.subtotal)}</Text></View>
-            <View style={styles.totalsRow}><Text style={styles.totalsLabel}>Amount paid</Text><Text style={styles.totalsNum}>−{money(data.currencySymbol, data.amountPaid)}</Text></View>
+            <View style={styles.totalsRow}><Text style={styles.totalsLabel}>Amount paid</Text><Text style={styles.totalsNum}>-{money(data.currencySymbol, data.amountPaid)}</Text></View>
             <View style={styles.balanceRow}><Text style={styles.balanceLabel}>Balance due</Text><Text style={styles.balanceNum}>{money(data.currencySymbol, data.balanceDue)}</Text></View>
           </View>
         </View>

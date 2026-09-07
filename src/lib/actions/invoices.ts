@@ -6,6 +6,10 @@ import { createClient } from "@/lib/supabase/server";
 import { formatDateOnly } from "@/lib/formatDate";
 import { requirePermission } from "@/lib/auth/permissions";
 import { computeInvoiceMath, splitIntoInstallments, SRB_TAX_RATE } from "@/lib/invoiceMath";
+import { getInvoiceBankSettings } from "@/lib/actions/invoiceSettings";
+import { buildInvoiceEmail } from "@/lib/invoiceEmail";
+import { sendEmail } from "@/lib/email";
+import { getSiteUrl } from "@/lib/siteUrl";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -200,6 +204,119 @@ export async function markInstallmentPaid(installmentId: string, studentId: stri
 
   revalidatePath(`/students/${studentId}`);
   return { success: true };
+}
+
+/**
+ * Emails the invoice to the student, with a tokenised link to the receipt
+ * rather than a PDF attachment.
+ *
+ * This used to only flip sent_status to 'sent' and stamp sent_at — no mail was
+ * ever sent, so the CRM reported invoices as delivered that nobody received.
+ * The status is now written only after the send actually succeeds.
+ */
+// Explicit return type: without it the inferred union of the early-return
+// error shapes and the success shape can't be property-accessed by callers.
+export async function sendInvoiceToStudent(
+  invoiceId: string,
+  studentId: string
+): Promise<{ error?: string; success?: boolean; sentTo?: string }> {
+  const denied = await requirePermission("finance.invoices.manage", "You can't send invoices.");
+  if (denied) return denied;
+
+  const supabase = await createClient();
+
+  const { data: invoice } = await supabase
+    .from("invoices")
+    .select(
+      `id, invoice_number, intake, currency, admin_charge, consultancy_fee,
+       discount_amount, discount_reason, tax_rate, created_at, pdf_path`
+    )
+    .eq("id", invoiceId)
+    .maybeSingle();
+  if (!invoice) return { error: "Invoice not found." };
+
+  const { data: student } = await supabase.from("leads").select("full_name, email, country_of_interest").eq("id", studentId).maybeSingle();
+  if (!student?.email) return { error: "This student has no email address on record." };
+
+  const { data: installments } = await supabase
+    .from("invoice_installments")
+    .select("installment_no, amount, amount_paid, status, due_date")
+    .eq("invoice_id", invoiceId)
+    .order("installment_no", { ascending: true });
+
+  const math = computeInvoiceMath({
+    consultancyFee: Number(invoice.consultancy_fee ?? 0),
+    adminCharge: Number(invoice.admin_charge ?? 0),
+    discountAmount: Number(invoice.discount_amount ?? 0),
+    taxRate: Number(invoice.tax_rate ?? 0),
+  });
+  const amountPaid = (installments ?? []).reduce((s, i) => s + Number(i.amount_paid ?? 0), 0);
+  const balanceDue = Math.round((math.total - amountPaid) * 100) / 100;
+
+  const invoiceNumber =
+    invoice.invoice_number ?? `INV-${new Date(invoice.created_at).getFullYear()}-${invoiceId.slice(0, 6).toUpperCase()}`;
+
+  // Make sure the PDF exists before the student is told to open it. The route
+  // can build it on demand too, but doing it here keeps the first click fast.
+  if (!invoice.pdf_path) {
+    const built = await buildAndStoreInvoicePdf(supabase, invoiceId, studentId);
+    if (built?.error) return { error: `Couldn't prepare the receipt PDF: ${built.error}` };
+  }
+
+  // Minted server-side; this also invalidates any link sent previously.
+  const { data: token, error: tokenError } = await supabase.rpc("issue_receipt_token", {
+    p_invoice_id: invoiceId,
+    p_days: 90,
+  });
+  if (tokenError || !token) return { error: tokenError?.message ?? "Couldn't create the receipt link." };
+
+  const bankRow = await getInvoiceBankSettings();
+
+  const email = buildInvoiceEmail({
+    studentName: student.full_name,
+    invoiceNumber,
+    currency: invoice.currency,
+    intake: invoice.intake,
+    destination: student.country_of_interest,
+    discountReason: invoice.discount_reason,
+    math,
+    installments: (installments ?? []).map((i) => ({
+      no: i.installment_no,
+      amount: Number(i.amount ?? 0),
+      dueDate: i.due_date,
+      paid: i.status === "paid",
+    })),
+    amountPaid,
+    balanceDue,
+    receiptUrl: `${getSiteUrl()}/receipt/${token}`,
+    bank: bankRow
+      ? {
+          bankName: bankRow.bank_name,
+          accountTitle: bankRow.account_title,
+          accountNumber: bankRow.account_number,
+          iban: bankRow.iban,
+          branch: bankRow.branch,
+          swiftCode: bankRow.swift_code,
+          paymentNote: bankRow.payment_note,
+        }
+      : null,
+  });
+
+  const sent = await sendEmail({ to: student.email, subject: email.subject, text: email.text, html: email.html });
+  if (sent.error) return { error: sent.error };
+
+  const { data: existingReceipt } = await supabase.from("receipts").select("id").eq("invoice_id", invoiceId).maybeSingle();
+  const nowIso = new Date().toISOString();
+  if (existingReceipt) {
+    await supabase.from("receipts").update({ sent_status: "sent", sent_at: nowIso }).eq("id", existingReceipt.id);
+  } else {
+    await supabase.from("receipts").insert({ invoice_id: invoiceId, sent_status: "sent", sent_at: nowIso });
+  }
+  await supabase.from("invoices").update({ sent_status: "sent", sent_at: nowIso }).eq("id", invoiceId);
+
+  revalidatePath(`/students/${studentId}`);
+  revalidatePath("/finance/invoice-generator");
+  return { success: true, sentTo: student.email };
 }
 
 export async function sendReceipt(invoiceId: string, studentId: string) {

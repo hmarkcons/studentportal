@@ -10,6 +10,13 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
+  // Emailed receipt links carry their own unguessable, expiring token and are
+  // opened by students who may have no portal login at all. Without this they
+  // are bounced to /login and the button in the email does nothing.
+  if (request.nextUrl.pathname.startsWith("/receipt/")) {
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
