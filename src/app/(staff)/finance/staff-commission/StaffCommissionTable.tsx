@@ -15,7 +15,7 @@ import {
   uploadStaffCommissionProof,
   carryForwardCommissionCredit,
 } from "@/lib/actions/finance";
-import { INVOICE_STATUS_LABELS, type InvoiceStatus } from "@/lib/invoiceStatus";
+import { type InvoiceStatus } from "@/lib/invoiceStatus";
 
 const REVALIDATE_TO = "/finance/staff-commission";
 const PAGE_SIZE = 10;
