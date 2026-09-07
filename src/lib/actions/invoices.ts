@@ -8,7 +8,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { computeInvoiceMath, splitIntoInstallments, SRB_TAX_RATE, conversionNote } from "@/lib/invoiceMath";
 import { getInvoiceBankSettings } from "@/lib/actions/invoiceSettings";
 import { buildInvoiceEmail } from "@/lib/invoiceEmail";
-import { sendEmail } from "@/lib/email";
+import { sendEmail, accountsFrom } from "@/lib/email";
 import { getSiteUrl } from "@/lib/siteUrl";
 
 function one<T>(v: T | T[] | null) {
@@ -307,7 +307,13 @@ export async function sendInvoiceToStudent(
       : null,
   });
 
-  const sent = await sendEmail({ to: student.email, subject: email.subject, text: email.text, html: email.html });
+  const sent = await sendEmail({
+    to: student.email,
+    subject: email.subject,
+    text: email.text,
+    html: email.html,
+    from: accountsFrom(),
+  });
   if (sent.error) return { error: sent.error };
 
   const { data: existingReceipt } = await supabase.from("receipts").select("id").eq("invoice_id", invoiceId).maybeSingle();

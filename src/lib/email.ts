@@ -9,18 +9,32 @@ export function isEmailConfigured() {
   return Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
 }
 
+/**
+ * Money correspondence goes out as the accounts mailbox rather than support,
+ * so a student replying about an invoice reaches the people who can answer.
+ * Authenticated with the same SMTP credentials — only the From differs.
+ */
+export function accountsFrom(): string {
+  return process.env.SMTP_FROM_ACCOUNTS?.trim() || process.env.SMTP_FROM || process.env.SMTP_USER || "";
+}
+
 export async function sendEmail({
   to,
   subject,
   text,
   html,
   attachments,
+  from,
+  replyTo,
 }: {
   to: string;
   subject: string;
   text: string;
   html?: string;
   attachments?: { filename: string; content: Buffer; contentType?: string }[];
+  /** Overrides SMTP_FROM for this message (see accountsFrom). */
+  from?: string;
+  replyTo?: string;
 }) {
   if (!isEmailConfigured()) {
     return { error: "Email isn't configured yet — set SMTP_HOST, SMTP_USER, and SMTP_PASS in the environment." };
@@ -35,7 +49,10 @@ export async function sendEmail({
 
   try {
     await transporter.sendMail({
-      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      from: from || process.env.SMTP_FROM || process.env.SMTP_USER,
+      // Replies follow the sender unless told otherwise, so a student
+      // answering an invoice reaches accounts rather than support.
+      replyTo: replyTo || from || undefined,
       to,
       subject,
       text,

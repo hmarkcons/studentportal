@@ -3,7 +3,7 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendEmail, isEmailConfigured } from "@/lib/email";
+import { sendEmail, isEmailConfigured, accountsFrom } from "@/lib/email";
 import { generateInvoicePdf, buildAndStoreInvoicePdf } from "@/lib/actions/invoices";
 
 async function requireProcessingOrAbove(supabase: Awaited<ReturnType<typeof createClient>>) {
@@ -141,6 +141,7 @@ export async function sendInvoiceEmail(invoiceId: string, studentId: string, rev
   } = await supabase.auth.getUser();
 
   const result = await sendEmail({
+    from: accountsFrom(),
     to: student.email,
     subject: `Invoice ${invoice.invoice_number ?? ""} — HMARK Consultants`,
     text: `Dear ${student.full_name},\n\nPlease find attached your invoice from HMARK Consultants.\n\nRegards,\nHMARK Consultants`,
@@ -193,6 +194,7 @@ export async function sendOverdueReminderIfDue(invoiceId: string, studentId: str
   const buffer = file ? Buffer.from(await file.arrayBuffer()) : null;
 
   const result = await sendEmail({
+    from: accountsFrom(),
     to: student.email,
     subject: `Payment overdue — Invoice ${pdfResult.invoiceNumber ?? ""} — HMARK Consultants`,
     text: `Dear ${student.full_name},\n\nThis is a reminder that one or more installments on your invoice are now overdue. Please arrange payment at your earliest convenience.\n\nRegards,\nHMARK Consultants`,
