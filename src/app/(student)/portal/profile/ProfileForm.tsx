@@ -134,6 +134,10 @@ export function ProfileForm({ studentId, student, profile }: { studentId: string
 
       <div>
         {state?.error && <p className="mb-2 text-xs text-danger">{state.error}</p>}
+        {/* Nothing on this form changes visibly on a successful save — the
+            fields already show what was typed — so without this the student
+            gets no confirmation that anything happened. */}
+        {state?.success && <p className="mb-2 text-xs text-success">Saved.</p>}
         <Button type="submit" variant="primary" pending={pending}>
           Save
         </Button>
