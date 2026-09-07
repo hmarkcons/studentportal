@@ -17,15 +17,25 @@ export function StudentTabs({ studentId, showScholarship }: { studentId: string;
   ];
 
   return (
-    <div className="mb-6 flex gap-1 overflow-x-auto border-b border-border">
+    // Wraps rather than scrolls: at some widths the strip cut the last tab by
+    // only ~13px, too little to look scrollable, so "Communication" just read
+    // as truncated. Same treatment as the pipeline stage strips.
+    <div className="mb-6 flex flex-wrap gap-1 border-b border-border">
       {tabs.map((t) => {
         const active = t.href === `/students/${studentId}` ? pathname === t.href : pathname.startsWith(t.href);
         return (
           <Link
             key={t.href}
             href={t.href}
+            // Border colour is set inline because globals.css carries an
+            // unlayered `* { border-color: var(--border) }`, which outranks
+            // Tailwind's layered border-* colour utilities — so
+            // border-transparent/border-primary here both render grey. On one
+            // row those greys hid on the container's own bottom border; once
+            // the strip wraps they would float under every first-row tab.
+            style={{ borderBottomColor: active ? "var(--primary)" : "transparent" }}
             className={`-mb-px flex-shrink-0 border-b-2 px-3 py-2 text-sm font-medium ${
-              active ? "border-primary text-primary" : "border-transparent text-muted hover:text-ink"
+              active ? "text-primary" : "text-muted hover:text-ink"
             }`}
           >
             {t.label}
