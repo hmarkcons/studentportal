@@ -13,6 +13,7 @@ import type { DashboardStageDef } from "@/lib/dashboardPipeline";
 import { PortalAccessPanel } from "./PortalAccessPanel";
 import { GenerateAgreementForm, UploadSignedAgreementForm } from "./GenerateAgreementForm";
 import { VerifySignedAgreement } from "./VerifySignedAgreement";
+import { ConsentVideoLink } from "./ConsentVideoLink";
 import { GenerateAgreementPdfButton } from "./GenerateAgreementPdfButton";
 import { AgreementActionsMenu } from "./AgreementActionsMenu";
 import { GenerateInvoiceForm, InvoiceCard } from "./InvoicePanel";
@@ -88,7 +89,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       supabase
         .from("agreements")
         .select(
-          "id, status, signing_method, signed_file_path, video_recording_path, pdf_path, email_verified, discount_amount, created_at, template_id, admin_charge_override, consultancy_fee_override, installment_count, template:agreement_templates(file_path, destination_id, destination:destinations(country, track))"
+          "id, status, version, signing_method, signed_file_path, video_recording_path, pdf_path, email_verified, discount_amount, created_at, template_id, admin_charge_override, consultancy_fee_override, installment_count, template:agreement_templates(file_path, destination_id, destination:destinations(country, track))"
         )
         .eq("student_id", id)
         .order("created_at", { ascending: false }),
@@ -388,6 +389,32 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     consentVideoUrl = data?.signedUrl ?? null;
   }
 
+  // The consent video is the evidence that an e-signature is attributable, so
+  // it has to stay watchable after verification — it was previously hidden the
+  // moment the agreement was marked signed, exactly when it matters most.
+  // It is footage of a person, so viewing is limited to Super Admin and the
+  // two people handling this student's case. No fallback to the whole
+  // processing team when nobody is assigned.
+  const canViewConsentVideo =
+    isSuperAdminRole ||
+    (Boolean(viewerStaff?.id) &&
+      (viewerStaff!.id === leadRegistration?.assigned_counselor_id ||
+        viewerStaff!.id === leadRegistration?.processing_officer_id));
+
+  // Every version's video, not just the latest, so a superseded agreement can
+  // still be evidenced if its signature is ever questioned.
+  const consentVideoUrls = new Map<string, string>();
+  if (canViewConsentVideo) {
+    await Promise.all(
+      (agreements ?? [])
+        .filter((a) => a.video_recording_path)
+        .map(async (a) => {
+          const { data } = await supabase.storage.from("documents").createSignedUrl(a.video_recording_path!, 3600);
+          if (data?.signedUrl) consentVideoUrls.set(a.id, data.signedUrl);
+        })
+    );
+  }
+
   const taskRows: DashboardTaskRow[] = (rawTasks ?? []).map((t) => ({
     id: t.id,
     description: t.description,
@@ -594,6 +621,9 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                       )}
                       {canModifyAgreement && a.status !== "signed" && (
                         <GenerateAgreementPdfButton agreementId={a.id} studentId={id} revalidateTo={`/students/${id}`} hasPdf={Boolean(links?.pdfUrl)} />
+                      )}
+                      {consentVideoUrls.has(a.id) && (
+                        <ConsentVideoLink url={consentVideoUrls.get(a.id)!} version={a.version} />
                       )}
                       <Badge tone={a.status === "signed" ? "success" : "warning"}>{a.status}</Badge>
                       <AgreementActionsMenu
