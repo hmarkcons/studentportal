@@ -12,7 +12,6 @@ export type TrackerFieldType =
   | "multi_select"
   | "multi_text"
   | "boolean"
-  | "credential"
   | "multi_university_status";
 
 export const TRACKER_FIELD_TYPES: TrackerFieldType[] = [
@@ -24,7 +23,6 @@ export const TRACKER_FIELD_TYPES: TrackerFieldType[] = [
   "multi_select",
   "multi_text",
   "boolean",
-  "credential",
   "multi_university_status",
 ];
 
@@ -34,7 +32,6 @@ export type TrackerFieldDef = {
   label: string;
   type: TrackerFieldType;
   options?: string[];
-  credentialType?: string; // for type: 'credential'
   // Only rendered once the referenced sibling field currently holds `equals`.
   // `equals: "*"` means "any non-empty value" (used to gate a field on
   // another field simply having been filled in, not a specific choice).

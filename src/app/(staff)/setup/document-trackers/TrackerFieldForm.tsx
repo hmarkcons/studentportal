@@ -10,7 +10,6 @@ const TYPE_HELP: Record<string, string> = {
   select: "Options: comma-separated list (leave blank to auto-fill from the student's applied universities in this country).",
   multi_select: "Options: comma-separated checkbox list.",
   multi_university_status: "Options: comma-separated status choices (e.g. Pending,Booked,Rejected). Set 'Date shown when status is' to reveal a date per row.",
-  credential: "Set the credential type (e.g. gmail, university_portal).",
   text: "No options needed.",
   textarea: "No options needed.",
   number: "No options needed.",
@@ -48,12 +47,6 @@ export function NewTrackerFieldForm({ countryCode }: { countryCode: string }) {
         Options {TYPE_HELP[fieldType]}
         <Input name="options" placeholder="Option A, Option B, Option C" />
       </label>
-      {fieldType === "credential" && (
-        <label className="flex flex-col gap-1 text-xs text-muted">
-          Credential type
-          <Input name="credential_type" />
-        </label>
-      )}
       {fieldType === "multi_university_status" && (
         <label className="flex flex-col gap-1 text-xs text-muted">
           Date shown when status is
@@ -159,12 +152,6 @@ export function TrackerFieldRow({ field }: { field: TrackerFieldDef }) {
         Options {TYPE_HELP[fieldType]}
         <Input name="options" defaultValue={field.options?.join(", ") ?? ""} />
       </label>
-      {fieldType === "credential" && (
-        <label className="flex flex-col gap-1 text-xs text-muted">
-          Credential type
-          <Input name="credential_type" defaultValue={field.credentialType ?? ""} />
-        </label>
-      )}
       {fieldType === "multi_university_status" && (
         <label className="flex flex-col gap-1 text-xs text-muted">
           Date shown when status is

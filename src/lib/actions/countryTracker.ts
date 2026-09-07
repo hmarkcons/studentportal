@@ -28,7 +28,6 @@ function rowToFieldDef(r: TrackerDefinitionRow): TrackerFieldDef {
     label: r.label,
     type: r.field_type,
     options: r.options ?? undefined,
-    credentialType: r.credential_type ?? undefined,
     showWhen: r.show_if_key ? { key: r.show_if_key, equals: r.show_if_equals ?? "" } : undefined,
     dateWhenStatus: r.date_when_status ?? undefined,
     showOnStudentVisa: r.show_on_student_visa ?? false,

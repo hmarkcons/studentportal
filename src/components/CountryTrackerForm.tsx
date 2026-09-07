@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useActionState } from "react";
 import { saveTrackerFields } from "@/lib/actions/countryTracker";
-import { CredentialField } from "@/components/CredentialField";
 import { Button } from "@/components/ui/Button";
 import { Input, Select, Textarea } from "@/components/ui/Input";
 import type { TrackerFieldDef } from "@/lib/countryTrackers";
@@ -42,8 +41,9 @@ export function CountryTrackerForm({
   // picker for multi_university_status fields.
   universityOptions?: { value: string; label: string }[];
 }) {
-  const plainFields = fields.filter((f) => f.type !== "credential");
-  const credentialFields = fields.filter((f) => f.type === "credential");
+  // Portal logins live in their own section on the student dashboard, so the
+  // tracker no longer carries credential fields at all.
+  const plainFields = fields;
 
   const [live, setLive] = useState<Record<string, string>>(values);
 
@@ -140,20 +140,6 @@ export function CountryTrackerForm({
         </div>
       </form>
 
-      {credentialFields.length > 0 && (
-        <div className="flex flex-col gap-3">
-          {credentialFields.map((f) => (
-            <CredentialField
-              key={f.key}
-              label={f.label}
-              ownerType="application"
-              ownerId={applicationId}
-              credentialType={f.credentialType ?? f.key}
-              revalidateTo={revalidateTo}
-            />
-          ))}
-        </div>
-      )}
     </div>
   );
 }
