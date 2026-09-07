@@ -6,7 +6,6 @@ import { createClient } from "@/lib/supabase/server";
 import { formatDateOnly } from "@/lib/formatDate";
 import { requirePermission } from "@/lib/auth/permissions";
 import { computeInvoiceMath, splitIntoInstallments, SRB_TAX_RATE, conversionNote } from "@/lib/invoiceMath";
-import { getInvoiceBankSettings } from "@/lib/actions/invoiceSettings";
 import { buildInvoiceEmail } from "@/lib/invoiceEmail";
 import { sendEmail, accountsFrom } from "@/lib/email";
 import { getSiteUrl } from "@/lib/siteUrl";
@@ -226,8 +225,26 @@ export async function sendInvoiceToStudent(
 ): Promise<{ error?: string; success?: boolean; sentTo?: string }> {
   const denied = await requirePermission("finance.invoices.manage", "You can't send invoices.");
   if (denied) return denied;
-
   const supabase = await createClient();
+  return buildAndSendInvoiceEmail(supabase, invoiceId, studentId, "invoice");
+}
+
+/**
+ * The single implementation behind every invoice email — the Invoice
+ * Generator, the button on the student page, and the daily overdue cron.
+ * These previously had three separate bodies, two of which attached the PDF
+ * instead of linking to it, so what a student received depended on where
+ * staff happened to click.
+ *
+ * Takes its client so the cron can pass a service-role one: it has no staff
+ * session, and RLS on invoices gates on has_role().
+ */
+export async function buildAndSendInvoiceEmail(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  invoiceId: string,
+  studentId: string,
+  variant: "invoice" | "overdue" = "invoice"
+): Promise<{ error?: string; success?: boolean; sentTo?: string }> {
 
   const { data: invoice } = await supabase
     .from("invoices")
@@ -268,13 +285,35 @@ export async function sendInvoiceToStudent(
   }
 
   // Minted server-side; this also invalidates any link sent previously.
-  const { data: token, error: tokenError } = await supabase.rpc("issue_receipt_token", {
+  // The RPC checks has_role, which a cron run cannot satisfy — it holds a
+  // service-role client and no auth.uid(). Fall back to writing the token
+  // directly, which RLS still permits only for that service-role client.
+  let token: string | null = null;
+  const { data: rpcToken, error: tokenError } = await supabase.rpc("issue_receipt_token", {
     p_invoice_id: invoiceId,
     p_days: 90,
   });
-  if (tokenError || !token) return { error: tokenError?.message ?? "Couldn't create the receipt link." };
+  if (!tokenError && rpcToken) {
+    token = rpcToken as string;
+  } else {
+    const fresh = crypto.randomUUID();
+    const { error: writeError } = await supabase
+      .from("invoices")
+      .update({
+        receipt_token: fresh,
+        receipt_token_expires_at: new Date(Date.now() + 90 * 86400_000).toISOString(),
+      })
+      .eq("id", invoiceId);
+    if (writeError) return { error: tokenError?.message ?? writeError.message };
+    token = fresh;
+  }
+  if (!token) return { error: "Couldn't create the receipt link." };
 
-  const bankRow = await getInvoiceBankSettings();
+  const { data: bankRow } = await supabase
+    .from("invoice_settings")
+    .select("bank_name, account_title, account_number, iban, branch, swift_code, payment_note, account_currency")
+    .eq("id", true)
+    .maybeSingle();
 
   const email = buildInvoiceEmail({
     studentName: student.full_name,
@@ -293,6 +332,7 @@ export async function sendInvoiceToStudent(
     amountPaid,
     balanceDue,
     receiptUrl: `${getSiteUrl()}/receipt/${token}`,
+    variant,
     conversionNote: conversionNote(invoice.currency, bankRow?.account_currency),
     bank: bankRow
       ? {

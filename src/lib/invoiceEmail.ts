@@ -16,6 +16,8 @@ export type InvoiceEmailData = {
   amountPaid: number;
   balanceDue: number;
   receiptUrl: string;
+  /** "overdue" reframes the same invoice as a payment reminder. */
+  variant?: "invoice" | "overdue";
   /** Set when the invoice currency differs from the account currency. */
   conversionNote?: string | null;
   bank: {
@@ -56,7 +58,10 @@ const BRAND = "#52be96";
 
 export function buildInvoiceEmail(data: InvoiceEmailData) {
   const { math } = data;
-  const subject = `Invoice ${data.invoiceNumber} from HMARK Consultants — ${money(data.currency, data.balanceDue)} due`;
+  const overdue = data.variant === "overdue";
+  const subject = overdue
+    ? `Payment overdue — Invoice ${data.invoiceNumber} — ${money(data.currency, data.balanceDue)} outstanding`
+    : `Invoice ${data.invoiceNumber} from HMARK Consultants — ${money(data.currency, data.balanceDue)} due`;
 
   const totalsRows: [string, string][] = [["Consultancy fee", money(data.currency, math.consultancyFee)]];
   if (math.discountAmount > 0) {
@@ -72,7 +77,9 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
   const text = [
     `Dear ${data.studentName},`,
     ``,
-    `Please find your invoice ${data.invoiceNumber} from HMARK Consultants${data.destination ? ` for ${data.destination}` : ""}${data.intake ? ` (${data.intake} intake)` : ""}.`,
+    overdue
+      ? `One or more installments on invoice ${data.invoiceNumber} are now past their due date. Please arrange payment at your earliest convenience.`
+      : `Please find your invoice ${data.invoiceNumber} from HMARK Consultants${data.destination ? ` for ${data.destination}` : ""}${data.intake ? ` (${data.intake} intake)` : ""}.`,
     ``,
     ...totalsRows.map(([l, v]) => `  ${l}: ${v}`),
     `  Total: ${money(data.currency, math.total)}`,
@@ -156,7 +163,7 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid ${LINE};border-radius:12px;border-collapse:collapse">
         <tr><td style="padding:28px 28px 0">
           <p style="margin:0 0 4px;font-size:13px;color:${SOFT}">HMARK Consultants</p>
-          <h1 style="margin:0 0 4px;font-size:19px;color:${INK}">Invoice ${esc(data.invoiceNumber)}</h1>
+          <h1 style="margin:0 0 4px;font-size:19px;color:${INK}">${overdue ? "Payment overdue" : "Invoice"} ${esc(data.invoiceNumber)}</h1>
           <p style="margin:0;font-size:13px;color:${SOFT}">
             ${esc(data.destination ?? "")}${data.destination && data.intake ? " · " : ""}${data.intake ? `${esc(data.intake)} intake` : ""}
           </p>
@@ -165,7 +172,9 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
         <tr><td style="padding:20px 28px 0">
           <p style="margin:0 0 16px;font-size:15px;color:${INK}">Dear ${esc(data.studentName)},</p>
           <p style="margin:0 0 20px;font-size:14px;color:${SOFT};line-height:1.6">
-            Here is your invoice from HMARK Consultants. You can open the full receipt below to print or save it.
+            ${overdue
+              ? "One or more installments on this invoice are now past their due date. You can open the full receipt below to print or save it."
+              : "Here is your invoice from HMARK Consultants. You can open the full receipt below to print or save it."}
           </p>
 
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">

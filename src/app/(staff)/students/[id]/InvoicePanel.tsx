@@ -4,13 +4,14 @@ import { useActionState, useState } from "react";
 import {
   generateInvoice,
   markInstallmentPaid,
+  sendInvoiceToStudent,
   sendReceipt,
   generateInvoicePdf,
   updateInvoice,
   deleteInvoice,
   updateInstallment,
 } from "@/lib/actions/invoices";
-import { updateAdminFeeStatus, addLineItem, deleteLineItem, sendInvoiceEmail } from "@/lib/actions/consultancyFee";
+import { updateAdminFeeStatus, addLineItem, deleteLineItem } from "@/lib/actions/consultancyFee";
 import { computeInvoiceStatus, INVOICE_STATUS_LABELS } from "@/lib/invoiceStatus";
 import { formatDateOnly } from "@/lib/formatDate";
 import { Badge } from "@/components/ui/Badge";
@@ -433,14 +434,14 @@ function GeneratePdfButton({ invoiceId, studentId, revalidateTo, hasExisting }: 
   );
 }
 
-function SendInvoiceEmailButton({ invoiceId, studentId, revalidateTo }: { invoiceId: string; studentId: string; revalidateTo: string }) {
+function SendInvoiceEmailButton({ invoiceId, studentId }: { invoiceId: string; studentId: string }) {
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
 
   async function handle() {
     setPending(true);
     setMessage(null);
-    const result = await sendInvoiceEmail(invoiceId, studentId, revalidateTo);
+    const result = await sendInvoiceToStudent(invoiceId, studentId);
     setMessage(result?.error ? { text: result.error, ok: false } : { text: "Sent.", ok: true });
     setPending(false);
   }
@@ -620,7 +621,7 @@ export function InvoiceCard({
         {canManage && (
           <>
             <GeneratePdfButton invoiceId={invoice.id} studentId={studentId} revalidateTo={revalidateTo} hasExisting={Boolean(pdfUrl)} />
-            <SendInvoiceEmailButton invoiceId={invoice.id} studentId={studentId} revalidateTo={revalidateTo} />
+            <SendInvoiceEmailButton invoiceId={invoice.id} studentId={studentId} />
           </>
         )}
       </div>

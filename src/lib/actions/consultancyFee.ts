@@ -3,8 +3,8 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendEmail, isEmailConfigured, accountsFrom } from "@/lib/email";
-import { generateInvoicePdf, buildAndStoreInvoicePdf } from "@/lib/actions/invoices";
+import { isEmailConfigured } from "@/lib/email";
+import { buildAndSendInvoiceEmail } from "@/lib/actions/invoices";
 
 async function requireProcessingOrAbove(supabase: Awaited<ReturnType<typeof createClient>>) {
   const {
@@ -126,27 +126,15 @@ export async function sendInvoiceEmail(invoiceId: string, studentId: string, rev
 
   if (!isEmailConfigured()) return { error: "Email isn't configured yet. Set SMTP_HOST / SMTP_USER / SMTP_PASS in the environment." };
 
-  const pdfResult = await generateInvoicePdf(invoiceId, studentId, revalidateTo);
-  if (pdfResult && "error" in pdfResult) return { error: pdfResult.error };
-
-  const { data: invoice } = await supabase.from("invoices").select("pdf_path, invoice_number").eq("id", invoiceId).maybeSingle();
-  if (!invoice?.pdf_path) return { error: "Could not generate the invoice PDF." };
-
-  const { data: file, error: downloadError } = await supabase.storage.from("documents").download(invoice.pdf_path);
-  if (downloadError || !file) return { error: downloadError?.message ?? "Could not read the generated PDF." };
-  const buffer = Buffer.from(await file.arrayBuffer());
-
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const result = await sendEmail({
-    from: accountsFrom(),
-    to: student.email,
-    subject: `Invoice ${invoice.invoice_number ?? ""} — HMARK Consultants`,
-    text: `Dear ${student.full_name},\n\nPlease find attached your invoice from HMARK Consultants.\n\nRegards,\nHMARK Consultants`,
-    attachments: [{ filename: `${invoice.invoice_number ?? "invoice"}.pdf`, content: buffer, contentType: "application/pdf" }],
-  });
+  // Delegates to the one shared implementation, so this sends the same
+  // link-format email as the Invoice Generator. It previously attached the
+  // PDF, so which kind of email a student received depended on where staff
+  // happened to click.
+  const result = await buildAndSendInvoiceEmail(supabase, invoiceId, studentId, "invoice");
 
   await supabase.from("invoice_email_log").insert({
     invoice_id: invoiceId,
@@ -187,19 +175,10 @@ export async function sendOverdueReminderIfDue(invoiceId: string, studentId: str
   if (!student?.email) return { skipped: true };
   if (!isEmailConfigured()) return { skipped: true };
 
-  const pdfResult = await buildAndStoreInvoicePdf(supabase, invoiceId, studentId);
-  if (pdfResult.error) return { error: pdfResult.error };
-
-  const { data: file } = await supabase.storage.from("documents").download(pdfResult.pdfPath!);
-  const buffer = file ? Buffer.from(await file.arrayBuffer()) : null;
-
-  const result = await sendEmail({
-    from: accountsFrom(),
-    to: student.email,
-    subject: `Payment overdue — Invoice ${pdfResult.invoiceNumber ?? ""} — HMARK Consultants`,
-    text: `Dear ${student.full_name},\n\nThis is a reminder that one or more installments on your invoice are now overdue. Please arrange payment at your earliest convenience.\n\nRegards,\nHMARK Consultants`,
-    attachments: buffer ? [{ filename: `${pdfResult.invoiceNumber ?? "invoice"}.pdf`, content: buffer, contentType: "application/pdf" }] : undefined,
-  });
+  // The same link-format email as everywhere else, reframed as a reminder.
+  // This used to attach the PDF, contradicting the rule that a receipt is
+  // reached through a button rather than an attachment.
+  const result = await buildAndSendInvoiceEmail(supabase, invoiceId, studentId, "overdue");
 
   await supabase.from("invoice_email_log").insert({
     invoice_id: invoiceId,
