@@ -86,7 +86,7 @@ export function EditAgreementTemplateForm({
           name="file"
           type="file"
           accept=".docx"
-          className="text-sm"
+          className="max-w-full text-sm"
           onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
         />
         {extracting && <p className="text-xs text-muted">Reading document…</p>}

@@ -61,7 +61,7 @@ export function NewServiceRequestForm({ students }: { students: { id: string; fu
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
           Proof of payment
-          <input name="proof_of_payment" type="file" className="text-xs" />
+          <input name="proof_of_payment" type="file" className="max-w-full text-xs" />
         </label>
       </div>
 

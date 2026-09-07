@@ -24,7 +24,7 @@ export function ImportUniversitiesForm({ destinations }: { destinations: { id: s
             </option>
           ))}
         </Select>
-        <input name="file" type="file" accept=".csv" required className="text-sm" />
+        <input name="file" type="file" accept=".csv" required className="max-w-full text-sm" />
         <Button type="submit" variant="primary" pending={pending}>
           Import
         </Button>

@@ -50,7 +50,7 @@ export function ImportProgramsForm({ universityId }: { universityId: string }) {
     <details className="mt-3 rounded-md border border-border p-3">
       <summary className="cursor-pointer text-sm font-medium text-ink">Import programs from CSV</summary>
       <form action={formAction} className="mt-3 flex flex-wrap items-end gap-2">
-        <input name="file" type="file" accept=".csv" required className="text-sm" />
+        <input name="file" type="file" accept=".csv" required className="max-w-full text-sm" />
         <Button type="submit" variant="primary" pending={pending}>
           Import
         </Button>
