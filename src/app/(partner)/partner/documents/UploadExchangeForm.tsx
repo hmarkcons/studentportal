@@ -11,7 +11,9 @@ export function UploadExchangeForm({ universityId }: { universityId: string }) {
 
   return (
     <form action={formAction} className="flex flex-wrap items-end gap-2">
-      <input type="file" name="file" required className="text-sm" />
+      {/* max-w-full: a native file input has an intrinsic minimum width that
+          overflows the page at 320px otherwise. */}
+      <input type="file" name="file" required className="max-w-full text-sm" />
       <Input name="description" placeholder="Description" />
       <Button type="submit" pending={pending} variant="primary">
         Upload

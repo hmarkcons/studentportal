@@ -9,8 +9,10 @@ export function LetterUploadForm({ applicationId, category, label }: { applicati
   const [state, formAction, pending] = useActionState(action, undefined);
 
   return (
-    <form action={formAction} className="flex items-center gap-2">
-      <input type="file" name="file" required className="text-xs" />
+    <form action={formAction} className="flex flex-wrap items-center gap-2">
+      {/* max-w-full + wrapping: the native file input's intrinsic minimum
+          width pushed the upload button off-screen at 320px. */}
+      <input type="file" name="file" required className="max-w-full text-xs" />
       <Button type="submit" variant="outline-primary" size="sm" pending={pending}>
         Upload {label}
       </Button>

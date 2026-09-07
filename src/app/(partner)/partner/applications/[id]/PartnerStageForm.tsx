@@ -11,8 +11,10 @@ export function PartnerStageForm({ applicationId, currentStage, pipelineStages }
   const [state, formAction, pending] = useActionState(action, undefined);
   const options = [...pipelineStages, ...MANUAL_APPLICATION_STATUSES];
 
+  // The select is w-full, so without wrapping the submit button is pushed
+  // past the viewport edge on a narrow phone.
   return (
-    <form action={formAction} className="flex items-end gap-2">
+    <form action={formAction} className="flex flex-wrap items-end gap-2">
       <Select name="current_stage" defaultValue={currentStage}>
         {options.map((s) => (
           <option key={s} value={s}>
