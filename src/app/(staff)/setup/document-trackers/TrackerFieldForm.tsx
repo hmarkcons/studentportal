@@ -59,6 +59,12 @@ export function NewTrackerFieldForm({ countryCode }: { countryCode: string }) {
         <input type="checkbox" name="show_on_student_visa" />
         Show this field on the student&rsquo;s Visa tab
       </label>
+      {/* Only date fields can be appointments — see the check constraint in
+          migration 0127. */}
+      <label className="col-span-full flex items-center gap-2 text-xs text-ink">
+        <input type="checkbox" name="is_appointment" />
+        This is an appointment the student attends (date fields only)
+      </label>
       <label className="flex flex-col gap-1 text-xs text-muted">
         Visa role
         <Select name="visa_role" defaultValue="">
@@ -163,6 +169,12 @@ export function TrackerFieldRow({ field }: { field: TrackerFieldDef }) {
       <label className="col-span-full flex items-center gap-2 text-xs text-ink">
         <input type="checkbox" name="show_on_student_visa" defaultChecked={field.showOnStudentVisa ?? false} />
         Show this field on the student&rsquo;s Visa tab
+      </label>
+      {/* Only date fields can be appointments — see the check constraint in
+          migration 0127. */}
+      <label className="col-span-full flex items-center gap-2 text-xs text-ink">
+        <input type="checkbox" name="is_appointment" defaultChecked={field.isAppointment ?? false} />
+        This is an appointment the student attends (date fields only)
       </label>
       <label className="flex flex-col gap-1 text-xs text-muted">
         Visa role

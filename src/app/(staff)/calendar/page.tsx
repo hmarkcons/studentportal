@@ -71,9 +71,26 @@ export default async function CalendarPage(props: {
     .lte("due_date", rangeEndStr)
     .order("due_date");
 
-  const { data: visaRecords } = await supabase
-    .from("visa_records")
-    .select("biometric_appointment, interview_appointment, medical_appointment, application:applications(student:leads(full_name))");
+  // Appointments live in the documentation tracker, not visa_records — that
+  // table is the pre-tracker system, the form that wrote it is no longer linked
+  // from anywhere and it holds no rows, so this section of the calendar was
+  // always empty. Which date fields count is opted in from Setup > Document
+  // trackers (is_appointment).
+  const { data: appointmentFields } = await supabase
+    .from("tracker_definitions")
+    .select("country_code, field_key, label")
+    .eq("is_appointment", true);
+
+  const { data: appointmentValues } = appointmentFields?.length
+    ? await supabase
+        .from("application_country_extra")
+        .select(
+          "field_key, field_value, application:applications(id, student:leads(full_name), university:universities(destination:destinations(country_code)))"
+        )
+        .in("field_key", [...new Set(appointmentFields.map((f) => f.field_key))])
+        .gte("field_value", rangeStartStr)
+        .lte("field_value", rangeEndStr)
+    : { data: [] };
 
   const { data: programDeadlines } = await supabase
     .from("applications")
@@ -154,26 +171,29 @@ export default async function CalendarPage(props: {
     });
   });
 
-  (visaRecords ?? []).forEach((v) => {
-    const name = one(one(v.application)?.student)?.full_name ?? "?";
-    const items: [string | null, string][] = [
-      [v.biometric_appointment, "Biometric appointment"],
-      [v.interview_appointment, "Visa interview"],
-      [v.medical_appointment, "Medical exam"],
-    ];
-    items.forEach(([ts, label], i) => {
-      if (!ts) return;
-      const d = new Date(ts);
-      const dateStr = d.toISOString().slice(0, 10);
-      if (dateStr < rangeStartStr || dateStr > rangeEndStr) return;
-      events.push({
-        id: `visa-${i}-${ts}-${name}`,
-        date: dateStr,
-        time: d.toISOString().slice(11, 16),
-        kind: "visa",
-        label: `${label} — ${name}`,
-        tone: "success",
-      });
+  // The label comes from the tracker field, so a country that calls it a
+  // "Prefettura appointment" says exactly that rather than a generic word of
+  // ours.
+  const apptLabel = new Map((appointmentFields ?? []).map((f) => [f.country_code + ":" + f.field_key, f.label]));
+  (appointmentValues ?? []).forEach((row) => {
+    const value = (row.field_value ?? "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
+    const app = one(row.application as never) as { id?: string; student?: unknown; university?: unknown } | null;
+    const student = one(app?.student as never) as { full_name?: string } | null;
+    const uni = one(app?.university as never) as { destination?: unknown } | null;
+    const dest = uni?.destination ? (one(uni.destination as never) as { country_code?: string } | null) : null;
+    // A field key flagged for a different country is not this application's
+    // appointment, even though the key matched.
+    const label = apptLabel.get(dest?.country_code + ":" + row.field_key);
+    if (!label) return;
+    events.push({
+      id: "appt-" + app?.id + "-" + row.field_key + "-" + value,
+      date: value,
+      // Tracker appointment fields are date-only, so there is no time to show.
+      time: null,
+      kind: "visa",
+      label: label + " — " + (student?.full_name ?? "?"),
+      tone: "success",
     });
   });
 

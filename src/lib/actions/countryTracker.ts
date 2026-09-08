@@ -15,6 +15,7 @@ type TrackerDefinitionRow = {
   credential_type: string | null;
   show_on_student_visa?: boolean | null;
   visa_role?: string | null;
+  is_appointment?: boolean | null;
   show_if_key: string | null;
   show_if_equals: string | null;
   date_when_status: string | null;
@@ -32,6 +33,7 @@ function rowToFieldDef(r: TrackerDefinitionRow): TrackerFieldDef {
     dateWhenStatus: r.date_when_status ?? undefined,
     showOnStudentVisa: r.show_on_student_visa ?? false,
     visaRole: (r.visa_role ?? null) as "outcome" | "outcome_reason" | null,
+    isAppointment: r.is_appointment ?? false,
     sortOrder: r.sort_order,
   };
 }
@@ -41,7 +43,7 @@ export async function listTrackerDefinitions(countryCodes: string[]): Promise<Re
   const supabase = await createClient();
   const { data } = await supabase
     .from("tracker_definitions")
-    .select("id, country_code, field_key, label, field_type, options, credential_type, show_if_key, show_if_equals, date_when_status, show_on_student_visa, visa_role, sort_order")
+    .select("id, country_code, field_key, label, field_type, options, credential_type, show_if_key, show_if_equals, date_when_status, show_on_student_visa, visa_role, is_appointment, sort_order")
     .in("country_code", countryCodes)
     .order("sort_order", { ascending: true })
     .returns<TrackerDefinitionRow[]>();
@@ -76,6 +78,9 @@ export async function createTrackerField(_prevState: unknown, formData: FormData
   const show_on_student_visa = formData.get("show_on_student_visa") === "on";
   const visaRoleRaw = String(formData.get("visa_role") ?? "").trim();
   const visa_role = visaRoleRaw === "outcome" || visaRoleRaw === "outcome_reason" ? visaRoleRaw : null;
+  // Constrained to date fields in the schema, so drop the flag rather than
+  // letting the insert fail on a check violation staff cannot interpret.
+  const is_appointment = formData.get("is_appointment") === "on" && field_type === "date";
   const sort_order = Number(formData.get("sort_order") ?? 0);
 
   if (!country_code || !field_key || !label || !field_type) {
@@ -104,6 +109,7 @@ export async function createTrackerField(_prevState: unknown, formData: FormData
     date_when_status,
     show_on_student_visa,
     visa_role,
+    is_appointment,
     sort_order,
   });
 
@@ -127,6 +133,9 @@ export async function updateTrackerField(id: string, _prevState: unknown, formDa
   const show_on_student_visa = formData.get("show_on_student_visa") === "on";
   const visaRoleRaw = String(formData.get("visa_role") ?? "").trim();
   const visa_role = visaRoleRaw === "outcome" || visaRoleRaw === "outcome_reason" ? visaRoleRaw : null;
+  // Constrained to date fields in the schema, so drop the flag rather than
+  // letting the insert fail on a check violation staff cannot interpret.
+  const is_appointment = formData.get("is_appointment") === "on" && field_type === "date";
   const sort_order = Number(formData.get("sort_order") ?? 0);
 
   if (!label || !field_type) return { error: "Label and type are required." };
@@ -140,7 +149,7 @@ export async function updateTrackerField(id: string, _prevState: unknown, formDa
 
   const { error } = await supabase
     .from("tracker_definitions")
-    .update({ label, field_type, options, credential_type, show_if_key, show_if_equals, date_when_status, show_on_student_visa, visa_role, sort_order })
+    .update({ label, field_type, options, credential_type, show_if_key, show_if_equals, date_when_status, show_on_student_visa, visa_role, is_appointment, sort_order })
     .eq("id", id);
 
   if (error) return { error: error.message };

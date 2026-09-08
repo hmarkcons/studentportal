@@ -44,5 +44,8 @@ export type TrackerFieldDef = {
   /** Marks the field carrying the visa decision, or the reason for it — used
    *  to decide whether the student sees an approval or refusal message. */
   visaRole?: "outcome" | "outcome_reason" | null;
+  /** A date the student turns up to — listed on their Appointments tab and on
+   *  the staff Calendar. Only meaningful on a date field. */
+  isAppointment?: boolean;
   sortOrder?: number;
 };
