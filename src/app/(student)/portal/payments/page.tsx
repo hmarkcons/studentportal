@@ -79,6 +79,15 @@ export default async function PortalPaymentsPage() {
           const settled = progress.outstanding <= 0;
           const cur = inv.currency;
 
+          // The instalment plan is what the student is actually asked to pay,
+          // so it is what Total reports. It can drift from the fee breakdown:
+          // editing an invoice's fee does not rebuild its instalments, so a
+          // later change leaves the two disagreeing. Say so rather than
+          // printing two totals and letting the student pick.
+          const scheduleTotal = Math.round(mine.reduce((s, i) => s + Number(i.amount ?? 0), 0) * 100) / 100;
+          const total = mine.length > 0 ? scheduleTotal : math.total;
+          const mismatch = mine.length > 0 && Math.abs(scheduleTotal - math.total) > 0.01;
+
           return (
             <Card key={inv.id}>
               <div className="mb-4 flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
@@ -107,10 +116,17 @@ export default async function PortalPaymentsPage() {
                 )}
                 {math.taxAmount > 0 && <Line label={`SRB tax · ${math.taxRate}%`} value={money(cur, math.taxAmount)} />}
                 {math.adminCharge > 0 && <Line label="Administrative charge" value={money(cur, math.adminCharge)} />}
-                <Line label="Total" value={money(cur, math.total)} strong />
+                <Line label="Total" value={money(cur, total)} strong />
                 {progress.paid > 0 && <Line label="Paid" value={`- ${money(cur, progress.paid)}`} tone="success" />}
                 <Line label="Balance" value={money(cur, progress.outstanding)} strong tone={settled ? "success" : undefined} />
               </dl>
+
+              {mismatch && (
+                <p className="mt-3 rounded-md bg-warning-bg p-3 text-xs text-warning">
+                  Please check with your counsellor before paying: the instalment plan below and the fee breakdown above
+                  don&rsquo;t currently add up to the same figure. The instalments are what we have on record.
+                </p>
+              )}
 
               {mine.length > 0 && (
                 <div className="mt-4 border-t border-border pt-3">
