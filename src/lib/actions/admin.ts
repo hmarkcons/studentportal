@@ -4,6 +4,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePermission } from "@/lib/auth/permissions";
+import { dateOfBirthError } from "@/lib/dateOfBirth";
 
 // "Suspended" just freezes the account (blocked from every staff route by
 // the (staff) layout's `status !== "active"` check, same as deactivated) —
@@ -59,6 +60,8 @@ export async function createStaffAccount(_prevState: unknown, formData: FormData
   const fields = staffFieldsFromFormData(formData);
 
   if (!email || !fields.full_name || !fields.role) return { error: "Email (official), name, and role are required." };
+  const dobError = dateOfBirthError(fields.date_of_birth);
+  if (dobError) return { error: dobError };
 
   const admin = createAdminClient();
   const tempPassword = Math.random().toString(36).slice(2) + "A1!";
@@ -85,6 +88,8 @@ export async function updateStaffDetails(staffId: string, _prevState: unknown, f
 
   const fields = staffFieldsFromFormData(formData);
   if (!fields.full_name || !fields.role) return { error: "Name and role are required." };
+  const dobError = dateOfBirthError(fields.date_of_birth);
+  if (dobError) return { error: dobError };
 
   // Deactivating a staff member must not silently strand their students with
   // a counselor nobody can see any more (is_active_staff() already hides an

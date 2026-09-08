@@ -5,6 +5,7 @@ import { updateLead } from "@/lib/actions/leads";
 import { STUDY_LEVELS, QUALIFICATION_LEVELS } from "@/lib/constants";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
+import { dobBounds } from "@/lib/dateOfBirth";
 
 export type LeadEditable = {
   id: string;
@@ -98,7 +99,7 @@ export function LeadEditForm({
         <>
           <label className="flex flex-col gap-1 text-xs text-muted">
             Date of birth
-            <Input name="date_of_birth" type="date" defaultValue={lead.date_of_birth ?? ""} required />
+            <Input name="date_of_birth" type="date" defaultValue={lead.date_of_birth ?? ""} required {...dobBounds()} />
           </label>
           <label className="flex flex-col gap-1 text-xs text-muted">
             Home phone

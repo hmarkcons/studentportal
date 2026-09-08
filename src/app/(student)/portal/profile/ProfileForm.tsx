@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { updateProfile } from "@/lib/actions/portal-profile";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
+import { dobBounds } from "@/lib/dateOfBirth";
 
 type Student = {
   full_name: string;
@@ -49,7 +50,7 @@ export function ProfileForm({ studentId, student, profile }: { studentId: string
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
           Date of birth
-          <Input name="date_of_birth" type="date" defaultValue={student.date_of_birth ?? ""} />
+          <Input name="date_of_birth" type="date" defaultValue={student.date_of_birth ?? ""} {...dobBounds()} />
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
           Home phone

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { LEAD_STATUSES } from "@/lib/constants";
+import { dateOfBirthError } from "@/lib/dateOfBirth";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -136,6 +137,8 @@ export async function updateLead(leadId: string, revalidateTo: string, _prevStat
   // there) — the agreement PDF needs it, so it's required in that context
   // specifically, not for a lead who hasn't registered yet.
   if (formData.has("date_of_birth") && !date_of_birth) return { error: "Date of birth is required." };
+  const dobError = dateOfBirthError(date_of_birth);
+  if (dobError) return { error: dobError };
 
   const { error } = await supabase
     .from("leads")
@@ -244,7 +247,9 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
       level_applying_for: ["bachelors", "masters", "phd"].includes(r.level_applying_for) ? r.level_applying_for : null,
       course_of_interest: r.course_of_interest || null,
       country_of_interest: r.country_of_interest || null,
-      date_of_birth: r.date_of_birth || null,
+      // A bad DOB in a spreadsheet is dropped rather than failing the whole
+      // import — the row still carries a name and contact details worth having.
+      date_of_birth: dateOfBirthError(r.date_of_birth) ? null : r.date_of_birth || null,
       address: r.address || null,
       home_phone: r.home_phone || null,
       status: "registered" as const,

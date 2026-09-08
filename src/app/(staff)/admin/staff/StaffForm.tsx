@@ -18,6 +18,7 @@ import {
 } from "@/lib/constants";
 import { Input, Select } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { dobBounds } from "@/lib/dateOfBirth";
 
 const labelClass = "text-xs font-medium text-muted";
 
@@ -157,7 +158,7 @@ export function StaffForm({
           </Select>
         </Field>
         <Field label="Date of birth">
-          <Input name="date_of_birth" type="date" defaultValue={staff?.date_of_birth ?? ""} />
+          <Input name="date_of_birth" type="date" defaultValue={staff?.date_of_birth ?? ""} {...dobBounds()} />
         </Field>
         <Field label="Marital status">
           <Select name="marital_status" defaultValue={staff?.marital_status ?? ""}>

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { dateOfBirthError } from "@/lib/dateOfBirth";
 
 // Saves the entire "Personal details" card on a registered student's profile
 // tab in one submit — the core lead fields (name, contact, registration
@@ -21,6 +22,8 @@ export async function updateRegisteredStudentProfile(
 
   const date_of_birth = String(formData.get("date_of_birth") ?? "") || null;
   if (!date_of_birth) return { error: "Date of birth is required." };
+  const dobError = dateOfBirthError(date_of_birth);
+  if (dobError) return { error: dobError };
 
   const { error: leadError } = await supabase
     .from("leads")

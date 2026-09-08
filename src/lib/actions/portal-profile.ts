@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { dateOfBirthError } from "@/lib/dateOfBirth";
 
 // Saves the entire Profile card in one submit — personal details and
 // passport/sponsor details used to be two separate forms/buttons, and
@@ -16,6 +17,9 @@ export async function updateProfile(studentId: string, _prevState: unknown, form
 
   const full_name = String(formData.get("full_name") ?? "").trim();
   if (!full_name) return { error: "Name is required." };
+
+  const dobError = dateOfBirthError(formData.get("date_of_birth"));
+  if (dobError) return { error: dobError };
 
   const { error: leadError } = await supabase
     .from("leads")
