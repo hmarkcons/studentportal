@@ -41,13 +41,29 @@ function WhyVideoDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-export function SubmitSignedAgreementForm({ agreementId, studentId }: { agreementId: string; studentId: string }) {
+export function SubmitSignedAgreementForm({
+  agreementId,
+  studentId,
+  needsDocument = true,
+  needsVideo = true,
+}: {
+  agreementId: string;
+  studentId: string;
+  // Which halves are outstanding. After staff send back only the video, asking
+  // for the signed agreement again is work the student has already done — and
+  // re-uploading it would reset its approval.
+  needsDocument?: boolean;
+  needsVideo?: boolean;
+}) {
   const action = submitSignedAgreement.bind(null, agreementId, studentId);
   const [state, formAction, pending] = useActionState(action, undefined);
   const [video, setVideo] = useState<File | null>(null);
   const [documentName, setDocumentName] = useState<string | null>(null);
   const [showWhy, setShowWhy] = useState(false);
   const videoInputRef = useRef<HTMLInputElement | null>(null);
+  const both = needsDocument && needsVideo;
+  // Only what is being asked for can block the button.
+  const ready = (!needsVideo || Boolean(video)) && (!needsDocument || Boolean(documentName));
 
   // The recorded Blob only exists in memory, so mirror it into a real file
   // input the form can post. DataTransfer is the supported way to set one.
@@ -66,21 +82,33 @@ export function SubmitSignedAgreementForm({ agreementId, studentId }: { agreemen
   return (
     <form action={formAction} className="mt-3 flex flex-col gap-3 border-t border-border pt-3">
       <div className="flex flex-wrap items-center gap-2">
-        <h4 className="text-sm font-medium text-ink">Submit your e-signed agreement</h4>
-        <button
-          type="button"
-          onClick={() => setShowWhy(true)}
-          className="rounded-md border border-primary px-2 py-0.5 text-xs font-medium text-primary hover:bg-primary/10"
-        >
-          Why this video is needed?
-        </button>
+        <h4 className="text-sm font-medium text-ink">
+          {both ? "Submit your e-signed agreement" : needsVideo ? "Record your video again" : "Attach your signed agreement again"}
+        </h4>
+        {needsVideo && (
+          <button
+            type="button"
+            onClick={() => setShowWhy(true)}
+            className="rounded-md border border-primary px-2 py-0.5 text-xs font-medium text-primary hover:bg-primary/10"
+          >
+            Why this video is needed?
+          </button>
+        )}
       </div>
       <p className="text-xs text-muted">
-        Record a short video confirming you are e-signing this agreement, then attach the signed document. Both are required.
+        {both
+          ? "Record a short video confirming you are e-signing this agreement, then attach the signed document. Both are required."
+          : needsVideo
+            ? "Only the video needs redoing — your signed agreement is already on file and stays as it is."
+            : "Only the signed document needs redoing — your video is already on file and stays as it is."}
       </p>
 
-      <ConsentVideoRecorder onVideo={attachVideo} disabled={pending} />
-      <input ref={videoInputRef} type="file" name="video" accept="video/*" className="sr-only" tabIndex={-1} aria-hidden />
+      {needsVideo && (
+        <>
+          <ConsentVideoRecorder onVideo={attachVideo} disabled={pending} />
+          <input ref={videoInputRef} type="file" name="video" accept="video/*" className="sr-only" tabIndex={-1} aria-hidden />
+        </>
+      )}
 
       {/* The native file input is styled out and driven by the label so it
           matches the bordered video picker above it — left bare it renders as
@@ -90,30 +118,32 @@ export function SubmitSignedAgreementForm({ agreementId, studentId }: { agreemen
           this card barely 440px, and inline it wrapped the button away from
           the picker it is meant to sit beside. */}
       <div className="flex flex-wrap items-center gap-2">
-        <label className="cursor-pointer whitespace-nowrap rounded-md border border-border px-2 py-1 text-xs text-ink hover:bg-bg">
-          {documentName ? "Change file" : "Choose file"}
-          <input
-            type="file"
-            name="agreement"
-            accept={ACCEPTED_DOCUMENT_ACCEPT}
-            className="sr-only"
-            disabled={pending}
-            onChange={(e) => setDocumentName(e.target.files?.[0]?.name ?? null)}
-          />
-        </label>
+        {needsDocument && (
+          <label className="cursor-pointer whitespace-nowrap rounded-md border border-border px-2 py-1 text-xs text-ink hover:bg-bg">
+            {documentName ? "Change file" : "Choose file"}
+            <input
+              type="file"
+              name="agreement"
+              accept={ACCEPTED_DOCUMENT_ACCEPT}
+              className="sr-only"
+              disabled={pending}
+              onChange={(e) => setDocumentName(e.target.files?.[0]?.name ?? null)}
+            />
+          </label>
+        )}
         {/* Gated in the button rather than with `required` on the input: a
             visually-hidden required control can't be focused for the native
             validation bubble, and Chrome then blocks submission silently. */}
-        <Button type="submit" variant="primary" size="sm" pending={pending} disabled={!video || !documentName}>
-          Submit signed agreement
+        <Button type="submit" variant="primary" size="sm" pending={pending} disabled={!ready}>
+          {both ? "Submit signed agreement" : needsVideo ? "Submit new video" : "Submit signed agreement"}
         </Button>
       </div>
-      <p className="truncate text-xs text-muted">{documentName ?? "No file chosen"}</p>
-      {(!video || !documentName) && (
+      {needsDocument && <p className="truncate text-xs text-muted">{documentName ?? "No file chosen"}</p>}
+      {!ready && (
         <p className="text-xs text-muted">
-          {!video && !documentName
+          {needsVideo && needsDocument && !video && !documentName
             ? "Record the video and attach your signed agreement — submission stays locked until both are here."
-            : !video
+            : needsVideo && !video
               ? "Record or attach the video first — submission stays locked until then."
               : "Attach your signed agreement — submission stays locked until then."}
         </p>

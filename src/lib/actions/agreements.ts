@@ -379,6 +379,13 @@ export async function verifySignedAgreement(
     return { error: "Tick both the agreement and the video to approve. If either is wrong, reject that one instead." };
   }
 
+  // Who approved it, not just when. The reject path records the reviewer (see
+  // reject_agreement_artifact), and an approval is the half of this workflow
+  // where knowing who signed off actually matters.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   const { error } = await supabase
     .from("agreements")
     .update({
@@ -389,6 +396,7 @@ export async function verifySignedAgreement(
       document_review_note: null,
       video_review_note: null,
       reviewed_at: new Date().toISOString(),
+      reviewed_by: user?.id ?? null,
     })
     .eq("id", agreementId);
   if (error) return { error: error.message };

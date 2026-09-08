@@ -109,7 +109,15 @@ export default async function PortalAgreementPage() {
                       </p>
                     </div>
                   )}
-                  <SubmitSignedAgreementForm agreementId={a.id} studentId={student.id} />
+                  {/* Per agreement, not from the portal-wide gate: staff may
+                      have sent back only one half, and the form should ask for
+                      exactly what is missing. */}
+                  <SubmitSignedAgreementForm
+                    agreementId={a.id}
+                    studentId={student.id}
+                    needsDocument={!a.signed_file_path}
+                    needsVideo={!a.video_recording_path}
+                  />
                 </>
               )
             )}
