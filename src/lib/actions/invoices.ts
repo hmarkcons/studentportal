@@ -166,13 +166,93 @@ export async function updateInvoice(invoiceId: string, studentId: string, revali
   const invoice_number = String(formData.get("invoice_number") ?? "").trim() || null;
   const installment_plan = String(formData.get("installment_plan") ?? "").trim() || null;
 
+  // Changing a fee used to leave the instalment rows untouched, so the invoice
+  // and its own payment schedule stopped agreeing about the total — and the
+  // student's Payments page then had to show them a warning instead of a bill.
+  // The schedule is rebuilt to match, or the edit is refused; it is never left
+  // inconsistent.
+  const { data: current } = await supabase
+    .from("invoices")
+    .select("discount_amount, tax_rate")
+    .eq("id", invoiceId)
+    .maybeSingle();
+
+  const discountAmount = Number(current?.discount_amount ?? 0);
+  const taxRate = Number(current?.tax_rate ?? 0);
+
+  // computeInvoiceMath would silently clamp this, quietly changing the discount
+  // the student was promised. Refuse instead and let staff decide.
+  if (discountAmount > consultancy_fee) {
+    return {
+      error: `This invoice carries a ${discountAmount.toFixed(2)} discount, which is more than the new consultancy fee. Lower the discount before reducing the fee.`,
+    };
+  }
+
+  const math = computeInvoiceMath({ consultancyFee: consultancy_fee, adminCharge: admin_charge, discountAmount, taxRate });
+
+  const { data: existing } = await supabase
+    .from("invoice_installments")
+    .select("id, installment_no, amount, amount_paid, status")
+    .eq("invoice_id", invoiceId)
+    .order("installment_no", { ascending: true });
+
+  const schedule = existing ?? [];
+  const scheduleTotal = Math.round(schedule.reduce((s, i) => s + Number(i.amount ?? 0), 0) * 100) / 100;
+  const needsRebuild = schedule.length > 0 && Math.abs(scheduleTotal - math.total) > 0.01;
+
+  // A settled or part-settled instalment is a record of money that actually
+  // changed hands. Rewriting its amount would falsify the ledger, so the edit
+  // stops here rather than deciding for staff which record to sacrifice.
+  if (needsRebuild) {
+    const settled = schedule.filter((i) => i.status === "paid" || Number(i.amount_paid ?? 0) > 0);
+    if (settled.length > 0) {
+      return {
+        error: `This would change the total from ${scheduleTotal.toFixed(2)} to ${math.total.toFixed(2)}, but ${
+          settled.length === 1 ? "instalment" : "instalments"
+        } ${settled.map((i) => i.installment_no).join(", ")} ${
+          settled.length === 1 ? "already has a payment" : "already have payments"
+        } recorded. Adjust the unpaid instalments individually, or delete this invoice and generate a new one.`,
+      };
+    }
+  }
+
   const { error } = await supabase
     .from("invoices")
-    .update({ admin_charge, consultancy_fee, currency, intake, terms, invoice_number, installment_plan })
+    // tax_amount is stored as well as recomputed, so anything reading the
+    // column rather than the rate does not go stale after an edit.
+    .update({
+      admin_charge,
+      consultancy_fee,
+      currency,
+      intake,
+      terms,
+      invoice_number,
+      installment_plan,
+      tax_amount: math.taxAmount,
+    })
     .eq("id", invoiceId);
   if (error) return { error: error.message };
 
+  if (needsRebuild) {
+    // Same number of instalments and the same due dates — only the amounts
+    // move, with the admin charge still riding on the first.
+    const amounts = buildInstallmentPlan(math, schedule.length);
+    for (let i = 0; i < schedule.length; i++) {
+      const { error: rowError } = await supabase
+        .from("invoice_installments")
+        .update({ amount: amounts[i] })
+        .eq("id", schedule[i].id);
+      if (rowError) {
+        return {
+          error: `The invoice was saved but instalment ${schedule[i].installment_no} could not be updated (${rowError.message}). Re-save to finish rebuilding the schedule.`,
+        };
+      }
+    }
+  }
+
   revalidatePath(revalidateTo);
+  revalidatePath("/finance/consultancy-fee");
+  revalidatePath("/finance/invoice-generator");
   return { success: true };
 }
 

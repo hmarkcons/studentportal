@@ -132,6 +132,10 @@ function EditInvoiceForm({
 
   return (
     <form action={formAction} className="mt-2 flex flex-col gap-2 rounded-md border border-border p-3">
+      <p className="text-xs text-muted">
+        Changing a fee rebuilds the instalment amounts to match, keeping the same number of instalments and due dates. If
+        any instalment already has a payment recorded, the change is refused instead.
+      </p>
       <div className="flex flex-wrap items-end gap-2">
         <Input name="admin_charge" type="number" step="0.01" defaultValue={invoice.admin_charge} required className="w-32" />
         <Input name="consultancy_fee" type="number" step="0.01" defaultValue={invoice.consultancy_fee} required className="w-36" />
