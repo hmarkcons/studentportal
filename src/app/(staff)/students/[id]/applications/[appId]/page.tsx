@@ -7,6 +7,7 @@ import { CredentialField } from "@/components/CredentialField";
 import { StageForm } from "./StageForm";
 import { TaskList } from "./TaskList";
 import { ApplicationDetailsForm } from "./ApplicationDetailsForm";
+import { LinksContactForm } from "./LinksContactForm";
 import { listTrackerDefinitions } from "@/lib/actions/countryTracker";
 import { DocumentChecklist, type DocRow } from "@/components/DocumentChecklist";
 import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
@@ -25,7 +26,7 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
     .select(
       `id, current_stage, intake, deadline, application_fee, special_requirements,
        university:universities(id, name, city, contact_email, destination:destinations(pipeline_stages, country_code)),
-       program:programs(name, page_link, requirements_link, application_portal_link)`
+       program:programs(id, name, page_link, requirements_link, application_portal_link)`
     )
     .eq("id", appId)
     .eq("student_id", id)
@@ -148,54 +149,16 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
 
       <Card className="mb-6">
         <h3 className="mb-3 text-sm font-medium text-ink">Links & contact</h3>
-        <div className="flex flex-col gap-3 text-sm text-ink">
-          <div className="flex items-center gap-2">
-            <span>Course page:</span>
-            {program?.page_link ? (
-              <a
-                href={program.page_link}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
-              >
-                👁️ View course page
-              </a>
-            ) : (
-              <span className="text-muted">—</span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <span>Requirements:</span>
-            {program?.requirements_link ? (
-              <a
-                href={program.requirements_link}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
-              >
-                👁️ View requirements
-              </a>
-            ) : (
-              <span className="text-muted">—</span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <span>Application portal:</span>
-            {program?.application_portal_link ? (
-              <a
-                href={program.application_portal_link}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
-              >
-                👁️ View application portal
-              </a>
-            ) : (
-              <span className="text-muted">—</span>
-            )}
-          </div>
-          <p>University email: {university?.contact_email ?? <span className="text-muted">—</span>}</p>
-        </div>
+        <LinksContactForm
+          applicationId={appId}
+          studentId={id}
+          programId={program?.id ?? null}
+          universityId={university?.id ?? null}
+          pageLink={program?.page_link ?? null}
+          requirementsLink={program?.requirements_link ?? null}
+          applicationPortalLink={program?.application_portal_link ?? null}
+          contactEmail={university?.contact_email ?? null}
+        />
         <div className="mt-3">
           <CredentialField label="University portal" ownerType="application" ownerId={appId} credentialType="university_portal" revalidateTo={revalidateTo} />
         </div>

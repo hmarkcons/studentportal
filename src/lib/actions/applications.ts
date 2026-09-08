@@ -111,6 +111,65 @@ export async function updateApplicationDetails(applicationId: string, studentId:
   return { success: true };
 }
 
+// The course, requirements and portal links live on the program, and the
+// contact address on the university — i.e. in the catalogue, not on this
+// application. Editing them here is deliberate (a broken link is noticed while
+// working a case, not while browsing Setup) but it is a catalogue edit, and the
+// form says so, because the correction lands for every student on that program.
+export async function updateApplicationLinks(
+  applicationId: string,
+  studentId: string,
+  programId: string | null,
+  universityId: string | null,
+  _prevState: unknown,
+  formData: FormData
+) {
+  const supabase = await createClient();
+
+  const clean = (key: string) => String(formData.get(key) ?? "").trim() || null;
+  const page_link = clean("page_link");
+  const requirements_link = clean("requirements_link");
+  const application_portal_link = clean("application_portal_link");
+  const contact_email = clean("contact_email");
+
+  // Typing "university.edu/course" and getting a link that resolves against our
+  // own domain is worse than no link at all, so require a real scheme.
+  for (const [label, value] of [
+    ["Course page", page_link],
+    ["Requirements", requirements_link],
+    ["Application portal", application_portal_link],
+  ] as const) {
+    if (value && !/^https?:\/\//i.test(value)) return { error: `${label} link must start with http:// or https://` };
+  }
+  if (contact_email && !contact_email.includes("@")) return { error: "University email doesn't look like an email address." };
+
+  // .select() on each update so a row blocked by RLS comes back as zero rows
+  // rather than as a silent success — otherwise a role without catalogue write
+  // access is told "Saved." and the old link is still there on reload.
+  if (programId) {
+    const { data, error } = await supabase
+      .from("programs")
+      .update({ page_link, requirements_link, application_portal_link })
+      .eq("id", programId)
+      .select("id");
+    if (error) return { error: error.message };
+    if (!data?.length) return { error: "You don't have permission to edit this program's links." };
+  }
+
+  if (universityId) {
+    const { data, error } = await supabase
+      .from("universities")
+      .update({ contact_email })
+      .eq("id", universityId)
+      .select("id");
+    if (error) return { error: error.message };
+    if (!data?.length) return { error: "You don't have permission to edit this university's contact email." };
+  }
+
+  revalidatePath(`/students/${studentId}/applications/${applicationId}`);
+  return { success: true };
+}
+
 export async function updateApplicationStage(applicationId: string, studentId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
   const current_stage = String(formData.get("current_stage") ?? "");
