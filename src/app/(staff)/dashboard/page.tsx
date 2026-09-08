@@ -2,9 +2,15 @@ import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { StatCard } from "@/components/ui/StatCard";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { loadStaffQueue } from "@/lib/staffQueue";
+import { StaffQueueCard } from "@/components/StaffQueueCard";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
+
+  // Scoped by RLS to whatever this person can act on, so a counsellor sees
+  // their own students and processing sees everything.
+  const queue = await loadStaffQueue(supabase);
 
   const { data: counselors } = await supabase
     .from("staff")
@@ -45,8 +51,15 @@ export default async function DashboardPage() {
 
   return (
     <div className="w-full">
-      <h2 className="mb-1 text-lg font-semibold text-ink">Dashboard</h2>
-      <p className="mb-6 text-sm text-muted">Team registration performance for {monthLabel}.</p>
+      <h2 className="mb-4 text-lg font-semibold text-ink">Dashboard</h2>
+
+      {/* What is waiting on this person comes first. The targets below are
+          worth knowing but are not a to-do list, and this is the landing page
+          for every role — not just counsellors. */}
+      <StaffQueueCard queue={queue} />
+
+      <h3 className="mb-1 text-base font-semibold text-ink">Registrations</h3>
+      <p className="mb-4 text-sm text-muted">Team registration performance for {monthLabel}.</p>
 
       <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <StatCard label="Registered this month" value={totalRegistered} tone="success" />
