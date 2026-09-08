@@ -12,29 +12,62 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import type { SupabaseClient } from "@supabase/supabase-js";
 
 const TEST_TYPES = ["ielts", "toefl", "pte", "duolingo", "langcert", "ib", "moi", "gre", "sat", "other"] as const;
 
-export async function addTestScore(studentId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
+// Whole-section save: the section is edited as a table and committed with one
+// Save, so a correction to an existing score is an edit rather than
+// delete-and-retype. Rows arrive as parallel arrays — one entry per rendered
+// row, in DOM order — with an empty id meaning "new".
+export async function saveTestScores(studentId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  const test_type = String(formData.get("test_type") ?? "");
-  if (!(TEST_TYPES as readonly string[]).includes(test_type)) return { error: "Choose a valid test type." };
-  const score = String(formData.get("score") ?? "").trim();
-  const test_date = String(formData.get("test_date") ?? "") || null;
-  if (!score) return { error: "Enter a score." };
 
-  const { error } = await supabase.from("student_test_scores").insert({ student_id: studentId, test_type, score, test_date });
-  if (error) return { error: error.message };
+  const ids = formData.getAll("score_id").map(String);
+  const types = formData.getAll("score_type").map(String);
+  const values = formData.getAll("score_value").map((v) => String(v).trim());
+  const dates = formData.getAll("score_date").map((v) => String(v) || null);
 
-  revalidatePath(revalidateTo);
-  return { success: true };
-}
+  if (types.length !== ids.length || values.length !== ids.length || dates.length !== ids.length) {
+    return { error: "That didn't submit cleanly — reload the page and try again." };
+  }
 
-export async function deleteTestScore(scoreId: string, revalidateTo: string) {
-  const supabase = await createClient();
-  const { error } = await supabase.from("student_test_scores").delete().eq("id", scoreId);
-  if (error) return { error: error.message };
+  const rows = ids.map((id, i) => ({ id: id || null, test_type: types[i], score: values[i], test_date: dates[i] }));
+  for (const r of rows) {
+    if (!(TEST_TYPES as readonly string[]).includes(r.test_type)) return { error: "Choose a valid test type for every row." };
+    if (!r.score) return { error: "Every row needs a score — remove the row if the result isn't known yet." };
+  }
+
+  // Ids to delete are worked out against what's actually on file rather than
+  // sent up from the browser, so a stale form can't be used to delete rows it
+  // was never shown.
+  const { data: existing, error: readError } = await supabase
+    .from("student_test_scores")
+    .select("id")
+    .eq("student_id", studentId);
+  if (readError) return { error: readError.message };
+
+  const kept = new Set(rows.map((r) => r.id).filter(Boolean) as string[]);
+  const removed = (existing ?? []).map((r) => r.id).filter((id) => !kept.has(id));
+  if (removed.length > 0) {
+    const { error } = await supabase.from("student_test_scores").delete().in("id", removed);
+    if (error) return { error: error.message };
+  }
+
+  for (const r of rows) {
+    if (!r.id) continue;
+    const { error } = await supabase
+      .from("student_test_scores")
+      .update({ test_type: r.test_type, score: r.score, test_date: r.test_date })
+      .eq("id", r.id)
+      .eq("student_id", studentId);
+    if (error) return { error: error.message };
+  }
+
+  const added = rows.filter((r) => !r.id).map((r) => ({ student_id: studentId, test_type: r.test_type, score: r.score, test_date: r.test_date }));
+  if (added.length > 0) {
+    const { error } = await supabase.from("student_test_scores").insert(added);
+    if (error) return { error: error.message };
+  }
 
   revalidatePath(revalidateTo);
   return { success: true };
@@ -59,71 +92,59 @@ export async function uploadStudentPhoto(studentId: string, revalidateTo: string
   return { success: true };
 }
 
-type JsonArrayColumn = "travel_history" | "visa_refusal_history";
-
-async function readJsonArray(supabase: SupabaseClient, studentId: string, column: JsonArrayColumn): Promise<Record<string, unknown>[]> {
-  const { data } = await supabase.from("student_profiles").select(column).eq("student_id", studentId).maybeSingle();
-  const value = (data as Record<string, unknown> | null)?.[column];
-  return Array.isArray(value) ? (value as Record<string, unknown>[]) : [];
-}
-
-async function appendJsonRecord(studentId: string, column: JsonArrayColumn, record: Record<string, unknown>) {
+// Travel and any prior refusal/deportation are one story a visa officer reads
+// together, so they are one section with one Save. Both live as JSON arrays on
+// the same student_profiles row, which means the two lists commit or fail as a
+// single write rather than leaving half the history updated.
+export async function saveTravelAndVisaHistory(studentId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  const existing = await readJsonArray(supabase, studentId, column);
-  const next = [...existing, { id: crypto.randomUUID(), ...record }];
-  const { error } = await supabase.from("student_profiles").upsert({ student_id: studentId, [column]: next }, { onConflict: "student_id" });
-  return error;
-}
 
-async function removeJsonRecord(studentId: string, column: JsonArrayColumn, recordId: string) {
-  const supabase = await createClient();
-  const existing = await readJsonArray(supabase, studentId, column);
-  const next = existing.filter((r) => r.id !== recordId);
-  const { error } = await supabase.from("student_profiles").update({ [column]: next }).eq("student_id", studentId);
-  return error;
-}
+  const travelIds = formData.getAll("travel_id").map(String);
+  const travelCountries = formData.getAll("travel_country").map((v) => String(v).trim());
+  const travelPurposes = formData.getAll("travel_purpose").map((v) => String(v).trim() || null);
+  const travelFrom = formData.getAll("travel_from").map((v) => String(v) || null);
+  const travelTo = formData.getAll("travel_to").map((v) => String(v) || null);
 
-export async function addTravelRecord(studentId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
-  const country = String(formData.get("country") ?? "").trim();
-  if (!country) return { error: "Country is required." };
-  const purpose = String(formData.get("purpose") ?? "").trim() || null;
-  const from_date = String(formData.get("from_date") ?? "") || null;
-  const to_date = String(formData.get("to_date") ?? "") || null;
+  const visaIds = formData.getAll("visa_id").map(String);
+  const visaCountries = formData.getAll("visa_country").map((v) => String(v).trim());
+  const visaTypes = formData.getAll("visa_type").map(String);
+  const visaDates = formData.getAll("visa_date").map((v) => String(v) || null);
+  const visaReasons = formData.getAll("visa_reason").map((v) => String(v).trim() || null);
 
-  const error = await appendJsonRecord(studentId, "travel_history", { country, purpose, from_date, to_date });
+  if (
+    [travelCountries, travelPurposes, travelFrom, travelTo].some((a) => a.length !== travelIds.length) ||
+    [visaCountries, visaTypes, visaDates, visaReasons].some((a) => a.length !== visaIds.length)
+  ) {
+    return { error: "That didn't submit cleanly — reload the page and try again." };
+  }
+
+  const travel_history = travelIds.map((id, i) => ({
+    id: id || crypto.randomUUID(),
+    country: travelCountries[i],
+    purpose: travelPurposes[i],
+    from_date: travelFrom[i],
+    to_date: travelTo[i],
+  }));
+  const visa_refusal_history = visaIds.map((id, i) => ({
+    id: id || crypto.randomUUID(),
+    country: visaCountries[i],
+    type: visaTypes[i],
+    date: visaDates[i],
+    reason: visaReasons[i],
+  }));
+
+  if (travel_history.some((r) => !r.country)) return { error: "Every trip needs a country — remove the row if it was added by mistake." };
+  if (visa_refusal_history.some((r) => !r.country)) return { error: "Every refusal or deportation needs a country." };
+  if (visa_refusal_history.some((r) => !["refusal", "deportation"].includes(r.type))) {
+    return { error: "Choose refusal or deportation for every row." };
+  }
+
+  const { error } = await supabase
+    .from("student_profiles")
+    .upsert({ student_id: studentId, travel_history, visa_refusal_history }, { onConflict: "student_id" });
   if (error) return { error: error.message };
 
   revalidatePath(revalidateTo);
   return { success: true };
 }
 
-export async function deleteTravelRecord(studentId: string, recordId: string, revalidateTo: string) {
-  const error = await removeJsonRecord(studentId, "travel_history", recordId);
-  if (error) return { error: error.message };
-
-  revalidatePath(revalidateTo);
-  return { success: true };
-}
-
-export async function addVisaRefusalRecord(studentId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
-  const country = String(formData.get("country") ?? "").trim();
-  if (!country) return { error: "Country is required." };
-  const type = String(formData.get("type") ?? "refusal");
-  if (!["refusal", "deportation"].includes(type)) return { error: "Choose a valid record type." };
-  const date = String(formData.get("date") ?? "") || null;
-  const reason = String(formData.get("reason") ?? "").trim() || null;
-
-  const error = await appendJsonRecord(studentId, "visa_refusal_history", { country, type, date, reason });
-  if (error) return { error: error.message };
-
-  revalidatePath(revalidateTo);
-  return { success: true };
-}
-
-export async function deleteVisaRefusalRecord(studentId: string, recordId: string, revalidateTo: string) {
-  const error = await removeJsonRecord(studentId, "visa_refusal_history", recordId);
-  if (error) return { error: error.message };
-
-  revalidatePath(revalidateTo);
-  return { success: true };
-}
