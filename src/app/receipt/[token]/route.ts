@@ -48,7 +48,11 @@ export async function GET(_request: NextRequest, ctx: { params: Promise<{ token:
   const { data: file, error } = await admin.storage.from("documents").download(path);
   if (error || !file) return gone("This receipt could not be opened. Please contact HMARK Consultants.");
 
-  const filename = `HMARK-Invoice-${invoice.invoice_number ?? invoice.id.slice(0, 8)}.pdf`;
+  // The invoice number IS the file name — HMC-<intake>-<counter>, minted per
+  // intake by next_invoice_number. No prefix of our own on top of it: the
+  // number is the reference staff and students quote to each other, and
+  // "HMARK-Invoice-HMC-Fall 2026-101.pdf" says the same thing three times.
+  const filename = `${invoice.invoice_number ?? `HMC-${invoice.id.slice(0, 8)}`}.pdf`;
   return new NextResponse(await file.arrayBuffer(), {
     headers: {
       "Content-Type": "application/pdf",

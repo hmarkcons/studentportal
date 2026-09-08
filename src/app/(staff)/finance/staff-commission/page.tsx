@@ -151,7 +151,7 @@ export default async function StaffCommissionPage() {
       programName: primaryApp?.programName ?? null,
       intake: primaryApp?.intake ?? null,
       refundCount: refundCountByStudent.get(c.student_id) ?? 0,
-      consultancyFeeStatus: latestInvoice ? computeInvoiceStatus(latestInvoice.admin_fee_status, invInstallments) : null,
+      consultancyFeeStatus: latestInvoice ? computeInvoiceStatus(invInstallments) : null,
       adminFeeStatus: (latestInvoice?.admin_fee_status as "paid" | "unpaid" | undefined) ?? null,
       hasCredit: creditedCommissionIds.has(c.id),
       sharedWithName: (one(c.shared_with as never) as { full_name?: string } | null)?.full_name ?? null,

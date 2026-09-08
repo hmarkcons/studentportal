@@ -11,7 +11,7 @@ import {
   deleteInvoice,
   updateInstallment,
 } from "@/lib/actions/invoices";
-import { updateAdminFeeStatus, addLineItem, deleteLineItem } from "@/lib/actions/consultancyFee";
+import { addLineItem, deleteLineItem } from "@/lib/actions/consultancyFee";
 import { computeInvoiceStatus, INVOICE_STATUS_LABELS } from "@/lib/invoiceStatus";
 import { computeInvoiceMath } from "@/lib/invoiceMath";
 import { formatDateOnly } from "@/lib/formatDate";
@@ -255,64 +255,6 @@ function EditInstallmentForm({
   );
 }
 
-function AdminFeeSection({
-  invoice,
-  revalidateTo,
-  canManage,
-}: {
-  invoice: { id: string; currency: string; admin_fee_status: string; admin_fee_paid_date: string | null; admin_fee_payment_method: string | null };
-  revalidateTo: string;
-  canManage: boolean;
-}) {
-  const [editing, setEditing] = useState(false);
-  const action = updateAdminFeeStatus.bind(null, invoice.id, revalidateTo);
-  const [state, formAction, pending] = useActionState(action, undefined);
-
-  if (!editing) {
-    return (
-      <div className="flex items-center justify-between text-xs">
-        <span className="text-muted">
-          Administrative fee
-          {invoice.admin_fee_paid_date && ` · paid ${formatDateOnly(invoice.admin_fee_paid_date)}`}
-          {invoice.admin_fee_payment_method && ` via ${invoice.admin_fee_payment_method}`}
-        </span>
-        <div className="flex items-center gap-1">
-          <Badge tone={invoice.admin_fee_status === "paid" ? "success" : "warning"}>{invoice.admin_fee_status}</Badge>
-          {canManage && (
-            <Button type="button" size="sm" onClick={() => setEditing(true)}>
-              ✏️
-            </Button>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <form action={formAction} className="flex flex-wrap items-center gap-1 rounded-md border border-border p-2">
-      <Select name="admin_fee_status" defaultValue={invoice.admin_fee_status}>
-        <option value="unpaid">unpaid</option>
-        <option value="paid">paid</option>
-      </Select>
-      <Select name="admin_fee_payment_method" defaultValue={invoice.admin_fee_payment_method ?? ""}>
-        <option value="">Method…</option>
-        <option value="Cash">Cash</option>
-        <option value="Bank transfer">Bank transfer</option>
-        <option value="Card">Card</option>
-        <option value="Other">Other</option>
-      </Select>
-      <Input name="admin_fee_paid_date" type="date" defaultValue={invoice.admin_fee_paid_date ?? ""} />
-      <Button type="submit" variant="primary" pending={pending} size="sm">
-        Save
-      </Button>
-      <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>
-        Cancel
-      </Button>
-      {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
-    </form>
-  );
-}
-
 function LineItemsSection({
   invoiceId,
   lineItems,
@@ -524,7 +466,7 @@ export function InvoiceCard({
       discountAmount: invoice.discount_amount ?? 0,
       taxRate: invoice.tax_rate ?? 0,
     }).total + lineItemsTotal;
-  const status = computeInvoiceStatus(invoice.admin_fee_status ?? "unpaid", installments);
+  const status = computeInvoiceStatus(installments);
 
   // Says who it reached, not just that it went: this button used to report
   // success without sending anything at all, and "Sent." alone reads the same
@@ -572,20 +514,6 @@ export function InvoiceCard({
         <EditInvoiceForm invoice={invoice} studentId={studentId} revalidateTo={revalidateTo} onDone={() => setEditingInvoice(false)} />
       )}
 
-      <div className="mt-2 border-t border-border pt-2">
-        <AdminFeeSection
-          invoice={{
-            id: invoice.id,
-            currency: invoice.currency,
-            admin_fee_status: invoice.admin_fee_status ?? "unpaid",
-            admin_fee_paid_date: invoice.admin_fee_paid_date ?? null,
-            admin_fee_payment_method: invoice.admin_fee_payment_method ?? null,
-          }}
-          revalidateTo={revalidateTo}
-          canManage={canManage}
-        />
-      </div>
-
       <div className="mt-2 flex flex-col gap-1 border-t border-border pt-2">
         {installments.map((i) =>
           editingInstallmentId === i.id && canManage ? (
@@ -594,6 +522,11 @@ export function InvoiceCard({
             <div key={i.id} className="flex items-center justify-between text-xs text-muted">
               <span>
                 Installment {i.installment_no} — {invoice.currency} {i.amount.toFixed(2)}
+                {/* The admin charge is collected with the first installment, so
+                    say so rather than leaving staff to wonder why it is bigger. */}
+                {i.installment_no === 1 && invoice.admin_charge > 0 && (
+                  <span> (includes {invoice.currency} {invoice.admin_charge.toFixed(2)} admin fee)</span>
+                )}
                 {i.due_date && ` · due ${formatDateOnly(i.due_date)}`}
                 {i.status === "partial" && ` · paid ${invoice.currency} ${(i.amount_paid ?? 0).toFixed(2)}`}
               </span>

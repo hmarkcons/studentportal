@@ -8,7 +8,7 @@
 // A discount recorded on the agreement likewise wins over the one captured at
 // registration, since the agreement is what the student actually signed.
 
-import { computeInvoiceMath, SRB_TAX_RATE, splitIntoInstallments, type InvoiceMath } from "@/lib/invoiceMath";
+import { computeInvoiceMath, SRB_TAX_RATE, buildInstallmentPlan, type InvoiceMath } from "@/lib/invoiceMath";
 
 export type StudentFeeInputs = {
   discount_amount?: number | string | null;
@@ -22,6 +22,8 @@ export type DestinationFeeInputs = {
   admin_charge?: number | string | null;
   consultancy_fee?: number | string | null;
   consultancy_fee_currency?: string | null;
+  /** "public" | "private". Public-university destinations are billed in EUR. */
+  track?: string | null;
 } | null;
 
 export type AgreementFeeInputs = {
@@ -76,14 +78,18 @@ export function resolveInvoiceDefaults(
 
   return {
     agreementId: agreement?.id ?? null,
-    currency: destination?.consultancy_fee_currency || "PKR",
+    // Public-university destinations are billed in EUR regardless of what is
+    // stored against the country, so the generator opens on the right currency
+    // and staff are not choosing it by hand. generateInvoice enforces the same
+    // rule server-side.
+    currency: destination?.track === "public" ? "EUR" : destination?.consultancy_fee_currency || "PKR",
     destinationLabel: destination?.display_name || destination?.country || null,
     intake: student.intake ?? null,
     installmentCount,
     // Only surface a reason when there is actually a discount to explain.
     discountReason: discountAmount > 0 ? student.discount_reason ?? null : null,
     math,
-    installments: splitIntoInstallments(math.total, installmentCount),
+    installments: buildInstallmentPlan(math, installmentCount),
     source: {
       consultancyFee: agreementFee !== null ? "agreement" : countryFee !== null ? "country" : "none",
       adminCharge: agreementAdmin !== null ? "agreement" : countryAdmin !== null ? "country" : "none",

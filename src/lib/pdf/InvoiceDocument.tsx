@@ -96,7 +96,14 @@ export type InvoicePdfData = {
   taxRate: number;
   taxAmount: number;
   terms: string | null;
-  payments: { date: string; method: string | null; amount: number; status: "paid" | "unpaid" }[];
+  payments: {
+    date: string;
+    method: string | null;
+    amount: number;
+    status: "paid" | "unpaid";
+    /** e.g. "incl. admin fee" on the first installment, which carries it. */
+    note?: string | null;
+  }[];
   subtotal: number;
   amountPaid: number;
   balanceDue: number;
@@ -293,7 +300,13 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
               </View>
               {data.payments.map((p, i) => (
                 <View key={i} style={styles.ledgerRow}>
-                  <Text style={{ flex: 1.5, fontSize: 8.5 }}>{p.date}</Text>
+                  <View style={{ flex: 1.5 }}>
+                    <Text style={{ fontSize: 8.5 }}>{p.date}</Text>
+                    {/* Installment 1 is larger than the rest because the
+                        administrative charge is collected with it. Unexplained,
+                        that reads as a billing error. */}
+                    {p.note && <Text style={{ fontSize: 7.5, color: GREY }}>{p.note}</Text>}
+                  </View>
                   <Text style={{ flex: 1.5, fontSize: 8.5, color: GREY }}>{p.method ?? "—"}</Text>
                   <Text style={{ flex: 1.2, fontSize: 8.5, textAlign: "right" }}>{money(data.currencySymbol, p.amount)}</Text>
                   <Text style={{ flex: 1, fontSize: 8.5, textAlign: "right", color: p.status === "paid" ? INK_STRONG : GREY }}>

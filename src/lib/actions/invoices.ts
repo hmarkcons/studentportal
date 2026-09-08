@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { formatDateOnly } from "@/lib/formatDate";
 import { requirePermission } from "@/lib/auth/permissions";
-import { computeInvoiceMath, splitIntoInstallments, SRB_TAX_RATE, conversionNote } from "@/lib/invoiceMath";
+import { computeInvoiceMath, buildInstallmentPlan, SRB_TAX_RATE, conversionNote } from "@/lib/invoiceMath";
 import { buildInvoiceEmail } from "@/lib/invoiceEmail";
 import { sendEmail, accountsFrom } from "@/lib/email";
 import { getSiteUrl } from "@/lib/siteUrl";
@@ -37,6 +37,27 @@ function addMonthsClampedUTC(dateStr: string, months: number): string {
   return new Date(Date.UTC(targetYear, targetMonthIndex, targetDay)).toISOString().slice(0, 10);
 }
 
+/**
+ * Whether an agreement's destination is a public-university track, which is
+ * billed in EUR. Returns false when there is no agreement to read a track
+ * from — an unlinked invoice keeps whatever currency staff chose, since there
+ * is nothing to contradict them with.
+ */
+async function isPublicTrackAgreement(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  agreementId: string | null
+): Promise<boolean> {
+  if (!agreementId) return false;
+  const { data } = await supabase
+    .from("agreements")
+    .select("template:agreement_templates(destination:destinations(track))")
+    .eq("id", agreementId)
+    .maybeSingle();
+  const template = one(data?.template as never) as { destination?: unknown } | null;
+  const destination = template?.destination ? (one(template.destination as never) as { track?: string } | null) : null;
+  return destination?.track === "public";
+}
+
 const DEFAULT_TERMS =
   "Only upon refusal from the university, 100% of the paid consultancy charges only will be refundable. There is no refund on withdrawal or rejection from the embassy or on failing the admission test, or under any other condition. Refunds are processed within 90 working days of the refusal notice.";
 
@@ -50,11 +71,18 @@ export async function generateInvoice(studentId: string, agreementId: string, _p
 
   const admin_charge = Number(formData.get("admin_charge") ?? 0);
   const consultancy_fee = Number(formData.get("consultancy_fee") ?? 0);
-  const currency = String(formData.get("currency") ?? "EUR");
   const installmentCount = Number(formData.get("installment_count") ?? 1);
   const intake = String(formData.get("intake") ?? "").trim() || null;
   const terms = String(formData.get("terms") ?? "").trim() || DEFAULT_TERMS;
-  const invoice_number = String(formData.get("invoice_number") ?? "").trim() || null;
+  const typedInvoiceNumber = String(formData.get("invoice_number") ?? "").trim() || null;
+
+  // Public-university destinations are billed in EUR — both the consultancy
+  // fee and the administrative charge — so the currency is taken from the
+  // destination's track rather than from the form. Enforced here and not only
+  // in the form's default: a stale or hand-posted form must not be able to
+  // raise a public-track invoice in rupees.
+  const requestedCurrency = String(formData.get("currency") ?? "EUR");
+  const currency = (await isPublicTrackAgreement(supabase, agreement_id)) ? "EUR" : requestedCurrency;
   const firstDueDate = String(formData.get("first_due_date") ?? "") || null;
   const installment_plan = String(formData.get("installment_plan") ?? "").trim() || null;
 
@@ -79,12 +107,24 @@ export async function generateInvoice(studentId: string, agreementId: string, _p
     taxRate: SRB_TAX_RATE,
   });
 
-  const amounts = splitIntoInstallments(math.total, installmentCount);
+  // The administrative charge rides on installment 1, because that is how it
+  // is collected — the student pays it together with their first installment.
+  const amounts = buildInstallmentPlan(math, installmentCount);
   const installments = amounts.map((amount, i) => ({
     installment_no: i + 1,
     amount,
     due_date: firstDueDate ? addMonthsClampedUTC(firstDueDate, i) : null,
   }));
+
+  // Staff may type their own reference; otherwise take the next HMC number for
+  // this intake. Claimed before the invoice is written so a failed generation
+  // burns a number rather than risking two invoices sharing one.
+  let invoice_number = typedInvoiceNumber;
+  if (!invoice_number) {
+    const { data: minted, error: numberError } = await supabase.rpc("next_invoice_number", { p_intake: intake });
+    if (numberError) return { error: `Couldn't allocate a receipt number: ${numberError.message}` };
+    invoice_number = minted as string;
+  }
 
   // Single security-definer RPC — the invoice and its installments commit or
   // fail together (see migration 0090), rather than as two separate writes
@@ -456,6 +496,12 @@ export async function buildAndStoreInvoicePdf(
     method: i.payment_method,
     amount: i.amount,
     status: (i.status === "paid" ? "paid" : "unpaid") as "paid" | "unpaid",
+    // The first installment carries the whole administrative charge, so it is
+    // larger than the others by design.
+    note:
+      i.installment_no === 1 && math.adminCharge > 0
+        ? `incl. ${CURRENCY_SYMBOLS[invoice.currency] ?? invoice.currency}${math.adminCharge.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} admin fee`
+        : null,
   }));
 
   const nextDue = (installments ?? []).find((i) => i.status !== "paid")?.due_date ?? null;

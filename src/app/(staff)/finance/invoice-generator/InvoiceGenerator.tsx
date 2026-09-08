@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { generateInvoice } from "@/lib/actions/invoices";
-import { computeInvoiceMath, splitIntoInstallments, SRB_TAX_RATE } from "@/lib/invoiceMath";
+import { computeInvoiceMath, buildInstallmentPlan, SRB_TAX_RATE } from "@/lib/invoiceMath";
 import type { InvoiceBankSettings } from "@/lib/actions/invoiceSettings";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
@@ -71,7 +71,8 @@ export function InvoiceGenerator({ students, bank }: { students: StudentOption[]
     taxRate: SRB_TAX_RATE,
   });
   const n = Math.max(1, Math.floor(Number(count) || 1));
-  const parts = splitIntoInstallments(math.total, n);
+  // Admin charge on installment 1, matching how it is actually collected.
+  const parts = buildInstallmentPlan(math, n);
   const discountTooBig = (Number(discount) || 0) > (Number(fee) || 0);
 
   return (

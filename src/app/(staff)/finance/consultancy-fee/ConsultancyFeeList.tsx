@@ -47,7 +47,7 @@ export function ConsultancyFeeList({
   const filtered = rows.filter((r) => {
     if (appliedName && !r.studentName.toLowerCase().includes(appliedName)) return false;
     if (appliedStatus !== "all") {
-      const status: InvoiceStatus = computeInvoiceStatus(r.invoice.admin_fee_status ?? "unpaid", r.installments);
+      const status: InvoiceStatus = computeInvoiceStatus(r.installments);
       if (status !== appliedStatus) return false;
     }
     return true;

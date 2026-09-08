@@ -63,6 +63,27 @@ export function splitIntoInstallments(total: number, count: number): number[] {
   return parts;
 }
 
+/**
+ * The payment schedule for an invoice: the consultancy fee (after discount,
+ * plus its tax) divided into `count` equal installments, with the whole
+ * administrative charge loaded onto the first one.
+ *
+ * That is how the fee is actually collected — the student pays the admin
+ * charge together with their first installment — so the schedule says so
+ * rather than spreading the admin charge across all of them. The parts still
+ * sum to math.total, which the caller can rely on: the invoice is paid in full
+ * exactly when every installment is.
+ *
+ * The fee breakdown on the receipt is unaffected; the administrative charge
+ * stays its own line there. This is about when money is due, not what is owed.
+ */
+export function buildInstallmentPlan(math: InvoiceMath, count: number): number[] {
+  const consultancySide = money(math.netConsultancyFee + math.taxAmount);
+  const parts = splitIntoInstallments(consultancySide, count);
+  parts[0] = money(parts[0] + math.adminCharge);
+  return parts;
+}
+
 export type PaymentProgress = {
   /** Installment amounts that are settled, plus the admin charge if paid. */
   paid: number;
@@ -92,12 +113,15 @@ function num(v: number | string | null | undefined): number {
  * What a student has actually paid against an invoice. `partial` installments
  * count only their amount_paid, so a half-settled installment is not reported
  * as fully received.
+ *
+ * The installments are the whole picture — the administrative charge rides on
+ * the first one (see buildInstallmentPlan). This used to add the admin charge
+ * on top of the installment total while generateInvoice was already including
+ * it in the amounts, so every invoice's total and outstanding figure was
+ * overstated by the admin charge.
  */
-export function computePaymentProgress(
-  installments: InstallmentLike[],
-  opts: { adminCharge: number; adminFeePaid: boolean }
-): PaymentProgress {
-  let paid = opts.adminFeePaid ? money(opts.adminCharge) : 0;
+export function computePaymentProgress(installments: InstallmentLike[]): PaymentProgress {
+  let paid = 0;
   let installmentsPaid = 0;
   let due: string | null = null;
 
@@ -114,7 +138,7 @@ export function computePaymentProgress(
     }
   }
 
-  const total = money(installments.reduce((s, i) => s + num(i.amount), 0) + money(opts.adminCharge));
+  const total = money(installments.reduce((s, i) => s + num(i.amount), 0));
   paid = money(paid);
   const outstanding = money(Math.max(0, total - paid));
 

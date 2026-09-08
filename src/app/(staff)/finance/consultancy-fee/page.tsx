@@ -102,7 +102,9 @@ export default async function ConsultancyFeePage() {
     const inv = r?.invoice;
     const insts = r?.installments ?? [];
     const adminCharge = Number(inv?.admin_charge ?? 0);
-    const adminFeePaid = inv?.admin_fee_status === "paid";
+    // The admin charge is collected with installment 1, so its settlement is
+    // that installment being paid rather than a flag of its own.
+    const adminFeePaid = insts.find((i) => i.installment_no === 1)?.status === "paid";
 
     const math = inv
       ? computeInvoiceMath({
@@ -113,9 +115,7 @@ export default async function ConsultancyFeePage() {
         })
       : null;
 
-    // The admin charge is already inside the installment amounts, so it is not
-    // added again here — it is tracked separately only for its paid flag.
-    const progress = computePaymentProgress(insts, { adminCharge: 0, adminFeePaid: false });
+    const progress = computePaymentProgress(insts);
     const overdue = insts.some((i) => i.status !== "paid" && i.due_date && i.due_date < today);
 
     const status: FeeStatus =
@@ -145,7 +145,7 @@ export default async function ConsultancyFeePage() {
 
   const counts = { paid: 0, pending: 0, overdue: 0 };
   for (const r of rows) {
-    const status = computeInvoiceStatus(r.invoice.admin_fee_status ?? "unpaid", r.installments);
+    const status = computeInvoiceStatus(r.installments);
     counts[status]++;
   }
 

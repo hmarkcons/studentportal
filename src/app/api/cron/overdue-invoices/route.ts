@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
       .select("status, due_date")
       .eq("invoice_id", invoice.id);
 
-    const status = computeInvoiceStatus(invoice.admin_fee_status, installments ?? []);
+    const status = computeInvoiceStatus(installments ?? []);
     if (status !== "overdue") continue;
 
     const result = await sendOverdueReminderIfDue(invoice.id, invoice.student_id);

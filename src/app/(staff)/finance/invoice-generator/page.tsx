@@ -42,7 +42,7 @@ export default async function InvoiceGeneratorPage() {
       .from("students")
       .select("id, full_name, email, contact_number, country_of_interest, intake, discount_amount, discount_reason, level_applying_for")
       .order("registered_at", { ascending: false }),
-    supabase.from("destinations").select("id, country, display_name, admin_charge, consultancy_fee, consultancy_fee_currency"),
+    supabase.from("destinations").select("id, country, display_name, admin_charge, consultancy_fee, consultancy_fee_currency, track"),
     supabase.from("agreements").select("id, student_id, status, admin_charge_override, consultancy_fee_override, discount_amount, installment_count"),
   ]);
 
@@ -120,10 +120,7 @@ export default async function InvoiceGeneratorPage() {
       discountAmount: Number(inv.discount_amount ?? 0),
       taxRate: Number(inv.tax_rate ?? 0),
     });
-    const progress = computePaymentProgress(mine, {
-      adminCharge: 0, // the admin charge is already inside the installment amounts
-      adminFeePaid: false,
-    });
+    const progress = computePaymentProgress(mine);
     const student = one(inv.student as never) as { full_name?: string; email?: string | null } | null;
     return {
       id: inv.id,
