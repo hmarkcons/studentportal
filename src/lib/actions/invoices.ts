@@ -245,7 +245,7 @@ export async function buildAndSendInvoiceEmail(
   supabase: Awaited<ReturnType<typeof createClient>>,
   invoiceId: string,
   studentId: string,
-  variant: "invoice" | "overdue" = "invoice"
+  variant: "invoice" | "overdue" | "receipt" = "invoice"
 ): Promise<{ error?: string; success?: boolean; sentTo?: string }> {
 
   const { data: invoice } = await supabase
@@ -372,24 +372,23 @@ export async function buildAndSendInvoiceEmail(
   return { success: true, sentTo: student.email };
 }
 
-export async function sendReceipt(invoiceId: string, studentId: string) {
+/**
+ * Acknowledges a payment to the student — the same document, framed as a
+ * receipt rather than a bill.
+ *
+ * This used to stamp sent_status = 'sent' and write a receipts row without
+ * sending anything, so staff saw "sent" on a receipt the student never got.
+ * It now goes through the one email implementation, which writes those rows
+ * only after the send succeeds.
+ */
+export async function sendReceipt(
+  invoiceId: string,
+  studentId: string
+): Promise<{ error?: string; success?: boolean; sentTo?: string }> {
+  const denied = await requirePermission("finance.invoices.manage", "You can't send receipts.");
+  if (denied) return denied;
   const supabase = await createClient();
-
-  const { data: existing } = await supabase.from("receipts").select("id").eq("invoice_id", invoiceId).maybeSingle();
-
-  const { error: receiptError } = existing
-    ? await supabase.from("receipts").update({ sent_status: "sent", sent_at: new Date().toISOString() }).eq("id", existing.id)
-    : await supabase.from("receipts").insert({ invoice_id: invoiceId, sent_status: "sent", sent_at: new Date().toISOString() });
-  if (receiptError) return { error: receiptError.message };
-
-  const { error: invoiceError } = await supabase
-    .from("invoices")
-    .update({ sent_status: "sent", sent_at: new Date().toISOString() })
-    .eq("id", invoiceId);
-  if (invoiceError) return { error: invoiceError.message };
-
-  revalidatePath(`/students/${studentId}`);
-  return { success: true };
+  return buildAndSendInvoiceEmail(supabase, invoiceId, studentId, "receipt");
 }
 
 // Shared by the interactive (staff-triggered) generateInvoicePdf below and

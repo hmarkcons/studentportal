@@ -16,8 +16,11 @@ export type InvoiceEmailData = {
   amountPaid: number;
   balanceDue: number;
   receiptUrl: string;
-  /** "overdue" reframes the same invoice as a payment reminder. */
-  variant?: "invoice" | "overdue";
+  /**
+   * Same invoice, three framings: the original bill, a reminder once an
+   * installment is past due, and an acknowledgement once money has arrived.
+   */
+  variant?: "invoice" | "overdue" | "receipt";
   /** Set when the invoice currency differs from the account currency. */
   conversionNote?: string | null;
   bank: {
@@ -59,9 +62,17 @@ const BRAND = "#52be96";
 export function buildInvoiceEmail(data: InvoiceEmailData) {
   const { math } = data;
   const overdue = data.variant === "overdue";
-  const subject = overdue
-    ? `Payment overdue — Invoice ${data.invoiceNumber} — ${money(data.currency, data.balanceDue)} outstanding`
-    : `Invoice ${data.invoiceNumber} from HMARK Consultants — ${money(data.currency, data.balanceDue)} due`;
+  const receipt = data.variant === "receipt";
+  const subject = receipt
+    ? `Receipt for invoice ${data.invoiceNumber} — ${money(data.currency, data.amountPaid)} received`
+    : overdue
+      ? `Payment overdue — Invoice ${data.invoiceNumber} — ${money(data.currency, data.balanceDue)} outstanding`
+      : `Invoice ${data.invoiceNumber} from HMARK Consultants — ${money(data.currency, data.balanceDue)} due`;
+
+  // A receipt for a settled invoice should not also tell the student where to
+  // send money. It still does when something is left to pay, since a part
+  // payment is acknowledged and chased in the same breath.
+  const showBank = Boolean(data.bank) && !(receipt && data.balanceDue <= 0);
 
   const totalsRows: [string, string][] = [["Consultancy fee", money(data.currency, math.consultancyFee)]];
   if (math.discountAmount > 0) {
@@ -77,9 +88,11 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
   const text = [
     `Dear ${data.studentName},`,
     ``,
-    overdue
-      ? `One or more installments on invoice ${data.invoiceNumber} are now past their due date. Please arrange payment at your earliest convenience.`
-      : `Please find your invoice ${data.invoiceNumber} from HMARK Consultants${data.destination ? ` for ${data.destination}` : ""}${data.intake ? ` (${data.intake} intake)` : ""}.`,
+    receipt
+      ? `Thank you — we have received ${money(data.currency, data.amountPaid)} against invoice ${data.invoiceNumber}.${data.balanceDue > 0 ? ` ${money(data.currency, data.balanceDue)} remains outstanding.` : " Nothing further is outstanding."}`
+      : overdue
+        ? `One or more installments on invoice ${data.invoiceNumber} are now past their due date. Please arrange payment at your earliest convenience.`
+        : `Please find your invoice ${data.invoiceNumber} from HMARK Consultants${data.destination ? ` for ${data.destination}` : ""}${data.intake ? ` (${data.intake} intake)` : ""}.`,
     ``,
     ...totalsRows.map(([l, v]) => `  ${l}: ${v}`),
     `  Total: ${money(data.currency, math.total)}`,
@@ -92,7 +105,7 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
     `View your receipt: ${data.receiptUrl}`,
     `(Opens in your browser, where you can print or save it.)`,
     ``,
-    ...(data.bank
+    ...(showBank && data.bank
       ? [
           `Payment details:`,
           data.bank.accountTitle ? `  Account title: ${data.bank.accountTitle}` : "",
@@ -138,7 +151,7 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
          </table>`
       : "";
 
-  const bankHtml = data.bank
+  const bankHtml = showBank && data.bank
     ? `<h3 style="margin:24px 0 8px;font-size:14px;color:${INK}">Where to pay</h3>
        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;background:#f7f7f9;border:1px solid ${LINE};border-radius:8px">
          <tr><td style="padding:14px 16px;font-size:13px;color:${INK};line-height:1.7">
@@ -163,7 +176,7 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid ${LINE};border-radius:12px;border-collapse:collapse">
         <tr><td style="padding:28px 28px 0">
           <p style="margin:0 0 4px;font-size:13px;color:${SOFT}">HMARK Consultants</p>
-          <h1 style="margin:0 0 4px;font-size:19px;color:${INK}">${overdue ? "Payment overdue" : "Invoice"} ${esc(data.invoiceNumber)}</h1>
+          <h1 style="margin:0 0 4px;font-size:19px;color:${INK}">${receipt ? "Receipt for invoice" : overdue ? "Payment overdue" : "Invoice"} ${esc(data.invoiceNumber)}</h1>
           <p style="margin:0;font-size:13px;color:${SOFT}">
             ${esc(data.destination ?? "")}${data.destination && data.intake ? " · " : ""}${data.intake ? `${esc(data.intake)} intake` : ""}
           </p>
@@ -172,9 +185,11 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
         <tr><td style="padding:20px 28px 0">
           <p style="margin:0 0 16px;font-size:15px;color:${INK}">Dear ${esc(data.studentName)},</p>
           <p style="margin:0 0 20px;font-size:14px;color:${SOFT};line-height:1.6">
-            ${overdue
-              ? "One or more installments on this invoice are now past their due date. You can open the full receipt below to print or save it."
-              : "Here is your invoice from HMARK Consultants. You can open the full receipt below to print or save it."}
+            ${receipt
+              ? `Thank you — your payment of ${esc(money(data.currency, data.amountPaid))} has been received. You can open the full receipt below to print or save it.`
+              : overdue
+                ? "One or more installments on this invoice are now past their due date. You can open the full receipt below to print or save it."
+                : "Here is your invoice from HMARK Consultants. You can open the full receipt below to print or save it."}
           </p>
 
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">

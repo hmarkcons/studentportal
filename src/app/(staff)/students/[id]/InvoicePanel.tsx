@@ -442,7 +442,7 @@ function SendInvoiceEmailButton({ invoiceId, studentId }: { invoiceId: string; s
     setPending(true);
     setMessage(null);
     const result = await sendInvoiceToStudent(invoiceId, studentId);
-    setMessage(result?.error ? { text: result.error, ok: false } : { text: "Sent.", ok: true });
+    setMessage(result?.error ? { text: result.error, ok: false } : { text: `Sent to ${result?.sentTo ?? "the student"}.`, ok: true });
     setPending(false);
   }
 
@@ -506,18 +506,23 @@ export function InvoiceCard({
 }) {
   const [editingInvoice, setEditingInvoice] = useState(false);
   const [editingInstallmentId, setEditingInstallmentId] = useState<string | null>(null);
-  const [receiptError, setReceiptError] = useState<string | null>(null);
+  const [receiptMessage, setReceiptMessage] = useState<{ text: string; ok: boolean } | null>(null);
   const [receiptPending, setReceiptPending] = useState(false);
 
   const lineItemsTotal = lineItems.reduce((sum, li) => sum + li.amount, 0);
   const total = invoice.admin_charge + invoice.consultancy_fee + lineItemsTotal;
   const status = computeInvoiceStatus(invoice.admin_fee_status ?? "unpaid", installments);
 
+  // Says who it reached, not just that it went: this button used to report
+  // success without sending anything at all, and "Sent." alone reads the same
+  // either way.
   async function handleSendReceipt() {
     setReceiptPending(true);
-    setReceiptError(null);
+    setReceiptMessage(null);
     const result = await sendReceipt(invoice.id, studentId);
-    if (result?.error) setReceiptError(result.error);
+    setReceiptMessage(
+      result?.error ? { text: result.error, ok: false } : { text: `Sent to ${result?.sentTo ?? "the student"}.`, ok: true }
+    );
     setReceiptPending(false);
   }
 
@@ -530,7 +535,9 @@ export function InvoiceCard({
           {invoice.currency} {total.toFixed(2)}
           {invoice.installment_plan && <span className="ml-2 text-xs font-normal text-muted">· {invoice.installment_plan}</span>}
         </p>
-        {receiptError && <p className="text-xs text-danger">{receiptError}</p>}
+        {receiptMessage && (
+          <p className={`text-xs ${receiptMessage.ok ? "text-success" : "text-danger"}`}>{receiptMessage.text}</p>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone={STATUS_TONE[status]}>{INVOICE_STATUS_LABELS[status]}</Badge>
           <Badge tone={invoice.sent_status === "sent" ? "success" : "neutral"}>{invoice.sent_status}</Badge>
