@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { NewTicketForm } from "./NewTicketForm";
+import { WHATSAPP_LINK, WHATSAPP_DISPLAY } from "@/lib/constants";
 import { loadTicketActivity, loadTicketReadMarkers, hasUnseenStaffReply } from "@/lib/supportSignals";
 
 const FAQS = [
@@ -37,11 +38,14 @@ export default async function SupportPage() {
 
       <Card className="mb-6">
         <a
-          href="https://wa.me/923000000000"
+          href={WHATSAPP_LINK}
           className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-ink"
         >
           💬 WhatsApp HMARK Consultants
         </a>
+        {/* Shown as well as linked: a student on a desktop browser has no
+            WhatsApp to hand off to, and may want to save the number. */}
+        <p className="mt-2 text-xs text-muted">{WHATSAPP_DISPLAY}</p>
       </Card>
 
       <Card className="mb-6">

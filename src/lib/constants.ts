@@ -143,3 +143,14 @@ export const PKR_RATE: Record<string, number> = { PKR: 1, USD: 280, EUR: 335 };
 export function toPKR(amount: number, currency: string) {
   return amount * (PKR_RATE[currency] ?? 1);
 }
+
+// HMARK's WhatsApp line, in one place because it appears on the login page and
+// in the portal's Support section. Both previously pointed at wa.me/923000000000
+// — a placeholder that reached nobody, on the two screens a stuck student is
+// most likely to try.
+//
+// WHATSAPP_LINK carries the digits wa.me needs (no +, spaces or leading zero);
+// WHATSAPP_DISPLAY is what a human should read.
+export const WHATSAPP_NUMBER = "923343297870";
+export const WHATSAPP_DISPLAY = "+92 334 3297870";
+export const WHATSAPP_LINK = `https://wa.me/${WHATSAPP_NUMBER}`;

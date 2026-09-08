@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useActionState } from "react";
+import { WHATSAPP_LINK, WHATSAPP_DISPLAY } from "@/lib/constants";
 import { useSearchParams } from "next/navigation";
 import { signIn } from "./actions";
 import { Button } from "@/components/ui/Button";
@@ -112,8 +113,8 @@ function LoginFormWithNext() {
           </p>
           <p className="mt-4 text-center text-xs text-muted">
             Need help? WhatsApp us at{" "}
-            <a href="https://wa.me/923000000000" className="text-primary hover:underline">
-              +92 300 0000000
+            <a href={WHATSAPP_LINK} className="text-primary hover:underline">
+              {WHATSAPP_DISPLAY}
             </a>
           </p>
         </div>
