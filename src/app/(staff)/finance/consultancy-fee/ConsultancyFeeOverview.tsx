@@ -94,6 +94,23 @@ export function ConsultancyFeeOverview({ rows, canManage }: { rows: FeeRow[]; ca
 
   // Mixed currencies can't be summed into one figure honestly.
   const currencies = useMemo(() => uniq(filtered.map((r) => r.currency)), [filtered]);
+  // Outstanding can only be summed when every row shares a currency; with a
+  // mix, the overdue count is the one honest figure to lead with.
+  const fourthCard: { label: string; value: string; tone: "default" | "danger" } =
+    currencies.length === 1
+      ? {
+          label: summary.overdue ? `Outstanding · ${summary.overdue} overdue` : "Outstanding",
+          value: money(currencies[0], summary.outstanding),
+          tone: summary.overdue ? "danger" : "default",
+        }
+      : summary.overdue
+        ? {
+            label: "Overdue",
+            value: `${summary.overdue} student${summary.overdue === 1 ? "" : "s"}`,
+            tone: "danger",
+          }
+        : { label: "Outstanding", value: "Mixed currencies", tone: "default" };
+
   const anyFilter = Boolean(country || intake || level || counselor || status);
 
   return (
@@ -102,12 +119,10 @@ export function ConsultancyFeeOverview({ rows, canManage }: { rows: FeeRow[]; ca
         <StatCard label="Paid in full" value={summary.paid_in_full} tone="success" icon="✅" />
         <StatCard label="Partially paid" value={summary.partially_paid} tone="warning" icon="◐" />
         <StatCard label="Payment pending" value={summary.payment_pending} tone="default" icon="⏳" />
-        <StatCard
-          label={summary.overdue ? `Overdue (${summary.overdue})` : "Outstanding"}
-          value={currencies.length === 1 ? money(currencies[0], summary.outstanding) : `${filtered.length} students`}
-          tone={summary.overdue ? "danger" : "default"}
-          icon="💰"
-        />
+        {/* Label, value and tone decided together. Computed separately they
+            could disagree — a mixed-currency view with one overdue student read
+            "Overdue (1)" above "22 students", which says 22 are overdue. */}
+        <StatCard label={fourthCard.label} value={fourthCard.value} tone={fourthCard.tone} icon="💰" />
       </div>
 
       {currencies.length > 1 && (
