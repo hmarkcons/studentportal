@@ -82,3 +82,35 @@ export async function markTicketRead(ticketId: string, side: "student" | "staff"
   if (error) return { error: error.message };
   return { success: true };
 }
+
+/**
+ * Corrects a ticket's subject.
+ *
+ * Only the subject: the body is the student's own description of the problem
+ * and stays frozen (see migration 0134), so a correction to it belongs in a
+ * reply. UPDATE on support_tickets is staff-only at the policy level, so a
+ * refused write comes back as zero rows rather than an error.
+ */
+export async function updateTicketSubject(
+  ticketId: string,
+  revalidateTo: string,
+  _prevState: unknown,
+  formData: FormData
+) {
+  const supabase = await createClient();
+  const subject = String(formData.get("subject") ?? "").trim();
+  if (!subject) return { error: "A subject is required." };
+  if (subject.length > 200) return { error: "Keep the subject under 200 characters." };
+
+  const { data, error } = await supabase
+    .from("support_tickets")
+    .update({ subject })
+    .eq("id", ticketId)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!data?.length) return { error: "You don't have permission to edit this ticket." };
+
+  revalidatePath(revalidateTo);
+  revalidatePath("/support");
+  return { success: true };
+}
