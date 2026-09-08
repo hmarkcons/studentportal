@@ -369,9 +369,20 @@ export async function uploadSignedAgreement(agreementId: string, studentId: stri
   // student with their consent video (student_submit_signed_agreement) and
   // staff verify those instead — uploading over one here would replace the
   // signed file while leaving the video pointing at a different submission.
-  const { data: existing } = await supabase.from("agreements").select("signing_method").eq("id", agreementId).maybeSingle();
+  const { data: existing } = await supabase.from("agreements").select("signing_method, status").eq("id", agreementId).maybeSingle();
   if (existing?.signing_method === "e_signature") {
     return { error: "E-signature agreements are uploaded by the student from their portal — verify their submission instead." };
+  }
+
+  // Replacing the scan of an already-signed agreement is a correction, not
+  // routine processing — staff have uploaded the wrong student's agreement
+  // before — so it takes the same permission as editing or deleting one.
+  if (existing?.status === "signed") {
+    const replaceDenied = await requirePermission(
+      "agreements.edit_delete",
+      "Only Super Admin can replace the scan of an agreement that is already signed."
+    );
+    if (replaceDenied) return { error: replaceDenied.error };
   }
 
   // Size and type are checked here as they are on every other upload path.

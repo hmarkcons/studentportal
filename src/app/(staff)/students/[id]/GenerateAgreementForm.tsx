@@ -201,17 +201,32 @@ export function DeleteAgreementButton({ agreementId, studentId }: { agreementId:
   );
 }
 
-export function UploadSignedAgreementForm({ agreementId, studentId }: { agreementId: string; studentId: string }) {
+// `replace` is for a paper agreement that is already signed: uploading the
+// wrong scan used to be uncorrectable, because the upload sets status=signed
+// and every caller hid this form once it was. The only way out was deleting
+// the agreement and regenerating it. Super Admin can now swap the file, and
+// the action supersedes the old object rather than leaving it in the
+// student's folder.
+export function UploadSignedAgreementForm({
+  agreementId,
+  studentId,
+  replace = false,
+}: {
+  agreementId: string;
+  studentId: string;
+  replace?: boolean;
+}) {
   const action = uploadSignedAgreement.bind(null, agreementId, studentId);
   const [state, formAction, pending] = useActionState(action, undefined);
 
   return (
     <form action={formAction} className="mt-2 flex flex-col gap-2">
+      {replace && <p className="text-xs text-muted">Replaces the signed copy on file. The previous scan is deleted.</p>}
       {/* File input sits directly next to the button it feeds. */}
       <div className="flex flex-wrap items-center gap-2">
         <input type="file" name="file" required className="max-w-full text-xs" />
         <Button type="submit" variant="outline-primary" size="sm" pending={pending}>
-          Upload signed agreement
+          {replace ? "Replace signed agreement" : "Upload signed agreement"}
         </Button>
       </div>
       <label className="flex items-center gap-1 text-xs text-muted">

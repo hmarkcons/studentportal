@@ -688,6 +688,11 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                 <UploadSignedAgreementForm agreementId={latestAgreement.id} studentId={id} />
               )
             )}
+            {/* A signed paper agreement with the wrong scan attached: Super
+                Admin can swap the file without deleting the agreement. */}
+            {isSuperAdmin && latestAgreement?.status === "signed" && latestAgreement.signing_method === "paper" && (
+              <UploadSignedAgreementForm agreementId={latestAgreement.id} studentId={id} replace />
+            )}
           </div>
         )}
       </CollapsibleCard>

@@ -170,6 +170,11 @@ export default async function AgreementGeneratorPage(props: { searchParams: Prom
             {canModifyAgreement && latestAgreement && latestAgreement.status !== "signed" && (
               <UploadSignedAgreementForm agreementId={latestAgreement.id} studentId={selected.id} />
             )}
+            {/* Correcting a wrong scan on an already-signed paper agreement —
+                see UploadSignedAgreementForm. */}
+            {isSuperAdmin && latestAgreement?.status === "signed" && latestAgreement.signing_method === "paper" && (
+              <UploadSignedAgreementForm agreementId={latestAgreement.id} studentId={selected.id} replace />
+            )}
           </div>
         )}
       </Card>
