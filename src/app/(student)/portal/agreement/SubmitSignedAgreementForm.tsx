@@ -151,7 +151,7 @@ export function SubmitSignedAgreementForm({
 
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
       {state?.success && (
-        <p className="text-xs text-success">Submitted. Your counselor will verify the video and agreement shortly.</p>
+        <p className="text-xs text-success">Submitted. Your counsellor will check the video and agreement shortly.</p>
       )}
 
       {showWhy && <WhyVideoDialog onClose={() => setShowWhy(false)} />}
