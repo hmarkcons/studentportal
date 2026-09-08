@@ -4,6 +4,7 @@ import { getStudentUser } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { TicketThread, type TicketReplyRow } from "@/components/TicketThread";
+import { MarkTicketRead } from "@/components/MarkTicketRead";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -56,6 +57,9 @@ export default async function PortalTicketDetailPage(props: PageProps<"/portal/s
       <Link href="/portal/support" className="text-sm text-muted hover:text-ink">
         &larr; Back to support
       </Link>
+
+      {/* Opening the ticket is what clears its "new reply" flag. */}
+      <MarkTicketRead ticketId={ticket.id} side="student" />
 
       <Card className="mt-2 mb-4">
         <div className="mb-2 flex items-start justify-between gap-3">

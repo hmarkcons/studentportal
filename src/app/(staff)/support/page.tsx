@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { loadTicketActivity, awaitingStaff } from "@/lib/supportSignals";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -27,6 +28,11 @@ export default async function SupportTicketsPage(props: { searchParams: Promise<
   }
   const { data: tickets } = await query;
 
+  // "Waiting on us" is derived from the thread rather than stored: the newest
+  // thing on the ticket came from the student, or nobody has replied at all.
+  const activity = await loadTicketActivity(supabase, (tickets ?? []).map((t) => t.id));
+  const waiting = (tickets ?? []).filter((t) => awaitingStaff(t, activity));
+
   const tabs: { key: string; label: string }[] = [
     { key: "", label: "All" },
     { key: "open", label: "Open" },
@@ -36,7 +42,12 @@ export default async function SupportTicketsPage(props: { searchParams: Promise<
 
   return (
     <div className="w-full max-w-3xl">
-      <h2 className="mb-4 text-lg font-semibold text-ink">Support Tickets</h2>
+      <h2 className="mb-1 text-lg font-semibold text-ink">Support Tickets</h2>
+      <p className="mb-4 text-sm text-muted">
+        {waiting.length === 0
+          ? "Nothing is waiting on a reply."
+          : `${waiting.length} ${waiting.length === 1 ? "ticket is" : "tickets are"} waiting on a reply from us.`}
+      </p>
 
       <div className="mb-4 flex gap-2">
         {tabs.map((t) => (
@@ -62,12 +73,21 @@ export default async function SupportTicketsPage(props: { searchParams: Promise<
                 href={`/support/${t.id}`}
                 className="flex items-center justify-between py-3 text-sm hover:bg-bg"
               >
-                <div>
-                  <p className="text-ink">{t.subject}</p>
+                <div className="min-w-0">
+                  <p className="flex flex-wrap items-center gap-2 text-ink">
+                    <span className="truncate">{t.subject}</span>
+                    {awaitingStaff(t, activity) && (
+                      <span className="shrink-0 rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+                        Waiting on us
+                      </span>
+                    )}
+                  </p>
                   <p className="text-xs text-muted">{student?.full_name ?? "Unknown student"}</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-xs text-muted">{new Date(t.updated_at).toLocaleDateString()}</span>
+                  <span className="whitespace-nowrap text-xs text-muted">
+                    {new Date(t.updated_at).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })}
+                  </span>
                   <Badge tone={STATUS_TONE[t.status] ?? "warning"}>{t.status.replace("_", " ")}</Badge>
                 </div>
               </Link>

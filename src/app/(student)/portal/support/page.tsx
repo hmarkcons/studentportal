@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { NewTicketForm } from "./NewTicketForm";
+import { loadTicketActivity, loadTicketReadMarkers, hasUnseenStaffReply } from "@/lib/supportSignals";
 
 const FAQS = [
   { q: "How do I upload a document?", a: "Open the application card on your dashboard and use the Upload button next to the document." },
@@ -25,6 +26,10 @@ export default async function SupportPage() {
     .select("id, subject, status, created_at")
     .eq("student_id", student.id)
     .order("created_at", { ascending: false });
+
+  const ticketIds = (tickets ?? []).map((t) => t.id);
+  const activity = await loadTicketActivity(supabase, ticketIds);
+  const markers = await loadTicketReadMarkers(supabase, ticketIds, "student");
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -60,7 +65,16 @@ export default async function SupportPage() {
         <div className="flex flex-col divide-y divide-border">
           {(tickets ?? []).map((t) => (
             <Link key={t.id} href={`/portal/support/${t.id}`} className="flex items-center justify-between gap-4 px-4 py-3 text-sm hover:bg-bg">
-              <span className="whitespace-nowrap text-ink">{t.subject}</span>
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="truncate text-ink">{t.subject}</span>
+                {/* A reply the student has not opened yet — the whole reason
+                    they would come back to this page. */}
+                {hasUnseenStaffReply(t.id, activity, markers) && (
+                  <span className="shrink-0 rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+                    New reply
+                  </span>
+                )}
+              </span>
               <Badge tone={t.status === "resolved" ? "success" : t.status === "in_progress" ? "info" : "warning"}>
                 {t.status.replace("_", " ")}
               </Badge>

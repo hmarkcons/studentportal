@@ -68,3 +68,17 @@ export async function updateTicketStatus(ticketId: string, revalidateTo: string,
   revalidatePath(revalidateTo);
   return { success: true };
 }
+
+/**
+ * Records that one side has opened a ticket, clearing its "new reply" flag.
+ *
+ * Goes through a security-definer RPC so neither side can stamp the other's
+ * marker, and so the marker never touches support_tickets itself — that table
+ * bumps updated_at on write, and the staff queue is ordered by it.
+ */
+export async function markTicketRead(ticketId: string, side: "student" | "staff") {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("mark_ticket_read", { p_ticket_id: ticketId, p_side: side });
+  if (error) return { error: error.message };
+  return { success: true };
+}

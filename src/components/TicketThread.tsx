@@ -6,6 +6,23 @@ import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Input";
 import { EmptyState } from "@/components/ui/EmptyState";
 
+// Locale AND timezone pinned. This is a client component, so anything left
+// to the environment renders differently on the server than in the browser —
+// Vercel is UTC, the reader is wherever they are — which React reports as a
+// hydration mismatch. Karachi because that is the office being talked to.
+function stamp(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("en-US", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "Asia/Karachi",
+  });
+}
+
 export type TicketReplyRow = {
   id: string;
   author_type: string;
@@ -48,7 +65,7 @@ export function TicketThread({
           >
             <p className="whitespace-pre-wrap">{r.body}</p>
             <p className="mt-1 text-[10px] opacity-70">
-              {r.author_name} · {new Date(r.created_at).toLocaleString("en-US")}
+              {r.author_name} · {stamp(r.created_at)}
             </p>
           </div>
         ))}
