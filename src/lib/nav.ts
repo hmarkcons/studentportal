@@ -25,6 +25,7 @@ const BASE_STAFF_NAV: NavItem[] = [
       { label: "Agreement generator", href: "/setup/agreement-generator" },
       { label: "Document trackers", href: "/setup/document-trackers" },
       { label: "Invoice settings", href: "/setup/invoice-settings" },
+      { label: "Support FAQ", href: "/setup/support-faqs" },
     ],
   },
   {

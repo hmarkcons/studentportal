@@ -7,12 +7,6 @@ import { NewTicketForm } from "./NewTicketForm";
 import { WHATSAPP_LINK, WHATSAPP_DISPLAY } from "@/lib/constants";
 import { loadTicketActivity, loadTicketReadMarkers, hasUnseenStaffReply } from "@/lib/supportSignals";
 
-const FAQS = [
-  { q: "How do I upload a document?", a: "Open the application card on your dashboard and use the Upload button next to the document." },
-  { q: "When does my portal activate?", a: "As soon as your signed agreement is uploaded by the HMARK team." },
-  { q: "How do I reschedule an appointment?", a: "Contact your counselor via Messages, phone, or by visiting the office — there's no self-service reschedule yet." },
-];
-
 export default async function SupportPage() {
   const supabase = await createClient();
   const {
@@ -32,6 +26,14 @@ export default async function SupportPage() {
   const activity = await loadTicketActivity(supabase, ticketIds);
   const markers = await loadTicketReadMarkers(supabase, ticketIds, "student");
 
+  // Maintained in Setup > Support FAQ. Only published entries reach a student,
+  // so staff can leave a half-written answer in place.
+  const { data: faqs } = await supabase
+    .from("support_faqs")
+    .select("id, question, answer")
+    .eq("is_published", true)
+    .order("sort_order", { ascending: true });
+
   return (
     <div className="mx-auto max-w-2xl">
       <h2 className="mb-4 text-lg font-semibold text-ink">Support</h2>
@@ -48,17 +50,21 @@ export default async function SupportPage() {
         <p className="mt-2 text-xs text-muted">{WHATSAPP_DISPLAY}</p>
       </Card>
 
-      <Card className="mb-6">
-        <h3 className="mb-3 text-sm font-medium text-ink">FAQ</h3>
-        <div className="flex flex-col gap-3">
-          {FAQS.map((f) => (
-            <div key={f.q}>
-              <p className="text-sm font-medium text-ink">{f.q}</p>
-              <p className="text-sm text-muted">{f.a}</p>
-            </div>
-          ))}
-        </div>
-      </Card>
+      {/* Hidden entirely when nothing is published, rather than showing an
+          empty "FAQ" heading. */}
+      {(faqs ?? []).length > 0 && (
+        <Card className="mb-6">
+          <h3 className="mb-3 text-sm font-medium text-ink">FAQ</h3>
+          <div className="flex flex-col gap-3">
+            {(faqs ?? []).map((f) => (
+              <div key={f.id}>
+                <p className="text-sm font-medium text-ink">{f.question}</p>
+                <p className="whitespace-pre-wrap text-sm text-muted">{f.answer}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <Card className="mb-6">
         <h3 className="mb-3 text-sm font-medium text-ink">Submit a ticket</h3>
