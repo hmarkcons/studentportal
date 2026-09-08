@@ -9,6 +9,10 @@
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
+    // Lets src/lib modules import each other with an explicit .ts extension,
+    // which is what makes them importable by node --test with no build step
+    // (see scripts/*-test.mjs). Safe because noEmit is on.
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "react-jsx",

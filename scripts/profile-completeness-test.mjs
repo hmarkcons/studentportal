@@ -100,3 +100,16 @@ test("today is expiring, not expired", () => {
   assert.equal(s.state, "expiring");
   assert.equal(s.daysLeft, 0);
 });
+
+test("a date of birth in the future does not earn a tick", () => {
+  const future = new Date();
+  future.setUTCFullYear(future.getUTCFullYear() + 10);
+  const dob = future.toISOString().slice(0, 10);
+  const check = profileChecklist({ date_of_birth: dob }).find((c) => c.label === "Date of birth");
+  assert.equal(check.met, false);
+});
+
+test("a plausible date of birth still does", () => {
+  const check = profileChecklist({ date_of_birth: "1999-02-11" }).find((c) => c.label === "Date of birth");
+  assert.equal(check.met, true);
+});
