@@ -31,21 +31,19 @@ export default async function PortalTicketDetailPage(props: PageProps<"/portal/s
 
   const { data: rawReplies } = await supabase
     .from("support_ticket_replies")
-    .select("id, author_type, author_id, body, created_at")
+    .select("id, author_type, body, created_at")
     .eq("ticket_id", id)
     .order("created_at", { ascending: true });
 
-  const staffIds = (rawReplies ?? []).filter((r) => r.author_type === "staff").map((r) => r.author_id);
-  const staffNames = new Map<string, string>();
-  if (staffIds.length > 0) {
-    const { data: staffRows } = await supabase.from("staff").select("id, full_name").in("id", staffIds);
-    (staffRows ?? []).forEach((s) => staffNames.set(s.id, s.full_name));
-  }
-
+  // Staff replies are attributed to the desk, not to an individual. A student
+  // cannot read the staff table under RLS, so the lookup that used to sit here
+  // always came back empty and fell through to this same label — a query on
+  // every page load that could only ever fail. Naming the desk is also the
+  // better answer: a ticket is answered by HMARK, not by whoever picked it up.
   const replies: TicketReplyRow[] = (rawReplies ?? []).map((r) => ({
     id: r.id,
     author_type: r.author_type,
-    author_name: r.author_type === "staff" ? (staffNames.get(r.author_id) ?? "HMARK Support") : "You",
+    author_name: r.author_type === "staff" ? "HMARK Support" : "You",
     body: r.body,
     created_at: r.created_at,
   }));
