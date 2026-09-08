@@ -5,13 +5,16 @@ import { studentUploadDocument } from "@/lib/actions/portal-documents";
 import { formatDateOnly } from "@/lib/formatDate";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { DOCUMENT_STATUS_TONE } from "@/lib/constants";
+import { DOCUMENT_STATUS_TONE, DOCUMENT_STATUS_LABELS } from "@/lib/constants";
 import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
+
+const LONG_DATE: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", year: "numeric" };
 
 export function PortalDocumentRow({
   doc,
   studentId,
   revalidateTo,
+  number,
 }: {
   doc: {
     id: string;
@@ -24,17 +27,37 @@ export function PortalDocumentRow({
   };
   studentId: string;
   revalidateTo: string;
+  /** e.g. "2.3", matching the numbering staff see on the Documents tab. */
+  number?: string;
 }) {
   const action = studentUploadDocument.bind(null, doc.id, studentId, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
 
+  // A deadline that has gone is the one thing on this row a student must not
+  // skim past, so it is coloured rather than left as ordinary grey text.
+  const today = new Date().toISOString().slice(0, 10);
+  const overdue = doc.status !== "verified" && doc.deadline && doc.deadline < today;
+
   return (
-    <div className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <p className="text-sm text-ink">{doc.custom_name ?? doc.category ?? "Document"}</p>
-        <div className="mt-1 flex items-center gap-2">
-          <Badge tone={DOCUMENT_STATUS_TONE[doc.status] ?? "neutral"}>{doc.status.replace("_", " ")}</Badge>
-          {doc.deadline && <span className="text-xs text-muted">Due {formatDateOnly(doc.deadline)}</span>}
+    <div className="flex flex-col gap-2 py-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0">
+        <p className="text-sm text-ink">
+          {number && <span className="mr-1.5 font-mono text-xs text-muted">{number}</span>}
+          {doc.custom_name ?? doc.category ?? "Document"}
+        </p>
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          {/* The stored value is "verified"; everyone reads it as Approved,
+              which is the word on the button staff press. This row used to
+              print the raw status, so students saw "verified" while staff saw
+              "Approved" for the same document. */}
+          <Badge tone={DOCUMENT_STATUS_TONE[doc.status] ?? "neutral"}>
+            {DOCUMENT_STATUS_LABELS[doc.status] ?? doc.status.replace("_", " ")}
+          </Badge>
+          {doc.deadline && (
+            <span className={`text-xs ${overdue ? "font-medium text-danger" : "text-muted"}`}>
+              {overdue ? "Was due" : "Due"} {formatDateOnly(doc.deadline, LONG_DATE)}
+            </span>
+          )}
           {doc.fileUrl && (
             <a
               href={doc.fileUrl}
@@ -46,13 +69,19 @@ export function PortalDocumentRow({
             </a>
           )}
         </div>
-        {doc.status === "rejected" && doc.rejected_reason && <p className="mt-1 text-xs text-danger">Reason: {doc.rejected_reason}</p>}
+        {doc.status === "rejected" && (
+          <p className="mt-1 text-xs text-danger">
+            {doc.rejected_reason
+              ? `Sent back: ${doc.rejected_reason}`
+              : "Sent back — ask your counsellor what needs changing, then upload a replacement."}
+          </p>
+        )}
       </div>
       {doc.status !== "verified" && (
-        <form action={formAction} className="flex flex-wrap items-center gap-2">
+        <form action={formAction} className="flex flex-wrap items-center gap-2 sm:shrink-0">
           <input type="file" name="file" accept={ACCEPTED_DOCUMENT_ACCEPT} capture="environment" className="max-w-full text-xs" />
           <Button type="submit" pending={pending} size="sm">
-            Upload
+            {doc.status === "rejected" ? "Replace" : "Upload"}
           </Button>
         </form>
       )}
