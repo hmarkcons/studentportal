@@ -26,6 +26,7 @@ const BASE_STAFF_NAV: NavItem[] = [
       { label: "Document trackers", href: "/setup/document-trackers" },
       { label: "Invoice settings", href: "/setup/invoice-settings" },
       { label: "Support FAQ", href: "/setup/support-faqs" },
+      { label: "Guide tutorials", href: "/setup/guide-videos" },
     ],
   },
   {
