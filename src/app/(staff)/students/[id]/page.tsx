@@ -97,7 +97,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       supabase
         .from("invoices")
         .select(
-          "id, admin_charge, consultancy_fee, currency, sent_status, agreement_id, pdf_path, invoice_number, intake, terms, installment_plan, admin_fee_status, admin_fee_paid_date, admin_fee_payment_method"
+          "id, admin_charge, consultancy_fee, currency, sent_status, agreement_id, pdf_path, invoice_number, intake, terms, installment_plan, discount_amount, tax_rate, admin_fee_status, admin_fee_paid_date, admin_fee_payment_method"
         )
         .eq("student_id", id),
       supabase

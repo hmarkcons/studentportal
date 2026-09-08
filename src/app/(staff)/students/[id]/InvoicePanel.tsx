@@ -13,6 +13,7 @@ import {
 } from "@/lib/actions/invoices";
 import { updateAdminFeeStatus, addLineItem, deleteLineItem } from "@/lib/actions/consultancyFee";
 import { computeInvoiceStatus, INVOICE_STATUS_LABELS } from "@/lib/invoiceStatus";
+import { computeInvoiceMath } from "@/lib/invoiceMath";
 import { formatDateOnly } from "@/lib/formatDate";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -484,6 +485,8 @@ export function InvoiceCard({
     admin_fee_status?: string;
     admin_fee_paid_date?: string | null;
     admin_fee_payment_method?: string | null;
+    discount_amount?: number | null;
+    tax_rate?: number | null;
   };
   installments: {
     id: string;
@@ -510,7 +513,17 @@ export function InvoiceCard({
   const [receiptPending, setReceiptPending] = useState(false);
 
   const lineItemsTotal = lineItems.reduce((sum, li) => sum + li.amount, 0);
-  const total = invoice.admin_charge + invoice.consultancy_fee + lineItemsTotal;
+  // Through computeInvoiceMath, the same function the PDF and the email use.
+  // Adding the two fees directly ignored the discount and the SRB tax, so this
+  // header disagreed with the total on the document the student was sent — and
+  // with the installments printed directly beneath it.
+  const total =
+    computeInvoiceMath({
+      consultancyFee: invoice.consultancy_fee,
+      adminCharge: invoice.admin_charge,
+      discountAmount: invoice.discount_amount ?? 0,
+      taxRate: invoice.tax_rate ?? 0,
+    }).total + lineItemsTotal;
   const status = computeInvoiceStatus(invoice.admin_fee_status ?? "unpaid", installments);
 
   // Says who it reached, not just that it went: this button used to report
