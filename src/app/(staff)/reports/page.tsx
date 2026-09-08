@@ -6,6 +6,7 @@ import { RadialGauge } from "@/components/ui/RadialGauge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LEAD_STATUS_LABELS } from "@/lib/constants";
 import { visibleReports } from "@/lib/reportsCatalogue";
+import { listVisaDecisions } from "@/lib/visaDecisions";
 
 const MONTHLY_TARGET = 5;
 
@@ -24,7 +25,7 @@ export default async function ReportsPage() {
 
   const { data: leads } = await supabase.from("leads").select("id, status, assigned_counselor_id, registered_at, date_of_inquiry");
   const { data: logs } = await supabase.from("lead_call_logs").select("id, counselor:staff(full_name), created_at");
-  const { data: visaRecords } = await supabase.from("visa_records").select("outcome");
+  const visaDecisions = await listVisaDecisions(supabase);
   const { data: staff } = await supabase.from("staff").select("id, full_name").eq("role", "counselor");
 
   const today = new Date().toISOString().slice(0, 10);
@@ -52,8 +53,8 @@ export default async function ReportsPage() {
     callsByCounselor.set(name, (callsByCounselor.get(name) ?? 0) + 1);
   });
 
-  const decidedVisas = (visaRecords ?? []).filter((v) => v.outcome !== "pending");
-  const approvedVisas = decidedVisas.filter((v) => v.outcome === "approved");
+  const decidedVisas = visaDecisions.filter((v) => v.decision !== "pending");
+  const approvedVisas = decidedVisas.filter((v) => v.decision === "approved");
   const visaApprovalRate = decidedVisas.length ? (approvedVisas.length / decidedVisas.length) * 100 : 0;
 
   const now = new Date();

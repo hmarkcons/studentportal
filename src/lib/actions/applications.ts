@@ -64,8 +64,9 @@ export async function deleteApplication(applicationId: string, revalidateTo: str
 }
 
 // Finalizing an application marks it as the one university the student is
-// actually pursuing a visa for — the Visa tab only shows the finalized
-// application (or a prompt to finalize one), not every university applied to.
+// actually pursuing a visa for. Country trackers key their visa fields off it
+// (UK's CAS, the US I-20), and it is what the "Finalized for visa" badge
+// reports.
 export async function finalizeApplication(applicationId: string, studentId: string, revalidateTo: string) {
   const supabase = await createClient();
 
@@ -81,7 +82,6 @@ export async function finalizeApplication(applicationId: string, studentId: stri
   if (error) return { error: error.message };
 
   revalidatePath(revalidateTo);
-  revalidatePath(`/students/${studentId}/visa`);
   return { success: true };
 }
 
@@ -91,7 +91,6 @@ export async function unfinalizeApplication(applicationId: string, studentId: st
   if (error) return { error: error.message };
 
   revalidatePath(revalidateTo);
-  revalidatePath(`/students/${studentId}/visa`);
   return { success: true };
 }
 
@@ -228,25 +227,5 @@ export async function deleteApplicationTask(taskId: string, revalidateTo: string
   const { error } = await supabase.from("application_tasks").delete().eq("id", taskId);
   if (error) return { error: error.message };
   revalidatePath(revalidateTo);
-  return { success: true };
-}
-
-export async function updateVisaRecord(applicationId: string, studentId: string, _prevState: unknown, formData: FormData) {
-  const supabase = await createClient();
-
-  const outcome = String(formData.get("outcome") ?? "pending");
-  const outcome_reason = String(formData.get("outcome_reason") ?? "").trim() || null;
-  const biometric_appointment = String(formData.get("biometric_appointment") ?? "") || null;
-  const interview_appointment = String(formData.get("interview_appointment") ?? "") || null;
-  const medical_appointment = String(formData.get("medical_appointment") ?? "") || null;
-
-  const { error } = await supabase.from("visa_records").upsert(
-    { application_id: applicationId, outcome, outcome_reason, biometric_appointment, interview_appointment, medical_appointment },
-    { onConflict: "application_id" }
-  );
-
-  if (error) return { error: error.message };
-
-  revalidatePath(`/students/${studentId}/applications/${applicationId}`);
   return { success: true };
 }

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePermission } from "@/lib/auth/permissions";
+import { listVisaDecisions } from "@/lib/visaDecisions";
 
 const REFUND_PERCENT: Record<string, number> = {
   no_admission: 100,
@@ -22,27 +23,19 @@ export async function syncVisaRefusalRefunds(): Promise<{ errors: string[] }> {
   const admin = createAdminClient();
   const errors: string[] = [];
 
-  const { data: refusals } = await admin
-    .from("visa_records")
-    .select(
-      "application_id, updated_at, application:applications(student_id, university:universities(destination:destinations(track)))"
-    )
-    .eq("outcome", "rejected");
-
-  if (!refusals || refusals.length === 0) return { errors };
-
-  function one<T>(v: T | T[] | null) {
-    return Array.isArray(v) ? (v[0] ?? null) : v;
-  }
+  // Read the decision from the tracker, where it actually lives. This used to
+  // query visa_records, which holds no rows — so no refusal was ever detected
+  // and no student's entitlement was ever surfaced.
+  const decisions = await listVisaDecisions(admin);
+  const refusals = decisions.filter((d) => d.decision === "refused");
+  if (refusals.length === 0) return { errors };
 
   const privateApplicationIds = refusals
-    .filter((r) => {
-      const app = one(r.application as never) as { university?: unknown } | null;
-      const uni = app ? (one(app.university as never) as { destination?: unknown } | null) : null;
-      const dest = uni ? (one(uni.destination as never) as { track?: string } | null) : null;
-      return dest?.track === "private";
-    })
-    .map((r) => ({ applicationId: r.application_id, refusalDate: r.updated_at }));
+    .filter((r) => r.track === "private")
+    // decidedAt is the tracker row's updated_at, i.e. when staff recorded the
+    // refusal. Falling back to today keeps the 90-day clock running from a
+    // real date rather than inserting a null notice date.
+    .map((r) => ({ applicationId: r.applicationId, refusalDate: r.decidedAt ?? new Date().toISOString() }));
 
   if (privateApplicationIds.length === 0) return { errors };
 
