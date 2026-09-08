@@ -692,18 +692,31 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         )}
       </CollapsibleCard>
 
-      {signedAgreement && (
+      {/* Shown whenever there is a signed agreement OR any invoice on file.
+          Gating the whole card on the agreement meant an existing invoice
+          disappeared from this page if the agreement was later reverted or
+          deleted — the money was still owed, and the only way to reach it was
+          the Invoice Generator. Generating a NEW one still needs the signed
+          agreement, since that is where the fee, discount and currency come
+          from. */}
+      {(signedAgreement || (invoices ?? []).length > 0) && (
         <CollapsibleCard id="invoice" title="Invoice" className="mt-6">
-          {canManageInvoice && (
-            <GenerateInvoiceForm
-              studentId={id}
-              agreementId={signedAgreement.id}
-              defaultInstallmentPlan={defaultInstallmentPlan}
-              defaultAdminCharge={defaultInvoiceAdminCharge}
-              defaultConsultancyFee={defaultInvoiceConsultancyFee}
-              defaultCurrency={defaultInvoiceCurrency}
-            />
-          )}
+          {canManageInvoice &&
+            (signedAgreement ? (
+              <GenerateInvoiceForm
+                studentId={id}
+                agreementId={signedAgreement.id}
+                defaultInstallmentPlan={defaultInstallmentPlan}
+                defaultAdminCharge={defaultInvoiceAdminCharge}
+                defaultConsultancyFee={defaultInvoiceConsultancyFee}
+                defaultCurrency={defaultInvoiceCurrency}
+              />
+            ) : (
+              <p className="rounded-md bg-warning-bg p-3 text-sm text-warning">
+                No signed agreement on file, so a new invoice can&apos;t be generated here — the fee, discount and currency
+                are read from it. The invoices below stay editable, and their payments can still be recorded.
+              </p>
+            ))}
           <div className="mt-4 flex flex-col gap-3">
             {(invoices ?? []).map((inv) => (
               <InvoiceCard
