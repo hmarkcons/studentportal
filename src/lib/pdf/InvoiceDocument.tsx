@@ -1,72 +1,74 @@
 import { Document, Page, Text, View, Image, StyleSheet } from "@react-pdf/renderer";
 import { BRAND_LOGO_DATA_URI, BRAND_LOGO_RATIO } from "./brandLogo";
 
-const GREEN = "#146856";
-const GREEN_SOFT = "#E4F2ED";
-const INK = "#1B2420";
-const INK_SOFT = "#57625C";
-const INK_FAINT = "#8B928B";
-const RULE = "#D6D3C8";
-const DUE = "#A05A20";
-const DUE_BG = "#F3E7D6";
+// Laid out to match HMARK's existing Wave-generated invoice
+// (reference/Invoice Samples/Invoice Sample - WaveApps.pdf) so students who
+// have had one before recognise this one: neutral greys rather than brand
+// colour, a right-aligned label/value meta block, and the shaded Amount Due
+// band. The SRB tax, discount, payment ledger and bank block are ours; they
+// are styled to sit inside that layout rather than beside it.
+const INK = "#4A4A4A";
+const INK_STRONG = "#333333";
+const GREY = "#8C8C8C";
+const RULE = "#E0E0E0";
+const BAND = "#F0F0F0";
 
 const styles = StyleSheet.create({
-  page: { padding: 44, fontSize: 9.5, color: INK, fontFamily: "Helvetica" },
-  head: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", paddingBottom: 14, borderBottomWidth: 2, borderBottomColor: GREEN },
-  brandLogo: { height: 32, width: 32 * BRAND_LOGO_RATIO },
-  companyBlock: { textAlign: "right", fontSize: 8, color: INK_FAINT, lineHeight: 1.5 },
-  companyBold: { color: INK_SOFT, fontFamily: "Helvetica-Bold" },
+  page: { paddingHorizontal: 40, paddingTop: 32, paddingBottom: 64, fontSize: 9.5, color: INK, fontFamily: "Helvetica", lineHeight: 1.45 },
 
-  titleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginTop: 16 },
-  docTitle: { fontFamily: "Times-Bold", fontSize: 17, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 },
-  statusPill: { alignSelf: "flex-start", fontSize: 7.5, letterSpacing: 0.6, textTransform: "uppercase", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, backgroundColor: DUE_BG, color: DUE },
-  statusPillPaid: { backgroundColor: GREEN_SOFT, color: GREEN },
-  docMeta: { fontFamily: "Courier", fontSize: 8.5, color: INK_SOFT, marginTop: 8, lineHeight: 1.7 },
+  head: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+  brandLogo: { height: 46, width: 46 * BRAND_LOGO_RATIO },
+  headRight: { textAlign: "right", flex: 1, paddingLeft: 24 },
+  docTitle: { fontFamily: "Helvetica-Bold", fontSize: 24, letterSpacing: 0.5, color: INK, marginBottom: 9 },
+  companyName: { fontFamily: "Helvetica-Bold", fontSize: 8.5, color: INK_STRONG },
+  companyLine: { fontSize: 8.5, color: INK },
+  contactLine: { fontSize: 8.5, color: INK },
 
-  dueCallout: { backgroundColor: GREEN_SOFT, paddingHorizontal: 14, paddingVertical: 8, minWidth: 140 },
-  dueLabel: { fontFamily: "Courier", fontSize: 7, letterSpacing: 1, textTransform: "uppercase", color: GREEN },
-  dueAmount: { fontFamily: "Courier-Bold", fontSize: 16, color: GREEN, marginTop: 2 },
+  rule: { borderBottomWidth: 1, borderBottomColor: RULE, marginTop: 12, marginBottom: 12 },
 
-  infoGrid: { flexDirection: "row", gap: 28, marginTop: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: RULE, borderBottomWidth: 1, borderBottomColor: RULE },
-  infoCol: { flex: 1, minWidth: 0 },
-  infoLabel: { fontFamily: "Courier-Bold", fontSize: 7, letterSpacing: 1, textTransform: "uppercase", color: GREEN, marginBottom: 6 },
-  infoRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 3 },
-  infoKey: { color: INK_FAINT, fontSize: 8.5 },
-  infoVal: { color: INK, fontSize: 8.5, fontFamily: "Helvetica-Bold" },
+  metaRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+  billTo: { flex: 1, paddingRight: 24 },
+  billLabel: { fontSize: 9, color: GREY, marginBottom: 3 },
+  billName: { fontFamily: "Helvetica-Bold", fontSize: 9.5, color: INK_STRONG },
+  billLine: { fontSize: 9, color: INK },
 
-  sectionLabel: { fontFamily: "Courier-Bold", fontSize: 7, letterSpacing: 1, textTransform: "uppercase", color: GREEN, marginTop: 16, marginBottom: 6 },
+  metaBlock: { width: 250 },
+  metaLine: { flexDirection: "row", alignItems: "baseline", marginBottom: 2 },
+  metaKey: { width: 128, textAlign: "right", paddingRight: 10, fontFamily: "Helvetica-Bold", fontSize: 9, color: INK_STRONG },
+  metaVal: { flex: 1, fontSize: 9, color: INK },
+  dueBand: { flexDirection: "row", alignItems: "baseline", backgroundColor: BAND, paddingVertical: 5, marginTop: 4 },
 
-  tableHeadRow: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#B8B6A9", paddingBottom: 5, marginBottom: 2 },
-  th: { fontFamily: "Helvetica-Bold", fontSize: 7.5, letterSpacing: 0.4, textTransform: "uppercase", color: INK_FAINT },
+  tableHead: { flexDirection: "row", marginTop: 18, paddingBottom: 6 },
+  th: { fontFamily: "Helvetica-Bold", fontSize: 9.5, color: INK_STRONG },
+  thinRule: { borderBottomWidth: 1, borderBottomColor: RULE },
 
-  feeRow: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: RULE, paddingVertical: 8 },
-  feeName: { fontFamily: "Helvetica-Bold", fontSize: 9.5 },
-  feeDesc: { fontSize: 7.8, color: INK_FAINT, marginTop: 3, lineHeight: 1.5 },
-  feeNum: { fontFamily: "Courier", fontSize: 9 },
+  itemRow: { flexDirection: "row", paddingTop: 9, paddingBottom: 3 },
+  itemName: { fontFamily: "Helvetica-Bold", fontSize: 9.5, color: INK_STRONG },
+  itemDesc: { fontSize: 9, color: INK, marginTop: 1 },
+  num: { fontSize: 9.5, color: INK },
 
-  ledgerRow: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: RULE, paddingVertical: 7, alignItems: "center" },
-  ledgerMethod: { fontSize: 8.5, color: INK_FAINT },
-  ledgerNum: { fontFamily: "Courier", fontSize: 9 },
+  itemsEnd: { borderBottomWidth: 2, borderBottomColor: RULE, marginTop: 10 },
 
-  totals: { alignItems: "flex-end", marginTop: 14 },
-  totalsBox: { width: 190 },
-  totalsRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 3 },
-  totalsLabel: { color: INK_SOFT, fontSize: 8.5 },
-  totalsNum: { fontFamily: "Courier", fontSize: 8.5, color: INK },
-  balanceRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 6, paddingTop: 8, borderTopWidth: 2, borderTopColor: GREEN },
-  balanceLabel: { fontFamily: "Helvetica-Bold", fontSize: 11 },
-  balanceNum: { fontFamily: "Courier-Bold", fontSize: 13, color: GREEN },
+  totals: { alignSelf: "flex-end", width: 300, marginTop: 8 },
+  totalsRow: { flexDirection: "row", alignItems: "baseline", paddingVertical: 2 },
+  totalsKey: { flex: 1, textAlign: "right", paddingRight: 14, fontSize: 9.5, color: INK },
+  totalsKeyBold: { fontFamily: "Helvetica-Bold", color: INK_STRONG },
+  totalsNum: { width: 96, textAlign: "right", fontSize: 9.5, color: INK },
+  totalsNumBold: { fontFamily: "Helvetica-Bold", fontSize: 11, color: INK_STRONG },
+  totalsRule: { borderTopWidth: 1, borderTopColor: RULE, marginTop: 6, paddingTop: 8 },
 
-  foot: { flexDirection: "row", marginTop: 16, justifyContent: "space-between" },
-  payInstr: { fontSize: 8, color: INK_SOFT, lineHeight: 1.8, maxWidth: 260 },
-  payCode: { fontFamily: "Courier", fontSize: 8, color: INK },
-  signBlock: { alignItems: "flex-end" },
-  signName: { fontFamily: "Times-Bold", fontSize: 11 },
-  signLine: { borderTopWidth: 1, borderTopColor: INK_FAINT, paddingTop: 4, marginTop: 30, fontSize: 7.5, color: INK_FAINT },
+  sectionLabel: { fontSize: 9, color: GREY, marginTop: 16, marginBottom: 5 },
+  ledgerRow: { flexDirection: "row", paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: RULE },
 
-  currencyNote: { marginTop: 10, paddingTop: 6, borderTopWidth: 1, borderTopColor: RULE, fontSize: 7.5, color: INK_SOFT, lineHeight: 1.5 },
-  legal: { marginTop: 10, paddingTop: 7, borderTopWidth: 1, borderTopColor: RULE, fontSize: 7.5, color: INK_FAINT, lineHeight: 1.6, textAlign: "center" },
-  legalItalic: { fontFamily: "Helvetica-Oblique", marginTop: 3 },
+  payRow: { flexDirection: "row", gap: 24 },
+  payBlock: { width: 215 },
+  scheduleBlock: { flex: 1 },
+  payLine: { fontSize: 9, color: INK },
+  payValue: { fontFamily: "Helvetica-Bold", color: INK_STRONG },
+
+  note: { marginTop: 12, fontSize: 8.5, color: INK, lineHeight: 1.5 },
+
+  foot: { position: "absolute", left: 40, right: 40, bottom: 22, textAlign: "center", fontSize: 8.5, color: GREY, lineHeight: 1.6 },
 });
 
 export type InvoicePdfData = {
@@ -75,6 +77,8 @@ export type InvoicePdfData = {
   issuedDate: string;
   dueDate: string | null;
   currencySymbol: string;
+  /** ISO code shown in the "Amount Due (PKR):" labels, as in the Wave layout. */
+  currencyCode: string;
   studentName: string;
   studentPhone: string | null;
   studentEmail: string | null;
@@ -91,13 +95,11 @@ export type InvoicePdfData = {
   netConsultancyFee: number;
   taxRate: number;
   taxAmount: number;
-  destinationLabel: string;
   terms: string | null;
   payments: { date: string; method: string | null; amount: number; status: "paid" | "unpaid" }[];
   subtotal: number;
   amountPaid: number;
   balanceDue: number;
-  signatoryName: string | null;
   // Where the student actually sends the money. Read from invoice_settings so
   // it is maintained in Setup rather than hardcoded into this document.
   bank: {
@@ -114,176 +116,209 @@ export type InvoicePdfData = {
 };
 
 function money(symbol: string, n: number) {
-  return `${symbol}${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `${symbol}${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
-  const statusLabel = data.status === "paid" ? "Paid in full" : data.status === "partially_paid" ? "Partially paid" : "Unpaid";
+  // Wave prints RECEIPT once nothing is outstanding and INVOICE while it is,
+  // which is also what the emailed "View receipt" button leads to.
+  const title = data.status === "paid" ? "RECEIPT" : "INVOICE";
+  // The headline band celebrates what was received on a settled invoice; the
+  // totals column below always closes on what is still owed, so the arithmetic
+  // reads straight down (Total, less payments, balance).
+  const bandLabel = data.status === "paid" ? `Amount Paid (${data.currencyCode}):` : `Amount Due (${data.currencyCode}):`;
+  const bandValue = data.status === "paid" ? data.amountPaid : data.balanceDue;
 
   return (
     <Document>
       <Page size="A4" style={styles.page}>
         <View style={styles.head}>
           <Image src={BRAND_LOGO_DATA_URI} style={styles.brandLogo} />
-          <View style={styles.companyBlock}>
-            <Text style={styles.companyBold}>HMARK Consultants</Text>
-            <Text>Suite 101, Dashityar Chambers, University Road</Text>
-            <Text>Gulshan-e-Iqbal, Block 13-C, Karachi, Sindh, Pakistan</Text>
-            <Text>+92 21 3499 9777 · +92 334 3297870</Text>
-            <Text>www.hmarkconsultants.com</Text>
+          <View style={styles.headRight}>
+            <Text style={styles.docTitle}>{title}</Text>
+            <Text style={styles.companyName}>HMARK Consultants</Text>
+            <Text style={styles.companyLine}>Suite 101, Dashityar Chambers, University Road, Gulshan-e-Iqbal, Block 13-C</Text>
+            <Text style={styles.companyLine}>Karachi, Sindh</Text>
+            <Text style={styles.companyLine}>Pakistan</Text>
+            <Text style={[styles.contactLine, { marginTop: 9 }]}>Phone: +92 213 4999777</Text>
+            <Text style={styles.contactLine}>Mobile: +92 334 3297870</Text>
+            <Text style={styles.contactLine}>www.hmarkconsultants.com</Text>
           </View>
         </View>
 
-        <View style={styles.titleRow}>
-          <View>
-            <Text style={styles.docTitle}>Invoice</Text>
-            <Text style={[styles.statusPill, data.status === "paid" ? styles.statusPillPaid : {}]}>{statusLabel}</Text>
-            <Text style={styles.docMeta}>
-              No. {data.invoiceNumber}{"\n"}
-              Issued {data.issuedDate}
-              {data.dueDate ? ` · Due ${data.dueDate}` : ""}
-            </Text>
+        <View style={styles.rule} />
+
+        <View style={styles.metaRow}>
+          <View style={styles.billTo}>
+            <Text style={styles.billLabel}>BILL TO</Text>
+            <Text style={styles.billName}>{data.studentName}</Text>
+            {data.studentPhone && <Text style={[styles.billLine, { marginTop: 10 }]}>{data.studentPhone}</Text>}
+            {data.studentEmail && <Text style={styles.billLine}>{data.studentEmail}</Text>}
           </View>
-          <View style={styles.dueCallout}>
-            <Text style={styles.dueLabel}>Amount due</Text>
-            <Text style={styles.dueAmount}>{money(data.currencySymbol, data.balanceDue)}</Text>
+
+          <View style={styles.metaBlock}>
+            <View style={styles.metaLine}>
+              <Text style={styles.metaKey}>Invoice Number:</Text>
+              <Text style={styles.metaVal}>{data.invoiceNumber}</Text>
+            </View>
+            <View style={styles.metaLine}>
+              <Text style={styles.metaKey}>Invoice Date:</Text>
+              <Text style={styles.metaVal}>{data.issuedDate}</Text>
+            </View>
+            {data.dueDate && (
+              <View style={styles.metaLine}>
+                <Text style={styles.metaKey}>Payment Due:</Text>
+                <Text style={styles.metaVal}>{data.dueDate}</Text>
+              </View>
+            )}
+            <View style={styles.dueBand}>
+              <Text style={styles.metaKey}>{bandLabel}</Text>
+              <Text style={[styles.metaVal, { fontFamily: "Helvetica-Bold", color: INK_STRONG }]}>
+                {money(data.currencySymbol, bandValue)}
+              </Text>
+            </View>
           </View>
         </View>
 
-        <View style={styles.infoGrid}>
-          <View style={styles.infoCol}>
-            <Text style={styles.infoLabel}>Bill to</Text>
-            <View style={styles.infoRow}><Text style={styles.infoKey}>Student</Text><Text style={styles.infoVal}>{data.studentName}</Text></View>
-            {data.studentPhone && <View style={styles.infoRow}><Text style={styles.infoKey}>Contact</Text><Text style={styles.infoVal}>{data.studentPhone}</Text></View>}
-            {data.studentEmail && <View style={styles.infoRow}><Text style={styles.infoKey}>Email</Text><Text style={styles.infoVal}>{data.studentEmail}</Text></View>}
-          </View>
-          <View style={styles.infoCol}>
-            <Text style={styles.infoLabel}>Placement</Text>
-            {data.destination && <View style={styles.infoRow}><Text style={styles.infoKey}>Destination</Text><Text style={styles.infoVal}>{data.destination}</Text></View>}
-            {data.intake && <View style={styles.infoRow}><Text style={styles.infoKey}>Intake</Text><Text style={styles.infoVal}>{data.intake}</Text></View>}
-            {data.counselor && <View style={styles.infoRow}><Text style={styles.infoKey}>Counselor</Text><Text style={styles.infoVal}>{data.counselor}</Text></View>}
-            {data.installmentPlan && <View style={styles.infoRow}><Text style={styles.infoKey}>Installment plan</Text><Text style={styles.infoVal}>{data.installmentPlan}</Text></View>}
-          </View>
-        </View>
-
-        <Text style={styles.sectionLabel}>Fee breakdown</Text>
-        <View style={styles.tableHeadRow}>
+        <View style={[styles.tableHead, styles.thinRule]}>
           <Text style={[styles.th, { flex: 3 }]}>Service</Text>
           <Text style={[styles.th, { flex: 1, textAlign: "right" }]}>Price</Text>
           <Text style={[styles.th, { flex: 1, textAlign: "right" }]}>Amount</Text>
         </View>
-        <View style={styles.feeRow}>
-          <View style={{ flex: 3 }}>
-            <Text style={styles.feeName}>Administrative Charges</Text>
-            <Text style={styles.feeDesc}>Administrative charges are non-refundable in any case.</Text>
-          </View>
-          <Text style={[styles.feeNum, { flex: 1, textAlign: "right" }]}>{money(data.currencySymbol, data.adminCharge)}</Text>
-          <Text style={[styles.feeNum, { flex: 1, textAlign: "right" }]}>{money(data.currencySymbol, data.adminCharge)}</Text>
-        </View>
-        <View style={styles.feeRow}>
-          <View style={{ flex: 3 }}>
-            <Text style={styles.feeName}>{data.destinationLabel}</Text>
-            {data.terms && <Text style={styles.feeDesc}>{data.terms}</Text>}
-          </View>
-          <Text style={[styles.feeNum, { flex: 1, textAlign: "right" }]}>{money(data.currencySymbol, data.consultancyFee)}</Text>
-          <Text style={[styles.feeNum, { flex: 1, textAlign: "right" }]}>{money(data.currencySymbol, data.consultancyFee)}</Text>
-        </View>
 
-        {data.payments.length > 0 && (
-          <>
-            <Text style={styles.sectionLabel}>Payments</Text>
-            <View style={styles.tableHeadRow}>
-              <Text style={[styles.th, { flex: 1.4 }]}>Date</Text>
-              <Text style={[styles.th, { flex: 1.4 }]}>Method</Text>
-              <Text style={[styles.th, { flex: 1, textAlign: "right" }]}>Amount</Text>
-              <Text style={[styles.th, { flex: 1.2, textAlign: "right" }]}>Status</Text>
+        {data.adminCharge > 0 && (
+          <View style={styles.itemRow}>
+            <View style={{ flex: 3, paddingRight: 16 }}>
+              <Text style={styles.itemName}>Administrative Charges</Text>
+              <Text style={styles.itemDesc}>Administrative charges are non-refundable in any case.</Text>
             </View>
-            {data.payments.map((p, i) => (
-              <View key={i} style={styles.ledgerRow}>
-                <Text style={{ flex: 1.4, fontSize: 8.5 }}>{p.date}</Text>
-                <Text style={[styles.ledgerMethod, { flex: 1.4 }]}>{p.method ?? "—"}</Text>
-                <Text style={[styles.ledgerNum, { flex: 1, textAlign: "right" }]}>{money(data.currencySymbol, p.amount)}</Text>
-                <Text
-                  style={[
-                    styles.statusPill,
-                    p.status === "paid" ? styles.statusPillPaid : {},
-                    { flex: 1.2, alignSelf: "flex-end", textAlign: "right" },
-                  ]}
-                >
-                  {p.status === "paid" ? "Received" : "Due"}
-                </Text>
-              </View>
-            ))}
-          </>
+            <Text style={[styles.num, { flex: 1, textAlign: "right" }]}>{money(data.currencySymbol, data.adminCharge)}</Text>
+            <Text style={[styles.num, { flex: 1, textAlign: "right" }]}>{money(data.currencySymbol, data.adminCharge)}</Text>
+          </View>
         )}
 
+        <View style={styles.itemRow}>
+          <View style={{ flex: 3, paddingRight: 16 }}>
+            <Text style={styles.itemName}>{data.destination ?? "Consultancy Services"}</Text>
+            {data.intake && <Text style={styles.itemDesc}>Intake: {data.intake}</Text>}
+            {data.installmentPlan && <Text style={styles.itemDesc}>Installment plan: {data.installmentPlan}</Text>}
+            {data.counselor && <Text style={styles.itemDesc}>Counselor: {data.counselor}</Text>}
+            {data.terms && <Text style={styles.itemDesc}>{data.terms}</Text>}
+          </View>
+          <Text style={[styles.num, { flex: 1, textAlign: "right" }]}>{money(data.currencySymbol, data.consultancyFee)}</Text>
+          <Text style={[styles.num, { flex: 1, textAlign: "right" }]}>{money(data.currencySymbol, data.consultancyFee)}</Text>
+        </View>
+
+        <View style={styles.itemsEnd} />
+
         <View style={styles.totals}>
-          <View style={styles.totalsBox}>
-            <View style={styles.totalsRow}><Text style={styles.totalsLabel}>Consultancy fee</Text><Text style={styles.totalsNum}>{money(data.currencySymbol, data.consultancyFee)}</Text></View>
-            {data.discountAmount > 0 && (
+          {data.discountAmount > 0 && (
+            <>
               <View style={styles.totalsRow}>
-                <Text style={styles.totalsLabel}>Discount{data.discountReason ? ` (${data.discountReason})` : ""}</Text>
+                <Text style={styles.totalsKey}>Subtotal:</Text>
+                <Text style={styles.totalsNum}>{money(data.currencySymbol, data.consultancyFee + data.adminCharge)}</Text>
+              </View>
+              <View style={styles.totalsRow}>
+                <Text style={styles.totalsKey}>
+                  Discount{data.discountReason ? ` (${data.discountReason})` : ""}:
+                </Text>
+                {/* ASCII hyphen, not U+2212: the PDF base fonts have no glyph
+                    for the true minus sign and it prints as nothing, which
+                    turns a deduction into an addition. */}
                 <Text style={styles.totalsNum}>-{money(data.currencySymbol, data.discountAmount)}</Text>
               </View>
-            )}
-            {data.taxAmount > 0 && (
-              <View style={styles.totalsRow}>
-                <Text style={styles.totalsLabel}>SRB tax ({data.taxRate}% of {money(data.currencySymbol, data.netConsultancyFee)})</Text>
-                <Text style={styles.totalsNum}>{money(data.currencySymbol, data.taxAmount)}</Text>
-              </View>
-            )}
-            {data.adminCharge > 0 && (
-              <View style={styles.totalsRow}><Text style={styles.totalsLabel}>Administrative charge</Text><Text style={styles.totalsNum}>{money(data.currencySymbol, data.adminCharge)}</Text></View>
-            )}
-            <View style={styles.totalsRow}><Text style={styles.totalsLabel}>Subtotal</Text><Text style={styles.totalsNum}>{money(data.currencySymbol, data.subtotal)}</Text></View>
-            <View style={styles.totalsRow}><Text style={styles.totalsLabel}>Amount paid</Text><Text style={styles.totalsNum}>-{money(data.currencySymbol, data.amountPaid)}</Text></View>
-            <View style={styles.balanceRow}><Text style={styles.balanceLabel}>Balance due</Text><Text style={styles.balanceNum}>{money(data.currencySymbol, data.balanceDue)}</Text></View>
+            </>
+          )}
+          {data.taxAmount > 0 && (
+            <View style={styles.totalsRow}>
+              <Text style={styles.totalsKey}>SRB Tax ({data.taxRate}% of {money(data.currencySymbol, data.netConsultancyFee)}):</Text>
+              <Text style={styles.totalsNum}>{money(data.currencySymbol, data.taxAmount)}</Text>
+            </View>
+          )}
+          <View style={styles.totalsRow}>
+            <Text style={[styles.totalsKey, styles.totalsKeyBold]}>Total:</Text>
+            <Text style={[styles.totalsNum, { fontFamily: "Helvetica-Bold", color: INK_STRONG }]}>
+              {money(data.currencySymbol, data.subtotal)}
+            </Text>
+          </View>
+          {data.amountPaid > 0 && (
+            <View style={styles.totalsRow}>
+              <Text style={styles.totalsKey}>Payments Received:</Text>
+              <Text style={styles.totalsNum}>-{money(data.currencySymbol, data.amountPaid)}</Text>
+            </View>
+          )}
+          <View style={[styles.totalsRow, styles.totalsRule]}>
+            <Text style={[styles.totalsKey, styles.totalsKeyBold]}>Amount Due ({data.currencyCode}):</Text>
+            <Text style={[styles.totalsNum, styles.totalsNumBold]}>{money(data.currencySymbol, data.balanceDue)}</Text>
           </View>
         </View>
 
-        <View style={styles.foot}>
-          {/* Driven by invoice_settings. Previously hardcoded placeholder
-              account numbers were printed here, which would have sent students
-              to a bank account that does not exist — so when nothing is
-              configured, say so rather than inventing details. */}
-          <View style={styles.payInstr}>
-            <Text style={styles.infoLabel}>Payment instructions</Text>
-            {data.bank?.accountTitle && <Text>Account title <Text style={styles.payCode}>{data.bank.accountTitle}</Text></Text>}
+        {/* Side by side so a routine invoice — fee, schedule and where to pay —
+            still lands on one page, as the Wave original did. */}
+        <View style={styles.payRow}>
+          {/* Driven by invoice_settings. Previously hardcoded placeholder account
+              numbers were printed here, which would have sent students to a bank
+              account that does not exist — so when nothing is configured, say so
+              rather than inventing details. */}
+          <View style={styles.payBlock}>
+            <Text style={styles.sectionLabel}>PAYMENT INSTRUCTIONS</Text>
+            {data.bank?.accountTitle && (
+              <Text style={styles.payLine}>Account Title: <Text style={styles.payValue}>{data.bank.accountTitle}</Text></Text>
+            )}
             {data.bank?.bankName && (
-              <Text>
-                Bank <Text style={styles.payCode}>{data.bank.bankName}{data.bank.branch ? `, ${data.bank.branch}` : ""}</Text>
+              <Text style={styles.payLine}>
+                Bank: <Text style={styles.payValue}>{data.bank.bankName}{data.bank.branch ? `, ${data.bank.branch}` : ""}</Text>
               </Text>
             )}
-            {data.bank?.accountNumber && <Text>Account no. <Text style={styles.payCode}>{data.bank.accountNumber}</Text></Text>}
-            {data.bank?.iban && <Text>IBAN <Text style={styles.payCode}>{data.bank.iban}</Text></Text>}
-            <Text>
-              {data.bank?.swiftCode ? <Text>SWIFT <Text style={styles.payCode}>{data.bank.swiftCode}</Text> · </Text> : null}
-              Ref. <Text style={styles.payCode}>{data.invoiceNumber}</Text>
-            </Text>
-            {data.bank?.paymentNote && <Text>{data.bank.paymentNote}</Text>}
+            {data.bank?.accountNumber && (
+              <Text style={styles.payLine}>Account Number: <Text style={styles.payValue}>{data.bank.accountNumber}</Text></Text>
+            )}
+            {data.bank?.iban && <Text style={styles.payLine}>IBAN: <Text style={styles.payValue}>{data.bank.iban}</Text></Text>}
+            {data.bank?.swiftCode && <Text style={styles.payLine}>SWIFT: <Text style={styles.payValue}>{data.bank.swiftCode}</Text></Text>}
+            <Text style={styles.payLine}>Payment Reference: <Text style={styles.payValue}>{data.invoiceNumber}</Text></Text>
+            {data.bank?.paymentNote && <Text style={styles.payLine}>{data.bank.paymentNote}</Text>}
             {!data.bank?.accountTitle && !data.bank?.bankName && !data.bank?.iban && !data.bank?.accountNumber && (
-              <Text>Bank details not yet configured — set them in Setup › Invoice Settings.</Text>
+              <Text style={styles.payLine}>Bank details not yet configured — set them in Setup &rsaquo; Invoice Settings.</Text>
             )}
           </View>
-          {data.signatoryName && (
-            <View style={styles.signBlock}>
-              <Text style={styles.signName}>{data.signatoryName}</Text>
-              <Text style={styles.signLine}>Authorized Signatory, HMARK Consultants</Text>
+
+          {data.payments.length > 0 && (
+            <View style={styles.scheduleBlock}>
+              <Text style={styles.sectionLabel}>PAYMENT SCHEDULE</Text>
+              <View style={[styles.ledgerRow, { paddingVertical: 0, paddingBottom: 5 }]}>
+                <Text style={[styles.th, { flex: 1.5 }]}>Date</Text>
+                <Text style={[styles.th, { flex: 1.5 }]}>Method</Text>
+                <Text style={[styles.th, { flex: 1.2, textAlign: "right" }]}>Amount</Text>
+                <Text style={[styles.th, { flex: 1, textAlign: "right" }]}>Status</Text>
+              </View>
+              {data.payments.map((p, i) => (
+                <View key={i} style={styles.ledgerRow}>
+                  <Text style={{ flex: 1.5, fontSize: 8.5 }}>{p.date}</Text>
+                  <Text style={{ flex: 1.5, fontSize: 8.5, color: GREY }}>{p.method ?? "—"}</Text>
+                  <Text style={{ flex: 1.2, fontSize: 8.5, textAlign: "right" }}>{money(data.currencySymbol, p.amount)}</Text>
+                  <Text style={{ flex: 1, fontSize: 8.5, textAlign: "right", color: p.status === "paid" ? INK_STRONG : GREY }}>
+                    {p.status === "paid" ? "Received" : "Due"}
+                  </Text>
+                </View>
+              ))}
             </View>
           )}
         </View>
 
-        {/* Full width: inside the narrow payment-instructions column this ran
-            past the page edge and was cut off mid-sentence. */}
         {data.conversionNote && (
-          <View style={styles.currencyNote}>
+          <View style={styles.note}>
             <Text>{data.conversionNote}</Text>
           </View>
         )}
 
-        <View style={styles.legal}>
-          <Text>Instalments unpaid past their due date may delay document submission on the student&apos;s application. For queries, contact accounts@hmarkconsultants.com.</Text>
-          <Text style={styles.legalItalic}>HMARK Consultants reserves the right, in its sole discretion, to cancel the scholarship or admission.</Text>
+        {/* Fixed to the bottom of the page like Wave's, so the closing line sits
+            in the same place whether the invoice runs long or short. */}
+        <View style={styles.foot} fixed>
+          <Text>
+            Instalments unpaid past their due date may delay document submission on the student&apos;s application. For queries,
+            contact accounts@hmarkconsultants.com.
+          </Text>
+          <Text>HMARK Consultants reserves the rights, in its sole discretion, to cancel the scholarship or admission.</Text>
         </View>
       </Page>
     </Document>

@@ -20,6 +20,8 @@ function one<T>(v: T | T[] | null) {
 // The ISO code is unambiguous and always renders.
 const CURRENCY_SYMBOLS: Record<string, string> = { PKR: "PKR ", USD: "$", EUR: "€" };
 
+const LONG_DATE: Intl.DateTimeFormatOptions = { year: "numeric", month: "long", day: "numeric" };
+
 // Date.setMonth() overflows past month-end for short target months (e.g. 31
 // Jan + 1 month rolls over to 3 March, not the intended end of February) —
 // done entirely in UTC, independent of `date.setMonth`, so it's also immune
@@ -459,10 +461,6 @@ export async function buildAndStoreInvoicePdf(
 
   const nextDue = (installments ?? []).find((i) => i.status !== "paid")?.due_date ?? null;
 
-  const destinationLabel = destination?.display_name
-    ? `${destination.display_name}${invoice.intake ? ` — Intake: ${invoice.intake}` : ""}`
-    : "Consultancy fee";
-
   // Read through the client we were handed, not the session-scoped helper:
   // the overdue-invoices cron calls this with a service-role client and has no
   // staff session, so a session-based read would come back empty and the PDF
@@ -494,9 +492,12 @@ export async function buildAndStoreInvoicePdf(
     data: {
       invoiceNumber,
       status,
-      issuedDate: new Date(invoice.created_at).toLocaleDateString(),
-      dueDate: nextDue ? formatDateOnly(nextDue) : null,
+      // Spelled-out month, matching the invoices HMARK already sends — "3/17/2026"
+      // is read differently either side of the Atlantic, "March 17, 2026" is not.
+      issuedDate: new Date(invoice.created_at).toLocaleDateString("en-US", LONG_DATE),
+      dueDate: nextDue ? formatDateOnly(nextDue, LONG_DATE) : null,
       currencySymbol,
+      currencyCode: invoice.currency,
       studentName: student?.full_name ?? "—",
       studentPhone: student?.contact_number ?? null,
       studentEmail: student?.email ?? null,
@@ -511,13 +512,11 @@ export async function buildAndStoreInvoicePdf(
       netConsultancyFee: math.netConsultancyFee,
       taxRate: math.taxRate,
       taxAmount: math.taxAmount,
-      destinationLabel,
       terms: invoice.terms,
       payments,
       subtotal,
       amountPaid,
       balanceDue,
-      signatoryName: template?.signatory_name ?? null,
       bank,
       conversionNote: conversionNote(invoice.currency, bankRow?.account_currency),
     },
