@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { StatCard } from "@/components/ui/StatCard";
 import { computeInvoiceStatus } from "@/lib/invoiceStatus";
 import { computeInvoiceMath, computePaymentProgress } from "@/lib/invoiceMath";
+import { getEffectivePermissions } from "@/lib/auth/permissions";
 import { FeeProductCatalog } from "./FeeProductCatalog";
 import { ConsultancyFeeList } from "./ConsultancyFeeList";
 import { ConsultancyFeeOverview, type FeeRow, type FeeStatus } from "./ConsultancyFeeOverview";
@@ -19,10 +20,14 @@ export default async function ConsultancyFeePage() {
   const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
   const role = staffRow?.role ?? null;
   const isSuperAdmin = role === "super_admin";
-  // Super Admin manages, Finance views. Processing previously had manage
-  // rights here; payment records are now Super Admin's alone.
   const canView = isSuperAdmin || role === "finance";
-  const canManage = isSuperAdmin;
+  // Read from the permission system rather than hardcoding the role. These
+  // records are the accounts team's to manage as well as Super Admin's, which
+  // is exactly what finance.invoices.manage already grants by default
+  // (migration 0094) — and it stays adjustable in Admin > Role Permissions
+  // instead of being fixed here.
+  const perms = await getEffectivePermissions();
+  const canManage = perms["finance.invoices.manage"] === true;
 
   if (!canView) {
     return (

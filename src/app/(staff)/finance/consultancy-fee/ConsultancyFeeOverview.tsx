@@ -213,7 +213,14 @@ export function ConsultancyFeeOverview({ rows, canManage }: { rows: FeeRow[]; ca
                   </Td>
                   <Td>
                     {r.adminCharge > 0 ? (
-                      <Badge tone={r.adminFeePaid ? "success" : "warning"}>{r.adminFeePaid ? "Paid" : "Unpaid"}</Badge>
+                      <span className="flex items-center gap-1.5 whitespace-nowrap">
+                        {money(r.currency, r.adminCharge)}
+                        {/* The charge is collected inside installment 1, so its
+                            state IS that installment's. Saying where it sits
+                            stops this reading as a second, separate charge. */}
+                        <span className="text-xs text-muted">in inst. 1</span>
+                        <Badge tone={r.adminFeePaid ? "success" : "warning"}>{r.adminFeePaid ? "Paid" : "Unpaid"}</Badge>
+                      </span>
                     ) : (
                       <span className="text-muted">—</span>
                     )}
