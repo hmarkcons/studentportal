@@ -21,13 +21,26 @@ function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
 }
 
-// Pinned locale and a readable shape. This renders on the server and hydrates
-// on the client, so an implicit locale is a hydration mismatch (see
-// formatDate.ts), and a bare toLocaleString gave "9/9/2026, 2:32:07 PM".
+// Locale AND timezone pinned. This renders on the server and hydrates on the
+// client, so anything left to the environment differs between the two — the
+// locale (see formatDate.ts) and, for a timestamp, the zone: Vercel is UTC
+// while the browser is wherever the reader is, which React reports as a
+// hydration mismatch and recovers from by re-rendering the whole thread.
+//
+// Karachi rather than UTC because that is the office both sides are talking
+// to, so "2:32 PM" means the same thing to a counsellor and to a student
+// reading it abroad.
 function stamp(iso: string) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleString("en-US", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
+  return d.toLocaleString("en-US", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "Asia/Karachi",
+  });
 }
 
 export function MessageThread({

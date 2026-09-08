@@ -15,7 +15,7 @@ export default async function StudentLayout({ children, params }: { children: Re
   const [{ data: student, error }, { data: italyApp }, { data: profile }, { data: finalizedApp }] = await Promise.all([
     supabase
       .from("students")
-      .select("id, full_name, email, contact_number, country_of_interest, portal_active, registration_status, messages_read_at_staff")
+      .select("id, full_name, email, contact_number, country_of_interest, portal_active, registration_status")
       .eq("id", id)
       .maybeSingle(),
     supabase
@@ -52,8 +52,13 @@ export default async function StudentLayout({ children, params }: { children: Re
     photoUrl = data?.signedUrl ?? null;
   }
 
-  // Messages this student has sent that no one on the team has opened yet.
-  const unreadMessages = await countUnreadMessages(supabase, id, "staff", student.messages_read_at_staff ?? null);
+  // Messages this student has sent that no one on the team has opened yet. The
+  // read marker is read from leads, not from the students view: the view has a
+  // fixed column list and selecting a column it does not carry fails the whole
+  // query, which took the layout down the notFound() path and 404'd every
+  // student page.
+  const { data: readMarker } = await supabase.from("leads").select("messages_read_at_staff").eq("id", id).maybeSingle();
+  const unreadMessages = await countUnreadMessages(supabase, id, "staff", readMarker?.messages_read_at_staff ?? null);
 
   const showScholarship = (italyApp ?? []).some((a) => {
     const uni = Array.isArray(a.university) ? a.university[0] : a.university;
