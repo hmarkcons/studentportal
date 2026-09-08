@@ -304,8 +304,49 @@ export async function deleteAgreement(agreementId: string, studentId: string) {
   const denied = await requirePermission("agreements.edit_delete", "Only Super Admin can delete an agreement.");
   if (denied) return { error: denied.error };
 
+  // Collect the file paths before the row goes, including any archived by a
+  // rejection — once the row is deleted the archive cascades with it and the
+  // paths are unrecoverable.
+  const { data: agreement } = await supabase
+    .from("agreements")
+    .select("pdf_path, signed_file_path, video_recording_path")
+    .eq("id", agreementId)
+    .maybeSingle();
+  const { data: archived } = await supabase
+    .from("agreement_submission_archive")
+    .select("file_path")
+    .eq("agreement_id", agreementId);
+
+  const paths = [
+    ...new Set(
+      [
+        agreement?.pdf_path,
+        agreement?.signed_file_path,
+        agreement?.video_recording_path,
+        ...(archived ?? []).map((a) => a.file_path),
+      ].filter((p): p is string => Boolean(p))
+    ),
+  ];
+
   const { error } = await supabase.from("agreements").delete().eq("id", agreementId);
   if (error) return { error: error.message };
+
+  // Storage is cleared too, not just the row. This used to delete only the
+  // row, so every agreement ever deleted left its generated PDF behind — and a
+  // leftover file is not merely clutter: documents_storage_select_self grants a
+  // student read on everything under their own id folder, so an orphan stays
+  // readable by them for as long as it exists. A signed copy uploaded against
+  // the wrong student would stay readable by the wrong student.
+  //
+  // Deliberately after the row delete and not fatal: the agreement is already
+  // gone, and failing the whole action over a leftover file would tell staff
+  // the deletion did not happen when it did.
+  if (paths.length > 0) {
+    const { error: storageError } = await supabase.storage.from("documents").remove(paths);
+    if (storageError) {
+      console.error(`deleteAgreement: removed agreement ${agreementId} but left files behind:`, storageError.message);
+    }
+  }
 
   revalidatePath(`/students/${studentId}`);
   return { success: true };
