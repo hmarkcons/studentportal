@@ -5,6 +5,9 @@ import { BoardingPassTracker } from "@/components/ui/BoardingPassTracker";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DestinationPipelineCard } from "@/components/DestinationPipelineCard";
 import type { DashboardStageDef } from "@/lib/dashboardPipeline";
+import { loadPortalSummary } from "@/lib/portalSummary";
+import { PortalAttention } from "@/components/PortalAttention";
+import { WHATSAPP_LINK } from "@/lib/constants";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -21,24 +24,14 @@ export default async function PortalDashboardPage() {
 
   if (!student) return null;
 
-  const [{ data: applications }, { count: pendingDocs }, { count: unassignedDocs }, { data: leadDestinations }] = await Promise.all([
+  const [{ data: applications }, summary, { data: leadDestinations }] = await Promise.all([
     supabase
       .from("applications")
       .select(
         "id, current_stage, intake, university:universities(name, destination:destinations(id, display_name, pipeline_stages, dashboard_pipeline_stages)), program:programs(name)"
       )
       .eq("student_id", student.id),
-    supabase
-      .from("student_documents")
-      .select("id", { count: "exact", head: true })
-      .eq("student_id", student.id)
-      .in("status", ["missing", "rejected"]),
-    supabase
-      .from("student_documents")
-      .select("id", { count: "exact", head: true })
-      .eq("student_id", student.id)
-      .is("application_id", null)
-      .in("status", ["missing", "rejected"]),
+    loadPortalSummary(supabase, student.id),
     supabase
       .from("lead_destinations")
       .select("destination_id, dashboard_stage_values, destination:destinations(display_name, dashboard_pipeline_stages)")
@@ -103,25 +96,35 @@ export default async function PortalDashboardPage() {
     <div className="mx-auto max-w-3xl">
       <h2 className="mb-6 text-lg font-semibold text-ink">Welcome back, {student.full_name}</h2>
 
+      {/* Everything outstanding, in one place — documents, money,
+          appointments and replies. Each row is computed by the same helper the
+          section it links to uses, so the two cannot disagree. */}
+      <PortalAttention summary={summary} />
+
       {counselor && (
         <Card className="mb-6">
-          <h3 className="mb-2 text-sm font-medium text-ink">Your counselor</h3>
+          <h3 className="mb-2 text-sm font-medium text-ink">Your counsellor</h3>
           <p className="text-sm text-ink">{counselor.full_name}</p>
-          <p className="text-xs text-muted">
-            {counselor.designation ?? "Counselor"} · {counselor.phone ?? counselor.whatsapp_number ?? "—"}
-          </p>
+          <p className="text-xs text-muted">{counselor.designation ?? "Counsellor"}</p>
+          {/* Tappable rather than plain text: a student reading this on a
+              phone should not have to copy a number out by hand. */}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {counselor.phone && (
+              <a
+                href={`tel:${counselor.phone.replace(/[^+\d]/g, "")}`}
+                className="rounded-md border border-border px-2 py-1 text-xs text-ink hover:bg-bg"
+              >
+                📞 {counselor.phone}
+              </a>
+            )}
+            <a
+              href={WHATSAPP_LINK}
+              className="rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
+            >
+              💬 WhatsApp HMARK
+            </a>
+          </div>
         </Card>
-      )}
-
-      {(pendingDocs ?? 0) > 0 && (
-        <Link href="/portal/documents">
-          <Card className="mb-6 bg-warning-bg">
-            <p className="text-sm text-warning">
-              {pendingDocs} document(s) need your attention{(unassignedDocs ?? 0) > 0 ? ` — including ${unassignedDocs} general document(s)` : ""}. Tap
-              to upload.
-            </p>
-          </Card>
-        </Link>
       )}
 
       {destinationPipelineRows.length > 0 && (
