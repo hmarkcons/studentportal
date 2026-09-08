@@ -8,6 +8,7 @@ import { formatDateOnly } from "@/lib/formatDate";
 import { getAgreementContent } from "@/lib/pdf/agreementContent";
 import { wordingToBlocks, DEFAULT_OFFICE_LINE } from "@/lib/pdf/templateWording";
 import { requirePermission } from "@/lib/auth/permissions";
+import { validateDocumentFile, sanitizeFilename } from "@/lib/documentUpload";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -373,7 +374,28 @@ export async function uploadSignedAgreement(agreementId: string, studentId: stri
     return { error: "E-signature agreements are uploaded by the student from their portal — verify their submission instead." };
   }
 
-  const path = `${studentId}/agreements/${agreementId}-${file.name}`;
+  // Size and type are checked here as they are on every other upload path.
+  // This one took the file unchecked, so a 200MB video could be filed as a
+  // signed agreement.
+  const invalid = validateDocumentFile(file);
+  if (invalid) return { error: invalid };
+
+  // The filename is sanitised, as it is everywhere else. It used to go into
+  // the key verbatim, and a real filename containing "%28" produced a stored
+  // path that did not match the object it named — which only worked because
+  // the signed-URL call happens to decode it, and which made the stored path
+  // useless for comparing against what is actually in the bucket.
+  const path = `${studentId}/agreements/${agreementId}-${sanitizeFilename(file.name)}`;
+
+  // What this replaces, if anything. A re-upload under a different filename
+  // used to leave the previous object behind with nothing pointing at it —
+  // and an orphan stays readable by whichever student's folder it sits in.
+  const { data: previous } = await supabase
+    .from("agreements")
+    .select("signed_file_path")
+    .eq("id", agreementId)
+    .maybeSingle();
+
   const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: true });
   if (uploadError) return { error: uploadError.message };
 
@@ -383,6 +405,14 @@ export async function uploadSignedAgreement(agreementId: string, studentId: stri
     .eq("id", agreementId);
 
   if (error) return { error: error.message };
+
+  // Only once the new path is safely recorded, and never the file just written.
+  if (previous?.signed_file_path && previous.signed_file_path !== path) {
+    const { error: cleanupError } = await supabase.storage.from("documents").remove([previous.signed_file_path]);
+    if (cleanupError) {
+      console.error(`uploadSignedAgreement: replaced ${agreementId} but left ${previous.signed_file_path}:`, cleanupError.message);
+    }
+  }
 
   revalidatePath(`/students/${studentId}`);
   return { success: true };
