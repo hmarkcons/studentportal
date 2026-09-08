@@ -10,7 +10,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
 
   const { data: studentRow } = await supabase
     .from("leads")
-    .select("id, full_name, portal_active, messages_read_at_student")
+    .select("id, full_name, portal_active")
     .eq("auth_user_id", userId ?? "")
     .maybeSingle();
 
@@ -34,7 +34,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
 
   // A message from their counsellor is worth surfacing in the menu — the whole
   // point of the channel is that the student does not have to think to look.
-  const unread = await countUnreadMessages(supabase, studentRow.id, "student", studentRow.messages_read_at_student ?? null);
+  const unread = await countUnreadMessages(supabase, studentRow.id, "student");
   const nav = unread > 0 ? visible.map((i) => (i.href === "/portal/messages" ? { ...i, badge: unread } : i)) : visible;
 
   return (

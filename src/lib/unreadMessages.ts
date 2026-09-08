@@ -9,15 +9,25 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 /**
  * Unread count for one student's thread.
  *
- * `side` decides both which messages count and which marker is compared:
- * a student's unread are the ones staff sent (outbound), and vice versa.
+ * `side` decides both which messages count and whose marker is compared: a
+ * student's unread are the ones staff sent (outbound), and vice versa.
+ *
+ * The marker is fetched here rather than passed in, so call sites don't have to
+ * know it lives in message_read_markers — it used to sit on leads, which meant
+ * every caller reading the `students` view had to reach for a second query.
  */
 export async function countUnreadMessages(
   supabase: SupabaseClient,
   studentId: string,
-  side: "student" | "staff",
-  readAt: string | null
+  side: "student" | "staff"
 ): Promise<number> {
+  const { data: marker } = await supabase
+    .from("message_read_markers")
+    .select("read_at")
+    .eq("student_id", studentId)
+    .eq("side", side)
+    .maybeSingle();
+
   let query = supabase
     .from("messages")
     .select("id", { count: "exact", head: true })
@@ -26,8 +36,8 @@ export async function countUnreadMessages(
     .neq("channel", "internal_note")
     .eq("direction", side === "student" ? "outbound" : "inbound");
 
-  // No marker means nothing has ever been opened, so everything is unread.
-  if (readAt) query = query.gt("sent_at", readAt);
+  // No marker means the thread has never been opened, so everything is unread.
+  if (marker?.read_at) query = query.gt("sent_at", marker.read_at);
 
   const { count } = await query;
   return count ?? 0;
