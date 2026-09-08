@@ -198,11 +198,25 @@ export async function deleteStaffAccount(staffId: string) {
     };
   }
 
+  // The login must go too, and a failure here cannot be swallowed: it used to
+  // be, so deleting a staff member whose id appeared in audit_log (i.e. anyone
+  // who had ever edited a lead) removed the staff row, reported success, and
+  // left a working credential behind. Migration 0136 made the two history FKs
+  // ON DELETE SET NULL so this now succeeds; if it ever fails again, say so
+  // instead of pretending the account is gone.
   const admin = createAdminClient();
-  await admin.auth.admin.deleteUser(staffId).catch(() => {});
+  const { error: authError } = await admin.auth.admin.deleteUser(staffId);
 
   revalidatePath("/admin/staff");
   revalidateTag("staff-directory", { expire: 0 });
+
+  if (authError) {
+    return {
+      error:
+        "Removed them from the staff list, but their login could not be deleted, so it may still work. " +
+        `Tell the developer: ${authError.message}`,
+    };
+  }
   return { success: true };
 }
 
