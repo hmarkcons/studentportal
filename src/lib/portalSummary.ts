@@ -12,6 +12,7 @@ import { countUnreadMessages } from "@/lib/unreadMessages";
 import { loadTicketActivity, loadTicketReadMarkers, hasUnseenStaffReply } from "@/lib/supportSignals";
 import { loadAppointments, daysUntil, type PortalAppointment } from "@/lib/portalAppointments";
 import { computePaymentProgress } from "@/lib/invoiceMath";
+import { profileChecklist, countMissing, passportStatus, type PassportStatus } from "@/lib/profileCompleteness";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type PortalSummary = {
@@ -27,12 +28,15 @@ export type PortalSummary = {
     nextDueDate: string | null;
     overdue: boolean;
   } | null;
+  /** Profile fields a visa application needs that are still blank. */
+  profileMissing: number;
+  passport: PassportStatus;
 };
 
 export async function loadPortalSummary(supabase: SupabaseClient, studentId: string): Promise<PortalSummary> {
   const today = new Date().toISOString().slice(0, 10);
 
-  const [unreadMessages, documentsNeedingAttention, appointments, invoices, tickets] = await Promise.all([
+  const [unreadMessages, documentsNeedingAttention, appointments, invoices, tickets, student, profile] = await Promise.all([
     countUnreadMessages(supabase, studentId, "student"),
     supabase
       .from("student_documents")
@@ -46,7 +50,21 @@ export async function loadPortalSummary(supabase: SupabaseClient, studentId: str
       .select("id, currency")
       .eq("student_id", studentId),
     supabase.from("support_tickets").select("id").eq("student_id", studentId),
+    supabase.from("students").select("contact_number, date_of_birth, address").eq("id", studentId).maybeSingle(),
+    supabase
+      .from("student_profiles")
+      .select(
+        "emergency_contact_name, emergency_contact_number, passport_number, passport_expiry, cnic, financial_sponsor_name, financial_sponsor_relation, financial_details"
+      )
+      .eq("student_id", studentId)
+      .maybeSingle(),
   ]);
+
+  // Same checklist the Profile page shows, so the dashboard count and that
+  // page can never disagree about what is outstanding.
+  const profileInput = { ...(student.data ?? {}), ...(profile.data ?? {}) };
+  const profileMissing = countMissing(profileChecklist(profileInput));
+  const passport = passportStatus(profile.data?.passport_expiry ?? null);
 
   // Support: how many tickets carry a reply the student has not opened.
   const ticketIds = (tickets.data ?? []).map((t) => t.id);
@@ -103,5 +121,7 @@ export async function loadPortalSummary(supabase: SupabaseClient, studentId: str
     nextAppointment,
     daysToAppointment: nextAppointment ? daysUntil(nextAppointment.date) : null,
     money,
+    profileMissing,
+    passport,
   };
 }

@@ -55,6 +55,35 @@ export function PortalAttention({ summary }: { summary: PortalSummary }) {
     });
   }
 
+  // A passport problem outranks an incomplete field: it needs a government
+  // office, not five minutes on a form.
+  if (summary.passport.state === "expired") {
+    rows.push({
+      href: "/portal/profile",
+      icon: "🛂",
+      text: "Your passport has expired",
+      detail: `Expired ${formatDateOnly(summary.passport.expiry!, LONG_DATE)} — a visa cannot be filed until it is renewed`,
+      urgent: true,
+    });
+  } else if (summary.passport.state === "expiring") {
+    rows.push({
+      href: "/portal/profile",
+      icon: "🛂",
+      text: "Your passport expires soon",
+      detail: `${formatDateOnly(summary.passport.expiry!, LONG_DATE)} · in ${summary.passport.daysLeft} days`,
+      urgent: true,
+    });
+  }
+
+  if (summary.profileMissing > 0) {
+    rows.push({
+      href: "/portal/profile",
+      icon: "👤",
+      text: `${summary.profileMissing} profile detail${summary.profileMissing === 1 ? "" : "s"} to add`,
+      detail: "Needed for your visa application",
+    });
+  }
+
   if (summary.unreadMessages > 0) {
     rows.push({
       href: "/portal/messages",
@@ -78,7 +107,7 @@ export function PortalAttention({ summary }: { summary: PortalSummary }) {
       <Card className="mb-6">
         <p className="text-sm text-ink">Nothing needs your attention right now.</p>
         <p className="mt-1 text-xs text-muted">
-          We&rsquo;ll show anything outstanding here — documents, payments, appointments and replies.
+          We&rsquo;ll show anything outstanding here — documents, payments, appointments, profile details and replies.
         </p>
       </Card>
     );

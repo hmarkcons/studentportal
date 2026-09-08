@@ -5,6 +5,7 @@ import { PhotoUpload } from "@/components/PhotoUpload";
 import { TestScoresSection } from "@/components/TestScoresSection";
 import { TravelVisaHistorySection } from "@/components/TravelVisaHistorySection";
 import { ProfileForm } from "./ProfileForm";
+import { ProfileCompleteness } from "@/components/ProfileCompleteness";
 import { uploadStudentPhoto } from "@/lib/actions/studentProfileExtras";
 
 export default async function PortalProfilePage() {
@@ -38,9 +39,27 @@ export default async function PortalProfilePage() {
     <div className="mx-auto max-w-2xl">
       <h2 className="mb-4 text-lg font-semibold text-ink">Profile</h2>
 
+      {/* What is still outstanding, before the form itself — a student should
+          not have to audit eleven fields to find the two they skipped. */}
+      <ProfileCompleteness
+        input={{
+          contact_number: student.contact_number,
+          date_of_birth: student.date_of_birth,
+          address: student.address,
+          emergency_contact_name: profile?.emergency_contact_name ?? null,
+          emergency_contact_number: profile?.emergency_contact_number ?? null,
+          passport_number: profile?.passport_number ?? null,
+          passport_expiry: profile?.passport_expiry ?? null,
+          cnic: profile?.cnic ?? null,
+          financial_sponsor_name: profile?.financial_sponsor_name ?? null,
+          financial_sponsor_relation: profile?.financial_sponsor_relation ?? null,
+          financial_details: profile?.financial_details ?? null,
+        }}
+      />
+
       <Card className="mb-6">
         <h3 className="mb-3 text-base font-semibold text-ink">Personal details</h3>
-        <p className="mb-4 text-xs text-muted">Your email and case status can only be changed by your counselor.</p>
+        <p className="mb-4 text-xs text-muted">Your email and case status can only be changed by your counsellor.</p>
 
         <div className="mb-4">
           <PhotoUpload action={uploadStudentPhoto.bind(null, student.id, revalidateTo)} photoUrl={photoUrl} />
