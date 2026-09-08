@@ -56,7 +56,7 @@ export function MessageThread({
           <div key={m.id} className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${m.direction === "outbound" ? "self-end bg-primary text-primary-ink" : "bg-bg text-ink"}`}>
             <p>{m.body}</p>
             <p className="mt-1 text-[10px] opacity-70">
-              {one(m.sent_by)?.full_name ?? "System"} · {new Date(m.sent_at).toLocaleString()}
+              {one(m.sent_by)?.full_name ?? "System"} · {new Date(m.sent_at).toLocaleString("en-US")}
             </p>
           </div>
         ))}

@@ -113,7 +113,7 @@ export function PayrollForm({
       </div>
       {Math.round(liveTotalCommission * 100) / 100 !== Math.round(totalCommission * 100) / 100 && (
         <p className="pb-1.5 text-right text-xs text-warning">
-          Ledger total is now ₨ {liveTotalCommission.toLocaleString()} (with bonus) —{" "}
+          Ledger total is now ₨ {liveTotalCommission.toLocaleString("en-US")} (with bonus) —{" "}
           <button type="button" onClick={() => setTotalCommission(liveTotalCommission)} className="text-primary hover:underline">
             refresh
           </button>
@@ -135,7 +135,7 @@ export function PayrollForm({
 
       <div className={`${rowClass} font-semibold`}>
         <span className="text-ink">Gross Total (PKR)</span>
-        <span className="text-ink">{grossTotal.toLocaleString()}</span>
+        <span className="text-ink">{grossTotal.toLocaleString("en-US")}</span>
       </div>
 
       <div className="py-1.5 text-sm">
@@ -184,7 +184,7 @@ export function PayrollForm({
 
       <div className={`${rowClass} text-base font-semibold`}>
         <span className="text-ink">Net Pay (Total, PKR)</span>
-        <span className="text-primary">{netPay.toLocaleString()}</span>
+        <span className="text-primary">{netPay.toLocaleString("en-US")}</span>
       </div>
 
       <div className={rowClass}>

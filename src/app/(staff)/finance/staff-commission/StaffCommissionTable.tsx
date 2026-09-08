@@ -464,7 +464,7 @@ export function StaffCommissionTable({
   return (
     <div>
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard icon="💰" iconTone="primary" label="Total Commission" value={`₨ ${Math.round(stats.totalPKR).toLocaleString()}`} caption="Filtered records" />
+        <StatCard icon="💰" iconTone="primary" label="Total Commission" value={`₨ ${Math.round(stats.totalPKR).toLocaleString("en-US")}`} caption="Filtered records" />
         <StatCard icon="✅" iconTone="success" label="Paid" value={String(stats.paid)} caption="Commission paid" />
         <StatCard icon="⏳" iconTone="warning" label="Unpaid" value={String(stats.unpaid)} caption="Awaiting payment" />
         <StatCard icon="🔄" iconTone="danger" label="Refunds" value={String(stats.refunds)} caption="Refund requests on file" />

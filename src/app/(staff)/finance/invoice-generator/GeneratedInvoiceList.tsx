@@ -52,14 +52,19 @@ export type GeneratedInvoice = {
 // created_at / sent_at are timestamptz, so they must not go through
 // formatDateOnly (that helper is for date-only columns and returns
 // "Invalid Date" for a full timestamp).
+// Locale and timezone are pinned rather than left to the environment. This
+// component renders on the server and hydrates on the client, and the two
+// disagree — Vercel is UTC/en-US, the browser is whatever the user has — so
+// leaving them implicit produced a hydration mismatch that made React throw
+// away the server HTML and re-render this list on every load.
 function fmtTimestamp(ts: string | null) {
   if (!ts) return "—";
   const d = new Date(ts);
-  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString();
+  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("en-US", { timeZone: "UTC" });
 }
 
 function fmt(currency: string, n: number) {
-  return `${currency} ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `${currency} ${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 const TONE: Record<GeneratedInvoice["status"], "success" | "warning" | "neutral"> = {

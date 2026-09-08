@@ -80,7 +80,7 @@ export function ConsultancyFeeList({
         {filtered.map((r) => (
           <div key={r.invoice.id}>
             <p className="mb-1 text-xs text-muted">
-              Registered {r.registeredAt ? new Date(r.registeredAt).toLocaleDateString() : "—"}
+              Registered {r.registeredAt ? new Date(r.registeredAt).toLocaleDateString("en-US") : "—"}
             </p>
             <InvoiceCard
               invoice={r.invoice}

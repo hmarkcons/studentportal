@@ -43,7 +43,7 @@ const STATUS_TONE: Record<FeeStatus, "success" | "warning" | "neutral" | "danger
 const LEVEL_LABELS: Record<string, string> = { bachelors: "Bachelors", masters: "Masters", phd: "PhD" };
 
 function money(currency: string, n: number) {
-  return `${currency} ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `${currency} ${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function uniq(values: (string | null)[]): string[] {

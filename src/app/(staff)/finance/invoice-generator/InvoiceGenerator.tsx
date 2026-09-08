@@ -32,7 +32,7 @@ const SOURCE_NOTE: Record<string, string> = {
 };
 
 function fmt(currency: string, n: number) {
-  return `${currency} ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `${currency} ${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export function InvoiceGenerator({ students, bank }: { students: StudentOption[]; bank: InvoiceBankSettings | null }) {

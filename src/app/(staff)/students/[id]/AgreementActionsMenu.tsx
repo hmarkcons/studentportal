@@ -106,7 +106,7 @@ export function AgreementActionsMenu({
         <div className="flex flex-col">
           <Row label="Status" value={agreement.status} />
           <Row label="Signing method" value={agreement.signing_method} />
-          <Row label="Created" value={new Date(agreement.created_at).toLocaleDateString()} />
+          <Row label="Created" value={new Date(agreement.created_at).toLocaleDateString("en-US")} />
           <Row label="Admin charge override" value={agreement.admin_charge_override} />
           <Row label="Consultancy fee override" value={agreement.consultancy_fee_override} />
           <Row label="Discount" value={agreement.discount_amount} />

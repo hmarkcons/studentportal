@@ -48,7 +48,7 @@ export function TicketThread({
           >
             <p className="whitespace-pre-wrap">{r.body}</p>
             <p className="mt-1 text-[10px] opacity-70">
-              {r.author_name} · {new Date(r.created_at).toLocaleString()}
+              {r.author_name} · {new Date(r.created_at).toLocaleString("en-US")}
             </p>
           </div>
         ))}
