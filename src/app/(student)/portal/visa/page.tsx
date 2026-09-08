@@ -13,7 +13,12 @@ function one<T>(v: T | T[] | null) {
 /** Date-only tracker values render as dates; everything else as written. */
 function display(value: string, type: string | undefined) {
   if (!value) return "—";
-  if (type === "date" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return formatDateOnly(value);
+  // Spelled-out month. A visa appointment is the one date on this page a
+  // student cannot afford to misread, and 11/20/2026 reads as 11 December to
+  // most of the world outside the US.
+  if (type === "date" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return formatDateOnly(value, { day: "numeric", month: "short", year: "numeric" });
+  }
   if (type === "boolean") return value === "true" ? "Yes" : value === "false" ? "No" : value;
   return value;
 }
@@ -75,6 +80,13 @@ export default async function PortalVisaPage() {
       const outcomeField = fields.find((f) => f.visaRole === "outcome");
       const reasonField = fields.find((f) => f.visaRole === "outcome_reason");
       const decision = readVisaDecision(outcomeField ? values[outcomeField.key] : null);
+
+      // A country whose fields are all still blank has nothing to say. A card
+      // of dashes under an "In progress" badge tells a student less than the
+      // empty state does — it reads as the page being broken rather than as
+      // their visa process not having started.
+      const anythingRecorded = fields.some((f) => (values[f.key] ?? "").trim() !== "");
+      if (!anythingRecorded) return null;
 
       return {
         country: c,
