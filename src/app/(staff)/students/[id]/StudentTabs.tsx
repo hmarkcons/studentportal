@@ -3,7 +3,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-export function StudentTabs({ studentId, showScholarship }: { studentId: string; showScholarship: boolean }) {
+export function StudentTabs({
+  studentId,
+  showScholarship,
+  unreadMessages = 0,
+}: {
+  studentId: string;
+  showScholarship: boolean;
+  /** Messages the student has sent that no one on the team has opened yet. */
+  unreadMessages?: number;
+}) {
   const pathname = usePathname();
 
   const tabs = [
@@ -14,7 +23,7 @@ export function StudentTabs({ studentId, showScholarship }: { studentId: string;
     // Visa lives on the student's own portal now and is sourced entirely from
     // the documentation tracker, which is where staff maintain it.
     ...(showScholarship ? [{ label: "Scholarship", href: `/students/${studentId}/scholarship` }] : []),
-    { label: "Communication", href: `/students/${studentId}/communication` },
+    { label: "Communication", href: `/students/${studentId}/communication`, badge: unreadMessages },
   ];
 
   return (
@@ -40,6 +49,11 @@ export function StudentTabs({ studentId, showScholarship }: { studentId: string;
             }`}
           >
             {t.label}
+            {Boolean(t.badge) && (
+              <span className="ml-1.5 rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+                {t.badge}
+              </span>
+            )}
           </Link>
         );
       })}

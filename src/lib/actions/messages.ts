@@ -69,3 +69,17 @@ export async function broadcastMessage(_prevState: unknown, formData: FormData) 
   revalidatePath("/marketing/broadcast");
   return { success: true, count: studentIds.length };
 }
+
+/**
+ * Records that one side has seen the thread, clearing its unread count.
+ *
+ * A security-definer RPC does the write: neither side may set the other's
+ * marker, and letting a student update their own leads row directly would need
+ * a write policy far broader than "I have read my messages".
+ */
+export async function markMessagesRead(studentId: string, side: "student" | "staff") {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("mark_messages_read", { p_student_id: studentId, p_side: side });
+  if (error) return { error: error.message };
+  return { success: true };
+}

@@ -19,6 +19,8 @@ export type NavItem = {
   href?: string;
   icon?: string;
   children?: { label: string; href: string }[];
+  /** Unread count shown beside the label. Omitted or 0 renders nothing. */
+  badge?: number;
 };
 
 export function AppShell({
@@ -130,6 +132,11 @@ export function AppShell({
               >
                 {item.icon && <span>{item.icon}</span>}
                 {item.label}
+                {Boolean(item.badge) && (
+                  <span className="ml-auto rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+                    {item.badge}
+                  </span>
+                )}
               </Link>
             )
           )}

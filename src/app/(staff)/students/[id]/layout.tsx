@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/Badge";
 import { StudentTabs } from "./StudentTabs";
 import { DeleteStudentButton } from "./DeleteStudentButton";
 import { InlineRegistrationStatusCell } from "../InlineRegistrationStatusCell";
+import { countUnreadMessages } from "@/lib/unreadMessages";
 
 export default async function StudentLayout({ children, params }: { children: React.ReactNode; params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -14,7 +15,7 @@ export default async function StudentLayout({ children, params }: { children: Re
   const [{ data: student, error }, { data: italyApp }, { data: profile }, { data: finalizedApp }] = await Promise.all([
     supabase
       .from("students")
-      .select("id, full_name, email, contact_number, country_of_interest, portal_active, registration_status")
+      .select("id, full_name, email, contact_number, country_of_interest, portal_active, registration_status, messages_read_at_staff")
       .eq("id", id)
       .maybeSingle(),
     supabase
@@ -50,6 +51,9 @@ export default async function StudentLayout({ children, params }: { children: Re
     const { data } = await supabase.storage.from("documents").createSignedUrl(profile.photo_path, 3600);
     photoUrl = data?.signedUrl ?? null;
   }
+
+  // Messages this student has sent that no one on the team has opened yet.
+  const unreadMessages = await countUnreadMessages(supabase, id, "staff", student.messages_read_at_staff ?? null);
 
   const showScholarship = (italyApp ?? []).some((a) => {
     const uni = Array.isArray(a.university) ? a.university[0] : a.university;
@@ -95,7 +99,7 @@ export default async function StudentLayout({ children, params }: { children: Re
         </div>
       </div>
 
-      <StudentTabs studentId={id} showScholarship={showScholarship} />
+      <StudentTabs studentId={id} showScholarship={showScholarship} unreadMessages={unreadMessages} />
 
       {children}
     </div>

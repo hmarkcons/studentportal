@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { MessageThread, type MessageRow } from "@/components/MessageThread";
+import { MarkMessagesRead } from "@/components/MarkMessagesRead";
 
 export default async function StudentCommunicationTab(props: PageProps<"/students/[id]/communication">) {
   const { id } = await props.params;
@@ -15,9 +16,12 @@ export default async function StudentCommunicationTab(props: PageProps<"/student
     .returns<MessageRow[]>();
 
   const { data: messageTemplates } = await supabase.from("message_templates").select("id, purpose, channel, body").order("purpose");
+  const { data: student } = await supabase.from("students").select("full_name").eq("id", id).maybeSingle();
 
   return (
     <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+      {/* Opening the thread is what clears the badge for the team. */}
+      <MarkMessagesRead studentId={id} side="staff" />
       <Card>
         <h3 className="mb-3 text-sm font-medium text-ink">Message student</h3>
         <p className="mb-3 text-xs text-muted">
@@ -32,6 +36,8 @@ export default async function StudentCommunicationTab(props: PageProps<"/student
           revalidateTo={`/students/${id}/communication`}
           placeholder="Message to the student…"
           templates={messageTemplates ?? []}
+          ownDirection="outbound"
+          counterpartName={student?.full_name ?? "Student"}
         />
       </Card>
 
@@ -44,6 +50,8 @@ export default async function StudentCommunicationTab(props: PageProps<"/student
           entityId={id}
           channel="internal_note"
           revalidateTo={`/students/${id}/communication`}
+          ownDirection="outbound"
+          counterpartName={student?.full_name ?? "Student"}
         />
       </Card>
     </div>
