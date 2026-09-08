@@ -5,7 +5,7 @@ import { updateRegisteredStudentProfile } from "@/lib/actions/students";
 import { STUDY_LEVELS, QUALIFICATION_LEVELS } from "@/lib/constants";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
-import { dobBounds } from "@/lib/dateOfBirth";
+import { dobBounds, dateOfBirthError } from "@/lib/dateOfBirth";
 
 type Lead = {
   full_name: string;
@@ -55,6 +55,7 @@ export function RegisteredStudentProfileForm({
   const action = updateRegisteredStudentProfile.bind(null, studentId, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
   const financial = profile?.financial_details;
+  const storedDobIssue = dateOfBirthError(lead.date_of_birth);
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
@@ -109,6 +110,12 @@ export function RegisteredStudentProfileForm({
           <label className="flex flex-col gap-1 text-xs text-muted">
             Date of birth
             <Input name="date_of_birth" type="date" defaultValue={lead.date_of_birth ?? ""} required {...dobBounds()} />
+            {/* Four registered students were saved with a date of birth a few
+                days after their own record was created, before the field had
+                any bounds. Saving is now blocked, but the wrong values are
+                still on file and this is where they get corrected — so say so
+                here rather than leaving it to be noticed on the agreement. */}
+            {storedDobIssue && <span className="text-danger">{storedDobIssue} It goes on the agreement, so please correct it.</span>}
           </label>
           <label className="flex flex-col gap-1 text-xs text-muted">
             Home phone
