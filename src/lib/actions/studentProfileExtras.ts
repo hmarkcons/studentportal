@@ -12,8 +12,11 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { TEST_TYPES, needsCustomName } from "@/lib/testScores";
 
-const TEST_TYPES = ["ielts", "toefl", "pte", "duolingo", "langcert", "ib", "moi", "gre", "sat", "other"] as const;
+// Was a third hand-written copy of this list, and it lacked GMAT and CEnT-S —
+// so the two types just added to the picker would have been rejected here as
+// invalid. One source now.
 
 // Whole-section save: the section is edited as a table and committed with one
 // Save, so a correction to an existing score is an edit rather than
@@ -26,15 +29,29 @@ export async function saveTestScores(studentId: string, revalidateTo: string, _p
   const types = formData.getAll("score_type").map(String);
   const values = formData.getAll("score_value").map((v) => String(v).trim());
   const dates = formData.getAll("score_date").map((v) => String(v) || null);
+  const customNames = formData.getAll("score_custom_name").map((v) => String(v).trim());
 
-  if (types.length !== ids.length || values.length !== ids.length || dates.length !== ids.length) {
+  if (types.length !== ids.length || values.length !== ids.length || dates.length !== ids.length || customNames.length !== ids.length) {
     return { error: "That didn't submit cleanly — reload the page and try again." };
   }
 
-  const rows = ids.map((id, i) => ({ id: id || null, test_type: types[i], score: values[i], test_date: dates[i] }));
+  const rows = ids.map((id, i) => ({
+    id: id || null,
+    test_type: types[i],
+    score: values[i],
+    test_date: dates[i],
+    // Only kept for the type that needs it, so switching a row away from
+    // Other does not leave a stale name behind on the record.
+    custom_test_name: needsCustomName(types[i]) ? customNames[i] || null : null,
+  }));
   for (const r of rows) {
     if (!(TEST_TYPES as readonly string[]).includes(r.test_type)) return { error: "Choose a valid test type for every row." };
     if (!r.score) return { error: "Every row needs a score — remove the row if the result isn't known yet." };
+    // Without this the document requirement it generates would read
+    // "Other test — scorecard", which names nothing for staff to chase.
+    if (needsCustomName(r.test_type) && !r.custom_test_name) {
+      return { error: "Name the test for every row set to Other." };
+    }
   }
 
   // Ids to delete are worked out against what's actually on file rather than
@@ -57,13 +74,21 @@ export async function saveTestScores(studentId: string, revalidateTo: string, _p
     if (!r.id) continue;
     const { error } = await supabase
       .from("student_test_scores")
-      .update({ test_type: r.test_type, score: r.score, test_date: r.test_date })
+      .update({ test_type: r.test_type, score: r.score, test_date: r.test_date, custom_test_name: r.custom_test_name })
       .eq("id", r.id)
       .eq("student_id", studentId);
     if (error) return { error: error.message };
   }
 
-  const added = rows.filter((r) => !r.id).map((r) => ({ student_id: studentId, test_type: r.test_type, score: r.score, test_date: r.test_date }));
+  const added = rows
+    .filter((r) => !r.id)
+    .map((r) => ({
+      student_id: studentId,
+      test_type: r.test_type,
+      score: r.score,
+      test_date: r.test_date,
+      custom_test_name: r.custom_test_name,
+    }));
   if (added.length > 0) {
     const { error } = await supabase.from("student_test_scores").insert(added);
     if (error) return { error: error.message };

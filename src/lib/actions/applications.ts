@@ -30,27 +30,19 @@ export async function createApplication(studentId: string, _prevState: unknown, 
   const { data, error } = await supabase.from("applications").insert(rows).select("id");
   if (error) return { error: error.message };
 
-  // Auto-provision the standard document checklist so staff see "missing"
-  // rows immediately instead of an empty Documents section.
-  const { data: templates } = await supabase
-    .from("document_templates")
-    .select("id, category")
-    .or(`destination_id.is.null,destination_id.eq.${university.destination_id}`);
-
-  if (templates && templates.length > 0) {
-    const docRows = data.flatMap((app) =>
-      templates.map((t) => ({
-        student_id: studentId,
-        application_id: app.id,
-        template_id: t.id,
-        category: t.category,
-        status: "missing" as const,
-      }))
-    );
-    const { error: seedError } = await supabase.from("student_documents").insert(docRows);
-    if (seedError) console.error("Failed to seed document checklist for new application:", seedError.message);
-  }
-
+  // Deliberately seeds nothing.
+  //
+  // This used to copy the destination's whole document checklist onto every
+  // new application, on top of the student-level copy ensureStudentDocumentRequirements
+  // already maintains. The same passport and the same transcript were asked
+  // for again per university, each row labelled with that university's name,
+  // so a student with three applications showed the same document four times
+  // over — once properly and three times as university-suffixed noise, in the
+  // application checklist and again in the Documents tab.
+  //
+  // A document is a property of the student, not of the application. The
+  // application checklist now carries only what someone deliberately adds to
+  // it: a genuine extra that one university asks for, via addDocumentRequirement.
   redirect(`/students/${studentId}/applications/${data[0].id}`);
 }
 

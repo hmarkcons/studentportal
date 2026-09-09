@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sanitizeFilename, validateDocumentFile } from "@/lib/documentUpload";
+import { profileDerivedRequirements, reconcileDerived } from "@/lib/documentChecklist";
 
 // The static document_templates checklist (Passport copy, Academic
 // transcripts, ...) previously had no auto-population anywhere — staff had
@@ -24,42 +25,115 @@ import { sanitizeFilename, validateDocumentFile } from "@/lib/documentUpload";
 // this is system bookkeeping, not user-submitted data, and every value it
 // reads/writes is already visible to whichever caller (staff or the
 // student themself) triggered it.
+//
+// Two sources feed the checklist now:
+//
+//   * document_templates, as before — the destination's own items plus the
+//     shared ones, minus any shared item that destination has explicitly
+//     dropped in the builder (destination_document_exclusions).
+//   * the student's own profile — a requirement per qualification (certificate
+//     and transcript, separately) and per test score they have entered, plus
+//     one row each for travel history and prior refusals when they have any.
+//     These carry a derived_key so this stays idempotent and so a requirement
+//     whose profile entry has gone can be found again.
 export async function ensureStudentDocumentRequirements(studentId: string) {
   const supabase = createAdminClient();
-  const [{ data: student }, { data: destRows }, { data: templates }, { data: existing }] = await Promise.all([
+  const [
+    { data: student },
+    { data: destRows },
+    { data: templates },
+    { data: existing },
+    { data: exclusions },
+    { data: qualifications },
+    { data: testScores },
+    { data: profile },
+  ] = await Promise.all([
     supabase.from("leads").select("level_applying_for").eq("id", studentId).maybeSingle(),
     supabase.from("lead_destinations").select("destination_id").eq("lead_id", studentId),
     supabase.from("document_templates").select("id, category, level, destination_id"),
-    supabase.from("student_documents").select("template_id").eq("student_id", studentId).is("application_id", null),
+    supabase
+      .from("student_documents")
+      .select("id, template_id, derived_key, file_path")
+      .eq("student_id", studentId)
+      .is("application_id", null),
+    supabase.from("destination_document_exclusions").select("destination_id, template_id"),
+    supabase.from("student_qualifications").select("id, qualification_type, qualification_name").eq("student_id", studentId),
+    supabase.from("student_test_scores").select("id, test_type, custom_test_name").eq("student_id", studentId),
+    supabase.from("student_profiles").select("travel_history, visa_refusal_history").eq("student_id", studentId).maybeSingle(),
   ]);
 
-  if (!templates || templates.length === 0) return;
-
   const destinationIds = new Set((destRows ?? []).map((d) => d.destination_id));
-  const existingTemplateIds = new Set((existing ?? []).map((d) => d.template_id).filter(Boolean));
+  const existingRows = existing ?? [];
+  const existingTemplateIds = new Set(existingRows.map((d) => d.template_id).filter(Boolean));
   const level = student?.level_applying_for;
 
-  const missing = templates.filter((t) => {
+  // A shared item is dropped for this student only if EVERY destination they
+  // are pursuing has excluded it — one country not asking for a document is no
+  // reason to stop collecting it for another the student is also applying to.
+  const excludedByDestination = new Map<string, Set<string>>();
+  for (const e of exclusions ?? []) {
+    const set = excludedByDestination.get(e.destination_id) ?? new Set<string>();
+    set.add(e.template_id);
+    excludedByDestination.set(e.destination_id, set);
+  }
+  const excludedEverywhere = (templateId: string) =>
+    destinationIds.size > 0 &&
+    [...destinationIds].every((d) => excludedByDestination.get(d as string)?.has(templateId));
+
+  const missing = (templates ?? []).filter((t) => {
     if (existingTemplateIds.has(t.id)) return false;
     const levelMatches = t.level === "all" || t.level === level;
     const destMatches = t.destination_id === null || destinationIds.has(t.destination_id);
-    return levelMatches && destMatches;
+    if (!levelMatches || !destMatches) return false;
+    if (t.destination_id === null && excludedEverywhere(t.id)) return false;
+    return true;
   });
 
-  if (missing.length === 0) return;
+  if (missing.length > 0) {
+    const { error } = await supabase.from("student_documents").insert(
+      missing.map((t) => ({
+        student_id: studentId,
+        application_id: null,
+        template_id: t.id,
+        category: t.category,
+        status: "missing",
+      }))
+    );
+    // 23505 = the partial unique index caught a concurrent duplicate insert
+    // (two page loads racing) — safe to ignore, the row already exists.
+    if (error && error.code !== "23505") throw error;
+  }
 
-  const { error } = await supabase.from("student_documents").insert(
-    missing.map((t) => ({
-      student_id: studentId,
-      application_id: null,
-      template_id: t.id,
-      category: t.category,
-      status: "missing",
-    }))
-  );
-  // 23505 = the partial unique index caught a concurrent duplicate insert
-  // (two page loads racing) — safe to ignore, the row already exists.
-  if (error && error.code !== "23505") throw error;
+  const wanted = profileDerivedRequirements({
+    qualifications: qualifications ?? [],
+    testScores: testScores ?? [],
+    travelHistoryCount: Array.isArray(profile?.travel_history) ? profile!.travel_history.length : 0,
+    visaHistoryCount: Array.isArray(profile?.visa_refusal_history) ? profile!.visa_refusal_history.length : 0,
+  });
+  const { toInsert, toDeleteIds } = reconcileDerived(wanted, existingRows);
+
+  if (toInsert.length > 0) {
+    const { error } = await supabase.from("student_documents").insert(
+      toInsert.map((r) => ({
+        student_id: studentId,
+        application_id: null,
+        template_id: null,
+        derived_key: r.derivedKey,
+        category: r.category,
+        custom_name: r.name,
+        status: "missing",
+      }))
+    );
+    if (error && error.code !== "23505") throw error;
+  }
+
+  // Only ever empty rows: reconcileDerived keeps anything with a file, so a
+  // qualification corrected in the profile cannot delete the document the
+  // student already sent in.
+  if (toDeleteIds.length > 0) {
+    const { error } = await supabase.from("student_documents").delete().in("id", toDeleteIds);
+    if (error) throw error;
+  }
 }
 
 export async function uploadDocument(

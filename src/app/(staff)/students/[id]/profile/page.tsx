@@ -21,7 +21,7 @@ export default async function StudentProfileTab(props: PageProps<"/students/[id]
       .maybeSingle(),
     supabase.from("student_profiles").select("*").eq("student_id", id).maybeSingle(),
     supabase.from("student_qualifications").select("*").eq("student_id", id),
-    supabase.from("student_test_scores").select("id, test_type, score, test_date").eq("student_id", id).order("test_date", { ascending: false }),
+    supabase.from("student_test_scores").select("id, test_type, score, test_date, custom_test_name").eq("student_id", id).order("test_date", { ascending: false }),
   ]);
 
   const revalidateTo = `/students/${id}/profile`;

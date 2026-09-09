@@ -24,7 +24,7 @@ export default async function PortalProfilePage() {
   const [{ data: profile }, { data: qualifications }, { data: testScores }] = await Promise.all([
     supabase.from("student_profiles").select("*").eq("student_id", student.id).maybeSingle(),
     supabase.from("student_qualifications").select("*").eq("student_id", student.id),
-    supabase.from("student_test_scores").select("id, test_type, score, test_date").eq("student_id", student.id).order("test_date", { ascending: false }),
+    supabase.from("student_test_scores").select("id, test_type, score, test_date, custom_test_name").eq("student_id", student.id).order("test_date", { ascending: false }),
   ]);
 
   const revalidateTo = "/portal/profile";

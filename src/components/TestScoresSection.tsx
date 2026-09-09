@@ -4,26 +4,29 @@ import { useActionState, useState } from "react";
 import { saveTestScores } from "@/lib/actions/studentProfileExtras";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
+import { TEST_TYPES, TEST_TYPE_LABELS, needsCustomName } from "@/lib/testScores";
 
-const TEST_TYPE_LABELS: Record<string, string> = {
-  ielts: "IELTS",
-  toefl: "TOEFL",
-  pte: "PTE",
-  duolingo: "Duolingo",
-  langcert: "LangCert",
-  ib: "IB",
-  moi: "MOI",
-  gre: "GRE",
-  sat: "SAT",
-  other: "Other",
+
+
+export type TestScoreRow = {
+  id: string;
+  test_type: string;
+  score: string | null;
+  test_date: string | null;
+  custom_test_name?: string | null;
 };
 
-export type TestScoreRow = { id: string; test_type: string; score: string | null; test_date: string | null };
-
-type DraftRow = { key: string; id: string; test_type: string; score: string; test_date: string };
+type DraftRow = { key: string; id: string; test_type: string; score: string; test_date: string; custom_test_name: string };
 
 function toDraft(rows: TestScoreRow[]): DraftRow[] {
-  return rows.map((r) => ({ key: r.id, id: r.id, test_type: r.test_type, score: r.score ?? "", test_date: r.test_date ?? "" }));
+  return rows.map((r) => ({
+    key: r.id,
+    id: r.id,
+    test_type: r.test_type,
+    score: r.score ?? "",
+    test_date: r.test_date ?? "",
+    custom_test_name: r.custom_test_name ?? "",
+  }));
 }
 
 // Edited as a table and committed with one Save, rather than a row at a time:
@@ -48,13 +51,32 @@ export function TestScoresSection({ studentId, revalidateTo, scores }: { student
           <label className="flex flex-col gap-1 text-xs text-muted">
             Test
             <Select name="score_type" value={r.test_type} onChange={(e) => update(r.key, { test_type: e.target.value })} className="w-32">
-              {Object.entries(TEST_TYPE_LABELS).map(([value, label]) => (
+              {TEST_TYPES.map((value) => (
                 <option key={value} value={value}>
-                  {label}
+                  {TEST_TYPE_LABELS[value]}
                 </option>
               ))}
             </Select>
           </label>
+          {/* "Other — scorecard" tells nobody which document to chase, and the
+              document requirement this row generates is named from it, so the
+              real name is asked for as soon as Other is picked. A hidden field
+              keeps the form arrays aligned for the rows that don't need it. */}
+          {needsCustomName(r.test_type) ? (
+            <label className="flex flex-col gap-1 text-xs text-muted">
+              Test name
+              <Input
+                name="score_custom_name"
+                value={r.custom_test_name}
+                onChange={(e) => update(r.key, { custom_test_name: e.target.value })}
+                placeholder="e.g. NTS GAT"
+                required
+                className="w-36"
+              />
+            </label>
+          ) : (
+            <input type="hidden" name="score_custom_name" value="" />
+          )}
           <label className="flex flex-col gap-1 text-xs text-muted">
             Score
             <Input name="score_value" value={r.score} onChange={(e) => update(r.key, { score: e.target.value })} placeholder="e.g. 7.5" className="w-24" />
@@ -76,7 +98,12 @@ export function TestScoresSection({ studentId, revalidateTo, scores }: { student
       <div>
         <button
           type="button"
-          onClick={() => setRows((prev) => [...prev, { key: crypto.randomUUID(), id: "", test_type: "ielts", score: "", test_date: "" }])}
+          onClick={() =>
+            setRows((prev) => [
+              ...prev,
+              { key: crypto.randomUUID(), id: "", test_type: "ielts", score: "", test_date: "", custom_test_name: "" },
+            ])
+          }
           className="text-xs font-medium text-primary hover:underline"
         >
           + Add score
