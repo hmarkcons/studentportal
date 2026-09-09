@@ -10,6 +10,7 @@
 // what that person can actually act on, without a role check here.
 
 import { loadTicketActivity, awaitingStaff } from "@/lib/supportSignals";
+import { karachiToday } from "@/lib/calendarDates";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 function one<T>(v: T | T[] | null) {
@@ -24,15 +25,21 @@ export type StaffQueue = {
   unreadFrom: NamedStudent[];
   overdueTasks: number;
   documentsToReview: number;
+  /** Inventory requests nobody has decided. Only Management and Super Admin
+   *  can decide one, and their policy is what limits the count. */
+  inventoryRequestsPending: number;
   /** E-signature submissions with both halves in, waiting for sign-off. */
   agreementsToVerify: NamedStudent[];
   overdueInstalments: number;
 };
 
 export async function loadStaffQueue(supabase: SupabaseClient): Promise<StaffQueue> {
-  const today = new Date().toISOString().slice(0, 10);
+  // Karachi's date, not the server's. toISOString() takes UTC, so between
+  // midnight and 5am local an item that fell due yesterday was not yet counted
+  // as overdue — the same off-by-one already fixed in the calendar.
+  const today = karachiToday();
 
-  const [tickets, tasks, docs, agreements, instalments, inbound, markers] = await Promise.all([
+  const [tickets, tasks, docs, agreements, instalments, inbound, markers, inventory] = await Promise.all([
     supabase.from("support_tickets").select("id, status"),
     supabase
       .from("application_tasks")
@@ -66,6 +73,14 @@ export async function loadStaffQueue(supabase: SupabaseClient): Promise<StaffQue
       .eq("direction", "inbound")
       .neq("channel", "internal_note"),
     supabase.from("message_read_markers").select("student_id, read_at").eq("side", "staff"),
+    // A request used to sit in the queue with nothing anywhere telling the
+    // people who can decide it that it existed; they had to think to visit the
+    // Inventory page. Requesters see only their own rows under
+    // inventory_requests_select, so for them this counts what they raised.
+    supabase
+      .from("inventory_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending"),
   ]);
 
   // Support: derived from the thread rather than a marker (see supportSignals).
@@ -107,5 +122,6 @@ export async function loadStaffQueue(supabase: SupabaseClient): Promise<StaffQue
     documentsToReview: docs.count ?? 0,
     agreementsToVerify,
     overdueInstalments: instalments.count ?? 0,
+    inventoryRequestsPending: inventory.count ?? 0,
   };
 }

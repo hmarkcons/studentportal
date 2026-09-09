@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requirePermission } from "@/lib/auth/permissions";
-import { requestQuantityError, stockQuantityError, thresholdError } from "@/lib/inventory";
+import { requestQuantityError, requestNoteError, stockQuantityError, thresholdError } from "@/lib/inventory";
 
 // Read and validated together, so add and edit cannot drift apart on what
 // counts as a sensible quantity.
@@ -83,6 +83,8 @@ export async function requestInventoryItem(_prevState: unknown, formData: FormDa
   const notes = String(formData.get("notes") ?? "").trim() || null;
 
   if (!item_id) return { error: "Choose an item." };
+  const noteInvalid = requestNoteError(notes);
+  if (noteInvalid) return { error: noteInvalid };
   const quantityInvalid = requestQuantityError(formData.get("quantity"));
   if (quantityInvalid) return { error: quantityInvalid };
   const quantity = Number(formData.get("quantity"));
@@ -100,20 +102,60 @@ export async function requestInventoryItem(_prevState: unknown, formData: FormDa
   if (error) return { error: error.message };
 
   revalidatePath("/inventory");
+  // The dashboard's "waiting on you" card counts pending requests now, so it
+  // has to hear about a new one.
+  revalidatePath("/dashboard");
   return { success: true };
 }
 
-export async function updateInventoryRequestStatus(requestId: string, status: "fulfilled" | "rejected") {
+export async function updateInventoryRequestStatus(
+  requestId: string,
+  status: "fulfilled" | "rejected",
+  note?: string
+) {
   const supabase = await createClient();
+
+  // A rejection has to say why. The requester's only other signal is a red
+  // badge, which cannot tell them whether the answer is "out of stock until
+  // Monday" or "that is far too many" — the same defect fixed for student
+  // documents and support tickets. Checked here for the sentence and in the
+  // function for the rule.
+  const noteInvalid = requestNoteError(note, status === "rejected");
+  if (noteInvalid) return { error: noteInvalid };
 
   // Single security-definer RPC — the status change and (for a fulfillment)
   // the stock decrement commit or fail together, with the request row
   // locked for the duration (see migration 0092), closing a race where two
   // concurrent "fulfill" clicks on the same request could both pass the
-  // pending-check before either write landed.
-  const { error } = await supabase.rpc("fulfill_inventory_request", { p_request_id: requestId, p_status: status });
+  // pending-check before either write landed. It also records who decided it
+  // and when (0158).
+  const { error } = await supabase.rpc("fulfill_inventory_request", {
+    p_request_id: requestId,
+    p_status: status,
+    p_note: note?.trim() || null,
+  });
   if (error) return { error: error.message };
 
   revalidatePath("/inventory");
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
+/**
+ * Withdraws your own request.
+ *
+ * A request raised by mistake had no way back: UPDATE and DELETE on
+ * inventory_requests are both Management/Super Admin, so the person who
+ * raised it had to ask somebody else to tidy up, and until they did the queue
+ * showed a request nobody wanted decided. The function checks that it is
+ * yours and still pending.
+ */
+export async function cancelInventoryRequest(requestId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("cancel_inventory_request", { p_request_id: requestId });
+  if (error) return { error: error.message };
+
+  revalidatePath("/inventory");
+  revalidatePath("/dashboard");
   return { success: true };
 }

@@ -11,7 +11,7 @@ function one<T>(v: T | T[] | null) {
 }
 
 export default async function InventoryPage() {
-  const { supabase } = await getStaffSession();
+  const { supabase, userId } = await getStaffSession();
   // inventory.manage rather than a role test, so granting it to another role
   // in Admin > Role Permissions changes what the page offers and not only what
   // the server accepts. The actions have always asked for the permission; the
@@ -26,12 +26,15 @@ export default async function InventoryPage() {
   const [{ data: pendingRequests }, { data: decidedRequests }] = await Promise.all([
     supabase
       .from("inventory_requests")
-      .select("id, quantity, status, notes, item_name, created_at, item:inventory_items(name), requester:staff(full_name)")
+      .select("id, quantity, status, notes, item_name, created_at, decided_at, decision_note, requested_by, item:inventory_items(name), requester:staff!inventory_requests_requested_by_fkey(full_name), decider:staff!inventory_requests_decided_by_fkey(full_name)")
       .eq("status", "pending")
-      .order("created_at", { ascending: false }),
+      // Oldest first: this is a list somebody works through, and the request
+      // that has been waiting longest is the one that needs deciding. Newest
+      // first buried it under everything raised since.
+      .order("created_at", { ascending: true }),
     supabase
       .from("inventory_requests")
-      .select("id, quantity, status, notes, item_name, created_at, item:inventory_items(name), requester:staff(full_name)")
+      .select("id, quantity, status, notes, item_name, created_at, decided_at, decision_note, requested_by, item:inventory_items(name), requester:staff!inventory_requests_requested_by_fkey(full_name), decider:staff!inventory_requests_decided_by_fkey(full_name)")
       .neq("status", "pending")
       .order("created_at", { ascending: false })
       .limit(50),
@@ -41,6 +44,7 @@ export default async function InventoryPage() {
   const requestRows = requests.map((r) => {
     const item = one(r.item as never) as { name?: string } | null;
     const requester = one(r.requester as never) as { full_name?: string } | null;
+    const decider = one(r.decider as never) as { full_name?: string } | null;
     return {
       id: r.id,
       quantity: r.quantity,
@@ -55,6 +59,14 @@ export default async function InventoryPage() {
       // outlives the person who raised it rather than blocking their deletion.
       requesterName: requester?.full_name ?? "Former staff member",
       createdAt: r.created_at,
+      decidedAt: r.decided_at,
+      // Null when the decider's staff row was deleted, or when the requester
+      // withdrew it themselves — the status already says which.
+      deciderName: decider?.full_name ?? null,
+      decisionNote: r.decision_note,
+      // Only the person who raised a request may withdraw it, so the row needs
+      // to know whether that is the person reading it.
+      isMine: r.requested_by === userId,
     };
   });
 

@@ -9,10 +9,12 @@ import {
   stockQuantityError,
   thresholdError,
   isLowStock,
+  requestNoteError,
+  REQUEST_NOTE_MAX,
 } from "../src/lib/inventory.ts";
 
 test("the statuses match the database CHECK constraint", () => {
-  assert.deepEqual([...INVENTORY_REQUEST_STATUSES].sort(), ["fulfilled", "pending", "rejected"]);
+  assert.deepEqual([...INVENTORY_REQUEST_STATUSES].sort(), ["cancelled", "fulfilled", "pending", "rejected"]);
 });
 
 test("every status has a label and a tone, and none is shown raw", () => {
@@ -24,7 +26,7 @@ test("every status has a label and a tone, and none is shown raw", () => {
 });
 
 test("an unrecognised status still renders", () => {
-  assert.equal(inventoryRequestStatusLabel("cancelled"), "cancelled");
+  assert.equal(inventoryRequestStatusLabel("escalated"), "escalated");
 });
 
 // The one that mattered: a negative request quantity was accepted, and
@@ -86,4 +88,39 @@ test("low stock fires at and below the threshold", () => {
   assert.equal(isLowStock(3, 2), false);
   assert.equal(isLowStock(2, 2), true);
   assert.equal(isLowStock(1, 2), true);
+});
+
+
+// ------------------------------------------------------------- decisions
+test("a rejection has to say why", () => {
+  // The requester's only other signal is a red badge, which cannot tell them
+  // whether the answer is "out of stock until Monday" or "far too many" — the
+  // same defect that was fixed for student documents and support tickets.
+  const err = requestNoteError("", true);
+  assert.ok(err);
+  assert.match(err, /why it is being turned down/);
+  assert.ok(requestNoteError("   ", true), "whitespace is not a reason");
+});
+
+test("fulfilling needs no explanation", () => {
+  assert.equal(requestNoteError("", false), null);
+  assert.equal(requestNoteError(null), null);
+  assert.equal(requestNoteError(undefined), null);
+});
+
+test("a note is bounded, and the message says by how much", () => {
+  assert.equal(requestNoteError("x".repeat(REQUEST_NOTE_MAX)), null);
+  const err = requestNoteError("x".repeat(REQUEST_NOTE_MAX + 1));
+  assert.ok(err);
+  assert.match(err, /501/);
+  assert.match(err, /500/);
+});
+
+test("withdrawn is its own status, not a rejection", () => {
+  // A queue that recorded both as "rejected" would read as though management
+  // had turned down something nobody ever wanted decided.
+  assert.ok(INVENTORY_REQUEST_STATUSES.includes("cancelled"));
+  assert.equal(INVENTORY_REQUEST_STATUS_LABELS.cancelled, "Withdrawn");
+  assert.notEqual(INVENTORY_REQUEST_STATUS_TONE.cancelled, INVENTORY_REQUEST_STATUS_TONE.rejected);
+  assert.equal(inventoryRequestStatusLabel("cancelled"), "Withdrawn");
 });

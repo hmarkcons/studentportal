@@ -79,6 +79,15 @@ export function StaffQueueCard({ queue }: { queue: StaffQueue }) {
     });
   }
 
+  if (queue.inventoryRequestsPending > 0) {
+    rows.push({
+      href: "/inventory",
+      icon: "📦",
+      text: `${queue.inventoryRequestsPending} inventory request${queue.inventoryRequestsPending === 1 ? "" : "s"} awaiting a decision`,
+      detail: "Fulfil or turn down — a rejection needs a reason the requester can act on",
+    });
+  }
+
   if (queue.overdueInstalments > 0) {
     rows.push({
       href: "/finance/consultancy-fee",
@@ -93,7 +102,8 @@ export function StaffQueueCard({ queue }: { queue: StaffQueue }) {
       <Card className="mb-6">
         <p className="text-sm text-ink">Nothing is waiting on you.</p>
         <p className="mt-1 text-xs text-muted">
-          Agreements to verify, tickets, unanswered students, overdue tasks, documents and payments all show here.
+          Agreements to verify, tickets, unanswered students, overdue tasks, documents, inventory requests and
+          payments all show here.
         </p>
       </Card>
     );
