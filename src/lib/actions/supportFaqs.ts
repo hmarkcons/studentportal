@@ -68,8 +68,12 @@ export async function updateFaq(id: string, _prevState: unknown, formData: FormD
 
 export async function deleteFaq(id: string) {
   const supabase = await createClient();
-  const { error } = await supabase.from("support_faqs").delete().eq("id", id);
+  const { data, error } = await supabase.from("support_faqs").delete().eq("id", id).select("id");
   if (error) return { error: error.message };
+  // As in updateFaq: RLS refuses by returning no rows, not by erroring, so
+  // this reported a deletion that had not happened and the entry reappeared on
+  // the next load.
+  if (!data?.length) return { error: "You don't have permission to delete the FAQ." };
 
   revalidatePath(SETUP_PATH);
   revalidatePath(PORTAL_PATH);
@@ -100,8 +104,16 @@ export async function moveFaq(id: string, direction: "up" | "down") {
   if (!swapWith) return { success: true }; // already at the end it was moving towards
 
   const mine = list[index];
-  const { error: a } = await supabase.from("support_faqs").update({ sort_order: swapWith.sort_order }).eq("id", mine.id);
+  const { data: moved, error: a } = await supabase
+    .from("support_faqs")
+    .update({ sort_order: swapWith.sort_order })
+    .eq("id", mine.id)
+    .select("id");
   if (a) return { error: a.message };
+  // Refused writes come back empty. Checking the first one before touching the
+  // second also stops a caller who cannot write from being told the order
+  // moved when nothing did.
+  if (!moved?.length) return { error: "You don't have permission to reorder the FAQ." };
   const { error: b } = await supabase.from("support_faqs").update({ sort_order: mine.sort_order }).eq("id", swapWith.id);
   if (b) return { error: `Moved, but the neighbouring entry could not be updated (${b.message}). Reorder again to fix.` };
 

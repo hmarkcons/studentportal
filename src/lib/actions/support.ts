@@ -2,13 +2,20 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { ticketBodyError, ticketSubjectError } from "@/lib/supportTickets";
 
 export async function createTicket(studentId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
   const subject = String(formData.get("subject") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
 
-  if (!subject || !body) return { error: "Subject and message are required." };
+  // Both were only checked for emptiness. The subject had a 200-character rule
+  // in the edit action but not here, so a ticket could be raised with a subject
+  // that then refused to save when staff tried to shorten it.
+  const subjectError = ticketSubjectError(subject);
+  if (subjectError) return { error: subjectError };
+  const bodyError = ticketBodyError(body);
+  if (bodyError) return { error: bodyError };
 
   const { error } = await supabase.from("support_tickets").insert({ student_id: studentId, subject, body });
   if (error) return { error: error.message };
@@ -17,43 +24,45 @@ export async function createTicket(studentId: string, _prevState: unknown, formD
   return { success: true };
 }
 
-export async function replyToTicket(
-  ticketId: string,
-  authorType: "staff" | "student",
-  revalidateTo: string,
-  _prevState: unknown,
-  formData: FormData
-) {
+/**
+ * Posts a reply, signed by whoever is actually calling.
+ *
+ * author_type used to be a bound argument, which means the client supplied it
+ * — and nothing checked it, so a student could post a reply that rendered as
+ * "HMARK Support" and a staff member could post one as the student. The policy
+ * in 0156 now refuses a mismatch, and the side is derived here as well so the
+ * UI cannot even ask for the wrong one.
+ */
+export async function replyToTicket(ticketId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
   const body = String(formData.get("body") ?? "").trim();
-  if (!body) return { error: "Message can't be empty." };
+  const bodyError = ticketBodyError(body, "reply");
+  if (bodyError) return { error: bodyError };
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  if (!user) return { error: "You are signed out — sign in again to reply." };
+
+  // Staff membership is the thing that decides which side of the conversation
+  // this is. A student holds no staff row, so the fallback is the student side
+  // and the policy verifies it against the ticket's owner.
+  const { data: staffRow } = await supabase.from("staff").select("id").eq("id", user.id).maybeSingle();
+  const authorType = staffRow ? "staff" : "student";
 
   const { error } = await supabase.from("support_ticket_replies").insert({
     ticket_id: ticketId,
     author_type: authorType,
-    author_id: user?.id,
+    author_id: user.id,
     body,
   });
 
   if (error) return { error: error.message };
 
-  // A staff reply moves an untouched ticket out of "open" automatically —
-  // matches the doc's intent that a reply means someone is on it, without
-  // making staff remember a separate status click for the common case.
-  if (authorType === "staff") {
-    const { data: ticket } = await supabase.from("support_tickets").select("status").eq("id", ticketId).maybeSingle();
-    if (ticket?.status === "open") {
-      const { error: statusError } = await supabase.from("support_tickets").update({ status: "in_progress" }).eq("id", ticketId);
-      // The reply itself already posted successfully above — don't fail the
-      // whole action over this auto-bump, but don't let it disappear either.
-      if (statusError) console.error(`replyToTicket: failed to auto-bump ticket ${ticketId} to in_progress:`, statusError.message);
-    }
-  }
-
+  // The status change and the ticket's last-activity time are the trigger's
+  // job now (0156), so they happen however the reply arrives — and a student
+  // reopening a resolved ticket works, which it could not from here: UPDATE on
+  // support_tickets is staff-only.
   revalidatePath(revalidateTo);
   return { success: true };
 }
@@ -62,10 +71,19 @@ export async function updateTicketStatus(ticketId: string, revalidateTo: string,
   const supabase = await createClient();
   if (!["open", "in_progress", "resolved"].includes(status)) return { error: "Choose a valid status." };
 
-  const { error } = await supabase.from("support_tickets").update({ status }).eq("id", ticketId);
+  const { data, error } = await supabase
+    .from("support_tickets")
+    .update({ status })
+    .eq("id", ticketId)
+    .select("id");
   if (error) return { error: error.message };
+  // UPDATE is staff-only at the policy level, and a refused write comes back as
+  // zero rows rather than an error — which this reported as a cheerful success
+  // over a status that had not moved.
+  if (!data?.length) return { error: "You don't have permission to change this ticket's status." };
 
   revalidatePath(revalidateTo);
+  revalidatePath("/support");
   return { success: true };
 }
 
@@ -99,8 +117,8 @@ export async function updateTicketSubject(
 ) {
   const supabase = await createClient();
   const subject = String(formData.get("subject") ?? "").trim();
-  if (!subject) return { error: "A subject is required." };
-  if (subject.length > 200) return { error: "Keep the subject under 200 characters." };
+  const subjectError = ticketSubjectError(subject);
+  if (subjectError) return { error: subjectError };
 
   const { data, error } = await supabase
     .from("support_tickets")

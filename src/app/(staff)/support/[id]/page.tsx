@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { TicketThread, type TicketReplyRow } from "@/components/TicketThread";
 import { TicketStatusSelect } from "./TicketStatusSelect";
 import { TicketSubject } from "./TicketSubject";
+import { formatStamp } from "@/lib/activityStamp";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -57,15 +58,7 @@ export default async function TicketDetailPage(props: PageProps<"/support/[id]">
           <div className="min-w-0">
             <TicketSubject ticketId={ticket.id} subject={ticket.subject} revalidateTo={revalidateTo} />
             <p className="text-xs text-muted">
-              {student?.full_name ?? "Unknown student"} ·{" "}
-              {new Date(ticket.created_at).toLocaleString("en-US", {
-                day: "numeric",
-                month: "short",
-                year: "numeric",
-                hour: "numeric",
-                minute: "2-digit",
-                timeZone: "Asia/Karachi",
-              })}
+              {student?.full_name ?? "Unknown student"} · Raised {formatStamp(ticket.created_at)}
             </p>
           </div>
           <TicketStatusSelect ticketId={ticket.id} status={ticket.status} revalidateTo={revalidateTo} />

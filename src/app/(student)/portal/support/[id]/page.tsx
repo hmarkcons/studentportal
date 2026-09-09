@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { TicketThread, type TicketReplyRow } from "@/components/TicketThread";
 import { MarkTicketRead } from "@/components/MarkTicketRead";
+import { formatStamp } from "@/lib/activityStamp";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -61,7 +62,11 @@ export default async function PortalTicketDetailPage(props: PageProps<"/portal/s
 
       <Card className="mt-2 mb-4">
         <div className="mb-2 flex items-start justify-between gap-3">
-          <h2 className="text-lg font-semibold text-ink">{ticket.subject}</h2>
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold text-ink">{ticket.subject}</h2>
+            {/* created_at was selected here and never shown. */}
+            <p className="text-xs text-muted">Raised {formatStamp(ticket.created_at)}</p>
+          </div>
           <Badge tone={STATUS_TONE[ticket.status] ?? "warning"}>{ticket.status.replace("_", " ")}</Badge>
         </div>
         <p className="whitespace-pre-wrap text-sm text-ink">{ticket.body}</p>

@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { NewTicketForm } from "./NewTicketForm";
 import { WHATSAPP_LINK, WHATSAPP_DISPLAY } from "@/lib/constants";
 import { loadTicketActivity, loadTicketReadMarkers, hasUnseenStaffReply } from "@/lib/supportSignals";
+import { formatStamp } from "@/lib/activityStamp";
 
 export default async function SupportPage() {
   const supabase = await createClient();
@@ -18,7 +19,7 @@ export default async function SupportPage() {
 
   const { data: tickets } = await supabase
     .from("support_tickets")
-    .select("id, subject, status, created_at")
+    .select("id, subject, status, created_at, updated_at")
     .eq("student_id", student.id)
     .order("created_at", { ascending: false });
 
@@ -75,15 +76,24 @@ export default async function SupportPage() {
         <div className="flex flex-col divide-y divide-border">
           {(tickets ?? []).map((t) => (
             <Link key={t.id} href={`/portal/support/${t.id}`} className="flex items-center justify-between gap-4 px-4 py-3 text-sm hover:bg-bg">
-              <span className="flex min-w-0 items-center gap-2">
-                <span className="truncate text-ink">{t.subject}</span>
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="truncate text-ink">{t.subject}</span>
                 {/* A reply the student has not opened yet — the whole reason
                     they would come back to this page. */}
-                {hasUnseenStaffReply(t.id, activity, markers) && (
-                  <span className="shrink-0 rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
-                    New reply
-                  </span>
-                )}
+                  {hasUnseenStaffReply(t.id, activity, markers) && (
+                    <span className="shrink-0 rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+                      New reply
+                    </span>
+                  )}
+                </span>
+                {/* This list carried no date at all, so a student could not
+                    tell a ticket they raised this morning from one they raised
+                    in June, nor whether anything had happened since. */}
+                <span className="text-xs text-muted">
+                  Raised {formatStamp(t.created_at)}
+                  {t.updated_at && t.updated_at !== t.created_at && ` · last activity ${formatStamp(t.updated_at)}`}
+                </span>
               </span>
               <Badge tone={t.status === "resolved" ? "success" : t.status === "in_progress" ? "info" : "warning"}>
                 {t.status.replace("_", " ")}

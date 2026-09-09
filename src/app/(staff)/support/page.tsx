@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { loadTicketActivity, awaitingStaff } from "@/lib/supportSignals";
+import { formatStamp } from "@/lib/activityStamp";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -31,7 +32,8 @@ export default async function SupportTicketsPage(props: { searchParams: Promise<
   // "Waiting on us" is derived from the thread rather than stored: the newest
   // thing on the ticket came from the student, or nobody has replied at all.
   const activity = await loadTicketActivity(supabase, (tickets ?? []).map((t) => t.id));
-  const waiting = (tickets ?? []).filter((t) => awaitingStaff(t, activity));
+  const rows = (tickets ?? []).map((t) => ({ ...t, waiting: awaitingStaff(t, activity) }));
+  const waiting = rows.filter((r) => r.waiting);
 
   const tabs: { key: string; label: string }[] = [
     { key: "", label: "All" },
@@ -65,7 +67,7 @@ export default async function SupportTicketsPage(props: { searchParams: Promise<
 
       <Card>
         <div className="flex flex-col divide-y divide-border">
-          {(tickets ?? []).map((t) => {
+          {rows.map((t) => {
             const student = one(t.student as never) as { full_name?: string } | null;
             return (
               <Link
@@ -76,7 +78,7 @@ export default async function SupportTicketsPage(props: { searchParams: Promise<
                 <div className="min-w-0">
                   <p className="flex flex-wrap items-center gap-2 text-ink">
                     <span className="truncate">{t.subject}</span>
-                    {awaitingStaff(t, activity) && (
+                    {t.waiting && (
                       <span className="shrink-0 rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
                         Waiting on us
                       </span>
@@ -85,15 +87,15 @@ export default async function SupportTicketsPage(props: { searchParams: Promise<
                   <p className="text-xs text-muted">{student?.full_name ?? "Unknown student"}</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="whitespace-nowrap text-xs text-muted">
-                    {new Date(t.updated_at).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })}
+                  <span className="whitespace-nowrap text-xs text-muted" title="Last activity on this ticket">
+                    {formatStamp(t.updated_at)}
                   </span>
                   <Badge tone={STATUS_TONE[t.status] ?? "warning"}>{t.status.replace("_", " ")}</Badge>
                 </div>
               </Link>
             );
           })}
-          {(!tickets || tickets.length === 0) && (
+          {rows.length === 0 && (
             <div className="py-6">
               <EmptyState>No tickets.</EmptyState>
             </div>
