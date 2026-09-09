@@ -204,6 +204,7 @@ export function DocumentChecklist({
   interviewSection = null,
   canManage = false,
   sections,
+  emptySections = "all",
 }: {
   docs: DocRow[];
   studentId: string;
@@ -213,6 +214,14 @@ export function DocumentChecklist({
   interviewSection?: React.ReactNode;
   /** Super Admin / Processing: may add and delete requirements. */
   canManage?: boolean;
+  /**
+   * Which sections to show even when they hold nothing, so there is somewhere
+   * to add a requirement. "all" suits a student's Documents tab, where the
+   * whole checklist is the subject. An application's page passes just the one
+   * or two sections its extras belong in — every empty section rendered there
+   * would be nine headings and nothing under them.
+   */
+  emptySections?: "all" | string[];
   /**
    * The sections this student's destinations ask for, in the order the
    * builder put them. Falls back to the built-in order when not supplied, so
@@ -247,7 +256,8 @@ export function DocumentChecklist({
     // An empty section is still shown to whoever can add to it — that is where
     // the "Add requirement" button lives, and a section with nothing in it is
     // exactly the one that needs something adding.
-    if (catDocs.length === 0 && !canManage) return [];
+    const showWhenEmpty = canManage && (emptySections === "all" || emptySections.includes(entry.key));
+    if (catDocs.length === 0 && !showWhenEmpty) return [];
     return [{ key: entry.key, label: entry.label, docs: catDocs }];
   });
 

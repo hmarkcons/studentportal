@@ -142,6 +142,11 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
           revalidateTo={revalidateTo}
           sections={sections}
           canManage={canManage}
+          // A university's own document ask belongs in Admission Documents,
+          // which is where the brief puts it and where it then shows on the
+          // student's Documents tab too. The other sections appear here only
+          // once they actually hold one of this application's extras.
+          emptySections={["admission"]}
           interviewSection={
             <InterviewSection
               applicationId={appId}
