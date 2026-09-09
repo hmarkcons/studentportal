@@ -1,14 +1,14 @@
 // A date of birth cannot be in the future, and nothing was stopping one.
 //
-// Four registered students are on file with a DOB a few days after their own
-// record was created — Saboor Khan's is 2026-09-21. The pattern is not
+// Five registered students are on file with a DOB within days of their own
+// record being created — Saboor Khan's is 2026-09-21. The pattern is not
 // mistyping: the field is required, so whoever filled it in left the picker
 // near today and submitted. None of the four DOB inputs set a max and none of
 // the five write paths checked, and the value flows straight onto the
 // generated agreement PDF, which is the copy the student signs.
 //
-// So "not in the future" is not a strong enough rule — two of those four are
-// dated today, which a future check accepts. The bound is a minimum age
+// So "not in the future" is not a strong enough rule — three of those five are
+// dated today or earlier, which a future check accepts. The bound is a minimum age
 // instead. Ten years is far below any real applicant (HMARK's youngest are
 // school leavers, 16 and up) while still catching every picker-left-near-today
 // mistake, which is the only way this has actually gone wrong.

@@ -110,11 +110,11 @@ export function RegisteredStudentProfileForm({
           <label className="flex flex-col gap-1 text-xs text-muted">
             Date of birth
             <Input name="date_of_birth" type="date" defaultValue={lead.date_of_birth ?? ""} required {...dobBounds()} />
-            {/* Four registered students were saved with a date of birth a few
-                days after their own record was created, before the field had
-                any bounds. Saving is now blocked, but the wrong values are
-                still on file and this is where they get corrected — so say so
-                here rather than leaving it to be noticed on the agreement. */}
+            {/* Five registered students were saved with a date of birth within
+                days of their own record being created, before the field had any
+                bounds. Saving is now blocked, but the wrong values are still on
+                file and this is where they get corrected — so say so here
+                rather than leaving it to be noticed on the agreement. */}
             {storedDobIssue && <span className="text-danger">{storedDobIssue} It goes on the agreement, so please correct it.</span>}
           </label>
           <label className="flex flex-col gap-1 text-xs text-muted">

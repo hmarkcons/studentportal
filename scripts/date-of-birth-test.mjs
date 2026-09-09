@@ -24,10 +24,11 @@ test("rejects a date in the future, and says so specifically", () => {
   assert.match(dateOfBirthError(shiftYears(2)) ?? "", /future/);
 });
 
-test("rejects each of the four values that were really on file", () => {
-  // Rashid Meer, Saboor Khan, summro, Syed Taimoor Nawaz Ali — every one of
-  // these was accepted before, and two of them survived a future-only check.
-  for (const dob of ["2026-09-16", "2026-09-21", "2026-09-09", "2026-09-09"]) {
+test("rejects every value that was really on file", () => {
+  // Rashid Meer, Saboor Khan, summro, Syed Taimoor Nawaz Ali, Shahid Rasool.
+  // All five were accepted before; three of them survived a future-only check,
+  // which is how the fifth went unnoticed until the bound became a minimum age.
+  for (const dob of ["2026-09-16", "2026-09-21", "2026-09-09", "2026-09-09", "2026-09-01"]) {
     assert.notEqual(dateOfBirthError(dob), null, dob);
   }
 });

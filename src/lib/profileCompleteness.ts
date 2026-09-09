@@ -35,10 +35,10 @@ const filled = (v: string | null | undefined) => Boolean(v && String(v).trim());
 export function profileChecklist(input: ProfileInput): ProfileCheck[] {
   return [
     { group: "personal", label: "Contact number", met: filled(input.contact_number) },
-    // Not just "filled": four registered students have a date of birth a few
-    // days after their own record was created, because the picker was left
-    // near today and submitted. A ticked box for a date that cannot be right
-    // is worse than an empty one, since it tells the student to stop looking.
+    // Not just "filled": five registered students have a date of birth within
+    // days of their own record being created, because the picker was left near
+    // today and submitted. A ticked box for a date that cannot be right is
+    // worse than an empty one, since it tells the student to stop looking.
     { group: "personal", label: "Date of birth", met: filled(input.date_of_birth) && !dateOfBirthError(input.date_of_birth) },
     { group: "personal", label: "Home address", met: filled(input.address) },
     { group: "personal", label: "Emergency contact name", met: filled(input.emergency_contact_name) },
