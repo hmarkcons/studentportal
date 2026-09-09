@@ -6,6 +6,7 @@ import { STUDY_LEVELS, QUALIFICATION_LEVELS } from "@/lib/constants";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { dobBounds, dateOfBirthError } from "@/lib/dateOfBirth";
+import { phoneBounds, phoneError } from "@/lib/phoneNumber";
 
 type Lead = {
   full_name: string;
@@ -56,6 +57,11 @@ export function RegisteredStudentProfileForm({
   const [state, formAction, pending] = useActionState(action, undefined);
   const financial = profile?.financial_details;
   const storedDobIssue = dateOfBirthError(lead.date_of_birth);
+  // Same reasoning as the date of birth: saving one is blocked now, but
+  // numbers like "121" and "1254" are already on real records and this is
+  // where they get corrected. Both go on the agreement.
+  const storedPhoneIssue = phoneError(lead.contact_number);
+  const storedEmergencyIssue = phoneError(profile?.emergency_contact_number, "emergency contact number");
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
@@ -68,7 +74,8 @@ export function RegisteredStudentProfileForm({
           </label>
           <label className="flex flex-col gap-1 text-xs text-muted">
             Contact number
-            <Input name="contact_number" defaultValue={lead.contact_number ?? ""} />
+            <Input name="contact_number" defaultValue={lead.contact_number ?? ""} {...phoneBounds()} />
+            {storedPhoneIssue && <span className="text-danger">{storedPhoneIssue}</span>}
           </label>
           <label className="flex flex-col gap-1 text-xs text-muted">
             Email
@@ -119,7 +126,7 @@ export function RegisteredStudentProfileForm({
           </label>
           <label className="flex flex-col gap-1 text-xs text-muted">
             Home phone
-            <Input name="home_phone" defaultValue={lead.home_phone ?? ""} />
+            <Input name="home_phone" defaultValue={lead.home_phone ?? ""} {...phoneBounds()} />
           </label>
           <label className="col-span-full flex flex-col gap-1 text-xs text-muted">
             Address
@@ -171,7 +178,8 @@ export function RegisteredStudentProfileForm({
           </label>
           <label className="col-span-full flex flex-col gap-1 text-xs text-muted">
             Number
-            <Input name="emergency_contact_number" defaultValue={profile?.emergency_contact_number ?? ""} />
+            <Input name="emergency_contact_number" defaultValue={profile?.emergency_contact_number ?? ""} {...phoneBounds()} />
+            {storedEmergencyIssue && <span className="text-danger">{storedEmergencyIssue}</span>}
           </label>
         </div>
       </div>

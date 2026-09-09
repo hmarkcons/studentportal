@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePermission } from "@/lib/auth/permissions";
 import { dateOfBirthError } from "@/lib/dateOfBirth";
+import { phoneError } from "@/lib/phoneNumber";
 
 // "Suspended" just freezes the account (blocked from every staff route by
 // the (staff) layout's `status !== "active"` check, same as deactivated) —
@@ -51,6 +52,14 @@ function staffFieldsFromFormData(formData: FormData) {
   };
 }
 
+function staffPhoneError(fields: ReturnType<typeof staffFieldsFromFormData>) {
+  return (
+    phoneError(fields.mobile_personal, "personal mobile") ??
+    phoneError(fields.mobile_official, "official mobile") ??
+    phoneError(fields.emergency_contact_number, "emergency contact number")
+  );
+}
+
 export async function createStaffAccount(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
   const denied = await requirePermission("staff.manage", "Only Super Admin can add staff.");
@@ -62,6 +71,8 @@ export async function createStaffAccount(_prevState: unknown, formData: FormData
   if (!email || !fields.full_name || !fields.role) return { error: "Email (official), name, and role are required." };
   const dobError = dateOfBirthError(fields.date_of_birth);
   if (dobError) return { error: dobError };
+  const phoneIssue = staffPhoneError(fields);
+  if (phoneIssue) return { error: phoneIssue };
 
   const admin = createAdminClient();
   const tempPassword = Math.random().toString(36).slice(2) + "A1!";
@@ -90,6 +101,8 @@ export async function updateStaffDetails(staffId: string, _prevState: unknown, f
   if (!fields.full_name || !fields.role) return { error: "Name and role are required." };
   const dobError = dateOfBirthError(fields.date_of_birth);
   if (dobError) return { error: dobError };
+  const phoneIssue = staffPhoneError(fields);
+  if (phoneIssue) return { error: phoneIssue };
 
   // Deactivating a staff member must not silently strand their students with
   // a counselor nobody can see any more (is_active_staff() already hides an

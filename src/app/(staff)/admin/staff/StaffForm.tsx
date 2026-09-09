@@ -19,6 +19,7 @@ import {
 import { Input, Select } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { dobBounds } from "@/lib/dateOfBirth";
+import { phoneBounds } from "@/lib/phoneNumber";
 
 const labelClass = "text-xs font-medium text-muted";
 
@@ -180,10 +181,10 @@ export function StaffForm({
 
       <Section title="Contact">
         <Field label="Mobile (Personal)">
-          <Input name="mobile_personal" defaultValue={staff?.mobile_personal ?? ""} />
+          <Input name="mobile_personal" defaultValue={staff?.mobile_personal ?? ""} {...phoneBounds()} />
         </Field>
         <Field label="Mobile (Official)">
-          <Input name="mobile_official" defaultValue={staff?.mobile_official ?? ""} />
+          <Input name="mobile_official" defaultValue={staff?.mobile_official ?? ""} {...phoneBounds()} />
         </Field>
         <Field label="Email (Personal)">
           <Input name="email_personal" type="email" defaultValue={staff?.email_personal ?? ""} />
@@ -192,7 +193,7 @@ export function StaffForm({
           <Input name="email_official" type="email" required={!isEdit} defaultValue={staff?.email_official ?? ""} />
         </Field>
         <Field label="Emergency contact number">
-          <Input name="emergency_contact_number" defaultValue={staff?.emergency_contact_number ?? ""} />
+          <Input name="emergency_contact_number" defaultValue={staff?.emergency_contact_number ?? ""} {...phoneBounds()} />
         </Field>
         <Field label="Emergency contact name">
           <Input name="emergency_contact_name" defaultValue={staff?.emergency_contact_name ?? ""} />

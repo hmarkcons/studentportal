@@ -6,6 +6,7 @@ import { STUDY_LEVELS } from "@/lib/constants";
 import { DestinationMultiSelect } from "@/components/DestinationMultiSelect";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
+import { phoneBounds } from "@/lib/phoneNumber";
 
 const labelClass = "text-sm font-medium text-ink";
 
@@ -27,7 +28,7 @@ export function NewLeadForm({
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-1.5">
           <label className={labelClass}>Contact number</label>
-          <Input name="contact_number" />
+          <Input name="contact_number" {...phoneBounds()} />
         </div>
         <div className="flex flex-col gap-1.5">
           <label className={labelClass}>Email</label>

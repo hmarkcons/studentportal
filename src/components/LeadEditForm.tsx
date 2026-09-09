@@ -6,6 +6,7 @@ import { STUDY_LEVELS, QUALIFICATION_LEVELS } from "@/lib/constants";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { dobBounds } from "@/lib/dateOfBirth";
+import { phoneBounds } from "@/lib/phoneNumber";
 
 export type LeadEditable = {
   id: string;
@@ -56,7 +57,7 @@ export function LeadEditForm({
       </label>
       <label className="flex flex-col gap-1 text-xs text-muted">
         Contact number
-        <Input name="contact_number" defaultValue={lead.contact_number ?? ""} />
+        <Input name="contact_number" defaultValue={lead.contact_number ?? ""} {...phoneBounds()} />
       </label>
       <label className="flex flex-col gap-1 text-xs text-muted">
         Email
@@ -103,7 +104,7 @@ export function LeadEditForm({
           </label>
           <label className="flex flex-col gap-1 text-xs text-muted">
             Home phone
-            <Input name="home_phone" defaultValue={lead.home_phone ?? ""} />
+            <Input name="home_phone" defaultValue={lead.home_phone ?? ""} {...phoneBounds()} />
           </label>
           <label className="col-span-full flex flex-col gap-1 text-xs text-muted">
             Address

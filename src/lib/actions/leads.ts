@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { LEAD_STATUSES } from "@/lib/constants";
 import { dateOfBirthError } from "@/lib/dateOfBirth";
+import { phoneError } from "@/lib/phoneNumber";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -80,6 +81,9 @@ export async function createLead(_prevState: unknown, formData: FormData) {
     return { error: "Name is required." };
   }
 
+  const phoneIssue = phoneError(contact_number);
+  if (phoneIssue) return { error: phoneIssue };
+
   const duplicate = await findDuplicateLead(supabase, email, contact_number);
   if (duplicate) return { error: duplicateLeadError(duplicate) };
 
@@ -139,6 +143,8 @@ export async function updateLead(leadId: string, revalidateTo: string, _prevStat
   if (formData.has("date_of_birth") && !date_of_birth) return { error: "Date of birth is required." };
   const dobError = dateOfBirthError(date_of_birth);
   if (dobError) return { error: dobError };
+  const phoneIssue = phoneError(contact_number);
+  if (phoneIssue) return { error: phoneIssue };
 
   const { error } = await supabase
     .from("leads")
@@ -204,7 +210,7 @@ export async function importLeads(_prevState: unknown, formData: FormData) {
     .filter((r) => r.full_name)
     .map((r) => ({
       full_name: r.full_name,
-      contact_number: r.contact_number || null,
+      contact_number: phoneError(r.contact_number) ? null : r.contact_number || null,
       email: r.email || null,
       platform_source: r.platform_source || null,
       current_qualification: r.current_qualification || null,
@@ -241,7 +247,7 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
     .filter((r) => r.full_name)
     .map((r) => ({
       full_name: r.full_name,
-      contact_number: r.contact_number || null,
+      contact_number: phoneError(r.contact_number) ? null : r.contact_number || null,
       email: r.email || null,
       current_qualification: r.current_qualification || null,
       level_applying_for: ["bachelors", "masters", "phd"].includes(r.level_applying_for) ? r.level_applying_for : null,
@@ -251,7 +257,7 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
       // import — the row still carries a name and contact details worth having.
       date_of_birth: dateOfBirthError(r.date_of_birth) ? null : r.date_of_birth || null,
       address: r.address || null,
-      home_phone: r.home_phone || null,
+      home_phone: phoneError(r.home_phone) ? null : r.home_phone || null,
       status: "registered" as const,
       // See registerStudentManually's comment — handle_lead_registration()
       // only stamps this on UPDATE, not INSERT, so it must be set explicitly
@@ -301,6 +307,9 @@ export async function registerStudentManually(_prevState: unknown, formData: For
   if ("error" in selection) return selection;
   const assigned_counselor_id = String(formData.get("assigned_counselor_id") ?? "") || null;
   const intake = String(formData.get("intake") ?? "").trim() || null;
+
+  const phoneIssue = phoneError(contact_number);
+  if (phoneIssue) return { error: phoneIssue };
 
   const duplicate = await findDuplicateLead(supabase, email, contact_number);
   if (duplicate) return { error: duplicateLeadError(duplicate) };

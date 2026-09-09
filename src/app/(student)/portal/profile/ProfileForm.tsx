@@ -5,6 +5,7 @@ import { updateProfile } from "@/lib/actions/portal-profile";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { dobBounds } from "@/lib/dateOfBirth";
+import { phoneBounds } from "@/lib/phoneNumber";
 
 type Student = {
   full_name: string;
@@ -46,7 +47,7 @@ export function ProfileForm({ studentId, student, profile }: { studentId: string
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
           Contact number
-          <Input name="contact_number" defaultValue={student.contact_number ?? ""} />
+          <Input name="contact_number" defaultValue={student.contact_number ?? ""} {...phoneBounds()} />
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
           Date of birth
@@ -54,7 +55,7 @@ export function ProfileForm({ studentId, student, profile }: { studentId: string
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
           Home phone
-          <Input name="home_phone" defaultValue={student.home_phone ?? ""} />
+          <Input name="home_phone" defaultValue={student.home_phone ?? ""} {...phoneBounds()} />
         </label>
         <label className="col-span-full flex flex-col gap-1 text-xs text-muted">
           Address
@@ -70,7 +71,7 @@ export function ProfileForm({ studentId, student, profile }: { studentId: string
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
           Emergency contact number
-          <Input name="emergency_contact_number" defaultValue={student.emergency_contact_number ?? ""} />
+          <Input name="emergency_contact_number" defaultValue={student.emergency_contact_number ?? ""} {...phoneBounds()} />
         </label>
       </div>
 
