@@ -5,6 +5,7 @@ import { updatePartnerCommission } from "@/lib/actions/finance";
 import { suggestPartnerCommission } from "./AddPartnerCommissionForm";
 import { Input, Select } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { PARTNER_COMMISSION_STATUSES, PARTNER_COMMISSION_STATUS_LABELS } from "@/lib/constants";
 
 const inputClass = "px-2 py-1 text-xs";
 
@@ -27,7 +28,6 @@ type Row = {
   configuredRateCurrency: string | null;
 };
 
-const STATUSES = ["not_yet_due", "pending", "received", "partially_received", "overdue", "disputed"];
 
 export function EditPartnerCommissionForm({ row }: { row: Row }) {
   const [editing, setEditing] = useState(false);
@@ -112,9 +112,9 @@ export function EditPartnerCommissionForm({ row }: { row: Row }) {
       <label className="flex flex-col gap-0.5 text-[10px] text-muted">
         Status
         <Select name="status" defaultValue={row.status} className={inputClass}>
-          {STATUSES.map((s) => (
+          {PARTNER_COMMISSION_STATUSES.map((s) => (
             <option key={s} value={s}>
-              {s.replace(/_/g, " ")}
+              {PARTNER_COMMISSION_STATUS_LABELS[s]}
             </option>
           ))}
         </Select>

@@ -6,12 +6,13 @@ import { StatusButtons } from "./StatusButtons";
 import { DeletePartnerCommissionButton } from "./DeletePartnerCommissionButton";
 import { EditPartnerCommissionForm } from "./EditPartnerCommissionForm";
 import { AddPartnerCommissionForm } from "./AddPartnerCommissionForm";
+import { PARTNER_COMMISSION_STATUS_LABELS, type PartnerCommissionStatus } from "@/lib/constants";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
 }
 
-const TONE: Record<string, "success" | "warning" | "danger" | "neutral"> = {
+const TONE: Record<PartnerCommissionStatus, "success" | "warning" | "danger" | "neutral"> = {
   received: "success",
   pending: "warning",
   not_yet_due: "neutral",
@@ -107,7 +108,9 @@ export default async function PartnerCommissionsPage() {
                     {r.currency} {r.expected_amount ?? "—"}
                   </td>
                   <td className="px-4 py-3">
-                    <Badge tone={TONE[r.status] ?? "neutral"}>{r.status.replace(/_/g, " ")}</Badge>
+                    <Badge tone={TONE[r.status as PartnerCommissionStatus] ?? "neutral"}>
+                      {PARTNER_COMMISSION_STATUS_LABELS[r.status as PartnerCommissionStatus] ?? r.status}
+                    </Badge>
                   </td>
                   <td className="px-4 py-3">
                     {canManage ? (

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { PARTNER_COMMISSION_STATUSES } from "@/lib/constants";
 import { requirePermission } from "@/lib/auth/permissions";
 import { listVisaDecisions } from "@/lib/visaDecisions";
 
@@ -411,7 +412,7 @@ export async function updatePartnerCommission(id: string, revalidateTo: string, 
   const hmark_bank_account = String(formData.get("hmark_bank_account") ?? "").trim() || null;
   const status = String(formData.get("status") ?? "");
 
-  const validStatuses = ["not_yet_due", "pending", "received", "partially_received", "overdue", "disputed"];
+  const validStatuses: readonly string[] = PARTNER_COMMISSION_STATUSES;
   if (!validStatuses.includes(status)) return { error: "Choose a valid status." };
 
   const { error } = await supabase

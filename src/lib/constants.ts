@@ -154,3 +154,29 @@ export function toPKR(amount: number, currency: string) {
 export const WHATSAPP_NUMBER = "923343297870";
 export const WHATSAPP_DISPLAY = "+92 334 3297870";
 export const WHATSAPP_LINK = `https://wa.me/${WHATSAPP_NUMBER}`;
+
+// Mirrors the partner_commissions.status check constraint. This list was
+// written out separately in five places — the status picker, the edit form,
+// the server action's validation, the finance page's colour map and the
+// revenue report — which is how the revenue report came to treat the status
+// as a received/not-received binary and fold partially_received, overdue and
+// disputed into one number.
+export const PARTNER_COMMISSION_STATUSES = [
+  "not_yet_due",
+  "pending",
+  "received",
+  "partially_received",
+  "overdue",
+  "disputed",
+] as const;
+
+export type PartnerCommissionStatus = (typeof PARTNER_COMMISSION_STATUSES)[number];
+
+export const PARTNER_COMMISSION_STATUS_LABELS: Record<PartnerCommissionStatus, string> = {
+  not_yet_due: "Not yet due",
+  pending: "Pending",
+  received: "Received",
+  partially_received: "Partially received",
+  overdue: "Overdue",
+  disputed: "Disputed",
+};
