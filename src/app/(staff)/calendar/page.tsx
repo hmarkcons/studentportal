@@ -1,5 +1,5 @@
 import { getStaffSession } from "@/lib/auth/session";
-import { toYMD, parseYMD, getMonthGridDays, getWeekDays, eachDateInRange, expandRecurrence } from "@/lib/calendarDates";
+import { toYMD, parseYMD, getMonthGridDays, getWeekDays, eachDateInRange, expandRecurrence, karachiToday } from "@/lib/calendarDates";
 import { CalendarShell } from "./CalendarShell";
 import type { CalendarEvent, CalendarRecurrence } from "./types";
 
@@ -19,7 +19,7 @@ function occurrenceDates(
     return expandRecurrence(dueDate, recurrence as CalendarRecurrence, recurrenceEndDate, rangeStartStr, rangeEndStr);
   }
   if (endDate && endDate > dueDate) {
-    return eachDateInRange(dueDate, endDate).filter((d) => d >= rangeStartStr && d <= rangeEndStr);
+    return eachDateInRange(dueDate, endDate, rangeStartStr, rangeEndStr);
   }
   return dueDate >= rangeStartStr && dueDate <= rangeEndStr ? [dueDate] : [];
 }
@@ -44,21 +44,28 @@ export default async function CalendarPage(props: {
       : (await supabase.from("staff").select("role").eq("id", targetStaffId).maybeSingle()).data?.role ?? null;
   const targetIsProcessing = targetRole === "processing";
 
-  const today = new Date();
-  const todayStr = toYMD(today);
-  const referenceDate = dateParam ? parseYMD(dateParam) : today;
+  // Karachi's day, not the server's. toISOString() is UTC, so for the first
+  // five hours of every Karachi day the grid highlighted yesterday as today and
+  // an item due today counted as not yet due.
+  const todayStr = karachiToday();
+  const referenceDate = parseYMD(dateParam || todayStr);
 
   const rangeDays = view === "month" ? getMonthGridDays(referenceDate) : view === "week" ? getWeekDays(referenceDate) : [referenceDate];
   const rangeStartStr = toYMD(rangeDays[0]);
   const rangeEndStr = toYMD(rangeDays[rangeDays.length - 1]);
 
+  // No lower bound, because a recurring task that began long ago still has
+  // occurrences in this range — but nothing that starts after the range ends
+  // can appear in it, so that bound is safe and keeps the query from growing
+  // with every task ever created.
   const { data: tasks } = await supabase
     .from("application_tasks")
     .select(
-      "id, description, notes, due_date, due_time, end_date, all_day, priority, status, color, guest_emails, recurrence, recurrence_end_date, application:applications(student:leads(full_name))"
+      "id, description, notes, due_date, due_time, end_date, all_day, priority, status, color, guest_emails, recurrence, recurrence_end_date, application:applications(student:leads(full_name, assigned_counselor_id, processing_officer_id))"
     )
     .eq("status", "pending")
-    .not("due_date", "is", null);
+    .not("due_date", "is", null)
+    .lte("due_date", rangeEndStr);
 
   // Resolved reminders are still fetched (not filtered out) — a completed
   // reminder stays visible on the calendar so staff can uncheck, edit, or
@@ -85,7 +92,7 @@ export default async function CalendarPage(props: {
     ? await supabase
         .from("application_country_extra")
         .select(
-          "field_key, field_value, application:applications(id, student:leads(full_name), university:universities(destination:destinations(country_code)))"
+          "field_key, field_value, application:applications(id, student:leads(full_name, assigned_counselor_id, processing_officer_id), university:universities(destination:destinations(country_code)))"
         )
         .in("field_key", [...new Set(appointmentFields.map((f) => f.field_key))])
         .gte("field_value", rangeStartStr)
@@ -113,11 +120,35 @@ export default async function CalendarPage(props: {
         )
         .eq("owner_id", targetStaffId)
         .eq("status", "pending")
+        .lte("due_date", rangeEndStr)
     : { data: [] };
+
+  // Whose work this calendar is showing.
+  //
+  // Every other event type re-scoped when management picked another person
+  // from the staff selector, but tasks and appointments did not — so "Sohaib's
+  // calendar" showed Sohaib's personal reminders and follow-ups alongside every
+  // task and appointment in the firm, which is not his calendar.
+  //
+  // Only applied when actually looking at somebody else. On your own calendar
+  // the breadth is unchanged: row-level security already limits it to students
+  // you may see, and narrowing management's own view to just the students they
+  // personally hold would hide work from the people meant to be watching all
+  // of it.
+  const viewingSomeoneElse = targetStaffId !== viewerId;
+  function studentBelongsToTarget(student: { assigned_counselor_id?: string | null; processing_officer_id?: string | null } | null) {
+    if (!viewingSomeoneElse) return true;
+    if (!student) return false;
+    return student.assigned_counselor_id === targetStaffId || student.processing_officer_id === targetStaffId;
+  }
 
   const events: CalendarEvent[] = [];
 
   (tasks ?? []).forEach((t) => {
+    const taskStudent = one(one(t.application)?.student) as
+      | { full_name?: string; assigned_counselor_id?: string | null; processing_officer_id?: string | null }
+      | null;
+    if (!studentBelongsToTarget(taskStudent)) return;
     const dates = occurrenceDates(t.due_date!, t.end_date, t.recurrence, t.recurrence_end_date, rangeStartStr, rangeEndStr);
     dates.forEach((date) => {
       events.push({
@@ -125,7 +156,7 @@ export default async function CalendarPage(props: {
         date,
         time: t.all_day ? null : t.due_time ? t.due_time.slice(0, 5) : null,
         kind: "task",
-        label: `${t.description} — ${one(one(t.application)?.student)?.full_name ?? "?"}`,
+        label: `${t.description} — ${taskStudent?.full_name ?? "?"}`,
         tone: "warning",
         color: t.color,
         priority: t.priority,
@@ -179,7 +210,10 @@ export default async function CalendarPage(props: {
     const value = (row.field_value ?? "").trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
     const app = one(row.application as never) as { id?: string; student?: unknown; university?: unknown } | null;
-    const student = one(app?.student as never) as { full_name?: string } | null;
+    const student = one(app?.student as never) as
+      | { full_name?: string; assigned_counselor_id?: string | null; processing_officer_id?: string | null }
+      | null;
+    if (!studentBelongsToTarget(student)) return;
     const uni = one(app?.university as never) as { destination?: unknown } | null;
     const dest = uni?.destination ? (one(uni.destination as never) as { country_code?: string } | null) : null;
     // A field key flagged for a different country is not this application's

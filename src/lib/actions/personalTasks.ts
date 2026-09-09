@@ -2,13 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-
-function parseGuestEmails(formData: FormData): string[] {
-  return String(formData.get("guest_emails") ?? "")
-    .split(",")
-    .map((e) => e.trim())
-    .filter(Boolean);
-}
+import { parseGuestEmails, eventFieldsError } from "@/lib/calendarEventFields";
 
 export async function updatePersonalTask(taskId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
@@ -21,12 +15,21 @@ export async function updatePersonalTask(taskId: string, revalidateTo: string, _
   const due_time = !all_day ? String(formData.get("due_time") ?? "").trim() || null : null;
   const priority = String(formData.get("priority") ?? "medium");
   const color = String(formData.get("color") ?? "").trim() || null;
-  const guest_emails = parseGuestEmails(formData);
+  const guests = parseGuestEmails(formData.get("guest_emails"));
+  if (guests.error) return { error: guests.error };
+  const guest_emails = guests.emails;
   const recurrence = String(formData.get("recurrence") ?? "none");
   const recurrence_end_date = String(formData.get("recurrence_end_date") ?? "").trim() || null;
 
-  if (!title || !due_date) return { error: "Title and date are required." };
-  if (end_date && end_date < due_date) return { error: "End date can't be before the start date." };
+  const invalid = eventFieldsError({
+    title,
+    dueDate: due_date,
+    endDate: end_date,
+    recurrence,
+    recurrenceEndDate: recurrence_end_date,
+    priority,
+  });
+  if (invalid) return { error: invalid };
 
   const { error } = await supabase
     .from("personal_tasks")
