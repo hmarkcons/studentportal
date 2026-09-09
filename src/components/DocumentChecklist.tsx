@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { DOCUMENT_STATUS_TONE, DOCUMENT_STATUS_LABELS } from "@/lib/constants";
 import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
 import { CATEGORY_ORDER, CATEGORY_LABELS } from "@/lib/documentCategories";
+import { DocumentSectionShell, ExpandAllToggle } from "@/components/DocumentSectionShell";
 
 export type DocRow = {
   id: string;
@@ -229,6 +230,10 @@ export function DocumentChecklist({
    */
   sections?: { key: string; label: string }[];
 }) {
+  // Collapsed is the default state, so this map holds only the sections
+  // somebody has opened during this visit.
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+
   const grouped = new Map<string, DocRow[]>();
   for (const doc of docs) {
     const cat = doc.category ?? "other";
@@ -268,31 +273,41 @@ export function DocumentChecklist({
     visibleSections.push({ key: "other", label: CATEGORY_LABELS.other ?? "Other", docs: uncategorized });
   }
 
+  // Derived from what is open rather than tracked separately, so the button
+  // cannot say "Collapse all" while a section is already shut.
+  const allExpanded = visibleSections.length > 0 && visibleSections.every((s) => openSections[s.key]);
+
   return (
     <div>
       {docs.length === 0 && !interviewSection ? (
         <EmptyState>{emptyMessage}</EmptyState>
       ) : (
-        // Sections are numbered by the order they actually appear, not by
-        // their position in CATEGORY_ORDER — a student with no attestation
-        // documents should read 1, 2, 3 rather than 1, 3, 4.
-        <div className="flex flex-col gap-5">
-          {visibleSections.map((section, i) => {
-            const n = i + 1;
-            return (
-              <section key={section.key} className="overflow-hidden rounded-lg border border-border">
-                <header className="flex items-baseline gap-2 border-b border-border bg-bg px-4 py-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-ink">
-                    {n}
-                  </span>
-                  <h3 className="text-base font-semibold text-ink">{section.label}</h3>
-                  {section.docs.length > 0 && (
-                    <span className="ml-auto shrink-0 text-xs text-muted">
-                      {section.docs.filter((d) => d.status === "verified").length}/{section.docs.length} verified
-                    </span>
-                  )}
-                </header>
-                <div className="px-4">
+        <>
+          <ExpandAllToggle
+            allExpanded={allExpanded}
+            onToggle={() =>
+              setOpenSections(allExpanded ? {} : Object.fromEntries(visibleSections.map((s) => [s.key, true])))
+            }
+          />
+
+          {/* Sections are numbered by the order they actually appear, not by
+              their position in CATEGORY_ORDER — a student with no attestation
+              documents should read 1, 2, 3 rather than 1, 3, 4. */}
+          <div className="flex flex-col gap-3">
+            {visibleSections.map((section, i) => {
+              const n = i + 1;
+              return (
+                <DocumentSectionShell
+                  key={section.key}
+                  number={n}
+                  label={section.label}
+                  total={section.docs.length}
+                  approved={section.docs.filter((d) => d.status === "verified").length}
+                  outstanding={section.docs.filter((d) => d.status === "missing").length}
+                  rejected={section.docs.filter((d) => d.status === "rejected").length}
+                  open={openSections[section.key] ?? false}
+                  onToggle={() => setOpenSections((prev) => ({ ...prev, [section.key]: !prev[section.key] }))}
+                >
                   {section.key === "interview" ? (
                     <div className="py-3">{interviewSection}</div>
                   ) : (
@@ -321,11 +336,11 @@ export function DocumentChecklist({
                       categoryLabel={section.label}
                     />
                   )}
-                </div>
-              </section>
-            );
-          })}
-        </div>
+                </DocumentSectionShell>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );

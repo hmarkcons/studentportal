@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/Badge";
 import { PortalDocumentRow } from "../applications/[id]/PortalDocumentRow";
 import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
 import { loadStudentChecklistSections } from "@/lib/studentChecklistSections";
+import { DocumentSectionShell } from "@/components/DocumentSectionShell";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -102,18 +103,23 @@ export default async function PortalDocumentsPage() {
         </Card>
       )}
 
-      <div className="flex flex-col gap-6">
+      {/* Collapsed on every load, the same as the staff Documents tab and
+          through the same component, so a student reading their checklist on a
+          phone gets an index rather than forty rows to scroll. The outstanding
+          and rejected counts stay in each header, so nothing that needs acting
+          on is hidden by a shut section — and the summary card above still
+          gives the totals for the whole page. */}
+      <div className="flex flex-col gap-3">
         {sections.map((section, i) => (
-          <Card key={section.category}>
-            <div className="mb-3 flex items-center gap-2">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-ink">
-                {i + 1}
-              </span>
-              <h3 className="text-base font-semibold text-ink">{section.label}</h3>
-              <span className="ml-auto text-xs text-muted">
-                {section.docs.filter((d) => d.status === "verified").length}/{section.docs.length} approved
-              </span>
-            </div>
+          <DocumentSectionShell
+            key={section.category}
+            number={i + 1}
+            label={section.label}
+            total={section.docs.length}
+            approved={section.docs.filter((d) => d.status === "verified").length}
+            outstanding={section.docs.filter((d) => d.status === "missing").length}
+            rejected={section.docs.filter((d) => d.status === "rejected").length}
+          >
             <div className="flex flex-col divide-y divide-border">
               {section.docs.map((doc, j) => (
                 <PortalDocumentRow
@@ -125,7 +131,7 @@ export default async function PortalDocumentsPage() {
                 />
               ))}
             </div>
-          </Card>
+          </DocumentSectionShell>
         ))}
       </div>
     </div>
