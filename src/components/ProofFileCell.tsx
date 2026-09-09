@@ -2,14 +2,18 @@
 
 import { useActionState } from "react";
 import { Button } from "@/components/ui/Button";
+import { addedLine } from "@/lib/activityStamp";
 
 type ActionState = { error?: string; success?: boolean } | undefined;
 
 export function ProofFileCell({
   viewUrl,
+  uploadedAt,
   uploadAction,
 }: {
   viewUrl?: string | null;
+  /** When the proof on file arrived — 0155. */
+  uploadedAt?: string | null;
   uploadAction: (prevState: ActionState, formData: FormData) => Promise<ActionState>;
 }) {
   const [state, formAction, pending] = useActionState(uploadAction, undefined);
@@ -25,6 +29,11 @@ export function ProofFileCell({
         >
           👁️ View proof
         </a>
+      )}
+      {/* Every caller shows the proof through this cell, so the date lives
+          here rather than being remembered in each table. */}
+      {addedLine(uploadedAt, "Uploaded") && (
+        <span className="text-xs text-muted">{addedLine(uploadedAt, "Uploaded")}</span>
       )}
       <form action={formAction} className="flex items-center gap-1">
         <input type="file" name="file" className="w-28 text-xs" />

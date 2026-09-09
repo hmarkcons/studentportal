@@ -89,7 +89,7 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
       const { data: rawCommissions } = await supabase
         .from("staff_commissions")
         .select(
-          "id, amount, currency, status, registration_date, payment_proof_path, student:leads(full_name), shared_with:staff!staff_commissions_shared_with_staff_id_fkey(full_name)"
+          "id, amount, currency, status, registration_date, payment_proof_path, payment_proof_uploaded_at, student:leads(full_name), shared_with:staff!staff_commissions_shared_with_staff_id_fkey(full_name)"
         )
         .eq("staff_id", staffId)
         .gte("registration_date", monthStart)
@@ -113,6 +113,7 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
         status: c.status,
         registration_date: c.registration_date,
         payment_proof_path: c.payment_proof_path,
+        payment_proof_uploaded_at: c.payment_proof_uploaded_at,
         student_name: (one(c.student as never) as { full_name?: string } | null)?.full_name ?? "Unknown",
         shared_with_name: (one(c.shared_with as never) as { full_name?: string } | null)?.full_name ?? null,
       }));

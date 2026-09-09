@@ -294,7 +294,10 @@ export async function markStaffCommissionPaid(id: string, revalidateTo: string, 
 
   const { error } = await supabase
     .from("staff_commissions")
-    .update({ status: "paid", ...(payment_proof_path ? { payment_proof_path } : {}) })
+    .update({
+      status: "paid",
+      ...(payment_proof_path ? { payment_proof_path, payment_proof_uploaded_at: new Date().toISOString() } : {}),
+    })
     .eq("id", id);
 
   if (error) return { error: error.message };
@@ -389,7 +392,10 @@ export async function uploadStaffCommissionProof(id: string, revalidateTo: strin
   const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: true });
   if (uploadError) return { error: uploadError.message };
 
-  const { error } = await supabase.from("staff_commissions").update({ payment_proof_path: path }).eq("id", id);
+  const { error } = await supabase
+    .from("staff_commissions")
+    .update({ payment_proof_path: path, payment_proof_uploaded_at: new Date().toISOString() })
+    .eq("id", id);
   if (error) return { error: error.message };
 
   revalidatePath(revalidateTo);
@@ -448,7 +454,10 @@ export async function uploadPartnerCommissionProof(id: string, revalidateTo: str
   const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: true });
   if (uploadError) return { error: uploadError.message };
 
-  const { error } = await supabase.from("partner_commissions").update({ payment_proof_path: path }).eq("id", id);
+  const { error } = await supabase
+    .from("partner_commissions")
+    .update({ payment_proof_path: path, payment_proof_uploaded_at: new Date().toISOString() })
+    .eq("id", id);
   if (error) return { error: error.message };
 
   revalidatePath(revalidateTo);

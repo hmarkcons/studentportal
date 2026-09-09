@@ -56,7 +56,10 @@ export async function partnerUploadCommissionProof(commissionId: string, _prevSt
   const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: true });
   if (uploadError) return { error: uploadError.message };
 
-  const { error } = await supabase.from("partner_commissions").update({ payment_proof_path: path }).eq("id", commissionId);
+  const { error } = await supabase
+    .from("partner_commissions")
+    .update({ payment_proof_path: path, payment_proof_uploaded_at: new Date().toISOString() })
+    .eq("id", commissionId);
   if (error) return { error: error.message };
 
   revalidatePath("/partner/commissions");

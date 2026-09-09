@@ -22,6 +22,7 @@ export type CommissionRecord = {
   status: string;
   registration_date: string | null;
   payment_proof_path: string | null;
+  payment_proof_uploaded_at: string | null;
   student_name: string;
   shared_with_name: string | null;
 };
@@ -269,7 +270,11 @@ export function CommissionLedgerTable({
                 <Badge tone={r.status === "paid" ? "success" : "warning"}>{r.status}</Badge>
                 {canManage ? (
                   <>
-                    <ProofFileCell viewUrl={proofUrls[r.id]} uploadAction={uploadStaffCommissionProof.bind(null, r.id, revalidateTo)} />
+                    <ProofFileCell
+                      viewUrl={proofUrls[r.id]}
+                      uploadedAt={r.payment_proof_uploaded_at}
+                      uploadAction={uploadStaffCommissionProof.bind(null, r.id, revalidateTo)}
+                    />
                     {r.status !== "paid" && <MarkPaidForm id={r.id} revalidateTo={revalidateTo} />}
                     <EditCommissionForm record={r} revalidateTo={revalidateTo} />
                     <DeleteCommissionButton id={r.id} revalidateTo={revalidateTo} />

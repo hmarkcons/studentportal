@@ -6,7 +6,7 @@ export default async function PartnerCommissionsPage() {
   const supabase = await createClient();
   const { data: commissions } = await supabase
     .from("partner_commissions")
-    .select("id, expected_amount, currency, status, student:leads(full_name)");
+    .select("id, expected_amount, currency, status, payment_proof_uploaded_at, student:leads(full_name)");
 
   return (
     <div className="mx-auto max-w-2xl">

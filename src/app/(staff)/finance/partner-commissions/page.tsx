@@ -34,7 +34,7 @@ export default async function PartnerCommissionsPage() {
   const { data: rowsRaw } = await supabase
     .from("partner_commissions")
     .select(
-      "id, paid_fee, fee_payment_date, rate_percent, fixed_amount, expected_amount, currency, channel, wallet_platform, received_date, hmark_bank_account, payment_proof_path, status, student:leads(full_name), application:applications(university:universities(name), program:programs(tuition_fee, rate:program_commission_rates(rate_percent, fixed_amount, currency)))"
+      "id, paid_fee, fee_payment_date, rate_percent, fixed_amount, expected_amount, currency, channel, wallet_platform, received_date, hmark_bank_account, payment_proof_path, payment_proof_uploaded_at, status, student:leads(full_name), application:applications(university:universities(name), program:programs(tuition_fee, rate:program_commission_rates(rate_percent, fixed_amount, currency)))"
     );
   const rows = (rowsRaw ?? []).map((r) => {
     const app = one(r.application);
@@ -116,6 +116,7 @@ export default async function PartnerCommissionsPage() {
                     {canManage ? (
                       <ProofFileCell
                         viewUrl={proofUrls.get(r.id)}
+                        uploadedAt={r.payment_proof_uploaded_at}
                         uploadAction={uploadPartnerCommissionProof.bind(null, r.id, "/finance/partner-commissions")}
                       />
                     ) : proofUrls.has(r.id) ? (
