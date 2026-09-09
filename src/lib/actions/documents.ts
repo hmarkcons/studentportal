@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sanitizeFilename, validateDocumentFile } from "@/lib/documentUpload";
-import { profileDerivedRequirements, reconcileDerived } from "@/lib/documentChecklist";
+import { profileDerivedRequirements, reconcileDerived, templatesToSeed } from "@/lib/documentChecklist";
 import { requirePermission } from "@/lib/auth/permissions";
 
 const MANAGE_DENIED = "Only Super Admin and the Processing team can add or remove document requirements.";
@@ -53,10 +53,10 @@ export async function ensureStudentDocumentRequirements(studentId: string) {
   ] = await Promise.all([
     supabase.from("leads").select("level_applying_for").eq("id", studentId).maybeSingle(),
     supabase.from("lead_destinations").select("destination_id").eq("lead_id", studentId),
-    supabase.from("document_templates").select("id, category, level, destination_id"),
+    supabase.from("document_templates").select("id, category, level, destination_id, name, sort_order"),
     supabase
       .from("student_documents")
-      .select("id, template_id, derived_key, file_path")
+      .select("id, template_id, derived_key, file_path, category, custom_name, template:document_templates(name)")
       .eq("student_id", studentId)
       .is("application_id", null),
     supabase.from("destination_document_exclusions").select("destination_id, template_id"),
@@ -83,7 +83,7 @@ export async function ensureStudentDocumentRequirements(studentId: string) {
     destinationIds.size > 0 &&
     [...destinationIds].every((d) => excludedByDestination.get(d as string)?.has(templateId));
 
-  const missing = (templates ?? []).filter((t) => {
+  const applicable = (templates ?? []).filter((t) => {
     if (existingTemplateIds.has(t.id)) return false;
     const levelMatches = t.level === "all" || t.level === level;
     const destMatches = t.destination_id === null || destinationIds.has(t.destination_id);
@@ -91,6 +91,26 @@ export async function ensureStudentDocumentRequirements(studentId: string) {
     if (t.destination_id === null && excludedEverywhere(t.id)) return false;
     return true;
   });
+
+  // One document is one requirement, however many of the student's countries
+  // ask for it — see templatesToSeed. Without this, a student pursuing Germany
+  // and Italy gets two rows for the single HEC attestation they will hand in.
+  const missing = templatesToSeed(
+    applicable.map((t) => ({
+      id: t.id,
+      destination_id: t.destination_id,
+      category: t.category,
+      name: t.name,
+      sort_order: t.sort_order ?? 0,
+    })),
+    existingRows.map((r) => {
+      // PostgREST returns an embedded row as an object or a single-element
+      // array depending on the relationship it infers, so both are handled.
+      const embedded = r.template as { name?: string } | { name?: string }[] | null;
+      const templateName = (Array.isArray(embedded) ? embedded[0] : embedded)?.name ?? null;
+      return { category: r.category, label: r.custom_name ?? templateName };
+    })
+  );
 
   if (missing.length > 0) {
     const { error } = await supabase.from("student_documents").insert(

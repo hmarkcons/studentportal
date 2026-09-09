@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveChecklist, profileDerivedRequirements, reconcileDerived } from "../src/lib/documentChecklist.ts";
+import { resolveChecklist, profileDerivedRequirements, reconcileDerived, templatesToSeed } from "../src/lib/documentChecklist.ts";
 import { testLabel, needsCustomName, TEST_TYPE_LABELS } from "../src/lib/testScores.ts";
 
 const SECTIONS = [
@@ -275,4 +275,109 @@ test("an other test is labelled by what staff typed, never as the word Other", (
   assert.equal(testLabel("other", "  "), "Other test", "a blank name must not produce an unnamed requirement");
   assert.equal(testLabel("other", null), "Other test");
   assert.equal(testLabel("ielts"), "IELTS");
+});
+
+// --------------------------------------------------- cross-country repeats
+
+const seed = (o) => ({
+  id: o.id,
+  destination_id: o.dest ?? null,
+  category: o.cat,
+  name: o.name,
+  sort_order: o.sort ?? 0,
+});
+
+test("a document two countries both ask for is seeded once", () => {
+  // Germany and Italy each carry their own HEC attestation row; the student
+  // hands in one piece of paper.
+  const out = templatesToSeed(
+    [
+      seed({ id: "de", dest: "DE", cat: "attestation", name: "Bachelor's degree and transcript attested from HEC Pakistan" }),
+      seed({ id: "it", dest: "IT", cat: "attestation", name: "Bachelor's degree and transcript attested from HEC Pakistan" }),
+    ],
+    []
+  );
+  assert.equal(out.length, 1);
+});
+
+test("the shared copy wins over a destination's own", () => {
+  const out = templatesToSeed(
+    [
+      seed({ id: "it", dest: "IT", cat: "visa", name: "Visa application form", sort: 1 }),
+      seed({ id: "shared", cat: "visa", name: "Visa application form", sort: 9 }),
+    ],
+    []
+  );
+  // Even though the destination copy sorts first, the shared row is the one
+  // that stays applicable if the student drops that destination.
+  assert.deepEqual(out.map((o) => o.id), ["shared"]);
+});
+
+test("the same name in a different section is NOT a repeat", () => {
+  // The Visa section has its own Photo alongside Admission's photographs: a
+  // photo for the consulate is not the photo for the university.
+  const out = templatesToSeed(
+    [
+      seed({ id: "a", cat: "admission", name: "Photo" }),
+      seed({ id: "v", cat: "visa", name: "Photo" }),
+    ],
+    []
+  );
+  assert.equal(out.length, 2);
+});
+
+test("nothing is seeded for a document the student is already asked for", () => {
+  const out = templatesToSeed(
+    [seed({ id: "de", dest: "DE", cat: "attestation", name: "IBCC attestation" })],
+    [{ category: "attestation", label: "IBCC attestation" }]
+  );
+  assert.deepEqual(out, []);
+});
+
+test("a manually added requirement counts as already asked", () => {
+  // Staff typed it in by hand; seeding must not add the template copy beside it.
+  const out = templatesToSeed(
+    [seed({ id: "t", cat: "visa", name: "Travel insurance" })],
+    [{ category: "visa", label: "Travel insurance" }]
+  );
+  assert.deepEqual(out, []);
+});
+
+test("matching ignores case and stray whitespace", () => {
+  const out = templatesToSeed(
+    [seed({ id: "t", cat: "visa", name: "  travel   INSURANCE " })],
+    [{ category: "visa", label: "Travel insurance" }]
+  );
+  assert.deepEqual(out, []);
+});
+
+test("genuinely different documents in one section all get seeded", () => {
+  const out = templatesToSeed(
+    [
+      seed({ id: "1", cat: "visa", name: "Travel insurance", sort: 1 }),
+      seed({ id: "2", cat: "visa", name: "Bank statement", sort: 2 }),
+      seed({ id: "3", cat: "visa", name: "Police clearance", sort: 3 }),
+    ],
+    []
+  );
+  assert.deepEqual(out.map((o) => o.id), ["1", "2", "3"]);
+});
+
+test("rows with no name cannot suppress a real requirement", () => {
+  // A nameless row (none should exist now) must not match everything.
+  const out = templatesToSeed(
+    [seed({ id: "t", cat: "visa", name: "Travel insurance" })],
+    [{ category: "visa", label: null }, { category: null, label: null }]
+  );
+  assert.equal(out.length, 1);
+});
+
+test("the choice is deterministic, whatever order the templates arrive in", () => {
+  const a = [
+    seed({ id: "x", dest: "DE", cat: "attestation", name: "IBCC attestation", sort: 2 }),
+    seed({ id: "y", dest: "IT", cat: "attestation", name: "IBCC attestation", sort: 1 }),
+  ];
+  const first = templatesToSeed(a, []);
+  const second = templatesToSeed([...a].reverse(), []);
+  assert.deepEqual(first.map((o) => o.id), second.map((o) => o.id));
 });
