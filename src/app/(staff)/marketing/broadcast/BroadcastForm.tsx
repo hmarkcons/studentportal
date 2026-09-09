@@ -5,6 +5,7 @@ import { broadcastMessage } from "@/lib/actions/messages";
 import type { TemplateRow } from "@/components/MessageThread";
 import { Button } from "@/components/ui/Button";
 import { Select, Textarea } from "@/components/ui/Input";
+import { MESSAGE_MAX_LENGTH } from "@/lib/messages";
 import { EmptyState } from "@/components/ui/EmptyState";
 
 type Student = { id: string; full_name: string };
@@ -77,12 +78,21 @@ export function BroadcastForm({ students, templates }: { students: Student[]; te
         placeholder="Message body…"
         required
         rows={4}
+        maxLength={MESSAGE_MAX_LENGTH}
         value={body}
         onChange={(e) => setBody(e.target.value)}
       />
+      {body.length > MESSAGE_MAX_LENGTH * 0.8 && (
+        <p className="-mt-2 text-xs text-muted">
+          {body.length.toLocaleString("en-US")} of {MESSAGE_MAX_LENGTH.toLocaleString("en-US")} characters
+        </p>
+      )}
 
       {state?.error && <p className="text-sm text-danger">{state.error}</p>}
       {state?.success && <p className="text-sm text-success">Sent to {state.count} student(s).</p>}
+      {/* Confirmed before sending: this reaches many people at once from a
+          single click, "Select all" is one button away, and there is no
+          unsend. */}
       <Button
         type="submit"
         variant="primary"
@@ -90,6 +100,17 @@ export function BroadcastForm({ students, templates }: { students: Student[]; te
         disabled={selected.size === 0}
         pending={pending}
         className="self-start"
+        onClick={(e) => {
+          const names = students
+            .filter((s) => selected.has(s.id))
+            .map((s) => s.full_name)
+            .slice(0, 5)
+            .join(", ");
+          const more = selected.size > 5 ? ` and ${selected.size - 5} more` : "";
+          if (!confirm(`Send this message to ${selected.size} student(s) — ${names}${more}? They will see it in their portal straight away and it cannot be unsent.`)) {
+            e.preventDefault();
+          }
+        }}
       >
         {`Send to ${selected.size} student(s)`}
       </Button>

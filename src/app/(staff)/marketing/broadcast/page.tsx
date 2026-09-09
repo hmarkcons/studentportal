@@ -1,9 +1,16 @@
-import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import { getStaffSession } from "@/lib/auth/session";
+import { hasPermission } from "@/lib/auth/permissions";
 import { Card } from "@/components/ui/Card";
 import { BroadcastForm } from "./BroadcastForm";
 
 export default async function BroadcastPage() {
-  const supabase = await createClient();
+  const { supabase, staff } = await getStaffSession();
+  if (!staff) redirect("/");
+  // Sending the same message to every student is not ordinary work, and this
+  // page had no check at all. Messaging one student from their own page is
+  // unaffected.
+  if (!(await hasPermission("messages.broadcast"))) redirect("/dashboard");
   const { data: students } = await supabase.from("students").select("id, full_name").order("full_name");
   const { data: templates } = await supabase.from("message_templates").select("id, purpose, channel, body").order("purpose");
 

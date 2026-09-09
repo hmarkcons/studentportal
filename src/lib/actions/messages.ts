@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { requirePermission } from "@/lib/auth/permissions";
+import { isSendableChannel, messageBodyError, broadcastRecipientsError } from "@/lib/messages";
 
 export async function sendMessage(
   entityType: "student" | "university",
@@ -12,8 +14,18 @@ export async function sendMessage(
   formData: FormData
 ) {
   const supabase = await createClient();
+
+  // The channel comes from the caller, not the form, so it is checked rather
+  // than trusted: the column also allows email, sms and whatsapp, and the
+  // thread would read such a row back as though it had been sent that way when
+  // nothing in the app can send by any of them.
+  if (!isSendableChannel(channel)) {
+    return { error: "That channel cannot be sent from here yet — in-app and internal notes only." };
+  }
+
   const body = String(formData.get("body") ?? "").trim();
-  if (!body) return { error: "Message can't be empty." };
+  const bodyInvalid = messageBodyError(formData.get("body"));
+  if (bodyInvalid) return { error: bodyInvalid };
 
   const {
     data: { user },
@@ -41,12 +53,25 @@ export async function sendMessage(
 // student — real email/SMS/WhatsApp broadcast needs a gateway integration,
 // same limitation as the per-student message thread.
 export async function broadcastMessage(_prevState: unknown, formData: FormData) {
+  // Messaging one student is ordinary work for whoever handles them; messaging
+  // everybody at once is not, and this had no check of any kind — any active
+  // staff member could reach every student their role can see.
+  const denied = await requirePermission(
+    "messages.broadcast",
+    "You do not have permission to send a broadcast. You can still message a student from their own page."
+  );
+  if (denied) return { error: denied.error };
+
   const supabase = await createClient();
   const body = String(formData.get("body") ?? "").trim();
-  const studentIds = formData.getAll("student_ids").map(String);
+  // De-duplicated: the same id submitted twice would post the message twice to
+  // that student.
+  const studentIds = [...new Set(formData.getAll("student_ids").map(String).filter(Boolean))];
 
-  if (!body) return { error: "Message can't be empty." };
-  if (studentIds.length === 0) return { error: "Select at least one student." };
+  const bodyInvalid = messageBodyError(formData.get("body"));
+  if (bodyInvalid) return { error: bodyInvalid };
+  const recipientsInvalid = broadcastRecipientsError(studentIds.length);
+  if (recipientsInvalid) return { error: recipientsInvalid };
 
   const {
     data: { user },
