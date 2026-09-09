@@ -303,7 +303,14 @@ export function DocumentChecklist({
 
   return (
     <div>
-      {docs.length === 0 ? (
+      {/* Gated on what will render, not on whether any document exists.
+          Checking docs.length short-circuited the emptySections mechanism
+          entirely: an application with nothing on it yet — every new one —
+          showed "No documents required yet" and no section, so the
+          "+ Add requirement" button that only lives inside a section could
+          never be reached, and a university's own document ask could not be
+          added until some other document happened to exist first. */}
+      {visibleSections.length === 0 ? (
         <EmptyState>{emptyMessage}</EmptyState>
       ) : (
         <>
