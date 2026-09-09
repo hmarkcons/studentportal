@@ -1,26 +1,84 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { addStudentScholarship, markPreenrollmentFinalized, updateStudentScholarship, deleteStudentScholarship } from "@/lib/actions/scholarships";
+import {
+  addStudentScholarship,
+  markPreenrollmentFinalized,
+  updateStudentScholarship,
+  deleteStudentScholarship,
+} from "@/lib/actions/scholarships";
 import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
 import { Input, Select } from "@/components/ui/Input";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { formatDateOnly } from "@/lib/formatDate";
+import {
+  SCHOLARSHIP_STATUSES,
+  SCHOLARSHIP_STATUS_LABELS,
+  SCHOLARSHIP_STATUS_TONE,
+  SCHOLARSHIP_CURRENCY_SYMBOL,
+  scholarshipStatusLabel,
+  type ScholarshipStatus,
+} from "@/lib/scholarships";
+
+export type ScholarshipBody = { id: string; name: string; region: string | null };
+
+export type StudentScholarship = {
+  id: string;
+  name: string | null;
+  status: string;
+  award_amount: number | null;
+  scholarship_body_id: string | null;
+  application_deadline: string | null;
+};
+
+function StatusOptions() {
+  return (
+    <>
+      {SCHOLARSHIP_STATUSES.map((s) => (
+        <option key={s} value={s}>
+          {SCHOLARSHIP_STATUS_LABELS[s]}
+        </option>
+      ))}
+    </>
+  );
+}
+
+function BodyOptions({ bodies }: { bodies: ScholarshipBody[] }) {
+  return (
+    <>
+      <option value="">Scholarship body…</option>
+      {bodies.map((b) => (
+        <option key={b.id} value={b.id}>
+          {b.name}
+          {b.region ? ` (${b.region})` : ""}
+        </option>
+      ))}
+    </>
+  );
+}
 
 function ScholarshipRow({
   s,
+  bodies,
   revalidateTo,
-  isSuperAdmin,
+  canManage,
 }: {
-  s: { id: string; name: string | null; status: string; award_amount: number | null };
+  s: StudentScholarship;
+  bodies: ScholarshipBody[];
   revalidateTo: string;
-  isSuperAdmin: boolean;
+  canManage: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const action = updateStudentScholarship.bind(null, s.id, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
 
+  const body = bodies.find((b) => b.id === s.scholarship_body_id) ?? null;
+
   async function handleDelete() {
+    const label = s.name ?? body?.name ?? "this scholarship";
+    if (!confirm(`Delete the record for ${label}?`)) return;
     setDeleteError(null);
     const result = await deleteStudentScholarship(s.id, revalidateTo);
     if (result?.error) setDeleteError(result.error);
@@ -29,19 +87,37 @@ function ScholarshipRow({
   if (editing) {
     return (
       <form action={formAction} className="flex flex-wrap items-end gap-2 rounded-md border border-border p-2">
-        <Input name="name" defaultValue={s.name ?? ""} placeholder="Name" />
-        <Input name="award_amount" type="number" step="0.01" defaultValue={s.award_amount ?? ""} className="w-28" />
-        <Select name="status" defaultValue={s.status}>
-          <option value="submitted">Submitted</option>
-          <option value="pending">Pending</option>
-          <option value="rejected">Rejected</option>
-          <option value="accepted">Accepted</option>
-          <option value="modification">Modification</option>
-        </Select>
+        {/* The body is editable now. It was offered when adding and then fixed
+            for the rest of the record's life, so a scholarship filed against
+            the wrong region could never be corrected. */}
+        <label className="flex flex-col gap-1 text-xs text-muted">
+          Body
+          <Select name="scholarship_body_id" defaultValue={s.scholarship_body_id ?? ""}>
+            <BodyOptions bodies={bodies} />
+          </Select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-muted">
+          Name
+          <Input name="name" defaultValue={s.name ?? ""} placeholder="Scholarship name" />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-muted">
+          Award ({SCHOLARSHIP_CURRENCY_SYMBOL})
+          <Input name="award_amount" type="number" step="0.01" min="0" defaultValue={s.award_amount ?? ""} className="w-28" />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-muted">
+          Deadline
+          <Input name="application_deadline" type="date" defaultValue={s.application_deadline ?? ""} />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-muted">
+          Status
+          <Select name="status" defaultValue={s.status}>
+            <StatusOptions />
+          </Select>
+        </label>
         <Button type="submit" variant="primary" size="sm" pending={pending}>
           Save
         </Button>
-        <button type="button" onClick={() => setEditing(false)} className="text-xs text-muted hover:underline">
+        <button type="button" onClick={() => setEditing(false)} className="pb-2 text-xs text-muted hover:underline">
           Cancel
         </button>
         {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
@@ -50,24 +126,41 @@ function ScholarshipRow({
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between text-sm">
-        <span className="text-ink">{s.name ?? "Scholarship"}</span>
-        <span className="flex items-center gap-2 text-muted">
-          {s.status} {s.award_amount != null && `· €${s.award_amount}`}
-          {isSuperAdmin && (
+    <div className="rounded-md border border-border p-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+        <div className="min-w-0">
+          {/* The body's name is shown. Picking one from the dropdown used to
+              leave the row reading "Scholarship", so the thing staff had just
+              selected was invisible from then on. */}
+          <p className="text-ink">{s.name ?? body?.name ?? "Scholarship"}</p>
+          <p className="text-xs text-muted">
+            {[
+              s.name && body ? body.name : null,
+              body?.region,
+              s.award_amount != null ? `${SCHOLARSHIP_CURRENCY_SYMBOL}${s.award_amount.toLocaleString("en-US")}` : null,
+              s.application_deadline ? `due ${formatDateOnly(s.application_deadline)}` : null,
+            ]
+              .filter(Boolean)
+              .join(" · ") || "No body, amount or deadline recorded"}
+          </p>
+        </div>
+        <span className="flex shrink-0 items-center gap-2">
+          <Badge tone={SCHOLARSHIP_STATUS_TONE[s.status as ScholarshipStatus] ?? "neutral"}>
+            {scholarshipStatusLabel(s.status)}
+          </Badge>
+          {canManage && (
             <>
-              <button onClick={() => setEditing(true)} className="text-xs text-muted hover:text-primary">
+              <button onClick={() => setEditing(true)} className="text-xs text-muted hover:text-primary" title="Edit">
                 ✏️
               </button>
-              <button onClick={handleDelete} className="text-xs text-muted hover:text-danger">
+              <button onClick={handleDelete} className="text-xs text-muted hover:text-danger" title="Delete">
                 🗑️
               </button>
             </>
           )}
         </span>
       </div>
-      {deleteError && <p className="text-xs text-danger">{deleteError}</p>}
+      {deleteError && <p className="mt-1 text-xs text-danger">{deleteError}</p>}
     </div>
   );
 }
@@ -79,20 +172,22 @@ export function ScholarshipSection({
   bodies,
   scholarships,
   preenrollmentFinalized,
-  isSuperAdmin = false,
+  canManage = false,
 }: {
   studentId: string;
   applicationId: string;
   revalidateTo: string;
-  bodies: { id: string; name: string; region: string | null }[];
-  scholarships: { id: string; name: string | null; status: string; award_amount: number | null }[];
+  bodies: ScholarshipBody[];
+  scholarships: StudentScholarship[];
   preenrollmentFinalized: boolean;
-  isSuperAdmin?: boolean;
+  /** scholarships.manage — Super Admin and Processing by default. */
+  canManage?: boolean;
 }) {
   const action = addStudentScholarship.bind(null, studentId, applicationId, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
   const [finalized, setFinalized] = useState(preenrollmentFinalized);
   const [finalizedError, setFinalizedError] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
 
   async function handleFinalizedChange(e: React.ChangeEvent<HTMLInputElement>) {
     const next = e.target.checked;
@@ -108,43 +203,76 @@ export function ScholarshipSection({
   return (
     <div>
       <div className="mb-3">
-        <label className="flex items-center gap-2 text-sm text-ink">
-          <input type="checkbox" checked={finalized} onChange={handleFinalizedChange} />
-          Pre-enrollment finalized on Universitaly.it (controls what the student can see for this application&apos;s Scholarship Region)
+        <label className="flex items-start gap-2 text-sm text-ink">
+          <input type="checkbox" checked={finalized} onChange={handleFinalizedChange} disabled={!canManage} className="mt-1" />
+          {/* The old label said this "controls what the student can see for
+              this application's Scholarship Region". It does not: there is no
+              scholarship page in the student portal, so the tick gated
+              nothing. It is a record of where the application has got to, and
+              now says so rather than promising something that does not
+              happen. */}
+          <span>
+            Pre-enrollment finalized on Universitaly.it
+            <span className="block text-xs text-muted">
+              Recorded against this application. Most regional bodies will not process a DSU application until it is
+              done.
+            </span>
+          </span>
         </label>
         {finalizedError && <p className="mt-1 text-xs text-danger">{finalizedError}</p>}
       </div>
 
       <div className="mb-3 flex flex-col gap-2">
         {scholarships.map((s) => (
-          <ScholarshipRow key={s.id} s={s} revalidateTo={revalidateTo} isSuperAdmin={isSuperAdmin} />
+          <ScholarshipRow key={s.id} s={s} bodies={bodies} revalidateTo={revalidateTo} canManage={canManage} />
         ))}
         {scholarships.length === 0 && <EmptyState>No scholarship record yet.</EmptyState>}
       </div>
 
-      <form action={formAction} className="flex flex-wrap items-end gap-2 border-t border-border pt-3">
-        <Select name="scholarship_body_id">
-          <option value="">Scholarship body…</option>
-          {bodies.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.name} {b.region && `(${b.region})`}
-            </option>
-          ))}
-        </Select>
-        <Input name="name" placeholder="Scholarship name" />
-        <Input name="award_amount" type="number" step="0.01" placeholder="Award amount" className="w-32" />
-        <Select name="status">
-          <option value="submitted">Submitted</option>
-          <option value="pending">Pending</option>
-          <option value="rejected">Rejected</option>
-          <option value="accepted">Accepted</option>
-          <option value="modification">Modification</option>
-        </Select>
-        <Button type="submit" size="sm" pending={pending}>
-          Add
-        </Button>
-        {state?.error && <p className="text-xs text-danger">{state.error}</p>}
-      </form>
+      {canManage &&
+        (adding ? (
+          <form action={formAction} className="flex flex-wrap items-end gap-2 border-t border-border pt-3">
+            <label className="flex flex-col gap-1 text-xs text-muted">
+              Body
+              <Select name="scholarship_body_id" autoFocus>
+                <BodyOptions bodies={bodies} />
+              </Select>
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-muted">
+              Name (if not a listed body)
+              <Input name="name" placeholder="Scholarship name" />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-muted">
+              Award ({SCHOLARSHIP_CURRENCY_SYMBOL})
+              <Input name="award_amount" type="number" step="0.01" min="0" placeholder="0.00" className="w-28" />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-muted">
+              Deadline
+              <Input name="application_deadline" type="date" />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-muted">
+              Status
+              <Select name="status" defaultValue="submitted">
+                <StatusOptions />
+              </Select>
+            </label>
+            <Button type="submit" size="sm" pending={pending}>
+              Add
+            </Button>
+            <button type="button" onClick={() => setAdding(false)} className="pb-2 text-xs text-muted hover:underline">
+              Cancel
+            </button>
+            {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
+          </form>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="border-t border-border pt-3 text-xs font-medium text-primary hover:underline"
+          >
+            + Add scholarship
+          </button>
+        ))}
     </div>
   );
 }

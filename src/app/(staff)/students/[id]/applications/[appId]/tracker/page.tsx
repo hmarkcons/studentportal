@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CountryTrackerForm } from "@/components/CountryTrackerForm";
 import { listTrackerDefinitions } from "@/lib/actions/countryTracker";
+import { hasPermission } from "@/lib/auth/permissions";
 import { ScholarshipSection } from "./ScholarshipSection";
 
 function one<T>(v: T | T[] | null) {
@@ -20,6 +21,10 @@ export default async function CountryTrackerPage(props: PageProps<"/students/[id
   } = await supabase.auth.getUser();
   const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
   const canAccess = staffRow?.role === "processing" || staffRow?.role === "super_admin";
+  // The permission, not the role: an override granting scholarships.manage in
+  // Admin > Role Permissions has to change what the page offers, not only what
+  // the server accepts.
+  const canManageScholarships = await hasPermission("scholarships.manage");
 
   const { data: app, error } = await supabase
     .from("applications")
@@ -52,9 +57,14 @@ export default async function CountryTrackerPage(props: PageProps<"/students/[id
   (extras ?? []).forEach((e) => (values[e.field_key] = e.field_value ?? ""));
 
   const isItaly = countryCode === "IT";
-  const { data: bodies } = isItaly ? await supabase.from("scholarship_bodies").select("id, name, region, covers") : { data: [] };
+  const { data: bodies } = isItaly
+    ? await supabase.from("scholarship_bodies").select("id, name, region, covers").order("region").order("name")
+    : { data: [] };
   const { data: scholarships } = isItaly
-    ? await supabase.from("student_scholarships").select("id, name, status, award_amount").eq("application_id", appId)
+    ? await supabase
+        .from("student_scholarships")
+        .select("id, name, status, award_amount, scholarship_body_id, application_deadline")
+        .eq("application_id", appId)
     : { data: [] };
 
   const regionByUniversityValue: Record<string, string> = {};
@@ -118,7 +128,7 @@ export default async function CountryTrackerPage(props: PageProps<"/students/[id
             bodies={bodies ?? []}
             scholarships={scholarships ?? []}
             preenrollmentFinalized={app.preenrollment_finalized}
-            isSuperAdmin={staffRow?.role === "super_admin"}
+            canManage={canManageScholarships}
           />
         </Card>
       )}

@@ -15,7 +15,7 @@ type Body = {
   source_url: string | null;
 };
 
-export function ScholarshipBodyRow({ body, isSuperAdmin }: { body: Body; isSuperAdmin: boolean }) {
+export function ScholarshipBodyRow({ body, canManage }: { body: Body; canManage: boolean }) {
   const [editing, setEditing] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const action = updateScholarshipBody.bind(null, body.id);
@@ -71,7 +71,7 @@ export function ScholarshipBodyRow({ body, isSuperAdmin }: { body: Body; isSuper
       <td className="px-4 py-3">{body.academic_year}</td>
       <td className="px-4 py-3">{body.stipend_amount ?? "—"}</td>
       <td className="px-4 py-3">
-        {isSuperAdmin && (
+        {canManage && (
           <div className="flex items-center gap-2">
             <button onClick={() => setEditing(true)} title="Edit" className="rounded p-1 text-muted hover:text-primary">
               ✏️
