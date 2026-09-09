@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { phoneError, matchesPhonePattern, PHONE_MIN_DIGITS } from "../src/lib/phoneNumber.ts";
+import { phoneError, phoneChangeError, matchesPhonePattern, PHONE_MIN_DIGITS } from "../src/lib/phoneNumber.ts";
 
 const GOOD = [
   "03352272275",        // Pakistani mobile as staff type it
@@ -59,4 +59,34 @@ test("the pattern survived escaping — it is not matching literal d characters"
   // accepts strings of the letter d. Both directions are checked.
   assert.equal(matchesPhonePattern("0".repeat(PHONE_MIN_DIGITS)), true);
   assert.equal(matchesPhonePattern("d".repeat(PHONE_MIN_DIGITS)), false);
+});
+
+test("an untouched bad number does not block an unrelated edit", () => {
+  // Saboor Khan's contact is nine digits and his emergency contact reads
+  // "4515". Staff opening that record to fix the date of birth must not be
+  // stopped by values they may not have the real version of yet.
+  assert.equal(phoneChangeError("090078601", "090078601"), null);
+  assert.equal(phoneChangeError("4515", "4515", "emergency contact number"), null);
+  assert.equal(phoneChangeError("Solo, Tehsil Buleda, District Kech", "Solo, Tehsil Buleda, District Kech", "home phone"), null);
+});
+
+test("but editing that field to another bad value is refused", () => {
+  assert.match(phoneChangeError("121", "090078601") ?? "", /only 3 digits/);
+});
+
+test("correcting it to a real number is accepted", () => {
+  assert.equal(phoneChangeError("0335 2272275", "090078601"), null);
+});
+
+test("a new bad number on a record that had none is refused", () => {
+  assert.match(phoneChangeError("555", null) ?? "", /only 3 digits/);
+  assert.match(phoneChangeError("555", "") ?? "", /only 3 digits/);
+});
+
+test("whitespace alone is not treated as a change", () => {
+  assert.equal(phoneChangeError("  090078601  ", "090078601"), null);
+});
+
+test("clearing an optional number is allowed", () => {
+  assert.equal(phoneChangeError("", "090078601"), null);
 });

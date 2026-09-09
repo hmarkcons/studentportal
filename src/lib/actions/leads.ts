@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { LEAD_STATUSES } from "@/lib/constants";
 import { dateOfBirthError } from "@/lib/dateOfBirth";
-import { phoneError } from "@/lib/phoneNumber";
+import { phoneError, phoneChangeError } from "@/lib/phoneNumber";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -143,7 +143,16 @@ export async function updateLead(leadId: string, revalidateTo: string, _prevStat
   if (formData.has("date_of_birth") && !date_of_birth) return { error: "Date of birth is required." };
   const dobError = dateOfBirthError(date_of_birth);
   if (dobError) return { error: dobError };
-  const phoneIssue = phoneError(contact_number);
+
+  // Only what is actually being changed is checked — see phoneChangeError.
+  const { data: storedLead } = await supabase
+    .from("leads")
+    .select("contact_number, home_phone")
+    .eq("id", leadId)
+    .maybeSingle();
+  const phoneIssue =
+    phoneChangeError(contact_number, storedLead?.contact_number, "contact number") ??
+    phoneChangeError(home_phone, storedLead?.home_phone, "home phone");
   if (phoneIssue) return { error: phoneIssue };
 
   const { error } = await supabase

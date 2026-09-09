@@ -42,6 +42,28 @@ export function isImplausiblePhone(value: string | null | undefined) {
 }
 
 /**
+ * Like phoneError, but silent when the value has not been touched.
+ *
+ * A validator's job is to stop bad data being entered, not to hold an existing
+ * record hostage. Three real students already carry a number this rejects —
+ * Saboor Khan's contact is nine digits, his emergency contact reads "4515",
+ * and Shah Nawaz's home phone field holds an address — so a plain check would
+ * lock staff out of saving anything on those records, including the date of
+ * birth correction they were opening the form to make. The bad values are
+ * surfaced inline on the profile form instead, and become unsaveable the
+ * moment anyone edits the field itself.
+ */
+export function phoneChangeError(
+  submitted: FormDataEntryValue | string | null | undefined,
+  stored: string | null | undefined,
+  label = "contact number"
+) {
+  const raw = typeof submitted === "string" ? submitted.trim() : "";
+  if (raw === (stored ?? "").trim()) return null;
+  return phoneError(raw, label);
+}
+
+/**
  * The `pattern` attribute equivalent of phoneError, kept beside it so the two
  * cannot drift: the browser must never refuse a number the server would take,
  * or accept one it would not.

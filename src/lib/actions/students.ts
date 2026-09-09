@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { dateOfBirthError } from "@/lib/dateOfBirth";
-import { phoneError } from "@/lib/phoneNumber";
+import { phoneChangeError } from "@/lib/phoneNumber";
 
 // Saves the entire "Personal details" card on a registered student's profile
 // tab in one submit — the core lead fields (name, contact, registration
@@ -26,14 +26,16 @@ export async function updateRegisteredStudentProfile(
   const dobError = dateOfBirthError(date_of_birth);
   if (dobError) return { error: dobError };
 
-  for (const [field, label] of [
-    ["contact_number", "contact number"],
-    ["emergency_contact_number", "emergency contact number"],
-    ["home_phone", "home phone"],
-  ] as const) {
-    const issue = phoneError(formData.get(field), label);
-    if (issue) return { error: issue };
-  }
+  const [{ data: storedLead }, { data: storedProfile }] = await Promise.all([
+    supabase.from("leads").select("contact_number, home_phone").eq("id", studentId).maybeSingle(),
+    supabase.from("student_profiles").select("emergency_contact_number").eq("student_id", studentId).maybeSingle(),
+  ]);
+  // Only what is actually being changed is checked — see phoneChangeError.
+  const phoneIssue =
+    phoneChangeError(formData.get("contact_number"), storedLead?.contact_number, "contact number") ??
+    phoneChangeError(formData.get("home_phone"), storedLead?.home_phone, "home phone") ??
+    phoneChangeError(formData.get("emergency_contact_number"), storedProfile?.emergency_contact_number, "emergency contact number");
+  if (phoneIssue) return { error: phoneIssue };
 
   const { error: leadError } = await supabase
     .from("leads")

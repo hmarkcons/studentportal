@@ -52,6 +52,9 @@ function staffFieldsFromFormData(formData: FormData) {
   };
 }
 
+// Checked outright rather than only-when-changed, unlike the student forms:
+// every number in the staff table already passes, so there is no legacy value
+// here for this to hold an unrelated edit hostage to.
 function staffPhoneError(fields: ReturnType<typeof staffFieldsFromFormData>) {
   return (
     phoneError(fields.mobile_personal, "personal mobile") ??
