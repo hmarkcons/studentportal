@@ -138,7 +138,13 @@ function ScholarshipRow({
               s.name && body ? body.name : null,
               body?.region,
               s.award_amount != null ? `${SCHOLARSHIP_CURRENCY_SYMBOL}${s.award_amount.toLocaleString("en-US")}` : null,
-              s.application_deadline ? `due ${formatDateOnly(s.application_deadline)}` : null,
+              // Spelled-out month, for the reason the portal's visa page gives:
+              // 11/30/2026 reads as 11 December to most of the world outside
+              // the US, and a scholarship deadline missed by a month is the
+              // whole award.
+              s.application_deadline
+                ? `due ${formatDateOnly(s.application_deadline, { day: "numeric", month: "short", year: "numeric" })}`
+                : null,
             ]
               .filter(Boolean)
               .join(" · ") || "No body, amount or deadline recorded"}
