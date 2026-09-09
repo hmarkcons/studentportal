@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { PortalDocumentRow } from "../applications/[id]/PortalDocumentRow";
 import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
-import { CATEGORY_ORDER, CATEGORY_LABELS } from "@/lib/documentCategories";
+import { loadStudentChecklistSections } from "@/lib/studentChecklistSections";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -45,15 +45,21 @@ export default async function PortalDocumentsPage() {
   // "section 2, item 3" means the same thing to a student on the phone as to
   // the counsellor talking them through it. Previously this page was two flat
   // lists while staff had numbered categories.
-  const sections: { category: string; label: string; docs: typeof docsWithUrls }[] = CATEGORY_ORDER.map((category) => ({
-    category: category as string,
-    label: CATEGORY_LABELS[category] ?? category,
-    docs: docsWithUrls.filter((d) => (d.category ?? "other") === category),
-  })).filter((s) => s.docs.length > 0);
+  // Order and labels come from what the Create Doc Checklist builder set for
+  // this student's destinations, so a section created in Setup reads under its
+  // own name here instead of being lumped in as "Other documents".
+  const configured = await loadStudentChecklistSections(supabase, student.id);
+  const sections: { category: string; label: string; docs: typeof docsWithUrls }[] = configured
+    .map((entry) => ({
+      category: entry.key,
+      label: entry.label,
+      docs: docsWithUrls.filter((d) => (d.category ?? "other") === entry.key),
+    }))
+    .filter((s) => s.docs.length > 0);
 
   // Anything with a category the order does not know about would otherwise
   // vanish from this page entirely.
-  const known = new Set<string>(CATEGORY_ORDER);
+  const known = new Set<string>(configured.map((c) => c.key));
   const uncategorised = docsWithUrls.filter((d) => !known.has(d.category ?? "other"));
   if (uncategorised.length > 0) sections.push({ category: "unsorted", label: "Other documents", docs: uncategorised });
 
