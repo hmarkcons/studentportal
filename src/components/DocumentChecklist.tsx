@@ -202,7 +202,6 @@ export function DocumentChecklist({
   applicationId = null,
   revalidateTo,
   emptyMessage = "No documents required yet.",
-  interviewSection = null,
   canManage = false,
   sections,
   emptySections = "all",
@@ -212,7 +211,6 @@ export function DocumentChecklist({
   applicationId?: string | null;
   revalidateTo: string;
   emptyMessage?: string;
-  interviewSection?: React.ReactNode;
   /** Super Admin / Processing: may add and delete requirements. */
   canManage?: boolean;
   /**
@@ -253,9 +251,6 @@ export function DocumentChecklist({
   // Only the sections that will actually render, so the numbering runs 1..n
   // without gaps.
   const visibleSections = order.flatMap((entry) => {
-    if (entry.key === "interview") {
-      return interviewSection ? [{ key: "interview", label: entry.label, docs: [] as DocRow[] }] : [];
-    }
     const catDocs =
       entry.key === "other" ? [...(grouped.get("other") ?? []), ...uncategorized] : (grouped.get(entry.key) ?? []);
     // An empty section is still shown to whoever can add to it — that is where
@@ -279,7 +274,7 @@ export function DocumentChecklist({
 
   return (
     <div>
-      {docs.length === 0 && !interviewSection ? (
+      {docs.length === 0 ? (
         <EmptyState>{emptyMessage}</EmptyState>
       ) : (
         <>
@@ -308,26 +303,22 @@ export function DocumentChecklist({
                   open={openSections[section.key] ?? false}
                   onToggle={() => setOpenSections((prev) => ({ ...prev, [section.key]: !prev[section.key] }))}
                 >
-                  {section.key === "interview" ? (
-                    <div className="py-3">{interviewSection}</div>
-                  ) : (
-                    <div className="flex flex-col divide-y divide-border">
-                      {section.docs.map((doc, j) => (
-                        <UploadRow
-                          key={doc.id}
-                          doc={doc}
-                          studentId={studentId}
-                          revalidateTo={revalidateTo}
-                          number={`${n}.${j + 1}`}
-                          canManage={canManage}
-                        />
-                      ))}
-                      {section.docs.length === 0 && (
-                        <p className="py-3 text-xs text-muted">Nothing required here yet.</p>
-                      )}
-                    </div>
-                  )}
-                  {canManage && section.key !== "interview" && (
+                  <div className="flex flex-col divide-y divide-border">
+                    {section.docs.map((doc, j) => (
+                      <UploadRow
+                        key={doc.id}
+                        doc={doc}
+                        studentId={studentId}
+                        revalidateTo={revalidateTo}
+                        number={`${n}.${j + 1}`}
+                        canManage={canManage}
+                      />
+                    ))}
+                    {section.docs.length === 0 && (
+                      <p className="py-3 text-xs text-muted">Nothing required here yet.</p>
+                    )}
+                  </div>
+                  {canManage && (
                     <AddRequirementForm
                       studentId={studentId}
                       applicationId={applicationId}

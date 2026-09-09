@@ -159,14 +159,26 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
           // student's Documents tab too. The other sections appear here only
           // once they actually hold one of this application's extras.
           emptySections={["admission"]}
-          interviewSection={
-            <InterviewSection
-              applicationId={appId}
-              revalidateTo={revalidateTo}
-              interviews={interviewRows}
-              canManage={canManageInterviews}
-            />
-          }
+        />
+      </Card>
+
+      {/* Its own card, not a section inside the documents checklist.
+          It was nested in there as an "interview" pseudo-section, which meant
+          it only rendered if somebody had added an Interview *document*
+          section to that destination's checklist in Setup — so whether a
+          university requires an interview depended on an unrelated setting,
+          and for most destinations the whole feature was invisible. */}
+      <Card className="mb-6">
+        <h3 className="mb-1 text-sm font-medium text-ink">Interview</h3>
+        <p className="mb-3 text-xs text-muted">
+          Rounds this university requires for the application. The student sees each one on their Appointments page,
+          in their own time.
+        </p>
+        <InterviewSection
+          applicationId={appId}
+          revalidateTo={revalidateTo}
+          interviews={interviewRows}
+          canManage={canManageInterviews}
         />
       </Card>
 
