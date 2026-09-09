@@ -5,7 +5,7 @@ import { uploadDocument, reviewDocument, addDocumentRequirement, deleteDocumentR
 import { formatDateOnly } from "@/lib/formatDate";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Input, Select } from "@/components/ui/Input";
+import { Input } from "@/components/ui/Input";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DOCUMENT_STATUS_TONE, DOCUMENT_STATUS_LABELS } from "@/lib/constants";
 import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
@@ -22,29 +22,18 @@ export type DocRow = {
   name?: string | null;
 };
 
-const REQUIREMENT_CATEGORIES = [
-  "admission",
-  "interview",
-  "attestation",
-  "visa",
-  "scholarship",
-  "scholarship_documents",
-  "italian_translations",
-  "visa_sticker",
-  "travel",
-  "enrollment",
-  "other",
-];
-
 function UploadRow({
   doc,
   studentId,
   revalidateTo,
   number,
+  canManage,
 }: {
   doc: DocRow;
   studentId: string;
   revalidateTo: string;
+  /** Whether this viewer may delete the requirement (and its file). */
+  canManage: boolean;
   /** Position within the whole checklist, e.g. "2.3" for the third document
    *  of the second section. */
   number?: string;
@@ -132,9 +121,18 @@ function UploadRow({
         <Button type="button" variant="danger" size="sm" onClick={() => review("rejected")} disabled={!doc.file_path || reviewPending}>
           Reject
         </Button>
-        <Button type="button" variant="outline" size="sm" onClick={remove} disabled={reviewPending} title="Remove this document from the checklist">
-          🗑️
-        </Button>
+        {canManage && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={remove}
+            disabled={reviewPending}
+            title="Remove this requirement from the checklist"
+          >
+            🗑️
+          </Button>
+        )}
       </div>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
       {reviewError && <p className="text-xs text-danger">{reviewError}</p>}
@@ -142,33 +140,57 @@ function UploadRow({
   );
 }
 
+// One per section, with the section fixed rather than chosen from a dropdown.
+// It used to be a single form at the foot of the page whose category had to be
+// picked from a list of raw keys, which meant scrolling away from the section
+// you were looking at and then naming it again from memory.
 function AddRequirementForm({
   studentId,
   applicationId,
   revalidateTo,
+  category,
+  categoryLabel,
 }: {
   studentId: string;
   applicationId: string | null;
   revalidateTo: string;
+  category: string;
+  categoryLabel: string;
 }) {
   const action = addDocumentRequirement.bind(null, studentId, applicationId, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
+  const [open, setOpen] = useState(false);
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="my-3 text-xs font-medium text-primary hover:underline"
+      >
+        + Add requirement
+      </button>
+    );
+  }
 
   return (
-    <form action={formAction} className="mt-3 flex flex-wrap items-end gap-2 border-t border-border pt-3">
-      <Input name="name" placeholder="Document name" required className="w-auto" />
-      <Select name="category" className="w-auto">
-        {REQUIREMENT_CATEGORIES.map((c) => (
-          <option key={c} value={c}>
-            {c}
-          </option>
-        ))}
-      </Select>
-      <Input name="deadline" type="date" className="w-auto" />
+    <form action={formAction} className="my-3 flex flex-wrap items-end gap-2 border-t border-border pt-3">
+      <input type="hidden" name="category" value={category} />
+      <label className="flex flex-col gap-1 text-xs text-muted">
+        Requirement for {categoryLabel}
+        <Input name="name" placeholder="e.g. Police clearance certificate" required autoFocus className="w-64" />
+      </label>
+      <label className="flex flex-col gap-1 text-xs text-muted">
+        Due (optional)
+        <Input name="deadline" type="date" className="w-auto" />
+      </label>
       <Button type="submit" variant="primary" size="sm" pending={pending}>
-        Add requirement
+        Add
       </Button>
-      {state?.error && <p className="text-xs text-danger">{state.error}</p>}
+      <button type="button" onClick={() => setOpen(false)} className="pb-2 text-xs text-muted hover:underline">
+        Cancel
+      </button>
+      {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
     </form>
   );
 }
@@ -180,6 +202,8 @@ export function DocumentChecklist({
   revalidateTo,
   emptyMessage = "No documents required yet.",
   interviewSection = null,
+  canManage = false,
+  sections,
 }: {
   docs: DocRow[];
   studentId: string;
@@ -187,24 +211,52 @@ export function DocumentChecklist({
   revalidateTo: string;
   emptyMessage?: string;
   interviewSection?: React.ReactNode;
+  /** Super Admin / Processing: may add and delete requirements. */
+  canManage?: boolean;
+  /**
+   * The sections this student's destinations ask for, in the order the
+   * builder put them. Falls back to the built-in order when not supplied, so
+   * the student portal and any caller that has not been updated still render.
+   */
+  sections?: { key: string; label: string }[];
 }) {
   const grouped = new Map<string, DocRow[]>();
   for (const doc of docs) {
     const cat = doc.category ?? "other";
     (grouped.get(cat) ?? grouped.set(cat, []).get(cat)!).push(doc);
   }
-  const uncategorized = docs.filter((d) => !d.category || !(CATEGORY_ORDER as readonly string[]).includes(d.category));
+  // Section order and labels come from the builder when the caller supplies
+  // them, so a section created in Setup shows up here under its own name
+  // instead of falling through to the hardcoded list.
+  const order: { key: string; label: string }[] =
+    sections && sections.length > 0
+      ? sections
+      : CATEGORY_ORDER.map((c) => ({ key: c as string, label: CATEGORY_LABELS[c] ?? c }));
 
-  // Build the sections that will actually render, in CATEGORY_ORDER, so the
-  // numbering below can run 1..n over them without gaps.
-  const visibleSections = CATEGORY_ORDER.flatMap((cat) => {
-    if (cat === "interview") {
-      return interviewSection ? [{ key: "interview", label: "Interview", docs: [] as DocRow[] }] : [];
+  const known = new Set(order.map((o) => o.key));
+  const uncategorized = docs.filter((d) => !d.category || !known.has(d.category));
+
+  // Only the sections that will actually render, so the numbering runs 1..n
+  // without gaps.
+  const visibleSections = order.flatMap((entry) => {
+    if (entry.key === "interview") {
+      return interviewSection ? [{ key: "interview", label: entry.label, docs: [] as DocRow[] }] : [];
     }
-    const catDocs = cat === "other" ? [...(grouped.get("other") ?? []), ...uncategorized] : (grouped.get(cat) ?? []);
-    if (catDocs.length === 0) return [];
-    return [{ key: cat as string, label: CATEGORY_LABELS[cat] ?? cat, docs: catDocs }];
+    const catDocs =
+      entry.key === "other" ? [...(grouped.get("other") ?? []), ...uncategorized] : (grouped.get(entry.key) ?? []);
+    // An empty section is still shown to whoever can add to it — that is where
+    // the "Add requirement" button lives, and a section with nothing in it is
+    // exactly the one that needs something adding.
+    if (catDocs.length === 0 && !canManage) return [];
+    return [{ key: entry.key, label: entry.label, docs: catDocs }];
   });
+
+  // A requirement filed under a section this student's destinations do not
+  // carry would otherwise be invisible. "other" already absorbs those, but if
+  // "other" itself is not in the order, add it rather than lose the rows.
+  if (uncategorized.length > 0 && !visibleSections.some((v) => v.key === "other")) {
+    visibleSections.push({ key: "other", label: CATEGORY_LABELS.other ?? "Other", docs: uncategorized });
+  }
 
   return (
     <div>
@@ -242,9 +294,22 @@ export function DocumentChecklist({
                           studentId={studentId}
                           revalidateTo={revalidateTo}
                           number={`${n}.${j + 1}`}
+                          canManage={canManage}
                         />
                       ))}
+                      {section.docs.length === 0 && (
+                        <p className="py-3 text-xs text-muted">Nothing required here yet.</p>
+                      )}
                     </div>
+                  )}
+                  {canManage && section.key !== "interview" && (
+                    <AddRequirementForm
+                      studentId={studentId}
+                      applicationId={applicationId}
+                      revalidateTo={revalidateTo}
+                      category={section.key}
+                      categoryLabel={section.label}
+                    />
                   )}
                 </div>
               </section>
@@ -252,7 +317,6 @@ export function DocumentChecklist({
           })}
         </div>
       )}
-      <AddRequirementForm studentId={studentId} applicationId={applicationId} revalidateTo={revalidateTo} />
     </div>
   );
 }

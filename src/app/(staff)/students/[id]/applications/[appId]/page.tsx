@@ -11,6 +11,8 @@ import { LinksContactForm } from "./LinksContactForm";
 import { listTrackerDefinitions } from "@/lib/actions/countryTracker";
 import { DocumentChecklist, type DocRow } from "@/components/DocumentChecklist";
 import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
+import { loadStudentChecklistSections } from "@/lib/studentChecklistSections";
+import { hasPermission } from "@/lib/auth/permissions";
 import { InterviewSection } from "@/components/InterviewSection";
 
 function one<T>(v: T | T[] | null) {
@@ -45,6 +47,11 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
   const revalidateTo = `/students/${id}/applications/${appId}`;
 
   await ensureStudentDocumentRequirements(id);
+
+  const [sections, canManage] = await Promise.all([
+    loadStudentChecklistSections(supabase, id),
+    hasPermission("documents.manage_requirements"),
+  ]);
 
   const [{ data: tasks }, { data: rawDocs }, { data: interview }] = await Promise.all([
     supabase
@@ -133,6 +140,8 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
           studentId={id}
           applicationId={appId}
           revalidateTo={revalidateTo}
+          sections={sections}
+          canManage={canManage}
           interviewSection={
             <InterviewSection
               applicationId={appId}

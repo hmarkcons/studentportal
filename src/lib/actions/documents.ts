@@ -5,6 +5,9 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sanitizeFilename, validateDocumentFile } from "@/lib/documentUpload";
 import { profileDerivedRequirements, reconcileDerived } from "@/lib/documentChecklist";
+import { requirePermission } from "@/lib/auth/permissions";
+
+const MANAGE_DENIED = "Only Super Admin and the Processing team can add or remove document requirements.";
 
 // The static document_templates checklist (Passport copy, Academic
 // transcripts, ...) previously had no auto-population anywhere — staff had
@@ -180,6 +183,13 @@ export async function reviewDocument(documentId: string, revalidateTo: string, s
   } = await supabase.auth.getUser();
 
   const trimmedReason = reason?.trim() || null;
+  // Approving needs no reason; rejecting does. A rejection with no reason
+  // leaves the student staring at "Rejected" with nothing to act on, and they
+  // cannot ask the document what was wrong with it.
+  if (status === "rejected" && !trimmedReason) {
+    return { error: "Give a reason for the rejection — the student sees it and needs to know what to fix." };
+  }
+
   const { error } = await supabase
     .from("student_documents")
     .update({
@@ -196,6 +206,9 @@ export async function reviewDocument(documentId: string, revalidateTo: string, s
 }
 
 export async function deleteDocumentRequirement(documentId: string, revalidateTo: string) {
+  const denied = await requirePermission("documents.manage_requirements", MANAGE_DENIED);
+  if (denied) return { error: denied.error };
+
   const supabase = await createClient();
 
   const { data: doc } = await supabase.from("student_documents").select("file_path").eq("id", documentId).maybeSingle();
@@ -224,6 +237,9 @@ export async function addDocumentRequirement(
   _prevState: unknown,
   formData: FormData
 ) {
+  const denied = await requirePermission("documents.manage_requirements", MANAGE_DENIED);
+  if (denied) return { error: denied.error };
+
   const supabase = await createClient();
   const category = String(formData.get("category") ?? "other");
   const name = String(formData.get("name") ?? "").trim();

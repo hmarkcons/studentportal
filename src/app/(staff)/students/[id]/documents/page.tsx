@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { DocumentChecklist, type DocRow } from "@/components/DocumentChecklist";
 import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
+import { loadStudentChecklistSections } from "@/lib/studentChecklistSections";
+import { hasPermission } from "@/lib/auth/permissions";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -12,6 +14,11 @@ export default async function StudentDocumentsTab(props: PageProps<"/students/[i
   const supabase = await createClient();
 
   await ensureStudentDocumentRequirements(id);
+
+  const [sections, canManage] = await Promise.all([
+    loadStudentChecklistSections(supabase, id),
+    hasPermission("documents.manage_requirements"),
+  ]);
 
   const { data: applications } = await supabase
     .from("applications")
@@ -43,7 +50,14 @@ export default async function StudentDocumentsTab(props: PageProps<"/students/[i
   return (
     <Card>
       <h3 className="mb-3 text-sm font-medium text-ink">All documents</h3>
-      <DocumentChecklist docs={docsWithUrls} studentId={id} applicationId={null} revalidateTo={`/students/${id}/documents`} />
+      <DocumentChecklist
+        docs={docsWithUrls}
+        studentId={id}
+        applicationId={null}
+        revalidateTo={`/students/${id}/documents`}
+        sections={sections}
+        canManage={canManage}
+      />
     </Card>
   );
 }
