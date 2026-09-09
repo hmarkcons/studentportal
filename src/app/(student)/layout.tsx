@@ -33,6 +33,20 @@ export default async function StudentLayout({ children }: { children: React.Reac
     ? STUDENT_NAV.filter((item) => Boolean(item.href) && isGateAllowedPath(item.href!))
     : STUDENT_NAV;
 
+  // Scholarship is only in the menu for a student who has one to look at.
+  // Row-level security returns their scholarships only once the application's
+  // pre-enrolment is finalised, so this asks the same question the page will:
+  // an empty entry would be a dead end for everyone applying outside Italy,
+  // which is most of them.
+  const { count: scholarshipCount } = await supabase
+    .from("student_scholarships")
+    .select("id", { count: "exact", head: true })
+    .eq("student_id", studentRow.id);
+  const withScholarship =
+    !gate.locked && (scholarshipCount ?? 0) > 0
+      ? [...visible, { label: "Scholarship", href: "/portal/scholarship", icon: "🎓" }]
+      : visible;
+
   // A message from their counsellor is worth surfacing in the menu — the whole
   // point of the channel is that the student does not have to think to look.
   const unread = await countUnreadMessages(supabase, studentRow.id, "student");
@@ -51,7 +65,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
     "/portal/messages": unread,
     "/portal/support": unreadTickets,
   };
-  const nav = visible.map((i) => {
+  const nav = withScholarship.map((i) => {
     const badge = i.href ? badges[i.href] ?? 0 : 0;
     return badge > 0 ? { ...i, badge } : i;
   });

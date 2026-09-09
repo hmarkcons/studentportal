@@ -205,17 +205,17 @@ export function ScholarshipSection({
       <div className="mb-3">
         <label className="flex items-start gap-2 text-sm text-ink">
           <input type="checkbox" checked={finalized} onChange={handleFinalizedChange} disabled={!canManage} className="mt-1" />
-          {/* The old label said this "controls what the student can see for
-              this application's Scholarship Region". It does not: there is no
-              scholarship page in the student portal, so the tick gated
-              nothing. It is a record of where the application has got to, and
-              now says so rather than promising something that does not
-              happen. */}
+          {/* This really does gate what the student sees, at the database:
+              student_scholarships_select grants a student their own rows only
+              once the application's pre-enrolment is finalised. That policy was
+              written for a portal page that had never been built, so the tick
+              controlled a view nobody could reach — the page exists now, and
+              the wording says plainly what ticking it does. */}
           <span>
             Pre-enrollment finalized on Universitaly.it
             <span className="block text-xs text-muted">
-              Recorded against this application. Most regional bodies will not process a DSU application until it is
-              done.
+              Until this is ticked the student sees nothing on their Scholarship page. Most regional bodies will not
+              process a DSU application before it is done.
             </span>
           </span>
         </label>
