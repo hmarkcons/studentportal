@@ -5,6 +5,7 @@ import { updateInventoryItem, deleteInventoryItem } from "@/lib/actions/inventor
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { isLowStock } from "@/lib/inventory";
 
 type Item = {
   id: string;
@@ -28,7 +29,7 @@ export function ItemRow({ item, canManage }: { item: Item; canManage: boolean })
     if (result?.error) setDeleteError(result.error);
   }
 
-  const low = item.low_stock_threshold != null && item.quantity_on_hand <= item.low_stock_threshold;
+  const low = isLowStock(item.quantity_on_hand, item.low_stock_threshold);
 
   if (editing) {
     return (
@@ -38,8 +39,16 @@ export function ItemRow({ item, canManage }: { item: Item; canManage: boolean })
             <Input name="name" defaultValue={item.name} required />
             <Input name="category" defaultValue={item.category ?? ""} />
             <Input name="unit" defaultValue={item.unit ?? ""} className="w-28" />
-            <Input name="quantity_on_hand" type="number" defaultValue={item.quantity_on_hand} className="w-28" />
-            <Input name="low_stock_threshold" type="number" defaultValue={item.low_stock_threshold ?? ""} className="w-32" />
+            <Input name="quantity_on_hand" type="number" min="0" step="1" defaultValue={item.quantity_on_hand} className="w-28" />
+            <Input
+              name="low_stock_threshold"
+              type="number"
+              min="0"
+              step="1"
+              defaultValue={item.low_stock_threshold ?? ""}
+              placeholder="Blank = no warning"
+              className="w-40"
+            />
             <Button type="submit" variant="primary" size="sm" pending={pending}>
               Save
             </Button>

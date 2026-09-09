@@ -4,6 +4,11 @@ import { useState } from "react";
 import { updateInventoryRequestStatus } from "@/lib/actions/inventory";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
+import {
+  INVENTORY_REQUEST_STATUS_TONE,
+  inventoryRequestStatusLabel,
+  type InventoryRequestStatus,
+} from "@/lib/inventory";
 
 type Request = {
   id: string;
@@ -11,10 +16,9 @@ type Request = {
   status: string;
   notes: string | null;
   itemName: string;
+  itemDeleted?: boolean;
   requesterName: string;
 };
-
-const TONE: Record<string, "success" | "warning" | "danger"> = { pending: "warning", fulfilled: "success", rejected: "danger" };
 
 function RequestRow({ request, canManage }: { request: Request; canManage: boolean }) {
   const [error, setError] = useState<string | null>(null);
@@ -31,12 +35,18 @@ function RequestRow({ request, canManage }: { request: Request; canManage: boole
   return (
     <div className="py-2 text-sm">
       <div className="flex items-center justify-between">
-        <span className="text-ink">
-          {request.itemName} × {request.quantity} <span className="text-muted">· {request.requesterName}</span>
+        <span className="min-w-0 text-ink">
+          {request.itemName} × {request.quantity}
+          {request.itemDeleted && <span className="ml-1 text-xs text-muted">(item since removed)</span>}
+          <span className="text-muted"> · {request.requesterName}</span>
           {request.notes && <span className="text-muted"> · {request.notes}</span>}
         </span>
-        <div className="flex items-center gap-2">
-          <Badge tone={TONE[request.status] ?? "neutral"}>{request.status}</Badge>
+        <div className="flex shrink-0 items-center gap-2">
+          {/* Was the raw value: a row read "pending" rather than "Awaiting
+              decision". */}
+          <Badge tone={INVENTORY_REQUEST_STATUS_TONE[request.status as InventoryRequestStatus] ?? "neutral"}>
+            {inventoryRequestStatusLabel(request.status)}
+          </Badge>
           {canManage && request.status === "pending" && (
             <>
               <button onClick={() => handleDecide("fulfilled")} disabled={!!pending} className="text-xs text-success hover:underline disabled:opacity-50">
@@ -57,11 +67,39 @@ function RequestRow({ request, canManage }: { request: Request; canManage: boole
 export function RequestQueue({ requests, canManage }: { requests: Request[]; canManage: boolean }) {
   if (requests.length === 0) return <EmptyState>No requests yet.</EmptyState>;
 
+  const pending = requests.filter((r) => r.status === "pending");
+  const decided = requests.filter((r) => r.status !== "pending");
+
   return (
-    <div className="flex flex-col divide-y divide-border">
-      {requests.map((r) => (
-        <RequestRow key={r.id} request={r} canManage={canManage} />
-      ))}
+    <div className="flex flex-col gap-4">
+      {/* Open requests first and counted: they are the only ones anybody has
+          to act on, and they used to be mixed into the settled history in
+          date order. */}
+      <div>
+        <h4 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">
+          Awaiting decision ({pending.length})
+        </h4>
+        {pending.length === 0 ? (
+          <p className="py-2 text-sm text-muted">Nothing waiting.</p>
+        ) : (
+          <div className="flex flex-col divide-y divide-border">
+            {pending.map((r) => (
+              <RequestRow key={r.id} request={r} canManage={canManage} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {decided.length > 0 && (
+        <div>
+          <h4 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">Decided</h4>
+          <div className="flex flex-col divide-y divide-border">
+            {decided.map((r) => (
+              <RequestRow key={r.id} request={r} canManage={canManage} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
