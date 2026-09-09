@@ -13,7 +13,7 @@ import { DocumentChecklist, type DocRow } from "@/components/DocumentChecklist";
 import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
 import { loadStudentChecklistSections } from "@/lib/studentChecklistSections";
 import { hasPermission } from "@/lib/auth/permissions";
-import { InterviewSection } from "@/components/InterviewSection";
+import { InterviewSection, type InterviewRow } from "@/components/InterviewSection";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -48,12 +48,13 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
 
   await ensureStudentDocumentRequirements(id);
 
-  const [sections, canManage] = await Promise.all([
+  const [sections, canManage, canManageInterviews] = await Promise.all([
     loadStudentChecklistSections(supabase, id),
     hasPermission("documents.manage_requirements"),
+    hasPermission("interviews.manage"),
   ]);
 
-  const [{ data: tasks }, { data: rawDocs }, { data: interview }] = await Promise.all([
+  const [{ data: tasks }, { data: rawDocs }, { data: interviews }] = await Promise.all([
     supabase
       .from("application_tasks")
       .select("id, description, due_date, status, priority")
@@ -70,10 +71,21 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
       .returns<(DocRow & { custom_name: string | null; application_id: string | null; template: { name: string } | { name: string }[] | null })[]>(),
     supabase
       .from("application_interviews")
-      .select("university_name, program_name, interview_details, interview_link, available_slots, confirmed_datetime")
+      .select(
+        "id, round_label, confirmed_datetime, timezone, platform, platform_other, status, interview_details, interview_link, preparation_notes, credentials:application_interview_credentials(login_username, login_password, login_instructions, share_with_student)"
+      )
       .eq("application_id", appId)
-      .maybeSingle(),
+      .order("confirmed_datetime", { ascending: true, nullsFirst: false }),
   ]);
+
+  // PostgREST returns an embedded one-to-one row as an object or a
+  // single-element array depending on the relationship it infers, so both are
+  // flattened before the component sees them.
+  const interviewRows = (interviews ?? []).map((i) => {
+    const embedded = i.credentials as unknown;
+    const credentials = (Array.isArray(embedded) ? embedded[0] : embedded) ?? null;
+    return { ...i, credentials } as InterviewRow;
+  });
 
   function one2<T>(v: T | T[] | null) {
     return Array.isArray(v) ? v[0] ?? null : v;
@@ -151,11 +163,8 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
             <InterviewSection
               applicationId={appId}
               revalidateTo={revalidateTo}
-              data={
-                interview
-                  ? interview
-                  : { university_name: university?.name ?? null, program_name: program?.name ?? null, interview_details: null, interview_link: null, available_slots: [], confirmed_datetime: null }
-              }
+              interviews={interviewRows}
+              canManage={canManageInterviews}
             />
           }
         />

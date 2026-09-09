@@ -21,6 +21,7 @@ export const PERMISSION_KEYS = [
   "document_trackers.manage",
   "document_checklist.manage",
   "documents.manage_requirements",
+  "interviews.manage",
   "inventory.manage",
 ] as const;
 

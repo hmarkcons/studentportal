@@ -3,7 +3,8 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatDateOnly } from "@/lib/formatDate";
-import { loadAppointments, daysUntil } from "@/lib/portalAppointments";
+import { loadAppointments, daysUntil, type PortalAppointment } from "@/lib/portalAppointments";
+import { interviewTimes, platformLabel, interviewStatusLabel } from "@/lib/interviews";
 
 // Appointments come from the documentation tracker, the same place as the Visa
 // tab. They used to be read from visa_records, which is the pre-tracker system:
@@ -82,13 +83,10 @@ export default async function PortalAppointmentsPage() {
   );
 }
 
-function Row({
-  appointment,
-  muted = false,
-}: {
-  appointment: { label: string; country: string; where: string; date: string };
-  muted?: boolean;
-}) {
+function Row({ appointment, muted = false }: { appointment: PortalAppointment; muted?: boolean }) {
+  const interview = appointment.interview;
+  const times = interview ? interviewTimes(interview.at, interview.timezone) : null;
+
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-3 text-sm">
       <div className="min-w-0">
@@ -97,6 +95,64 @@ function Row({
           {appointment.country}
           {appointment.where && ` · ${appointment.where}`}
         </p>
+
+        {interview && (
+          <div className="mt-1 flex flex-col gap-1">
+            {/* Your own time first, and the university's alongside it. A time
+                quoted as "14:00" by a university in Rome is 18:00 here, and
+                working that out is not the student's job. */}
+            {times && (
+              <p className="text-xs">
+                <span className="font-medium text-ink">{times.studentTime}</span>
+                <span className="text-muted"> your time</span>
+                {!times.sameZone && (
+                  <span className="text-muted">
+                    {" "}
+                    · {times.universityTime} {times.universityZoneLabel}
+                  </span>
+                )}
+              </p>
+            )}
+            <p className="text-xs text-muted">
+              {platformLabel(interview.platform, interview.platformOther)} · {interviewStatusLabel(interview.status)}
+            </p>
+            {interview.link && (
+              <a
+                href={interview.link}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs font-medium text-primary hover:underline"
+              >
+                Joining link &rarr;
+              </a>
+            )}
+            {interview.details && <p className="text-xs text-muted">{interview.details}</p>}
+            {interview.preparation && (
+              <p className="text-xs text-muted">
+                <span className="text-ink">To prepare:</span> {interview.preparation}
+              </p>
+            )}
+            {/* Only ever present when staff chose to share it — row-level
+                security returns this row to a student on no other terms, so
+                there is nothing to hide here. */}
+            {interview.credentials && (
+              <div className="mt-1 rounded-md border border-border bg-bg px-2 py-1.5 text-xs">
+                <p className="font-medium text-ink">Your login for this interview</p>
+                {interview.credentials.username && (
+                  <p className="text-muted">
+                    Username / meeting ID: <span className="font-mono text-ink">{interview.credentials.username}</span>
+                  </p>
+                )}
+                {interview.credentials.password && (
+                  <p className="text-muted">
+                    Password: <span className="font-mono text-ink">{interview.credentials.password}</span>
+                  </p>
+                )}
+                {interview.credentials.instructions && <p className="text-muted">{interview.credentials.instructions}</p>}
+              </div>
+            )}
+          </div>
+        )}
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {/* Spelled-out month: this is a date a student has to turn up on, and
