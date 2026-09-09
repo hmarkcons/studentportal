@@ -15,7 +15,9 @@ type PartnerApplicationRow = {
   application_deadline: string | null;
   student_email: string | null;
   student_phone: string | null;
-  documents_summary: Record<string, string> | null;
+  // An array since 0154 — see the detail page for why the category→status map
+  // had to go. Declared for the RPC's shape; this page does not render it.
+  documents_summary: { name: string; status: string }[] | null;
 };
 
 // Approximates the year an application reached 'enrolled', since

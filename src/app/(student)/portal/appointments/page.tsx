@@ -5,6 +5,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { formatDateOnly } from "@/lib/formatDate";
 import { loadAppointments, daysUntil, type PortalAppointment } from "@/lib/portalAppointments";
 import { interviewTimes, platformLabel, interviewStatusLabel } from "@/lib/interviews";
+import { addedLine, changedLine } from "@/lib/activityStamp";
 
 // Appointments come from the documentation tracker, the same place as the Visa
 // tab. They used to be read from visa_records, which is the pre-tracker system:
@@ -151,6 +152,21 @@ function Row({ appointment, muted = false }: { appointment: PortalAppointment; m
                 {interview.credentials.instructions && <p className="text-muted">{interview.credentials.instructions}</p>}
               </div>
             )}
+            {/* When HMARK put this interview on the record, and — when the row
+                has since been edited — when the details last moved. Without the
+                second line a rescheduled interview looks exactly like the
+                original, and a student has no way to tell the time changed. */}
+            {(() => {
+              const added = addedLine(interview.addedAt, "Added by HMARK");
+              const changed = changedLine(interview.addedAt, interview.changedAt, "Last updated");
+              if (!added && !changed) return null;
+              return (
+                <p className="flex flex-col gap-0.5 text-xs text-muted">
+                  {added && <span>{added}</span>}
+                  {changed && <span>{changed}</span>}
+                </p>
+              );
+            })()}
           </div>
         )}
       </div>

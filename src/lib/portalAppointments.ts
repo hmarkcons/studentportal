@@ -35,6 +35,9 @@ export type PortalAppointment = {
     details: string | null;
     link: string | null;
     preparation: string | null;
+    /** When staff put the interview on the record, and when it last changed. */
+    addedAt: string | null;
+    changedAt: string | null;
     credentials: {
       username: string | null;
       password: string | null;
@@ -127,7 +130,7 @@ export async function loadAppointments(supabase: SupabaseClient, studentId: stri
   const { data: interviews } = await supabase
     .from("application_interviews")
     .select(
-      "id, round_label, confirmed_datetime, timezone, platform, platform_other, status, interview_details, interview_link, preparation_notes, application:applications!inner(student_id, university:universities(name, destination:destinations(display_name))), credentials:application_interview_credentials(login_username, login_password, login_instructions)"
+      "id, round_label, confirmed_datetime, timezone, platform, platform_other, status, interview_details, interview_link, preparation_notes, created_at, updated_at, application:applications!inner(student_id, university:universities(name, destination:destinations(display_name))), credentials:application_interview_credentials(login_username, login_password, login_instructions)"
     )
     .eq("application.student_id", studentId)
     .not("confirmed_datetime", "is", null)
@@ -160,6 +163,8 @@ export async function loadAppointments(supabase: SupabaseClient, studentId: stri
         details: i.interview_details,
         link: i.interview_link,
         preparation: i.preparation_notes,
+        addedAt: i.created_at as string | null,
+        changedAt: i.updated_at as string | null,
         credentials: cred
           ? {
               username: cred.login_username ?? null,

@@ -21,6 +21,7 @@ import {
   platformNeedsName,
   type InterviewStatus,
 } from "@/lib/interviews";
+import { addedLine, changedLine } from "@/lib/activityStamp";
 
 export type InterviewCredentials = {
   login_username: string | null;
@@ -40,8 +41,23 @@ export type InterviewRow = {
   interview_details: string | null;
   interview_link: string | null;
   preparation_notes: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
   credentials: InterviewCredentials;
 };
+
+/** When the interview was put on the record, and when it last changed. */
+function ActivityStamps({ interview, label = "Added" }: { interview: InterviewRow; label?: string }) {
+  const added = addedLine(interview.created_at, label);
+  const changed = changedLine(interview.created_at, interview.updated_at);
+  if (!added && !changed) return null;
+  return (
+    <p className="mt-1 flex flex-col gap-0.5 text-xs text-muted">
+      {added && <span>{added}</span>}
+      {changed && <span>{changed}</span>}
+    </p>
+  );
+}
 
 function TimeReadings({ interview }: { interview: InterviewRow }) {
   const times = interviewTimes(interview.confirmed_datetime, interview.timezone);
@@ -319,6 +335,7 @@ function InterviewCard({
           )}
         </p>
       )}
+      <ActivityStamps interview={interview} />
       {error && <p className="mt-1 text-xs text-danger">{error}</p>}
     </div>
   );

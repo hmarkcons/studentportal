@@ -73,7 +73,7 @@ test("both readings are shown, and they are the same instant", () => {
   // more thing to misread on an appointment that cannot be rescheduled.
   const iso = localWallTimeToInstant("2026-11-28T14:00", "Europe/Rome");
   const t = interviewTimes(iso, "Europe/Rome");
-  assert.match(t.studentTime, /28 Nov 2026/);
+  assert.match(t.studentTime, /Nov 28, 2026/);
   assert.match(t.studentTime, /18:00/);
   assert.equal(t.universityTime, "14:00");
   assert.equal(t.sameZone, false);
@@ -94,12 +94,12 @@ test("a student's reading can fall on the next day, and says so", () => {
   // reading only "21:00" would show up a day late.
   const iso = localWallTimeToInstant("2026-11-28T21:00", "America/New_York");
   const t = interviewTimes(iso, "America/New_York");
-  assert.match(t.studentTime, /29 Nov 2026/, `student sees ${t.studentTime}`);
+  assert.match(t.studentTime, /Nov 29, 2026/, `student sees ${t.studentTime}`);
   assert.match(t.studentTime, /07:00/, "two digits, so 07:00 cannot read as the evening");
   assert.equal(t.differentDay, true);
   // The university's date comes along, or "29 Nov ... 21:00" reads as a
   // contradiction.
-  assert.match(t.universityTime, /28 Nov/, `university reading was "${t.universityTime}"`);
+  assert.match(t.universityTime, /Nov 28/, `university reading was "${t.universityTime}"`);
   assert.match(t.universityTime, /21:00/);
 });
 
@@ -118,7 +118,7 @@ test("the offered zones cover every destination and are all real", () => {
   for (const z of ["Asia/Karachi", "Europe/Rome", "Europe/London", "America/New_York", "Australia/Sydney", "UTC"]) {
     assert.equal(isInterviewTimezone(z), true, z);
     // A bad IANA name throws here, which is the point of checking.
-    assert.doesNotThrow(() => new Date().toLocaleString("en-GB", { timeZone: z }), z);
+    assert.doesNotThrow(() => new Date().toLocaleString("en-US", { timeZone: z }), z);
   }
   assert.equal(isInterviewTimezone("Europe/Nowhere"), false);
   assert.equal(STUDENT_TIMEZONE, "Asia/Karachi");

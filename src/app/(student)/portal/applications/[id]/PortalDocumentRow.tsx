@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { DOCUMENT_STATUS_TONE, DOCUMENT_STATUS_LABELS } from "@/lib/constants";
 import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
+import { uploadedLine, reviewedLine, type UploaderRole } from "@/lib/activityStamp";
 
 const LONG_DATE: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", year: "numeric" };
 
@@ -24,6 +25,9 @@ export function PortalDocumentRow({
     rejected_reason: string | null;
     fileUrl?: string | null;
     deadline: string | null;
+    uploaded_at?: string | null;
+    uploaded_by_role?: UploaderRole | null;
+    verified_at?: string | null;
   };
   studentId: string;
   revalidateTo: string;
@@ -69,6 +73,19 @@ export function PortalDocumentRow({
             </a>
           )}
         </div>
+        {/* When it arrived and when it was looked at. A student could not
+            previously tell whether the file they sent had reached anyone, or
+            how long it had been sitting unreviewed. Staff names are not shown
+            here — the student is dealing with HMARK, not one employee. */}
+        <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted">
+          {uploadedLine({ at: doc.uploaded_at, byRole: doc.uploaded_by_role, audience: "student" }) && (
+            <span>{uploadedLine({ at: doc.uploaded_at, byRole: doc.uploaded_by_role, audience: "student" })}</span>
+          )}
+          {reviewedLine(doc.verified_at, doc.status, "student") && (
+            <span>{reviewedLine(doc.verified_at, doc.status, "student")}</span>
+          )}
+        </div>
+
         {doc.status === "rejected" && (
           <p className="mt-1 text-xs text-danger">
             {doc.rejected_reason

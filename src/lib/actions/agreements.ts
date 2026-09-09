@@ -412,7 +412,15 @@ export async function uploadSignedAgreement(agreementId: string, studentId: stri
 
   const { error } = await supabase
     .from("agreements")
-    .update({ signed_file_path: path, status: "signed", email_verified })
+    // updated_at moves on every later change to the row, including a staff
+    // review, so it cannot say when the signed agreement itself arrived. The
+    // artefact gets its own stamp (0154).
+    .update({
+      signed_file_path: path,
+      status: "signed",
+      email_verified,
+      signed_file_uploaded_at: new Date().toISOString(),
+    })
     .eq("id", agreementId);
 
   if (error) return { error: error.message };

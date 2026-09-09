@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { UploadExchangeForm } from "./UploadExchangeForm";
+import { uploadedLine } from "@/lib/activityStamp";
 
 export default async function PartnerDocumentsPage() {
   const supabase = await createClient();
@@ -13,7 +14,7 @@ export default async function PartnerDocumentsPage() {
 
   const { data: docs } = await supabase
     .from("partner_document_exchange")
-    .select("id, file_path, description, created_at")
+    .select("id, file_path, description, created_at, uploaded_by_partner, uploaded_by_staff")
     .eq("university_id", account.university_id)
     .order("created_at", { ascending: false });
 
@@ -33,9 +34,21 @@ export default async function PartnerDocumentsPage() {
       </Card>
       <div className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
         {(docs ?? []).map((d) => (
-          <div key={d.id} className="flex items-center justify-between px-4 py-3 text-sm">
-            <span className="text-ink">{d.description ?? "Document"}</span>
-            <a href={links.get(d.id)} target="_blank" rel="noreferrer" className="text-primary underline">
+          <div key={d.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+            <span className="min-w-0">
+              <span className="block text-ink">{d.description ?? "Document"}</span>
+              {/* created_at was selected all along and never rendered, so
+                  neither side could tell when a document had been shared or
+                  which of them had shared it. */}
+              <span className="block text-xs text-muted">
+                {uploadedLine({
+                  at: d.created_at,
+                  byRole: d.uploaded_by_partner ? "partner" : d.uploaded_by_staff ? "staff" : null,
+                  audience: "partner",
+                })}
+              </span>
+            </span>
+            <a href={links.get(d.id)} target="_blank" rel="noreferrer" className="shrink-0 text-primary underline">
               View
             </a>
           </div>

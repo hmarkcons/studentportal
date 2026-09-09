@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { DOCUMENT_STATUS_TONE, DOCUMENT_STATUS_LABELS } from "@/lib/constants";
 import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
 import { CATEGORY_ORDER, CATEGORY_LABELS } from "@/lib/documentCategories";
+import { uploadedLine, reviewedLine, addedLine, type UploaderRole } from "@/lib/activityStamp";
 import { DocumentSectionShell, ExpandAllToggle } from "@/components/DocumentSectionShell";
 
 export type DocRow = {
@@ -21,6 +22,15 @@ export type DocRow = {
   rejected_reason: string | null;
   fileUrl?: string | null;
   name?: string | null;
+  /** When the file arrived, and from which side. Recorded all along; never shown. */
+  uploaded_at?: string | null;
+  uploaded_by_role?: UploaderRole | null;
+  /** When it was reviewed — set whichever way the review went. */
+  verified_at?: string | null;
+  /** When the requirement itself was added to the checklist. */
+  created_at?: string | null;
+  /** Null for a requirement somebody added by hand rather than a template. */
+  template_id?: string | null;
 };
 
 function UploadRow({
@@ -94,6 +104,25 @@ function UploadRow({
         {doc.status === "rejected" && doc.rejected_reason && (
           <p className="mt-1 text-xs text-danger">Reason: {doc.rejected_reason}</p>
         )}
+
+        {/* All three were recorded from the start and none was ever shown, so
+            nobody could tell whether a document had arrived an hour ago or last
+            month. Only lines with something behind them render: an unfilled
+            requirement says nothing rather than "Uploaded by nobody". */}
+        <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted">
+          {uploadedLine({ at: doc.uploaded_at, byRole: doc.uploaded_by_role, audience: "staff" }) && (
+            <span>{uploadedLine({ at: doc.uploaded_at, byRole: doc.uploaded_by_role, audience: "staff" })}</span>
+          )}
+          {reviewedLine(doc.verified_at, doc.status, "staff") && (
+            <span>{reviewedLine(doc.verified_at, doc.status, "staff")}</span>
+          )}
+          {/* Only for a requirement somebody added by hand — for the seeded
+              ones "Added" is just when the checklist was provisioned, which
+              tells nobody anything. */}
+          {!doc.template_id && !doc.uploaded_at && addedLine(doc.created_at, "Requirement added") && (
+            <span>{addedLine(doc.created_at, "Requirement added")}</span>
+          )}
+        </div>
       </div>
 
       {showUploadForm ? (

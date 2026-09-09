@@ -5,6 +5,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { formatDateOnly } from "@/lib/formatDate";
 import { SubmitSignedAgreementForm } from "./SubmitSignedAgreementForm";
 import { evaluateAgreementGate } from "@/lib/portalGate";
+import { uploadedLine } from "@/lib/activityStamp";
 
 // The stored values are draft / pending_signature / signed. Those are database
 // words; a student should be told what is expected of them.
@@ -28,7 +29,7 @@ export default async function PortalAgreementPage() {
   const { data: agreements } = await supabase
     .from("agreements")
     .select(
-      "id, status, version, signed_file_path, video_recording_path, pdf_path, signing_method, created_at, document_status, video_status, document_review_note, video_review_note"
+      "id, status, version, signed_file_path, video_recording_path, pdf_path, signing_method, created_at, document_status, video_status, document_review_note, video_review_note, signed_file_uploaded_at, video_uploaded_at"
     )
     .eq("student_id", student.id)
     .order("created_at", { ascending: false });
@@ -98,6 +99,10 @@ export default async function PortalAgreementPage() {
       <div className="flex flex-col gap-3">
         {(agreements ?? []).map((a) => {
           const awaitingReview = a.status !== "signed" && Boolean(a.signed_file_path && a.video_recording_path);
+          // Who put the file there: an e-signature agreement is uploaded by the
+          // student from this page, a paper one is scanned in at the Karachi
+          // office. Saying "by you" on a paper signing would be wrong.
+          const uploadedBy = a.signing_method === "e_signature" ? "student" : "staff";
           return (
             <Card key={a.id}>
               <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
@@ -129,6 +134,22 @@ export default async function PortalAgreementPage() {
                   >
                     ✍️ View your signed copy
                   </a>
+                )}
+              </div>
+
+              {/* When each half was sent in. A student who uploads on a
+                  deadline day has nothing else to point at: created_at is the
+                  day HMARK generated the agreement, and updated_at moves again
+                  when staff review it. */}
+              <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted">
+                {uploadedLine({ at: a.signed_file_uploaded_at, byRole: uploadedBy, audience: "student" }) && (
+                  <span>
+                    Signed agreement ·{" "}
+                    {uploadedLine({ at: a.signed_file_uploaded_at, byRole: uploadedBy, audience: "student" })}
+                  </span>
+                )}
+                {uploadedLine({ at: a.video_uploaded_at, byRole: uploadedBy, audience: "student" }) && (
+                  <span>Consent video · {uploadedLine({ at: a.video_uploaded_at, byRole: uploadedBy, audience: "student" })}</span>
                 )}
               </div>
 

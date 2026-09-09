@@ -8,6 +8,7 @@ import { AddProgramForm } from "./AddProgramForm";
 import { ImportProgramsForm } from "./ImportProgramsForm";
 import { UniversityEditForm } from "./UniversityEditForm";
 import { ProgramRow } from "./ProgramRow";
+import { uploadedLine } from "@/lib/activityStamp";
 
 export default async function UniversityDetailPage(props: PageProps<"/setup/universities/[id]">) {
   const { id } = await props.params;
@@ -42,6 +43,30 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
   }
 
   const programs = (programsRaw ?? []).map((p) => ({ ...p, commission_rate: one(p.commission_rate) }));
+
+  // What the university has shared with HMARK through its own portal.
+  //
+  // Processing and Super Admin have been able to read this table since 0016 and
+  // no page ever queried it, so a university could upload a brochure or a
+  // template and nobody at HMARK would ever see it — it arrived into a table
+  // with no reader. Restricted to the same two roles the policy names, so the
+  // card is absent rather than empty for anyone else.
+  const canSeeExchange = staffRow?.role === "super_admin" || staffRow?.role === "processing";
+  const { data: exchange } = canSeeExchange
+    ? await supabase
+        .from("partner_document_exchange")
+        .select("id, file_path, description, created_at, intake_label, uploaded_by_partner, uploaded_by_staff")
+        .eq("university_id", id)
+        .order("created_at", { ascending: false })
+    : { data: null };
+
+  const exchangeLinks = new Map<string, string>();
+  await Promise.all(
+    (exchange ?? []).map(async (d) => {
+      const { data } = await supabase.storage.from("documents").createSignedUrl(d.file_path, 3600);
+      if (data?.signedUrl) exchangeLinks.set(d.id, data.signedUrl);
+    })
+  );
 
   return (
     <div className="w-full">
@@ -87,6 +112,47 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
         <AddProgramForm universityId={id} />
         <ImportProgramsForm universityId={id} />
       </Card>
+
+      {canSeeExchange && (
+        <Card className="mt-6">
+          <h3 className="mb-1 text-sm font-medium text-ink">Document exchange</h3>
+          <p className="mb-3 text-xs text-muted">
+            Files this university has shared with HMARK from its own portal, newest first.
+          </p>
+          <div className="flex flex-col divide-y divide-border">
+            {(exchange ?? []).map((d) => (
+              <div key={d.id} className="flex items-start justify-between gap-3 py-2 text-sm">
+                <span className="min-w-0">
+                  <span className="block text-ink">{d.description ?? "Document"}</span>
+                  <span className="block text-xs text-muted">
+                    {uploadedLine({
+                      at: d.created_at,
+                      byRole: d.uploaded_by_partner ? "partner" : d.uploaded_by_staff ? "staff" : null,
+                      audience: "staff",
+                    })}
+                    {d.intake_label ? ` · ${d.intake_label}` : ""}
+                  </span>
+                </span>
+                {exchangeLinks.has(d.id) && (
+                  <a
+                    href={exchangeLinks.get(d.id)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="shrink-0 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                  >
+                    View file
+                  </a>
+                )}
+              </div>
+            ))}
+            {(!exchange || exchange.length === 0) && (
+              <div className="py-2">
+                <EmptyState>Nothing shared by this university yet.</EmptyState>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

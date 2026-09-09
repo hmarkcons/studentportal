@@ -136,9 +136,9 @@ export function timezoneLabel(value: string | null): string {
  * server HTML.
  */
 export type InterviewTimes = {
-  /** e.g. "Sat, 28 Nov 2026, 18:00" */
+  /** e.g. "Sat, Nov 28, 2026, 18:00" */
   studentTime: string;
-  /** The same instant where the university is: "14:00", or "28 Nov, 21:00"
+  /** The same instant where the university is: "14:00", or "Nov 28, 21:00"
    *  when that falls on a different day from the student's reading. */
   universityTime: string;
   universityZoneLabel: string;
@@ -174,8 +174,8 @@ export function interviewTimes(iso: string | null, timezone: string | null): Int
   const differentDay = dayKey(at, STUDENT_TIMEZONE) !== dayKey(at, zone);
 
   return {
-    studentTime: at.toLocaleString("en-GB", { ...DATE_PART, ...TIME_PART, timeZone: STUDENT_TIMEZONE }),
-    universityTime: at.toLocaleString("en-GB", {
+    studentTime: at.toLocaleString("en-US", { ...DATE_PART, ...TIME_PART, timeZone: STUDENT_TIMEZONE }),
+    universityTime: at.toLocaleString("en-US", {
       ...(differentDay ? { day: "numeric", month: "short" } : {}),
       ...TIME_PART,
       timeZone: zone,

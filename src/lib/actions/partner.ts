@@ -34,6 +34,11 @@ export async function partnerUploadLetter(applicationId: string, category: "offe
     file_path: path,
     status: "submitted",
     uploaded_by_role: "partner",
+    // The staff and student upload paths both stamp this; this one did not, so
+    // an offer letter from a university was the one document on file that
+    // nobody could date. uploaded_at has no database default, so the row was
+    // simply left null. A trigger (0154) now backs all three up.
+    uploaded_at: new Date().toISOString(),
   });
 
   if (error) return { error: error.message };

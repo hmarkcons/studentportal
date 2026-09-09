@@ -62,7 +62,9 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
       .order("due_date", { ascending: true }),
     supabase
       .from("student_documents")
-      .select("id, category, custom_name, status, file_path, deadline, rejected_reason, application_id, template:document_templates(name)")
+      .select(
+      "id, category, custom_name, status, file_path, deadline, rejected_reason, application_id, uploaded_at, uploaded_by_role, verified_at, created_at, template_id, template:document_templates(name)"
+    )
       .eq("student_id", id)
       // Only requirements added for THIS application. The standard checklist is
       // student-level and identical for every university, so pulling it in here
@@ -72,7 +74,7 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
     supabase
       .from("application_interviews")
       .select(
-        "id, round_label, confirmed_datetime, timezone, platform, platform_other, status, interview_details, interview_link, preparation_notes, credentials:application_interview_credentials(login_username, login_password, login_instructions, share_with_student)"
+        "id, round_label, confirmed_datetime, timezone, platform, platform_other, status, interview_details, interview_link, preparation_notes, created_at, updated_at, credentials:application_interview_credentials(login_username, login_password, login_instructions, share_with_student)"
       )
       .eq("application_id", appId)
       .order("confirmed_datetime", { ascending: true, nullsFirst: false }),

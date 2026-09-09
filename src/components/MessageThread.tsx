@@ -5,6 +5,7 @@ import { sendMessage } from "@/lib/actions/messages";
 import { Button } from "@/components/ui/Button";
 import { Select, Textarea } from "@/components/ui/Input";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { formatStamp } from "@/lib/activityStamp";
 
 export type TemplateRow = { id: string; purpose: string; channel: string; body: string };
 
@@ -21,27 +22,6 @@ function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
 }
 
-// Locale AND timezone pinned. This renders on the server and hydrates on the
-// client, so anything left to the environment differs between the two — the
-// locale (see formatDate.ts) and, for a timestamp, the zone: Vercel is UTC
-// while the browser is wherever the reader is, which React reports as a
-// hydration mismatch and recovers from by re-rendering the whole thread.
-//
-// Karachi rather than UTC because that is the office both sides are talking
-// to, so "2:32 PM" means the same thing to a counsellor and to a student
-// reading it abroad.
-function stamp(iso: string) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleString("en-US", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: "Asia/Karachi",
-  });
-}
 
 export function MessageThread({
   messages,
@@ -102,7 +82,7 @@ export function MessageThread({
             >
               <p className="whitespace-pre-wrap break-words">{m.body}</p>
               <p className="mt-1 text-[10px] opacity-70">
-                {who} · {stamp(m.sent_at)}
+                {who} · {formatStamp(m.sent_at)}
               </p>
             </div>
           );

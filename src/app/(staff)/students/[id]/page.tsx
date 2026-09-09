@@ -25,6 +25,7 @@ import { RegistrationEditForm } from "./RegistrationEditForm";
 import { getCachedDestinations, getCachedCounselors, getCachedAgreementTemplates, getCachedFeeProducts } from "@/lib/cachedQueries";
 import { getEffectivePermissions } from "@/lib/auth/permissions";
 import { CollapsibleCard } from "@/components/CollapsibleCard";
+import { uploadedLine } from "@/lib/activityStamp";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -90,7 +91,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       supabase
         .from("agreements")
         .select(
-          "id, status, version, signing_method, signed_file_path, video_recording_path, pdf_path, email_verified, document_status, video_status, document_review_note, video_review_note, discount_amount, created_at, template_id, admin_charge_override, consultancy_fee_override, installment_count, template:agreement_templates(file_path, destination_id, destination:destinations(country, track))"
+          "id, status, version, signing_method, signed_file_path, video_recording_path, signed_file_uploaded_at, video_uploaded_at, pdf_path, email_verified, document_status, video_status, document_review_note, video_review_note, discount_amount, created_at, template_id, admin_charge_override, consultancy_fee_override, installment_count, template:agreement_templates(file_path, destination_id, destination:destinations(country, track))"
         )
         .eq("student_id", id)
         .order("created_at", { ascending: false }),
@@ -111,7 +112,9 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         .order("created_at", { ascending: true }),
       supabase
         .from("student_documents")
-        .select("id, category, custom_name, status, file_path, deadline, rejected_reason, application_id, template:document_templates(name)")
+        .select(
+      "id, category, custom_name, status, file_path, deadline, rejected_reason, application_id, uploaded_at, uploaded_by_role, verified_at, created_at, template_id, template:document_templates(name)"
+    )
         .eq("student_id", id)
         .order("created_at", { ascending: false })
         .returns<(DocRow & { application_id: string | null; custom_name: string | null; template: { name: string } | { name: string }[] | null })[]>(),
@@ -649,7 +652,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-ink">
                       v{a.status === "signed" ? "signed" : "pending"} · {a.signing_method ?? "—"} ·{" "}
-                      {new Date(a.created_at).toLocaleDateString()}
+                      {new Date(a.created_at).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Karachi" })}
                       {a.discount_amount != null && ` · discount ${a.discount_amount}`}
                     </span>
                     <div className="flex flex-wrap items-center justify-end gap-2">
@@ -702,6 +705,31 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                         canDelete={isSuperAdmin}
                       />
                     </div>
+                  </div>
+                  {/* When each artefact arrived. The row's own created_at is
+                      the day the agreement was generated and updated_at moves
+                      again on review, so neither could answer when the student
+                      actually sent the signed copy in. */}
+                  <div className="flex flex-col gap-0.5 text-xs text-muted">
+                    {uploadedLine({
+                      at: a.signed_file_uploaded_at,
+                      byRole: a.signing_method === "e_signature" ? "student" : "staff",
+                      audience: "staff",
+                    }) && (
+                      <span>
+                        Signed agreement ·{" "}
+                        {uploadedLine({
+                          at: a.signed_file_uploaded_at,
+                          byRole: a.signing_method === "e_signature" ? "student" : "staff",
+                          audience: "staff",
+                        })}
+                      </span>
+                    )}
+                    {uploadedLine({ at: a.video_uploaded_at, byRole: "student", audience: "staff" }) && (
+                      <span>
+                        Consent video · {uploadedLine({ at: a.video_uploaded_at, byRole: "student", audience: "staff" })}
+                      </span>
+                    )}
                   </div>
                 </div>
               );

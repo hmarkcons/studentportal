@@ -23,7 +23,9 @@ export default async function PortalDocumentsPage() {
 
   const { data: rawDocs } = await supabase
     .from("student_documents")
-    .select("id, category, custom_name, status, file_path, deadline, rejected_reason, application_id, template:document_templates(name)")
+    .select(
+      "id, category, custom_name, status, file_path, deadline, rejected_reason, application_id, uploaded_at, uploaded_by_role, verified_at, created_at, template_id, template:document_templates(name)"
+    )
     .eq("student_id", student.id)
     .order("created_at", { ascending: false });
 
