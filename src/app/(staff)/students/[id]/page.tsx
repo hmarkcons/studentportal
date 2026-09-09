@@ -126,6 +126,14 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   ]);
 
   const signedAgreement = agreements?.find((a) => a.status === "signed");
+  // Header summaries for the collapsible sections below. They open closed, so
+  // without these the page would say nothing about whether the agreement is
+  // signed or the invoice paid until you opened each one.
+  const agreementSummary = !agreements?.length
+    ? { text: "Not generated", tone: "neutral" as const }
+    : signedAgreement
+      ? { text: "Signed", tone: "success" as const }
+      : { text: "Awaiting signature", tone: "warning" as const };
   const latestAgreement = agreements?.[0];
   const signedAgreementTemplate = signedAgreement
     ? (one(signedAgreement.template as never) as { destination_id?: string } | null)
@@ -358,6 +366,19 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       .order("full_name"),
   ]);
 
+  // Header summary for the Invoice section, which also opens collapsed. Counted
+  // across every invoice on the student rather than summed, because the amounts
+  // can be in different currencies and a combined figure would be meaningless
+  // — how many instalments are settled is the thing worth seeing at a glance.
+  const invoiceSummary = (() => {
+    const schedule = installments ?? [];
+    if ((invoices ?? []).length === 0) return { text: "None raised", tone: "neutral" as const };
+    if (schedule.length === 0) return { text: "No schedule yet", tone: "warning" as const };
+    const paid = schedule.filter((i) => i.status === "paid").length;
+    if (paid === schedule.length) return { text: "Paid in full", tone: "success" as const };
+    return { text: `${paid}/${schedule.length} instalments paid`, tone: "warning" as const };
+  })();
+
   let assignedCounselorPhotoUrl: string | null = null;
   if (assignedCounselorStaff?.photo_path) {
     const { data } = await supabase.storage.from("documents").createSignedUrl(assignedCounselorStaff.photo_path, 3600);
@@ -517,7 +538,15 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         </>
       )}
 
-      <CollapsibleCard id="registration-portal-access" title="Registration & Portal Access">
+      <CollapsibleCard
+        id="registration-portal-access"
+        title="Registration & Portal Access"
+        badge={
+          <Badge tone={student?.portal_active ? "success" : "neutral"}>
+            {student?.portal_active ? "Portal active" : "Portal off"}
+          </Badge>
+        }
+      >
         <div className="mb-4">
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Registration</p>
           <RegistrationEditForm
@@ -597,7 +626,12 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         </Card>
       )}
 
-      <CollapsibleCard id="agreement" title="Agreement" className="mt-6">
+      <CollapsibleCard
+        id="agreement"
+        title="Agreement"
+        className="mt-6"
+        badge={<Badge tone={agreementSummary.tone}>{agreementSummary.text}</Badge>}
+      >
         {canModifyAgreement && (
           <GenerateAgreementForm
             studentId={id}
@@ -705,7 +739,12 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
           agreement, since that is where the fee, discount and currency come
           from. */}
       {(signedAgreement || (invoices ?? []).length > 0) && (
-        <CollapsibleCard id="invoice" title="Invoice" className="mt-6">
+        <CollapsibleCard
+          id="invoice"
+          title="Invoice"
+          className="mt-6"
+          badge={<Badge tone={invoiceSummary.tone}>{invoiceSummary.text}</Badge>}
+        >
           {canManageInvoice &&
             (signedAgreement ? (
               <GenerateInvoiceForm
@@ -742,7 +781,18 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       )}
 
 
-      <CollapsibleCard id="portal-credentials" title="Portal credentials" className="mt-6">
+      <CollapsibleCard
+        id="portal-credentials"
+        title="Portal credentials"
+        className="mt-6"
+        badge={
+          <Badge tone={existingCredentialTypes.length > 0 ? "success" : "neutral"}>
+            {existingCredentialTypes.length > 0
+              ? `${existingCredentialTypes.length} on file`
+              : "None saved"}
+          </Badge>
+        }
+      >
         <PortalCredentialsSection studentId={id} existingTypes={existingCredentialTypes} />
       </CollapsibleCard>
 

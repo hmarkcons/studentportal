@@ -3,30 +3,44 @@
 import { useCallback, useState } from "react";
 import { Card } from "@/components/ui/Card";
 
-// Every section starts open on each page load. Collapsing is for getting one
-// long block out of the way while working, not a setting.
+// Every section starts CLOSED on each page load, and the choice is never
+// remembered.
 //
-// This did persist the choice per person per section in localStorage. In
-// practice a section folded away once stayed folded on every student opened
-// afterwards, including after a refresh, which read as the page having lost
-// its content rather than as a remembered preference. Opening fresh every time
-// costs one click to re-collapse and never hides anything unexpectedly.
+// Those are two separate decisions and the history is worth keeping straight.
+// The state was once persisted per person per section in localStorage, and a
+// section folded away stayed folded on every student opened afterwards — that
+// read as the page having lost its content, so persistence went. The default
+// then became open, which made a registered student's page a very long scroll
+// through four form-heavy panels to reach anything below them.
+//
+// Closed-by-default plus no persistence is the combination that works: the
+// page opens as a short index every time, and nothing is remembered, so it is
+// always the same page rather than whatever shape you left it in.
+//
+// It only works because a closed header still says something. Pass a `badge`
+// with whatever the section would have told you — whether the agreement is
+// signed, whether the invoice is paid — or collapsing it hides the answer
+// instead of tidying the page.
 
 export function CollapsibleCard({
   id,
   title,
   subtitle,
   badge,
-  defaultOpen = true,
+  defaultOpen = false,
   className = "",
   children,
 }: {
-  /** Stable key for remembering this section's state. */
+  /** Stable key for the panel id the header points at. Nothing is stored. */
   id: string;
   title: string;
   subtitle?: string;
-  /** Small summary shown in the header, useful while collapsed. */
+  /**
+   * Shown in the header, and the reason closed-by-default is acceptable: this
+   * is what the section would have told you at a glance.
+   */
   badge?: React.ReactNode;
+  /** Closed unless a caller has a reason to open it. */
   defaultOpen?: boolean;
   className?: string;
   children: React.ReactNode;
