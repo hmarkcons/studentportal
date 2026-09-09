@@ -17,7 +17,20 @@ function dotClassFor(e: CalendarEvent) {
   return colorDotClass(e.color) ?? DOT_CLASS[e.tone];
 }
 
-const MAX_VISIBLE = 3;
+// How many events a cell lists before it defers to the day panel.
+//
+// Was 3, which is fewer than an ordinary day holds once a recurring task is in
+// play — so a whole month could read "+N more" in every cell and the calendar
+// stopped being a calendar. Six is what fits without a row becoming tall
+// enough to push the rest of the month off screen: the grid sizes each row to
+// its busiest day, so a quiet week stays compact and only a busy one grows.
+//
+// Not scrollable, deliberately. The cell is a button whose whole area opens the
+// day panel, so a scroll container inside it turns drag gestures into taps on
+// touch, and forty-two independent scroll areas would take the wheel away from
+// the page whenever the pointer crossed the grid. The day panel already shows
+// everything; what was missing was any sign that it would.
+const MAX_VISIBLE = 6;
 
 export function MonthGrid({
   referenceDate,
@@ -78,7 +91,20 @@ export function MonthGrid({
                     <span className="truncate">{e.time ? `${e.time} ` : ""}{e.label}</span>
                   </span>
                 ))}
-                {overflow > 0 && <span className="text-[11px] text-muted">+{overflow} more</span>}
+                {/* Styled as a control rather than grey text. Clicking anywhere
+                    in the cell already opened the day panel with the full list;
+                    nothing said so, so this read as "the rest is hidden" rather
+                    than "click to see the rest". A nested <button> would be
+                    invalid inside the cell's own button, so it is the cell that
+                    stays clickable. */}
+                {overflow > 0 && (
+                  <span
+                    className="text-[11px] font-medium text-primary underline decoration-dotted underline-offset-2"
+                    title={`Open ${dayStr} to see all ${dayEvents.length}`}
+                  >
+                    +{overflow} more
+                  </span>
+                )}
               </div>
             </button>
           );
