@@ -252,6 +252,23 @@ export async function approvePartnerAccount(accountId: string, status: string) {
   return { success: true };
 }
 
+export type PunchOutcome = "in" | "out" | "already_in" | "not_in" | "not_staff" | "invalid_token";
+
+/**
+ * Clock in or out.
+ *
+ * The work is done by attendance_punch (0157) rather than here. Two reasons:
+ * ordinary staff no longer hold INSERT or UPDATE on attendance_records — which
+ * is what stopped a timesheet being rewritten by the person it is about — and
+ * the button and the QR scan were two separate implementations of the same
+ * toggle, each with its own copy of the stale-shift handling.
+ *
+ * It also says what happened. This used to return success without doing
+ * anything at all when the state already matched: pressing Clock In while
+ * already clocked in, or Clock Out while not clocked in, both reported a
+ * cheerful success over nothing. And after a forgotten clock-out, Clock In did
+ * nothing every time, forever, still reporting success.
+ */
 export async function clockInOut(action: "in" | "out") {
   const supabase = await createClient();
   const {
@@ -259,82 +276,54 @@ export async function clockInOut(action: "in" | "out") {
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in." };
 
-  const today = new Date().toISOString().slice(0, 10);
+  const { data, error } = await supabase.rpc("attendance_punch", { p_action: action, p_method: "button" });
+  if (error) return { error: error.message };
 
-  // The open-shift lookup must NOT scope by today's work_date — a shift
-  // left open from a prior day (a forgotten clock-out) would otherwise
-  // never be found, leaving it permanently open while a fresh clock-in
-  // stacks a second simultaneously-open record on top.
-  const { data: open } = await supabase
-    .from("attendance_records")
-    .select("id")
-    .eq("staff_id", user.id)
-    .is("clock_out", null)
-    .order("clock_in", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (action === "in") {
-    if (!open) {
-      const { error } = await supabase
-        .from("attendance_records")
-        .insert({ staff_id: user.id, work_date: today, clock_in: new Date().toISOString() });
-      if (error) return { error: error.message };
-    }
-  } else if (open) {
-    const { error } = await supabase.from("attendance_records").update({ clock_out: new Date().toISOString() }).eq("id", open.id);
-    if (error) return { error: error.message };
-  }
+  const result = (Array.isArray(data) ? data[0] : data) as { outcome: PunchOutcome; detail: string } | null;
+  if (!result) return { error: "Attendance could not be recorded — try again." };
 
   revalidatePath("/admin/attendance");
-  return { success: true };
+  // "Already clocked in since 9:04 AM" is not a failure, but it is not a
+  // silent success either — the caller shows it either way.
+  return { success: true, outcome: result.outcome, message: result.detail };
 }
 
-// QR check-in (Module 1M): a fixed QR code posted at the office encodes
-// this token; scanning it hits /attendance/checkin?token=..., which calls
-// this to record arrival/departure tied to whichever staff account is
-// currently logged in — same clock-in/out toggle as the manual button,
-// just method: 'qr' and no button press required.
-export async function checkinViaQr(token: string): Promise<{ status: "in" | "out" | "invalid_token" | "not_staff" | "error" }> {
+/**
+ * QR check-in (Module 1M): a fixed sheet posted at the office encodes a token;
+ * scanning it hits /attendance/checkin?token=..., which calls this to toggle
+ * arrival/departure for whichever staff account the phone is logged into.
+ *
+ * The token is no longer read here and compared in JavaScript. It was readable
+ * by every active staff member through the API (checked against production),
+ * so anyone who had ever logged in could assemble the check-in URL and record
+ * physical presence at the office from anywhere — which is the entire thing the
+ * printed sheet exists to establish. attendance_punch verifies it inside the
+ * database and never returns it, and only Super Admin can read it now, to
+ * print the sheet.
+ */
+export async function checkinViaQr(
+  token: string
+): Promise<{ status: "in" | "out" | "already_in" | "not_in" | "invalid_token" | "not_staff" | "error"; detail?: string }> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { status: "not_staff" };
 
-  const { data: qr } = await supabase.from("office_qr_tokens").select("token").eq("id", true).maybeSingle();
-  if (!qr || qr.token !== token) return { status: "invalid_token" };
-
-  const { data: staffRow } = await supabase.from("staff").select("id").eq("id", user.id).eq("status", "active").maybeSingle();
-  if (!staffRow) return { status: "not_staff" };
-
-  // Same fix as clockInOut: must not scope the open-shift lookup by
-  // today's work_date, or a forgotten clock-out from a prior day is never
-  // found — it stays open forever and a fresh scan creates a second
-  // simultaneously-open record instead of closing the real one.
-  const { data: open } = await supabase
-    .from("attendance_records")
-    .select("id")
-    .eq("staff_id", user.id)
-    .is("clock_out", null)
-    .order("clock_in", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (open) {
-    const { error } = await supabase.from("attendance_records").update({ clock_out: new Date().toISOString() }).eq("id", open.id);
-    if (error) return { status: "error" };
-    revalidatePath("/admin/attendance");
-    return { status: "out" };
-  }
-
-  const today = new Date().toISOString().slice(0, 10);
-  const { error } = await supabase
-    .from("attendance_records")
-    .insert({ staff_id: user.id, work_date: today, clock_in: new Date().toISOString(), method: "qr" });
+  const { data, error } = await supabase.rpc("attendance_punch", {
+    p_action: "toggle",
+    p_method: "qr",
+    p_token: token,
+  });
   if (error) return { status: "error" };
+
+  const result = (Array.isArray(data) ? data[0] : data) as
+    | { outcome: "in" | "out" | "already_in" | "not_in" | "invalid_token" | "not_staff"; detail: string }
+    | null;
+  if (!result) return { status: "error" };
+
   revalidatePath("/admin/attendance");
-  return { status: "in" };
+  return { status: result.outcome, detail: result.detail };
 }
 
 export async function rotateOfficeQrToken(_prevState: unknown, _formData: FormData) {
