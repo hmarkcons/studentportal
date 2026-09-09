@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { requireReportAccess } from "@/lib/auth/reportAccess";
 import { StatCard } from "@/components/ui/StatCard";
 import { Card } from "@/components/ui/Card";
 
@@ -28,7 +28,7 @@ function formatTotals(totals: Map<string, number>) {
 }
 
 export default async function RevenueCommissionPage() {
-  const supabase = await createClient();
+  const { supabase } = await requireReportAccess("/reports/revenue-commission");
 
   const { data: invoices } = await supabase.from("invoices").select("admin_charge, consultancy_fee, currency");
   const { data: installments } = await supabase

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { requireReportAccess } from "@/lib/auth/reportAccess";
 import { DataTable } from "@/components/ui/DataTable";
 
 function one<T>(v: T | T[] | null) {
@@ -21,7 +21,7 @@ function formatByCurrency(totals: Map<string, number>) {
 type Row = { id: string; name: string; paid: Map<string, number>; unpaid: Map<string, number> };
 
 export default async function StaffCommissionReportPage() {
-  const supabase = await createClient();
+  const { supabase } = await requireReportAccess("/reports/staff-commission");
 
   const { data: commissions } = await supabase
     .from("staff_commissions")

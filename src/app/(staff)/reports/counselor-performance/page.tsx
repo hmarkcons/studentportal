@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { requireReportAccess } from "@/lib/auth/reportAccess";
 import { DataTable } from "@/components/ui/DataTable";
 
 type Row = { id: string; name: string; assigned: number; registered: number; conversionPct: number };
 
 export default async function CounselorPerformancePage() {
-  const supabase = await createClient();
+  const { supabase } = await requireReportAccess("/reports/counselor-performance");
 
   const { data: counselors } = await supabase.from("staff").select("id, full_name").eq("role", "counselor");
   const { data: leads } = await supabase.from("leads").select("assigned_counselor_id, registered_at");

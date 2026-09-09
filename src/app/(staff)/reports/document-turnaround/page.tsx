@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { requireReportAccess } from "@/lib/auth/reportAccess";
 
 export default async function DocumentTurnaroundPage() {
-  const supabase = await createClient();
+  const { supabase } = await requireReportAccess("/reports/document-turnaround");
 
   // Turnaround is meant to measure how long STAFF took to review a document
   // once it was actually submitted — created_at is when the checklist row

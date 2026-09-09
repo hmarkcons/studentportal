@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { requireReportAccess } from "@/lib/auth/reportAccess";
 import { DataTable } from "@/components/ui/DataTable";
 
 type Row = { id: string; name: string; total: number; enrolled: number; rejected: number; successPct: number };
@@ -9,7 +9,7 @@ function one<T>(v: T | T[] | null) {
 }
 
 export default async function UniversitySuccessPage() {
-  const supabase = await createClient();
+  const { supabase } = await requireReportAccess("/reports/university-success");
 
   const { data: applications } = await supabase.from("applications").select("current_stage, university:universities(id, name)");
 

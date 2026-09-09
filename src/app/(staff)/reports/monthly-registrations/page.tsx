@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { requireReportAccess } from "@/lib/auth/reportAccess";
 
 function monthKey(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
 export default async function MonthlyRegistrationsPage() {
-  const supabase = await createClient();
+  const { supabase } = await requireReportAccess("/reports/monthly-registrations");
 
   const { data: counselors } = await supabase.from("staff").select("id, full_name").eq("role", "counselor");
   const { data: leads } = await supabase.from("leads").select("assigned_counselor_id, registered_at").not("registered_at", "is", null);

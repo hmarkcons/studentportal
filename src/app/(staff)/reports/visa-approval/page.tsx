@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { requireReportAccess } from "@/lib/auth/reportAccess";
 import { Badge } from "@/components/ui/Badge";
 import { listVisaDecisions } from "@/lib/visaDecisions";
 
@@ -12,7 +12,7 @@ import { listVisaDecisions } from "@/lib/visaDecisions";
 // zero is worse than no column.
 
 export default async function VisaApprovalPage() {
-  const supabase = await createClient();
+  const { supabase } = await requireReportAccess("/reports/visa-approval");
   const decisions = await listVisaDecisions(supabase);
 
   const byDestination = new Map<string, { approved: number; refused: number; pending: number }>();

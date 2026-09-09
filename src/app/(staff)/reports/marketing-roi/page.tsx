@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { requireReportAccess } from "@/lib/auth/reportAccess";
 import { DataTable } from "@/components/ui/DataTable";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 
 export default async function MarketingRoiPage() {
-  const supabase = await createClient();
+  const { supabase } = await requireReportAccess("/reports/marketing-roi");
 
   const { data: campaigns } = await supabase.from("campaigns").select("id, name, budget, actual_spend");
   const { data: leads } = await supabase.from("leads").select("campaign_id, platform_source, registered_at");

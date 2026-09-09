@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { requireReportAccess } from "@/lib/auth/reportAccess";
 import { StatCard } from "@/components/ui/StatCard";
 
 // refund_requests.currency is a free-typed field per row (public-track EUR
@@ -14,7 +14,7 @@ function formatByCurrency(totals: Map<string, number>) {
 }
 
 export default async function RefundReportPage() {
-  const supabase = await createClient();
+  const { supabase } = await requireReportAccess("/reports/refunds");
 
   const { data: refunds } = await supabase.from("refund_requests").select("status, amount, currency");
 
