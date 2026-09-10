@@ -6,48 +6,45 @@
 // credentials: it answered, and with ?dry=1 it printed student names and staff
 // email addresses to anyone who asked.
 //
-// Two things follow. A cron endpoint that sends email must not be triggerable
-// by the public, and a dry run — which exists to echo exactly who would be
-// mailed and about which students — must not be reachable without the secret.
+// The dry run is the part that leaks, so that is the part this closes outright:
+// it exists to echo exactly who would be emailed and about which students, and
+// it now needs the secret whatever else is true about the caller.
 //
-// The secret is still optional, because requiring it would silently stop three
-// daily jobs the office relies on until somebody set it. Without it, only
-// Vercel's own scheduler gets through: it invokes with the user agent
-// `vercel-cron/1.0` (documented) and nothing else about the request is
-// distinguishable. That is weaker than a shared secret and is why the response
-// says so — set CRON_SECRET in the Vercel project and this tightens to the
-// header check on its own.
+// A plain run is deliberately still allowed when no secret is set. Requiring
+// one would mean betting that Vercel's scheduler presents something I can
+// recognise, and being wrong would silently stop three daily jobs the office
+// depends on — a worse failure than the one being fixed, and a silent one. What
+// an unauthenticated run can do is cause the same emails the schedule sends
+// anyway; it cannot read anything back. So the response says the route is open
+// instead, and setting CRON_SECRET in the Vercel project closes it completely.
 
-export type CronAuthResult = { ok: true; secretConfigured: boolean } | { ok: false; status: number; error: string };
+export type CronAuthResult =
+  | { ok: true; secretConfigured: boolean; warning?: string }
+  | { ok: false; status: number; error: string };
 
-const VERCEL_CRON_AGENT = "vercel-cron/";
+/** Shown in every unauthenticated response, so the gap is visible rather than assumed. */
+export const CRON_OPEN_WARNING =
+  "CRON_SECRET is not set, so this endpoint can be triggered by anyone. Set it in the Vercel project.";
 
 export function checkCronRequest(request: Request, opts: { dryRun?: boolean } = {}): CronAuthResult {
   const secret = process.env.CRON_SECRET?.trim();
   const authHeader = request.headers.get("authorization") ?? "";
-  const agent = (request.headers.get("user-agent") ?? "").toLowerCase();
 
   if (secret) {
     if (authHeader === `Bearer ${secret}`) return { ok: true, secretConfigured: true };
     return { ok: false, status: 401, error: "Unauthorized" };
   }
 
-  // A dry run reports names and addresses, so it needs the secret whatever
-  // else is true about the caller.
+  // A dry run reports names and addresses. Nothing else about the caller
+  // substitutes for the secret here.
   if (opts.dryRun) {
     return {
       ok: false,
       status: 401,
       error:
-        "A dry run reports student names and staff addresses, so it needs CRON_SECRET. Set it in the Vercel project and call this with an Authorization: Bearer header.",
+        "A dry run reports student names and staff email addresses, so it needs CRON_SECRET. Set it in the Vercel project, then call this with an Authorization: Bearer header.",
     };
   }
 
-  if (agent.startsWith(VERCEL_CRON_AGENT)) return { ok: true, secretConfigured: false };
-
-  return {
-    ok: false,
-    status: 401,
-    error: "Unauthorized. Set CRON_SECRET in the environment to call this outside the scheduler.",
-  };
+  return { ok: true, secretConfigured: false, warning: CRON_OPEN_WARNING };
 }

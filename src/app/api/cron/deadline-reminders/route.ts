@@ -157,5 +157,6 @@ export async function GET(request: NextRequest) {
     sent,
     failed,
     results,
+    ...(auth.warning ? { warning: auth.warning } : {}),
   });
 }
