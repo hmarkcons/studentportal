@@ -7,6 +7,7 @@ import { CredentialField } from "@/components/CredentialField";
 import { StageForm } from "./StageForm";
 import { TaskList } from "./TaskList";
 import { ApplicationDetailsForm } from "./ApplicationDetailsForm";
+import { AddBackupPrograms } from "./AddBackupPrograms";
 import { LinksContactForm } from "./LinksContactForm";
 import { listTrackerDefinitions } from "@/lib/actions/countryTracker";
 import { DocumentChecklist, type DocRow } from "@/components/DocumentChecklist";
@@ -26,7 +27,7 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
   const { data: app, error } = await supabase
     .from("applications")
     .select(
-      `id, current_stage, intake, deadline, application_fee, special_requirements,
+      `id, current_stage, intake, deadline, application_fee, special_requirements, program_id, is_finalized,
        university:universities(id, name, city, contact_email, destination:destinations(pipeline_stages, country_code)),
        program:programs(id, name, page_link, requirements_link, application_portal_link)`
     )
@@ -43,6 +44,32 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
   const trackerDefs = countryCode ? (await listTrackerDefinitions([countryCode]))[countryCode] : undefined;
   const hasTracker = Boolean(trackerDefs?.length);
   const program = one(app.program);
+
+  // Every programme at this university, and which of them this student already
+  // has an application for — the two things the Details form and the backup
+  // picker each need.
+  const [{ data: universityPrograms }, { data: siblingApps }] = await Promise.all([
+    university?.id
+      ? supabase.from("programs").select("id, name").eq("university_id", university.id).order("name")
+      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    university?.id
+      ? supabase
+          .from("applications")
+          .select("id, program_id, program:programs(name)")
+          .eq("student_id", id)
+          .eq("university_id", university.id)
+          .neq("id", appId)
+      : Promise.resolve({ data: [] as { id: string; program_id: string | null; program: unknown }[] }),
+  ]);
+
+  const takenProgramIds = new Set(
+    [app.program_id, ...(siblingApps ?? []).map((a) => a.program_id)].filter(Boolean) as string[]
+  );
+  const availablePrograms = (universityPrograms ?? []).filter((p) => !takenProgramIds.has(p.id));
+  const siblings = (siblingApps ?? []).map((a) => ({
+    id: a.id,
+    name: (one(a.program as never) as { name?: string } | null)?.name ?? null,
+  }));
 
   const revalidateTo = `/students/${id}/applications/${appId}`;
 
@@ -144,7 +171,25 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
           deadline={app.deadline}
           application_fee={app.application_fee}
           special_requirements={app.special_requirements}
+          intake={app.intake}
+          programId={app.program_id}
+          programs={universityPrograms ?? []}
+          isFinalized={app.is_finalized}
+          universityName={university?.name ?? "this university"}
         />
+        {/* The office applies to two or three programmes at one university.
+            Creation handles that with its "+ Add another program" slots;
+            afterwards there was no way to add one without going back to New
+            application and re-picking the country and university. */}
+        <div className="mt-4 border-t border-border pt-3">
+          <AddBackupPrograms
+            applicationId={appId}
+            studentId={id}
+            universityName={university?.name ?? "this university"}
+            available={availablePrograms}
+            siblings={siblings}
+          />
+        </div>
       </Card>
 
       <Card className="mb-6">

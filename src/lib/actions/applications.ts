@@ -4,6 +4,10 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
+function one<T>(v: T | T[] | null) {
+  return Array.isArray(v) ? v[0] ?? null : v;
+}
+
 export async function createApplication(studentId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
 
@@ -86,19 +90,174 @@ export async function unfinalizeApplication(applicationId: string, studentId: st
   return { success: true };
 }
 
+/**
+ * Edits an existing application.
+ *
+ * The programme and the intake are editable here as well as the deadline, fee
+ * and special requirements. They were not, and a mis-keyed programme could
+ * only be corrected by deleting the application and making a new one — which
+ * takes its tasks, its document requirements, its interviews and its stage
+ * history with it.
+ *
+ * The university is deliberately not editable. Everything attached to an
+ * application — the offer letter, the interviews, the tracker fields — is
+ * about that university, and moving the row would silently change what all of
+ * it referred to. A different university is a different application.
+ */
 export async function updateApplicationDetails(applicationId: string, studentId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
   const deadline = String(formData.get("deadline") ?? "") || null;
   const application_fee = formData.get("application_fee") ? Number(formData.get("application_fee")) : null;
   const special_requirements = String(formData.get("special_requirements") ?? "").trim() || null;
+  const intake = String(formData.get("intake") ?? "").trim() || null;
+  // Absent means the field was not offered (a finalised application), which is
+  // different from an explicit "no programme chosen".
+  const programField = formData.get("program_id");
+  const programSubmitted = programField !== null;
+  const program_id = String(programField ?? "") || null;
+
+  if (application_fee !== null && (!Number.isFinite(application_fee) || application_fee < 0)) {
+    return { error: "An application fee cannot be negative." };
+  }
+
+  const { data: existing } = await supabase
+    .from("applications")
+    .select("university_id, program_id, is_finalized")
+    .eq("id", applicationId)
+    .maybeSingle();
+  if (!existing) return { error: "That application no longer exists." };
+
+  const changingProgram = programSubmitted && program_id !== existing.program_id;
+
+  // Finalising is HMARK saying this is the university and programme the visa
+  // is being built on, and the country trackers key their visa fields off it.
+  // Changing the programme underneath that would leave the visa record
+  // describing something else.
+  if (changingProgram && existing.is_finalized) {
+    return {
+      error:
+        "This application is finalised for the visa, so its programme is fixed. Un-finalise it first if the programme really has changed.",
+    };
+  }
+
+  if (changingProgram && program_id) {
+    // A programme from another university would make the row describe two
+    // different institutions at once.
+    const { data: program } = await supabase
+      .from("programs")
+      .select("university_id")
+      .eq("id", program_id)
+      .maybeSingle();
+    if (!program) return { error: "That programme no longer exists — reload the page." };
+    if (program.university_id !== existing.university_id) {
+      return { error: "That programme belongs to a different university. Add a separate application for it instead." };
+    }
+  }
 
   const { error } = await supabase
     .from("applications")
-    .update({ deadline, application_fee, special_requirements })
+    .update({
+      deadline,
+      application_fee,
+      special_requirements,
+      intake,
+      ...(programSubmitted ? { program_id } : {}),
+    })
     .eq("id", applicationId);
-  if (error) return { error: error.message };
+  if (error) {
+    // unique (student_id, university_id, program_id): the student already has
+    // an application for that programme, which is a sentence rather than a
+    // constraint name.
+    if (error.code === "23505") {
+      return { error: "This student already has an application for that programme at this university." };
+    }
+    return { error: error.message };
+  }
 
   revalidatePath(`/students/${studentId}/applications/${applicationId}`);
+  revalidatePath(`/students/${studentId}/applications`);
+  revalidatePath(`/students/${studentId}`);
+  return { success: true };
+}
+
+/**
+ * Adds further programmes at the same university as an existing application.
+ *
+ * The office applies to two or three programmes at one university — a first
+ * choice and its backups — and the creation form already handles that with its
+ * "+ Add another program" slots, inserting one application row per programme.
+ * Afterwards there was no way to add one: you had to go back to New
+ * application and re-pick the country and university you were already looking
+ * at.
+ *
+ * The rows are siblings with no ranking, exactly as creation makes them, and
+ * they inherit this application's intake and deadline because a backup at the
+ * same university is part of the same cycle. Both stay editable per row.
+ */
+export async function addBackupPrograms(applicationId: string, studentId: string, _prevState: unknown, formData: FormData) {
+  const supabase = await createClient();
+
+  const programIds = Array.from(new Set(formData.getAll("program_ids").map(String).filter(Boolean)));
+  if (programIds.length === 0) return { error: "Choose at least one programme to add." };
+
+  const { data: source } = await supabase
+    .from("applications")
+    .select("university_id, intake, deadline, current_stage")
+    .eq("id", applicationId)
+    .maybeSingle();
+  if (!source) return { error: "That application no longer exists." };
+
+  const { data: programs } = await supabase
+    .from("programs")
+    .select("id, name, university_id")
+    .in("id", programIds);
+  const wrongUniversity = (programs ?? []).find((p) => p.university_id !== source.university_id);
+  if (wrongUniversity) {
+    return { error: `${wrongUniversity.name} is at a different university — add it as its own application.` };
+  }
+  if ((programs ?? []).length !== programIds.length) {
+    return { error: "One of those programmes no longer exists — reload the page." };
+  }
+
+  // Said plainly before the insert, because a partial failure here would add
+  // some rows and report an error about the others.
+  const { data: already } = await supabase
+    .from("applications")
+    .select("program_id, program:programs(name)")
+    .eq("student_id", studentId)
+    .eq("university_id", source.university_id)
+    .in("program_id", programIds);
+  if ((already ?? []).length > 0) {
+    const names = (already ?? [])
+      .map((a) => (one(a.program as never) as { name?: string } | null)?.name)
+      .filter(Boolean)
+      .join(", ");
+    return { error: `Already applied for ${names || "that programme"} at this university.` };
+  }
+
+  const { error } = await supabase.from("applications").insert(
+    programIds.map((program_id) => ({
+      student_id: studentId,
+      university_id: source.university_id,
+      program_id,
+      intake: source.intake,
+      deadline: source.deadline,
+      // current_stage is left out on purpose. The stage trigger fills it with
+      // the destination's first pipeline stage, which is where a backup starts
+      // whatever the first choice has already reached — nobody has submitted
+      // it yet.
+    }))
+  );
+  if (error) {
+    if (error.code === "23505") {
+      return { error: "This student already has an application for one of those programmes." };
+    }
+    return { error: error.message };
+  }
+
+  revalidatePath(`/students/${studentId}/applications/${applicationId}`);
+  revalidatePath(`/students/${studentId}/applications`);
+  revalidatePath(`/students/${studentId}`);
   return { success: true };
 }
 
