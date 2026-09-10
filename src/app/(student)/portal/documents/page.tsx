@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/Badge";
 import { PortalDocumentRow } from "../applications/[id]/PortalDocumentRow";
 import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
 import { loadStudentChecklistSections } from "@/lib/studentChecklistSections";
-import { DocumentSectionShell } from "@/components/DocumentSectionShell";
+import { DocumentSectionList } from "@/components/DocumentSectionList";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -106,22 +106,25 @@ export default async function PortalDocumentsPage() {
       )}
 
       {/* Collapsed on every load, the same as the staff Documents tab and
-          through the same component, so a student reading their checklist on a
+          through the same components, so a student reading their checklist on a
           phone gets an index rather than forty rows to scroll. The outstanding
           and rejected counts stay in each header, so nothing that needs acting
           on is hidden by a shut section — and the summary card above still
-          gives the totals for the whole page. */}
-      <div className="flex flex-col gap-3">
-        {sections.map((section, i) => (
-          <DocumentSectionShell
-            key={section.category}
-            number={i + 1}
-            label={section.label}
-            total={section.docs.length}
-            approved={section.docs.filter((d) => d.status === "verified").length}
-            outstanding={section.docs.filter((d) => d.status === "missing").length}
-            rejected={section.docs.filter((d) => d.status === "rejected").length}
-          >
+          gives the totals for the whole page.
+
+          Expand-all comes from the shared list wrapper: the staff tab has had
+          it since these sections became collapsible, and without it reading a
+          whole checklist here was one click per section. */}
+      <DocumentSectionList
+        sections={sections.map((section, i) => ({
+          key: section.category,
+          number: i + 1,
+          label: section.label,
+          total: section.docs.length,
+          approved: section.docs.filter((d) => d.status === "verified").length,
+          outstanding: section.docs.filter((d) => d.status === "missing").length,
+          rejected: section.docs.filter((d) => d.status === "rejected").length,
+          content: (
             <div className="flex flex-col divide-y divide-border">
               {section.docs.map((doc, j) => (
                 <PortalDocumentRow
@@ -133,9 +136,9 @@ export default async function PortalDocumentsPage() {
                 />
               ))}
             </div>
-          </DocumentSectionShell>
-        ))}
-      </div>
+          ),
+        }))}
+      />
     </div>
   );
 }
