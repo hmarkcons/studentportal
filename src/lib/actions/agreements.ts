@@ -497,6 +497,50 @@ export async function verifySignedAgreement(
 }
 
 /**
+ * Takes an approval back.
+ *
+ * Approving was a one-way door: verifySignedAgreement marks the agreement
+ * signed and the review panel disappears, so a mistaken approval — the wrong
+ * video watched, a colleague clicking through — could only be undone by
+ * deleting the agreement and regenerating it, which throws away the student's
+ * signed copy and their recording.
+ *
+ * This is not a rejection and does not behave like one. Nothing is archived,
+ * nothing is unlinked, and the student is not asked to send anything again:
+ * the submission simply goes back to awaiting verification. Their portal
+ * closes again to everything but the agreement, their payments and support,
+ * because the access was granted on the strength of an approval that no longer
+ * stands — but their login keeps working, since a student who cannot reach
+ * their agreement page cannot help with whatever was wrong with it.
+ */
+export async function undoAgreementApproval(
+  agreementId: string,
+  studentId: string,
+  kind: "document" | "video" | "both",
+  note?: string
+): Promise<{ error?: string; success?: boolean }> {
+  const denied = await requirePermission("agreements.process", "Only Super Admin/Processing can undo an approval.");
+  if (denied) return { error: denied.error };
+
+  const trimmed = note?.trim() ?? "";
+  if (trimmed.length > 500) return { error: "Keep the note under 500 characters." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("undo_agreement_approval", {
+    p_agreement_id: agreementId,
+    p_kind: kind,
+    p_note: trimmed || null,
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath(`/students/${studentId}`);
+  revalidatePath("/portal/agreement");
+  // The student's menu is built from the gate, so it has to be rebuilt too.
+  revalidatePath("/portal", "layout");
+  return { success: true };
+}
+
+/**
  * Sends one half of a submission back to the student to redo. The file is
  * archived rather than deleted — a rejected consent video is still the record
  * of what was originally submitted — and the reason is shown to the student so

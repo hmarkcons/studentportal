@@ -70,7 +70,7 @@ export async function proxy(request: NextRequest) {
     if (lead) {
       const { data: agreements } = await supabase
         .from("agreements")
-        .select("status, signing_method, signed_file_path, video_recording_path")
+        .select("status, signing_method, signed_file_path, video_recording_path, approval_undone_at")
         .eq("student_id", lead.id);
       if (evaluateAgreementGate(agreements ?? []).locked) {
         const url = request.nextUrl.clone();

@@ -29,7 +29,7 @@ export default async function PortalAgreementPage() {
   const { data: agreements } = await supabase
     .from("agreements")
     .select(
-      "id, status, version, signed_file_path, video_recording_path, pdf_path, signing_method, created_at, document_status, video_status, document_review_note, video_review_note, signed_file_uploaded_at, video_uploaded_at"
+      "id, status, version, signed_file_path, video_recording_path, pdf_path, signing_method, created_at, document_status, video_status, document_review_note, video_review_note, signed_file_uploaded_at, video_uploaded_at, approval_undone_at"
     )
     .eq("student_id", student.id)
     .order("created_at", { ascending: false });
@@ -74,7 +74,26 @@ export default async function PortalAgreementPage() {
         Your agreement with HMARK Consultants, and every version of it we hold.
       </p>
 
-      {gate.locked && (
+      {/* Two different reasons the portal is held back, and telling a student
+          to upload something they have already uploaded would be worse than
+          saying nothing. When staff take an approval back the student has
+          nothing to do: the files are still on file, and the wait is ours. */}
+      {gate.locked && gate.reason === "awaiting_reverification" && (
+        <Card className="mb-4 bg-warning-bg">
+          <h3 className="mb-1 text-sm font-semibold text-warning">We are checking your agreement again</h3>
+          <p className="mb-2 text-sm text-warning">
+            Your signed agreement and consent video are both with us — nothing is missing and there is nothing for you to
+            send. Someone at HMARK is reviewing them once more, and the rest of your portal opens again as soon as that is
+            done.
+          </p>
+          <p className="text-xs text-warning">
+            Your agreement and your payments stay available in the meantime. If you need anything else, open a Support
+            ticket and your counsellor will help.
+          </p>
+        </Card>
+      )}
+
+      {gate.locked && gate.reason === "awaiting_submission" && (
         <Card className="mb-4 bg-warning-bg">
           <h3 className="mb-1 text-sm font-semibold text-warning">Two things to do before your portal opens</h3>
           <p className="mb-2 text-sm text-warning">

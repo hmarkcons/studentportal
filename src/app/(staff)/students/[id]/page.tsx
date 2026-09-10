@@ -13,6 +13,7 @@ import type { DashboardStageDef } from "@/lib/dashboardPipeline";
 import { PortalAccessPanel } from "./PortalAccessPanel";
 import { GenerateAgreementForm, UploadSignedAgreementForm } from "./GenerateAgreementForm";
 import { VerifySignedAgreement } from "./VerifySignedAgreement";
+import { UndoAgreementApproval, UndoneApprovalNote } from "./UndoAgreementApproval";
 import { ConsentVideoLink } from "./ConsentVideoLink";
 import { GenerateAgreementPdfButton } from "./GenerateAgreementPdfButton";
 import { AgreementActionsMenu } from "./AgreementActionsMenu";
@@ -91,7 +92,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       supabase
         .from("agreements")
         .select(
-          "id, status, version, signing_method, signed_file_path, video_recording_path, signed_file_uploaded_at, video_uploaded_at, pdf_path, email_verified, document_status, video_status, document_review_note, video_review_note, discount_amount, created_at, template_id, admin_charge_override, consultancy_fee_override, installment_count, template:agreement_templates(file_path, destination_id, destination:destinations(country, track))"
+          "id, status, version, signing_method, signed_file_path, video_recording_path, signed_file_uploaded_at, video_uploaded_at, approval_undone_at, approval_undo_note, undone_by:staff!agreements_approval_undone_by_fkey(full_name), pdf_path, email_verified, document_status, video_status, document_review_note, video_review_note, discount_amount, created_at, template_id, admin_charge_override, consultancy_fee_override, installment_count, template:agreement_templates(file_path, destination_id, destination:destinations(country, track))"
         )
         .eq("student_id", id)
         .order("created_at", { ascending: false }),
@@ -468,6 +469,33 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     count: missingDocCountsByCategory.get(cat) ?? 0,
   }));
 
+  // What a closed Documentation tracker header has to be able to say. A
+  // checkbox field reads "true"/"false", and "false" is an answer somebody
+  // gave rather than a blank, so anything non-empty counts as recorded.
+  function summariseTracker(
+    sections: { entry: { displayName: string }; values: Record<string, string>; fields: { key: string }[] }[]
+  ) {
+    let filled = 0;
+    let total = 0;
+    const perCountry: string[] = [];
+    for (const section of sections) {
+      const countryFilled = section.fields.filter((f) => (section.values[f.key] ?? "").trim() !== "").length;
+      filled += countryFilled;
+      total += section.fields.length;
+      perCountry.push(`${section.entry.displayName} ${countryFilled}/${section.fields.length}`);
+    }
+    const tone: "success" | "warning" | "neutral" =
+      total === 0 ? "neutral" : filled === total ? "success" : "warning";
+    return {
+      filled,
+      total,
+      tone,
+      // Only worth spelling out when there is more than one country; with one
+      // it would just repeat the badge.
+      subtitle: sections.length > 1 ? perCountry.join(" · ") : undefined,
+    };
+  }
+
   // ---- Level 3: per-country tracker sections — each country's fields fetch
   // in parallel, one level below trackerDefsByCountry (level 2). ----
   const trackerSections = await Promise.all(
@@ -509,6 +537,8 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         return { entry, values, fields: trackerDefsByCountry[entry.countryCode] ?? [], universityOptions, regionByUniversityValue };
       })
   );
+
+  const trackerProgress = summariseTracker(trackerSections);
 
   return (
     <div>
@@ -609,8 +639,17 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       </div>
 
       {trackerSections.length > 0 && (
-        <Card className="mt-6">
-          <h3 className="mb-3 text-sm font-medium text-ink">Documentation tracker</h3>
+        <CollapsibleCard
+          id="documentation-tracker"
+          title="Documentation tracker"
+          className="mt-6"
+          subtitle={trackerProgress.subtitle}
+          badge={
+            <Badge tone={trackerProgress.tone}>
+              {trackerProgress.filled} / {trackerProgress.total} recorded
+            </Badge>
+          }
+        >
           <div className="flex flex-col gap-6">
             {trackerSections.map(({ entry, values, fields, universityOptions, regionByUniversityValue }) => (
               <div key={entry.countryCode}>
@@ -626,7 +665,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
               </div>
             ))}
           </div>
-        </Card>
+        </CollapsibleCard>
       )}
 
       <CollapsibleCard
@@ -750,6 +789,27 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                 <UploadSignedAgreementForm agreementId={latestAgreement.id} studentId={id} />
               )
             )}
+            {/* Approving used to be a one-way door: once signed, the review
+                panel above disappears and there was no way back short of
+                deleting the agreement and regenerating it, which discards the
+                student's signed copy and their recording. */}
+            {canModifyAgreement && latestAgreement?.signing_method === "e_signature" && (
+              <UndoAgreementApproval
+                agreementId={latestAgreement.id}
+                studentId={id}
+                documentStatus={latestAgreement.document_status ?? "pending"}
+                videoStatus={latestAgreement.video_status ?? "pending"}
+                hasInvoice={(invoices ?? []).some((inv) => inv.agreement_id === latestAgreement.id)}
+              />
+            )}
+            {latestAgreement?.approval_undone_at && (
+              <UndoneApprovalNote
+                at={latestAgreement.approval_undone_at}
+                by={(one(latestAgreement.undone_by as never) as { full_name?: string } | null)?.full_name ?? null}
+                note={latestAgreement.approval_undo_note}
+              />
+            )}
+
             {/* A signed paper agreement with the wrong scan attached: Super
                 Admin can swap the file without deleting the agreement. */}
             {isSuperAdmin && latestAgreement?.status === "signed" && latestAgreement.signing_method === "paper" && (

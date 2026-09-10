@@ -24,7 +24,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
   // portal rather than an outstanding task.
   const { data: agreements } = await supabase
     .from("agreements")
-    .select("status, signing_method, signed_file_path, video_recording_path")
+    .select("status, signing_method, signed_file_path, video_recording_path, approval_undone_at")
     .eq("student_id", studentRow.id);
   const gate = evaluateAgreementGate(agreements ?? []);
   // NavItem.href is optional (group headers have none); a menu entry with no
