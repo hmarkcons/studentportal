@@ -60,7 +60,10 @@ export async function ensureStudentDocumentRequirements(studentId: string) {
       .eq("student_id", studentId)
       .is("application_id", null),
     supabase.from("destination_document_exclusions").select("destination_id, template_id"),
-    supabase.from("student_qualifications").select("id, qualification_type, qualification_name").eq("student_id", studentId),
+    supabase
+      .from("student_qualifications")
+      .select("id, qualification_type, qualification_name, institution_name")
+      .eq("student_id", studentId),
     supabase.from("student_test_scores").select("id, test_type, custom_test_name").eq("student_id", studentId),
     supabase.from("student_profiles").select("travel_history, visa_refusal_history").eq("student_id", studentId).maybeSingle(),
   ]);
@@ -133,7 +136,7 @@ export async function ensureStudentDocumentRequirements(studentId: string) {
     travelHistoryCount: Array.isArray(profile?.travel_history) ? profile!.travel_history.length : 0,
     visaHistoryCount: Array.isArray(profile?.visa_refusal_history) ? profile!.visa_refusal_history.length : 0,
   });
-  const { toInsert, toDeleteIds } = reconcileDerived(wanted, existingRows);
+  const { toInsert, toDeleteIds, toRename } = reconcileDerived(wanted, existingRows);
 
   if (toInsert.length > 0) {
     const { error } = await supabase.from("student_documents").insert(
@@ -148,6 +151,14 @@ export async function ensureStudentDocumentRequirements(studentId: string) {
       }))
     );
     if (error && error.code !== "23505") throw error;
+  }
+
+  // A school renamed or first named in the profile, so the requirement says
+  // which institution it is for. Only the label moves — the uploaded file and
+  // its review state are untouched.
+  for (const row of toRename) {
+    const { error } = await supabase.from("student_documents").update({ custom_name: row.name }).eq("id", row.id);
+    if (error) throw error;
   }
 
   // Only ever empty rows: reconcileDerived keeps anything with a file, so a

@@ -381,3 +381,101 @@ test("the choice is deterministic, whatever order the templates arrive in", () =
   const second = templatesToSeed([...a].reverse(), []);
   assert.deepEqual(first.map((o) => o.id), second.map((o) => o.id));
 });
+
+// ------------------------------------------ the institution on the label
+test("a qualification's document names the school it is from", () => {
+  // "Secondary School — certificate" says what kind of document is wanted and
+  // nothing about which one. The profile has always carried institution_name;
+  // it simply was not used here.
+  const wanted = profileDerivedRequirements({
+    qualifications: [
+      { id: "q1", qualification_type: "secondary_school", institution_name: "Beaconhouse School System" },
+      { id: "q2", qualification_type: "high_school", institution_name: "Punjab College" },
+      { id: "q3", qualification_type: "bachelors_4yr", institution_name: "University of the Punjab" },
+    ],
+    testScores: [],
+    travelHistoryCount: 0,
+    visaHistoryCount: 0,
+  });
+  const names = wanted.map((w) => w.name);
+  assert.ok(names.includes("Secondary School — certificate — Beaconhouse School System"), names.join(" | "));
+  assert.ok(names.includes("High School — transcript / marksheet — Punjab College"));
+  assert.ok(names.includes("Bachelors (4 years) — certificate — University of the Punjab"));
+});
+
+test("a qualification with no institution recorded keeps its old wording", () => {
+  const wanted = profileDerivedRequirements({
+    qualifications: [{ id: "q1", qualification_type: "secondary_school", institution_name: "   " }],
+    testScores: [],
+    travelHistoryCount: 0,
+    visaHistoryCount: 0,
+  });
+  assert.deepEqual(
+    wanted.map((w) => w.name),
+    ["Secondary School — certificate", "Secondary School — transcript / marksheet"]
+  );
+});
+
+test("a test scorecard is not given an institution", () => {
+  // A scorecard comes from the test board, not a school.
+  const wanted = profileDerivedRequirements({
+    qualifications: [],
+    testScores: [{ id: "t1", test_type: "ielts" }],
+    travelHistoryCount: 0,
+    visaHistoryCount: 0,
+  });
+  assert.equal(wanted.length, 1);
+  assert.ok(!wanted[0].name.includes(" — ") || wanted[0].name.endsWith("scorecard"), wanted[0].name);
+});
+
+test("renaming the school renames the requirement instead of retiring it", () => {
+  // The key is the qualification's id, so correcting a spelling must not
+  // retire the row and take the uploaded certificate out of reach.
+  const before = profileDerivedRequirements({
+    qualifications: [{ id: "q1", qualification_type: "secondary_school", institution_name: "Beconhouse" }],
+    testScores: [],
+    travelHistoryCount: 0,
+    visaHistoryCount: 0,
+  });
+  const after = profileDerivedRequirements({
+    qualifications: [{ id: "q1", qualification_type: "secondary_school", institution_name: "Beaconhouse" }],
+    testScores: [],
+    travelHistoryCount: 0,
+    visaHistoryCount: 0,
+  });
+  assert.deepEqual(
+    before.map((b) => b.derivedKey),
+    after.map((a) => a.derivedKey),
+    "the identity must not depend on the name"
+  );
+
+  const existing = before.map((b, i) => ({
+    id: `d${i}`,
+    derived_key: b.derivedKey,
+    file_path: "s/cert.pdf",
+    custom_name: b.name,
+  }));
+  const result = reconcileDerived(after, existing);
+  assert.equal(result.toDeleteIds.length, 0, "nothing is retired");
+  assert.equal(result.toInsert.length, 0, "nothing is duplicated");
+  assert.deepEqual(
+    result.toRename.map((r) => r.name),
+    after.map((a) => a.name)
+  );
+});
+
+test("a row whose label already matches is left alone", () => {
+  const wanted = profileDerivedRequirements({
+    qualifications: [{ id: "q1", qualification_type: "secondary_school", institution_name: "Beaconhouse" }],
+    testScores: [],
+    travelHistoryCount: 0,
+    visaHistoryCount: 0,
+  });
+  const existing = wanted.map((w, i) => ({
+    id: `d${i}`,
+    derived_key: w.derivedKey,
+    file_path: null,
+    custom_name: w.name,
+  }));
+  assert.deepEqual(reconcileDerived(wanted, existing).toRename, []);
+});
