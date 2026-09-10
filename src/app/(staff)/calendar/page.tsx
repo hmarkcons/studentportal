@@ -2,6 +2,7 @@ import { getStaffSession } from "@/lib/auth/session";
 import { toYMD, parseYMD, getMonthGridDays, getWeekDays, eachDateInRange, expandRecurrence, karachiToday } from "@/lib/calendarDates";
 import { CalendarShell } from "./CalendarShell";
 import type { CalendarEvent, CalendarRecurrence } from "./types";
+import { applicationDeadline } from "@/lib/applicationDeadline";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -99,10 +100,15 @@ export default async function CalendarPage(props: {
         .lte("field_value", rangeEndStr)
     : { data: [] };
 
+  // The application's own deadline as well as the programme's. This read only
+  // programs.application_deadline, which is the imported catalogue date and is
+  // null for almost every programme — so the deadline a processing officer
+  // typed on the Application Details form never reached their calendar. It also
+  // required a programme, so an application recorded before one was chosen was
+  // skipped even when it had a date.
   const { data: programDeadlines } = await supabase
     .from("applications")
-    .select("id, program:programs(name, application_deadline), student:leads(full_name, processing_officer_id)")
-    .not("program_id", "is", null);
+    .select("id, deadline, program:programs(name, application_deadline), student:leads(full_name, processing_officer_id)");
 
   const { data: documentDeadlines } = await supabase
     .from("student_documents")
@@ -239,7 +245,8 @@ export default async function CalendarPage(props: {
   }
 
   (programDeadlines ?? []).forEach((a) => {
-    const deadline = one(a.program)?.application_deadline;
+    const program = one(a.program);
+    const deadline = applicationDeadline(a.deadline, program?.application_deadline);
     if (!deadline) return;
     if (deadline < rangeStartStr || deadline > rangeEndStr) return;
     const student = one(a.student);
@@ -249,7 +256,9 @@ export default async function CalendarPage(props: {
       date: deadline,
       time: null,
       kind: "deadline",
-      label: `${one(a.program)?.name} deadline — ${student?.full_name ?? "?"}`,
+      // "Application deadline" when no programme is chosen yet, rather than
+      // the "undefined deadline" the old template produced.
+      label: `${program?.name ? `${program.name} deadline` : "Application deadline"} — ${student?.full_name ?? "?"}`,
       tone: "danger",
     });
   });

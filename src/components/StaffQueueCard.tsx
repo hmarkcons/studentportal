@@ -31,6 +31,25 @@ function studentList(students: NamedStudent[], tab: string) {
 export function StaffQueueCard({ queue }: { queue: StaffQueue }) {
   const rows: Row[] = [];
 
+  // First, and marked urgent: a missed application deadline cannot be
+  // recovered by working faster tomorrow.
+  if (queue.upcomingDeadlines.length > 0) {
+    const soonest = queue.upcomingDeadlines[0];
+    rows.push({
+      href: "/calendar",
+      icon: "⏰",
+      text:
+        queue.upcomingDeadlines.length === 1
+          ? `${soonest.label} for ${soonest.studentName} — ${soonest.urgency}`
+          : `${queue.upcomingDeadlines.length} application deadlines in the next fortnight — next ${soonest.urgency}`,
+      detail: queue.upcomingDeadlines
+        .slice(0, 3)
+        .map((d) => `${d.studentName}: ${d.label} (${d.urgency})`)
+        .join(" · "),
+      urgent: true,
+    });
+  }
+
   if (queue.agreementsToVerify.length > 0) {
     rows.push({
       href: `/students/${queue.agreementsToVerify[0].id}`,
@@ -102,8 +121,8 @@ export function StaffQueueCard({ queue }: { queue: StaffQueue }) {
       <Card className="mb-6">
         <p className="text-sm text-ink">Nothing is waiting on you.</p>
         <p className="mt-1 text-xs text-muted">
-          Agreements to verify, tickets, unanswered students, overdue tasks, documents, inventory requests and
-          payments all show here.
+          Application deadlines, agreements to verify, tickets, unanswered students, overdue tasks, documents,
+          inventory requests and payments all show here.
         </p>
       </Card>
     );

@@ -3,6 +3,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail, isEmailConfigured } from "@/lib/email";
 import { buildDeadlineReminderEmail } from "@/lib/deadlineReminderEmail";
 import { buildDeadlineRecipients, DEADLINE_WINDOW_DAYS, type DeadlineRow, type ProcessingStaff } from "@/lib/deadlineReminders";
+import { applicationDeadline } from "@/lib/applicationDeadline";
+import { karachiToday } from "@/lib/calendarDates";
+import { checkCronRequest } from "@/lib/cronAuth";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -18,26 +21,32 @@ type StudentRef = { full_name?: string | null; processing_officer_id?: string | 
 // nothing goes unwatched. Bucketing lives in buildDeadlineRecipients() so
 // it can be tested without running this route against live data.
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   // A dry run sends nothing, so it stays useful for checking routing even
-  // where SMTP isn't set up.
+  // where SMTP isn't set up — but it prints student names and staff addresses,
+  // so it needs the secret. See cronAuth.
   const dryRun = request.nextUrl.searchParams.get("dry") === "1";
+  const auth = checkCronRequest(request, { dryRun });
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
   if (!dryRun && !isEmailConfigured()) {
     return NextResponse.json({ error: "Email isn't configured.", deadlinesChecked: 0, recipients: 0 });
   }
 
   const admin = createAdminClient();
-  const todayStr = new Date().toISOString().slice(0, 10);
+  // Karachi's date. toISOString() is UTC, so for the first five hours of every
+  // Karachi day this ran with yesterday's date and a deadline falling today
+  // was reported as already past.
+  const todayStr = karachiToday();
 
   const [{ data: programRows }, { data: taskRows }, { data: documentRows }, { data: staffRows }] = await Promise.all([
     admin
+      // Both dates. The application's own deadline is what staff type on the
+      // Application Details form; the programme's is the imported catalogue
+      // date. This query used to require a programme and read only the
+      // catalogue column, which is why nothing was ever sent: on production,
+      // all 10 dated applications had a null catalogue date and only 2 of
+      // 1,957 programmes had one at all.
       .from("applications")
-      .select("id, program:programs(name, application_deadline), student:leads(full_name, processing_officer_id)")
-      .not("program_id", "is", null),
+      .select("id, deadline, program:programs(name, application_deadline), student:leads(full_name, processing_officer_id)"),
     admin
       .from("application_tasks")
       .select("id, description, due_date, application:applications(student:leads(full_name, processing_officer_id))")
@@ -56,12 +65,13 @@ export async function GET(request: NextRequest) {
   (programRows ?? []).forEach((a) => {
     const program = one(a.program) as { name?: string; application_deadline?: string | null } | null;
     const student = one(a.student) as StudentRef;
-    if (!program?.application_deadline) return;
+    const due = applicationDeadline(a.deadline, program?.application_deadline);
+    if (!due) return;
     deadlines.push({
       kind: "program",
-      title: program.name ?? "Programme",
+      title: program?.name ?? "Application",
       studentName: student?.full_name ?? "Unknown student",
-      dueDate: program.application_deadline,
+      dueDate: due,
       processingOfficerId: student?.processing_officer_id ?? null,
     });
   });

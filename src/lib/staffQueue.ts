@@ -11,6 +11,8 @@
 
 import { loadTicketActivity, awaitingStaff } from "@/lib/supportSignals";
 import { karachiToday } from "@/lib/calendarDates";
+import { applicationDeadline, deadlineUrgency, isUpcoming } from "@/lib/applicationDeadline";
+import { DEADLINE_WINDOW_DAYS } from "@/lib/deadlineReminders";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 function one<T>(v: T | T[] | null) {
@@ -28,6 +30,15 @@ export type StaffQueue = {
   /** Inventory requests nobody has decided. Only Management and Super Admin
    *  can decide one, and their policy is what limits the count. */
   inventoryRequestsPending: number;
+  /**
+   * Application deadlines falling due in the next fortnight, for the officer
+   * they belong to.
+   *
+   * The only notification for these was a daily email, which depends on SMTP
+   * and on somebody reading it. A deadline is the thing this office cannot
+   * miss, so it belongs where the officer looks when they sign in.
+   */
+  upcomingDeadlines: { studentId: string; studentName: string; label: string; dueDate: string; urgency: string }[];
   /** E-signature submissions with both halves in, waiting for sign-off. */
   agreementsToVerify: NamedStudent[];
   overdueInstalments: number;
@@ -39,7 +50,7 @@ export async function loadStaffQueue(supabase: SupabaseClient): Promise<StaffQue
   // as overdue — the same off-by-one already fixed in the calendar.
   const today = karachiToday();
 
-  const [tickets, tasks, docs, agreements, instalments, inbound, markers, inventory] = await Promise.all([
+  const [tickets, tasks, docs, agreements, instalments, inbound, markers, inventory, deadlineRows] = await Promise.all([
     supabase.from("support_tickets").select("id, status"),
     supabase
       .from("application_tasks")
@@ -81,6 +92,11 @@ export async function loadStaffQueue(supabase: SupabaseClient): Promise<StaffQue
       .from("inventory_requests")
       .select("id", { count: "exact", head: true })
       .eq("status", "pending"),
+    // Scoped by RLS to the students this viewer can see, then narrowed below
+    // to the ones they are the processing officer for.
+    supabase
+      .from("applications")
+      .select("id, deadline, student_id, program:programs(name, application_deadline), student:leads(full_name, processing_officer_id)"),
   ]);
 
   // Support: derived from the thread rather than a marker (see supportSignals).
@@ -110,6 +126,32 @@ export async function loadStaffQueue(supabase: SupabaseClient): Promise<StaffQue
     unreadFrom = (named ?? []).map((s) => ({ id: s.id, name: s.full_name }));
   }
 
+  // A deadline is the assigned processing officer's to chase, which is the
+  // same rule the calendar and the reminder email use.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const viewerId = user?.id ?? "";
+
+  const upcomingDeadlines = (deadlineRows.data ?? [])
+    .flatMap((a) => {
+      const program = one(a.program as never) as { name?: string; application_deadline?: string | null } | null;
+      const student = one(a.student as never) as { full_name?: string; processing_officer_id?: string | null } | null;
+      if (student?.processing_officer_id !== viewerId) return [];
+      const due = applicationDeadline(a.deadline as string | null, program?.application_deadline);
+      if (!due || !isUpcoming(due, today, DEADLINE_WINDOW_DAYS)) return [];
+      return [
+        {
+          studentId: a.student_id as string,
+          studentName: student?.full_name ?? "Unknown student",
+          label: program?.name ?? "Application",
+          dueDate: due,
+          urgency: deadlineUrgency(due, today),
+        },
+      ];
+    })
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+
   const agreementsToVerify: NamedStudent[] = (agreements.data ?? []).map((a) => {
     const student = one(a.student as never) as { full_name?: string } | null;
     return { id: a.student_id as string, name: student?.full_name ?? "Unknown student" };
@@ -123,5 +165,6 @@ export async function loadStaffQueue(supabase: SupabaseClient): Promise<StaffQue
     agreementsToVerify,
     overdueInstalments: instalments.count ?? 0,
     inventoryRequestsPending: inventory.count ?? 0,
+    upcomingDeadlines,
   };
 }

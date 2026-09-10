@@ -2,16 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { computeInvoiceStatus } from "@/lib/invoiceStatus";
 import { sendOverdueReminderIfDue } from "@/lib/actions/consultancyFee";
+import { checkCronRequest } from "@/lib/cronAuth";
 
 // Daily Vercel Cron job (see vercel.json) — finds every invoice currently
 // "overdue" (an installment past its due date and still unpaid) and sends a
 // reminder email, throttled to once per 24h per invoice inside
 // sendOverdueReminderIfDue.
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  // This one emails students about money, so being publicly triggerable
+  // mattered more than most. See cronAuth.
+  const auth = checkCronRequest(request);
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const admin = createAdminClient();
 

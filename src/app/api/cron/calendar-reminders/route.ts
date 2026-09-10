@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail, isEmailConfigured } from "@/lib/email";
 import { buildCalendarReminderEmail } from "@/lib/calendarReminderEmail";
 import { buildReminderRecipients } from "@/lib/calendarReminders";
+import { checkCronRequest } from "@/lib/cronAuth";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -17,10 +18,10 @@ function one<T>(v: T | T[] | null) {
 // buildReminderRecipients() so it can be tested against a scoped fixture
 // without ever running this route against live production data.
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  // Same guard as the other two: the old one authenticated nothing when
+  // CRON_SECRET was unset, and it is unset in production.
+  const auth = checkCronRequest(request);
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   if (!isEmailConfigured()) {
     return NextResponse.json({ error: "Email isn't configured.", tasksChecked: 0, personalChecked: 0, recipients: 0 });
