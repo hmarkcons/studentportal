@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { formatDateOnly } from "@/lib/formatDate";
 import { Card } from "@/components/ui/Card";
+import { formatAmount, spendState } from "@/lib/marketing";
 import { NewAdCampaignForm } from "./NewAdCampaignForm";
 import { ActualSpendInput } from "./ActualSpendInput";
 
@@ -16,9 +17,20 @@ export default async function AdCampaignsPage() {
     return Array.isArray(v) ? v[0] ?? null : v;
   }
 
+  const rows = campaigns ?? [];
+  const totalPlanned = rows.reduce((sum, c) => sum + Number(c.planned_spend ?? 0), 0);
+  const totalActual = rows.reduce((sum, c) => sum + Number(c.actual_spend ?? 0), 0);
+
   return (
     <div className="w-full">
-      <h2 className="mb-4 text-lg font-semibold text-ink">Digital Marketing — Ad Campaigns</h2>
+      <h2 className="mb-1 text-lg font-semibold text-ink">Digital Marketing — Ad Campaigns</h2>
+      {/* A spend table with no total is a table you have to add up yourself. */}
+      {rows.length > 0 && (
+        <p className="mb-4 text-sm text-muted">
+          {rows.length} {rows.length === 1 ? "campaign" : "campaigns"} · {formatAmount(totalPlanned)} planned ·{" "}
+          {formatAmount(totalActual)} spent
+        </p>
+      )}
       <Card className="mb-6">
         <NewAdCampaignForm universities={universities ?? []} />
       </Card>
@@ -35,14 +47,34 @@ export default async function AdCampaignsPage() {
             </tr>
           </thead>
           <tbody>
-            {(campaigns ?? []).map((c) => (
+            {rows.map((c) => {
+              const state = spendState(c.planned_spend, c.actual_spend);
+              return (
               <tr key={c.id} className="border-b border-border last:border-0">
                 <td className="px-4 py-3">{c.platform}</td>
                 <td className="px-4 py-3">
                   {c.country ?? "—"} {one(c.university)?.name && `· ${one(c.university)?.name}`}
                 </td>
                 <td className="px-4 py-3">{c.budget_period}</td>
-                <td className="px-4 py-3 text-right tabular-nums">{c.planned_spend ?? "—"}</td>
+                {/* Bare numbers before, with nothing comparing the two, so a
+                    campaign three times over its planned spend read the same
+                    as one comfortably under. */}
+                <td className="px-4 py-3 text-right tabular-nums">
+                  {formatAmount(c.planned_spend)}
+                  {state && (
+                    <span
+                      className={`block text-[10px] ${
+                        state.tone === "danger"
+                          ? "text-danger"
+                          : state.tone === "warning"
+                            ? "text-warning"
+                            : "text-success"
+                      }`}
+                    >
+                      {state.label}
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-right">
                   <ActualSpendInput id={c.id} actualSpend={c.actual_spend} />
                 </td>
@@ -51,8 +83,9 @@ export default async function AdCampaignsPage() {
                   {c.end_date && ` – ${formatDateOnly(c.end_date)}`}
                 </td>
               </tr>
-            ))}
-            {(!campaigns || campaigns.length === 0) && (
+              );
+            })}
+            {rows.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-10 text-center text-muted">
                   No ad campaigns yet.

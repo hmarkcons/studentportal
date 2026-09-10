@@ -16,8 +16,18 @@ export function NewCampaignForm() {
       </Select>
       <Input name="name" placeholder="Campaign name" required className="min-w-[200px] flex-1" />
       <Input name="city" placeholder="City" />
-      <Input name="event_date_start" type="date" />
-      <Input name="budget" type="number" step="0.01" placeholder="Budget" className="w-28" />
+      {/* An event has a start and an end. event_date_end has been in the
+          schema since 0015 with no way to enter it, so a three-day fair was
+          recorded as a single date. */}
+      <label className="flex flex-col gap-1 text-xs text-muted">
+        Starts
+        <Input name="event_date_start" type="date" />
+      </label>
+      <label className="flex flex-col gap-1 text-xs text-muted">
+        Ends
+        <Input name="event_date_end" type="date" />
+      </label>
+      <Input name="budget" type="number" step="0.01" min="0" placeholder="Budget" className="w-28" />
       <Button type="submit" variant="primary" pending={pending}>
         Add campaign
       </Button>

@@ -30,7 +30,7 @@ export function NewAdCampaignForm({ universities }: { universities: { id: string
         <option value="weekly">Weekly</option>
         <option value="monthly">Monthly</option>
       </Select>
-      <Input name="planned_spend" type="number" step="0.01" placeholder="Planned spend" className="w-32" />
+      <Input name="planned_spend" type="number" step="0.01" min="0" placeholder="Planned spend" className="w-32" />
       <Input name="start_date" type="date" />
       <Input name="end_date" type="date" />
       <Button type="submit" variant="primary" pending={pending}>

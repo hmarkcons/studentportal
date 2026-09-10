@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { advanceSocialPostStatus } from "@/lib/actions/marketing";
 import { Select } from "@/components/ui/Input";
-
-const STATUSES = ["brief_sent", "in_design", "ready_for_review", "approved", "scheduled", "posted"];
+import { SOCIAL_POST_STATUSES, socialPostStatusLabel } from "@/lib/marketing";
 
 export function StatusAdvance({ id, status }: { id: string; status: string }) {
   const [value, setValue] = useState(status);
@@ -24,9 +23,9 @@ export function StatusAdvance({ id, status }: { id: string; status: string }) {
   return (
     <div>
       <Select value={value} onChange={(e) => handleChange(e.target.value)} className="text-xs">
-        {STATUSES.map((s) => (
+        {SOCIAL_POST_STATUSES.map((s) => (
           <option key={s} value={s}>
-            {s.replace(/_/g, " ")}
+            {socialPostStatusLabel(s)}
           </option>
         ))}
       </Select>
