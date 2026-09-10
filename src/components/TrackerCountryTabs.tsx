@@ -54,7 +54,7 @@ export function TrackerCountryTabs({
       )}
 
       {tabs.map((t) => (
-        <div key={t.code} hidden={t.code !== active}>
+        <div key={t.code} data-tracker-country={t.code} hidden={t.code !== active}>
           {tabs.length === 1 && <p className="mb-2 text-xs font-medium text-muted">{t.label}</p>}
           {t.content}
         </div>
