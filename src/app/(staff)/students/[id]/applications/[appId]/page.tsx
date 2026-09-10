@@ -150,10 +150,13 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
         <Badge tone="info">{app.current_stage.replace(/_/g, " ")}</Badge>
       </div>
 
+      {/* One tracker per country, on the student's dashboard — not one per
+          application. This used to open a second tracker keyed to this
+          application, whose answers the dashboard could not see. */}
       {hasTracker && (
         <div className="mb-6">
-          <Link href={`/students/${id}/applications/${appId}/tracker`} className="text-sm font-medium text-primary hover:underline">
-            Open country documentation tracker →
+          <Link href={`/students/${id}`} className="text-sm font-medium text-primary hover:underline">
+            Open the country documentation tracker on the dashboard →
           </Link>
         </div>
       )}

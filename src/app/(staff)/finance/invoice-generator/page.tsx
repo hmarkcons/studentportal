@@ -157,7 +157,7 @@ export default async function InvoiceGeneratorPage() {
     <div className="mx-auto max-w-5xl">
       <h2 className="mb-1 text-lg font-semibold text-ink">Invoice Generator</h2>
       <p className="mb-4 text-sm text-muted">
-        Pick a registered student — the consultancy fee, administrative charge and any discount are pulled from their
+        Pick a registered student — the consultancy fee, administrative fee and any discount are pulled from their
         registered country and signed agreement, and SRB tax is applied automatically.
       </p>
 

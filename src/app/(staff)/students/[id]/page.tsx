@@ -26,6 +26,7 @@ import { RegistrationEditForm } from "./RegistrationEditForm";
 import { getCachedDestinations, getCachedCounselors, getCachedAgreementTemplates, getCachedFeeProducts } from "@/lib/cachedQueries";
 import { getEffectivePermissions } from "@/lib/auth/permissions";
 import { CollapsibleCard } from "@/components/CollapsibleCard";
+import { TrackerCountryTabs } from "@/components/TrackerCountryTabs";
 import { uploadedLine } from "@/lib/activityStamp";
 
 function one<T>(v: T | T[] | null) {
@@ -87,7 +88,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       supabase.from("leads").select("assigned_counselor_id, processing_officer_id, intake, discount_amount, discount_reason").eq("id", id).maybeSingle(),
       supabase
         .from("lead_destinations")
-        .select("destination_id, is_backup, created_at, dashboard_stage_values, destination:destinations(display_name, dashboard_pipeline_stages)")
+        .select("destination_id, is_backup, created_at, dashboard_stage_values, destination:destinations(display_name, country_code, dashboard_pipeline_stages)")
         .eq("lead_id", id),
       supabase
         .from("agreements")
@@ -540,6 +541,27 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
 
   const trackerProgress = summariseTracker(trackerSections);
 
+  // Primary country first, then backups, matching the Applications tab. The
+  // student's lead_destinations rows are what say which is which; a country
+  // with a tracker but no destination row (a destination removed after the
+  // application was made) goes last rather than disappearing.
+  const backupByCode = new Map<string, boolean>();
+  const destinationOrder = new Map<string, number>();
+  (selectedDestinations ?? []).forEach((row) => {
+    const dest = one(row.destination as never) as { country_code?: string } | null;
+    if (!dest?.country_code) return;
+    backupByCode.set(dest.country_code, Boolean(row.is_backup));
+    destinationOrder.set(dest.country_code, row.is_backup ? 1 : 0);
+  });
+
+  const trackerTabs = trackerSections
+    .map((section) => ({
+      section,
+      isBackup: backupByCode.get(section.entry.countryCode) ?? false,
+      rank: destinationOrder.get(section.entry.countryCode) ?? 2,
+    }))
+    .sort((a, b) => a.rank - b.rank || a.section.entry.displayName.localeCompare(b.section.entry.displayName));
+
   return (
     <div>
       {destinationPipelineRows.length > 0 && (
@@ -643,28 +665,34 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
           id="documentation-tracker"
           title="Documentation tracker"
           className="mt-6"
-          subtitle={trackerProgress.subtitle}
           badge={
             <Badge tone={trackerProgress.tone}>
               {trackerProgress.filled} / {trackerProgress.total} recorded
             </Badge>
           }
         >
-          <div className="flex flex-col gap-6">
-            {trackerSections.map(({ entry, values, fields, universityOptions, regionByUniversityValue }) => (
-              <div key={entry.countryCode}>
-                <p className="mb-2 text-xs font-medium text-muted">{entry.displayName}</p>
+          {/* One tab per country. There is one tracker per country and always
+              was — this is about being able to look at one of them, rather
+              than three sets of twenty-odd fields stacked in one card. */}
+          <TrackerCountryTabs
+            tabs={trackerTabs.map(({ section, isBackup }) => ({
+              code: section.entry.countryCode,
+              label: section.entry.displayName,
+              isBackup,
+              filled: section.fields.filter((f) => (section.values[f.key] ?? "").trim() !== "").length,
+              total: section.fields.length,
+              content: (
                 <CountryTrackerForm
-                  applicationId={entry.id}
-                  fields={fields}
-                  values={values}
+                  applicationId={section.entry.id}
+                  fields={section.fields}
+                  values={section.values}
                   revalidateTo={`/students/${id}`}
-                  universityOptions={universityOptions}
-                  regionByUniversityValue={regionByUniversityValue}
+                  universityOptions={section.universityOptions}
+                  regionByUniversityValue={section.regionByUniversityValue}
                 />
-              </div>
-            ))}
-          </div>
+              ),
+            }))}
+          />
         </CollapsibleCard>
       )}
 

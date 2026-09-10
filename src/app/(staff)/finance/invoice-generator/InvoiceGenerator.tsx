@@ -110,7 +110,7 @@ export function InvoiceGenerator({ students, bank }: { students: StudentOption[]
               <Input name="consultancy_fee" type="number" step="0.01" value={fee} onChange={(e) => setFee(e.target.value)} required />
             </label>
             <label className="flex flex-col gap-1 text-xs text-muted">
-              Administrative charge <span className="text-[10px]">({SOURCE_NOTE[student.source.adminCharge]})</span>
+              Administrative fee <span className="text-[10px]">({SOURCE_NOTE[student.source.adminCharge]})</span>
               <Input name="admin_charge" type="number" step="0.01" value={admin} onChange={(e) => setAdmin(e.target.value)} required />
             </label>
             <label className="flex flex-col gap-1 text-xs text-muted">
@@ -150,7 +150,7 @@ export function InvoiceGenerator({ students, bank }: { students: StudentOption[]
               )}
               {math.discountAmount > 0 && <Row label="Net consultancy fee" value={fmt(currency, math.netConsultancyFee)} muted />}
               <Row label={`SRB tax (${math.taxRate}% of net fee)`} value={fmt(currency, math.taxAmount)} />
-              <Row label="Administrative charge" value={fmt(currency, math.adminCharge)} />
+              <Row label="Administrative fee" value={fmt(currency, math.adminCharge)} />
               <div className="mt-1 flex items-center justify-between border-t border-border pt-1 text-sm font-semibold text-ink">
                 <dt>Total payable</dt>
                 <dd className="font-mono">{fmt(currency, math.total)}</dd>

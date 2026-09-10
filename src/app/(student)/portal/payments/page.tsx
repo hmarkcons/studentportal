@@ -115,7 +115,7 @@ export default async function PortalPaymentsPage() {
                   />
                 )}
                 {math.taxAmount > 0 && <Line label={`SRB tax · ${math.taxRate}%`} value={money(cur, math.taxAmount)} />}
-                {math.adminCharge > 0 && <Line label="Administrative charge" value={money(cur, math.adminCharge)} />}
+                {math.adminCharge > 0 && <Line label="Administrative fee" value={money(cur, math.adminCharge)} />}
                 <Line label="Total" value={money(cur, total)} strong />
                 {progress.paid > 0 && <Line label="Paid" value={`- ${money(cur, progress.paid)}`} tone="success" />}
                 <Line label="Balance" value={money(cur, progress.outstanding)} strong tone={settled ? "success" : undefined} />
@@ -141,7 +141,7 @@ export default async function PortalPaymentsPage() {
                             {/* The administrative charge is collected with the
                                 first instalment, so it is larger by design. */}
                             {i.installment_no === 1 && math.adminCharge > 0 && (
-                              <span className="text-muted"> · includes the {money(cur, math.adminCharge)} admin charge</span>
+                              <span className="text-muted"> · includes the {money(cur, math.adminCharge)} admin fee</span>
                             )}
                             {i.status === "partial" && Number(i.amount_paid ?? 0) > 0 && (
                               <span className="text-muted"> · {money(cur, Number(i.amount_paid))} received</span>

@@ -196,8 +196,8 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
         {data.adminCharge > 0 && (
           <View style={styles.itemRow}>
             <View style={{ flex: 3, paddingRight: 16 }}>
-              <Text style={styles.itemName}>Administrative Charges</Text>
-              <Text style={styles.itemDesc}>Administrative charges are non-refundable in any case.</Text>
+              <Text style={styles.itemName}>Administrative Fee</Text>
+              <Text style={styles.itemDesc}>The administrative fee is non-refundable in any case.</Text>
             </View>
             <Text style={[styles.num, { flex: 1, textAlign: "right" }]}>{money(data.currencySymbol, data.adminCharge)}</Text>
             <Text style={[styles.num, { flex: 1, textAlign: "right" }]}>{money(data.currencySymbol, data.adminCharge)}</Text>

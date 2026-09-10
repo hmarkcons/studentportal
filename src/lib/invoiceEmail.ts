@@ -115,11 +115,11 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
     breakdown.push([`Discount${data.discountReason ? ` · ${data.discountReason}` : ""}`, `− ${amount(math.discountAmount)}`]);
   }
   if (math.taxAmount > 0) breakdown.push([`SRB tax · ${math.taxRate}%`, amount(math.taxAmount)]);
-  if (math.adminCharge > 0) breakdown.push(["Administrative charge", amount(math.adminCharge)]);
+  if (math.adminCharge > 0) breakdown.push(["Administrative fee", amount(math.adminCharge)]);
 
   // Installment 1 carries the whole administrative charge — see
   // buildInstallmentPlan. Unexplained, a bigger first payment reads as an error.
-  const adminNote = (no: number) => (no === 1 && math.adminCharge > 0 ? " · includes the administrative charge" : "");
+  const adminNote = (no: number) => (no === 1 && math.adminCharge > 0 ? " · includes the administrative fee" : "");
 
   // ---- plain text (what a text-only client, and most spam filters, see) ----
   const text = [
@@ -191,7 +191,7 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
                 (i) => `<tr>
                   <td style="padding:8px 0;border-bottom:1px solid ${HAIR};font:13px ${FONT};color:${INK}">
                     ${i.no}.&nbsp;<span style="font:13px ${NUM}">${esc(amount(i.amount))}</span>${
-                      i.no === 1 && math.adminCharge > 0 ? `<span style="color:${FAINT}"> · incl. admin charge</span>` : ""
+                      i.no === 1 && math.adminCharge > 0 ? `<span style="color:${FAINT}"> · incl. admin fee</span>` : ""
                     }
                   </td>
                   <td style="padding:8px 0;border-bottom:1px solid ${HAIR};text-align:right;white-space:nowrap;font:13px ${FONT};color:${i.paid ? GREEN : FAINT}">

@@ -224,7 +224,7 @@ function InvoiceRow({ inv, canDelete }: { inv: GeneratedInvoice; canDelete: bool
               />
             )}
             <Line label={`SRB tax (${inv.math.taxRate}%)`} value={fmt(inv.currency, inv.math.taxAmount)} />
-            <Line label="Administrative charge" value={fmt(inv.currency, inv.math.adminCharge)} />
+            <Line label="Administrative fee" value={fmt(inv.currency, inv.math.adminCharge)} />
             <Line label="Total" value={fmt(inv.currency, inv.math.total)} strong />
           </dl>
 
