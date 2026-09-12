@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { CollapsibleCard } from "@/components/CollapsibleCard";
 import { listTrackerDefinitions, listTrackerCountries } from "@/lib/actions/countryTracker";
 import { NewTrackerFieldForm, TrackerFieldRow } from "./TrackerFieldForm";
 import { NewCountryForm } from "./NewCountryForm";
@@ -30,25 +31,47 @@ export default async function DocumentTrackersPage() {
 
       {isSuperAdmin && <NewCountryForm />}
 
-      <div className="flex flex-col gap-6">
-        {countries.map((code) => (
-          <Card key={code}>
-            <h3 className="mb-3 text-sm font-medium text-ink">
-              {nameByCode.get(code) ?? code} <span className="text-xs text-muted">({code})</span>
-            </h3>
-            <div className="flex flex-col">
-              {(defsByCountry[code] ?? []).map((f) => (
-                <TrackerFieldRow key={f.id} field={f} />
-              ))}
-              {(defsByCountry[code] ?? []).length === 0 && <p className="py-2 text-sm text-muted">No fields yet.</p>}
-            </div>
-            {isSuperAdmin && (
-              <div className="mt-3">
-                <NewTrackerFieldForm countryCode={code} />
+      {/* One card per country, all shut on every open and refresh, nothing
+          remembered — the same rule as everywhere else in the app. Nine
+          countries at up to twenty-one fields each made this a page you
+          scrolled rather than read. */}
+      <div className="flex flex-col gap-4">
+        {countries.map((code) => {
+          const fields = defsByCountry[code] ?? [];
+          const hasFinalizedUniversity = fields.some((f) => f.isFinalizedUniversity);
+          return (
+            <CollapsibleCard
+              key={code}
+              id={`tracker-${code}`}
+              title={nameByCode.get(code) ?? code}
+              subtitle={code}
+              badge={
+                <span className="flex flex-wrap items-center gap-2">
+                  {/* A tracker with no field recording the finalised
+                      university cannot do the one thing every country's
+                      tracker has to, so it is worth seeing without opening
+                      the card. */}
+                  {!hasFinalizedUniversity && <Badge tone="danger">No finalised-university field</Badge>}
+                  <Badge tone={fields.length === 0 ? "warning" : "neutral"}>
+                    {fields.length} {fields.length === 1 ? "field" : "fields"}
+                  </Badge>
+                </span>
+              }
+            >
+              <div className="flex flex-col">
+                {fields.map((f) => (
+                  <TrackerFieldRow key={f.id} field={f} />
+                ))}
+                {fields.length === 0 && <p className="py-2 text-sm text-muted">No fields yet.</p>}
               </div>
-            )}
-          </Card>
-        ))}
+              {isSuperAdmin && (
+                <div className="mt-3">
+                  <NewTrackerFieldForm countryCode={code} />
+                </div>
+              )}
+            </CollapsibleCard>
+          );
+        })}
         {countries.length === 0 && <EmptyState>No document trackers configured yet.</EmptyState>}
       </div>
     </div>
