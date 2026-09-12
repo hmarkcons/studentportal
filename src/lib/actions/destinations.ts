@@ -153,12 +153,20 @@ export async function updateDestination(destinationId: string, _prevState: unkno
   const consultancy_fee_currency = String(formData.get("consultancy_fee_currency") ?? "EUR");
   const installment_plan = String(formData.get("installment_plan") ?? "").trim() || null;
   const status = String(formData.get("status") ?? "active");
+  // What this destination calls choosing the university to proceed with.
+  // Italy calls it pre-enrolment; somewhere else will call it something else
+  // again, and that should not need a developer.
+  const finalize_action_label = String(formData.get("finalize_action_label") ?? "").trim() || "Finalize for visa";
+  const finalized_badge_label = String(formData.get("finalized_badge_label") ?? "").trim() || "Finalized for visa";
 
   if (!country || !country_code || !["public", "private"].includes(track) || !currency || !display_name) {
     return { error: "Fill in all required fields." };
   }
   if (admin_charge < 0 || consultancy_fee < 0) {
     return { error: "Admin charge and consultancy fee can't be negative." };
+  }
+  if (finalize_action_label.length > 40 || finalized_badge_label.length > 40) {
+    return { error: "Keep the finalising wording under 40 characters — it has to fit on a button and a badge." };
   }
 
   const { error } = await supabase
@@ -175,6 +183,8 @@ export async function updateDestination(destinationId: string, _prevState: unkno
       consultancy_fee_currency,
       installment_plan,
       status,
+      finalize_action_label,
+      finalized_badge_label,
     })
     .eq("id", destinationId);
 

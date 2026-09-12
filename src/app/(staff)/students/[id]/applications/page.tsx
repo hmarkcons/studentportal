@@ -26,7 +26,7 @@ export default async function StudentApplicationsTab(props: {
       .from("applications")
       .select(
         `id, current_stage, intake, deadline, is_finalized,
-       university:universities(name, destination:destinations(display_name, country_code, pipeline_stages)),
+       university:universities(name, destination:destinations(display_name, country_code, pipeline_stages, finalize_action_label, finalized_badge_label)),
        program:programs(name)`
       )
       .eq("student_id", id)
@@ -159,10 +159,15 @@ export default async function StudentApplicationsTab(props: {
             {(apps ?? []).map((a) => {
               const uni = one(a.university as never) as { name?: string; destination?: unknown } | null;
               const dest = uni?.destination
-                ? (one(uni.destination as never) as { pipeline_stages?: string[]; country_code?: string } | null)
+                ? (one(uni.destination as never) as {
+                    pipeline_stages?: string[];
+                    country_code?: string;
+                    finalize_action_label?: string;
+                    finalized_badge_label?: string;
+                  } | null)
                 : null;
               const program = one(a.program as never) as { name?: string } | null;
-              const isItaly = dest?.country_code === "IT";
+
               const number = numberById.get(a.id) ?? 0;
               // Banded like a spreadsheet so adjacent applications don't blur
               // together — tinted with the brand green rather than plain grey.
@@ -195,7 +200,7 @@ export default async function StudentApplicationsTab(props: {
                       {a.is_finalized && (
                         <>
                           {" · "}
-                          <Badge tone="success">{isItaly ? "Pre-Enrolled" : "Finalized for visa"}</Badge>
+                          <Badge tone="success">{dest?.finalized_badge_label ?? "Finalized for visa"}</Badge>
                         </>
                       )}
                     </span>
@@ -205,7 +210,8 @@ export default async function StudentApplicationsTab(props: {
                         studentId={id}
                         revalidateTo={revalidateTo}
                         isFinalized={a.is_finalized}
-                        countryCode={dest?.country_code}
+                        actionLabel={dest?.finalize_action_label ?? undefined}
+                        badgeLabel={dest?.finalized_badge_label ?? undefined}
                         blockedByOther={hasFinalized && !a.is_finalized}
                       />
                       {canDelete && (

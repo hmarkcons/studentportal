@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useActionState } from "react";
 import { saveTrackerFields } from "@/lib/actions/countryTracker";
@@ -25,6 +26,8 @@ export function CountryTrackerForm({
   dynamicOptions = {},
   regionByUniversityValue = {},
   universityOptions = [],
+  studentId,
+  finalizeActionLabel = "Finalize for visa",
 }: {
   applicationId: string;
   fields: TrackerFieldDef[];
@@ -40,6 +43,11 @@ export function CountryTrackerForm({
   // This application's country's applied universities, used as the per-row
   // picker for multi_university_status fields.
   universityOptions?: { value: string; label: string }[];
+  /** For the link to the Applications tab, where the university is decided. */
+  studentId?: string;
+  /** What this destination calls finalising a university, e.g. "Pre-Enroll
+   *  University" — set per destination in Setup, not hardcoded per country. */
+  finalizeActionLabel?: string;
 }) {
   // Portal logins live in their own section on the student dashboard, so the
   // tracker no longer carries credential fields at all.
@@ -51,7 +59,10 @@ export function CountryTrackerForm({
     null,
     applicationId,
     revalidateTo,
-    plainFields.map((f) => ({ key: f.key, type: f.type }))
+    // The finalised university is not the tracker's to write: it comes from
+    // the finalised application. saveTrackerFields writes every key it is
+    // given, so leaving it in would blank it on each save.
+    plainFields.filter((f) => !f.isFinalizedUniversity).map((f) => ({ key: f.key, type: f.type }))
   );
   const [state, formAction, pending] = useActionState(action, undefined);
 
@@ -77,7 +88,18 @@ export function CountryTrackerForm({
           return (
             <div key={f.key} className={f.type === "multi_university_status" ? "col-span-full flex flex-col gap-1" : "flex flex-col gap-1"}>
               <label className="text-xs text-muted">{f.label}</label>
-              {f.type === "boolean" ? (
+              {/* The university the student is proceeding with is decided on
+                  the Applications tab and read here, not asked for twice. Shown
+                  rather than editable so the two can never disagree: to change
+                  it, un-finalise that application and finalise another. */}
+              {f.isFinalizedUniversity ? (
+                <FinalizedUniversityField
+                  value={live[f.key] ?? ""}
+                  options={selectOptions}
+                  studentId={studentId}
+                  actionLabel={finalizeActionLabel}
+                />
+              ) : f.type === "boolean" ? (
                 <input type="checkbox" name={f.key} defaultChecked={values[f.key] === "true"} className="h-4 w-4 self-start" />
               ) : f.type === "select" ? (
                 <Select
@@ -286,6 +308,65 @@ function UniversityStatusField({
       </button>
       {universities.length === 0 && <p className="text-xs text-muted">No applications for this country yet.</p>}
       <input type="hidden" name={fieldKey} value={JSON.stringify(entries.filter((e) => e.university_id && e.status))} />
+    </div>
+  );
+}
+
+/**
+ * The finalised university, shown rather than asked for.
+ *
+ * Which university a student is proceeding with is decided once, by finalising
+ * an application on the Applications tab, and the tracker reads it (0163). It
+ * used to be a second dropdown that could quietly disagree with the
+ * Applications tab, with nothing to say which was right.
+ *
+ * A hidden input carries the value so saving the rest of the tracker does not
+ * blank it — the save writes every field it is given.
+ */
+function FinalizedUniversityField({
+  value,
+  options,
+  studentId,
+  actionLabel,
+}: {
+  value: string;
+  options: { value: string; label: string }[];
+  studentId?: string;
+  actionLabel: string;
+}) {
+  const chosen = options.find((o) => o.value === value);
+
+  return (
+    <div className="flex flex-col gap-1">
+      <p
+        className={`rounded-md border border-border bg-bg px-3 py-2 text-sm ${chosen ? "text-ink" : "text-muted"}`}
+      >
+        {chosen?.label ?? "No university finalised yet"}
+      </p>
+      <p className="text-xs text-muted">
+        {chosen ? (
+          <>
+            From the finalised application.{" "}
+            {studentId && (
+              <Link href={`/students/${studentId}/applications`} className="text-primary hover:underline">
+                Change it on the Applications tab
+              </Link>
+            )}
+          </>
+        ) : (
+          <>
+            Use &ldquo;{actionLabel}&rdquo; on the{" "}
+            {studentId ? (
+              <Link href={`/students/${studentId}/applications`} className="text-primary hover:underline">
+                Applications tab
+              </Link>
+            ) : (
+              "Applications tab"
+            )}{" "}
+            and it appears here.
+          </>
+        )}
+      </p>
     </div>
   );
 }

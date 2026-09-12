@@ -65,6 +65,13 @@ export function NewTrackerFieldForm({ countryCode }: { countryCode: string }) {
         <input type="checkbox" name="is_appointment" />
         This is an appointment the student attends (date fields only)
       </label>
+      {/* Every country's tracker needs exactly one of these, and it is the
+          first field a new tracker must have. Filled from whichever
+          application staff finalise, and shown read-only on the tracker. */}
+      <label className="col-span-full flex items-center gap-2 text-xs text-ink">
+        <input type="checkbox" name="is_finalized_university" />
+        This field records the finalised university (Select, options left blank — one per country)
+      </label>
       <label className="flex flex-col gap-1 text-xs text-muted">
         Visa role
         <Select name="visa_role" defaultValue="">

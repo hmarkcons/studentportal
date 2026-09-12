@@ -13,6 +13,8 @@ type Destination = {
   currency: string;
   display_name: string;
   visa_type: string | null;
+  finalize_action_label?: string | null;
+  finalized_badge_label?: string | null;
   admin_charge: number;
   consultancy_fee: number;
   consultancy_fee_currency: string;
@@ -67,6 +69,32 @@ export function DestinationEditForm({ destination }: { destination: Destination 
         Visa type
         <Input name="visa_type" defaultValue={destination.visa_type ?? ""} />
       </label>
+
+      {/* Choosing the university a student will actually apply for a visa with
+          is one step under different names — Italy calls it pre-enrolment. The
+          documentation tracker reads whichever application carries it, so the
+          wording lives here rather than in a country-code comparison in the
+          code. */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <label className="flex flex-col gap-1 text-xs text-muted">
+          Wording for finalising a university (button)
+          <Input
+            name="finalize_action_label"
+            defaultValue={destination.finalize_action_label ?? "Finalize for visa"}
+            maxLength={40}
+            placeholder="Finalize for visa"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-muted">
+          Wording once it is done (badge)
+          <Input
+            name="finalized_badge_label"
+            defaultValue={destination.finalized_badge_label ?? "Finalized for visa"}
+            maxLength={40}
+            placeholder="Finalized for visa"
+          />
+        </label>
+      </div>
       <div className="grid grid-cols-3 gap-4">
         <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
           Admin charge

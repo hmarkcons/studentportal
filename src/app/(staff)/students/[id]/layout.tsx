@@ -25,7 +25,7 @@ export default async function StudentLayout({ children, params }: { children: Re
     supabase.from("student_profiles").select("photo_path").eq("student_id", id).maybeSingle(),
     supabase
       .from("applications")
-      .select("id, university:universities(name, destination:destinations(country_code))")
+      .select("id, university:universities(name, destination:destinations(country_code, finalized_badge_label))")
       .eq("student_id", id)
       .eq("is_finalized", true)
       .maybeSingle(),
@@ -41,10 +41,12 @@ export default async function StudentLayout({ children, params }: { children: Re
   const finalizedUniversityName = finalizedUni?.name ?? null;
   const finalizedDest = finalizedUni?.destination
     ? ((Array.isArray(finalizedUni.destination) ? finalizedUni.destination[0] : finalizedUni.destination) as
-        | { country_code?: string }
+        | { country_code?: string; finalized_badge_label?: string }
         | null)
     : null;
-  const finalizedIsItaly = finalizedDest?.country_code === "IT";
+  // What this destination calls the state, set in Setup rather than compared
+  // against a country code here.
+  const finalizedBadgeLabel = finalizedDest?.finalized_badge_label ?? "Finalized for visa";
 
   let photoUrl: string | null = null;
   if (profile?.photo_path) {
@@ -84,7 +86,7 @@ export default async function StudentLayout({ children, params }: { children: Re
             </p>
             {finalizedUniversityName && (
               <p className="mt-1 flex flex-wrap items-center gap-1.5 text-sm">
-                <Badge tone="success">{finalizedIsItaly ? "Pre-Enrolled" : "Finalized for visa"}</Badge>
+                <Badge tone="success">{finalizedBadgeLabel}</Badge>
                 <span className="font-medium text-ink">{finalizedUniversityName}</span>
               </p>
             )}

@@ -88,7 +88,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       supabase.from("leads").select("assigned_counselor_id, processing_officer_id, intake, discount_amount, discount_reason").eq("id", id).maybeSingle(),
       supabase
         .from("lead_destinations")
-        .select("destination_id, is_backup, created_at, dashboard_stage_values, destination:destinations(display_name, country_code, dashboard_pipeline_stages)")
+        .select("destination_id, is_backup, created_at, dashboard_stage_values, destination:destinations(display_name, country_code, dashboard_pipeline_stages, finalize_action_label)")
         .eq("lead_id", id),
       supabase
         .from("agreements")
@@ -547,11 +547,13 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   // application was made) goes last rather than disappearing.
   const backupByCode = new Map<string, boolean>();
   const destinationOrder = new Map<string, number>();
+  const finalizeLabelByCode = new Map<string, string>();
   (selectedDestinations ?? []).forEach((row) => {
-    const dest = one(row.destination as never) as { country_code?: string } | null;
+    const dest = one(row.destination as never) as { country_code?: string; finalize_action_label?: string } | null;
     if (!dest?.country_code) return;
     backupByCode.set(dest.country_code, Boolean(row.is_backup));
     destinationOrder.set(dest.country_code, row.is_backup ? 1 : 0);
+    if (dest.finalize_action_label) finalizeLabelByCode.set(dest.country_code, dest.finalize_action_label);
   });
 
   const trackerTabs = trackerSections
@@ -689,6 +691,8 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                   revalidateTo={`/students/${id}`}
                   universityOptions={section.universityOptions}
                   regionByUniversityValue={section.regionByUniversityValue}
+                  studentId={id}
+                  finalizeActionLabel={finalizeLabelByCode.get(section.entry.countryCode) ?? "Finalize for visa"}
                 />
               ),
             }))}

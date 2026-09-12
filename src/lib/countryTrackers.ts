@@ -47,5 +47,12 @@ export type TrackerFieldDef = {
   /** A date the student turns up to — listed on their Appointments tab and on
    *  the staff Calendar. Only meaningful on a date field. */
   isAppointment?: boolean;
+  /**
+   * This field records the university the student is proceeding with for the
+   * visa (0163). It is filled from the finalised application and shown
+   * read-only: the way to change it is to finalise a different application,
+   * so the tracker can never disagree with the Applications tab.
+   */
+  isFinalizedUniversity?: boolean;
   sortOrder?: number;
 };
