@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { BoardingPassTracker } from "@/components/ui/BoardingPassTracker";
 import { DeleteApplicationButton } from "./DeleteApplicationButton";
 import { FinalizeApplicationButton } from "./FinalizeApplicationButton";
+import { ApplicationOrderList } from "./ApplicationOrderList";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -30,6 +31,10 @@ export default async function StudentApplicationsTab(props: {
        program:programs(name)`
       )
       .eq("student_id", id)
+      // The priority staff set, then creation order for anything that somehow
+      // has no position yet — nullsFirst:false so an unpositioned application
+      // lands at the bottom rather than jumping to the top of the list (0171).
+      .order("sort_order", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: true }),
     // The countries this student is registered for, and which of them are
     // backups. A backup country with nothing in it yet is worth a visible,
@@ -155,8 +160,10 @@ export default async function StudentApplicationsTab(props: {
               </EmptyState>
             </Card>
           )}
-          <div className="flex flex-col gap-4">
-            {(apps ?? []).map((a) => {
+          <ApplicationOrderList
+            studentId={id}
+            canEdit
+            applications={(apps ?? []).map((a) => {
               const uni = one(a.university as never) as { name?: string; destination?: unknown } | null;
               const dest = uni?.destination
                 ? (one(uni.destination as never) as {
@@ -168,13 +175,18 @@ export default async function StudentApplicationsTab(props: {
                 : null;
               const program = one(a.program as never) as { name?: string } | null;
 
+              const orderableStage = a.current_stage;
               const number = numberById.get(a.id) ?? 0;
               // Banded like a spreadsheet so adjacent applications don't blur
               // together — tinted with the brand green rather than plain grey.
               const banded = number % 2 === 0;
-              return (
+              return {
+                id: a.id,
+                universityName: uni?.name ?? "University",
+                programName: program?.name ?? null,
+                stage: orderableStage,
+                card: (
                 <div
-                  key={a.id}
                   className={`rounded-xl p-2 ${banded ? "bg-[color-mix(in_srgb,var(--primary)_7%,transparent)]" : "bg-transparent"}`}
                 >
                   <div className="mb-1 flex items-center gap-2 px-1">
@@ -220,9 +232,10 @@ export default async function StudentApplicationsTab(props: {
                     </div>
                   </div>
                 </div>
-              );
+                ),
+              };
             })}
-          </div>
+          />
         </div>
         );
       })}

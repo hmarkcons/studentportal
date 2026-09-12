@@ -380,3 +380,49 @@ export async function deleteApplicationTask(taskId: string, revalidateTo: string
   revalidatePath(revalidateTo);
   return { success: true };
 }
+
+/**
+ * Reorders a student's applications so the list reads in priority order.
+ *
+ * The list was ordered by created_at, so whichever university happened to be
+ * entered first sat at the top forever — the opposite of what staff read it
+ * for. Rearranging used to mean deleting an application and making a new one,
+ * which takes its tasks, documents, interviews and stage history with it.
+ *
+ * The ids are client-supplied, so they are checked against this student's own
+ * applications before anything is written: a bound argument is not a
+ * permission, and a stray id here would renumber somebody else's list.
+ */
+export async function reorderApplications(studentId: string, orderedIds: string[]) {
+  const supabase = await createClient();
+
+  if (!Array.isArray(orderedIds) || orderedIds.length === 0) return { error: "Nothing to reorder." };
+  if (new Set(orderedIds).size !== orderedIds.length) return { error: "That order listed the same application twice." };
+
+  const { data: owned, error: readError } = await supabase
+    .from("applications")
+    .select("id")
+    .eq("student_id", studentId)
+    .in("id", orderedIds);
+  if (readError) return { error: readError.message };
+
+  // Every id has to be one of this student's, and RLS has to have let us see
+  // it. A short list back means one was not ours to move.
+  if ((owned ?? []).length !== orderedIds.length) {
+    return { error: "That order refers to an application that isn't this student's — reload and try again." };
+  }
+
+  // Tens, so a later single move can be written without renumbering the rest.
+  for (const [index, id] of orderedIds.entries()) {
+    const { error } = await supabase
+      .from("applications")
+      .update({ sort_order: (index + 1) * 10 })
+      .eq("id", id)
+      .eq("student_id", studentId);
+    if (error) return { error: error.message };
+  }
+
+  revalidatePath(`/students/${studentId}/applications`);
+  revalidatePath(`/students/${studentId}`);
+  return { success: true };
+}
