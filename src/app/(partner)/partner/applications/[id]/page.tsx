@@ -71,6 +71,15 @@ export default async function PartnerApplicationDetailPage(props: PageProps<"/pa
 
   const documents = Array.isArray(app.documents_summary) ? app.documents_summary : [];
 
+  // Whether a letter of each kind is already on this application, so the form
+  // says "Replace" and warns that the one being replaced stays on the record.
+  const { data: letters } = await supabase
+    .from("student_documents")
+    .select("category")
+    .eq("application_id", id)
+    .in("category", ["offer_letter", "rejection_letter"]);
+  const sentCategories = new Set((letters ?? []).map((l) => l.category));
+
   return (
     <div className="mx-auto max-w-2xl">
       <Link href="/partner" className="text-sm text-muted hover:text-ink">
@@ -179,8 +188,18 @@ export default async function PartnerApplicationDetailPage(props: PageProps<"/pa
       <Card>
         <h3 className="mb-3 text-sm font-medium text-ink">Upload official document</h3>
         <div className="flex flex-col gap-2">
-          <LetterUploadForm applicationId={id} category="offer_letter" label="offer letter" />
-          <LetterUploadForm applicationId={id} category="rejection_letter" label="rejection letter" />
+          <LetterUploadForm
+            applicationId={id}
+            category="offer_letter"
+            label="offer letter"
+            alreadySent={sentCategories.has("offer_letter")}
+          />
+          <LetterUploadForm
+            applicationId={id}
+            category="rejection_letter"
+            label="rejection letter"
+            alreadySent={sentCategories.has("rejection_letter")}
+          />
         </div>
       </Card>
     </div>

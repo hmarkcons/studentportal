@@ -1,3 +1,4 @@
+import { loadDocumentHistory } from "@/lib/documentHistory";
 import { getStudentUser } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -29,6 +30,8 @@ export default async function PortalDocumentsPage() {
     .eq("student_id", student.id)
     .order("created_at", { ascending: false });
 
+  const docHistory = await loadDocumentHistory(supabase, (rawDocs ?? []).map((d) => d.id));
+
   const docsWithUrls = await Promise.all(
     (rawDocs ?? []).map(async (d) => {
       const uni = d.application_id ? appLabel.get(d.application_id) : null;
@@ -38,9 +41,10 @@ export default async function PortalDocumentsPage() {
       // shared across every application, and labelling it "General" is what
       // stops it reading as a document nobody asked for.
       const custom_name = `${baseName}${uni?.name ? ` — ${uni.name}` : ""}`;
-      if (!d.file_path) return { ...d, custom_name };
+      const past = docHistory.get(d.id) ?? [];
+      if (!d.file_path) return { ...d, custom_name, history: past };
       const { data } = await supabase.storage.from("documents").createSignedUrl(d.file_path, 3600);
-      return { ...d, custom_name, fileUrl: data?.signedUrl ?? null };
+      return { ...d, custom_name, history: past, fileUrl: data?.signedUrl ?? null };
     })
   );
 

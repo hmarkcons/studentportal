@@ -1,3 +1,4 @@
+import { loadDocumentHistory } from "@/lib/documentHistory";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -120,6 +121,8 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
     return Array.isArray(v) ? v[0] ?? null : v;
   }
 
+  const docHistory = await loadDocumentHistory(supabase, (rawDocs ?? []).map((d) => d.id));
+
   const docsWithUrls = await Promise.all(
     (rawDocs ?? []).map(async (d) => {
       const templateName = one2(d.template as never) as { name?: string } | null;
@@ -128,9 +131,10 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
       // application — uploading/verifying one here satisfies it everywhere,
       // not just this university, so it's labeled to make that clear.
       const name = d.application_id === null ? `${baseName} (shared — all applications)` : baseName;
-      if (!d.file_path) return { ...d, name };
+      const past = docHistory.get(d.id) ?? [];
+      if (!d.file_path) return { ...d, name, history: past };
       const { data } = await supabase.storage.from("documents").createSignedUrl(d.file_path, 3600);
-      return { ...d, name, fileUrl: data?.signedUrl ?? null };
+      return { ...d, name, history: past, fileUrl: data?.signedUrl ?? null };
     })
   );
 

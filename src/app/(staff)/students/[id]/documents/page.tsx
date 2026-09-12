@@ -1,3 +1,4 @@
+import { loadDocumentHistory } from "@/lib/documentHistory";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { DocumentChecklist, type DocRow } from "@/components/DocumentChecklist";
@@ -36,6 +37,8 @@ export default async function StudentDocumentsTab(props: PageProps<"/students/[i
 
   const appLabel = new Map((applications ?? []).map((a) => [a.id, one(a.university as never) as { name?: string } | null]));
 
+  const history = await loadDocumentHistory(supabase, (rawDocs ?? []).map((d) => d.id));
+
   const docsWithUrls = await Promise.all(
     (rawDocs ?? []).map(async (d) => {
       const templateName = one(d.template as never) as { name?: string } | null;
@@ -43,9 +46,10 @@ export default async function StudentDocumentsTab(props: PageProps<"/students/[i
       // Only application-specific extras carry a university suffix; the standard
       // checklist is student-level and needs no label of its own.
       const name = `${d.custom_name ?? templateName?.name ?? d.category ?? "Document"}${uni?.name ? ` — ${uni.name}` : ""}`;
-      if (!d.file_path) return { ...d, name };
+      const past = history.get(d.id) ?? [];
+      if (!d.file_path) return { ...d, name, history: past };
       const { data } = await supabase.storage.from("documents").createSignedUrl(d.file_path, 3600);
-      return { ...d, name, fileUrl: data?.signedUrl ?? null };
+      return { ...d, name, history: past, fileUrl: data?.signedUrl ?? null };
     })
   );
 

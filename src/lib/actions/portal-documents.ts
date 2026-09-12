@@ -12,20 +12,32 @@ export async function studentUploadDocument(documentId: string, studentId: strin
   const validationError = validateDocumentFile(file);
   if (validationError) return { error: validationError };
 
-  const { data: existing } = await supabase.from("student_documents").select("status").eq("id", documentId).maybeSingle();
-  if (existing?.status === "verified") {
+  const { data: existing } = await supabase
+    .from("student_documents")
+    .select("status, file_path, version")
+    .eq("id", documentId)
+    .maybeSingle();
+  if (!existing) return { error: "That document requirement no longer exists — reload the page." };
+  if (existing.status === "verified") {
     return { error: "This document is already verified and can't be replaced — ask staff to reopen it first." };
   }
 
-  const path = `${studentId}/${documentId}-${sanitizeFilename(file.name)}`;
-  const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: true });
+  // The version goes in the key, so a replacement cannot land on top of what
+  // it replaces. This used to be `<student>/<document id>-<filename>` with
+  // upsert: true — a student fixing a scan and re-uploading it under the same
+  // filename destroyed the rejected one, which is the evidence of why it was
+  // sent back.
+  const nextVersion = (existing.version ?? 1) + (existing.file_path ? 1 : 0);
+  const path = `${studentId}/${documentId}-v${nextVersion}-${sanitizeFilename(file.name)}`;
+  const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: false });
   if (uploadError) return { error: uploadError.message };
 
-  const { error } = await supabase
-    .from("student_documents")
-    .update({ file_path: path, status: "submitted", uploaded_at: new Date().toISOString(), uploaded_by_role: "student" })
-    .eq("id", documentId);
-
+  // One call, so the archive row and the replacement commit together (0165).
+  const { error } = await supabase.rpc("replace_student_document", {
+    p_document_id: documentId,
+    p_new_path: path,
+    p_uploaded_by_role: "student",
+  });
   if (error) return { error: error.message };
 
   revalidatePath(revalidateTo);

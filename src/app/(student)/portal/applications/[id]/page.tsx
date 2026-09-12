@@ -1,3 +1,4 @@
+import { loadDocumentHistory } from "@/lib/documentHistory";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getStudentUser } from "@/lib/auth/session";
@@ -37,14 +38,17 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
     .eq("student_id", app.student_id)
     .or(`application_id.eq.${id},application_id.is.null`);
 
+  const docHistory = await loadDocumentHistory(supabase, (documents ?? []).map((d) => d.id));
+
   const docsWithUrls = await Promise.all(
     (documents ?? []).map(async (d) => {
       const templateName = one(d.template as never) as { name?: string } | null;
       const baseName = d.custom_name ?? templateName?.name ?? d.category ?? "Document";
       const custom_name = d.application_id === null ? `${baseName} (shared — all applications)` : baseName;
-      if (!d.file_path) return { ...d, custom_name };
+      const past = docHistory.get(d.id) ?? [];
+      if (!d.file_path) return { ...d, custom_name, history: past };
       const { data } = await supabase.storage.from("documents").createSignedUrl(d.file_path, 3600);
-      return { ...d, custom_name, fileUrl: data?.signedUrl ?? null };
+      return { ...d, custom_name, history: past, fileUrl: data?.signedUrl ?? null };
     })
   );
 

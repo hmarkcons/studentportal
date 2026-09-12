@@ -11,10 +11,13 @@ import { DOCUMENT_STATUS_TONE, DOCUMENT_STATUS_LABELS } from "@/lib/constants";
 import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
 import { CATEGORY_ORDER, CATEGORY_LABELS } from "@/lib/documentCategories";
 import { uploadedLine, reviewedLine, addedLine, type UploaderRole } from "@/lib/activityStamp";
+import { DocumentHistory, type ArchivedUpload } from "@/components/DocumentHistory";
 import { DocumentSectionShell, ExpandAllToggle } from "@/components/DocumentSectionShell";
 
 export type DocRow = {
   id: string;
+  /** Everything previously sent against this requirement (0165). */
+  history?: ArchivedUpload[];
   category: string | null;
   status: string;
   file_path: string | null;
@@ -123,6 +126,10 @@ function UploadRow({
             <span>{addedLine(doc.created_at, "Requirement added")}</span>
           )}
         </div>
+        {/* What was sent before this, and why it came back. A replacement used
+            to overwrite what it replaced, so the thing staff rejected — the
+            evidence of why — was gone. */}
+        <DocumentHistory versions={doc.history ?? []} audience="staff" />
       </div>
 
       {showUploadForm ? (

@@ -1,3 +1,4 @@
+import { loadDocumentHistory } from "@/lib/documentHistory";
 import Link from "next/link";
 import { getStaffSession } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
@@ -289,6 +290,8 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
 
   // ---- Level 2: each of these depends only on level-1 results, and is
   // independent of every other level-2 query — fetch concurrently again. ----
+  const docHistory = await loadDocumentHistory(supabase, (rawDocs ?? []).map((d) => d.id));
+
   const [
     agreementLinkEntries,
     { data: allLineItems },
@@ -339,9 +342,10 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         const templateName = one(d.template as never) as { name?: string } | null;
         const uni = d.application_id ? appLabel.get(d.application_id) : null;
         const name = `${d.custom_name ?? templateName?.name ?? d.category ?? "Document"}${uni?.name ? ` — ${uni.name}` : " — Student-level"}`;
-        if (!d.file_path) return { ...d, name };
+        const past = docHistory.get(d.id) ?? [];
+        if (!d.file_path) return { ...d, name, history: past };
         const { data } = await supabase.storage.from("documents").createSignedUrl(d.file_path, 3600);
-        return { ...d, name, fileUrl: data?.signedUrl ?? null };
+        return { ...d, name, history: past, fileUrl: data?.signedUrl ?? null };
       })
     ),
     appIds.length

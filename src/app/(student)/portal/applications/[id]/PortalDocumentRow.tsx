@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { ConfirmedUploadForm } from "@/components/ConfirmedUploadForm";
+import { DocumentHistory, type ArchivedUpload } from "@/components/DocumentHistory";
 import { studentUploadDocument } from "@/lib/actions/portal-documents";
 import { formatDateOnly } from "@/lib/formatDate";
 import { Badge } from "@/components/ui/Badge";
@@ -28,6 +29,8 @@ export function PortalDocumentRow({
     uploaded_at?: string | null;
     uploaded_by_role?: UploaderRole | null;
     verified_at?: string | null;
+    /** Everything previously sent against this requirement (0165). */
+    history?: ArchivedUpload[];
   };
   studentId: string;
   revalidateTo: string;
@@ -35,7 +38,6 @@ export function PortalDocumentRow({
   number?: string;
 }) {
   const action = studentUploadDocument.bind(null, doc.id, studentId, revalidateTo);
-  const [state, formAction, pending] = useActionState(action, undefined);
 
   // A deadline that has gone is the one thing on this row a student must not
   // skim past, so it is coloured rather than left as ordinary grey text.
@@ -94,15 +96,23 @@ export function PortalDocumentRow({
           </p>
         )}
       </div>
+      {/* What was sent before, and why it came back. Kept rather than
+          overwritten, so it is worth showing the student their own attempt. */}
+      <DocumentHistory versions={doc.history ?? []} audience="student" />
+
+      {/* Asks before it sends: a document cannot be taken back once it is
+          in, and if it is sent back the original stays on the record as the
+          rejected version. */}
       {doc.status !== "verified" && (
-        <form action={formAction} className="flex flex-wrap items-center gap-2 sm:shrink-0">
-          <input type="file" name="file" accept={ACCEPTED_DOCUMENT_ACCEPT} capture="environment" className="max-w-full text-xs" />
-          <Button type="submit" pending={pending} size="sm">
-            {doc.status === "rejected" ? "Replace" : "Upload"}
-          </Button>
-        </form>
+        <ConfirmedUploadForm
+          action={action}
+          accept={ACCEPTED_DOCUMENT_ACCEPT}
+          capture="environment"
+          submitLabel={doc.status === "rejected" ? "Replace" : "Upload"}
+          replacing={doc.status === "rejected"}
+          className="sm:shrink-0"
+        />
       )}
-      {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </div>
   );
 }

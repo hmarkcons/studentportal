@@ -1,22 +1,31 @@
 "use client";
 
-import { useActionState } from "react";
 import { partnerUploadLetter } from "@/lib/actions/partner";
-import { Button } from "@/components/ui/Button";
+import { ConfirmedUploadForm } from "@/components/ConfirmedUploadForm";
+import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
 
-export function LetterUploadForm({ applicationId, category, label }: { applicationId: string; category: "offer_letter" | "rejection_letter"; label: string }) {
+export function LetterUploadForm({
+  applicationId,
+  category,
+  label,
+  alreadySent = false,
+}: {
+  applicationId: string;
+  category: "offer_letter" | "rejection_letter";
+  label: string;
+  /** A letter of this kind is already on the application. */
+  alreadySent?: boolean;
+}) {
   const action = partnerUploadLetter.bind(null, applicationId, category);
-  const [state, formAction, pending] = useActionState(action, undefined);
 
+  // Asks before it sends. A letter a university uploads cannot be taken back
+  // by them, and reissuing one leaves the first on the record.
   return (
-    <form action={formAction} className="flex flex-wrap items-center gap-2">
-      {/* max-w-full + wrapping: the native file input's intrinsic minimum
-          width pushed the upload button off-screen at 320px. */}
-      <input type="file" name="file" required className="max-w-full text-xs" />
-      <Button type="submit" variant="outline-primary" size="sm" pending={pending}>
-        Upload {label}
-      </Button>
-      {state?.error && <p className="text-xs text-danger">{state.error}</p>}
-    </form>
+    <ConfirmedUploadForm
+      action={action}
+      accept={ACCEPTED_DOCUMENT_ACCEPT}
+      submitLabel={`${alreadySent ? "Replace" : "Upload"} ${label}`}
+      replacing={alreadySent}
+    />
   );
 }

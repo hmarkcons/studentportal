@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { sanitizeFilename, validateDocumentFile } from "@/lib/documentUpload";
 
 export async function partnerUpdateStage(applicationId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
@@ -19,29 +20,62 @@ export async function partnerUploadLetter(applicationId: string, category: "offe
   const supabase = await createClient();
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) return { error: "Choose a file." };
+  const validationError = validateDocumentFile(file);
+  if (validationError) return { error: validationError };
 
   const { data: app } = await supabase.from("applications").select("student_id").eq("id", applicationId).maybeSingle();
   if (!app) return { error: "Application not found." };
 
-  const path = `${app.student_id}/${applicationId}-${category}-${file.name}`;
-  const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: true });
+  // An existing letter of the same kind on this application is replaced rather
+  // than duplicated, and the one it replaces is archived — a university that
+  // reissues an offer leaves the first one on the record.
+  const { data: existing } = await supabase
+    .from("student_documents")
+    .select("id, status, file_path, version")
+    .eq("application_id", applicationId)
+    .eq("category", category)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (existing?.status === "verified") {
+    return { error: "HMARK has already accepted this letter — send them a message if it needs replacing." };
+  }
+
+  // The filename is sanitised and the version is part of the key. It used to
+  // be the raw filename with upsert: true, so a second letter with the same
+  // name replaced the object in storage, and a name containing an escape
+  // produced a stored path that did not match the object it named.
+  const version = (existing?.version ?? 0) + 1;
+  const path = `${app.student_id}/${applicationId}-${category}-v${version}-${sanitizeFilename(file.name)}`;
+  const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: false });
   if (uploadError) return { error: uploadError.message };
 
-  const { error } = await supabase.from("student_documents").insert({
-    student_id: app.student_id,
-    application_id: applicationId,
-    category,
-    file_path: path,
-    status: "submitted",
-    uploaded_by_role: "partner",
-    // The staff and student upload paths both stamp this; this one did not, so
-    // an offer letter from a university was the one document on file that
-    // nobody could date. uploaded_at has no database default, so the row was
-    // simply left null. A trigger (0154) now backs all three up.
-    uploaded_at: new Date().toISOString(),
-  });
-
-  if (error) return { error: error.message };
+  if (existing) {
+    // Archives whatever was there and points the requirement at the new file,
+    // in one transaction (0165).
+    const { error } = await supabase.rpc("replace_student_document", {
+      p_document_id: existing.id,
+      p_new_path: path,
+      p_uploaded_by_role: "partner",
+    });
+    if (error) return { error: error.message };
+  } else {
+    const { error } = await supabase.from("student_documents").insert({
+      student_id: app.student_id,
+      application_id: applicationId,
+      category,
+      file_path: path,
+      status: "submitted",
+      uploaded_by_role: "partner",
+      // The staff and student upload paths both stamp this; this one did not,
+      // so an offer letter from a university was the one document on file that
+      // nobody could date. uploaded_at has no database default, so the row was
+      // simply left null. A trigger (0154) now backs all three up.
+      uploaded_at: new Date().toISOString(),
+    });
+    if (error) return { error: error.message };
+  }
 
   revalidatePath(`/partner/applications/${applicationId}`);
   return { success: true };
