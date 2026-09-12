@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import { saveTestScores } from "@/lib/actions/studentProfileExtras";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
-import { TEST_TYPES, TEST_TYPE_LABELS, needsCustomName } from "@/lib/testScores";
+import { TEST_TYPES, TEST_TYPE_LABELS, needsCustomName, testScoreHint } from "@/lib/testScores";
 
 
 
@@ -79,7 +79,17 @@ export function TestScoresSection({ studentId, revalidateTo, scores }: { student
           )}
           <label className="flex flex-col gap-1 text-xs text-muted">
             Score
-            <Input name="score_value" value={r.score} onChange={(e) => update(r.key, { score: e.target.value })} placeholder="e.g. 7.5" className="w-24" />
+            {/* The example follows the test that is chosen: 7.5 is a good
+                IELTS and a meaningless GRE, and one placeholder for all twelve
+                invites the wrong scale to be typed in. */}
+            <Input
+              name="score_value"
+              value={r.score}
+              onChange={(e) => update(r.key, { score: e.target.value })}
+              placeholder={testScoreHint(r.test_type)}
+              title={testScoreHint(r.test_type)}
+              className="w-40"
+            />
           </label>
           <label className="flex flex-col gap-1 text-xs text-muted">
             Test date
