@@ -20,13 +20,29 @@ export type ScholarshipBody = {
 
 export type DestinationChoice = { id: string; display_name: string; country: string };
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+function Field({
+  label,
+  hint,
+  children,
+  /**
+   * A group of controls rather than one. Renders a <div>, because a <label>
+   * wrapping several inputs resolves to the first of them — clicking one
+   * country's name would tick another's box.
+   */
+  group = false,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+  group?: boolean;
+}) {
+  const Tag = group ? "div" : "label";
   return (
-    <label className="block">
+    <Tag className="block">
       <span className="mb-1 block text-xs font-medium text-muted">{label}</span>
       {children}
       {hint && <span className="mt-1 block text-[11px] text-muted">{hint}</span>}
-    </label>
+    </Tag>
   );
 }
 
@@ -57,6 +73,7 @@ export function ScholarshipBodyForm({
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
           {/* First, because it decides which students ever see this body. */}
           <Field
+            group
             label="Countries it serves *"
             hint="A body can serve more than one. It is only offered to students applying to a country ticked here."
           >
