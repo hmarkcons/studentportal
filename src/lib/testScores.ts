@@ -51,6 +51,10 @@ export const TEST_TYPE_LABELS: Record<TestType, string> = {
  * Focus to 805, and printing a wrong boundary is worse than printing none.
  * MOI is not a score at all — it is a letter from the institution — so it asks
  * for what the letter says.
+ *
+ * CEnT-S is marked out of 55, confirmed by the office. The example here used
+ * to be "e.g. 60" — a score the test cannot produce, shown to whoever was
+ * about to type a real one.
  */
 export const TEST_SCORE_HINTS: Record<TestType, string> = {
   ielts: "e.g. 7.5 (0–9)",
@@ -63,7 +67,7 @@ export const TEST_SCORE_HINTS: Record<TestType, string> = {
   gre: "e.g. 320 (260–340)",
   gmat: "e.g. 650",
   sat: "e.g. 1350 (400–1600)",
-  cent_s: "e.g. 60",
+  cent_s: "e.g. 42 (0–55)",
   other: "Score as the certificate states it",
 };
 
