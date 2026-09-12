@@ -63,11 +63,14 @@ function ScholarshipRow({
   bodies,
   revalidateTo,
   canManage,
+  currencySymbol,
 }: {
   s: StudentScholarship;
   bodies: ScholarshipBody[];
   revalidateTo: string;
   canManage: boolean;
+  /** The destination's currency — a UK award must not read as euros. */
+  currencySymbol: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -101,7 +104,7 @@ function ScholarshipRow({
           <Input name="name" defaultValue={s.name ?? ""} placeholder="Scholarship name" />
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
-          Award ({SCHOLARSHIP_CURRENCY_SYMBOL})
+          Award ({currencySymbol})
           <Input name="award_amount" type="number" step="0.01" min="0" defaultValue={s.award_amount ?? ""} className="w-28" />
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
@@ -137,7 +140,7 @@ function ScholarshipRow({
             {[
               s.name && body ? body.name : null,
               body?.region,
-              s.award_amount != null ? `${SCHOLARSHIP_CURRENCY_SYMBOL}${s.award_amount.toLocaleString("en-US")}` : null,
+              s.award_amount != null ? `${currencySymbol}${s.award_amount.toLocaleString("en-US")}` : null,
               // Spelled-out month, for the reason the portal's visa page gives:
               // 11/30/2026 reads as 11 December to most of the world outside
               // the US, and a scholarship deadline missed by a month is the
@@ -179,6 +182,7 @@ export function ScholarshipSection({
   scholarships,
   preenrollmentFinalized,
   canManage = false,
+  currencySymbol = SCHOLARSHIP_CURRENCY_SYMBOL,
 }: {
   studentId: string;
   applicationId: string;
@@ -186,6 +190,13 @@ export function ScholarshipSection({
   bodies: ScholarshipBody[];
   scholarships: StudentScholarship[];
   preenrollmentFinalized: boolean;
+  /**
+   * The destination's own currency. Awards were labelled € everywhere because
+   * every body was Italian; a UK award shown as €5,000 when it is £5,000 is
+   * not a cosmetic problem. Defaults to euro so the tracker view, which has no
+   * destination in scope, reads as it always did.
+   */
+  currencySymbol?: string;
   /** scholarships.manage — Super Admin and Processing by default. */
   canManage?: boolean;
 }) {
@@ -230,7 +241,14 @@ export function ScholarshipSection({
 
       <div className="mb-3 flex flex-col gap-2">
         {scholarships.map((s) => (
-          <ScholarshipRow key={s.id} s={s} bodies={bodies} revalidateTo={revalidateTo} canManage={canManage} />
+          <ScholarshipRow
+            key={s.id}
+            s={s}
+            bodies={bodies}
+            revalidateTo={revalidateTo}
+            canManage={canManage}
+            currencySymbol={currencySymbol}
+          />
         ))}
         {scholarships.length === 0 && <EmptyState>No scholarship record yet.</EmptyState>}
       </div>
@@ -249,7 +267,7 @@ export function ScholarshipSection({
               <Input name="name" placeholder="Scholarship name" />
             </label>
             <label className="flex flex-col gap-1 text-xs text-muted">
-              Award ({SCHOLARSHIP_CURRENCY_SYMBOL})
+              Award ({currencySymbol})
               <Input name="award_amount" type="number" step="0.01" min="0" placeholder="0.00" className="w-28" />
             </label>
             <label className="flex flex-col gap-1 text-xs text-muted">

@@ -30,7 +30,54 @@ function readBodyFields(formData: FormData) {
       .map((c) => c.trim())
       .filter(Boolean),
     stipend_amount: String(formData.get("stipend_amount") ?? "").trim() || null,
+    source_url: String(formData.get("source_url") ?? "").trim() || null,
   };
+}
+
+/** The countries this body serves, as ticked on the form. */
+function readDestinationIds(formData: FormData): string[] {
+  return [...new Set(formData.getAll("destination_ids").map(String).filter(Boolean))];
+}
+
+/**
+ * Replaces a body's countries with exactly the ones given.
+ *
+ * Deleting what is no longer ticked and inserting what is new, rather than
+ * clearing and re-inserting: the rows carry a created_at, and a country that
+ * stayed ticked did not just get added.
+ */
+async function setBodyDestinations(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  bodyId: string,
+  destinationIds: string[]
+) {
+  const { data: existing } = await supabase
+    .from("scholarship_body_destinations")
+    .select("destination_id")
+    .eq("scholarship_body_id", bodyId);
+
+  const before = new Set((existing ?? []).map((r) => r.destination_id as string));
+  const after = new Set(destinationIds);
+
+  const removed = [...before].filter((id) => !after.has(id));
+  if (removed.length > 0) {
+    const { error } = await supabase
+      .from("scholarship_body_destinations")
+      .delete()
+      .eq("scholarship_body_id", bodyId)
+      .in("destination_id", removed);
+    if (error) return error.message;
+  }
+
+  const added = [...after].filter((id) => !before.has(id));
+  if (added.length > 0) {
+    const { error } = await supabase
+      .from("scholarship_body_destinations")
+      .insert(added.map((destination_id) => ({ scholarship_body_id: bodyId, destination_id })));
+    if (error) return error.message;
+  }
+
+  return null;
 }
 
 export async function createScholarshipBody(_prevState: unknown, formData: FormData) {
@@ -41,8 +88,25 @@ export async function createScholarshipBody(_prevState: unknown, formData: FormD
   const fields = readBodyFields(formData);
   if (!fields.name || !fields.academic_year) return { error: "Name and academic year are required." };
 
-  const { error: insertError } = await supabase.from("scholarship_bodies").insert(fields);
+  // A body nobody can find is a body nobody can award. The directory is read
+  // by country everywhere it is used, so one is the minimum.
+  const destinationIds = readDestinationIds(formData);
+  if (destinationIds.length === 0) return { error: "Choose at least one country this scholarship body serves." };
+
+  const { data: created, error: insertError } = await supabase
+    .from("scholarship_bodies")
+    .insert(fields)
+    .select("id")
+    .single();
   if (insertError) return { error: insertError.message };
+
+  const linkError = await setBodyDestinations(supabase, created.id, destinationIds);
+  if (linkError) {
+    // Without its countries the row is invisible in the directory, so it is
+    // not left behind half-made for somebody to find later.
+    await supabase.from("scholarship_bodies").delete().eq("id", created.id);
+    return { error: linkError };
+  }
 
   revalidatePath("/setup/scholarship-bodies");
   return { success: true };
@@ -56,8 +120,14 @@ export async function updateScholarshipBody(bodyId: string, _prevState: unknown,
   const fields = readBodyFields(formData);
   if (!fields.name || !fields.academic_year) return { error: "Name and academic year are required." };
 
+  const destinationIds = readDestinationIds(formData);
+  if (destinationIds.length === 0) return { error: "Choose at least one country this scholarship body serves." };
+
   const { error: updateError } = await supabase.from("scholarship_bodies").update(fields).eq("id", bodyId);
   if (updateError) return { error: updateError.message };
+
+  const linkError = await setBodyDestinations(supabase, bodyId, destinationIds);
+  if (linkError) return { error: linkError };
 
   revalidatePath("/setup/scholarship-bodies");
   return { success: true };

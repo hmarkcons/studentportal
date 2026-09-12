@@ -160,6 +160,9 @@ export async function updateDestination(destinationId: string, _prevState: unkno
   const finalize_action_label = String(formData.get("finalize_action_label") ?? "").trim() || "Finalize for visa";
   // How this country's intake is written down (0170). One text box everywhere
   // is how the column came to hold both "Fall 27" and "Fall 2027".
+  // Whether every student for this country is offered a scholarship, or a few
+  // are put forward for one (0172).
+  const scholarship_access = String(formData.get("scholarship_access") ?? "selective");
   const intake_mode = String(formData.get("intake_mode") ?? "free_text");
   const intake_seasons = String(formData.get("intake_seasons") ?? "")
     .split(/[\n,]/)
@@ -172,6 +175,9 @@ export async function updateDestination(destinationId: string, _prevState: unkno
   }
   if (admin_charge < 0 || consultancy_fee < 0) {
     return { error: "Admin charge and consultancy fee can't be negative." };
+  }
+  if (!["universal", "selective"].includes(scholarship_access)) {
+    return { error: "Choose whether this destination's scholarships are for every student or awarded on merit." };
   }
   if (!isIntakeMode(intake_mode)) {
     return { error: "Choose how this destination's intake is entered." };
@@ -210,6 +216,7 @@ export async function updateDestination(destinationId: string, _prevState: unkno
       finalized_badge_label,
       intake_mode,
       intake_seasons: intake_mode === "free_text" ? [] : intake_seasons,
+      scholarship_access,
     })
     .eq("id", destinationId);
 

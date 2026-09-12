@@ -16,6 +16,7 @@ type Destination = {
   finalize_action_label?: string | null;
   intake_mode?: string | null;
   intake_seasons?: string[] | null;
+  scholarship_access?: string | null;
   finalized_badge_label?: string | null;
   admin_charge: number;
   consultancy_fee: number;
@@ -126,6 +127,19 @@ export function DestinationEditForm({ destination }: { destination: Destination 
           </span>
         </label>
       </div>
+
+      {/* Italy's DSU is a right — every registered student is offered one, so
+          the Scholarship tab opens on its own. France's Eiffel takes thirty
+          master's students in the world, so it is opened for one student at a
+          time. Collapsing the two would either promise every French student a
+          scholarship or hide Italy's from the students entitled to it. */}
+      <label className="flex flex-col gap-1 text-xs text-muted">
+        Scholarships for this destination
+        <Select name="scholarship_access" defaultValue={destination.scholarship_access ?? "selective"}>
+          <option value="selective">Merit-based — opened for one student at a time</option>
+          <option value="universal">Every registered student is offered one</option>
+        </Select>
+      </label>
 
       <div className="grid grid-cols-3 gap-4">
         <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
