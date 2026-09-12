@@ -354,6 +354,8 @@ export async function registerStudentManually(_prevState: unknown, formData: For
     await supabase.from("lead_destinations").insert(destinationRows);
   }
 
+  await ensureCommissionForStudent(id);
+
   revalidatePath("/students");
   // Same reasoning as registerLead: this form only captures a handful of
   // lead-level fields, none of the registration-specific ones (DOB,
@@ -510,6 +512,12 @@ export async function registerLead(leadId: string, _formData: FormData) {
 
   const { error } = await supabase.from("leads").update({ status: "registered" }).eq("id", leadId);
   if (error) throw new Error(error.message);
+
+  // Registration is what earns the assigned counselor their commission.
+  // After the update, not before: registered_at is stamped by
+  // handle_lead_registration() on the transition, and the commission is
+  // keyed to the month that date falls in.
+  await ensureCommissionForStudent(leadId);
 
   revalidatePath(`/leads/${leadId}`);
   revalidatePath("/leads");

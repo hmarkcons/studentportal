@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { addMissingCommissionsForMonth } from "@/lib/actions/commissionAuto";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -40,6 +41,7 @@ export function MissingCommissions({
   canManage: boolean;
   currencySymbol: string;
 }) {
+  const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [added, setAdded] = useState<number | null>(null);
@@ -53,7 +55,13 @@ export function MissingCommissions({
     setError(null);
     const result = await addMissingCommissionsForMonth(staffId, month, revalidateTo);
     if (result?.error) setError(result.error);
-    else setAdded(result?.added ?? 0);
+    else {
+      setAdded(result?.added ?? 0);
+      // revalidatePath alone only marks the cache stale — this list and the
+      // Total Commission beside it would both keep showing the figures from
+      // before the click until something else navigated.
+      router.refresh();
+    }
     setPending(false);
   }
 
