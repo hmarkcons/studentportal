@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { updateApplicationDetails } from "@/lib/actions/applications";
 import { Button } from "@/components/ui/Button";
 import { Input, Select, Textarea } from "@/components/ui/Input";
+import { IntakeField, type IntakeConfig } from "@/components/IntakeField";
 
 export function ApplicationDetailsForm({
   applicationId,
@@ -12,6 +13,7 @@ export function ApplicationDetailsForm({
   application_fee,
   special_requirements,
   intake,
+  intakeConfig,
   programId,
   programs,
   isFinalized,
@@ -23,6 +25,8 @@ export function ApplicationDetailsForm({
   application_fee: number | null;
   special_requirements: string | null;
   intake: string | null;
+  /** This application's own destination decides the shape of the field. */
+  intakeConfig: IntakeConfig | null;
   programId: string | null;
   /** Every programme at this application's university. */
   programs: { id: string; name: string }[];
@@ -65,7 +69,7 @@ export function ApplicationDetailsForm({
       </label>
       <label className="flex flex-col gap-1 text-xs text-muted">
         Intake
-        <Input name="intake" defaultValue={intake ?? ""} placeholder="e.g. Fall 2026" />
+        <IntakeField config={intakeConfig} defaultValue={intake} label="" />
       </label>
       <label className="flex flex-col gap-1 text-xs text-muted">
         Deadline

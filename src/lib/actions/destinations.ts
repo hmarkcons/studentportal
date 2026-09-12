@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { MANUAL_APPLICATION_STATUSES } from "@/lib/constants";
 import { DEFAULT_AGREEMENT_WORDING } from "@/lib/pdf/defaultAgreementWording";
 import { parseDashboardStagesText } from "@/lib/dashboardPipeline";
+import { isIntakeMode } from "@/lib/intake";
 
 // Every destination needs an agreement it can actually generate — without a
 // template, generateAgreementPdf has no legacy hardcoded content for a new
@@ -157,6 +158,13 @@ export async function updateDestination(destinationId: string, _prevState: unkno
   // Italy calls it pre-enrolment; somewhere else will call it something else
   // again, and that should not need a developer.
   const finalize_action_label = String(formData.get("finalize_action_label") ?? "").trim() || "Finalize for visa";
+  // How this country's intake is written down (0170). One text box everywhere
+  // is how the column came to hold both "Fall 27" and "Fall 2027".
+  const intake_mode = String(formData.get("intake_mode") ?? "free_text");
+  const intake_seasons = String(formData.get("intake_seasons") ?? "")
+    .split(/[\n,]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
   const finalized_badge_label = String(formData.get("finalized_badge_label") ?? "").trim() || "Finalized for visa";
 
   if (!country || !country_code || !["public", "private"].includes(track) || !currency || !display_name) {
@@ -165,6 +173,21 @@ export async function updateDestination(destinationId: string, _prevState: unkno
   if (admin_charge < 0 || consultancy_fee < 0) {
     return { error: "Admin charge and consultancy fee can't be negative." };
   }
+  if (!isIntakeMode(intake_mode)) {
+    return { error: "Choose how this destination's intake is entered." };
+  }
+  // A picker with nothing to pick is a dead end for whoever opens the form,
+  // and the table refuses it anyway — better said here than as a constraint.
+  if (intake_mode !== "free_text" && intake_seasons.length === 0) {
+    return { error: "List this destination's intakes, one per line — or set the intake to be typed out." };
+  }
+  if (intake_mode === "single" && intake_seasons.length > 1) {
+    return { error: "A single-intake destination has one intake. Choose \"two or more\" if it runs several." };
+  }
+  if (intake_seasons.some((s) => s.length > 40)) {
+    return { error: "Keep each intake name under 40 characters — it is written onto agreements and invoices." };
+  }
+
   if (finalize_action_label.length > 40 || finalized_badge_label.length > 40) {
     return { error: "Keep the finalising wording under 40 characters — it has to fit on a button and a badge." };
   }
@@ -185,6 +208,8 @@ export async function updateDestination(destinationId: string, _prevState: unkno
       status,
       finalize_action_label,
       finalized_badge_label,
+      intake_mode,
+      intake_seasons: intake_mode === "free_text" ? [] : intake_seasons,
     })
     .eq("id", destinationId);
 

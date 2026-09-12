@@ -4,8 +4,10 @@ import { useActionState, useMemo, useState } from "react";
 import { createApplication } from "@/lib/actions/applications";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
+import { IntakeField } from "@/components/IntakeField";
+import { intakeConfigFor, type DestinationOption } from "@/app/(staff)/students/new/RegisterStudentForm";
 
-type Destination = { id: string; display_name: string };
+type Destination = DestinationOption;
 type University = { id: string; name: string; destination_id: string };
 type Program = { id: string; university_id: string; name: string };
 
@@ -101,7 +103,9 @@ export function NewApplicationForm({
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-ink">Intake</label>
-          <Input name="intake" placeholder="e.g. Fall 2026" />
+          {/* The application already knows its destination, so the intake
+              field is exactly the one that country uses. */}
+          <IntakeField config={intakeConfigFor(destinations, destinationId)} label="" />
         </div>
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-ink">Deadline</label>

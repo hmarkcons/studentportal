@@ -1,7 +1,9 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { registerStudentManually } from "@/lib/actions/leads";
+import { IntakeField, type IntakeConfig } from "@/components/IntakeField";
+import { isIntakeMode } from "@/lib/intake";
 import { STUDY_LEVELS, QUALIFICATION_LEVELS } from "@/lib/constants";
 import { PrimaryBackupDestinationSelect } from "@/components/PrimaryBackupDestinationSelect";
 import { Button } from "@/components/ui/Button";
@@ -10,14 +12,40 @@ import { phoneBounds } from "@/lib/phoneNumber";
 
 const labelClass = "text-sm font-medium text-ink";
 
+export type DestinationOption = {
+  id: string;
+  display_name: string;
+  intake_mode?: string | null;
+  intake_seasons?: string[] | null;
+};
+
+/**
+ * The intake shape for whichever country is currently primary.
+ *
+ * Null until one is chosen, which leaves a plain text box — the same thing
+ * the field has always been, rather than an empty picker that cannot be used.
+ */
+export function intakeConfigFor(destinations: DestinationOption[], primaryId: string): IntakeConfig | null {
+  const d = destinations.find((x) => x.id === primaryId);
+  if (!d) return null;
+  const mode = d.intake_mode ?? "free_text";
+  return {
+    destinationName: d.display_name,
+    mode: isIntakeMode(mode) ? mode : "free_text",
+    options: d.intake_seasons ?? [],
+  };
+}
+
 export function RegisterStudentForm({
   counselors,
   destinations,
 }: {
   counselors: { id: string; full_name: string }[];
-  destinations: { id: string; display_name: string }[];
+  destinations: DestinationOption[];
 }) {
   const [state, formAction, pending] = useActionState(registerStudentManually, undefined);
+  const [primaryId, setPrimaryId] = useState("");
+  const intakeConfig = intakeConfigFor(destinations, primaryId);
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
@@ -65,7 +93,7 @@ export function RegisterStudentForm({
       </div>
       <div className="flex flex-col gap-1.5">
         <label className={labelClass}>Country of interest</label>
-        <PrimaryBackupDestinationSelect destinations={destinations} />
+        <PrimaryBackupDestinationSelect destinations={destinations} onPrimaryChange={setPrimaryId} />
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-1.5">
@@ -81,7 +109,7 @@ export function RegisterStudentForm({
         </div>
         <div className="flex flex-col gap-1.5">
           <label className={labelClass}>Intake</label>
-          <Input name="intake" placeholder="e.g. Fall 2026" />
+          <IntakeField config={intakeConfig} label="" />
         </div>
       </div>
 

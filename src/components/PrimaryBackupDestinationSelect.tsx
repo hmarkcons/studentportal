@@ -16,10 +16,17 @@ export function PrimaryBackupDestinationSelect({
   destinations,
   defaultPrimaryId = null,
   defaultBackupIds = [],
+  onPrimaryChange,
 }: {
   destinations: { id: string; display_name: string }[];
   defaultPrimaryId?: string | null;
   defaultBackupIds?: string[];
+  /**
+   * The intake field next to this one is shaped by the primary destination —
+   * Italy has one intake a year, Germany has two, the UK is written out — so
+   * the form above needs to know which country is selected as it changes.
+   */
+  onPrimaryChange?: (id: string) => void;
 }) {
   const [primaryId, setPrimaryId] = useState(defaultPrimaryId ?? "");
   const [backupIds, setBackupIds] = useState<string[]>(
@@ -31,6 +38,7 @@ export function PrimaryBackupDestinationSelect({
   function setPrimary(id: string) {
     setPrimaryId(id);
     setBackupIds((prev) => prev.filter((b) => b !== id));
+    onPrimaryChange?.(id);
   }
 
   function addBackup(id: string) {

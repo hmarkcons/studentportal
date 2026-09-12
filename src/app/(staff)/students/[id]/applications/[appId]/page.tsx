@@ -16,6 +16,7 @@ import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
 import { loadStudentChecklistSections } from "@/lib/studentChecklistSections";
 import { hasPermission } from "@/lib/auth/permissions";
 import { InterviewSection, type InterviewRow } from "@/components/InterviewSection";
+import { isIntakeMode, type IntakeMode } from "@/lib/intake";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -29,7 +30,7 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
     .from("applications")
     .select(
       `id, current_stage, intake, deadline, application_fee, special_requirements, program_id, is_finalized,
-       university:universities(id, name, city, contact_email, destination:destinations(pipeline_stages, country_code)),
+       university:universities(id, name, city, contact_email, destination:destinations(pipeline_stages, country_code, display_name, intake_mode, intake_seasons)),
        program:programs(id, name, page_link, requirements_link, application_portal_link)`
     )
     .eq("id", appId)
@@ -179,6 +180,17 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
           application_fee={app.application_fee}
           special_requirements={app.special_requirements}
           intake={app.intake}
+          intakeConfig={
+            destination
+              ? {
+                  destinationName: (destination as { display_name?: string }).display_name ?? null,
+                  mode: isIntakeMode((destination as { intake_mode?: string }).intake_mode ?? "")
+                    ? ((destination as { intake_mode: string }).intake_mode as IntakeMode)
+                    : "free_text",
+                  options: (destination as { intake_seasons?: string[] }).intake_seasons ?? [],
+                }
+              : null
+          }
           programId={app.program_id}
           programs={universityPrograms ?? []}
           isFinalized={app.is_finalized}

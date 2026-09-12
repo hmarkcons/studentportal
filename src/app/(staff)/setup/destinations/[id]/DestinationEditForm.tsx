@@ -3,7 +3,7 @@
 import { useActionState, useState } from "react";
 import { updateDestination, deleteDestination } from "@/lib/actions/destinations";
 import { Button } from "@/components/ui/Button";
-import { Input, Select } from "@/components/ui/Input";
+import { Input, Select, Textarea } from "@/components/ui/Input";
 
 type Destination = {
   id: string;
@@ -14,6 +14,8 @@ type Destination = {
   display_name: string;
   visa_type: string | null;
   finalize_action_label?: string | null;
+  intake_mode?: string | null;
+  intake_seasons?: string[] | null;
   finalized_badge_label?: string | null;
   admin_charge: number;
   consultancy_fee: number;
@@ -95,6 +97,36 @@ export function DestinationEditForm({ destination }: { destination: Destination 
           />
         </label>
       </div>
+      {/* One free text box on every form is how the intake column came to
+          hold both "Fall 27" and "Fall 2027" — the same intake, which no
+          filter or report can group. Italy, France and Finland run a single
+          intake a year; Austria, Germany and Turkey run two and a student is
+          sometimes offered both; the UK runs several and is written out. Set
+          here so a destination added next year needs no code. */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <label className="flex flex-col gap-1 text-xs text-muted">
+          How the intake is entered
+          <Select name="intake_mode" defaultValue={destination.intake_mode ?? "free_text"}>
+            <option value="single">One intake a year — staff choose only the year</option>
+            <option value="multi">Two or more — tick one or several, then the year</option>
+            <option value="free_text">Typed out — many intakes, or none fixed</option>
+          </Select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-muted">
+          The intakes, one per line
+          <Textarea
+            name="intake_seasons"
+            rows={3}
+            defaultValue={(destination.intake_seasons ?? []).join("\n")}
+            placeholder={"Spring/Summer\nFall/Winter"}
+          />
+          <span className="text-[11px] text-muted">
+            Written onto agreements and invoices exactly as spelled here, with the year after it — “Fall/Winter 2027”.
+            Leave empty when the intake is typed out.
+          </span>
+        </label>
+      </div>
+
       <div className="grid grid-cols-3 gap-4">
         <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
           Admin charge

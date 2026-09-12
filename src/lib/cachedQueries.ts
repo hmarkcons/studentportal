@@ -14,7 +14,12 @@ export const getCachedDestinations = unstable_cache(
     const supabase = createAdminClient();
     const { data } = await supabase
       .from("destinations")
-      .select("id, display_name, installment_plan, admin_charge, consultancy_fee, consultancy_fee_currency")
+      // intake_mode/intake_seasons shape the intake field on every form that
+      // sets one — Italy has a single intake a year, Germany two, the UK is
+      // written out — so they travel with the destination list (0170).
+      .select(
+        "id, display_name, installment_plan, admin_charge, consultancy_fee, consultancy_fee_currency, intake_mode, intake_seasons"
+      )
       .order("display_name");
     return data ?? [];
   },

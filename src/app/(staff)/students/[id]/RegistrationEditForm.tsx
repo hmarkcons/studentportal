@@ -3,6 +3,8 @@
 import { useActionState, useState } from "react";
 import { updateRegistrationDetails } from "@/lib/actions/leads";
 import { PrimaryBackupDestinationSelect } from "@/components/PrimaryBackupDestinationSelect";
+import { IntakeField } from "@/components/IntakeField";
+import { intakeConfigFor, type DestinationOption } from "@/app/(staff)/students/new/RegisterStudentForm";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 
@@ -22,7 +24,7 @@ export function RegistrationEditForm({
 }: {
   studentId: string;
   revalidateTo: string;
-  destinations: { id: string; display_name: string }[];
+  destinations: DestinationOption[];
   defaultPrimaryId: string | null;
   defaultBackupIds: string[];
   counselors: { id: string; full_name: string }[];
@@ -34,6 +36,9 @@ export function RegistrationEditForm({
   intake: string | null;
 }) {
   const [editing, setEditing] = useState(false);
+  // Starts at whatever the student is already registered for, so the intake
+  // field opens on that country's shape rather than a text box.
+  const [primaryId, setPrimaryId] = useState(defaultPrimaryId ?? "");
   const action = updateRegistrationDetails.bind(null, studentId, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
 
@@ -49,7 +54,12 @@ export function RegistrationEditForm({
     <form action={formAction} className="flex flex-col gap-3 rounded-md border border-border p-3">
       <div>
         <label className="mb-1 block text-xs text-muted">Country</label>
-        <PrimaryBackupDestinationSelect destinations={destinations} defaultPrimaryId={defaultPrimaryId} defaultBackupIds={defaultBackupIds} />
+        <PrimaryBackupDestinationSelect
+          destinations={destinations}
+          defaultPrimaryId={defaultPrimaryId}
+          defaultBackupIds={defaultBackupIds}
+          onPrimaryChange={setPrimaryId}
+        />
       </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
         <label className="flex flex-col gap-1 text-xs text-muted">
@@ -76,7 +86,7 @@ export function RegistrationEditForm({
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
           Intake
-          <Input name="intake" placeholder="e.g. Fall 2026" defaultValue={intake ?? ""} />
+          <IntakeField config={intakeConfigFor(destinations, primaryId)} defaultValue={intake} label="" />
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
           Discount amount
