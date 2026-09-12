@@ -6,6 +6,11 @@ import { PayrollSelectors } from "./PayrollSelectors";
 import { PayrollForm } from "./PayrollForm";
 import { CommissionLedgerTable, type CommissionRecord } from "./CommissionLedgerTable";
 import type { CommissionStaffOption } from "@/app/(staff)/finance/staff-commission/StaffCommissionTable";
+import { MissingCommissions, type MissingCommission } from "./MissingCommissions";
+import { commissionFor } from "@/lib/staffCommissionBasis";
+import { effectiveSchedule, summariseMonth, payrollAdjustment, type AttendancePolicy } from "@/lib/attendancePayroll";
+import { formatDuration } from "@/lib/attendance";
+import { AttendanceSummaryCard } from "./AttendanceSummaryCard";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -47,7 +52,7 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
     const { data: staff } = await supabase
       .from("staff")
       .select(
-        "id, full_name, role, designation, monthly_salary, currency, allowance, commission_rate_general, commission_rate_public_universities, commission_type_general, commission_type_public_universities, monthly_target, bonus_eligible, bonus_rate_percent"
+        "id, full_name, role, designation, monthly_salary, currency, allowance, commission_rate_general, commission_rate_public_universities, commission_type_general, commission_type_public_universities, monthly_target, bonus_eligible, bonus_rate_percent, work_start_time, work_end_time, work_days"
       )
       .eq("id", staffId)
       .maybeSingle();
@@ -55,10 +60,12 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
     if (staff) {
       const { data: registeredStudents } = await supabase
         .from("leads")
-        .select("id")
+        .select("id, full_name, registered_at")
         .eq("assigned_counselor_id", staffId)
+        .eq("registration_status", "registered")
         .gte("registered_at", monthStart)
-        .lt("registered_at", nextMonthStart);
+        .lt("registered_at", nextMonthStart)
+        .order("registered_at");
 
       const studentIds = (registeredStudents ?? []).map((s) => s.id);
 
@@ -163,6 +170,67 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
         };
       }
 
+      // ---- Registered this month, but nothing in the commission ledger ----
+      // The ledger can only show rows that exist, so until now a forgotten
+      // commission looked exactly like no commission being due. Matched on the
+      // student rather than on (staff, month) so a row typed against another
+      // month, or a share of one, still counts as present.
+      const { data: ledgerRowsForStudents } = studentIds.length
+        ? await supabase.from("staff_commissions").select("student_id").in("student_id", studentIds)
+        : { data: [] };
+      const studentsInLedger = new Set((ledgerRowsForStudents ?? []).map((r) => r.student_id));
+
+      const missingCommissions: MissingCommission[] = (registeredStudents ?? [])
+        .filter((s) => !studentsInLedger.has(s.id))
+        .map((s) => {
+          const outcome = commissionFor(staff, commissionBasisByStudent[s.id] ?? null);
+          return {
+            studentId: s.id,
+            studentName: s.full_name ?? "Unknown",
+            registeredOn: s.registered_at ? String(s.registered_at).slice(0, 10) : null,
+            amount: outcome.ok ? outcome.amount : null,
+            currency: outcome.ok ? (CURRENCY_SYMBOLS[outcome.currency] ?? outcome.currency) : null,
+            reason: outcome.ok ? null : outcome.reason,
+          };
+        });
+
+      // ---- What the month's attendance is worth (0168) ----
+      // The hours are per person, falling back to the office policy, so a
+      // late arrival is measured against the day that person is actually due
+      // in rather than a single office-wide shift.
+      const [{ data: policyRow }, { data: attendanceRecords }] = await Promise.all([
+        supabase
+          .from("attendance_policy")
+          .select(
+            "work_start_time, work_end_time, work_days, grace_minutes, overtime_rate_per_hour, late_deduction, absent_deduction"
+          )
+          .eq("id", true)
+          .maybeSingle(),
+        supabase
+          .from("attendance_records")
+          .select("work_date, clock_in, clock_out, clock_out_missing")
+          .eq("staff_id", staffId)
+          .gte("work_date", monthStart)
+          .lt("work_date", nextMonthStart),
+      ]);
+
+      const policy: AttendancePolicy = {
+        work_start_time: policyRow?.work_start_time ?? null,
+        work_end_time: policyRow?.work_end_time ?? null,
+        work_days: policyRow?.work_days ?? [1, 2, 3, 4, 5, 6],
+        grace_minutes: policyRow?.grace_minutes ?? 15,
+        overtime_rate_per_hour: Number(policyRow?.overtime_rate_per_hour ?? 0),
+        late_deduction: Number(policyRow?.late_deduction ?? 0),
+        absent_deduction: Number(policyRow?.absent_deduction ?? 0),
+      };
+      const schedule = effectiveSchedule(staff, policy);
+      const attendanceSummary = summariseMonth({
+        month,
+        records: (attendanceRecords ?? []).map((r) => ({ ...r, work_date: String(r.work_date).slice(0, 10) })),
+        schedule,
+      });
+      const attendanceMoney = payrollAdjustment(attendanceSummary, policy);
+
       const currencySymbol = CURRENCY_SYMBOLS[staff.currency] ?? staff.currency;
       const revalidateTo = `/finance/payroll?staff=${staffId}&month=${month}`;
 
@@ -199,6 +267,27 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
               </div>
             </div>
           </Card>
+
+          <AttendanceSummaryCard
+            summary={attendanceSummary}
+            money={attendanceMoney}
+            scheduleConfigured={schedule.configured}
+            start={schedule.start}
+            end={schedule.end}
+            usesOwnHours={Boolean(staff.work_start_time && staff.work_end_time)}
+            currencySymbol={currencySymbol}
+            workedLabel={formatDuration(attendanceSummary.workedMinutes)}
+            overtimeLabel={formatDuration(attendanceSummary.overtimeMinutes)}
+          />
+
+          <MissingCommissions
+            staffId={staffId}
+            month={month}
+            revalidateTo={`/finance/payroll?staff=${staffId}&month=${month}`}
+            missing={missingCommissions}
+            canManage={canManage}
+            currencySymbol={currencySymbol}
+          />
 
           <Card className="mb-6">
             <h3 className="text-sm font-semibold text-ink">Student Commission Breakdown</h3>
@@ -244,14 +333,28 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
                   basic_salary: existingPayroll?.basic_salary ?? staff.monthly_salary ?? 0,
                   allowances: existingPayroll?.allowances ?? staff.allowance ?? 0,
                   total_commission: existingPayroll?.total_commission ?? totalCommissionWithBonus,
-                  overtime: existingPayroll?.overtime ?? 0,
-                  deduction_absent: existingPayroll?.deduction_absent ?? 0,
-                  deduction_late: existingPayroll?.deduction_late ?? 0,
+                  // Filled from the month's attendance for a payslip nobody
+                  // has saved yet, and left alone once there is one: a figure
+                  // Finance corrected must not be quietly overwritten on the
+                  // next visit. The live figures go down as well, so a row
+                  // saved before the month ended can be brought up to date.
+                  overtime: existingPayroll?.overtime ?? attendanceMoney.overtimePay,
+                  deduction_absent: existingPayroll?.deduction_absent ?? attendanceMoney.absentDeduction,
+                  deduction_late: existingPayroll?.deduction_late ?? attendanceMoney.lateDeduction,
                   deduction_other: existingPayroll?.deduction_other ?? 0,
                   tax: existingPayroll?.tax ?? 0,
                   payment_status: existingPayroll?.payment_status ?? "pending",
                 }}
                 liveTotalCommission={totalCommissionWithBonus}
+                liveAttendance={{
+                  overtimePay: attendanceMoney.overtimePay,
+                  lateDeduction: attendanceMoney.lateDeduction,
+                  absentDeduction: attendanceMoney.absentDeduction,
+                  ratesConfigured: attendanceMoney.ratesConfigured,
+                  lateArrivals: attendanceSummary.lateArrivals,
+                  absentDays: attendanceSummary.absentDays,
+                  overtimeLabel: formatDuration(attendanceSummary.overtimeMinutes),
+                }}
               />
             </Card>
 

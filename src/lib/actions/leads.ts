@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { ensureCommissionForStudent } from "@/lib/actions/commissionAuto";
 import { createClient } from "@/lib/supabase/server";
 import { LEAD_STATUSES } from "@/lib/constants";
 import { dateOfBirthError } from "@/lib/dateOfBirth";
@@ -370,6 +371,14 @@ export async function updateRegistrationStatus(studentId: string, _prevState: un
 
   const { error } = await supabase.from("leads").update({ registration_status }).eq("id", studentId);
   if (error) return { error: error.message };
+
+  // A registered student earns their counselor a commission. It used to have
+  // to be typed in by hand on the Staff Commission page, so a student nobody
+  // remembered simply never earned one. Quiet when it cannot be priced yet —
+  // Payroll lists those with the reason, which is where they can be acted on.
+  if (registration_status === "registered") {
+    await ensureCommissionForStudent(studentId);
+  }
 
   revalidatePath(`/students/${studentId}`);
   revalidatePath("/students");

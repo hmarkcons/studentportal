@@ -8,6 +8,7 @@ import { formatDateOnly } from "@/lib/formatDate";
 import { getAgreementContent } from "@/lib/pdf/agreementContent";
 import { wordingToBlocks, DEFAULT_OFFICE_LINE } from "@/lib/pdf/templateWording";
 import { requirePermission } from "@/lib/auth/permissions";
+import { ensureCommissionForStudent } from "@/lib/actions/commissionAuto";
 import { validateDocumentFile, sanitizeFilename } from "@/lib/documentUpload";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
@@ -490,6 +491,11 @@ export async function verifySignedAgreement(
     })
     .eq("id", agreementId);
   if (error) return { error: error.message };
+
+  // Signing is usually the moment the consultancy fee becomes known, and the
+  // counselor's commission is a share of it. Registration may well have
+  // happened first, with nothing to price it against at the time.
+  await ensureCommissionForStudent(studentId);
 
   revalidatePath(`/students/${studentId}`);
   revalidatePath("/portal/agreement");

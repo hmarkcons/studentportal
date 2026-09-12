@@ -17,6 +17,7 @@ export function PayrollForm({
   initial,
   canManage,
   liveTotalCommission,
+  liveAttendance,
 }: {
   staffId: string;
   payrollMonth: string;
@@ -42,6 +43,21 @@ export function PayrollForm({
   // saving won't update on its own, so this is surfaced as a one-click
   // refresh rather than silently overwritten.
   liveTotalCommission: number;
+  /**
+   * What this month's attendance comes to, as of this render — the same
+   * treatment as liveTotalCommission. A saved payroll row is a snapshot, so a
+   * day worked after it was saved cannot update it on its own; this is offered
+   * as a one-click correction rather than written over what Finance typed.
+   */
+  liveAttendance: {
+    overtimePay: number;
+    lateDeduction: number;
+    absentDeduction: number;
+    ratesConfigured: boolean;
+    lateArrivals: number;
+    absentDays: number;
+    overtimeLabel: string;
+  };
 }) {
   const action = upsertStaffPayroll.bind(null, staffId, payrollMonth, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
@@ -120,7 +136,26 @@ export function PayrollForm({
         </p>
       )}
       <div className={rowClass}>
-        <label className="text-ink">Overtime ({currencySymbol})</label>
+        <label className="text-ink">
+          Overtime ({currencySymbol})
+          {liveAttendance.ratesConfigured && (
+            <span className="block text-xs text-muted">
+              {liveAttendance.overtimeLabel} recorded this month
+              {liveAttendance.overtimePay !== overtime && (
+                <>
+                  {" — "}
+                  <button
+                    type="button"
+                    onClick={() => setOvertime(liveAttendance.overtimePay)}
+                    className="text-primary hover:underline"
+                  >
+                    use {liveAttendance.overtimePay.toLocaleString("en-US")}
+                  </button>
+                </>
+              )}
+            </span>
+          )}
+        </label>
         <Input
           name="overtime"
           type="number"
@@ -140,6 +175,30 @@ export function PayrollForm({
 
       <div className="py-1.5 text-sm">
         <p className="mb-1 text-ink">Deduction (Absent / Late / Other)</p>
+        {/* Where the two numbers came from, and a way back to them. A
+            deduction nobody can trace to the days behind it is one they
+            will dispute. */}
+        {liveAttendance.ratesConfigured && (
+          <p className="mb-1 text-xs text-muted">
+            From attendance: {liveAttendance.absentDays} absent, {liveAttendance.lateArrivals} late
+            {(liveAttendance.absentDeduction !== deductionAbsent || liveAttendance.lateDeduction !== deductionLate) && (
+              <>
+                {" — "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeductionAbsent(liveAttendance.absentDeduction);
+                    setDeductionLate(liveAttendance.lateDeduction);
+                  }}
+                  className="text-primary hover:underline"
+                >
+                  use {liveAttendance.absentDeduction.toLocaleString("en-US")} /{" "}
+                  {liveAttendance.lateDeduction.toLocaleString("en-US")}
+                </button>
+              </>
+            )}
+          </p>
+        )}
         <div className="flex items-center gap-2">
           <Input
             name="deduction_absent"
