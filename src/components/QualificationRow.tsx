@@ -51,7 +51,7 @@ export function QualificationRow({
   if (editing) {
     return (
       <Card className="mb-3">
-        <form action={formAction} className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <form action={formAction} onReset={(e) => e.preventDefault()} className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <input type="hidden" name="qualification_type" value={type} />
           {/* Present only when editing an existing row — its absence is what
               tells the action to add another entry of this type. */}
@@ -95,7 +95,15 @@ export function QualificationRow({
               </button>
             )}
           </div>
-          {state?.error && <p className="col-span-full text-xs text-danger">{state.error}</p>}
+          {state?.error && (
+            <p
+              role="alert"
+              className="col-span-full rounded-md border border-danger bg-danger-bg px-3 py-2 text-sm font-medium text-danger"
+            >
+              {state.error}
+              <span className="mt-0.5 block text-xs font-normal">Nothing was saved — what you typed is still here.</span>
+            </p>
+          )}
         </form>
       </Card>
     );

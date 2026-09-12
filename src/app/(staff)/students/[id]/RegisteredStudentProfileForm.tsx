@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
 import { updateRegisteredStudentProfile } from "@/lib/actions/students";
 import { STUDY_LEVELS, QUALIFICATION_LEVELS } from "@/lib/constants";
 import { Button } from "@/components/ui/Button";
@@ -55,6 +55,27 @@ export function RegisteredStudentProfileForm({
 }) {
   const action = updateRegisteredStudentProfile.bind(null, studentId, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // React clears a form once its server action finishes — including when the
+  // action REFUSED the save. Every field here is uncontrolled with a
+  // defaultValue, so the clear restored each one to what the server last sent,
+  // which for a half-filled profile is empty.
+  //
+  // That lost whatever had just been typed, and then the next Save wrote those
+  // blanks over the record and reported "Saved." A passport number typed once,
+  // refused for an unrelated reason and retyped nowhere is not a cosmetic
+  // problem. Verified against production before and after this line.
+  //
+  // Nothing is gained by the clear: this is an edit-in-place form, and after a
+  // successful save the fields already hold exactly what was saved.
+
+  // The error sits under a form long enough to scroll several screens, so on a
+  // refusal it is brought into view. Syncing the browser's scroll position to
+  // the latest state is what an effect is for; no state is set here.
+  useEffect(() => {
+    if (state?.error) formRef.current?.querySelector("[data-profile-error]")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [state]);
   const financial = profile?.financial_details;
   const storedDobIssue = dateOfBirthError(lead.date_of_birth);
   // Same reasoning as the date of birth: saving one is blocked now, but
@@ -64,7 +85,7 @@ export function RegisteredStudentProfileForm({
   const storedEmergencyIssue = phoneError(profile?.emergency_contact_number, "emergency contact number");
 
   return (
-    <form action={formAction} className="flex flex-col gap-4">
+    <form ref={formRef} action={formAction} onReset={(e) => e.preventDefault()} className="flex flex-col gap-4">
       <div>
         <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Core details</h4>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -225,8 +246,21 @@ export function RegisteredStudentProfileForm({
         </div>
       </div>
 
-      {state?.error && <p className="text-xs text-danger">{state.error}</p>}
-      {state?.success && <p className="text-xs text-success">Saved.</p>}
+      {state?.error && (
+        <p
+          data-profile-error
+          role="alert"
+          className="rounded-md border border-danger bg-danger-bg px-3 py-2 text-sm font-medium text-danger"
+        >
+          {state.error}
+          <span className="mt-0.5 block text-xs font-normal">
+            Nothing was saved, and everything you typed is still here — fix this and press Save again.
+          </span>
+        </p>
+      )}
+      {state?.success && (
+        <p className="rounded-md border border-success bg-success-bg px-3 py-2 text-sm font-medium text-success">Saved.</p>
+      )}
       <Button type="submit" variant="primary" pending={pending} className="justify-self-start">
         Save
       </Button>
