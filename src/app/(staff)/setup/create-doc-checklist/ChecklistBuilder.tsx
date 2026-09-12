@@ -100,6 +100,7 @@ export function ChecklistBuilder({
   }
 
   const available = palette.filter((p) => !ordered.some((s) => s.key === p.key));
+  const anyShared = ordered.some((s) => s.items.some((i) => i.isShared));
 
   return (
     <div className="mt-6 flex flex-col gap-5">
@@ -183,9 +184,17 @@ export function ChecklistBuilder({
       )}
 
       <div className="flex flex-col gap-4">
-        <ChecklistHeading meta={`${ordered.length} section${ordered.length === 1 ? "" : "s"}`}>
-          {destinationLabel}
-        </ChecklistHeading>
+        <div className="flex flex-col gap-1">
+          <ChecklistHeading meta={`${ordered.length} section${ordered.length === 1 ? "" : "s"}`}>
+            {destinationLabel}
+          </ChecklistHeading>
+          {!isAllDestinations && anyShared && (
+            <p className="pl-3 text-xs text-muted">
+              Rows marked <span className="text-ink">shared</span> come from the All destinations list. Editing or
+              reordering one changes it for every country; &ldquo;Don&rsquo;t ask&rdquo; drops it from this one only.
+            </p>
+          )}
+        </div>
 
         {ordered.length === 0 && (
           <div

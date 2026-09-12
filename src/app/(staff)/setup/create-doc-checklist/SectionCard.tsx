@@ -101,8 +101,6 @@ export function SectionCard({
     setDraggingItem(null);
   }
 
-  const sharedInSection = items.some((i) => i.isShared);
-
   return (
     <div
       onDragOver={(e) => {
@@ -217,13 +215,6 @@ export function SectionCard({
       </div>
 
       <div className="px-4 py-3">
-      {sharedInSection && !isAllDestinations && (
-        <p className="mb-2 text-xs text-muted">
-          Rows marked <span className="text-ink">shared</span> come from the All destinations list. Editing or
-          reordering one changes it for every country; &ldquo;Don&rsquo;t ask&rdquo; drops it from this one only.
-        </p>
-      )}
-
       <div className="flex flex-col divide-y divide-border">
         {items.length === 0 && <p className="pb-2 text-xs text-muted">Nothing here yet.</p>}
 
