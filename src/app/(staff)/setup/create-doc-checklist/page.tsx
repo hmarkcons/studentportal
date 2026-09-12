@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { resolveChecklist, type TemplateRow } from "@/lib/documentChecklist";
 import { ChecklistBuilder } from "./ChecklistBuilder";
 import { DestinationPicker } from "./DestinationPicker";
+import { ChecklistPageTitle } from "./ChecklistHeading";
 
 export default async function CreateDocChecklistPage(props: {
   searchParams: Promise<{ destination?: string }>;
@@ -57,13 +58,12 @@ export default async function CreateDocChecklistPage(props: {
 
   return (
     <div className="w-full">
-      <h2 className="mb-1 text-lg font-semibold text-ink">Create Doc Checklist</h2>
-      <p className="mb-5 max-w-3xl text-sm text-muted">
+      <ChecklistPageTitle title="Create Doc Checklist">
         What each destination asks a student for. Drag a section from the palette into the checklist, add requirements
         to it, and reorder either by dragging or with the arrows. A requirement on the{" "}
         <strong className="font-medium text-ink">All destinations</strong> list is asked for by every country &mdash;
         edit it there once, or drop it from a single country without affecting the rest.
-      </p>
+      </ChecklistPageTitle>
 
       <DestinationPicker
         destinations={destinations ?? []}

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Card } from "@/components/ui/Card";
+import { ChecklistHeading } from "./ChecklistHeading";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import {
@@ -114,8 +115,12 @@ export function SectionCard({
         onDropOn();
       }}
     >
-      <Card className={`transition ${isDragging ? "opacity-60" : ""} ${dropOver ? "border-primary" : ""}`}>
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+      <Card
+        className={`overflow-hidden !p-0 transition ${isDragging ? "opacity-60" : ""} ${
+          dropOver ? "border-primary ring-2 ring-primary" : ""
+        }`}
+      >
+      <div className="flex flex-wrap items-start justify-between gap-2 border-b border-border bg-[color-mix(in_srgb,var(--primary)_8%,transparent)] px-4 py-2.5">
         <div className="flex items-center gap-2">
           <span
             draggable
@@ -155,10 +160,12 @@ export function SectionCard({
             </form>
           ) : (
             <>
-              <h4 className="text-sm font-medium text-ink">{section.label}</h4>
-              <span className="text-xs text-muted">
-                {items.length} requirement{items.length === 1 ? "" : "s"}
-              </span>
+              <ChecklistHeading
+                level="card"
+                meta={`${items.length} requirement${items.length === 1 ? "" : "s"}`}
+              >
+                {section.label}
+              </ChecklistHeading>
             </>
           )}
         </div>
@@ -209,6 +216,7 @@ export function SectionCard({
         </div>
       </div>
 
+      <div className="px-4 py-3">
       {sharedInSection && !isAllDestinations && (
         <p className="mb-2 text-xs text-muted">
           Rows marked <span className="text-ink">shared</span> come from the All destinations list. Editing or
@@ -385,6 +393,7 @@ export function SectionCard({
           + Add requirement
         </button>
       )}
+      </div>
       </Card>
     </div>
   );

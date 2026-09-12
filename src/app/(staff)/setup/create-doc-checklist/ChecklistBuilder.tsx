@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Card } from "@/components/ui/Card";
+import { ChecklistHeading } from "./ChecklistHeading";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import {
@@ -105,9 +106,12 @@ export function ChecklistBuilder({
       {/* The palette stays put while the list below scrolls, so a section can
           be dragged into a long checklist without losing sight of it. */}
       <Card className="sticky top-2 z-20">
-        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-          <h3 className="text-sm font-medium text-ink">Sections you can add</h3>
-          <p className="text-xs text-muted">Drag one into the checklist, or press + to append it.</p>
+        <div className="mb-2">
+          <ChecklistHeading
+            actions={<p className="text-xs text-muted">Drag one into the checklist, or press + to append it.</p>}
+          >
+            Sections you can add
+          </ChecklistHeading>
         </div>
 
         {available.length === 0 ? (
@@ -179,12 +183,9 @@ export function ChecklistBuilder({
       )}
 
       <div className="flex flex-col gap-4">
-        <h3 className="text-sm font-medium text-ink">
+        <ChecklistHeading meta={`${ordered.length} section${ordered.length === 1 ? "" : "s"}`}>
           {destinationLabel}
-          <span className="ml-2 font-normal text-muted">
-            {ordered.length} section{ordered.length === 1 ? "" : "s"}
-          </span>
-        </h3>
+        </ChecklistHeading>
 
         {ordered.length === 0 && (
           <div
@@ -227,7 +228,9 @@ export function ChecklistBuilder({
 
       {excludedItems.length > 0 && (
         <Card>
-          <h3 className="mb-1 text-sm font-medium text-ink">Dropped from this destination</h3>
+          <div className="mb-1">
+            <ChecklistHeading>Dropped from this destination</ChecklistHeading>
+          </div>
           <p className="mb-3 text-xs text-muted">
             Shared requirements {destinationLabel} does not ask for. They are still asked for everywhere else.
           </p>
