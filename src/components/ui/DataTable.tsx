@@ -11,6 +11,11 @@ type Column = {
   header: string;
   align?: "left" | "right" | "center";
   exportable?: boolean;
+  /**
+   * Keeps this column wrapping when the table is in one-line mode — for cells
+   * that hold an inline editor and need the room rather than a single line.
+   */
+  wrap?: boolean;
 };
 
 type Row = {
@@ -34,6 +39,10 @@ export function DataTable({
   searchPlaceholder = "Search…",
   filters = [],
   minTableWidthClassName = "min-w-[640px]",
+  // Keeps every cell on one line and lets the table run wider than the screen,
+  // scrolling sideways, instead of wrapping names and numbers onto two and
+  // three lines. Off by default so the report tables are untouched.
+  oneLine = false,
   pageSize,
 }: {
   columns: Column[];
@@ -47,6 +56,7 @@ export function DataTable({
   // toolbar) — spreads columns out instead of squeezing their content, at the
   // cost of a horizontal scrollbar on narrower screens.
   minTableWidthClassName?: string;
+  oneLine?: boolean;
   // Opt-in: when set, only this many matching rows are rendered at once, with
   // Prev/Next controls below the table — every other DataTable caller keeps
   // rendering every row exactly as before. Search/filter/export still run
@@ -189,7 +199,9 @@ export function DataTable({
             {columns.map((c) => (
               <th
                 key={c.key}
-                className={`px-4 py-3 font-medium ${c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : ""}`}
+                className={`px-4 py-3 font-medium ${oneLine && !c.wrap ? "whitespace-nowrap" : ""} ${
+                  c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : ""
+                }`}
               >
                 {c.header}
               </th>
@@ -207,7 +219,9 @@ export function DataTable({
               {columns.map((c) => (
                 <td
                   key={c.key}
-                  className={`px-4 py-3 ${c.align === "right" ? "text-right tabular-nums" : c.align === "center" ? "text-center" : ""}`}
+                  className={`px-4 py-3 ${oneLine && !c.wrap ? "whitespace-nowrap" : ""} ${
+                    c.align === "right" ? "text-right tabular-nums" : c.align === "center" ? "text-center" : ""
+                  }`}
                 >
                   {row.cells[c.key]}
                 </td>

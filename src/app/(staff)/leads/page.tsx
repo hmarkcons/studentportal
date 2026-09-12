@@ -68,14 +68,18 @@ export default async function LeadsPage() {
 
   const counselors = await getCachedCounselors();
 
+  // Everything on one line, with the table scrolling sideways — a name, a
+  // number and a country each wrapping onto two lines made a row three deep
+  // and the list impossible to scan. Status and Follow-up keep wrapping: both
+  // hold an inline editor that needs the room.
   const columns = [
     { key: "month", header: "Month" },
     { key: "name", header: "Name" },
     { key: "contact", header: "Contact" },
     { key: "country", header: "Country" },
-    { key: "status", header: "Status" },
+    { key: "status", header: "Status", wrap: true },
     { key: "counselor", header: "Counselor", align: "center" as const },
-    { key: "followUp", header: "Follow-up" },
+    { key: "followUp", header: "Follow-up", wrap: true },
     { key: "date", header: "Inquiry date" },
     { key: "actions", header: "", align: "right" as const, exportable: false },
   ];
@@ -152,6 +156,7 @@ export default async function LeadsPage() {
             columns={columns}
             searchable
             searchPlaceholder="Search name, contact…"
+            oneLine
             minTableWidthClassName="min-w-[640px] lg:min-w-[950px]"
             pageSize={25}
             filters={[

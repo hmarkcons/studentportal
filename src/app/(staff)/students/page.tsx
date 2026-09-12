@@ -80,7 +80,8 @@ export default async function StudentsPage() {
     { key: "backupCountry", header: "Backup Country" },
     { key: "counselor", header: "Counselor", align: "center" as const },
     { key: "intake", header: "Intake" },
-    { key: "regStatus", header: "Registration status" },
+    // Kept wrapping: it carries the inline registration-status control.
+    { key: "regStatus", header: "Registration status", wrap: true },
     { key: "portal", header: "Portal" },
     { key: "date", header: "Registered" },
     { key: "actions", header: "", align: "right" as const, exportable: false },
@@ -169,6 +170,7 @@ export default async function StudentsPage() {
             columns={columns}
             searchable
             searchPlaceholder="Search name, contact…"
+            oneLine
             minTableWidthClassName="min-w-[640px] lg:min-w-[1250px]"
             pageSize={25}
             filters={[
