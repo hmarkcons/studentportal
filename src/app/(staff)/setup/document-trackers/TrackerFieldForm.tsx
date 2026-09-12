@@ -88,10 +88,10 @@ export function NewTrackerFieldForm({ countryCode }: { countryCode: string }) {
         …equals (or * for &ldquo;any value&rdquo;)
         <Input name="show_if_equals" placeholder="e.g. Booked or *" />
       </label>
-      <label className="flex flex-col gap-1 text-xs text-muted">
-        Sort order
-        <Input name="sort_order" type="number" defaultValue={100} />
-      </label>
+      {/* Where a field sits is set by dragging it, or with the arrows beside
+          it — a new one joins the end. Typing competing numbers into a box on
+          each field was the old way, and it left several fields sharing a
+          number on the live data. */}
       <div className="col-span-full">
         <Button type="submit" variant="primary" disabled={pending}>
           {pending ? "Adding…" : "+ Add field"}
@@ -157,10 +157,7 @@ export function TrackerFieldRow({ field }: { field: TrackerFieldDef }) {
           ))}
         </Select>
       </label>
-      <label className="flex flex-col gap-1 text-xs text-muted">
-        Sort order
-        <Input name="sort_order" type="number" defaultValue={field.sortOrder ?? 0} />
-      </label>
+
       <label className="col-span-full flex flex-col gap-1 text-xs text-muted">
         Options {TYPE_HELP[fieldType]}
         <Input name="options" defaultValue={field.options?.join(", ") ?? ""} />

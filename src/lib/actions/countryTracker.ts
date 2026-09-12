@@ -59,8 +59,89 @@ export async function listTrackerDefinitions(countryCodes: string[]): Promise<Re
 
 export async function listTrackerCountries(): Promise<string[]> {
   const supabase = await createClient();
-  const { data } = await supabase.from("tracker_definitions").select("country_code");
-  return Array.from(new Set((data ?? []).map((r) => r.country_code))).sort();
+  const [{ data }, { data: order }] = await Promise.all([
+    supabase.from("tracker_definitions").select("country_code"),
+    supabase.from("tracker_country_order").select("country_code, sort_order"),
+  ]);
+
+  // The order staff arranged (0164), with anything not yet placed — a tracker
+  // started since the last rearrangement — falling in alphabetically at the
+  // end rather than vanishing.
+  const rank = new Map((order ?? []).map((r) => [r.country_code, r.sort_order]));
+  return Array.from(new Set((data ?? []).map((r) => r.country_code))).sort((a, b) => {
+    const ra = rank.get(a);
+    const rb = rank.get(b);
+    if (ra !== undefined && rb !== undefined) return ra - rb;
+    if (ra !== undefined) return -1;
+    if (rb !== undefined) return 1;
+    return a.localeCompare(b);
+  });
+}
+
+/**
+ * Rearranges the trackers themselves.
+ *
+ * Gaps of ten, so a country added later can be dropped between two others
+ * without rewriting every row.
+ */
+export async function reorderTrackerCountries(codes: string[]) {
+  const supabase = await createClient();
+  const denied = await requirePermission("document_trackers.manage", "Only Super Admin can edit document trackers.");
+  if (denied) return { error: denied.error };
+
+  if (codes.length === 0) return { success: true };
+
+  const { error } = await supabase
+    .from("tracker_country_order")
+    .upsert(
+      codes.map((country_code, i) => ({ country_code, sort_order: (i + 1) * 10, updated_at: new Date().toISOString() })),
+      { onConflict: "country_code" }
+    );
+  if (error) return { error: error.message };
+
+  revalidatePath("/setup/document-trackers");
+  return { success: true };
+}
+
+/**
+ * Rearranges the fields inside one country's tracker.
+ *
+ * The whole order is written rather than two rows swapped, because a drag
+ * moves an item past several others at once and a swap cannot express that.
+ * It is also what makes the result independent of whatever numbers the rows
+ * happened to hold — several fields share a sort_order on live data.
+ *
+ * The ids are checked against the country before anything is written: they
+ * arrive from the client, and a crafted call could otherwise renumber another
+ * country's tracker.
+ */
+export async function reorderTrackerFields(countryCode: string, ids: string[]) {
+  const supabase = await createClient();
+  const denied = await requirePermission("document_trackers.manage", "Only Super Admin can edit document trackers.");
+  if (denied) return { error: denied.error };
+
+  if (ids.length === 0) return { success: true };
+
+  const { data: owned } = await supabase
+    .from("tracker_definitions")
+    .select("id")
+    .eq("country_code", countryCode)
+    .in("id", ids);
+  if ((owned ?? []).length !== ids.length) {
+    return { error: "That list does not match this country's fields — reload the page and try again." };
+  }
+
+  for (const [i, id] of ids.entries()) {
+    const { error } = await supabase
+      .from("tracker_definitions")
+      .update({ sort_order: (i + 1) * 10 })
+      .eq("id", id)
+      .eq("country_code", countryCode);
+    if (error) return { error: error.message };
+  }
+
+  revalidatePath("/setup/document-trackers");
+  return { success: true };
 }
 
 export async function createTrackerField(_prevState: unknown, formData: FormData) {
@@ -86,7 +167,6 @@ export async function createTrackerField(_prevState: unknown, formData: FormData
   // The field that records which university the student is proceeding with.
   // A select, because its choices are that student's own applications.
   const is_finalized_university = formData.get("is_finalized_university") === "on" && field_type === "select";
-  const sort_order = Number(formData.get("sort_order") ?? 0);
 
   if (!country_code || !field_key || !label || !field_type) {
     return { error: "Country, field key, label, and type are required." };
@@ -125,6 +205,16 @@ export async function createTrackerField(_prevState: unknown, formData: FormData
         .map((o) => o.trim())
         .filter(Boolean)
     : null;
+
+  // The order is set by dragging now, so a new field simply joins the end.
+  const { data: last } = await supabase
+    .from("tracker_definitions")
+    .select("sort_order")
+    .eq("country_code", country_code)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const sort_order = (last?.sort_order ?? 0) + 10;
 
   const { error } = await supabase.from("tracker_definitions").insert({
     country_code,
@@ -179,7 +269,7 @@ export async function updateTrackerField(id: string, _prevState: unknown, formDa
 
   const { error } = await supabase
     .from("tracker_definitions")
-    .update({ label, field_type, options, credential_type, show_if_key, show_if_equals, date_when_status, show_on_student_visa, visa_role, is_appointment, sort_order })
+    .update({ label, field_type, options, credential_type, show_if_key, show_if_equals, date_when_status, show_on_student_visa, visa_role, is_appointment })
     .eq("id", id);
 
   if (error) return { error: error.message };

@@ -28,6 +28,7 @@ export function CollapsibleCard({
   subtitle,
   badge,
   defaultOpen = false,
+  actions,
   className = "",
   children,
 }: {
@@ -42,6 +43,13 @@ export function CollapsibleCard({
   badge?: React.ReactNode;
   /** Closed unless a caller has a reason to open it. */
   defaultOpen?: boolean;
+  /**
+   * Controls that belong to the card rather than to its contents — a drag
+   * handle, reorder arrows. Rendered beside the toggle, never inside it:
+   * nesting a button in a button is invalid, and clicking an arrow would open
+   * the card instead of moving it.
+   */
+  actions?: React.ReactNode;
   className?: string;
   children: React.ReactNode;
 }) {
@@ -52,12 +60,13 @@ export function CollapsibleCard({
 
   return (
     <Card className={className}>
+      <div className="flex items-center gap-2">
       <button
         type="button"
         onClick={toggle}
         aria-expanded={open}
         aria-controls={panelId}
-        className="flex w-full items-center gap-2 text-left"
+        className="flex min-w-0 flex-1 items-center gap-2 text-left"
       >
         <span
           aria-hidden
@@ -72,6 +81,8 @@ export function CollapsibleCard({
         {badge && <span className="shrink-0">{badge}</span>}
         <span className="shrink-0 text-xs text-muted">{open ? "Hide" : "Show"}</span>
       </button>
+      {actions && <span className="shrink-0">{actions}</span>}
+      </div>
 
       {/* Kept mounted and hidden rather than unmounted, so a half-typed form
           inside is not thrown away by collapsing the section. */}
