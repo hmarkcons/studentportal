@@ -77,7 +77,11 @@ export function CountryTrackerForm({
 
   return (
     <div className="flex flex-col gap-6">
-      <form action={formAction} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      {/* React clears the form when the action completes. Here that puts
+          each controlled <select> back on its first option, and each checkbox
+          back to the defaultChecked from before the save — a tracker field
+          displayed as the value it used to have. */}
+      <form action={formAction} onReset={(e) => e.preventDefault()} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {visibleFields.map((f) => {
           const staticOptions = f.options && f.options.length > 0 ? f.options.map((o) => ({ value: o, label: o.replace(/_/g, " ") })) : null;
           const dynamic = dynamicOptions[f.key] ?? universityOptions;

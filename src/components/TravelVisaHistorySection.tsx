@@ -50,8 +50,11 @@ export function TravelVisaHistorySection({
     }))
   );
 
+  // React clears the form when the action completes, which for this
+  // edit-as-a-table means every controlled <select> jumping back to its first
+  // option while the state behind it still holds what was saved.
   return (
-    <form action={formAction} className="flex flex-col gap-6">
+    <form action={formAction} onReset={(e) => e.preventDefault()} className="flex flex-col gap-6">
       <div className="flex flex-col gap-3">
         <h4 className="text-sm font-semibold text-ink">Travel history</h4>
         {trips.length === 0 && <p className="text-xs text-muted">No prior travel on file.</p>}

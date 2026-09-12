@@ -37,12 +37,35 @@ export function TestScoresSection({ studentId, revalidateTo, scores }: { student
   const [state, formAction, pending] = useActionState(action, undefined);
   const [rows, setRows] = useState<DraftRow[]>(() => toDraft(scores));
 
+  // Once the save lands, take the rows back from the server. Without this a
+  // row added in this session keeps id:"" in the draft, so the next Save
+  // deletes and re-inserts it under a fresh id — and the document requirement
+  // it drives is keyed `test:<id>:scorecard`, so the old requirement is
+  // orphaned and a duplicate appears in its place.
+  //
+  // Adjusted during render against a signature of the server rows rather than
+  // from an effect: an effect that calls setState is a cascading render, and
+  // comparing content means an unrelated revalidation elsewhere on the page
+  // cannot throw away what is being typed here.
+  const signature = scores.map((s) => `${s.id}|${s.test_type}|${s.score}|${s.test_date}|${s.custom_test_name}`).join("~");
+  const [syncedTo, setSyncedTo] = useState(signature);
+  if (signature !== syncedTo) {
+    setSyncedTo(signature);
+    setRows(toDraft(scores));
+  }
+
   function update(key: string, patch: Partial<DraftRow>) {
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-3">
+    // React resets the form when a server action completes. For a controlled
+    // <select> that means the DOM snapping back to its first option — IELTS —
+    // while the state behind it still reads Duolingo, so a score saved as
+    // Duolingo or CEnT-S was displayed as IELTS until the page was reloaded.
+    // The scores themselves were always written correctly; only the screen
+    // lied, which is the worse of the two.
+    <form action={formAction} onReset={(e) => e.preventDefault()} className="flex flex-col gap-3">
       {rows.length === 0 && <p className="text-xs text-muted">No test scores on file yet.</p>}
 
       {rows.map((r) => (
