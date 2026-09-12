@@ -24,6 +24,7 @@ export const PERMISSION_KEYS = [
   "interviews.manage",
   "messages.broadcast",
   "marketing.referral_incentives",
+  "marketing.referrals.manage",
   "inventory.manage",
 ] as const;
 

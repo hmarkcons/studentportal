@@ -8,7 +8,6 @@ import {
   readAmount,
   dateRangeError,
   isSocialPostStatus,
-  isReferralIncentiveStatus,
 } from "@/lib/marketing";
 
 // Every update in this file used to report success whether or not it wrote
@@ -120,72 +119,10 @@ export async function advanceSocialPostStatus(id: string, status: string) {
   return { success: true };
 }
 
-export async function createReferral(_prevState: unknown, formData: FormData) {
-  const supabase = await createClient();
-
-  const lead_id = String(formData.get("lead_id") ?? "");
-  const referrer_name = String(formData.get("referrer_name") ?? "").trim();
-
-  if (!lead_id || !referrer_name) return { error: "Lead and referrer name are required." };
-  if (referrer_name.length > 120) return { error: "That referrer name is too long — 120 characters is the limit." };
-
-  const incentiveInvalid = amountError(formData.get("incentive_owed"), "incentive");
-  if (incentiveInvalid) return { error: incentiveInvalid };
-  const incentive_owed = readAmount(formData.get("incentive_owed"));
-
-  // Logging a referral is ordinary work; attaching money to it is not. The
-  // policy in 0159 refuses a row that carries an amount unless the writer holds
-  // the money roles, and this turns that into a sentence rather than a
-  // row-level-security error.
-  if (incentive_owed !== null) {
-    const denied = await requirePermission(
-      "marketing.referral_incentives",
-      "Log the referral without an amount — only Finance, Management or Super Admin can set what is owed."
-    );
-    if (denied) return { error: denied.error };
-  }
-
-  const { error } = await supabase.from("referrals").insert({ lead_id, referrer_name, incentive_owed });
-  if (error) {
-    // The unique index on (lead_id, referrer) reaches the user as a constraint
-    // name otherwise, and the thing they need to know is that it is already
-    // recorded — not that a database index objected.
-    if (error.code === "23505") {
-      return { error: "That referrer is already logged against this lead, so nobody will be paid twice." };
-    }
-    return { error: error.message };
-  }
-
-  revalidatePath("/marketing/referrals");
-  return { success: true };
-}
-
-export async function updateReferralIncentiveStatus(id: string, status: string) {
-  const supabase = await createClient();
-  if (!isReferralIncentiveStatus(status)) return { error: "An incentive is either owed or paid." };
-
-  // Declaring money paid was open to any active staff member: referrals_write
-  // was the one policy in 0015 written as is_active_staff(). Verified against
-  // production that a counselor could mark an incentive paid, raise it
-  // afterwards and delete the record.
-  const denied = await requirePermission(
-    "marketing.referral_incentives",
-    "Only Finance, Management or Super Admin can mark an incentive paid."
-  );
-  if (denied) return { error: denied.error };
-
-  const { data, error } = await supabase
-    .from("referrals")
-    .update({ incentive_status: status })
-    .eq("id", id)
-    .select("id");
-  if (error) return { error: error.message };
-  if (!data?.length) return { error: REFUSED };
-
-  revalidatePath("/marketing/referrals");
-  return { success: true };
-}
-
+// createReferral and updateReferralIncentiveStatus lived here. A referral is
+// now logged against a referral_parties row rather than a typed-in name, and
+// marking one paid has to carry the date it was paid on, so both moved to
+// src/lib/actions/referralParties.ts. Only the inline amount stayed.
 export async function updateReferralIncentiveAmount(id: string, amount: string) {
   const supabase = await createClient();
 
