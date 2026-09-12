@@ -47,6 +47,9 @@ export type StaffRecord = {
   emergency_contact_name: string | null;
   emergency_contact_relation: string | null;
   monthly_salary: number | null;
+  work_start_time?: string | null;
+  work_end_time?: string | null;
+  work_days?: number[] | null;
   currency: string;
   allowance: number | null;
   commission_rate_general: number | null;
@@ -75,6 +78,16 @@ function Field({ label, children, full }: { label: string; children: React.React
     </label>
   );
 }
+
+const WORK_DAYS = [
+  { value: 1, label: "Mon" },
+  { value: 2, label: "Tue" },
+  { value: 3, label: "Wed" },
+  { value: 4, label: "Thu" },
+  { value: 5, label: "Fri" },
+  { value: 6, label: "Sat" },
+  { value: 0, label: "Sun" },
+];
 
 export function StaffForm({
   staff,
@@ -201,6 +214,37 @@ export function StaffForm({
         <Field label="Emergency contact relation">
           <Input name="emergency_contact_relation" defaultValue={staff?.emergency_contact_relation ?? ""} />
         </Field>
+      </Section>
+
+      {/* Hours are per person — that is the whole reason they are here and
+          not only in Setup. Blank means the office default, so this only has
+          to be filled in for somebody who differs from it. */}
+      <Section title="Working hours">
+        <Field label="Starts">
+          <Input name="work_start_time" type="time" defaultValue={(staff?.work_start_time ?? "").slice(0, 5)} />
+        </Field>
+        <Field label="Ends">
+          <Input name="work_end_time" type="time" defaultValue={(staff?.work_end_time ?? "").slice(0, 5)} />
+        </Field>
+        <Field label="Working days">
+          <div className="flex flex-wrap gap-2 pt-1">
+            {WORK_DAYS.map((d) => (
+              <label key={d.value} className="flex items-center gap-1 text-xs text-ink">
+                <input
+                  type="checkbox"
+                  name="work_days"
+                  value={d.value}
+                  defaultChecked={(staff?.work_days ?? []).includes(d.value)}
+                />
+                {d.label}
+              </label>
+            ))}
+          </div>
+        </Field>
+        <p className="col-span-full text-xs text-muted">
+          Leave blank to use the office hours set in Setup &rsaquo; Attendance policy. Lateness, absence and overtime
+          are all measured against whichever applies.
+        </p>
       </Section>
 
       <Section title="Compensation">

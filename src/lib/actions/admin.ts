@@ -46,10 +46,45 @@ function staffFieldsFromFormData(formData: FormData) {
     commission_type_public_universities:
       String(formData.get("commission_type_public_universities") ?? "percentage") === "flat" ? "flat" : "percentage",
     monthly_target: formData.get("monthly_target") ? Number(formData.get("monthly_target")) : null,
+    // Blank means "the office default" (0168), so a schedule only has to be
+    // filled in for somebody who actually differs from it. A time input sends
+    // "09:00"; the column wants "09:00:00".
+    work_start_time: readWorkTime(formData.get("work_start_time")),
+    work_end_time: readWorkTime(formData.get("work_end_time")),
+    work_days: readWorkDays(formData),
     bonus_eligible: formData.get("bonus_eligible") === "on",
     bonus_rate_percent:
       formData.get("bonus_eligible") === "on" && formData.get("bonus_rate_percent") ? Number(formData.get("bonus_rate_percent")) : null,
   };
+}
+
+function readWorkTime(value: FormDataEntryValue | null): string | null {
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+  return /^\d{2}:\d{2}$/.test(text) ? `${text}:00` : null;
+}
+
+function readWorkDays(formData: FormData): number[] | null {
+  const days = formData
+    .getAll("work_days")
+    .map((d) => Number(d))
+    .filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
+    .sort((a, b) => a - b);
+  return days.length > 0 ? days : null;
+}
+
+/**
+ * Half a schedule is worse than none: an end with no start cannot say whether
+ * anybody was late, and a start with no end cannot say what overtime is.
+ */
+function staffHoursError(fields: ReturnType<typeof staffFieldsFromFormData>) {
+  if (Boolean(fields.work_start_time) !== Boolean(fields.work_end_time)) {
+    return "Set both a start and an end time, or leave both blank to use the office hours.";
+  }
+  if (fields.work_start_time && fields.work_end_time && fields.work_end_time <= fields.work_start_time) {
+    return "The working day has to end after it starts — check the hours.";
+  }
+  return null;
 }
 
 // Checked outright rather than only-when-changed, unlike the student forms:
@@ -75,6 +110,8 @@ export async function createStaffAccount(_prevState: unknown, formData: FormData
   const dobError = dateOfBirthError(fields.date_of_birth);
   if (dobError) return { error: dobError };
   const phoneIssue = staffPhoneError(fields);
+  const hoursIssue = staffHoursError(fields);
+  if (hoursIssue) return { error: hoursIssue };
   if (phoneIssue) return { error: phoneIssue };
 
   const admin = createAdminClient();
@@ -105,6 +142,8 @@ export async function updateStaffDetails(staffId: string, _prevState: unknown, f
   const dobError = dateOfBirthError(fields.date_of_birth);
   if (dobError) return { error: dobError };
   const phoneIssue = staffPhoneError(fields);
+  const hoursIssue = staffHoursError(fields);
+  if (hoursIssue) return { error: hoursIssue };
   if (phoneIssue) return { error: phoneIssue };
 
   // Deactivating a staff member must not silently strand their students with
