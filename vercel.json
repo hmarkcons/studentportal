@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/deadline-reminders",
       "schedule": "30 7 * * *"
+    },
+    {
+      "path": "/api/cron/scholarship-updates",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

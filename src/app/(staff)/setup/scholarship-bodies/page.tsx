@@ -7,6 +7,8 @@ import { DataTable } from "@/components/ui/DataTable";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ScholarshipBodyForm, type ScholarshipBody, type DestinationChoice } from "./ScholarshipBodyForm";
 import { currentAcademicYear, guideFreshness } from "@/lib/academicYear";
+import { UpdateRunsPanel, type UpdateRun } from "./UpdateRunsPanel";
+import { researchConfigured } from "@/lib/scholarshipResearch";
 import { DeleteScholarshipBodyButton } from "./DeleteScholarshipBodyButton";
 
 export default async function ScholarshipBodiesPage() {
@@ -30,6 +32,13 @@ export default async function ScholarshipBodiesPage() {
       .order("country"),
     supabase.from("scholarship_body_destinations").select("scholarship_body_id, destination_id"),
   ]);
+
+  // Only what still needs a person: an applied or dismissed run is history.
+  const { data: runs } = await supabase
+    .from("scholarship_body_update_runs")
+    .select("id, scholarship_body_id, status, academic_year, notes, error, source_url, call_pdf_url, requested_at, proposal")
+    .in("status", ["queued", "running", "proposed", "awaiting", "failed"])
+    .order("requested_at", { ascending: false });
 
   const destById = new Map((destinations ?? []).map((d) => [d.id, d]));
   const destIdsByBody = new Map<string, string[]>();
@@ -85,6 +94,20 @@ export default async function ScholarshipBodiesPage() {
 
   const universal = (destinations ?? []).filter((d) => d.scholarship_access === "universal").map((d) => d.country);
 
+  const nameById = new Map((bodies ?? []).map((b) => [b.id, b.name]));
+  const updateRuns: UpdateRun[] = (runs ?? []).map((r) => ({
+    id: r.id,
+    bodyName: nameById.get(r.scholarship_body_id) ?? "Unknown body",
+    status: r.status,
+    academic_year: r.academic_year,
+    notes: r.notes,
+    error: r.error,
+    source_url: r.source_url,
+    call_pdf_url: r.call_pdf_url,
+    requested_at: r.requested_at,
+    proposal: (r.proposal ?? null) as UpdateRun["proposal"],
+  }));
+
   // The year everything on this page is measured against. Computed, not
   // stored: it turns over in May on its own, and a stored one is a thing
   // somebody has to remember to change.
@@ -128,6 +151,8 @@ export default async function ScholarshipBodiesPage() {
             if every student there is entitled to one.</>
         )}
       </p>
+
+      <UpdateRunsPanel runs={updateRuns} canManage={canManage} researchConfigured={researchConfigured()} />
 
       {/* Three different reasons a body might need attention, kept apart
           because they call for different things. A stale guide is work; a
