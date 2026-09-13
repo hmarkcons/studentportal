@@ -11,7 +11,8 @@ import { checkCronRequest } from "@/lib/cronAuth";
 export async function GET(request: NextRequest) {
   // This one emails students about money, so being publicly triggerable
   // mattered more than most. See cronAuth.
-  const auth = checkCronRequest(request);
+  const dryRun = request.nextUrl.searchParams.get("dry") === "1";
+  const auth = checkCronRequest(request, { dryRun });
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const admin = createAdminClient();
@@ -31,10 +32,20 @@ export async function GET(request: NextRequest) {
     const status = computeInvoiceStatus(installments ?? []);
     if (status !== "overdue") continue;
 
+    // This one emails students about money. A dry run names the invoices it
+    // would chase and sends nothing — the throttle inside
+    // sendOverdueReminderIfDue is not a substitute, because it only stops the
+    // SECOND one.
+    if (dryRun) {
+      results.push({ invoiceId: invoice.id, result: { wouldRemind: true, studentId: invoice.student_id } });
+      reminded++;
+      continue;
+    }
+
     const result = await sendOverdueReminderIfDue(invoice.id, invoice.student_id);
     results.push({ invoiceId: invoice.id, result });
     if (result && "success" in result) reminded++;
   }
 
-  return NextResponse.json({ checked: invoices.length, reminded, results });
+  return NextResponse.json({ ...(dryRun ? { dryRun: true } : {}), checked: invoices.length, reminded, results });
 }

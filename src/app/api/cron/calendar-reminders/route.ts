@@ -20,7 +20,8 @@ function one<T>(v: T | T[] | null) {
 export async function GET(request: NextRequest) {
   // Same guard as the other two: the old one authenticated nothing when
   // CRON_SECRET was unset, and it is unset in production.
-  const auth = checkCronRequest(request);
+  const dryRun = new URL(request.url).searchParams.get("dry") === "1";
+  const auth = checkCronRequest(request, { dryRun });
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   if (!isEmailConfigured()) {
@@ -76,6 +77,21 @@ export async function GET(request: NextRequest) {
     staffEmailById,
     todayStr
   );
+
+  // Reports who would be written to and about what, and sends nothing.
+  if (dryRun) {
+    return NextResponse.json({
+      dryRun: true,
+      tasksChecked: tasks?.length ?? 0,
+      personalChecked: personalTasks?.length ?? 0,
+      recipients: [...recipients].map(([to, bucket]) => ({
+        to,
+        name: bucket.name,
+        items: bucket.items.length,
+        subject: buildCalendarReminderEmail(bucket.name, bucket.items).subject,
+      })),
+    });
+  }
 
   let sent = 0;
   let failed = 0;
