@@ -21,28 +21,44 @@ export function readVisaDecision(rawValue: string | null | undefined): VisaDecis
   return "pending";
 }
 
-export type VisaMessage = { heading: string; body: string[] };
+export type VisaMessage = { heading: string; body: string[]; signoff: string };
 
-export function visaMessage(decision: VisaDecision, studentName?: string | null): VisaMessage | null {
+/**
+ * What a student reads when the decision arrives.
+ *
+ * This is the only part of the portal that carries genuine news, good or bad,
+ * and it is read once. The wording is the office's own — approved keeps the
+ * celebration and closes professionally; refused names the disappointment and
+ * gives room before it offers anything, because hope offered before the bad
+ * news has landed reads as brushing past it.
+ */
+export function visaMessage(
+  decision: VisaDecision,
+  studentName?: string | null,
+  country?: string | null
+): VisaMessage | null {
   const name = (studentName ?? "").trim().split(/\s+/)[0];
 
   if (decision === "approved") {
     return {
-      heading: "Congratulations — your visa has been approved!",
+      heading: "🎉 Your visa has been issued",
       body: [
-        `This is the moment everything has been building towards${name ? `, ${name}` : ""}. Every document you gathered and every deadline you met brought you here, and we could not be prouder to have been part of it.`,
-        "Your counsellor will be in touch shortly about your next steps — travel, accommodation and enrolment. Welcome to the next chapter.",
+        `Congratulations${name ? `, ${name}` : ""} — it's official.${country ? ` You're going to ${country}.` : ""}`,
+        "After everything you put into this application, take a moment to enjoy it. It has been a pleasure supporting you from the first document to this result, and the whole team wishes you every success in your studies.",
       ],
+      signoff: "HMARK Consultants",
     };
   }
 
   if (decision === "refused") {
     return {
-      heading: "Your visa application was not successful this time",
+      heading: "Your visa was not approved this time",
       body: [
-        "We know how much this meant to you, and we're genuinely sorry. A refusal is not a judgement on your ability or your ambition — many students who are refused once go on to study abroad successfully.",
-        "Your counsellor will go through the refusal reason with you in detail and talk you through the options, including reapplying for the next intake. We're still with you.",
+        `${name ? `${name}, we're` : "We're"} sorry. We know how much you put into this, and a refusal is hard news to receive. Take a moment — it's fair to feel that.`,
+        "When you're ready, we're still here. It isn't the end of the road: many students who apply again are successful, and a refusal reason is something that can be worked on rather than a closed door. We'll look at it together, and if you'd like to try for the next intake, we'll help you prepare from the start.",
+        "Nothing you've achieved so far is lost.",
       ],
+      signoff: "The HMARK team",
     };
   }
 

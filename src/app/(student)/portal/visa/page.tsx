@@ -41,11 +41,32 @@ export default async function PortalVisaPage() {
   // Setup › Document trackers, so a country added later needs no code change.
   const { data: applications } = await supabase
     .from("applications")
-    .select("id, university:universities(name, destination:destinations(country_code, display_name))")
+    .select("id, is_finalized, university:universities(name, destination:destinations(country_code, display_name))")
     .eq("student_id", student.id);
+
+  // The visa belongs to the university the student is actually going to. Until
+  // one is finalised there is no visa process to report, and showing every
+  // country they applied to would suggest several are under way at once.
+  //
+  // Per country rather than across the student: a finalised Italian
+  // pre-enrolment says nothing about a German application that is still open.
+  const finalisedByCountry = new Set<string>();
+  for (const a of applications ?? []) {
+    if (!a.is_finalized) continue;
+    const uni = one(a.university as never) as { destination?: unknown } | null;
+    const dest = uni?.destination ? (one(uni.destination as never) as { country_code?: string } | null) : null;
+    if (dest?.country_code) finalisedByCountry.add(dest.country_code);
+  }
 
   const byCountry = new Map<string, { code: string; name: string; appId: string; universities: string[] }>();
   for (const a of applications ?? []) {
+    // Only the finalised application for a country that has one.
+    const uniForGate = one(a.university as never) as { destination?: unknown } | null;
+    const destForGate = uniForGate?.destination
+      ? (one(uniForGate.destination as never) as { country_code?: string } | null)
+      : null;
+    if (destForGate?.country_code && finalisedByCountry.has(destForGate.country_code) && !a.is_finalized) continue;
+    if (destForGate?.country_code && !finalisedByCountry.has(destForGate.country_code)) continue;
     const uni = one(a.university as never) as { name?: string; destination?: unknown } | null;
     const dest = uni?.destination ? (one(uni.destination as never) as { country_code?: string; display_name?: string } | null) : null;
     if (!dest?.country_code) continue;
@@ -126,7 +147,7 @@ export default async function PortalVisaPage() {
       ) : (
         <div className="flex flex-col gap-6">
           {visible.map((s) => {
-            const message = visaMessage(s.decision, student.full_name);
+            const message = visaMessage(s.decision, student.full_name, s.country.name);
             return (
               <Card key={s.country.code}>
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -155,6 +176,11 @@ export default async function PortalVisaPage() {
                         {para}
                       </p>
                     ))}
+                    {/* Signed, because a message this personal reading as an
+                        automated status line would undo it. */}
+                    <p className={`mt-3 text-xs ${s.decision === "approved" ? "text-success" : "text-warning"}`}>
+                      — {message.signoff}
+                    </p>
                     {s.decision === "refused" && s.reason && (
                       <p className="mt-2 text-xs text-warning">Reason given: {s.reason}</p>
                     )}
