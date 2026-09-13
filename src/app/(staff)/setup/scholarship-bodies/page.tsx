@@ -22,7 +22,7 @@ export default async function ScholarshipBodiesPage() {
     supabase
       .from("scholarship_bodies")
       .select(
-        "id, name, region, academic_year, covers, stipend_amount, source_url, last_updated_year, apply_url, application_deadline, isee_threshold, ispe_threshold, benefits, call_status, call_expected_on, call_notes, call_pdf_url, guide_sections, guide_updated_at"
+        "id, name, region, academic_year, covers, stipend_amount, source_url, last_updated_year, apply_url, application_deadline, isee_threshold, ispe_threshold, benefits, call_status, call_expected_on, call_notes, call_pdf_url, call_pdf_path, call_pdf_language, call_pdf_fetched_at, guide_sections, guide_updated_at"
       )
       .order("name"),
     supabase
@@ -39,6 +39,19 @@ export default async function ScholarshipBodiesPage() {
     .select("id, scholarship_body_id, status, academic_year, notes, error, source_url, call_pdf_url, requested_at, proposal")
     .in("status", ["queued", "running", "proposed", "awaiting", "failed"])
     .order("requested_at", { ascending: false });
+
+  // One signed link per stored call, made here rather than in the row: a
+  // client component cannot sign, and a public bucket is not an option for
+  // something only staff should be handed.
+  const signedCalls = new Map<string, string>();
+  await Promise.all(
+    (bodies ?? [])
+      .filter((b) => b.call_pdf_path)
+      .map(async (b) => {
+        const { data } = await supabase.storage.from("documents").createSignedUrl(b.call_pdf_path!, 3600);
+        if (data?.signedUrl) signedCalls.set(b.id, data.signedUrl);
+      })
+  );
 
   const destById = new Map((destinations ?? []).map((d) => [d.id, d]));
   const destIdsByBody = new Map<string, string[]>();
@@ -62,6 +75,7 @@ export default async function ScholarshipBodiesPage() {
       id: b.id,
       countries,
       freshness: guideFreshness(b.academic_year),
+      callUrl: signedCalls.get(b.id) ?? null,
       sectionCount: Array.isArray(b.guide_sections) ? b.guide_sections.length : 0,
       body: {
         id: b.id,
@@ -81,6 +95,10 @@ export default async function ScholarshipBodiesPage() {
         call_expected_on: b.call_expected_on,
         call_notes: b.call_notes,
         call_pdf_url: b.call_pdf_url,
+        call_pdf_path: b.call_pdf_path,
+        call_pdf_language: b.call_pdf_language,
+        call_pdf_fetched_at: b.call_pdf_fetched_at,
+        call_pdf_signed_url: signedCalls.get(b.id) ?? null,
         guide_sections: Array.isArray(b.guide_sections) ? (b.guide_sections as { title: string; body: string }[]) : [],
       } satisfies ScholarshipBody,
     };
@@ -254,7 +272,18 @@ export default async function ScholarshipBodiesPage() {
                 ),
               guide: r.sectionCount > 0 ? `${r.sectionCount} sections` : <Badge tone="warning">none yet</Badge>,
               stipend: r.body.stipend_amount ?? "—",
-              source: r.body.source_url ? (
+              source: r.body.call_pdf_path && r.callUrl ? (
+                <span className="flex items-center gap-2">
+                  <a href={r.callUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                    📄 call
+                  </a>
+                  {r.body.source_url && (
+                    <a href={r.body.source_url} target="_blank" rel="noreferrer" className="text-muted hover:underline">
+                      site ↗
+                    </a>
+                  )}
+                </span>
+              ) : r.body.source_url ? (
                 <a
                   href={r.body.source_url}
                   target="_blank"

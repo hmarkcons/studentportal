@@ -15,6 +15,9 @@ export type GuideBody = {
   call_status: string;
   call_expected_on: string | null;
   call_pdf_url: string | null;
+  /** The copy kept against this body, signed on the server. */
+  call_pdf_signed_url: string | null;
+  call_pdf_language: string | null;
   source_url: string | null;
   guide_sections: { title: string; body: string }[];
   /** From guideFreshness, resolved on the server. */
@@ -71,10 +74,19 @@ export function ScholarshipGuide({ body }: { body: GuideBody }) {
             Apply portal ↗
           </a>
         )}
-        {body.call_pdf_url && (
-          <a href={body.call_pdf_url} target="_blank" rel="noreferrer" className="text-primary hover:underline">
-            Official call ↗
+        {/* The stored copy first: the region's own link stops answering the
+            week they publish the next one, and this is the paper the student
+            was actually advised from. */}
+        {body.call_pdf_signed_url ? (
+          <a href={body.call_pdf_signed_url} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+            📄 Official call{body.call_pdf_language === "it" ? " (Italian)" : body.call_pdf_language === "en" ? " (English)" : ""}
           </a>
+        ) : (
+          body.call_pdf_url && (
+            <a href={body.call_pdf_url} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+              Official call ↗
+            </a>
+          )
         )}
         {body.source_url && (
           <a href={body.source_url} target="_blank" rel="noreferrer" className="text-muted hover:underline">

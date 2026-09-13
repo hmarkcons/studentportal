@@ -104,7 +104,7 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
       // covers is what maps a university to its body — without it the matcher
       // has nothing to match on and silently finds nothing.
       .select(
-        "id, name, region, covers, academic_year, application_deadline, apply_url, isee_threshold, ispe_threshold, call_status, call_expected_on, call_pdf_url, source_url, guide_sections, destinations:scholarship_body_destinations(destination_id)"
+        "id, name, region, covers, academic_year, application_deadline, apply_url, isee_threshold, ispe_threshold, call_status, call_expected_on, call_pdf_url, call_pdf_path, call_pdf_language, source_url, guide_sections, destinations:scholarship_body_destinations(destination_id)"
       )
       .order("region")
       .order("name"),
@@ -113,6 +113,18 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
       .select("id, name, status, award_amount, application_id, scholarship_body_id, application_deadline")
       .in("application_id", appIds),
   ]);
+
+  // Signed here rather than in the guide component, which runs on the client
+  // and cannot sign anything.
+  const signedCalls = new Map<string, string>();
+  await Promise.all(
+    (bodies ?? [])
+      .filter((b) => b.call_pdf_path)
+      .map(async (b) => {
+        const { data } = await supabase.storage.from("documents").createSignedUrl(b.call_pdf_path!, 3600);
+        if (data?.signedUrl) signedCalls.set(b.id, data.signedUrl);
+      })
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -190,6 +202,8 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
                       call_status: b.call_status ?? "published",
                       call_expected_on: b.call_expected_on ?? null,
                       call_pdf_url: b.call_pdf_url ?? null,
+                      call_pdf_signed_url: signedCalls.get(b.id) ?? null,
+                      call_pdf_language: b.call_pdf_language ?? null,
                       source_url: b.source_url ?? null,
                       guide_sections: Array.isArray(b.guide_sections)
                         ? (b.guide_sections as { title: string; body: string }[])

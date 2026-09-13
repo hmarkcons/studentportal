@@ -6,6 +6,7 @@ import { useSlideOverForm } from "@/app/(staff)/marketing/referrals/useSlideOver
 import { Button } from "@/components/ui/Button";
 import { Input, Select, Textarea } from "@/components/ui/Input";
 import { GuideSectionsEditor, type GuideSection } from "./GuideSectionsEditor";
+import { CallPdfButton } from "./CallPdfButton";
 import { SlideOver } from "@/components/ui/SlideOver";
 
 export type ScholarshipBody = {
@@ -26,6 +27,11 @@ export type ScholarshipBody = {
   call_expected_on: string | null;
   call_notes: string | null;
   call_pdf_url: string | null;
+  call_pdf_path: string | null;
+  call_pdf_language: string | null;
+  call_pdf_fetched_at: string | null;
+  /** Signed on the server; null when nothing is stored. */
+  call_pdf_signed_url: string | null;
   guide_sections: GuideSection[];
 };
 
@@ -169,6 +175,25 @@ export function ScholarshipBodyForm({
               <Input name="call_pdf_url" type="url" defaultValue={body?.call_pdf_url ?? ""} placeholder="https://…" />
             </Field>
           </div>
+
+          {/* Only once the body exists — there is nothing to attach a file to
+              until it has been saved. */}
+          {body && (
+            <Field
+              label="Keep a copy"
+              hint="Regions take last year's PDF down the week the new one appears. A stored copy is what makes it answerable afterwards."
+              group
+            >
+              <CallPdfButton
+                bodyId={body.id}
+                hasStored={Boolean(body.call_pdf_path)}
+                storedUrl={body.call_pdf_signed_url}
+                language={body.call_pdf_language}
+                fetchedAt={body.call_pdf_fetched_at}
+                hasLink={Boolean(body.call_pdf_url)}
+              />
+            </Field>
+          )}
           <Field label="Notes on the call">
             <Textarea name="call_notes" defaultValue={body?.call_notes ?? ""} rows={2} maxLength={1000} />
           </Field>
