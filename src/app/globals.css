@@ -172,3 +172,35 @@ body {
     display: none;
   }
 }
+
+/* ------------------------------------------------------------------ print
+   The app's furniture is not part of any document somebody prints. Without
+   this, printing the QR sheet gives a page with the sidebar down the left and
+   the header across the top, and the code shrunk to fit what is left.
+
+   Applied to every page rather than just that one: nothing in this app is
+   improved by printing its navigation. */
+@media print {
+  [data-app-sidebar],
+  [data-app-header] {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  /* Anything explicitly marked as screen-only — back links, the print button
+     itself, which would otherwise appear on the paper it produced. */
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* Ink, not a grey wash: a QR code printed on a tinted background scans
+     worse, and a page of coloured panels wastes toner for no gain. */
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+}

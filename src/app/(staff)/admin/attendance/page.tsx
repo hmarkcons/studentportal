@@ -70,11 +70,13 @@ export default async function AttendancePage(props: { searchParams: Promise<{ mo
   const canAdminQr = await hasPermission("attendance.qr_admin");
   let qrImage: string | null = null;
   let checkinUrl: string | null = null;
+  let qrUpdatedAt: string | null = null;
   if (canAdminQr) {
     // Read only when it is going to be rendered. It used to be fetched on every
     // visit by every role, and the policy let all of them have it.
-    const { data: qr } = await supabase.from("office_qr_tokens").select("token").eq("id", true).maybeSingle();
+    const { data: qr } = await supabase.from("office_qr_tokens").select("token, updated_at").eq("id", true).maybeSingle();
     if (qr) {
+      qrUpdatedAt = qr.updated_at;
       const h = await headers();
       const origin = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}`;
       checkinUrl = `${origin}/attendance/checkin?token=${qr.token}`;
@@ -110,15 +112,33 @@ export default async function AttendancePage(props: { searchParams: Promise<{ mo
         <Card className="mb-6">
           <h3 className="mb-3 text-sm font-medium text-ink">Office QR code</h3>
           <p className="mb-3 text-xs text-muted">
-            Print this and post it at the office entrance. Staff scan it on arrival/departure to clock in/out —
-            tied to whichever account they&apos;re logged into on their phone. Only Super Admin can see this code;
-            rotating it invalidates every printed copy, so reprint after you do.
+            Post it at the office entrance. Staff scan it on arrival and departure to clock in and out, against
+            whichever account they are signed into on their phone. Only Super Admin can see this code — anyone who can
+            read it can clock in from anywhere.
           </p>
+          {/* The token was last replaced on this date, so a sheet on the wall
+              can be checked against it rather than found stale by somebody
+              failing to clock in. */}
+          {qrUpdatedAt && (
+            <p className="mb-3 text-xs text-muted">
+              Current code issued {formatDateOnly(String(qrUpdatedAt).slice(0, 10))}. Rotating it invalidates every
+              printed copy.
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-4">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={qrImage} alt="Office check-in QR code" width={220} height={220} className="rounded-md border border-border" />
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col items-start gap-2">
               <p className="max-w-xs break-all text-xs text-muted">{checkinUrl}</p>
+              {/* The page said "reprint after you rotate" without there being
+                  anything to print: this code sits at 220px between a button
+                  and a month of records. */}
+              <Link
+                href="/admin/attendance/qr-sheet"
+                className="inline-flex items-center gap-1.5 rounded-md border border-primary px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+              >
+                🖨️ Open the printable sheet
+              </Link>
               <RotateQrButton />
             </div>
           </div>

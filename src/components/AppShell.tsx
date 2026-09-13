@@ -149,7 +149,7 @@ export function AppShell({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-border bg-card px-6 py-3">
+        <header data-app-header className="flex items-center justify-between border-b border-border bg-card px-6 py-3">
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
