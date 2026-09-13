@@ -149,3 +149,26 @@ body {
   background: var(--bg);
   font-weight: 600;
 }
+
+/* ---------------------------------------------------------- hidden sidebar
+   The menu is 16rem of every page, and the wide tables — leads, registered
+   students, referrals, the scholarship directory — all scroll sideways
+   underneath it. Staff can put it away and get that width back.
+
+   Driven by an attribute on <html> set before paint (see THEME_INIT_SCRIPT)
+   rather than by React state, so a page does not draw with the menu and then
+   shove itself sideways once the stored choice is read.
+
+   Only from the md breakpoint up: below that the sidebar is already a drawer
+   that is closed by default, and hiding it again would leave no way back. */
+@media (min-width: 768px) {
+  :root[data-sidebar="hidden"] [data-app-sidebar] {
+    position: fixed;
+    transform: translateX(-100%);
+    z-index: 40;
+  }
+  /* The toggle that brings it back only exists while it is away. */
+  :root:not([data-sidebar="hidden"]) [data-sidebar-show] {
+    display: none;
+  }
+}

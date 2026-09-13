@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { ThemeToggle } from "./ThemeToggle";
 import { SignOutButton } from "./SignOutButton";
+import { SidebarToggle } from "./SidebarToggle";
 
 // Pulls in React Query's client runtime — only staff nav uses search, so
 // student/partner portals never ship this code.
@@ -66,6 +67,7 @@ export function AppShell({
         />
       )}
       <aside
+        data-app-sidebar
         className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-shrink-0 flex-col border-r border-sidebar-border bg-sidebar-bg transition-transform duration-200 ease-in-out md:static md:z-auto md:translate-x-0 ${
           navOpen ? "translate-x-0" : "-translate-x-full"
         }`}
@@ -78,14 +80,17 @@ export function AppShell({
             </div>
             <p className="mt-2 text-xs font-medium text-sidebar-ink">{brand}</p>
           </div>
-          <button
-            type="button"
-            onClick={() => setNavOpen(false)}
-            aria-label="Close menu"
-            className="rounded-md p-1 text-sidebar-ink hover:bg-sidebar-active-bg md:hidden"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-1">
+            <SidebarToggle variant="hide" />
+            <button
+              type="button"
+              onClick={() => setNavOpen(false)}
+              aria-label="Close menu"
+              className="rounded-md p-1 text-sidebar-ink hover:bg-sidebar-active-bg md:hidden"
+            >
+              ✕
+            </button>
+          </div>
         </div>
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           {nav.map((item) =>
@@ -154,6 +159,9 @@ export function AppShell({
             >
               ☰
             </button>
+            {/* Its desktop twin, which CSS keeps out of sight until the menu
+                is actually away. */}
+            <SidebarToggle variant="show" />
             {showSearch && <GlobalSearch />}
           </div>
           <div className="flex items-center gap-3">
