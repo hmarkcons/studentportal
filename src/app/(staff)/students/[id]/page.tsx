@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getStaffSession } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { agreementCountry, agreementLabel } from "@/lib/agreementLabel";
 import { StatCard } from "@/components/ui/StatCard";
 import { categorizeApplicationStage } from "@/lib/applicationStage";
 import type { DocRow } from "@/components/DocumentChecklist";
@@ -140,7 +141,9 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     : signedAgreement
       ? { text: "Signed", tone: "success" as const }
       : { text: "Awaiting signature", tone: "warning" as const };
-  const latestAgreement = agreements?.[0];
+  // No "latest agreement" any more. A student holds one per destination, so
+  // every panel that used to act on agreements[0] now acts on the agreement it
+  // is rendered under.
   const signedAgreementTemplate = signedAgreement
     ? (one(signedAgreement.template as never) as { destination_id?: string } | null)
     : null;
@@ -414,11 +417,6 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
 
   // The consent video a student recorded when e-signing, for staff to watch
   // before verifying (see VerifySignedAgreement).
-  let consentVideoUrl: string | null = null;
-  if (latestAgreement?.video_recording_path) {
-    const { data } = await supabase.storage.from("documents").createSignedUrl(latestAgreement.video_recording_path, 3600);
-    consentVideoUrl = data?.signedUrl ?? null;
-  }
 
   // The consent video is the evidence that an e-signature is attributable, so
   // it has to stay watchable after verification — it was previously hidden the
@@ -726,7 +724,8 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                 <div key={a.id} className="flex flex-col gap-1">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-ink">
-                      v{a.status === "signed" ? "signed" : "pending"} · {a.signing_method ?? "—"} ·{" "}
+                      <span className="font-medium">{agreementCountry(a) ?? "No country"}</span> · v{a.version} ·{" "}
+                      {a.signing_method === "e_signature" ? "e-signature" : (a.signing_method ?? "—")} ·{" "}
                       {new Date(a.created_at).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Karachi" })}
                       {a.discount_amount != null && ` · discount ${a.discount_amount}`}
                     </span>
@@ -806,51 +805,68 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                       </span>
                     )}
                   </div>
+
+                  {/* Belongs to this agreement, not to whichever was generated
+                      last. A student with an unsigned Italy agreement and an
+                      unsigned Germany one had one upload box between them. */}
+                  {canModifyAgreement && a.status !== "signed" && (
+                    <div className="mt-2 rounded-md border border-border bg-bg p-3">
+                      <p className="mb-2 text-xs font-medium text-ink">
+                        {a.signing_method === "e_signature" ? "Review" : "Upload the signed copy"} —{" "}
+                        <span className="font-semibold">{agreementLabel(a)}</span>
+                      </p>
+                      {a.signing_method === "e_signature" ? (
+                        <VerifySignedAgreement
+                          agreementId={a.id}
+                          studentId={id}
+                          submitted={Boolean(a.signed_file_path)}
+                          videoUrl={consentVideoUrls.get(a.id) ?? null}
+                          documentStatus={a.document_status}
+                          videoStatus={a.video_status}
+                          documentNote={a.document_review_note}
+                          videoNote={a.video_review_note}
+                        />
+                      ) : (
+                        <UploadSignedAgreementForm agreementId={a.id} studentId={id} />
+                      )}
+                    </div>
+                  )}
+
+                  {/* Approving used to be a one-way door: once signed, the
+                      review panel disappears and there was no way back short
+                      of deleting the agreement and regenerating it, which
+                      discards the student's signed copy and their recording. */}
+                  {canModifyAgreement && a.signing_method === "e_signature" && (
+                    <UndoAgreementApproval
+                      agreementId={a.id}
+                      studentId={id}
+                      documentStatus={a.document_status ?? "pending"}
+                      videoStatus={a.video_status ?? "pending"}
+                      hasInvoice={(invoices ?? []).some((inv) => inv.agreement_id === a.id)}
+                    />
+                  )}
+                  {a.approval_undone_at && (
+                    <UndoneApprovalNote
+                      at={a.approval_undone_at}
+                      by={(one(a.undone_by as never) as { full_name?: string } | null)?.full_name ?? null}
+                      note={a.approval_undo_note}
+                    />
+                  )}
+
+                  {/* A signed paper agreement with the wrong scan attached:
+                      Super Admin can swap the file without deleting it. */}
+                  {isSuperAdmin && a.status === "signed" && a.signing_method === "paper" && (
+                    <div className="mt-2 rounded-md border border-border bg-bg p-3">
+                      <p className="mb-2 text-xs font-medium text-ink">
+                        Replace the scan — <span className="font-semibold">{agreementLabel(a)}</span>
+                      </p>
+                      <UploadSignedAgreementForm agreementId={a.id} studentId={id} replace />
+                    </div>
+                  )}
                 </div>
               );
             })}
-            {canModifyAgreement && latestAgreement && latestAgreement.status !== "signed" && (
-              latestAgreement.signing_method === "e_signature" ? (
-                <VerifySignedAgreement
-                  agreementId={latestAgreement.id}
-                  studentId={id}
-                  submitted={Boolean(latestAgreement.signed_file_path)}
-                  videoUrl={consentVideoUrl}
-                  documentStatus={latestAgreement.document_status}
-                  videoStatus={latestAgreement.video_status}
-                  documentNote={latestAgreement.document_review_note}
-                  videoNote={latestAgreement.video_review_note}
-                />
-              ) : (
-                <UploadSignedAgreementForm agreementId={latestAgreement.id} studentId={id} />
-              )
-            )}
-            {/* Approving used to be a one-way door: once signed, the review
-                panel above disappears and there was no way back short of
-                deleting the agreement and regenerating it, which discards the
-                student's signed copy and their recording. */}
-            {canModifyAgreement && latestAgreement?.signing_method === "e_signature" && (
-              <UndoAgreementApproval
-                agreementId={latestAgreement.id}
-                studentId={id}
-                documentStatus={latestAgreement.document_status ?? "pending"}
-                videoStatus={latestAgreement.video_status ?? "pending"}
-                hasInvoice={(invoices ?? []).some((inv) => inv.agreement_id === latestAgreement.id)}
-              />
-            )}
-            {latestAgreement?.approval_undone_at && (
-              <UndoneApprovalNote
-                at={latestAgreement.approval_undone_at}
-                by={(one(latestAgreement.undone_by as never) as { full_name?: string } | null)?.full_name ?? null}
-                note={latestAgreement.approval_undo_note}
-              />
-            )}
 
-            {/* A signed paper agreement with the wrong scan attached: Super
-                Admin can swap the file without deleting the agreement. */}
-            {isSuperAdmin && latestAgreement?.status === "signed" && latestAgreement.signing_method === "paper" && (
-              <UploadSignedAgreementForm agreementId={latestAgreement.id} studentId={id} replace />
-            )}
           </div>
         )}
       </CollapsibleCard>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { agreementCountry } from "@/lib/agreementLabel";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -66,7 +67,7 @@ export default async function AgreementGeneratorPage(props: { searchParams: Prom
     const { data: agreements } = await supabase
       .from("agreements")
       .select(
-        "id, status, signing_method, signed_file_path, pdf_path, email_verified, discount_amount, created_at, template:agreement_templates(file_path)"
+        "id, status, version, signing_method, signed_file_path, pdf_path, email_verified, discount_amount, created_at, template:agreement_templates(file_path, destination:destinations(country))"
       )
       .eq("student_id", selected.id)
       .order("created_at", { ascending: false });
@@ -117,7 +118,10 @@ export default async function AgreementGeneratorPage(props: { searchParams: Prom
               return (
                 <div key={a.id} className="flex items-center justify-between text-sm">
                   <span className="text-ink">
-                    v{a.status === "signed" ? "signed" : "pending"} · {a.signing_method ?? "—"} · {new Date(a.created_at).toLocaleDateString()}
+                    {agreementCountry(a) ?? "No country"} · v{a.version} ·{" "}
+                    {a.status === "signed" ? "signed" : "pending signature"} ·{" "}
+                    {a.signing_method === "e_signature" ? "e-signature" : (a.signing_method ?? "—")} ·{" "}
+                    {new Date(a.created_at).toLocaleDateString()}
                     {a.discount_amount != null && ` · discount ${a.discount_amount}`}
                   </span>
                   <div className="flex flex-wrap items-center gap-2">
