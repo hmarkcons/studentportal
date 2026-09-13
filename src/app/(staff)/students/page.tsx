@@ -17,6 +17,7 @@ type StudentRow = {
   portal_active: boolean;
   intake: string | null;
   assigned_counselor: { full_name: string } | { full_name: string }[] | null;
+  processing_officer: { full_name: string } | { full_name: string }[] | null;
 };
 
 const MONTH_NAMES = [
@@ -49,7 +50,7 @@ export default async function StudentsPage() {
   const { data: students, error } = await supabase
     .from("students")
     .select(
-      "id, full_name, email, contact_number, country_of_interest, registered_at, registration_status, portal_active, intake, assigned_counselor:staff!assigned_counselor_id(full_name)"
+      "id, full_name, email, contact_number, country_of_interest, registered_at, registration_status, portal_active, intake, assigned_counselor:staff!assigned_counselor_id(full_name), processing_officer:staff!processing_officer_id(full_name)"
     )
     .order("registered_at", { ascending: false })
     .returns<StudentRow[]>();
@@ -79,6 +80,7 @@ export default async function StudentsPage() {
     { key: "country", header: "Country" },
     { key: "backupCountry", header: "Backup Country" },
     { key: "counselor", header: "Counselor", align: "center" as const },
+    { key: "officer", header: "Processing", align: "center" as const },
     { key: "intake", header: "Intake" },
     // Kept wrapping: it carries the inline registration-status control.
     { key: "regStatus", header: "Registration status", wrap: true },
@@ -114,6 +116,21 @@ export default async function StudentsPage() {
         ) : (
           "—"
         ),
+        // Unassigned is not a gap in cover — deadline reminders fall back to
+        // the whole processing team — but it is worth seeing, and it was
+        // invisible until now.
+        officer: one(r.processing_officer)?.full_name ? (
+          <span
+            title={one(r.processing_officer)!.full_name}
+            className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-info-bg text-[11px] font-medium text-info"
+          >
+            {initials(one(r.processing_officer)!.full_name)}
+          </span>
+        ) : (
+          <span title="Nobody assigned — the whole processing team covers this student" className="text-xs text-warning">
+            none
+          </span>
+        ),
         intake: r.intake ?? "—",
         regStatus: <InlineRegistrationStatusCell studentId={r.id} status={r.registration_status} stacked />,
         portal: <Badge tone={r.portal_active ? "success" : "neutral"}>{r.portal_active ? "Active" : "Inactive"}</Badge>,
@@ -128,6 +145,10 @@ export default async function StudentsPage() {
         country: r.country_of_interest ?? "",
         backupCountry: (backupNamesByLead.get(r.id) ?? []).join(", "),
         counselor: one(r.assigned_counselor)?.full_name ?? "",
+        // "none" rather than blank: the filter matches on this value, so an
+        // empty string would offer a "none" option that selected nothing. It
+        // reads better in the export too.
+        officer: one(r.processing_officer)?.full_name ?? "none",
         intake: r.intake ?? "",
         regStatus: r.registration_status,
         portal: r.portal_active ? "active" : "inactive",
@@ -142,6 +163,11 @@ export default async function StudentsPage() {
   const counselorOptions = Array.from(
     new Set((students ?? []).map((r) => one(r.assigned_counselor)?.full_name).filter(Boolean))
   ).sort() as string[];
+  // "none" is a real choice here: it is the one people will filter for.
+  const officerOptions = [
+    ...Array.from(new Set((students ?? []).map((r) => one(r.processing_officer)?.full_name).filter(Boolean))).sort(),
+    ...((students ?? []).some((r) => !one(r.processing_officer)) ? ["none"] : []),
+  ] as string[];
   const intakeOptions = Array.from(new Set((students ?? []).map((r) => r.intake).filter(Boolean))).sort() as string[];
   const monthOptions = MONTH_NAMES.filter((m) => rows.some((r) => r.csv.month === m));
   const yearOptions = Array.from(new Set(rows.map((r) => r.csv.year))).sort((a, b) => Number(b) - Number(a));
@@ -178,6 +204,7 @@ export default async function StudentsPage() {
               { key: "portal", label: "Portal", options: ["active", "inactive"] },
               { key: "country", label: "Country", options: countryOptions },
               { key: "counselor", label: "Counselor", options: counselorOptions },
+              { key: "officer", label: "Processing", options: officerOptions },
               { key: "intake", label: "Intake", options: intakeOptions },
               { key: "month", label: "Month", options: monthOptions },
               { key: "year", label: "Year", options: yearOptions },
