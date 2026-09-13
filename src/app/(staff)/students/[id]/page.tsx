@@ -146,8 +146,9 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   // university; agreements through their template.
   const destinationWork = (allDestinations ?? []).map((d) => {
     const appsHere = (applications ?? []).filter((a) => {
-      const uni = one(a.university as never) as { destination_id?: string } | null;
-      return uni?.destination_id === d.id;
+      const uni = one(a.university as never) as { destination?: unknown } | null;
+      const dest = uni?.destination ? (one(uni.destination as never) as { id?: string } | null) : null;
+      return dest?.id === d.id;
     });
     const agreementsHere = (agreements ?? []).filter((a) => {
       const t = one(a.template as never) as { destination_id?: string } | null;

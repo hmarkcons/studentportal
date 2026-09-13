@@ -63,8 +63,9 @@ export function DestinationChangeWarning({
             {withWork.length === 1 ? "its" : "their"} work.
           </span>{" "}
           {withWork.map((w) => describe(w)).join("; ")} — {withWork.length === 1 ? "it stays" : "they stay"} on file and
-          the country keeps its own tab under Applications. Delete{" "}
-          {withWork.length === 1 ? "the application" : "those applications"} first if that is what you mean to do.
+          the country keeps its own tab under Applications. Remove{" "}
+          {withWork.some((w) => w.applications > 0) ? "those records" : "that agreement"} first if that is what you mean
+          to do.
         </p>
       )}
       {demoted && (
