@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/Button";
 const PRESETS = [
   { label: "Gmail", credentialType: "gmail" },
   { label: "University portal", credentialType: "university_portal" },
+  // Shown to the student on their own Visa tab, so the name has to be the
+  // same one that page looks for.
+  { label: "Visa appointment portal", credentialType: "visa_appointment_portal" },
 ];
 
 function slugify(label: string) {

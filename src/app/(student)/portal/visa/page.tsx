@@ -5,6 +5,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { listTrackerDefinitions } from "@/lib/actions/countryTracker";
 import { formatDateOnly } from "@/lib/formatDate";
 import { readVisaDecision, visaMessage } from "@/lib/visaOutcome";
+import { VisaCredentials } from "./VisaCredentials";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -122,15 +123,26 @@ export default async function PortalVisaPage() {
 
   const visible = sections.filter((s): s is NonNullable<typeof s> => s !== null);
 
-  // Credentials are encrypted at rest behind a vault key and decrypting them
-  // into the student portal would be a real change in who can read secrets —
-  // so this only reports that the login exists, and points at the counsellor.
+  // The visa appointment login is the student's own — staff record it so they
+  // can book on the student's behalf, and read_credential has allowed a
+  // student to read their own since it was written. What was missing was
+  // anywhere for them to see it, so a student had to ask their counsellor for
+  // their own password.
+  //
+  // The row is listed here and decrypted only when the student asks, in
+  // VisaCredentials.
   const { data: credentials } = await supabase
     .from("encrypted_credentials")
     .select("credential_type")
     .eq("owner_type", "student")
     .eq("owner_id", student.id);
-  const appointmentLogin = (credentials ?? []).find((c) => /vfs|appointment|visa/i.test(c.credential_type));
+  // The preset first; then anything a staff member typed by hand before it
+  // existed, so an older visa_portal or vfs_login is not stranded.
+  const visaLogins = (credentials ?? [])
+    .filter((c) => c.credential_type === "visa_appointment_portal" || /vfs|appointment|visa/i.test(c.credential_type))
+    // portal_login is this portal's own password, not a visa one.
+    .filter((c) => c.credential_type !== "portal_login");
+  const appointmentLogin = visaLogins[0] ?? null;
 
   // Edited in Setup › Visa messages. Null only on a database where the row was
   // deleted, and visaMessage falls back to its built-in copy then rather than
@@ -214,12 +226,21 @@ export default async function PortalVisaPage() {
 
       {appointmentLogin && (
         <Card className="mt-6">
-          <h3 className="mb-1 text-sm font-medium text-ink">Visa appointment portal</h3>
-          <p className="text-sm text-ink">
-            Your visa appointment portal login has been set up by your counsellor.
-          </p>
-          <p className="mt-1 text-xs text-muted">
-            Ask them for the details — we never show portal passwords in the portal or send them by email.
+          <h3 className="mb-2 text-sm font-medium text-ink">Visa appointment portal</h3>
+          <VisaCredentials
+            studentId={student.id}
+            credentialType={appointmentLogin.credential_type}
+            label={
+              appointmentLogin.credential_type === "visa_appointment_portal"
+                ? "Your appointment portal login"
+                : appointmentLogin.credential_type.replace(/_/g, " ")
+            }
+          />
+          {/* The one thing this page cannot do for them. A portal that locks
+              an account after three wrong attempts is not the place to guess. */}
+          <p className="mt-2 text-xs text-muted">
+            If this login does not work, tell your counsellor rather than trying repeatedly — some appointment portals
+            lock an account after a few failed attempts.
           </p>
         </Card>
       )}
