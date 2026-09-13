@@ -5,6 +5,8 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Badge } from "@/components/ui/Badge";
 import { CURRENCY_SYMBOLS } from "@/lib/constants";
 import { bodiesForUniversity } from "@/lib/scholarshipMatch";
+import { guideFreshness } from "@/lib/academicYear";
+import { ScholarshipGuide } from "@/components/ScholarshipGuide";
 import { SCHOLARSHIP_CURRENCY_SYMBOL } from "@/lib/scholarships";
 import { ScholarshipSection } from "../applications/[appId]/tracker/ScholarshipSection";
 
@@ -101,7 +103,9 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
       .from("scholarship_bodies")
       // covers is what maps a university to its body — without it the matcher
       // has nothing to match on and silently finds nothing.
-      .select("id, name, region, covers, destinations:scholarship_body_destinations(destination_id)")
+      .select(
+        "id, name, region, covers, academic_year, application_deadline, apply_url, isee_threshold, ispe_threshold, call_status, call_expected_on, call_pdf_url, source_url, guide_sections, destinations:scholarship_body_destinations(destination_id)"
+      )
       .order("region")
       .order("name"),
     supabase
@@ -168,6 +172,36 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
                 {w.country}&rsquo;s scholarships are awarded on merit to a small number of students, so this is not
                 offered to everyone. Add one below if this student is being put forward for it.
               </p>
+            )}
+            {offeredBodies.length > 0 && (
+              <div className="mb-3 flex flex-col gap-2">
+                {offeredBodies.map((b) => (
+                  <ScholarshipGuide
+                    key={b.id}
+                    body={{
+                      id: b.id,
+                      name: b.name,
+                      region: b.region,
+                      academic_year: b.academic_year ?? null,
+                      application_deadline: b.application_deadline ?? null,
+                      apply_url: b.apply_url ?? null,
+                      isee_threshold: b.isee_threshold ?? null,
+                      ispe_threshold: b.ispe_threshold ?? null,
+                      call_status: b.call_status ?? "published",
+                      call_expected_on: b.call_expected_on ?? null,
+                      call_pdf_url: b.call_pdf_url ?? null,
+                      source_url: b.source_url ?? null,
+                      guide_sections: Array.isArray(b.guide_sections)
+                        ? (b.guide_sections as { title: string; body: string }[])
+                        : [],
+                      staleFor: (() => {
+                        const f = guideFreshness(b.academic_year);
+                        return f.state === "stale" ? f.expected : null;
+                      })(),
+                    }}
+                  />
+                ))}
+              </div>
             )}
             <ScholarshipSection
               studentId={id}

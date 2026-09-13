@@ -5,18 +5,21 @@ export function SlideOver({
   onClose,
   title,
   children,
+  wide = false,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  /** For a panel holding a whole document rather than a handful of fields. */
+  wide?: boolean;
 }) {
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative flex h-full w-full max-w-lg flex-col bg-card shadow-xl">
+      <div className={`relative flex h-full w-full flex-col bg-card shadow-xl ${wide ? "max-w-3xl" : "max-w-lg"}`}>
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h3 className="text-sm font-semibold text-ink">{title}</h3>
           <button onClick={onClose} className="text-lg text-muted hover:text-ink" aria-label="Close">

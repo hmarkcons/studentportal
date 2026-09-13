@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ScholarshipBodyForm, type ScholarshipBody, type DestinationChoice } from "./ScholarshipBodyForm";
+import { currentAcademicYear, guideFreshness } from "@/lib/academicYear";
 import { DeleteScholarshipBodyButton } from "./DeleteScholarshipBodyButton";
 
 export default async function ScholarshipBodiesPage() {
@@ -18,7 +19,9 @@ export default async function ScholarshipBodiesPage() {
   const [{ data: bodies }, { data: destinations }, { data: links }] = await Promise.all([
     supabase
       .from("scholarship_bodies")
-      .select("id, name, region, academic_year, covers, stipend_amount, source_url, last_updated_year")
+      .select(
+        "id, name, region, academic_year, covers, stipend_amount, source_url, last_updated_year, apply_url, application_deadline, isee_threshold, ispe_threshold, benefits, call_status, call_expected_on, call_notes, call_pdf_url, guide_sections, guide_updated_at"
+      )
       .order("name"),
     supabase
       .from("destinations")
@@ -49,6 +52,8 @@ export default async function ScholarshipBodiesPage() {
     return {
       id: b.id,
       countries,
+      freshness: guideFreshness(b.academic_year),
+      sectionCount: Array.isArray(b.guide_sections) ? b.guide_sections.length : 0,
       body: {
         id: b.id,
         name: b.name,
@@ -58,6 +63,16 @@ export default async function ScholarshipBodiesPage() {
         stipend_amount: b.stipend_amount,
         source_url: b.source_url,
         destinationIds: destIdsByBody.get(b.id) ?? [],
+        apply_url: b.apply_url,
+        application_deadline: b.application_deadline,
+        isee_threshold: b.isee_threshold,
+        ispe_threshold: b.ispe_threshold,
+        benefits: b.benefits,
+        call_status: b.call_status ?? "published",
+        call_expected_on: b.call_expected_on,
+        call_notes: b.call_notes,
+        call_pdf_url: b.call_pdf_url,
+        guide_sections: Array.isArray(b.guide_sections) ? (b.guide_sections as { title: string; body: string }[]) : [],
       } satisfies ScholarshipBody,
     };
   });
@@ -69,6 +84,14 @@ export default async function ScholarshipBodiesPage() {
   }));
 
   const universal = (destinations ?? []).filter((d) => d.scholarship_access === "universal").map((d) => d.country);
+
+  // The year everything on this page is measured against. Computed, not
+  // stored: it turns over in May on its own, and a stored one is a thing
+  // somebody has to remember to change.
+  const thisYear = currentAcademicYear();
+  const stale = rows.filter((r) => r.freshness.state === "stale");
+  const awaiting = rows.filter((r) => r.body.call_status === "awaiting");
+  const noGuide = rows.filter((r) => r.sectionCount === 0);
 
   return (
     <div className="w-full">
@@ -106,6 +129,34 @@ export default async function ScholarshipBodiesPage() {
         )}
       </p>
 
+      {/* Three different reasons a body might need attention, kept apart
+          because they call for different things. A stale guide is work; a
+          call that is not published is the calendar; a body with no guide at
+          all has never been written up. */}
+      {(stale.length > 0 || awaiting.length > 0 || noGuide.length > 0) && (
+        <div className="mb-4 flex flex-col gap-1 rounded-md border border-border bg-bg px-3 py-2 text-xs">
+          <p className="font-medium text-ink">Academic year {thisYear}</p>
+          {stale.length > 0 && (
+            <p className="text-warning">
+              {stale.length} {stale.length === 1 ? "guide still describes" : "guides still describe"} an earlier year:{" "}
+              {stale.map((r) => r.body.name).join(", ")}.
+            </p>
+          )}
+          {awaiting.length > 0 && (
+            <p className="text-info">
+              {awaiting.length} waiting on {awaiting.length === 1 ? "its region" : "their regions"} to publish the call:{" "}
+              {awaiting.map((r) => r.body.name).join(", ")}.
+            </p>
+          )}
+          {noGuide.length > 0 && (
+            <p className="text-muted">
+              {noGuide.length} {noGuide.length === 1 ? "body has" : "bodies have"} no guide written up yet:{" "}
+              {noGuide.map((r) => r.body.name).join(", ")}.
+            </p>
+          )}
+        </div>
+      )}
+
       {rows.length === 0 ? (
         <Card>
           <EmptyState>No scholarship bodies added yet.</EmptyState>
@@ -130,6 +181,8 @@ export default async function ScholarshipBodiesPage() {
             { key: "region", header: "Region" },
             { key: "covers", header: "Covers" },
             { key: "academic_year", header: "Academic year" },
+            { key: "deadline", header: "Deadline" },
+            { key: "guide", header: "Guide" },
             { key: "stipend", header: "Stipend / notes" },
             { key: "source", header: "Source" },
             { key: "actions", header: "", exportable: false },
@@ -154,7 +207,27 @@ export default async function ScholarshipBodiesPage() {
               body: <span className="font-medium text-ink">{r.body.name}</span>,
               region: r.body.region ?? "—",
               covers: r.body.covers.join(", ") || "—",
-              academic_year: r.body.academic_year,
+              academic_year: (
+                <span className="whitespace-nowrap">
+                  {r.body.academic_year}
+                  {/* Goes stale on its own the day the year turns in May —
+                      nobody has to remember to mark it. */}
+                  {r.freshness.state === "stale" && (
+                    <Badge tone="warning" >
+                      needs {r.freshness.expected}
+                    </Badge>
+                  )}
+                </span>
+              ),
+              deadline:
+                r.body.call_status === "awaiting" ? (
+                  <Badge tone="info">
+                    call not out{r.body.call_expected_on ? ` · expected ${r.body.call_expected_on}` : ""}
+                  </Badge>
+                ) : (
+                  (r.body.application_deadline ?? "—")
+                ),
+              guide: r.sectionCount > 0 ? `${r.sectionCount} sections` : <Badge tone="warning">none yet</Badge>,
               stipend: r.body.stipend_amount ?? "—",
               source: r.body.source_url ? (
                 <a
@@ -190,6 +263,8 @@ export default async function ScholarshipBodiesPage() {
               region: r.body.region ?? "",
               covers: r.body.covers.join(", "),
               academic_year: r.body.academic_year,
+              deadline: r.body.application_deadline ?? "",
+              guide: String(r.sectionCount),
               stipend: r.body.stipend_amount ?? "",
               source: r.body.source_url ?? "",
             },

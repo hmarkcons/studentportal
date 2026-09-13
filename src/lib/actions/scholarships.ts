@@ -31,6 +31,60 @@ function readBodyFields(formData: FormData) {
       .filter(Boolean),
     stipend_amount: String(formData.get("stipend_amount") ?? "").trim() || null,
     source_url: String(formData.get("source_url") ?? "").trim() || null,
+    apply_url: String(formData.get("apply_url") ?? "").trim() || null,
+    application_deadline: String(formData.get("application_deadline") ?? "").trim() || null,
+    isee_threshold: String(formData.get("isee_threshold") ?? "").trim() || null,
+    ispe_threshold: String(formData.get("ispe_threshold") ?? "").trim() || null,
+    benefits: String(formData.get("benefits") ?? "").trim() || null,
+    call_pdf_url: String(formData.get("call_pdf_url") ?? "").trim() || null,
+    call_notes: String(formData.get("call_notes") ?? "").trim() || null,
+  };
+}
+
+/**
+ * The guide, which arrives as one JSON field.
+ *
+ * Client-supplied, so it is rebuilt here rather than trusted: only a title and
+ * a body survive, both trimmed and capped, and anything that is not an object
+ * with both is dropped. A malformed value returns an error instead of writing
+ * something the table's own CHECK would reject with a constraint name.
+ */
+function readGuideSections(formData: FormData): { sections: { title: string; body: string }[] } | { error: string } {
+  const raw = formData.get("guide_sections");
+  if (raw == null || String(raw).trim() === "") return { sections: [] };
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(String(raw));
+  } catch {
+    return { error: "The guide did not submit cleanly — reload the page and try again." };
+  }
+  if (!Array.isArray(parsed)) return { error: "The guide did not submit cleanly — reload the page and try again." };
+  if (parsed.length > 40) return { error: "That is more than 40 sections — split the guide or shorten it." };
+
+  const sections: { title: string; body: string }[] = [];
+  for (const item of parsed) {
+    if (!item || typeof item !== "object") continue;
+    const title = String((item as { title?: unknown }).title ?? "").trim().slice(0, 120);
+    const body = String((item as { body?: unknown }).body ?? "").trim().slice(0, 8000);
+    if (!title || !body) continue;
+    sections.push({ title, body });
+  }
+  return { sections };
+}
+
+/** 'published' or 'awaiting', and a date that only means anything for the latter. */
+function readCallStatus(formData: FormData) {
+  const status = String(formData.get("call_status") ?? "published");
+  if (!["published", "awaiting"].includes(status)) {
+    return { error: "Choose whether this year's call is published or not out yet." };
+  }
+  const expected = String(formData.get("call_expected_on") ?? "").trim() || null;
+  return {
+    // A date on a published call is left over from when it was awaited, and
+    // would read as a second deadline.
+    call_status: status,
+    call_expected_on: status === "awaiting" ? expected : null,
   };
 }
 
@@ -93,9 +147,14 @@ export async function createScholarshipBody(_prevState: unknown, formData: FormD
   const destinationIds = readDestinationIds(formData);
   if (destinationIds.length === 0) return { error: "Choose at least one country this scholarship body serves." };
 
+  const guide = readGuideSections(formData);
+  if ("error" in guide) return { error: guide.error };
+  const call = readCallStatus(formData);
+  if ("error" in call) return { error: call.error };
+
   const { data: created, error: insertError } = await supabase
     .from("scholarship_bodies")
-    .insert(fields)
+    .insert({ ...fields, ...call, guide_sections: guide.sections, guide_updated_at: new Date().toISOString() })
     .select("id")
     .single();
   if (insertError) return { error: insertError.message };
@@ -123,7 +182,27 @@ export async function updateScholarshipBody(bodyId: string, _prevState: unknown,
   const destinationIds = readDestinationIds(formData);
   if (destinationIds.length === 0) return { error: "Choose at least one country this scholarship body serves." };
 
-  const { error: updateError } = await supabase.from("scholarship_bodies").update(fields).eq("id", bodyId);
+  const guide = readGuideSections(formData);
+  if ("error" in guide) return { error: guide.error };
+  const call = readCallStatus(formData);
+  if ("error" in call) return { error: call.error };
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { error: updateError } = await supabase
+    .from("scholarship_bodies")
+    .update({
+      ...fields,
+      ...call,
+      guide_sections: guide.sections,
+      // Stamped on every save: this is what says a guide has been looked at
+      // for the current year, which is the whole point of tracking staleness.
+      guide_updated_at: new Date().toISOString(),
+      guide_updated_by: user?.id ?? null,
+    })
+    .eq("id", bodyId);
   if (updateError) return { error: updateError.message };
 
   const linkError = await setBodyDestinations(supabase, bodyId, destinationIds);

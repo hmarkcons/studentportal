@@ -4,7 +4,8 @@ import { useState } from "react";
 import { createScholarshipBody, updateScholarshipBody } from "@/lib/actions/scholarships";
 import { useSlideOverForm } from "@/app/(staff)/marketing/referrals/useSlideOverForm";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { Input, Select, Textarea } from "@/components/ui/Input";
+import { GuideSectionsEditor, type GuideSection } from "./GuideSectionsEditor";
 import { SlideOver } from "@/components/ui/SlideOver";
 
 export type ScholarshipBody = {
@@ -16,6 +17,16 @@ export type ScholarshipBody = {
   stipend_amount: string | null;
   source_url: string | null;
   destinationIds: string[];
+  apply_url: string | null;
+  application_deadline: string | null;
+  isee_threshold: string | null;
+  ispe_threshold: string | null;
+  benefits: string | null;
+  call_status: string;
+  call_expected_on: string | null;
+  call_notes: string | null;
+  call_pdf_url: string | null;
+  guide_sections: GuideSection[];
 };
 
 export type DestinationChoice = { id: string; display_name: string; country: string };
@@ -69,7 +80,7 @@ export function ScholarshipBodyForm({
   return (
     <>
       <span onClick={() => setOpen(true)}>{trigger}</span>
-      <SlideOver open={open} onClose={() => setOpen(false)} title={body ? `Edit ${body.name}` : "Add a scholarship body"}>
+      <SlideOver open={open} onClose={() => setOpen(false)} title={body ? `Edit ${body.name}` : "Add a scholarship body"} wide>
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
           {/* First, because it decides which students ever see this body. */}
           <Field
@@ -110,9 +121,62 @@ export function ScholarshipBodyForm({
           <Field label="Stipend / notes">
             <Input name="stipend_amount" defaultValue={body?.stipend_amount ?? ""} maxLength={200} />
           </Field>
-          <Field label="Source" hint="The body's own page. Staff open this to check a deadline against the source.">
-            <Input name="source_url" type="url" defaultValue={body?.source_url ?? ""} placeholder="https://…" />
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Source" hint="The body's own page.">
+              <Input name="source_url" type="url" defaultValue={body?.source_url ?? ""} placeholder="https://…" />
+            </Field>
+            <Field label="Apply portal" hint="Where the student actually submits.">
+              <Input name="apply_url" type="url" defaultValue={body?.apply_url ?? ""} placeholder="https://…" />
+            </Field>
+          </div>
+          <Field label="Application deadline" hint="As the call words it — many carry a time, and some carry two dates.">
+            <Input
+              name="application_deadline"
+              defaultValue={body?.application_deadline ?? ""}
+              maxLength={200}
+              placeholder="e.g. 7 September 2026, 13:00"
+            />
           </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="ISEE limit">
+              <Input name="isee_threshold" defaultValue={body?.isee_threshold ?? ""} maxLength={60} placeholder="≤€26,887.93" />
+            </Field>
+            <Field label="ISPE limit">
+              <Input name="ispe_threshold" defaultValue={body?.ispe_threshold ?? ""} maxLength={60} placeholder="≤€58,452.06" />
+            </Field>
+          </div>
+          <Field label="Benefits">
+            <Input name="benefits" defaultValue={body?.benefits ?? ""} maxLength={300} placeholder="e.g. free meals at university canteens" />
+          </Field>
+
+          {/* Whether this year's call is even out yet. A body waiting on its
+              region has not been neglected, and saying so stops the same
+              person checking it again next week. */}
+          <p className="mt-2 border-t border-border pt-3 text-xs font-semibold uppercase tracking-wide text-muted">
+            This year&rsquo;s call
+          </p>
+          <Field label="Status">
+            <Select name="call_status" defaultValue={body?.call_status ?? "published"}>
+              <option value="published">Published — this guide reflects it</option>
+              <option value="awaiting">Not published yet</option>
+            </Select>
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Expected on" hint="When the region usually publishes. Only for a call that is not out.">
+              <Input name="call_expected_on" type="date" defaultValue={body?.call_expected_on ?? ""} />
+            </Field>
+            <Field label="Official call PDF" hint="Link to the call document itself, where the region publishes one.">
+              <Input name="call_pdf_url" type="url" defaultValue={body?.call_pdf_url ?? ""} placeholder="https://…" />
+            </Field>
+          </div>
+          <Field label="Notes on the call">
+            <Textarea name="call_notes" defaultValue={body?.call_notes ?? ""} rows={2} maxLength={1000} />
+          </Field>
+
+          <p className="mt-2 border-t border-border pt-3 text-xs font-semibold uppercase tracking-wide text-muted">
+            The guide
+          </p>
+          <GuideSectionsEditor name="guide_sections" initial={body?.guide_sections ?? []} />
 
           {error && <p className="text-xs text-danger">{error}</p>}
           <div className="flex gap-2 pt-2">
