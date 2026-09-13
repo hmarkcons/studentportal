@@ -141,6 +141,27 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     : signedAgreement
       ? { text: "Signed", tone: "success" as const }
       : { text: "Awaiting signature", tone: "warning" as const };
+  // What this student has against each country, for the warning when one is
+  // dropped or swapped. Applications reach their destination through their
+  // university; agreements through their template.
+  const destinationWork = (allDestinations ?? []).map((d) => {
+    const appsHere = (applications ?? []).filter((a) => {
+      const uni = one(a.university as never) as { destination_id?: string } | null;
+      return uni?.destination_id === d.id;
+    });
+    const agreementsHere = (agreements ?? []).filter((a) => {
+      const t = one(a.template as never) as { destination_id?: string } | null;
+      return t?.destination_id === d.id;
+    });
+    return {
+      destinationId: d.id,
+      name: d.display_name,
+      applications: appsHere.length,
+      agreements: agreementsHere.length,
+      signedAgreements: agreementsHere.filter((a) => a.status === "signed").length,
+    };
+  });
+
   // No "latest agreement" any more. A student holds one per destination, so
   // every panel that used to act on agreements[0] now acts on the agreement it
   // is rendered under.
@@ -609,6 +630,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         <div className="mb-4">
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Registration</p>
           <RegistrationEditForm
+            destinationWork={destinationWork}
             studentId={id}
             revalidateTo={`/students/${id}`}
             destinations={allDestinations ?? []}

@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { updateRegistrationDetails } from "@/lib/actions/leads";
 import { PrimaryBackupDestinationSelect } from "@/components/PrimaryBackupDestinationSelect";
 import { IntakeField } from "@/components/IntakeField";
+import { DestinationChangeWarning, type DestinationWork } from "./DestinationChangeWarning";
 import { intakeConfigFor, type DestinationOption } from "@/app/(staff)/students/new/RegisterStudentForm";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
@@ -21,6 +22,7 @@ export function RegistrationEditForm({
   discountAmount,
   discountReason,
   intake,
+  destinationWork,
 }: {
   studentId: string;
   revalidateTo: string;
@@ -34,11 +36,14 @@ export function RegistrationEditForm({
   discountAmount: number | null;
   discountReason: string | null;
   intake: string | null;
+  /** What this student already has against each country. */
+  destinationWork: DestinationWork[];
 }) {
   const [editing, setEditing] = useState(false);
   // Starts at whatever the student is already registered for, so the intake
   // field opens on that country's shape rather than a text box.
   const [primaryId, setPrimaryId] = useState(defaultPrimaryId ?? "");
+  const [backupIds, setBackupIds] = useState<string[]>(defaultBackupIds);
   const action = updateRegistrationDetails.bind(null, studentId, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
 
@@ -59,7 +64,22 @@ export function RegistrationEditForm({
           defaultPrimaryId={defaultPrimaryId}
           defaultBackupIds={defaultBackupIds}
           onPrimaryChange={setPrimaryId}
+          onSelectionChange={({ primaryId: p, backupIds: b }) => {
+            setPrimaryId(p);
+            setBackupIds(b);
+          }}
         />
+        {/* Nothing is blocked — dropping a country is an ordinary thing to
+            do. This only means nobody finds out afterwards. */}
+        <div className="mt-2">
+          <DestinationChangeWarning
+            work={destinationWork}
+            originalPrimaryId={defaultPrimaryId}
+            originalBackupIds={defaultBackupIds}
+            primaryId={primaryId}
+            backupIds={backupIds}
+          />
+        </div>
       </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
         <label className="flex flex-col gap-1 text-xs text-muted">

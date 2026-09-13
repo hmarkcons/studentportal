@@ -17,10 +17,17 @@ export function PrimaryBackupDestinationSelect({
   defaultPrimaryId = null,
   defaultBackupIds = [],
   onPrimaryChange,
+  onSelectionChange,
 }: {
   destinations: { id: string; display_name: string }[];
   defaultPrimaryId?: string | null;
   defaultBackupIds?: string[];
+  /**
+   * The whole selection, whenever it moves. Removing a country here can
+   * orphan its applications, agreements and documents, and the form above
+   * needs to know in order to say so before anything is saved.
+   */
+  onSelectionChange?: (selection: { primaryId: string; backupIds: string[] }) => void;
   /**
    * The intake field next to this one is shaped by the primary destination —
    * Italy has one intake a year, Germany has two, the UK is written out — so
@@ -36,18 +43,24 @@ export function PrimaryBackupDestinationSelect({
   const nameById = new Map(destinations.map((d) => [d.id, d.display_name]));
 
   function setPrimary(id: string) {
+    const nextBackups = backupIds.filter((b) => b !== id);
     setPrimaryId(id);
-    setBackupIds((prev) => prev.filter((b) => b !== id));
+    setBackupIds(nextBackups);
     onPrimaryChange?.(id);
+    onSelectionChange?.({ primaryId: id, backupIds: nextBackups });
   }
 
   function addBackup(id: string) {
     if (!id || id === primaryId || backupIds.includes(id) || backupIds.length >= MAX_BACKUPS) return;
-    setBackupIds((prev) => [...prev, id]);
+    const next = [...backupIds, id];
+    setBackupIds(next);
+    onSelectionChange?.({ primaryId, backupIds: next });
   }
 
   function removeBackup(id: string) {
-    setBackupIds((prev) => prev.filter((b) => b !== id));
+    const next = backupIds.filter((b) => b !== id);
+    setBackupIds(next);
+    onSelectionChange?.({ primaryId, backupIds: next });
   }
 
   const availableForBackup = destinations.filter((d) => d.id !== primaryId && !backupIds.includes(d.id));
