@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requirePermission } from "@/lib/auth/permissions";
 import { currentAcademicYear } from "@/lib/academicYear";
-import { PROPOSABLE_FIELDS, type ProposableField } from "@/lib/scholarshipResearch";
+import { PROPOSABLE_FIELDS, researchConfigured, type ProposableField } from "@/lib/scholarshipResearch";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { runScholarshipCheck } from "@/lib/scholarshipCheckRunner";
 
 const PAGE = "/setup/scholarship-bodies";
 const DENIED = "Only Super Admin and the Processing team can manage scholarships.";
@@ -125,6 +127,73 @@ export async function applyScholarshipProposal(runId: string, acceptedFields: st
 
   revalidatePath(PAGE);
   return { success: true, applied: Object.keys(patch).length };
+}
+
+/**
+ * Takes the next queued body, reads its call, and records the outcome.
+ *
+ * One at a time and called from the browser in a loop: a serverless function
+ * here is capped at sixty seconds and reading one regional site takes most of
+ * that, so a batch would be killed halfway through with rows left claimed.
+ *
+ * Returns what happened and whether anything is left, so the caller knows
+ * whether to come round again.
+ */
+export async function processNextScholarshipUpdate(): Promise<
+  { error: string } | { done: true; remaining: 0 } | { done: false; body: string; outcome: string; remaining: number }
+> {
+  const error = await gate();
+  if (error) return { error };
+
+  if (!researchConfigured()) {
+    return { error: "ANTHROPIC_API_KEY is not set in this environment, so no call can be read." };
+  }
+
+  const admin = createAdminClient();
+
+  // Anything claimed and never finished — a function that died mid-read — is
+  // released, or the one-live-request index blocks that body forever.
+  const stale = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  await admin
+    .from("scholarship_body_update_runs")
+    .update({ status: "failed", error: "The check did not finish — try again.", finished_at: new Date().toISOString() })
+    .eq("status", "running")
+    .lt("started_at", stale);
+
+  const { data: next } = await admin
+    .from("scholarship_body_update_runs")
+    .select("id, scholarship_body_id, academic_year")
+    .eq("status", "queued")
+    .order("requested_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (!next) return { done: true, remaining: 0 };
+
+  // Claimed conditionally, so two tabs cannot both take the same row.
+  const { data: claimed } = await admin
+    .from("scholarship_body_update_runs")
+    .update({ status: "running", started_at: new Date().toISOString() })
+    .eq("id", next.id)
+    .eq("status", "queued")
+    .select("id");
+  if (!claimed?.length) {
+    const { count } = await admin
+      .from("scholarship_body_update_runs")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "queued");
+    return { done: false, body: "", outcome: "taken by another tab", remaining: count ?? 0 };
+  }
+
+  const outcome = await runScholarshipCheck(admin, next.id, next.scholarship_body_id, next.academic_year);
+
+  const { count } = await admin
+    .from("scholarship_body_update_runs")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "queued");
+
+  revalidatePath(PAGE);
+  return { done: false, body: outcome.body, outcome: outcome.result, remaining: count ?? 0 };
 }
 
 /** Rejects a proposal. The reading is kept, so the next run can tell it has seen this call. */

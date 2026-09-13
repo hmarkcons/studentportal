@@ -2,7 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { requestScholarshipUpdate, applyScholarshipProposal, dismissScholarshipProposal } from "@/lib/actions/scholarshipUpdates";
+import {
+  requestScholarshipUpdate,
+  applyScholarshipProposal,
+  dismissScholarshipProposal,
+  processNextScholarshipUpdate,
+} from "@/lib/actions/scholarshipUpdates";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
@@ -152,27 +157,51 @@ export function UpdateRunsPanel({
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<string[]>([]);
 
   const proposed = runs.filter((r) => r.status === "proposed");
   const working = runs.filter((r) => r.status === "queued" || r.status === "running");
   const awaiting = runs.filter((r) => r.status === "awaiting");
   const failed = runs.filter((r) => r.status === "failed");
 
+  /**
+   * Queues the work, then drains it one body at a time from here.
+   *
+   * The plan this runs on allows daily crons only, so a scheduled worker would
+   * mean clicking the button today and seeing the answer tomorrow. Driving it
+   * from the page also means the office watches it happen instead of staring
+   * at a spinner — each region takes most of a minute to read.
+   */
   async function checkAll() {
     setPending(true);
     setError(null);
     setMessage(null);
-    const result = await requestScholarshipUpdate(null);
-    setPending(false);
-    if (result?.error) {
-      setError(result.error);
+    setProgress([]);
+
+    const queued = await requestScholarshipUpdate(null);
+    if (queued?.error) {
+      setPending(false);
+      setError(queued.error);
       return;
     }
-    setMessage(
-      result.queued === 0
-        ? "Every body already has a check queued or waiting for review."
-        : `${result.queued} queued. They are read a few at a time — come back in a few minutes.`
-    );
+    router.refresh();
+
+    // A hard ceiling rather than "until empty": a bug that never drains the
+    // queue would otherwise spend the office's money in a loop.
+    for (let i = 0; i < 40; i++) {
+      const step = await processNextScholarshipUpdate();
+      if ("error" in step) {
+        setError(step.error);
+        break;
+      }
+      if (step.done) break;
+      setProgress((prev) => [...prev, `${step.body || "…"} — ${step.outcome}`]);
+      router.refresh();
+      if (step.remaining === 0) break;
+    }
+
+    setPending(false);
+    setMessage("Finished checking. Anything proposed is below, waiting for you.");
     router.refresh();
   }
 
@@ -207,6 +236,18 @@ export function UpdateRunsPanel({
           guides are maintained by hand, which is what the Edit button is for.
         </p>
       )}
+
+      {progress.length > 0 && (
+        <div className="max-h-40 overflow-y-auto rounded-md border border-border bg-card px-3 py-2 text-xs">
+          {progress.map((line, i) => (
+            <p key={i} className="text-muted">
+              {line}
+            </p>
+          ))}
+          {pending && <p className="text-primary">reading the next one…</p>}
+        </div>
+      )}
+      {pending && progress.length === 0 && <p className="text-xs text-primary">Queuing, then reading the first one…</p>}
 
       {message && <p className="text-xs text-success">{message}</p>}
       {error && <p className="text-xs text-danger">{error}</p>}
