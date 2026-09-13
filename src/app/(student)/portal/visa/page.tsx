@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { listTrackerDefinitions } from "@/lib/actions/countryTracker";
+import { listTrackerDefinitions, listCredentialTypesAction } from "@/lib/actions/countryTracker";
 import { formatDateOnly } from "@/lib/formatDate";
 import { readVisaDecision, visaMessage } from "@/lib/visaOutcome";
 import { VisaCredentials } from "./VisaCredentials";
@@ -131,18 +131,14 @@ export default async function PortalVisaPage() {
   //
   // The row is listed here and decrypted only when the student asks, in
   // VisaCredentials.
-  const { data: credentials } = await supabase
-    .from("encrypted_credentials")
-    .select("credential_type")
-    .eq("owner_type", "student")
-    .eq("owner_id", student.id);
+  const credentialTypes = await listCredentialTypesAction("student", student.id);
   // The preset first; then anything a staff member typed by hand before it
   // existed, so an older visa_portal or vfs_login is not stranded.
-  const visaLogins = (credentials ?? [])
-    .filter((c) => c.credential_type === "visa_appointment_portal" || /vfs|appointment|visa/i.test(c.credential_type))
+  const appointmentLogin =
+    credentialTypes.find((t) => t === "visa_appointment_portal") ??
     // portal_login is this portal's own password, not a visa one.
-    .filter((c) => c.credential_type !== "portal_login");
-  const appointmentLogin = visaLogins[0] ?? null;
+    credentialTypes.find((t) => t !== "portal_login" && /vfs|appointment|visa/i.test(t)) ??
+    null;
 
   // Edited in Setup › Visa messages. Null only on a database where the row was
   // deleted, and visaMessage falls back to its built-in copy then rather than
@@ -229,11 +225,11 @@ export default async function PortalVisaPage() {
           <h3 className="mb-2 text-sm font-medium text-ink">Visa appointment portal</h3>
           <VisaCredentials
             studentId={student.id}
-            credentialType={appointmentLogin.credential_type}
+            credentialType={appointmentLogin}
             label={
-              appointmentLogin.credential_type === "visa_appointment_portal"
+              appointmentLogin === "visa_appointment_portal"
                 ? "Your appointment portal login"
-                : appointmentLogin.credential_type.replace(/_/g, " ")
+                : appointmentLogin.replace(/_/g, " ")
             }
           />
           {/* The one thing this page cannot do for them. A portal that locks
