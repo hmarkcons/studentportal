@@ -132,6 +132,15 @@ export default async function PortalVisaPage() {
     .eq("owner_id", student.id);
   const appointmentLogin = (credentials ?? []).find((c) => /vfs|appointment|visa/i.test(c.credential_type));
 
+  // Edited in Setup › Visa messages. Null only on a database where the row was
+  // deleted, and visaMessage falls back to its built-in copy then rather than
+  // leaving a badge with nothing under it.
+  const { data: templates } = await supabase
+    .from("visa_messages")
+    .select("approved_heading, approved_body, approved_signoff, refused_heading, refused_body, refused_signoff")
+    .eq("id", true)
+    .maybeSingle();
+
   return (
     <div className="mx-auto max-w-3xl">
       <h2 className="mb-1 text-lg font-semibold text-ink">Visa</h2>
@@ -147,7 +156,7 @@ export default async function PortalVisaPage() {
       ) : (
         <div className="flex flex-col gap-6">
           {visible.map((s) => {
-            const message = visaMessage(s.decision, student.full_name, s.country.name);
+            const message = visaMessage(s.decision, student.full_name, s.country.name, templates ?? null);
             return (
               <Card key={s.country.code}>
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">

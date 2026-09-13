@@ -27,6 +27,7 @@ const BASE_STAFF_NAV: NavItem[] = [
       { label: "Create Doc Checklist", href: "/setup/create-doc-checklist" },
       { label: "Invoice settings", href: "/setup/invoice-settings" },
       { label: "Attendance policy", href: "/setup/attendance-policy" },
+      { label: "Visa messages", href: "/setup/visa-messages" },
       { label: "Support FAQ", href: "/setup/support-faqs" },
       { label: "Guide tutorials", href: "/setup/guide-videos" },
     ],

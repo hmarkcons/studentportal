@@ -23,6 +23,71 @@ export function readVisaDecision(rawValue: string | null | undefined): VisaDecis
 
 export type VisaMessage = { heading: string; body: string[]; signoff: string };
 
+/** What the office may drop into its own wording. */
+export const VISA_PLACEHOLDERS = ["{name}", "{country}"] as const;
+
+/**
+ * Fills {name} and {country} into text the office wrote.
+ *
+ * The cleanup afterwards is the whole job. Once the wording is editable, the
+ * sentence around a placeholder is not mine to control — somebody will write
+ * "Congratulations, {name} — you're going to {country}." and then a student
+ * with no finalised country will read "Congratulations, — you're going to ."
+ *
+ * So an empty value takes its own punctuation with it: the comma that
+ * introduced it, the stray space, the full stop left hanging. Not perfect
+ * English in every possible sentence, but never visibly broken, which is the
+ * thing that matters on the page where someone finds out whether they are
+ * going.
+ */
+export function fillVisaTemplate(text: string, values: { name?: string | null; country?: string | null }): string {
+  const name = (values.name ?? "").trim().split(/\s+/)[0] ?? "";
+  const country = (values.country ?? "").trim();
+
+  let out = text.replace(/\{name\}/g, name).replace(/\{country\}/g, country);
+
+  if (!name || !country) {
+    out = out
+      // "Congratulations, — it's official" → the comma goes, the space stays.
+      .replace(/,\s*(?=[—–-]\s)/g, " ")
+      // "to ." / "for ." — a preposition left pointing at nothing.
+      .replace(/\b(?:to|for|in|at)\s+(?=[.!?])/gi, "")
+      .replace(/\s+([.,!?])/g, "$1")
+      .replace(/,\s*,/g, ",")
+      .replace(/[ \t]{2,}/g, " ");
+
+    // A paragraph that now opens with punctuation — "{name}, we're sorry"
+    // with no name — loses it, and the sentence gets its capital back.
+    out = out
+      .split("\n")
+      .map((line) => {
+        const trimmed = line.replace(/^[\s,;:]+/, "");
+        return trimmed.replace(/^([a-z])/, (c) => c.toUpperCase());
+      })
+      .join("\n");
+  }
+
+  return out.trim();
+}
+
+/** Blank lines separate paragraphs — how anybody writes prose in a textarea. */
+export function splitParagraphs(body: string): string[] {
+  return body
+    .split(/\n\s*\n/)
+    .map((p) => p.replace(/\s*\n\s*/g, " ").trim())
+    .filter(Boolean);
+}
+
+/** The office's stored wording, or null to fall back to the built-in copy. */
+export type VisaMessageTemplates = {
+  approved_heading: string;
+  approved_body: string;
+  approved_signoff: string;
+  refused_heading: string;
+  refused_body: string;
+  refused_signoff: string;
+} | null;
+
 /**
  * What a student reads when the decision arrives.
  *
@@ -35,9 +100,24 @@ export type VisaMessage = { heading: string; body: string[]; signoff: string };
 export function visaMessage(
   decision: VisaDecision,
   studentName?: string | null,
-  country?: string | null
+  country?: string | null,
+  // Edited in Setup › Visa messages. Absent only on a database that predates
+  // the table, or one where the row was deleted — the built-in copy below is
+  // what a student reads then, rather than a blank card.
+  templates?: VisaMessageTemplates
 ): VisaMessage | null {
   const name = (studentName ?? "").trim().split(/\s+/)[0];
+
+  if (templates && decision !== "pending") {
+    const heading = decision === "approved" ? templates.approved_heading : templates.refused_heading;
+    const body = decision === "approved" ? templates.approved_body : templates.refused_body;
+    const signoff = decision === "approved" ? templates.approved_signoff : templates.refused_signoff;
+    return {
+      heading: fillVisaTemplate(heading, { name: studentName, country }),
+      body: splitParagraphs(fillVisaTemplate(body, { name: studentName, country })),
+      signoff: (signoff ?? "").trim(),
+    };
+  }
 
   if (decision === "approved") {
     return {

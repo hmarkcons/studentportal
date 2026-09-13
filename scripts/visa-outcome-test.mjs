@@ -64,3 +64,80 @@ test("a missing name or country does not leave a gap in the sentence", () => {
     assert.ok(!text.includes("undefined") && !text.includes("null"), text);
   }
 });
+
+// ---------------------------------------------------- editable wording (0177)
+import { fillVisaTemplate, splitParagraphs } from "../src/lib/visaOutcome.ts";
+
+const GREETING = "Congratulations, {name} — it's official. You're going to {country}.";
+
+test("placeholders fill from the student and their country", () => {
+  assert.equal(
+    fillVisaTemplate(GREETING, { name: "Ahmed Raza", country: "Italy" }),
+    "Congratulations, Ahmed — it's official. You're going to Italy."
+  );
+});
+
+test("a missing value takes its own punctuation with it", () => {
+  // Once the office writes the sentence, the words around a placeholder are
+  // not mine to control — so an empty one must not leave "Congratulations, —"
+  // or "going to ." on the page where someone learns whether they are going.
+  assert.equal(
+    fillVisaTemplate(GREETING, { name: null, country: "Italy" }),
+    "Congratulations — it's official. You're going to Italy."
+  );
+  assert.equal(
+    fillVisaTemplate(GREETING, { name: "Ahmed", country: null }),
+    "Congratulations, Ahmed — it's official. You're going."
+  );
+});
+
+test("a sentence that started with a placeholder gets its capital back", () => {
+  assert.equal(
+    fillVisaTemplate("{name}, we're sorry. We know how much you put into this.", { name: null }),
+    "We're sorry. We know how much you put into this."
+  );
+});
+
+test("no rendered message ever shows a stray marker or a doubled space", () => {
+  const templates = [GREETING, "{name}, we're sorry.", "You applied for {country}.", "{name} — {country}."];
+  for (const t of templates) {
+    for (const values of [{}, { name: "Ahmed" }, { country: "Italy" }, { name: "Ahmed", country: "Italy" }]) {
+      const out = fillVisaTemplate(t, values);
+      assert.ok(!out.includes("{"), `${t} → ${out}`);
+      assert.ok(!out.includes("undefined") && !out.includes("null"), `${t} → ${out}`);
+      assert.ok(!/ {2,}/.test(out), `${t} → ${out}`);
+      assert.ok(!/^[,;:]/.test(out), `${t} → ${out}`);
+    }
+  }
+});
+
+test("blank lines are what separate paragraphs", () => {
+  // How anybody writes prose into a textarea.
+  assert.deepEqual(splitParagraphs("One.\n\nTwo.\n\n\nThree."), ["One.", "Two.", "Three."]);
+  // A single newline inside a paragraph is a wrap, not a break.
+  assert.deepEqual(splitParagraphs("One line\nwrapped."), ["One line wrapped."]);
+  assert.deepEqual(splitParagraphs("   "), []);
+});
+
+test("stored wording is used in place of the built-in copy", () => {
+  const templates = {
+    approved_heading: "Visa granted",
+    approved_body: "Well done {name}.\n\nSee you in {country}.",
+    approved_signoff: "The office",
+    refused_heading: "Not this time",
+    refused_body: "Sorry {name}.",
+    refused_signoff: "The office",
+  };
+  const m = visaMessage("approved", "Ahmed Raza", "Italy", templates);
+  assert.equal(m.heading, "Visa granted");
+  assert.deepEqual(m.body, ["Well done Ahmed.", "See you in Italy."]);
+  assert.equal(m.signoff, "The office");
+});
+
+test("with no stored wording the built-in copy still answers", () => {
+  // A database that predates the table, or a row somebody deleted, must not
+  // leave a student with a badge and a blank card.
+  const m = visaMessage("refused", "Ahmed", "Italy", null);
+  assert.match(m.heading, /not approved/i);
+  assert.ok(m.body.length > 0);
+});
