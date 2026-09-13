@@ -4,7 +4,12 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requirePermission } from "@/lib/auth/permissions";
 import { currentAcademicYear } from "@/lib/academicYear";
-import { PROPOSABLE_FIELDS, researchConfigured, type ProposableField } from "@/lib/scholarshipResearch";
+import {
+  PROPOSABLE_FIELDS,
+  researchConfigured,
+  testResearchConnection,
+  type ProposableField,
+} from "@/lib/scholarshipResearch";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runScholarshipCheck } from "@/lib/scholarshipCheckRunner";
 
@@ -194,6 +199,14 @@ export async function processNextScholarshipUpdate(): Promise<
 
   revalidatePath(PAGE);
   return { done: false, body: outcome.body, outcome: outcome.result, remaining: count ?? 0 };
+}
+
+/** Checks the research key before anybody spends a sweep finding out. */
+export async function testScholarshipResearch() {
+  const error = await gate();
+  if (error) return { error };
+  const result = await testResearchConnection();
+  return result.ok ? { success: true, model: result.model } : { error: result.error };
 }
 
 /** Rejects a proposal. The reading is kept, so the next run can tell it has seen this call. */

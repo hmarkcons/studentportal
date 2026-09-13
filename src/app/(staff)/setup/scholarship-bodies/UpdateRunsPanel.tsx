@@ -7,6 +7,7 @@ import {
   applyScholarshipProposal,
   dismissScholarshipProposal,
   processNextScholarshipUpdate,
+  testScholarshipResearch,
 } from "@/lib/actions/scholarshipUpdates";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -158,6 +159,7 @@ export function UpdateRunsPanel({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<string[]>([]);
+  const [testing, setTesting] = useState(false);
 
   const proposed = runs.filter((r) => r.status === "proposed");
   const working = runs.filter((r) => r.status === "queued" || r.status === "running");
@@ -222,6 +224,24 @@ export function UpdateRunsPanel({
               {working.length} checking…
             </Badge>
           )}
+          {/* Answered in a second for a fraction of a cent, instead of as
+              twenty-one failed runs twenty minutes from now. */}
+          <Button
+            type="button"
+            size="sm"
+            pending={testing}
+            onClick={async () => {
+              setTesting(true);
+              setError(null);
+              setMessage(null);
+              const result = await testScholarshipResearch();
+              setTesting(false);
+              if (result?.error) setError(result.error);
+              else setMessage(`The key works — research runs on ${result.model}.`);
+            }}
+          >
+            Test the key
+          </Button>
           <Button type="button" variant="primary" size="sm" pending={pending} onClick={checkAll} disabled={!researchConfigured}>
             Check for updates
           </Button>
@@ -232,8 +252,10 @@ export function UpdateRunsPanel({
           ever pick up. */}
       {!researchConfigured && (
         <p className="rounded-md border border-warning bg-warning-bg px-3 py-2 text-xs text-warning">
-          Set <span className="font-mono">ANTHROPIC_API_KEY</span> in the Vercel project to turn this on. Until then the
-          guides are maintained by hand, which is what the Edit button is for.
+          Set <span className="font-mono">ANTHROPIC_API_KEY</span> in the Vercel project to turn this on, then redeploy —
+          an environment variable only reaches a running page on a new deployment. Press <strong>Test the key</strong>
+          afterwards to confirm before sweeping every body. Until then the guides are maintained by hand, which is what
+          the Edit button is for.
         </p>
       )}
 
