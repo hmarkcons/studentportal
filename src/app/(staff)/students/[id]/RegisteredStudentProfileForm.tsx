@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
+import { useFormAction } from "@/components/useFormAction";
 import { updateRegisteredStudentProfile } from "@/lib/actions/students";
 import { STUDY_LEVELS, QUALIFICATION_LEVELS } from "@/lib/constants";
 import { Button } from "@/components/ui/Button";
@@ -54,7 +55,11 @@ export function RegisteredStudentProfileForm({
   profile: Profile;
 }) {
   const action = updateRegisteredStudentProfile.bind(null, studentId, revalidateTo);
-  const [state, formAction, pending] = useActionState(action, undefined);
+  // Not useActionState: React clears a form once its action finishes, and it
+  // does that for uncontrolled fields by restoring their defaults during
+  // commit rather than by dispatching the cancelable reset event — so an
+  // onReset guard does not stop it. See useFormAction.
+  const { onSubmit, pending, error, success } = useFormAction(action);
   const formRef = useRef<HTMLFormElement>(null);
 
   // React clears a form once its server action finishes — including when the
@@ -74,8 +79,8 @@ export function RegisteredStudentProfileForm({
   // refusal it is brought into view. Syncing the browser's scroll position to
   // the latest state is what an effect is for; no state is set here.
   useEffect(() => {
-    if (state?.error) formRef.current?.querySelector("[data-profile-error]")?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [state]);
+    if (error) formRef.current?.querySelector("[data-profile-error]")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [error]);
   const financial = profile?.financial_details;
   const storedDobIssue = dateOfBirthError(lead.date_of_birth);
   // Same reasoning as the date of birth: saving one is blocked now, but
@@ -85,7 +90,7 @@ export function RegisteredStudentProfileForm({
   const storedEmergencyIssue = phoneError(profile?.emergency_contact_number, "emergency contact number");
 
   return (
-    <form ref={formRef} action={formAction} onReset={(e) => e.preventDefault()} className="flex flex-col gap-4">
+    <form ref={formRef} onSubmit={onSubmit} className="flex flex-col gap-4">
       <div>
         <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Core details</h4>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -246,19 +251,19 @@ export function RegisteredStudentProfileForm({
         </div>
       </div>
 
-      {state?.error && (
+      {error && (
         <p
           data-profile-error
           role="alert"
           className="rounded-md border border-danger bg-danger-bg px-3 py-2 text-sm font-medium text-danger"
         >
-          {state.error}
+          {error}
           <span className="mt-0.5 block text-xs font-normal">
             Nothing was saved, and everything you typed is still here — fix this and press Save again.
           </span>
         </p>
       )}
-      {state?.success && (
+      {success && (
         <p className="rounded-md border border-success bg-success-bg px-3 py-2 text-sm font-medium text-success">Saved.</p>
       )}
       <Button type="submit" variant="primary" pending={pending} className="justify-self-start">

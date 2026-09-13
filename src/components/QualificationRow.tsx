@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useState } from "react";
+import { useFormAction } from "@/components/useFormAction";
 import { upsertStudentQualification, deleteStudentQualification } from "@/lib/actions/qualifications";
 import { QUALIFICATION_TYPE_LABELS, institutionLabel, type QualificationType } from "@/lib/qualifications";
 import { Button } from "@/components/ui/Button";
@@ -38,7 +39,9 @@ export function QualificationRow({
   const [editing, setEditing] = useState(!data);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const action = upsertStudentQualification.bind(null, studentId, revalidateTo);
-  const [state, formAction, pending] = useActionState(action, undefined);
+  // See useFormAction: React's own form reset empties an uncontrolled field
+  // when the action refuses, taking the institution and grade with it.
+  const { onSubmit, pending, error } = useFormAction(action);
 
   async function handleDelete() {
     if (!confirm(`Remove this ${QUALIFICATION_TYPE_LABELS[type]} entry?`)) return;
@@ -51,7 +54,7 @@ export function QualificationRow({
   if (editing) {
     return (
       <Card className="mb-3">
-        <form action={formAction} onReset={(e) => e.preventDefault()} className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <form onSubmit={onSubmit} className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <input type="hidden" name="qualification_type" value={type} />
           {/* Present only when editing an existing row — its absence is what
               tells the action to add another entry of this type. */}
@@ -95,12 +98,12 @@ export function QualificationRow({
               </button>
             )}
           </div>
-          {state?.error && (
+          {error && (
             <p
               role="alert"
               className="col-span-full rounded-md border border-danger bg-danger-bg px-3 py-2 text-sm font-medium text-danger"
             >
-              {state.error}
+              {error}
               <span className="mt-0.5 block text-xs font-normal">Nothing was saved — what you typed is still here.</span>
             </p>
           )}
