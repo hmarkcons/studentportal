@@ -244,17 +244,7 @@ export async function deleteStudentScholarship(scholarshipId: string, revalidate
   return { success: true };
 }
 
-export async function markPreenrollmentFinalized(applicationId: string, revalidateTo: string, finalized: boolean) {
-  const error = await gate();
-  if (error) return { error };
-  const supabase = await createClient();
-
-  const { error: updateError } = await supabase
-    .from("applications")
-    .update({ preenrollment_finalized: finalized })
-    .eq("id", applicationId);
-  if (updateError) return { error: updateError.message };
-
-  revalidatePath(revalidateTo);
-  return { success: true };
-}
+// markPreenrollmentFinalized lived here. Finalising the university in
+// Applications is what opens a student's scholarship now, and 0173 keeps
+// applications.preenrollment_finalized equal to is_finalized — so a second
+// writer could only ever put the two out of step.

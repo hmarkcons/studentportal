@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Badge } from "@/components/ui/Badge";
 import { CURRENCY_SYMBOLS } from "@/lib/constants";
+import { bodiesForUniversity } from "@/lib/scholarshipMatch";
 import { SCHOLARSHIP_CURRENCY_SYMBOL } from "@/lib/scholarships";
 import { ScholarshipSection } from "../applications/[appId]/tracker/ScholarshipSection";
 
@@ -25,7 +26,7 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
   const { data: applications } = await supabase
     .from("applications")
     .select(
-      "id, preenrollment_finalized, university:universities(name, destination:destinations(id, country, display_name, scholarship_access, currency))"
+      "id, is_finalized, preenrollment_finalized, university:universities(name, destination:destinations(id, country, display_name, scholarship_access, currency))"
     )
     .eq("student_id", id);
 
@@ -66,7 +67,22 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
   const { data: bodyLinks } = await supabase.from("scholarship_body_destinations").select("destination_id");
   const destinationsWithBodies = new Set((bodyLinks ?? []).map((l) => l.destination_id as string));
 
-  const candidates = withDestination.filter((w) => w.destinationId && destinationsWithBodies.has(w.destinationId));
+  const withBodies = withDestination.filter((w) => w.destinationId && destinationsWithBodies.has(w.destinationId));
+
+  // Once a university is finalised, the scholarship is about that university
+  // and no other. Before then, every application the student has open is a
+  // possibility and all of them are shown.
+  //
+  // Per country, not across the student: an Italian pre-enrolment says nothing
+  // about which German university they might end up at.
+  const finalisedByDestination = new Map<string, string>();
+  for (const w of withBodies) {
+    if (w.app.is_finalized && w.destinationId) finalisedByDestination.set(w.destinationId, w.app.id);
+  }
+  const candidates = withBodies.filter((w) => {
+    const finalisedHere = w.destinationId ? finalisedByDestination.get(w.destinationId) : undefined;
+    return !finalisedHere || finalisedHere === w.app.id;
+  });
 
   if (candidates.length === 0) {
     return (
@@ -100,6 +116,14 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
           ((b.destinations ?? []) as { destination_id: string }[]).some((d) => d.destination_id === w.destinationId)
         );
 
+        // The body that actually pays for this university. Offering all
+        // twenty-one Italian agencies when the student is going to Pisa is
+        // how the wrong one gets picked; DSU Toscana is the only answer.
+        // Only narrowed once the university is settled — before that the whole
+        // list is still the honest answer.
+        const designated = w.app.is_finalized ? bodiesForUniversity(w.universityName, countryBodies) : [];
+        const offeredBodies = designated.length > 0 ? designated : countryBodies;
+
         return (
           <Card key={w.app.id}>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -113,6 +137,30 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
                 <Badge tone="info">Merit-based · limited places</Badge>
               )}
             </div>
+            {w.app.is_finalized && (
+              <p className="mb-3 rounded-md border border-success bg-success-bg px-3 py-2 text-xs text-success">
+                <span className="font-medium">{w.universityName}</span> is finalised in Applications, so the scholarship
+                is open to this student.{" "}
+                {designated.length > 0 ? (
+                  <>
+                    {designated.length === 1 ? "Its scholarship body is" : "Its scholarship bodies are"}{" "}
+                    <span className="font-medium">{designated.map((b) => b.name).join(", ")}</span> — the only one
+                    offered below.
+                  </>
+                ) : (
+                  <>
+                    No body in the directory lists this university, so all of {w.country}&rsquo;s are offered below. Add
+                    it to a body&rsquo;s &ldquo;covers&rdquo; in Setup &rsaquo; Scholarship bodies to narrow this.
+                  </>
+                )}
+              </p>
+            )}
+            {!w.app.is_finalized && w.access === "universal" && (
+              <p className="mb-3 text-xs text-muted">
+                No university finalised for {w.country} yet, so every body is offered. Finalise one in Applications and
+                only its own body will be shown.
+              </p>
+            )}
             {w.access !== "universal" && scholarships.length === 0 && (
               <p className="mb-3 text-xs text-muted">
                 {w.country}&rsquo;s scholarships are awarded on merit to a small number of students, so this is not
@@ -123,7 +171,7 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
               studentId={id}
               applicationId={w.app.id}
               revalidateTo={`/students/${id}/scholarship`}
-              bodies={countryBodies.map((b) => ({ id: b.id, name: b.name, region: b.region }))}
+              bodies={offeredBodies.map((b) => ({ id: b.id, name: b.name, region: b.region }))}
               scholarships={scholarships}
               preenrollmentFinalized={w.app.preenrollment_finalized}
               canManage={canManage}

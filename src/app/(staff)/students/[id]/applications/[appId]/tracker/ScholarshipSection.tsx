@@ -3,7 +3,6 @@
 import { useActionState, useState } from "react";
 import {
   addStudentScholarship,
-  markPreenrollmentFinalized,
   updateStudentScholarship,
   deleteStudentScholarship,
 } from "@/lib/actions/scholarships";
@@ -202,41 +201,31 @@ export function ScholarshipSection({
 }) {
   const action = addStudentScholarship.bind(null, studentId, applicationId, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
-  const [finalized, setFinalized] = useState(preenrollmentFinalized);
-  const [finalizedError, setFinalizedError] = useState<string | null>(null);
+  // Straight from the server now: the finalisation lives on the application
+  // and 0173 keeps this equal to it, so there is no local state to hold and
+  // nothing here can disagree with Applications.
+  const finalized = preenrollmentFinalized;
   const [adding, setAdding] = useState(false);
-
-  async function handleFinalizedChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const next = e.target.checked;
-    setFinalized(next);
-    setFinalizedError(null);
-    const result = await markPreenrollmentFinalized(applicationId, revalidateTo, next);
-    if (result?.error) {
-      setFinalized(!next);
-      setFinalizedError(result.error);
-    }
-  }
 
   return (
     <div>
-      <div className="mb-3">
-        <label className="flex items-start gap-2 text-sm text-ink">
-          <input type="checkbox" checked={finalized} onChange={handleFinalizedChange} disabled={!canManage} className="mt-1" />
-          {/* This really does gate what the student sees, at the database:
-              student_scholarships_select grants a student their own rows only
-              once the application's pre-enrolment is finalised. That policy was
-              written for a portal page that had never been built, so the tick
-              controlled a view nobody could reach — the page exists now, and
-              the wording says plainly what ticking it does. */}
-          <span>
-            Pre-enrollment finalized on Universitaly.it
-            <span className="block text-xs text-muted">
-              Until this is ticked the student sees nothing on their Scholarship page. Most regional bodies will not
-              process a DSU application before it is done.
-            </span>
+      {/* Not a control: finalising the university in Applications is what
+          sets this, and the database keeps the two equal (0173). It gates what
+          the student sees — student_scholarships_select grants them their own
+          rows only once their application is finalised — so it is worth
+          stating plainly on the page that depends on it. */}
+      <div className="mb-3 flex items-start gap-2 text-sm">
+        <span aria-hidden className={finalized ? "text-success" : "text-muted"}>
+          {finalized ? "☑" : "☐"}
+        </span>
+        <span className={finalized ? "text-ink" : "text-muted"}>
+          {finalized ? "University finalised — the student can see this scholarship" : "No university finalised yet"}
+          <span className="block text-xs text-muted">
+            {finalized
+              ? "Set by finalising the university in Applications. Most regional bodies will not process a DSU application before pre-enrolment is done."
+              : "Finalise the university in Applications to open this. Until then the student sees nothing on their Scholarship page."}
           </span>
-        </label>
-        {finalizedError && <p className="mt-1 text-xs text-danger">{finalizedError}</p>}
+        </span>
       </div>
 
       <div className="mb-3 flex flex-col gap-2">
