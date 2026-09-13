@@ -99,7 +99,9 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
   const [{ data: bodies }, { data: allScholarships }] = await Promise.all([
     supabase
       .from("scholarship_bodies")
-      .select("id, name, region, destinations:scholarship_body_destinations(destination_id)")
+      // covers is what maps a university to its body — without it the matcher
+      // has nothing to match on and silently finds nothing.
+      .select("id, name, region, covers, destinations:scholarship_body_destinations(destination_id)")
       .order("region")
       .order("name"),
     supabase
