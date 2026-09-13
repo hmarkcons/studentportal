@@ -12,11 +12,6 @@ function readTime(value: FormDataEntryValue | null): string | null {
   return /^\d{2}:\d{2}$/.test(text) ? `${text}:00` : null;
 }
 
-function readAmount(value: FormDataEntryValue | null): number {
-  const n = Number(String(value ?? "").trim());
-  return Number.isFinite(n) && n >= 0 ? n : 0;
-}
-
 function readDays(formData: FormData): number[] {
   return formData
     .getAll("work_days")
@@ -49,6 +44,20 @@ export async function updateAttendancePolicy(_prevState: unknown, formData: Form
   }
   if (work_days.length === 0) return { error: "Choose at least one working day, or nobody is ever due in." };
 
+  // Blank means normal time, not "overtime is worth nothing" — readAmount
+  // turns an empty field into 0, and 0 stored here would read as a deliberate
+  // decision to pay nothing for hours actually worked.
+  const rawMultiplier = String(formData.get("overtime_multiplier") ?? "").trim();
+  const overtime_multiplier = rawMultiplier === "" ? 1 : Number(rawMultiplier);
+  if (!Number.isFinite(overtime_multiplier) || overtime_multiplier < 0) {
+    return { error: "The overtime multiplier has to be a number — 1 for normal time, 1.5 for time and a half." };
+  }
+  // Said here rather than left to the table's own constraint, which reaches
+  // the user as a constraint name.
+  if (overtime_multiplier > 5) {
+    return { error: "That overtime multiplier is above 5× the hourly rate — check the figure." };
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -60,9 +69,7 @@ export async function updateAttendancePolicy(_prevState: unknown, formData: Form
       work_end_time,
       work_days,
       grace_minutes,
-      overtime_rate_per_hour: readAmount(formData.get("overtime_rate_per_hour")),
-      late_deduction: readAmount(formData.get("late_deduction")),
-      absent_deduction: readAmount(formData.get("absent_deduction")),
+      overtime_multiplier,
       updated_at: new Date().toISOString(),
       updated_by: user?.id ?? null,
     })

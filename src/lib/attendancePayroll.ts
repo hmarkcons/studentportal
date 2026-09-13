@@ -21,9 +21,8 @@ export type AttendancePolicy = {
   work_end_time: string | null;
   work_days: number[];
   grace_minutes: number;
-  overtime_rate_per_hour: number;
-  late_deduction: number;
-  absent_deduction: number;
+  /** A multiple of the person's own hourly rate. 1 = normal time. */
+  overtime_multiplier: number;
 };
 
 export type StaffSchedule = {
@@ -190,31 +189,91 @@ export type PayrollAdjustment = {
   absentDeduction: number;
   /** Positive adds to the payslip, negative takes off. */
   net: number;
-  /** True when no rate is set, so the figures above are all zero by default. */
+  /** True when the figures above could actually be worked out. */
   ratesConfigured: boolean;
+  /** What one working day of this person's salary comes to, for the payslip. */
+  dailyRate: number;
+  hourlyRate: number;
 };
 
 /**
- * What the month's attendance is worth.
+ * How many days this person is due in, in this month.
  *
- * Overtime is paid by the hour and rounded to the minute rather than up to a
- * whole hour, because rounding a payroll figure in the employer's favour is a
- * decision nobody asked for. Lateness and absence are per occurrence, which is
- * how both were described.
+ * The divisor for a day's pay. Counted from their own working days rather than
+ * taken as a flat 26 or 30, because a five-day week and a six-day week are not
+ * the same month's work, and February is not January.
  */
-export function payrollAdjustment(summary: MonthSummary, policy: AttendancePolicy): PayrollAdjustment {
-  const overtimePay = (summary.overtimeMinutes / 60) * Number(policy.overtime_rate_per_hour ?? 0);
-  const lateDeduction = summary.lateArrivals * Number(policy.late_deduction ?? 0);
-  const absentDeduction = summary.absentDays * Number(policy.absent_deduction ?? 0);
+export function scheduleHoursPerDay(schedule: Schedule): number {
+  const start = timeToMinutes(schedule.start);
+  const end = timeToMinutes(schedule.end);
+  if (start == null || end == null || end <= start) return 0;
+  return (end - start) / 60;
+}
+
+export function scheduledDaysInMonth(month: string, schedule: Schedule): number {
+  if (!schedule.configured) return 0;
+  return datesInMonth(month).filter((d) => schedule.days.includes(weekdayOf(d))).length;
+}
+
+/**
+ * What the month's attendance is worth, priced from this person's own salary.
+ *
+ * Flat office-wide amounts were the first shape of this, and they are wrong
+ * here: the same ₨500 is trivial against a 100,000 salary and heavy against a
+ * 45,000 one, for the identical lateness. So a day absent costs a day of that
+ * person's pay, an hour of overtime pays their own hourly rate, and lateness
+ * is charged by the minute.
+ *
+ * Charging late arrivals by the minute rather than per occurrence is the
+ * office's choice and the defensible one: forty minutes costs forty minutes.
+ * Nothing is rounded up to a whole hour or a whole day anywhere here, because
+ * rounding a payroll figure in the employer's favour is a decision nobody
+ * asked for.
+ */
+export function payrollAdjustment(
+  summary: MonthSummary,
+  policy: AttendancePolicy,
+  basis: {
+    monthlySalary: number | null;
+    /** Days this person was due in this month. */
+    scheduledDays: number;
+    /** Hours in their own working day. */
+    hoursPerDay: number;
+  }
+): PayrollAdjustment {
   const round = (n: number) => Math.round(n * 100) / 100;
+  const salary = Number(basis.monthlySalary ?? 0);
+
+  // No salary, no schedule, or a month with no working days in it: there is
+  // nothing to divide, and a division by zero on a payslip is worse than a
+  // blank. Everything stays zero and ratesConfigured says why.
+  if (!(salary > 0) || !(basis.scheduledDays > 0) || !(basis.hoursPerDay > 0)) {
+    return {
+      overtimePay: 0,
+      lateDeduction: 0,
+      absentDeduction: 0,
+      net: 0,
+      ratesConfigured: false,
+      dailyRate: 0,
+      hourlyRate: 0,
+    };
+  }
+
+  const dailyRate = salary / basis.scheduledDays;
+  const hourlyRate = dailyRate / basis.hoursPerDay;
+  const multiplier = Number(policy.overtime_multiplier ?? 1) || 1;
+
+  const overtimePay = (summary.overtimeMinutes / 60) * hourlyRate * multiplier;
+  const lateDeduction = (summary.lateMinutes / 60) * hourlyRate;
+  const absentDeduction = summary.absentDays * dailyRate;
+
   return {
     overtimePay: round(overtimePay),
     lateDeduction: round(lateDeduction),
     absentDeduction: round(absentDeduction),
     net: round(overtimePay - lateDeduction - absentDeduction),
-    ratesConfigured:
-      Number(policy.overtime_rate_per_hour ?? 0) > 0 ||
-      Number(policy.late_deduction ?? 0) > 0 ||
-      Number(policy.absent_deduction ?? 0) > 0,
+    ratesConfigured: true,
+    dailyRate: round(dailyRate),
+    hourlyRate: round(hourlyRate),
   };
 }

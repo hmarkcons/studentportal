@@ -8,7 +8,14 @@ import { CommissionLedgerTable, type CommissionRecord } from "./CommissionLedger
 import type { CommissionStaffOption } from "@/app/(staff)/finance/staff-commission/StaffCommissionTable";
 import { MissingCommissions, type MissingCommission } from "./MissingCommissions";
 import { commissionFor } from "@/lib/staffCommissionBasis";
-import { effectiveSchedule, summariseMonth, payrollAdjustment, type AttendancePolicy } from "@/lib/attendancePayroll";
+import {
+  effectiveSchedule,
+  summariseMonth,
+  payrollAdjustment,
+  scheduledDaysInMonth,
+  scheduleHoursPerDay,
+  type AttendancePolicy,
+} from "@/lib/attendancePayroll";
 import { formatDuration } from "@/lib/attendance";
 import { AttendanceSummaryCard } from "./AttendanceSummaryCard";
 
@@ -202,7 +209,7 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
         supabase
           .from("attendance_policy")
           .select(
-            "work_start_time, work_end_time, work_days, grace_minutes, overtime_rate_per_hour, late_deduction, absent_deduction"
+            "work_start_time, work_end_time, work_days, grace_minutes, overtime_multiplier"
           )
           .eq("id", true)
           .maybeSingle(),
@@ -219,9 +226,7 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
         work_end_time: policyRow?.work_end_time ?? null,
         work_days: policyRow?.work_days ?? [1, 2, 3, 4, 5, 6],
         grace_minutes: policyRow?.grace_minutes ?? 15,
-        overtime_rate_per_hour: Number(policyRow?.overtime_rate_per_hour ?? 0),
-        late_deduction: Number(policyRow?.late_deduction ?? 0),
-        absent_deduction: Number(policyRow?.absent_deduction ?? 0),
+        overtime_multiplier: Number(policyRow?.overtime_multiplier ?? 1),
       };
       const schedule = effectiveSchedule(staff, policy);
       const attendanceSummary = summariseMonth({
@@ -229,7 +234,18 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
         records: (attendanceRecords ?? []).map((r) => ({ ...r, work_date: String(r.work_date).slice(0, 10) })),
         schedule,
       });
-      const attendanceMoney = payrollAdjustment(attendanceSummary, policy);
+      // Priced from this person's own salary: a day absent costs a day of
+      // their pay, overtime pays their own hourly rate, and lateness is
+      // charged by the minute. Their scheduled days in THIS month is the
+      // divisor — a six-day week and a five-day week are not the same month's
+      // work, and February is not January.
+      const scheduledDays = scheduledDaysInMonth(month, schedule);
+      const hoursPerDay = scheduleHoursPerDay(schedule);
+      const attendanceMoney = payrollAdjustment(attendanceSummary, policy, {
+        monthlySalary: staff.monthly_salary,
+        scheduledDays,
+        hoursPerDay,
+      });
 
       const currencySymbol = CURRENCY_SYMBOLS[staff.currency] ?? staff.currency;
       const revalidateTo = `/finance/payroll?staff=${staffId}&month=${month}`;
@@ -351,6 +367,8 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
                   lateDeduction: attendanceMoney.lateDeduction,
                   absentDeduction: attendanceMoney.absentDeduction,
                   ratesConfigured: attendanceMoney.ratesConfigured,
+                  dailyRate: attendanceMoney.dailyRate,
+                  hourlyRate: attendanceMoney.hourlyRate,
                   lateArrivals: attendanceSummary.lateArrivals,
                   absentDays: attendanceSummary.absentDays,
                   overtimeLabel: formatDuration(attendanceSummary.overtimeMinutes),

@@ -20,9 +20,7 @@ export type PolicyRow = {
   work_end_time: string | null;
   work_days: number[];
   grace_minutes: number;
-  overtime_rate_per_hour: number;
-  late_deduction: number;
-  absent_deduction: number;
+  overtime_multiplier: number;
 };
 
 /** A "09:00:00" from Postgres is "09:00" to a time input. */
@@ -71,34 +69,47 @@ export function AttendancePolicyForm({ policy }: { policy: PolicyRow }) {
 
       <section className="flex flex-col gap-2 border-t border-border pt-4">
         <h3 className="text-sm font-medium text-ink">What it is worth</h3>
+        {/* Flat office-wide amounts were the first shape of this and they are
+            wrong here: the same ₨500 is trivial against a 100,000 salary and
+            heavy against a 45,000 one, for the identical lateness. */}
         <p className="text-xs text-muted">
-          In each staff member&rsquo;s own currency. Every rate starts at zero and nothing is added to or taken off a
-          payslip until you set it — the payroll counts the hours either way and says the rates are unset.
+          Priced from each person&rsquo;s own salary, so the same lateness costs the same share of everyone&rsquo;s pay
+          rather than the same number of rupees.
         </p>
+        <ul className="ml-4 list-disc text-xs text-muted">
+          <li>
+            <span className="text-ink">A day absent</span> costs one day of their salary — their monthly salary divided
+            by the days they were due in that month, so a short month costs more per day than a long one.
+          </li>
+          <li>
+            <span className="text-ink">Lateness</span> is charged by the minute at their hourly rate. Forty minutes
+            costs forty minutes, whether that was one late arrival or two.
+          </li>
+          <li>
+            <span className="text-ink">Overtime</span> is time past the end of their own day, paid to the minute rather
+            than rounded up to the hour. A shift nobody clocked out of earns none: the time they left is not recorded.
+          </li>
+        </ul>
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1 text-xs text-muted">
-            Overtime, per hour
+            Overtime pays
             <Input
-              name="overtime_rate_per_hour"
+              name="overtime_multiplier"
               type="number"
-              step="0.01"
+              step="0.25"
               min="0"
-              defaultValue={policy.overtime_rate_per_hour}
+              max="5"
+              defaultValue={policy.overtime_multiplier}
               className="w-32"
             />
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-muted">
-            Deduction per late arrival
-            <Input name="late_deduction" type="number" step="0.01" min="0" defaultValue={policy.late_deduction} className="w-32" />
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-muted">
-            Deduction per absent day
-            <Input name="absent_deduction" type="number" step="0.01" min="0" defaultValue={policy.absent_deduction} className="w-32" />
+            <span className="text-[11px] text-muted">
+              × their hourly rate. 1 is normal time, 1.5 is time and a half.
+            </span>
           </label>
         </div>
         <p className="text-xs text-muted">
-          Overtime is time past the end of that person&rsquo;s own day, paid to the minute rather than rounded up to the
-          hour. A shift nobody clocked out of earns none: the time they left is not recorded anywhere.
+          Nothing can be worked out for anyone with no monthly salary on their staff record — the payroll says so rather
+          than showing a zero that looks like a decision.
         </p>
       </section>
 

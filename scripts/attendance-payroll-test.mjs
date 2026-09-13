@@ -17,9 +17,7 @@ const POLICY = {
   work_end_time: "18:00:00",
   work_days: [1, 2, 3, 4, 5, 6],
   grace_minutes: 15,
-  overtime_rate_per_hour: 200,
-  late_deduction: 100,
-  absent_deduction: 1000,
+  overtime_multiplier: 1,
 };
 
 // 04:00Z is 09:00 in Karachi; 13:00Z is 18:00.
@@ -173,32 +171,73 @@ test("a shift nobody closed is counted as such rather than as hours", () => {
 });
 
 // ------------------------------------------------------------------- money
+// Everything is priced from the person's own salary, so the numbers here are
+// chosen to divide cleanly: 52,000 over 26 working days is 2,000 a day, and
+// over a 10-hour day that is 200 an hour.
+const BASIS = { monthlySalary: 52000, scheduledDays: 26, hoursPerDay: 10 };
+const NONE = { workedMinutes: 0, overtimeMinutes: 0, lateArrivals: 0, lateMinutes: 0, absentDays: 0, unclosedShifts: 0, daysPresent: 0 };
+
+test("a day absent costs a day of that person's pay", () => {
+  const adj = payrollAdjustment({ ...NONE, absentDays: 3, daysPresent: 20 }, POLICY, BASIS);
+  assert.equal(adj.dailyRate, 2000);
+  assert.equal(adj.absentDeduction, 6000);
+});
+
+test("overtime pays their own hourly rate, to the minute", () => {
+  // Rounding a payroll figure in the employer's favour is a decision nobody
+  // asked for, so 30 minutes is half an hour and not a whole one.
+  assert.equal(payrollAdjustment({ ...NONE, overtimeMinutes: 90 }, POLICY, BASIS).overtimePay, 300);
+  assert.equal(payrollAdjustment({ ...NONE, overtimeMinutes: 30 }, POLICY, BASIS).overtimePay, 100);
+  assert.equal(payrollAdjustment({ ...NONE, overtimeMinutes: 7 }, POLICY, BASIS).overtimePay, 23.33);
+});
+
+test("the overtime multiplier is applied when the office pays more than normal time", () => {
+  const timeAndAHalf = { ...POLICY, overtime_multiplier: 1.5 };
+  assert.equal(payrollAdjustment({ ...NONE, overtimeMinutes: 60 }, timeAndAHalf, BASIS).overtimePay, 300);
+  // A missing or zero multiplier means normal time, never nothing: an hour
+  // worked has to be paid something.
+  assert.equal(payrollAdjustment({ ...NONE, overtimeMinutes: 60 }, { ...POLICY, overtime_multiplier: 0 }, BASIS).overtimePay, 200);
+});
+
+test("lateness is charged by the minute, not per occurrence", () => {
+  // Forty minutes costs forty minutes — two arrivals or one.
+  const twice = payrollAdjustment({ ...NONE, lateArrivals: 2, lateMinutes: 40 }, POLICY, BASIS);
+  const once = payrollAdjustment({ ...NONE, lateArrivals: 1, lateMinutes: 40 }, POLICY, BASIS);
+  assert.equal(twice.lateDeduction, 133.33);
+  assert.equal(once.lateDeduction, twice.lateDeduction, "the number of occurrences is not what is charged");
+});
+
 test("the month's attendance becomes one figure", () => {
   const adj = payrollAdjustment(
-    { workedMinutes: 0, overtimeMinutes: 90, lateArrivals: 2, lateMinutes: 40, absentDays: 1, unclosedShifts: 0, daysPresent: 20 },
-    POLICY
+    { workedMinutes: 0, overtimeMinutes: 90, lateArrivals: 2, lateMinutes: 60, absentDays: 1, unclosedShifts: 0, daysPresent: 20 },
+    POLICY,
+    BASIS
   );
-  assert.equal(adj.overtimePay, 300, "1.5 hours at 200");
+  assert.equal(adj.overtimePay, 300);
   assert.equal(adj.lateDeduction, 200);
-  assert.equal(adj.absentDeduction, 1000);
-  assert.equal(adj.net, -900);
+  assert.equal(adj.absentDeduction, 2000);
+  assert.equal(adj.net, -1900);
 });
 
-test("overtime is paid to the minute, not rounded up to an hour", () => {
-  // Rounding a payroll figure in the employer's favour is a decision nobody
-  // asked for.
-  const adj = payrollAdjustment(
-    { workedMinutes: 0, overtimeMinutes: 30, lateArrivals: 0, lateMinutes: 0, absentDays: 0, unclosedShifts: 0, daysPresent: 1 },
-    POLICY
-  );
-  assert.equal(adj.overtimePay, 100);
+test("the divisor is this person's own month, not a flat 26 or 30", () => {
+  // The same absence in a 24-day month costs more than in a 27-day one,
+  // because a day is a larger share of the month's pay.
+  const short = payrollAdjustment({ ...NONE, absentDays: 1 }, POLICY, { ...BASIS, scheduledDays: 24 });
+  const long = payrollAdjustment({ ...NONE, absentDays: 1 }, POLICY, { ...BASIS, scheduledDays: 27 });
+  assert.ok(short.absentDeduction > long.absentDeduction);
+  assert.equal(short.dailyRate, 2166.67);
 });
 
-test("no rates set means no money, and says so", () => {
-  const adj = payrollAdjustment(
-    { workedMinutes: 0, overtimeMinutes: 120, lateArrivals: 3, lateMinutes: 60, absentDays: 2, unclosedShifts: 0, daysPresent: 18 },
-    { ...POLICY, overtime_rate_per_hour: 0, late_deduction: 0, absent_deduction: 0 }
-  );
-  assert.equal(adj.net, 0);
-  assert.equal(adj.ratesConfigured, false, "so the payroll can say the rates are unset rather than imply zero");
+test("nothing can be priced without a salary, and it says so rather than charging zero", () => {
+  for (const broken of [
+    { ...BASIS, monthlySalary: null },
+    { ...BASIS, monthlySalary: 0 },
+    { ...BASIS, scheduledDays: 0 },
+    { ...BASIS, hoursPerDay: 0 },
+  ]) {
+    const adj = payrollAdjustment({ ...NONE, overtimeMinutes: 120, lateMinutes: 60, absentDays: 2 }, POLICY, broken);
+    assert.equal(adj.net, 0, JSON.stringify(broken));
+    assert.equal(adj.ratesConfigured, false, "so the payroll says the salary is missing rather than implying zero");
+    assert.equal(adj.dailyRate, 0);
+  }
 });

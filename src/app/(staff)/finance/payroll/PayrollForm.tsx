@@ -57,6 +57,9 @@ export function PayrollForm({
     lateArrivals: number;
     absentDays: number;
     overtimeLabel: string;
+    /** This person's own day and hour, which every figure above is priced from. */
+    dailyRate: number;
+    hourlyRate: number;
   };
 }) {
   const action = upsertStaffPayroll.bind(null, staffId, payrollMonth, revalidateTo);
@@ -180,7 +183,9 @@ export function PayrollForm({
             will dispute. */}
         {liveAttendance.ratesConfigured && (
           <p className="mb-1 text-xs text-muted">
-            From attendance: {liveAttendance.absentDays} absent, {liveAttendance.lateArrivals} late
+            From attendance: {liveAttendance.absentDays} absent, {liveAttendance.lateArrivals} late · a day is{" "}
+            {currencySymbol} {liveAttendance.dailyRate.toLocaleString("en-US")}, an hour {currencySymbol}{" "}
+            {liveAttendance.hourlyRate.toLocaleString("en-US")}
             {(liveAttendance.absentDeduction !== deductionAbsent || liveAttendance.lateDeduction !== deductionLate) && (
               <>
                 {" — "}

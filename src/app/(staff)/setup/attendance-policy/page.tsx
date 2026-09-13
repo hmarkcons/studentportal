@@ -9,7 +9,7 @@ export default async function AttendancePolicyPage() {
 
   const { data: policy } = await supabase
     .from("attendance_policy")
-    .select("work_start_time, work_end_time, work_days, grace_minutes, overtime_rate_per_hour, late_deduction, absent_deduction")
+    .select("work_start_time, work_end_time, work_days, grace_minutes, overtime_multiplier")
     .eq("id", true)
     .maybeSingle();
 
@@ -18,9 +18,7 @@ export default async function AttendancePolicyPage() {
     work_end_time: policy?.work_end_time ?? null,
     work_days: policy?.work_days ?? [1, 2, 3, 4, 5, 6],
     grace_minutes: policy?.grace_minutes ?? 15,
-    overtime_rate_per_hour: Number(policy?.overtime_rate_per_hour ?? 0),
-    late_deduction: Number(policy?.late_deduction ?? 0),
-    absent_deduction: Number(policy?.absent_deduction ?? 0),
+    overtime_multiplier: Number(policy?.overtime_multiplier ?? 1),
   };
 
   const configured = Boolean(row.work_start_time && row.work_end_time);
