@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { readCredentialAction } from "@/lib/actions/countryTracker";
+import { readCredentialAction, storeCredentialAction } from "@/lib/actions/countryTracker";
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 
 /** Nothing is revealed for longer than this without being asked for again. */
 const HIDE_AFTER_MS = 60_000;
@@ -33,6 +34,9 @@ export function VisaCredentials({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Clears the countdown if the student navigates away mid-reveal, so a later
@@ -68,6 +72,39 @@ export function VisaCredentials({
       // A browser that refuses the clipboard still shows the text to read.
       setError("Your browser would not let the page copy that — select it and copy by hand.");
     }
+  }
+
+  /**
+   * Saves a password the student changed on the portal itself.
+   *
+   * Appointment portals force a reset every so often, and until now the copy
+   * here quietly went stale — staff would book with a password that no longer
+   * worked and nobody would know why.
+   *
+   * The form starts empty rather than pre-filled with what is stored: this is
+   * for recording a new password, and a form that arrives holding the old one
+   * invites an accidental Save that changes nothing while looking like it did.
+   */
+  async function save(form: HTMLFormElement) {
+    const data = new FormData(form);
+    const username = String(data.get("username") ?? "").trim();
+    const password = String(data.get("password") ?? "");
+    if (!username || !password) {
+      setError("Enter both the username and the password.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    const result = await storeCredentialAction("student", studentId, credentialType, "/portal/visa", undefined, data);
+    setSaving(false);
+    if (result?.error) {
+      setError(result.error);
+      return;
+    }
+    setEditing(false);
+    setSaved(true);
+    setValue(null);
+    setTimeout(() => setSaved(false), 4000);
   }
 
   return (
@@ -110,6 +147,43 @@ export function VisaCredentials({
           )}
           <p className="text-[11px] text-muted">Hides itself in a minute. Press Show again whenever you need it.</p>
         </div>
+      )}
+
+      {/* Changing it is a separate act from looking at it, so it is a
+          separate button — and it is offered whether or not the login is
+          currently revealed. */}
+      {!editing && (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <button type="button" onClick={() => setEditing(true)} className="text-xs font-medium text-primary hover:underline">
+            I changed this password
+          </button>
+          {saved && <span className="text-xs text-success">Saved — your counsellor will see the new one.</span>}
+        </div>
+      )}
+
+      {editing && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void save(e.currentTarget);
+          }}
+          className="mt-2 flex flex-col gap-2 rounded-md border border-border bg-bg p-2"
+        >
+          <p className="text-xs text-muted">
+            Type the new details exactly as they are on the portal. Your counsellor books appointments with this, so it
+            has to match.
+          </p>
+          <Input name="username" placeholder="Username / ID" autoComplete="off" className="text-sm" />
+          <Input name="password" type="password" placeholder="New password" autoComplete="off" className="text-sm" />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="submit" size="sm" variant="primary" pending={saving}>
+              Save
+            </Button>
+            <Button type="button" size="sm" onClick={() => { setEditing(false); setError(null); }}>
+              Cancel
+            </Button>
+          </div>
+        </form>
       )}
 
       {error && <p className="mt-1 text-xs text-danger">{error}</p>}
