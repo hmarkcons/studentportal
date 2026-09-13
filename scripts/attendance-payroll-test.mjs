@@ -228,6 +228,23 @@ test("the divisor is this person's own month, not a flat 26 or 30", () => {
   assert.equal(short.dailyRate, 2166.67);
 });
 
+test("an unpriceable month says WHICH thing is missing", () => {
+  // The salary is on the staff record and the schedule is in Setup, so these
+  // send whoever is looking to two different pages. Telling someone "no rates
+  // are set" when the rates are set and the salary is blank is a dead end.
+  const noSalary = payrollAdjustment({ ...NONE, absentDays: 1 }, POLICY, { ...BASIS, monthlySalary: null });
+  assert.equal(noSalary.missing, "salary");
+
+  const noSchedule = payrollAdjustment({ ...NONE, absentDays: 1 }, POLICY, { ...BASIS, scheduledDays: 0 });
+  assert.equal(noSchedule.missing, "schedule");
+
+  const noHours = payrollAdjustment({ ...NONE, absentDays: 1 }, POLICY, { ...BASIS, hoursPerDay: 0 });
+  assert.equal(noHours.missing, "schedule");
+
+  // And a month that priced fine is not missing anything.
+  assert.equal(payrollAdjustment({ ...NONE, absentDays: 1 }, POLICY, BASIS).missing, null);
+});
+
 test("nothing can be priced without a salary, and it says so rather than charging zero", () => {
   for (const broken of [
     { ...BASIS, monthlySalary: null },

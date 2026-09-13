@@ -191,6 +191,8 @@ export type PayrollAdjustment = {
   net: number;
   /** True when the figures above could actually be worked out. */
   ratesConfigured: boolean;
+  /** Why not, when they could not — so the screen can point at the right page. */
+  missing: "salary" | "schedule" | null;
   /** What one working day of this person's salary comes to, for the payslip. */
   dailyRate: number;
   hourlyRate: number;
@@ -254,6 +256,9 @@ export function payrollAdjustment(
       absentDeduction: 0,
       net: 0,
       ratesConfigured: false,
+      // The schedule is the office's to fix and the salary is this person's,
+      // so they are different errands and the screen says which.
+      missing: basis.scheduledDays > 0 && basis.hoursPerDay > 0 ? "salary" : "schedule",
       dailyRate: 0,
       hourlyRate: 0,
     };
@@ -273,6 +278,7 @@ export function payrollAdjustment(
     absentDeduction: round(absentDeduction),
     net: round(overtimePay - lateDeduction - absentDeduction),
     ratesConfigured: true,
+    missing: null,
     dailyRate: round(dailyRate),
     hourlyRate: round(hourlyRate),
   };

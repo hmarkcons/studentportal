@@ -20,6 +20,7 @@ export function AttendanceSummaryCard({
   currencySymbol,
   workedLabel,
   overtimeLabel,
+  staffName,
 }: {
   summary: MonthSummary;
   money: PayrollAdjustment;
@@ -30,6 +31,8 @@ export function AttendanceSummaryCard({
   currencySymbol: string;
   workedLabel: string;
   overtimeLabel: string;
+  /** Named in the message, so it is obvious whose record needs the salary. */
+  staffName?: string;
 }) {
   const amount = (n: number) => `${currencySymbol} ${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
 
@@ -93,11 +96,21 @@ export function AttendanceSummaryCard({
         )}
       </div>
 
-      {!money.ratesConfigured && (
+      {money.missing === "salary" && (
+        <p className="mt-3 text-xs text-warning">
+          {staffName ? `${staffName} has` : "This staff member has"} no monthly salary on their staff record, and every
+          figure here is priced from it — so nothing is added to or taken off the payslip.{" "}
+          <Link href="/admin/staff" className="text-primary hover:underline">
+            Set their salary
+          </Link>
+          .
+        </p>
+      )}
+      {money.missing === "schedule" && (
         <p className="mt-3 text-xs text-muted">
-          No rates are set, so none of this is added to or taken off the payslip yet.{" "}
+          No working hours are set, so there is nothing to be late against and nothing to price.{" "}
           <Link href="/setup/attendance-policy" className="text-primary hover:underline">
-            Set what overtime, lateness and absence are worth
+            Set the office day
           </Link>
           .
         </p>

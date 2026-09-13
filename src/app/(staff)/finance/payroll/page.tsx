@@ -292,6 +292,7 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
             end={schedule.end}
             usesOwnHours={Boolean(staff.work_start_time && staff.work_end_time)}
             currencySymbol={currencySymbol}
+            staffName={staff.full_name}
             workedLabel={formatDuration(attendanceSummary.workedMinutes)}
             overtimeLabel={formatDuration(attendanceSummary.overtimeMinutes)}
           />
