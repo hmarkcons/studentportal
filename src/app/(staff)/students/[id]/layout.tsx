@@ -15,7 +15,7 @@ export default async function StudentLayout({ children, params }: { children: Re
   const [{ data: student, error }, { data: italyApp }, { data: profile }, { data: finalizedApp }] = await Promise.all([
     supabase
       .from("students")
-      .select("id, full_name, email, contact_number, country_of_interest, portal_active, registration_status")
+      .select("id, full_name, email, contact_number, country_of_interest, portal_active, registration_status, student_code")
       .eq("id", id)
       .maybeSingle(),
     supabase
@@ -92,6 +92,11 @@ export default async function StudentLayout({ children, params }: { children: Re
           )}
           <div className="min-w-0">
             <h2 className="text-xl font-semibold text-ink">{student.full_name}</h2>
+            {/* Their own number, stamped at registration. On the agreement and
+                the receipt, so it is what the office quotes on the phone. */}
+            {student.student_code && (
+              <p className="font-mono text-xs tracking-wide text-muted">{student.student_code}</p>
+            )}
             <p className="text-sm text-muted">
               {student.email ?? "No email"} · {student.contact_number ?? "No phone"} · {student.country_of_interest ?? "—"}
             </p>

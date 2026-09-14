@@ -16,7 +16,7 @@ export default async function PortalProfilePage() {
 
   const { data: student } = await supabase
     .from("students")
-    .select("id, full_name, email, contact_number, date_of_birth, address, home_phone, level_applying_for")
+    .select("id, full_name, email, contact_number, date_of_birth, address, home_phone, level_applying_for, student_code")
     .eq("auth_user_id", user?.id ?? "")
     .maybeSingle();
   if (!student) return null;
@@ -37,7 +37,15 @@ export default async function PortalProfilePage() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h2 className="mb-4 text-lg font-semibold text-ink">Profile</h2>
+      <h2 className="mb-1 text-lg font-semibold text-ink">Profile</h2>
+      {/* Their own number. Quoted back at them by the office, so they should
+          not have to ring up and ask what it is. */}
+      {student.student_code && (
+        <p className="mb-4 text-xs text-muted">
+          Student ID <span className="font-mono tracking-wide text-ink">{student.student_code}</span>
+        </p>
+      )}
+      {!student.student_code && <div className="mb-4" />}
 
       {/* What is still outstanding, before the form itself — a student should
           not have to audit eleven fields to find the two they skipped. */}

@@ -8,6 +8,7 @@ import { RowActionsMenu } from "@/components/RowActionsMenu";
 
 type StudentRow = {
   id: string;
+  student_code: string | null;
   full_name: string;
   email: string | null;
   contact_number: string | null;
@@ -50,7 +51,7 @@ export default async function StudentsPage() {
   const { data: students, error } = await supabase
     .from("students")
     .select(
-      "id, full_name, email, contact_number, country_of_interest, registered_at, registration_status, portal_active, intake, assigned_counselor:staff!assigned_counselor_id(full_name), processing_officer:staff!processing_officer_id(full_name)"
+      "id, student_code, full_name, email, contact_number, country_of_interest, registered_at, registration_status, portal_active, intake, assigned_counselor:staff!assigned_counselor_id(full_name), processing_officer:staff!processing_officer_id(full_name)"
     )
     .order("registered_at", { ascending: false })
     .returns<StudentRow[]>();
@@ -75,6 +76,9 @@ export default async function StudentsPage() {
 
   const columns = [
     { key: "month", header: "Month" },
+    // Their own number. First after the month because that is how the
+    // office refers to a student once the agreement is out.
+    { key: "code", header: "Student ID" },
     { key: "name", header: "Name" },
     { key: "contact", header: "Contact" },
     { key: "country", header: "Country" },
@@ -98,6 +102,7 @@ export default async function StudentsPage() {
       id: r.id,
       cells: {
         month: monthYearLabel,
+        code: r.student_code ? <span className="font-mono text-xs text-muted">{r.student_code}</span> : "—",
         name: (
           <Link href={`/students/${r.id}`} prefetch={false} className="font-medium text-ink hover:underline">
             {r.full_name}
