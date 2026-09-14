@@ -37,6 +37,7 @@ function readBodyFields(formData: FormData) {
     ispe_threshold: String(formData.get("ispe_threshold") ?? "").trim() || null,
     benefits: String(formData.get("benefits") ?? "").trim() || null,
     call_pdf_url: String(formData.get("call_pdf_url") ?? "").trim() || null,
+    call_page_url: String(formData.get("call_page_url") ?? "").trim() || null,
     call_notes: String(formData.get("call_notes") ?? "").trim() || null,
   };
 }

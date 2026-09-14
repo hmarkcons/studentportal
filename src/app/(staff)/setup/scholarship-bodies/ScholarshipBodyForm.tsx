@@ -27,6 +27,7 @@ export type ScholarshipBody = {
   call_expected_on: string | null;
   call_notes: string | null;
   call_pdf_url: string | null;
+  call_page_url: string | null;
   call_pdf_path: string | null;
   call_pdf_language: string | null;
   call_pdf_fetched_at: string | null;
@@ -175,6 +176,12 @@ export function ScholarshipBodyForm({
               <Input name="call_pdf_url" type="url" defaultValue={body?.call_pdf_url ?? ""} placeholder="https://…" />
             </Field>
           </div>
+          <Field
+            label="Call page"
+            hint="The page the call is published on, for the regions that put the bando up with its annexes instead of one PDF. Used when there is no PDF above — the student is taken here."
+          >
+            <Input name="call_page_url" type="url" defaultValue={body?.call_page_url ?? ""} placeholder="https://…" />
+          </Field>
 
           {/* Only once the body exists — there is nothing to attach a file to
               until it has been saved. */}

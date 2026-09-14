@@ -22,7 +22,7 @@ export default async function ScholarshipBodiesPage() {
     supabase
       .from("scholarship_bodies")
       .select(
-        "id, name, region, academic_year, covers, stipend_amount, source_url, last_updated_year, apply_url, application_deadline, isee_threshold, ispe_threshold, benefits, call_status, call_expected_on, call_notes, call_pdf_url, call_pdf_path, call_pdf_language, call_pdf_fetched_at, guide_sections, guide_updated_at"
+        "id, name, region, academic_year, covers, stipend_amount, source_url, last_updated_year, apply_url, application_deadline, isee_threshold, ispe_threshold, benefits, call_status, call_expected_on, call_notes, call_pdf_url, call_page_url, call_pdf_path, call_pdf_language, call_pdf_fetched_at, guide_sections, guide_updated_at"
       )
       .order("name"),
     supabase
@@ -95,6 +95,7 @@ export default async function ScholarshipBodiesPage() {
         call_expected_on: b.call_expected_on,
         call_notes: b.call_notes,
         call_pdf_url: b.call_pdf_url,
+        call_page_url: b.call_page_url,
         call_pdf_path: b.call_pdf_path,
         call_pdf_language: b.call_pdf_language,
         call_pdf_fetched_at: b.call_pdf_fetched_at,

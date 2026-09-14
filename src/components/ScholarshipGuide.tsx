@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
+import { callLink } from "@/lib/scholarshipCallLink";
 
 export type GuideBody = {
   id: string;
@@ -18,6 +19,8 @@ export type GuideBody = {
   /** The copy kept against this body, signed on the server. */
   call_pdf_signed_url: string | null;
   call_pdf_language: string | null;
+  /** The page the call sits on, where the region publishes no single PDF. */
+  call_page_url?: string | null;
   source_url: string | null;
   guide_sections: { title: string; body: string }[];
   /** From guideFreshness, resolved on the server. */
@@ -36,6 +39,7 @@ export type GuideBody = {
 export function ScholarshipGuide({ body }: { body: GuideBody }) {
   const [open, setOpen] = useState(false);
   const sections = body.guide_sections ?? [];
+  const call = callLink(body);
 
   return (
     <div className="rounded-md border border-border">
@@ -74,24 +78,25 @@ export function ScholarshipGuide({ body }: { body: GuideBody }) {
             Apply portal ↗
           </a>
         )}
-        {/* The stored copy first: the region's own link stops answering the
-            week they publish the next one, and this is the paper the student
-            was actually advised from. */}
-        {body.call_pdf_signed_url ? (
-          <a href={body.call_pdf_signed_url} target="_blank" rel="noreferrer" className="text-primary hover:underline">
-            📄 Official call{body.call_pdf_language === "it" ? " (Italian)" : body.call_pdf_language === "en" ? " (English)" : ""}
+        {/* The stored copy first, then the region's PDF, then the page it
+            sits on — resolved in scholarshipCallLink so the student's own
+            Scholarship tab cannot end up showing a different paper. */}
+        {call && (
+          <a href={call.url} target="_blank" rel="noreferrer" className="font-medium text-primary hover:underline">
+            {call.kind === "page" ? "🔗" : "📄"} {call.label} {call.kind === "stored" ? "" : "↗"}
           </a>
-        ) : (
-          body.call_pdf_url && (
-            <a href={body.call_pdf_url} target="_blank" rel="noreferrer" className="text-primary hover:underline">
-              Official call ↗
-            </a>
-          )
         )}
         {body.source_url && (
           <a href={body.source_url} target="_blank" rel="noreferrer" className="text-muted hover:underline">
             {new URL(body.source_url).hostname.replace(/^www\./, "")} ↗
           </a>
+        )}
+        {/* Said here rather than left blank: the call is what the student is
+            sent, and a counselor cannot send what nobody has linked. */}
+        {!call && body.call_status !== "awaiting" && (
+          <span className="text-muted">
+            No call linked — add one in Setup &rsaquo; Scholarship bodies
+          </span>
         )}
       </div>
 

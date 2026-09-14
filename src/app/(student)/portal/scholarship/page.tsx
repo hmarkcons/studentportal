@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatDateOnly } from "@/lib/formatDate";
 import { scholarshipPortals } from "@/lib/scholarshipPortal";
+import { callLink, callAbsenceNote } from "@/lib/scholarshipCallLink";
 import { listCredentialTypesAction } from "@/lib/actions/countryTracker";
 import { VisaCredentials } from "../visa/VisaCredentials";
 import {
@@ -29,6 +30,12 @@ type Body = {
   stipend_amount: string | null;
   benefits: string | null;
   source_url: string | null;
+  call_status: string | null;
+  call_expected_on: string | null;
+  call_pdf_path: string | null;
+  call_pdf_url: string | null;
+  call_page_url: string | null;
+  call_pdf_language: string | null;
 };
 
 function Detail({ label, value }: { label: string; value: string | null }) {
@@ -37,6 +44,53 @@ function Detail({ label, value }: { label: string; value: string | null }) {
     <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
       <span className="shrink-0 text-xs text-muted sm:w-44">{label}</span>
       <span className="text-sm text-ink">{value}</span>
+    </div>
+  );
+}
+
+/**
+ * The region's call for applications, as the student sees it.
+ *
+ * Given its own block rather than a link in the row of links, because it is
+ * not one more reference: it is the rule the whole card summarises, and the
+ * one document a student is expected to have read before they ring the office
+ * about a threshold.
+ *
+ * The language is said out loud. Most regions publish the bando in Italian
+ * only, and a student who opens forty pages of Italian expecting English
+ * assumes the portal sent them to the wrong place.
+ */
+function CallForApplications({ body, signed }: { body: Body; signed: Map<string, string> }) {
+  const call = callLink({
+    ...body,
+    call_pdf_signed_url: body.call_pdf_path ? signed.get(body.call_pdf_path) ?? null : null,
+  });
+
+  if (!call) {
+    return (
+      <p className="mt-3 rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted">
+        {callAbsenceNote(body)}
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-3 rounded-md border border-primary bg-[color-mix(in_srgb,var(--primary)_7%,transparent)] px-3 py-2">
+      <a
+        href={call.url}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+      >
+        {call.kind === "page" ? "🔗" : "📄"} {call.label}
+        {call.kind === "stored" ? "" : " →"}
+      </a>
+      <p className="mt-1 text-xs text-muted">
+        {call.kind === "page"
+          ? `The call, its annexes and the forms are published on ${body.name}'s own site. Everything on this card is a summary of it.`
+          : `Published by ${body.name}. Everything on this card is a summary of it — the call is what decides.`}
+        {call.language === "it" && " It is in Italian; ask your counsellor if anything in it is unclear."}
+      </p>
     </div>
   );
 }
@@ -67,9 +121,30 @@ export default async function PortalScholarshipPage() {
   const { data: scholarships } = await supabase
     .from("student_scholarships")
     .select(
-      "id, name, status, award_amount, application_deadline, body:scholarship_bodies(name, region, academic_year, application_deadline, document_upload_deadline, courier_deadline, isee_threshold, ispe_threshold, stipend_amount, benefits, source_url)"
+      "id, name, status, award_amount, application_deadline, body:scholarship_bodies(name, region, academic_year, application_deadline, document_upload_deadline, courier_deadline, isee_threshold, ispe_threshold, stipend_amount, benefits, source_url, call_status, call_expected_on, call_pdf_path, call_pdf_url, call_page_url, call_pdf_language)"
     )
     .eq("student_id", student.id);
+
+  // The copy HMARK holds of each call, signed for this student. Any signed-in
+  // user may read scholarship-calls (0175), so this is the student's own link
+  // to the same paper their counsellor is reading — and it keeps answering
+  // after the region takes the original down, which they do every year.
+  //
+  // Signed once per path: two scholarships in the same region share a body.
+  const callPaths = [
+    ...new Set(
+      (scholarships ?? [])
+        .map((s) => (one(s.body as never) as Body | null)?.call_pdf_path)
+        .filter((p): p is string => Boolean(p))
+    ),
+  ];
+  const signedCalls = new Map<string, string>();
+  await Promise.all(
+    callPaths.map(async (path) => {
+      const { data } = await supabase.storage.from("documents").createSignedUrl(path, 3600);
+      if (data?.signedUrl) signedCalls.set(path, data.signedUrl);
+    })
+  );
 
   return (
     <div className="w-full">
@@ -128,6 +203,12 @@ export default async function PortalScholarshipPage() {
                   <Detail label="Stipend" value={body?.stipend_amount ?? null} />
                   <Detail label="Also covers" value={body?.benefits ?? null} />
                 </div>
+
+                {/* The call is the document that actually governs: every
+                    deadline, threshold and required paper on this card is a
+                    summary of it. A student who is asked for an ISEE nobody
+                    explained needs to be able to read the rule themselves. */}
+                {body && <CallForApplications body={body} signed={signedCalls} />}
 
                 {body?.source_url && (
                   <a
