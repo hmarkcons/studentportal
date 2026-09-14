@@ -7,6 +7,7 @@ import { saveTrackerFields } from "@/lib/actions/countryTracker";
 import { Button } from "@/components/ui/Button";
 import { Input, Select, Textarea } from "@/components/ui/Input";
 import type { TrackerFieldDef } from "@/lib/countryTrackers";
+import { parseMultiValue } from "@/lib/trackerValue";
 
 function parseJsonArray(raw: string | undefined): unknown[] {
   if (!raw) return [];
@@ -173,7 +174,11 @@ export function CountryTrackerForm({
 // Checkbox list JSON-encoded into a single hidden input — no schema change
 // needed since application_country_extra.field_value is generic text.
 function MultiSelectField({ fieldKey, options, initial }: { fieldKey: string; options: string[]; initial?: string }) {
-  const [selected, setSelected] = useState<string[]>(() => parseJsonArray(initial) as string[]);
+  // parseMultiValue, not parseJsonArray: a field that used to be a single
+  // select stores its old answers unquoted ("CEnT-S", not ["CEnT-S"]), and
+  // reading those as nothing would drop a student's recorded test from the
+  // form and then overwrite it on the next save.
+  const [selected, setSelected] = useState<string[]>(() => parseMultiValue(initial));
 
   function toggle(o: string) {
     setSelected((prev) => (prev.includes(o) ? prev.filter((v) => v !== o) : [...prev, o]));

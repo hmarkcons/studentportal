@@ -34,6 +34,7 @@ import { getEffectivePermissions } from "@/lib/auth/permissions";
 import { CollapsibleCard } from "@/components/CollapsibleCard";
 import { TrackerCountryTabs } from "@/components/TrackerCountryTabs";
 import { uploadedLine } from "@/lib/activityStamp";
+import { trackerValueFilled } from "@/lib/trackerValue";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -524,7 +525,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     let total = 0;
     const perCountry: string[] = [];
     for (const section of sections) {
-      const countryFilled = section.fields.filter((f) => (section.values[f.key] ?? "").trim() !== "").length;
+      const countryFilled = section.fields.filter((f) => trackerValueFilled(section.values[f.key])).length;
       filled += countryFilled;
       total += section.fields.length;
       perCountry.push(`${section.entry.displayName} ${countryFilled}/${section.fields.length}`);
