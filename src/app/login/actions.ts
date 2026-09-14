@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { signInErrorMessage } from "@/lib/signInError";
 
 export async function signIn(_prevState: unknown, formData: FormData) {
   const email = String(formData.get("email") ?? "");
@@ -12,7 +13,11 @@ export async function signIn(_prevState: unknown, formData: FormData) {
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    return { error: "Incorrect email or password." };
+    // Logged server-side because the message the user gets is deliberately
+    // vague, and "incorrect password" for what was actually a rate limit is
+    // otherwise invisible to anyone trying to work out why nobody can log in.
+    console.error("[signIn] failed", { status: error.status, code: error.code, message: error.message });
+    return { error: signInErrorMessage(error) ?? "Incorrect email or password." };
   }
 
   redirect(safeNextPath(next));
