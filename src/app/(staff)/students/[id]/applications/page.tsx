@@ -8,6 +8,7 @@ import { BoardingPassTracker } from "@/components/ui/BoardingPassTracker";
 import { DeleteApplicationButton } from "./DeleteApplicationButton";
 import { FinalizeApplicationButton } from "./FinalizeApplicationButton";
 import { ApplicationOrderList } from "./ApplicationOrderList";
+import { orderCycles, cycleTabLabel, intakeLabel, type Cycle } from "@/lib/intakeCycle";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -15,18 +16,18 @@ function one<T>(v: T | T[] | null) {
 
 export default async function StudentApplicationsTab(props: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ country?: string }>;
+  searchParams: Promise<{ country?: string; cycle?: string }>;
 }) {
   const { id } = await props.params;
-  const { country: countryParam } = await props.searchParams;
+  const { country: countryParam, cycle: cycleParam } = await props.searchParams;
   const { supabase, staff: staffRow } = await getStaffSession();
   const canDelete = staffRow?.role === "super_admin" || staffRow?.role === "management";
 
-  const [{ data: applications }, { data: destinationRows }] = await Promise.all([
+  const [{ data: applications }, { data: destinationRows }, { data: cycleRows }] = await Promise.all([
     supabase
       .from("applications")
       .select(
-        `id, current_stage, intake, deadline, is_finalized,
+        `id, current_stage, intake, deadline, is_finalized, cycle_id,
        university:universities(name, destination:destinations(display_name, country_code, pipeline_stages, finalize_action_label, finalized_badge_label)),
        program:programs(name)`
       )
@@ -43,25 +44,51 @@ export default async function StudentApplicationsTab(props: {
       .from("lead_destinations")
       .select("is_backup, destination:destinations(display_name, country_code)")
       .eq("lead_id", id),
+    supabase
+      .from("student_cycles")
+      .select("id, sequence, intake, is_current")
+      .eq("student_id", id)
+      .order("sequence"),
   ]);
 
   const revalidateTo = `/students/${id}/applications`;
 
+  // One tab per intake the student has been through, the current one first.
+  // A student who has only gone round once — almost all of them — gets no
+  // intake strip at all, and this page looks exactly as it did.
+  const cycles = orderCycles((cycleRows ?? []) as Cycle[]);
+  const showCycleTabs = cycles.length > 1;
+  const currentCycleId = cycles.find((c) => c.is_current)?.id ?? cycles[0]?.id ?? null;
+  const activeCycleId =
+    showCycleTabs && cycleParam && cycles.some((c) => c.id === cycleParam) ? cycleParam : currentCycleId;
+  // An application raised before cycles existed belongs to the first attempt.
+  const firstCycleId = cycles.at(-1)?.id ?? null;
+  const inActiveCycle = (appCycleId: string | null) =>
+    !showCycleTabs || (appCycleId ?? firstCycleId) === activeCycleId;
+  const activeCycle = cycles.find((c) => c.id === activeCycleId) ?? null;
+  const isPreviousIntake = Boolean(activeCycle && !activeCycle.is_current);
+
+  // Only the intake being looked at. Numbering, the finalize lock and the
+  // country tabs are all per intake: last year's finalised university must not
+  // lock this year's, and "application #3" has to mean the third one of this
+  // attempt.
+  const cycleApplications = (applications ?? []).filter((a) => inActiveCycle(a.cycle_id ?? null));
+
   // One running number across every application (not per country group), so
   // "application #3" means the same thing wherever it's referred to. Numbered
   // in creation order, which the query above already sorts by.
-  const numberById = new Map((applications ?? []).map((a, i) => [a.id, i + 1]));
+  const numberById = new Map(cycleApplications.map((a, i) => [a.id, i + 1]));
 
   // Once one university is finalized, Finalize is locked on the rest until
   // that one is un-finalized.
-  const hasFinalized = (applications ?? []).some((a) => a.is_finalized);
+  const hasFinalized = cycleApplications.some((a) => a.is_finalized);
 
   // Grouped by country code rather than display name, so the tab in the URL
   // is stable and does not carry a country's name in it.
   const UNASSIGNED = "unassigned";
   const byCountry = new Map<string, NonNullable<typeof applications>>();
   const nameByCode = new Map<string, string>();
-  for (const a of applications ?? []) {
+  for (const a of cycleApplications) {
     const uni = one(a.university as never) as { destination?: unknown } | null;
     const dest = uni?.destination
       ? (one(uni.destination as never) as { display_name?: string; country_code?: string } | null)
@@ -111,16 +138,53 @@ export default async function StudentApplicationsTab(props: {
 
   return (
     <div>
+      {/* One tab per intake, the upcoming one first and the previous year
+          second, as the office asked. Only when there is more than one. */}
+      {showCycleTabs && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          {cycles.map((c) => (
+            <Link
+              key={c.id}
+              href={`/students/${id}/applications?cycle=${c.id}`}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                c.id === activeCycleId
+                  ? "bg-primary text-primary-ink"
+                  : "border border-border text-muted hover:text-ink"
+              }`}
+            >
+              {cycleTabLabel("Apps", c)}
+              {!c.is_current && <span className="ml-1.5 text-xs font-normal opacity-80">previous</span>}
+            </Link>
+          ))}
+        </div>
+      )}
+
       <div className="mb-4 flex items-center justify-between">
-        <p className="text-sm text-muted">{applications?.length ?? 0} applications</p>
-        <Link href={`/students/${id}/applications/new`} className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink">
-          + Add application
-        </Link>
+        <p className="text-sm text-muted">
+          {cycleApplications.length} applications
+          {showCycleTabs && activeCycle ? ` · ${intakeLabel(activeCycle.intake)}` : ""}
+        </p>
+        {/* A closed intake takes no new applications — an application added to
+            last year would quietly reopen work that is finished. */}
+        {!isPreviousIntake && (
+          <Link href={`/students/${id}/applications/new`} className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink">
+            + Add application
+          </Link>
+        )}
       </div>
 
-      {(!applications || applications.length === 0) && !showTabs && (
+      {isPreviousIntake && (
+        <p className="mb-4 rounded-md border border-border bg-surface-2 px-3 py-2 text-xs text-muted">
+          This is a previous intake, kept for reference. The student&rsquo;s current work is under{" "}
+          <strong className="font-medium text-ink">{cycleTabLabel("Apps", cycles[0])}</strong>.
+        </p>
+      )}
+
+      {cycleApplications.length === 0 && !showTabs && (
         <Card>
-          <EmptyState>No applications yet.</EmptyState>
+          <EmptyState>
+            {isPreviousIntake ? "Nothing was applied for in this intake." : "No applications yet."}
+          </EmptyState>
         </Card>
       )}
 
@@ -133,7 +197,7 @@ export default async function StudentApplicationsTab(props: {
           {tabs.map((t) => (
             <Link
               key={t.code}
-              href={`/students/${id}/applications?country=${t.code}`}
+              href={`/students/${id}/applications?country=${t.code}${activeCycleId ? `&cycle=${activeCycleId}` : ""}`}
               className={`rounded-md px-3 py-1.5 text-xs font-medium ${
                 t.code === activeCode ? "bg-primary text-primary-ink" : "border border-border text-muted hover:text-ink"
               }`}
@@ -162,7 +226,7 @@ export default async function StudentApplicationsTab(props: {
           )}
           <ApplicationOrderList
             studentId={id}
-            canEdit
+            canEdit={!isPreviousIntake}
             applications={(apps ?? []).map((a) => {
               const uni = one(a.university as never) as { name?: string; destination?: unknown } | null;
               const dest = uni?.destination
@@ -216,20 +280,24 @@ export default async function StudentApplicationsTab(props: {
                         </>
                       )}
                     </span>
-                    <div className="flex items-center gap-2">
-                      <FinalizeApplicationButton
-                        applicationId={a.id}
-                        studentId={id}
-                        revalidateTo={revalidateTo}
-                        isFinalized={a.is_finalized}
-                        actionLabel={dest?.finalize_action_label ?? undefined}
-                        badgeLabel={dest?.finalized_badge_label ?? undefined}
-                        blockedByOther={hasFinalized && !a.is_finalized}
-                      />
-                      {canDelete && (
-                        <DeleteApplicationButton applicationId={a.id} revalidateTo={revalidateTo} label={uni?.name ?? "this university"} />
-                      )}
-                    </div>
+                    {/* A closed intake is a record, not a workspace: nothing
+                        about it can be finalised or deleted from here. */}
+                    {!isPreviousIntake && (
+                      <div className="flex items-center gap-2">
+                        <FinalizeApplicationButton
+                          applicationId={a.id}
+                          studentId={id}
+                          revalidateTo={revalidateTo}
+                          isFinalized={a.is_finalized}
+                          actionLabel={dest?.finalize_action_label ?? undefined}
+                          badgeLabel={dest?.finalized_badge_label ?? undefined}
+                          blockedByOther={hasFinalized && !a.is_finalized}
+                        />
+                        {canDelete && (
+                          <DeleteApplicationButton applicationId={a.id} revalidateTo={revalidateTo} label={uni?.name ?? "this university"} />
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
                 ),

@@ -25,6 +25,8 @@ import { PortalCredentialsSection } from "./PortalCredentialsSection";
 import { DashboardTaskList, type DashboardTaskRow } from "./DashboardTaskList";
 import { listCredentialTypesAction } from "@/lib/actions/countryTracker";
 import { RegistrationEditForm } from "./RegistrationEditForm";
+import { RestartProcessPanel } from "./RestartProcessPanel";
+import { loadRestartContext } from "@/lib/actions/intakeCycles";
 import { getCachedDestinations, getCachedCounselors, getCachedAgreementTemplates, getCachedFeeProducts } from "@/lib/cachedQueries";
 import { getEffectivePermissions } from "@/lib/auth/permissions";
 import { CollapsibleCard } from "@/components/CollapsibleCard";
@@ -565,6 +567,12 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
 
   const trackerProgress = summariseTracker(trackerSections);
 
+  // Whether this student can be started again, and on what evidence. Read here
+  // rather than in the panel so the visa outcome comes from the same place the
+  // Visa tab reads it from.
+  const restartContext = await loadRestartContext(id);
+  const canRestart = perms["students.restart_process"] === true;
+
   // Primary country first, then backups, matching the Applications tab. The
   // student's lead_destinations rows are what say which is which; a country
   // with a tracker but no destination row (a destination removed after the
@@ -590,6 +598,11 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
 
   return (
     <div>
+      {/* Above everything, because a refused or ghosted student is not a
+          detail — it is the thing the counsellor opened this page about. The
+          panel renders nothing at all for a student who is neither. */}
+      <RestartProcessPanel studentId={id} context={restartContext} canEdit={canRestart} />
+
       {destinationPipelineRows.length > 0 && (
         <>
           <div className="mb-6 flex flex-col gap-4">

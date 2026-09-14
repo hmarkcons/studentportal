@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { loadDocumentHistory } from "@/lib/documentHistory";
+import { orderCycles, cycleTabLabel, resolveCycleDocuments, type Cycle } from "@/lib/intakeCycle";
 import { getStudentUser } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -11,7 +13,8 @@ function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
 }
 
-export default async function PortalDocumentsPage() {
+export default async function PortalDocumentsPage(props: { searchParams: Promise<{ cycle?: string }> }) {
+  const { cycle: cycleParam } = await props.searchParams;
   const { supabase, userId } = await getStudentUser();
 
   const { data: student } = await supabase.from("students").select("id").eq("auth_user_id", userId ?? "").maybeSingle();
@@ -19,28 +22,67 @@ export default async function PortalDocumentsPage() {
 
   await ensureStudentDocumentRequirements(student.id);
 
-  const { data: applications } = await supabase.from("applications").select("id, university:universities(name)").eq("student_id", student.id);
+  const [{ data: applications }, { data: cycleRows }, { data: renewTemplates }] = await Promise.all([
+    supabase.from("applications").select("id, university:universities(name)").eq("student_id", student.id),
+    supabase.from("student_cycles").select("id, sequence, intake, is_current").eq("student_id", student.id).order("sequence"),
+    supabase.from("document_templates").select("id").eq("renew_each_intake", true),
+  ]);
   const appLabel = new Map((applications ?? []).map((a) => [a.id, one(a.university as never) as { name?: string } | null]));
 
-  const { data: rawDocs } = await supabase
+  const { data: allDocs } = await supabase
     .from("student_documents")
     .select(
-      "id, category, custom_name, status, file_path, deadline, rejected_reason, application_id, uploaded_at, uploaded_by_role, verified_at, created_at, template_id, template:document_templates(name)"
+      "id, category, custom_name, status, file_path, deadline, rejected_reason, application_id, uploaded_at, uploaded_by_role, verified_at, created_at, template_id, derived_key, cycle_id, template:document_templates(name)"
     )
     .eq("student_id", student.id)
     .order("created_at", { ascending: false });
 
-  const docHistory = await loadDocumentHistory(supabase, (rawDocs ?? []).map((d) => d.id));
+  // A student who has gone round the process more than once sees a tab per
+  // intake, the current one first. Their previous intake's paperwork stays
+  // readable — it is theirs, and it is what they sent us.
+  const cycles = orderCycles((cycleRows ?? []) as Cycle[]);
+  const showCycleTabs = cycles.length > 1;
+  const currentCycleId = cycles.find((c) => c.is_current)?.id ?? cycles[0]?.id ?? null;
+  const activeCycleId =
+    showCycleTabs && cycleParam && cycles.some((c) => c.id === cycleParam) ? cycleParam : currentCycleId;
+  const activeCycle = cycles.find((c) => c.id === activeCycleId) ?? null;
+  const isPreviousIntake = Boolean(activeCycle && !activeCycle.is_current);
+
+  let rawDocs = allDocs ?? [];
+  const inheritedFromById = new Map<string, number | null>();
+  if (showCycleTabs && activeCycleId) {
+    const resolved = resolveCycleDocuments(
+      rawDocs.map((d) => ({
+        id: d.id,
+        cycle_id: d.cycle_id,
+        category: d.category ?? null,
+        template_id: d.template_id ?? null,
+        derived_key: d.derived_key ?? null,
+        status: d.status,
+      })),
+      activeCycleId,
+      new Map(cycles.map((c) => [c.id, c.sequence])),
+      new Set((renewTemplates ?? []).map((t) => t.id as string))
+    );
+    const keep = new Map(resolved.map((r) => [r.doc.id, r.inheritedFrom]));
+    for (const [docId, from] of keep) inheritedFromById.set(docId, from);
+    rawDocs = rawDocs.filter((d) => keep.has(d.id));
+  }
+
+  const docHistory = await loadDocumentHistory(supabase, rawDocs.map((d) => d.id));
 
   const docsWithUrls = await Promise.all(
-    (rawDocs ?? []).map(async (d) => {
+    rawDocs.map(async (d) => {
       const uni = d.application_id ? appLabel.get(d.application_id) : null;
       const templateName = one(d.template as never) as { name?: string } | null;
       const baseName = d.custom_name ?? templateName?.name ?? d.category ?? "Document";
       // Only application-scoped rows name a university; a student-level one is
       // shared across every application, and labelling it "General" is what
       // stops it reading as a document nobody asked for.
-      const custom_name = `${baseName}${uni?.name ? ` — ${uni.name}` : ""}`;
+      // A document approved for an earlier intake says so, or it looks like a
+      // mistake sitting in this year's list already ticked off.
+      const carried = inheritedFromById.get(d.id) ? " — already approved, carried over" : "";
+      const custom_name = `${baseName}${uni?.name ? ` — ${uni.name}` : ""}${carried}`;
       const past = docHistory.get(d.id) ?? [];
       if (!d.file_path) return { ...d, custom_name, history: past };
       const { data } = await supabase.storage.from("documents").createSignedUrl(d.file_path, 3600);
@@ -80,6 +122,30 @@ export default async function PortalDocumentsPage() {
       <p className="mb-4 text-sm text-muted">
         Everything we need from you, in the order your counsellor works through it.
       </p>
+
+      {showCycleTabs && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          {cycles.map((c) => (
+            <Link
+              key={c.id}
+              href={`/portal/documents?cycle=${c.id}`}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                c.id === activeCycleId ? "bg-primary text-primary-ink" : "border border-border text-muted hover:text-ink"
+              }`}
+            >
+              {cycleTabLabel("Docs", c)}
+              {!c.is_current && <span className="ml-1.5 text-xs font-normal opacity-80">previous</span>}
+            </Link>
+          ))}
+        </div>
+      )}
+
+      {isPreviousIntake && (
+        <p className="mb-4 rounded-md border border-border bg-surface-2 px-3 py-2 text-xs text-muted">
+          This is what you sent us for an earlier intake, kept so you always have it. Anything still valid has already
+          been carried over to <strong className="font-medium text-ink">{cycleTabLabel("Docs", cycles[0])}</strong>.
+        </p>
+      )}
 
       {total > 0 && (
         <Card className="mb-6">
@@ -136,7 +202,8 @@ export default async function PortalDocumentsPage() {
                   doc={doc}
                   number={`${i + 1}.${j + 1}`}
                   studentId={student.id}
-                  revalidateTo="/portal/documents"
+                  revalidateTo={`/portal/documents${showCycleTabs && activeCycleId ? `?cycle=${activeCycleId}` : ""}`}
+                  readOnly={isPreviousIntake}
                 />
               ))}
             </div>

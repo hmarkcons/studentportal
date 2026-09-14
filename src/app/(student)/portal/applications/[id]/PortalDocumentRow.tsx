@@ -17,6 +17,7 @@ export function PortalDocumentRow({
   studentId,
   revalidateTo,
   number,
+  readOnly = false,
 }: {
   doc: {
     id: string;
@@ -36,6 +37,8 @@ export function PortalDocumentRow({
   revalidateTo: string;
   /** e.g. "2.3", matching the numbering staff see on the Documents tab. */
   number?: string;
+  /** A closed intake: readable, but nothing new can be sent against it. */
+  readOnly?: boolean;
 }) {
   const action = studentUploadDocument.bind(null, doc.id, studentId, revalidateTo);
 
@@ -103,7 +106,7 @@ export function PortalDocumentRow({
       {/* Asks before it sends: a document cannot be taken back once it is
           in, and if it is sent back the original stays on the record as the
           rejected version. */}
-      {doc.status !== "verified" && (
+      {doc.status !== "verified" && !readOnly && (
         <ConfirmedUploadForm
           action={action}
           accept={ACCEPTED_DOCUMENT_ACCEPT}

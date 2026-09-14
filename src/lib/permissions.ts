@@ -27,6 +27,7 @@ export const PERMISSION_KEYS = [
   "marketing.referrals.manage",
   "settings.visa_messages",
   "settings.travel_guide",
+  "students.restart_process",
   "inventory.manage",
 ] as const;
 

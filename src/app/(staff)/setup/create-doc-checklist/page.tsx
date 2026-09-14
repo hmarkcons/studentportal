@@ -22,7 +22,7 @@ export default async function CreateDocChecklistPage(props: {
       supabase.from("destination_document_sections").select("destination_id, section_key, sort_order"),
       supabase
         .from("document_templates")
-        .select("id, destination_id, category, name, description, required, level, sort_order")
+        .select("id, destination_id, category, name, description, required, level, sort_order, renew_each_intake")
         .order("sort_order"),
     ]);
 
@@ -106,6 +106,7 @@ export default async function CreateDocChecklistPage(props: {
               required: i.required,
               level: i.level,
               isShared: i.isShared,
+              renewEachIntake: Boolean(i.renew_each_intake),
             })),
           }))}
           excludedItems={excludedItems.map((t) => ({ id: t.id, name: t.name, category: t.category }))}

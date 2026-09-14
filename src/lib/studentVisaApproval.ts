@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { listTrackerDefinitions } from "@/lib/actions/countryTracker";
-import { readVisaDecision } from "@/lib/visaOutcome";
+import { readVisaDecision, type VisaDecision } from "@/lib/visaOutcome";
 
 export type ApprovedDestination = {
   destinationId: string;
@@ -8,6 +8,8 @@ export type ApprovedDestination = {
   country: string;
   university: string;
 };
+
+export type VisaOutcome = ApprovedDestination & { decision: VisaDecision; applicationId: string };
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -29,6 +31,20 @@ export async function approvedVisaDestinations(
   supabase: SupabaseClient,
   studentId: string
 ): Promise<ApprovedDestination[]> {
+  const outcomes = await visaOutcomes(supabase, studentId);
+  return outcomes
+    .filter((o) => o.decision === "approved")
+    .map(({ destinationId, countryCode, country, university }) => ({ destinationId, countryCode, country, university }));
+}
+
+/**
+ * Every country this student has a recorded visa decision for, approved or not.
+ *
+ * The approval gate and the "start the process again" panel have to read the
+ * same field the same way, or a student could be refused on one screen and
+ * congratulated on another.
+ */
+export async function visaOutcomes(supabase: SupabaseClient, studentId: string): Promise<VisaOutcome[]> {
   const { data: applications } = await supabase
     .from("applications")
     .select("id, is_finalized, university:universities(name, destination:destinations(id, country_code, display_name))")
@@ -58,7 +74,7 @@ export async function approvedVisaDestinations(
 
   const defs = await listTrackerDefinitions([...byCode.keys()]);
 
-  const approved: ApprovedDestination[] = [];
+  const outcomes: VisaOutcome[] = [];
   for (const [code, entry] of byCode) {
     const outcomeField = (defs[code] ?? []).find((f) => f.visaRole === "outcome");
     if (!outcomeField) continue;
@@ -68,14 +84,14 @@ export async function approvedVisaDestinations(
       .eq("application_id", entry.appId)
       .eq("field_key", outcomeField.key)
       .maybeSingle();
-    if (readVisaDecision(extra?.field_value ?? null) === "approved") {
-      approved.push({
-        destinationId: entry.destinationId,
-        countryCode: entry.countryCode,
-        country: entry.country,
-        university: entry.university,
-      });
-    }
+    outcomes.push({
+      destinationId: entry.destinationId,
+      countryCode: entry.countryCode,
+      country: entry.country,
+      university: entry.university,
+      applicationId: entry.appId,
+      decision: readVisaDecision(extra?.field_value ?? null),
+    });
   }
-  return approved;
+  return outcomes;
 }

@@ -8,6 +8,25 @@ function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
 }
 
+type Db = Awaited<ReturnType<typeof createClient>>;
+
+/**
+ * The intake this student is currently working towards.
+ *
+ * Null for a student with no cycle at all — a lead whose applications predate
+ * 0180 — which reads as "the first attempt" everywhere it is used, so nothing
+ * has to be backfilled before an application can be added.
+ */
+async function currentCycleId(supabase: Db, studentId: string): Promise<string | null> {
+  const { data } = await supabase
+    .from("student_cycles")
+    .select("id")
+    .eq("student_id", studentId)
+    .eq("is_current", true)
+    .maybeSingle();
+  return data?.id ?? null;
+}
+
 export async function createApplication(studentId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
 
@@ -23,16 +42,27 @@ export async function createApplication(studentId: string, _prevState: unknown, 
     return { error: "This university is inactive — applications can't be added for it." };
   }
 
+  // Which attempt this belongs to. A student going round a second time must
+  // not have their new applications filed under the intake that ended, or the
+  // previous-intake tab starts filling up with this year's work.
+  const cycle_id = await currentCycleId(supabase, studentId);
+
   const rows = (program_ids.length > 0 ? program_ids : [null]).map((program_id) => ({
     student_id: studentId,
     university_id,
     program_id,
     intake,
     deadline,
+    cycle_id,
   }));
 
   const { data, error } = await supabase.from("applications").insert(rows).select("id");
-  if (error) return { error: error.message };
+  if (error) {
+    if (error.code === "23505") {
+      return { error: "This student already has an application for one of those programmes in this intake." };
+    }
+    return { error: error.message };
+  }
 
   // Deliberately seeds nothing.
   //
@@ -202,7 +232,7 @@ export async function addBackupPrograms(applicationId: string, studentId: string
 
   const { data: source } = await supabase
     .from("applications")
-    .select("university_id, intake, deadline, current_stage")
+    .select("university_id, intake, deadline, current_stage, cycle_id")
     .eq("id", applicationId)
     .maybeSingle();
   if (!source) return { error: "That application no longer exists." };
@@ -221,18 +251,24 @@ export async function addBackupPrograms(applicationId: string, studentId: string
 
   // Said plainly before the insert, because a partial failure here would add
   // some rows and report an error about the others.
-  const { data: already } = await supabase
+  //
+  // Scoped to this intake. A student re-applying after a refusal is applying
+  // to the same programmes again on purpose; last year's row is not a clash.
+  const duplicates = supabase
     .from("applications")
     .select("program_id, program:programs(name)")
     .eq("student_id", studentId)
     .eq("university_id", source.university_id)
     .in("program_id", programIds);
+  const { data: already } = await (source.cycle_id
+    ? duplicates.eq("cycle_id", source.cycle_id)
+    : duplicates.is("cycle_id", null));
   if ((already ?? []).length > 0) {
     const names = (already ?? [])
       .map((a) => (one(a.program as never) as { name?: string } | null)?.name)
       .filter(Boolean)
       .join(", ");
-    return { error: `Already applied for ${names || "that programme"} at this university.` };
+    return { error: `Already applied for ${names || "that programme"} at this university in this intake.` };
   }
 
   const { error } = await supabase.from("applications").insert(
@@ -242,6 +278,8 @@ export async function addBackupPrograms(applicationId: string, studentId: string
       program_id,
       intake: source.intake,
       deadline: source.deadline,
+      // The same intake as the application it is a backup for.
+      cycle_id: source.cycle_id,
       // current_stage is left out on purpose. The stage trigger fills it with
       // the destination's first pipeline stage, which is where a backup starts
       // whatever the first choice has already reached — nobody has submitted

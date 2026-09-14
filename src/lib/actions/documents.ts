@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sanitizeFilename, validateDocumentFile } from "@/lib/documentUpload";
 import { profileDerivedRequirements, reconcileDerived, templatesToSeed } from "@/lib/documentChecklist";
 import { requirePermission } from "@/lib/auth/permissions";
+import { categoryCarriesOver } from "@/lib/intakeCycle";
 
 const MANAGE_DENIED = "Only Super Admin and the Processing team can add or remove document requirements.";
 
@@ -53,10 +54,10 @@ export async function ensureStudentDocumentRequirements(studentId: string) {
   ] = await Promise.all([
     supabase.from("leads").select("level_applying_for").eq("id", studentId).maybeSingle(),
     supabase.from("lead_destinations").select("destination_id").eq("lead_id", studentId),
-    supabase.from("document_templates").select("id, category, level, destination_id, name, sort_order"),
+    supabase.from("document_templates").select("id, category, level, destination_id, name, sort_order, renew_each_intake"),
     supabase
       .from("student_documents")
-      .select("id, template_id, derived_key, file_path, category, custom_name, template:document_templates(name)")
+      .select("id, template_id, derived_key, file_path, category, custom_name, cycle_id, status, template:document_templates(name)")
       .eq("student_id", studentId)
       .is("application_id", null),
     supabase.from("destination_document_exclusions").select("destination_id, template_id"),
@@ -70,8 +71,42 @@ export async function ensureStudentDocumentRequirements(studentId: string) {
 
   const destinationIds = new Set((destRows ?? []).map((d) => d.destination_id));
   const existingRows = existing ?? [];
-  const existingTemplateIds = new Set(existingRows.map((d) => d.template_id).filter(Boolean));
   const level = student?.level_applying_for;
+
+  // Which intake this student is working towards, and which requirements a
+  // previous intake has already satisfied.
+  //
+  // A row from an earlier intake normally counts, which is exactly the
+  // carry-over the office asked for: nobody re-uploads their degree. It does
+  // NOT count when the requirement is marked to be renewed each intake, or
+  // when it is one of the categories that deliberately does not follow a
+  // student across — the visa and the scholarship. Those are asked for again.
+  const { data: cycleRows } = await supabase
+    .from("student_cycles")
+    .select("id, sequence, is_current")
+    .eq("student_id", studentId)
+    .order("sequence");
+  const currentCycle = (cycleRows ?? []).find((c) => c.is_current) ?? (cycleRows ?? []).at(-1) ?? null;
+  const currentCycleId = currentCycle?.id ?? null;
+  const isFirstAttempt = !currentCycle || currentCycle.sequence === 1;
+
+  const renewTemplateIds = new Set(
+    (templates ?? []).filter((t) => t.renew_each_intake).map((t) => t.id as string)
+  );
+  const satisfiedTemplateIds = new Set(
+    existingRows
+      .filter((r) => {
+        if (!r.template_id) return false;
+        // In this intake, any row counts — it is the row for this intake.
+        if (isFirstAttempt || (r.cycle_id ?? null) === currentCycleId) return true;
+        // From an earlier intake: only if it still counts.
+        if (renewTemplateIds.has(r.template_id as string)) return false;
+        if (!categoryCarriesOver(r.category)) return false;
+        return r.status === "verified";
+      })
+      .map((r) => r.template_id)
+  );
+  const existingTemplateIds = satisfiedTemplateIds;
 
   // A shared item is dropped for this student only if EVERY destination they
   // are pursuing has excluded it — one country not asking for a document is no
@@ -106,13 +141,23 @@ export async function ensureStudentDocumentRequirements(studentId: string) {
       name: t.name,
       sort_order: t.sort_order ?? 0,
     })),
-    existingRows.map((r) => {
-      // PostgREST returns an embedded row as an object or a single-element
-      // array depending on the relationship it infers, so both are handled.
-      const embedded = r.template as { name?: string } | { name?: string }[] | null;
-      const templateName = (Array.isArray(embedded) ? embedded[0] : embedded)?.name ?? null;
-      return { category: r.category, label: r.custom_name ?? templateName };
-    })
+    // Only rows that actually satisfy a requirement for THIS intake. Passing
+    // every row the student has ever had would silently suppress the
+    // renew-each-intake requirements and the visa documents, which is the one
+    // thing a new intake has to ask for again.
+    existingRows
+      .filter((r) =>
+        r.template_id
+          ? satisfiedTemplateIds.has(r.template_id)
+          : isFirstAttempt || (r.cycle_id ?? null) === currentCycleId || categoryCarriesOver(r.category)
+      )
+      .map((r) => {
+        // PostgREST returns an embedded row as an object or a single-element
+        // array depending on the relationship it infers, so both are handled.
+        const embedded = r.template as { name?: string } | { name?: string }[] | null;
+        const templateName = (Array.isArray(embedded) ? embedded[0] : embedded)?.name ?? null;
+        return { category: r.category, label: r.custom_name ?? templateName };
+      })
   );
 
   if (missing.length > 0) {
@@ -123,6 +168,7 @@ export async function ensureStudentDocumentRequirements(studentId: string) {
         template_id: t.id,
         category: t.category,
         status: "missing",
+        cycle_id: currentCycleId,
       }))
     );
     // 23505 = the partial unique index caught a concurrent duplicate insert
@@ -148,6 +194,7 @@ export async function ensureStudentDocumentRequirements(studentId: string) {
         category: r.category,
         custom_name: r.name,
         status: "missing",
+        cycle_id: currentCycleId,
       }))
     );
     if (error && error.code !== "23505") throw error;

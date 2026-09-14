@@ -23,6 +23,8 @@ export type BuilderItem = {
   required: boolean;
   level: string;
   isShared: boolean;
+  /** Asked for again when a student starts a new intake. */
+  renewEachIntake: boolean;
 };
 
 type Section = { key: string; label: string; items: BuilderItem[] };
@@ -263,6 +265,16 @@ export function SectionCard({
                 <label className="flex items-center gap-1 pb-2 text-xs text-muted">
                   <input type="checkbox" name="required" defaultChecked={item.required} /> Required
                 </label>
+                {/* Whether it goes stale between intakes. A student who
+                    re-applies next year does not re-upload their degree, but a
+                    bank statement or a police certificate has to be redone. */}
+                <label
+                  className="flex items-center gap-1 pb-2 text-xs text-muted"
+                  title="Ask for this again when a student starts a new intake, instead of carrying the approved copy over."
+                >
+                  <input type="checkbox" name="renew_each_intake" defaultChecked={item.renewEachIntake} /> Renew each
+                  intake
+                </label>
                 <Button type="submit" variant="primary" size="sm" pending={busy}>
                   Save
                 </Button>
@@ -277,6 +289,7 @@ export function SectionCard({
                     {item.name}
                     {!item.required && <span className="ml-2 text-xs text-muted">optional</span>}
                     {item.level !== "all" && <span className="ml-2 text-xs text-muted">{item.level} only</span>}
+                    {item.renewEachIntake && <span className="ml-2 text-xs text-warning">renew each intake</span>}
                     {item.isShared && <span className="ml-2 text-xs text-muted">shared</span>}
                   </p>
                   {item.description && <p className="text-xs text-muted">{item.description}</p>}
@@ -367,6 +380,12 @@ export function SectionCard({
           </label>
           <label className="flex items-center gap-1 pb-2 text-xs text-muted">
             <input type="checkbox" name="required" defaultChecked /> Required
+          </label>
+          <label
+            className="flex items-center gap-1 pb-2 text-xs text-muted"
+            title="Ask for this again when a student starts a new intake, instead of carrying the approved copy over."
+          >
+            <input type="checkbox" name="renew_each_intake" /> Renew each intake
           </label>
           <Button type="submit" variant="primary" size="sm" pending={busy}>
             Add

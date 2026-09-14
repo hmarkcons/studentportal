@@ -281,6 +281,10 @@ export async function addChecklistItem(
     description,
     required,
     level,
+    // Whether this goes stale between intakes. Off by default: most documents
+    // do not, and wrongly asking a student to re-do an attestation costs them
+    // money.
+    renew_each_intake: formData.get("renew_each_intake") === "on",
     sort_order: (last?.sort_order ?? 0) + 1,
   });
   if (insertError) return { error: insertError.message };
@@ -304,6 +308,7 @@ export async function updateChecklistItem(templateId: string, _prevState: unknow
       description: String(formData.get("description") ?? "").trim() || null,
       required: formData.get("required") !== "off",
       level: String(formData.get("level") ?? "all"),
+      renew_each_intake: formData.get("renew_each_intake") === "on",
     })
     .eq("id", templateId);
   if (updateError) return { error: updateError.message };
