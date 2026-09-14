@@ -3,6 +3,9 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatDateOnly } from "@/lib/formatDate";
+import { scholarshipPortals } from "@/lib/scholarshipPortal";
+import { listCredentialTypesAction } from "@/lib/actions/countryTracker";
+import { VisaCredentials } from "../visa/VisaCredentials";
 import {
   SCHOLARSHIP_CURRENCY_SYMBOL,
   SCHOLARSHIP_STATUS_TONE,
@@ -54,6 +57,11 @@ export default async function PortalScholarshipPage() {
   } = await supabase.auth.getUser();
 
   const { data: student } = await supabase.from("leads").select("id").eq("auth_user_id", user?.id ?? "").maybeSingle();
+
+  // Their own logins for the agency portals. Listed here and decrypted only
+  // when they press Show — read_credential has always allowed a student to
+  // read their own, the same as the visa appointment login.
+  const portals = student ? scholarshipPortals(await listCredentialTypesAction("student", student.id)) : [];
   if (!student) return null;
 
   const { data: scholarships } = await supabase
@@ -135,6 +143,26 @@ export default async function PortalScholarshipPage() {
             );
           })}
         </div>
+      )}
+
+      {/* So a student never has to ring the office for their own password. */}
+      {student && portals.length > 0 && (
+        <Card className="mt-6">
+          <h3 className="mb-1 text-sm font-medium text-ink">Your scholarship portal logins</h3>
+          <p className="mb-3 text-xs text-muted">
+            Your own accounts on the scholarship portals. Nothing is shown until you ask for it.
+          </p>
+          <div className="flex flex-col gap-3">
+            {portals.map((portal) => (
+              <VisaCredentials
+                key={portal.credentialType}
+                studentId={student.id}
+                credentialType={portal.credentialType}
+                label={portal.label}
+              />
+            ))}
+          </div>
+        </Card>
       )}
     </div>
   );

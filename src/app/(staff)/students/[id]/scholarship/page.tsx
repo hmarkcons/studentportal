@@ -6,6 +6,11 @@ import { Badge } from "@/components/ui/Badge";
 import { CURRENCY_SYMBOLS } from "@/lib/constants";
 import { bodiesForUniversity } from "@/lib/scholarshipMatch";
 import { scholarshipGate, scholarshipGateMessage } from "@/lib/scholarshipGate";
+import { scholarshipPortals } from "@/lib/scholarshipPortal";
+import { listCredentialTypesAction } from "@/lib/actions/countryTracker";
+import { listScholarshipProofs } from "@/lib/actions/scholarshipProofs";
+import { ScholarshipProofs } from "./ScholarshipProofs";
+import { ScholarshipPortals } from "./ScholarshipPortals";
 import { guideFreshness } from "@/lib/academicYear";
 import { ScholarshipGuide } from "@/components/ScholarshipGuide";
 import { SCHOLARSHIP_CURRENCY_SYMBOL } from "@/lib/scholarships";
@@ -115,6 +120,15 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
       .select("id, name, status, award_amount, application_id, scholarship_body_id, application_deadline")
       .in("application_id", appIds),
   ]);
+
+  // Proof files per scholarship, and the student's portal logins. Both read
+  // here so the client components are handed what they need rather than
+  // signing URLs or decrypting anything themselves.
+  const [proofsByScholarship, credentialTypes] = await Promise.all([
+    listScholarshipProofs((allScholarships ?? []).map((sc) => sc.id)),
+    listCredentialTypesAction("student", id),
+  ]);
+  const portals = scholarshipPortals(credentialTypes);
 
   // Signed here rather than in the guide component, which runs on the client
   // and cannot sign anything.
@@ -229,9 +243,29 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
               canManage={canManage}
               currencySymbol={w.currencySymbol}
             />
+            {/* The evidence each application was actually submitted, kept with
+                the application it belongs to rather than in one pile. */}
+            {scholarships.map((sc) => (
+              <ScholarshipProofs
+                key={sc.id}
+                scholarshipId={sc.id}
+                studentId={id}
+                proofs={proofsByScholarship[sc.id] ?? []}
+                canManage={canManage}
+              />
+            ))}
           </Card>
         );
       })}
+
+      {/* Once for the student, not once per country: these are their own
+          accounts and the portal's name says which region it belongs to. */}
+      <ScholarshipPortals
+        studentId={id}
+        portals={portals}
+        canManage={canManage}
+        revalidateTo={`/students/${id}/scholarship`}
+      />
     </div>
   );
 }
