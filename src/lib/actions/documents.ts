@@ -7,6 +7,7 @@ import { sanitizeFilename, validateDocumentFile } from "@/lib/documentUpload";
 import { profileDerivedRequirements, reconcileDerived, templatesToSeed } from "@/lib/documentChecklist";
 import { requirePermission } from "@/lib/auth/permissions";
 import { categoryCarriesOver } from "@/lib/intakeCycle";
+import { ensureCurrentCycleId } from "@/lib/ensureCycle";
 
 const MANAGE_DENIED = "Only Super Admin and the Processing team can add or remove document requirements.";
 
@@ -81,6 +82,7 @@ export async function ensureStudentDocumentRequirements(studentId: string) {
   // NOT count when the requirement is marked to be renewed each intake, or
   // when it is one of the categories that deliberately does not follow a
   // student across — the visa and the scholarship. Those are asked for again.
+  await ensureCurrentCycleId(studentId);
   const { data: cycleRows } = await supabase
     .from("student_cycles")
     .select("id, sequence, is_current")

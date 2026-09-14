@@ -7,6 +7,7 @@ import { getStaffSession } from "@/lib/auth/session";
 import { visaOutcomes } from "@/lib/studentVisaApproval";
 import { recommendRestart, type Cycle, type DeadlineEvidence, type RestartRecommendation } from "@/lib/intakeCycle";
 import { isIntakeMode, type IntakeMode } from "@/lib/intake";
+import { ensureCurrentCycleId } from "@/lib/ensureCycle";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -33,6 +34,10 @@ export type RestartContext = {
  */
 export async function loadRestartContext(studentId: string): Promise<RestartContext> {
   const supabase = await createClient();
+  // A student registered after 0180 has no cycle yet. Their first one has to
+  // exist before a second can be opened, or the first attempt's applications
+  // would belong to no intake at all.
+  await ensureCurrentCycleId(studentId);
 
   const [{ data: student }, { data: cycleRows }, { data: destRows }, { data: apps }] = await Promise.all([
     supabase.from("leads").select("intake, registration_status, status").eq("id", studentId).maybeSingle(),
@@ -148,12 +153,19 @@ export async function startNewCycle(_prevState: unknown, formData: FormData) {
   const { supabase, staff } = await getStaffSession();
   if (!staff) return { error: "You are signed out — reload the page." };
 
+  // The first cycle has to exist before a second can open, or last intake's
+  // applications end up belonging to no intake and its tab is empty.
+  await ensureCurrentCycleId(studentId);
+
   const { data: cycles, error: readError } = await supabase
     .from("student_cycles")
     .select("id, sequence, is_current")
     .eq("student_id", studentId)
     .order("sequence");
   if (readError) return { error: readError.message };
+  if ((cycles ?? []).length === 0) {
+    return { error: "This student is not registered yet, so there is no process to start again." };
+  }
 
   const last = (cycles ?? []).at(-1);
   const nextSequence = (last?.sequence ?? 0) + 1;

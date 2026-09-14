@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { ensureCurrentCycleId } from "@/lib/ensureCycle";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -24,7 +25,9 @@ async function currentCycleId(supabase: Db, studentId: string): Promise<string |
     .eq("student_id", studentId)
     .eq("is_current", true)
     .maybeSingle();
-  return data?.id ?? null;
+  // Creating it if it does not exist yet, so the very first application a
+  // student ever gets is already filed under an intake.
+  return data?.id ?? (await ensureCurrentCycleId(studentId));
 }
 
 export async function createApplication(studentId: string, _prevState: unknown, formData: FormData) {
