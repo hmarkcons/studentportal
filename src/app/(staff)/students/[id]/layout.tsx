@@ -20,7 +20,7 @@ export default async function StudentLayout({ children, params }: { children: Re
       .maybeSingle(),
     supabase
       .from("applications")
-      .select("id, university:universities(destination:destinations(country_code))")
+      .select("id, university:universities(destination:destinations(id, country_code))")
       .eq("student_id", id),
     supabase.from("student_profiles").select("photo_path").eq("student_id", id).maybeSingle(),
     supabase
@@ -57,10 +57,21 @@ export default async function StudentLayout({ children, params }: { children: Re
   // Messages this student has sent that no one on the team has opened yet.
   const unreadMessages = await countUnreadMessages(supabase, id, "staff");
 
+  // The tab appears for any country that has a scholarship body on file, not
+  // only Italy. It was hardcoded to "IT" while the page itself had already
+  // grown to handle every country — so a France student with an Eiffel
+  // scholarship recorded against them had no tab to see it in.
+  //
+  // Whether the tab has anything IN it is a separate question, answered by
+  // scholarshipGate: nothing until a university is finalised for pre-enrolment.
+  const { data: scholarshipBodyLinks } = await supabase
+    .from("scholarship_body_destinations")
+    .select("destination_id");
+  const destinationsWithBodies = new Set((scholarshipBodyLinks ?? []).map((l) => l.destination_id as string));
   const showScholarship = (italyApp ?? []).some((a) => {
     const uni = Array.isArray(a.university) ? a.university[0] : a.university;
     const dest = uni ? (Array.isArray(uni.destination) ? uni.destination[0] : uni.destination) : null;
-    return dest?.country_code === "IT";
+    return Boolean(dest?.id && destinationsWithBodies.has(dest.id));
   });
 
   return (

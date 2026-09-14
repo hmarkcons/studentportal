@@ -5,6 +5,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Badge } from "@/components/ui/Badge";
 import { CURRENCY_SYMBOLS } from "@/lib/constants";
 import { bodiesForUniversity } from "@/lib/scholarshipMatch";
+import { scholarshipGate, scholarshipGateMessage } from "@/lib/scholarshipGate";
 import { guideFreshness } from "@/lib/academicYear";
 import { ScholarshipGuide } from "@/components/ScholarshipGuide";
 import { SCHOLARSHIP_CURRENCY_SYMBOL } from "@/lib/scholarships";
@@ -69,33 +70,34 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
   const { data: bodyLinks } = await supabase.from("scholarship_body_destinations").select("destination_id");
   const destinationsWithBodies = new Set((bodyLinks ?? []).map((l) => l.destination_id as string));
 
-  const withBodies = withDestination.filter((w) => w.destinationId && destinationsWithBodies.has(w.destinationId));
-
-  // Once a university is finalised, the scholarship is about that university
-  // and no other. Before then, every application the student has open is a
-  // possibility and all of them are shown.
+  // Nothing at all until a university is finalised for pre-enrolment.
   //
-  // Per country, not across the student: an Italian pre-enrolment says nothing
-  // about which German university they might end up at.
-  const finalisedByDestination = new Map<string, string>();
-  for (const w of withBodies) {
-    if (w.app.is_finalized && w.destinationId) finalisedByDestination.set(w.destinationId, w.app.id);
-  }
-  const candidates = withBodies.filter((w) => {
-    const finalisedHere = w.destinationId ? finalisedByDestination.get(w.destinationId) : undefined;
-    return !finalisedHere || finalisedHere === w.app.id;
-  });
+  // This page used to show every open application's possible body while none
+  // was finalised, which read as several live scholarships when there were
+  // none: the body, its deadlines and its income thresholds all follow the
+  // region the chosen university sits in, so there is nothing to apply for
+  // until one is chosen.
+  const gate = scholarshipGate(
+    withDestination.map((w) => ({
+      applicationId: w.app.id,
+      destinationId: w.destinationId,
+      // What the office calls finalising to pre-enrol. Kept in step with
+      // is_finalized by the trigger in migration 0173.
+      preenrollmentFinalized: Boolean(w.app.preenrollment_finalized || w.app.is_finalized),
+      hasBody: Boolean(w.destinationId && destinationsWithBodies.has(w.destinationId)),
+    }))
+  );
 
-  if (candidates.length === 0) {
+  if (gate.reason) {
     return (
       <Card>
-        <EmptyState>
-          No scholarship applicable — none of this student&rsquo;s countries has a scholarship body on file. Add one in
-          Setup &rsaquo; Scholarship bodies to track scholarships for a country.
-        </EmptyState>
+        <EmptyState>{scholarshipGateMessage(gate.reason)}</EmptyState>
       </Card>
     );
   }
+
+  const visibleIds = new Set(gate.visible.map((v) => v.applicationId));
+  const candidates = withDestination.filter((w) => visibleIds.has(w.app.id));
 
   const appIds = candidates.map((w) => w.app.id);
   const [{ data: bodies }, { data: allScholarships }] = await Promise.all([
