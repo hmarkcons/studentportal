@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { updateDestinationStages } from "@/lib/actions/destinations";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Input";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export function StagesForm({ destinationId, stages }: { destinationId: string; stages: string[] }) {
   const action = updateDestinationStages.bind(null, destinationId);
@@ -17,6 +18,7 @@ export function StagesForm({ destinationId, stages }: { destinationId: string; s
       <Button type="submit" variant="primary" className="self-start" pending={pending}>
         Save stages
       </Button>
+      <ActionStatus state={state} pending={pending} label="Saved." />
     </form>
   );
 }

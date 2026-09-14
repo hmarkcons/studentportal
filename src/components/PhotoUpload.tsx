@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { FileField } from "@/components/FileField";
 import { MAX_PHOTO_BYTES } from "@/lib/fileSize";
+import { ActionStatus } from "@/components/ActionStatus";
 
 type PhotoUploadState = { error?: string; success?: boolean } | undefined;
 
@@ -60,6 +61,7 @@ export function PhotoUpload({
         <Button type="submit" variant="outline" size="sm" pending={pending} disabled={!ready}>
           {showsReplace ? "Replace photo" : "Upload photo"}
         </Button>
+        <ActionStatus state={state} pending={pending} label="Photo uploaded." />
         {state?.error && <p className="text-center text-xs text-danger">{state.error}</p>}
       </form>
     </div>

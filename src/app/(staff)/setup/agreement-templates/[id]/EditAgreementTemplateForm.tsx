@@ -8,6 +8,7 @@ import { RichTextEditor } from "@/components/RichTextEditor";
 import { Button } from "@/components/ui/Button";
 import { FileField } from "@/components/FileField";
 import { Input, Select } from "@/components/ui/Input";
+import { ActionStatus } from "@/components/ActionStatus";
 
 // Templates saved before the rich-text editor was added stored plain text
 // (paragraphs separated by a blank line) rather than HTML — wrap each
@@ -119,6 +120,7 @@ export function EditAgreementTemplateForm({
         <Button type="submit" variant="primary" disabled={pending || blocked}>
           {pending ? "Saving…" : "Save changes"}
         </Button>
+        <ActionStatus state={state} pending={pending} label="Saved." />
         <button type="button" className="text-xs text-danger hover:underline" onClick={handleDelete}>
           Delete template
         </button>

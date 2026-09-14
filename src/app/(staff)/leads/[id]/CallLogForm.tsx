@@ -5,6 +5,7 @@ import { updateLeadStatus } from "@/lib/actions/leads";
 import { LEAD_STATUSES, LEAD_STATUS_LABELS } from "@/lib/constants";
 import { Button } from "@/components/ui/Button";
 import { Select, Textarea } from "@/components/ui/Input";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export function CallLogForm({ leadId, currentStatus }: { leadId: string; currentStatus: string }) {
   const action = updateLeadStatus.bind(null, leadId);
@@ -30,6 +31,7 @@ export function CallLogForm({ leadId, currentStatus }: { leadId: string; current
       <Button type="submit" variant="primary" disabled={pending} className="self-start">
         {pending ? "Saving…" : "Log call & update status"}
       </Button>
+      <ActionStatus state={state} pending={pending} label="Call logged." />
     </form>
   );
 }

@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { toggleReminderResolved, updateReminder, deleteReminder } from "@/lib/actions/calendarEvents";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export function ReminderRow({
   reminderId,
@@ -48,6 +49,7 @@ export function ReminderRow({
           <Button type="submit" variant="primary" size="sm" pending={pending}>
             Save
           </Button>
+          <ActionStatus state={state} pending={pending} label="Saved." />
           <button type="button" onClick={() => setEditing(false)} className="text-xs text-muted hover:underline">
             Cancel
           </button>

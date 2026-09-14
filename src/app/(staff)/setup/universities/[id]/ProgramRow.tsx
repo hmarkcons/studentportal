@@ -5,6 +5,7 @@ import { updateProgram, deleteProgram, upsertProgramCommissionRate } from "@/lib
 import { STUDY_LEVELS } from "@/lib/constants";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export type ProgramCommissionRate = { rate_percent: number | null; fixed_amount: number | null; currency: string } | null;
 
@@ -58,6 +59,7 @@ function CommissionRateEditor({
       <Button type="button" variant="ghost" size="sm" onClick={onDone}>
         Close
       </Button>
+      <ActionStatus state={state} pending={pending} label="Saved." />
       {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
     </form>
   );
@@ -158,6 +160,7 @@ export function ProgramRow({
       <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>
         Cancel
       </Button>
+      <ActionStatus state={state} pending={pending} label="Saved." />
       {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
     </form>
   );

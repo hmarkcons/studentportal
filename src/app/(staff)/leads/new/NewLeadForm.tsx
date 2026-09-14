@@ -7,6 +7,7 @@ import { DestinationMultiSelect } from "@/components/DestinationMultiSelect";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { phoneBounds } from "@/lib/phoneNumber";
+import { ActionStatus } from "@/components/ActionStatus";
 
 const labelClass = "text-sm font-medium text-ink";
 
@@ -81,6 +82,7 @@ export function NewLeadForm({
       <Button type="submit" variant="primary" pending={pending} className="mt-2">
         Create lead
       </Button>
+      <ActionStatus state={state} pending={pending} label="Lead created." />
     </form>
   );
 }

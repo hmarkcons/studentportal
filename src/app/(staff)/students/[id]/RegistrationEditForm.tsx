@@ -8,6 +8,7 @@ import { DestinationChangeWarning, type DestinationWork } from "./DestinationCha
 import { intakeConfigFor, type DestinationOption } from "@/app/(staff)/students/new/RegisterStudentForm";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export function RegistrationEditForm({
   studentId,
@@ -121,6 +122,7 @@ export function RegistrationEditForm({
         <Button type="submit" variant="primary" size="sm" pending={pending}>
           Save
         </Button>
+        <ActionStatus state={state} pending={pending} label="Saved." />
         <button type="button" onClick={() => setEditing(false)} className="text-xs text-muted hover:underline">
           Cancel
         </button>

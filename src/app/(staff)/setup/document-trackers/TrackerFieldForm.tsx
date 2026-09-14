@@ -5,6 +5,7 @@ import { createTrackerField, updateTrackerField, deleteTrackerField } from "@/li
 import { TRACKER_FIELD_TYPES, type TrackerFieldDef } from "@/lib/countryTrackers";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
+import { ActionStatus } from "@/components/ActionStatus";
 
 const TYPE_HELP: Record<string, string> = {
   select: "Options: comma-separated list (leave blank to auto-fill from the student's applied universities in this country).",
@@ -96,6 +97,7 @@ export function NewTrackerFieldForm({ countryCode }: { countryCode: string }) {
         <Button type="submit" variant="primary" disabled={pending}>
           {pending ? "Adding…" : "+ Add field"}
         </Button>
+        <ActionStatus state={state} pending={pending} label="Saved." />
         {state?.error && <p className="mt-2 text-xs text-danger">{state.error}</p>}
       </div>
     </form>
@@ -203,6 +205,7 @@ export function TrackerFieldRow({ field }: { field: TrackerFieldDef }) {
         <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>
           Cancel
         </Button>
+        <ActionStatus state={state} pending={pending} label="Saved." />
         {state?.error && <p className="text-xs text-danger">{state.error}</p>}
       </div>
     </form>

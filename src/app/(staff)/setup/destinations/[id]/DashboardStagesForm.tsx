@@ -5,6 +5,7 @@ import { updateDashboardPipelineStages } from "@/lib/actions/destinations";
 import { formatDashboardStagesText, type DashboardStageDef } from "@/lib/dashboardPipeline";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Input";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export function DashboardStagesForm({ destinationId, stages }: { destinationId: string; stages: DashboardStageDef[] }) {
   const action = updateDashboardPipelineStages.bind(null, destinationId);
@@ -21,6 +22,7 @@ export function DashboardStagesForm({ destinationId, stages }: { destinationId: 
       <Button type="submit" variant="primary" className="self-start" pending={pending}>
         Save stages
       </Button>
+      <ActionStatus state={state} pending={pending} label="Saved." />
     </form>
   );
 }

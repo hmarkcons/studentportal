@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { createDestination } from "@/lib/actions/destinations";
 import { Button } from "@/components/ui/Button";
 import { Input, Select, Textarea } from "@/components/ui/Input";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export function NewDestinationForm() {
   const [state, formAction, pending] = useActionState(createDestination, undefined);
@@ -80,6 +81,7 @@ export function NewDestinationForm() {
       <Button type="submit" variant="primary" disabled={pending}>
         {pending ? "Saving…" : "Create destination"}
       </Button>
+      <ActionStatus state={state} pending={pending} label="Destination added." />
     </form>
   );
 }

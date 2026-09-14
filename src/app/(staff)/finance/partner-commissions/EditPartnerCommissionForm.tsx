@@ -6,6 +6,7 @@ import { suggestPartnerCommission } from "./AddPartnerCommissionForm";
 import { Input, Select } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { PARTNER_COMMISSION_STATUSES, PARTNER_COMMISSION_STATUS_LABELS } from "@/lib/constants";
+import { ActionStatus } from "@/components/ActionStatus";
 
 const inputClass = "px-2 py-1 text-xs";
 
@@ -132,6 +133,7 @@ export function EditPartnerCommissionForm({ row }: { row: Row }) {
         <Button type="submit" variant="primary" size="sm" pending={pending}>
           Save
         </Button>
+        <ActionStatus state={state} pending={pending} label="Saved." />
         <button type="button" onClick={() => setEditing(false)} className="text-xs text-muted hover:underline">
           Cancel
         </button>

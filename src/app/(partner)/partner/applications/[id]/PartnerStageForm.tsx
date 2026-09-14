@@ -5,6 +5,7 @@ import { partnerUpdateStage } from "@/lib/actions/partner";
 import { MANUAL_APPLICATION_STATUSES } from "@/lib/constants";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Input";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export function PartnerStageForm({ applicationId, currentStage, pipelineStages }: { applicationId: string; currentStage: string; pipelineStages: string[] }) {
   const action = partnerUpdateStage.bind(null, applicationId);
@@ -25,6 +26,7 @@ export function PartnerStageForm({ applicationId, currentStage, pipelineStages }
       <Button type="submit" pending={pending} variant="primary">
         Update status
       </Button>
+      <ActionStatus state={state} pending={pending} label="Stage updated." />
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
   );

@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { createTicket } from "@/lib/actions/support";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export function NewTicketForm({ studentId }: { studentId: string }) {
   const action = createTicket.bind(null, studentId);
@@ -17,6 +18,7 @@ export function NewTicketForm({ studentId }: { studentId: string }) {
       <Button type="submit" variant="primary" pending={pending} className="self-start">
         Submit ticket
       </Button>
+      <ActionStatus state={state} pending={pending} label="Ticket raised." />
     </form>
   );
 }

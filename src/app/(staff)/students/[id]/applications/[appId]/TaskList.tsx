@@ -11,6 +11,7 @@ import { formatDateOnly } from "@/lib/formatDate";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export type TaskRow = { id: string; description: string; due_date: string | null; status: string; priority: string; label?: string };
 
@@ -51,6 +52,7 @@ function TaskRowView({ task, revalidateTo }: { task: TaskRow; revalidateTo: stri
         <Button type="submit" variant="primary" size="sm" pending={pending}>
           Save
         </Button>
+        <ActionStatus state={state} pending={pending} label="Saved." />
         <button type="button" onClick={() => setEditing(false)} className="text-xs text-muted hover:underline">
           Cancel
         </button>
@@ -116,6 +118,7 @@ export function TaskList({
         <Button type="submit" size="sm" pending={pending}>
           Add
         </Button>
+        <ActionStatus state={state} pending={pending} label="Saved." />
       </form>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </div>

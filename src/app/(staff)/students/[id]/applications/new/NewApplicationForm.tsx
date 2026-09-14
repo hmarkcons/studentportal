@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { IntakeField } from "@/components/IntakeField";
 import { intakeConfigFor, type DestinationOption } from "@/app/(staff)/students/new/RegisterStudentForm";
+import { ActionStatus } from "@/components/ActionStatus";
 
 type Destination = DestinationOption;
 type University = { id: string; name: string; destination_id: string };
@@ -116,6 +117,7 @@ export function NewApplicationForm({
       <Button type="submit" variant="primary" pending={pending}>
         Create application
       </Button>
+      <ActionStatus state={state} pending={pending} label="Application added." />
     </form>
   );
 }

@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { updateRegistrationStatus } from "@/lib/actions/leads";
 import { Badge } from "@/components/ui/Badge";
+import { ActionStatus } from "@/components/ActionStatus";
 
 const TONE: Record<string, "success" | "warning" | "danger"> = {
   registered: "success",
@@ -40,6 +41,9 @@ export function InlineRegistrationStatusCell({
           <option value="withdrawn">Withdrawn</option>
           <option value="ghost">Ghost</option>
         </select>
+        {/* Beside the control itself — this form has no button, the select
+            submits on change. */}
+        <ActionStatus state={state} pending={pending} label="Status updated." />
       </div>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>

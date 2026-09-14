@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import { createRefundRequest } from "@/lib/actions/finance";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export function NewRefundForm({ students }: { students: { id: string; full_name: string }[] }) {
   const [state, formAction, pending] = useActionState(createRefundRequest, undefined);
@@ -40,6 +41,7 @@ export function NewRefundForm({ students }: { students: { id: string; full_name:
       <Button type="submit" variant="primary" pending={pending}>
         Add refund
       </Button>
+      <ActionStatus state={state} pending={pending} label="Refund logged." />
       {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
     </form>
   );

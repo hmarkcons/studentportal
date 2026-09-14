@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { dobBounds } from "@/lib/dateOfBirth";
 import { phoneBounds } from "@/lib/phoneNumber";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export type LeadEditable = {
   id: string;
@@ -116,6 +117,7 @@ export function LeadEditForm({
         <Button type="submit" variant="primary" size="sm" pending={pending}>
           Save
         </Button>
+        <ActionStatus state={state} pending={pending} label="Saved." />
         {!alwaysEditing && (
           <button type="button" onClick={() => setEditing(false)} className="text-xs text-muted hover:underline">
             Cancel

@@ -22,6 +22,7 @@ import {
   type InterviewStatus,
 } from "@/lib/interviews";
 import { addedLine, changedLine } from "@/lib/activityStamp";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export type InterviewCredentials = {
   login_username: string | null;
@@ -239,6 +240,7 @@ function InterviewForm({
         <Button type="submit" variant="primary" size="sm" pending={pending}>
           {existing ? "Save interview" : "Add interview"}
         </Button>
+        <ActionStatus state={state} pending={pending} label="Saved." />
         <button type="button" onClick={onDone} className="text-xs text-muted hover:underline">
           Cancel
         </button>

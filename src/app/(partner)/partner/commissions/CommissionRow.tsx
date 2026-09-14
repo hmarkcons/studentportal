@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { FileField } from "@/components/FileField";
 import { uploadedLine } from "@/lib/activityStamp";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export function CommissionRow({
   commission,
@@ -65,6 +66,7 @@ export function CommissionRow({
         <Button onClick={handleDispute} variant="danger" size="sm" pending={disputePending}>
           Dispute
         </Button>
+        <ActionStatus state={state} pending={pending} label="Proof uploaded." />
       </div>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
       {disputeError && <p className="text-xs text-danger">{disputeError}</p>}

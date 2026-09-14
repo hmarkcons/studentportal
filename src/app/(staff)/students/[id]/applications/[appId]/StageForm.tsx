@@ -5,6 +5,7 @@ import { updateApplicationStage } from "@/lib/actions/applications";
 import { MANUAL_APPLICATION_STATUSES } from "@/lib/constants";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Input";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export function StageForm({
   applicationId,
@@ -34,6 +35,7 @@ export function StageForm({
       <Button type="submit" variant="primary" pending={pending}>
         Update stage
       </Button>
+      <ActionStatus state={state} pending={pending} label="Stage updated." />
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
   );

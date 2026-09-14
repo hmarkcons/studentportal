@@ -5,6 +5,7 @@ import { addProgram } from "@/lib/actions/universities";
 import { STUDY_LEVELS } from "@/lib/constants";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export function AddProgramForm({ universityId }: { universityId: string }) {
   const action = addProgram.bind(null, universityId);
@@ -26,6 +27,7 @@ export function AddProgramForm({ universityId }: { universityId: string }) {
       <Button type="submit" variant="primary" pending={pending}>
         Add program
       </Button>
+      <ActionStatus state={state} pending={pending} label="Programme added." />
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
   );

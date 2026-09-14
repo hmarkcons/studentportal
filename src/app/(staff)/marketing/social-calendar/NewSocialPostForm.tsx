@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { createSocialPost } from "@/lib/actions/marketing";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export function NewSocialPostForm() {
   const [state, formAction, pending] = useActionState(createSocialPost, undefined);
@@ -16,6 +17,7 @@ export function NewSocialPostForm() {
       <Button type="submit" variant="primary" pending={pending}>
         Add slot
       </Button>
+      <ActionStatus state={state} pending={pending} label="Post added." />
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
   );

@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { FileField } from "@/components/FileField";
+import { ActionStatus } from "@/components/ActionStatus";
 
 /**
  * An upload that asks before it commits.
@@ -111,6 +112,7 @@ export function ConfirmedUploadForm({
             >
               Choose a different file
             </Button>
+            <ActionStatus state={state} pending={pending} label="Submitted." />
           </div>
         </div>
       )}

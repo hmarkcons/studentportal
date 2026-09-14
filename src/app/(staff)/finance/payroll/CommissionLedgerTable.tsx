@@ -14,6 +14,7 @@ import {
   uploadStaffCommissionProof,
 } from "@/lib/actions/finance";
 import { suggestCommission, type CommissionStaffOption } from "@/app/(staff)/finance/staff-commission/StaffCommissionTable";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export type CommissionRecord = {
   id: string;
@@ -69,6 +70,8 @@ function MarkPaidForm({ id, revalidateTo }: { id: string; revalidateTo: string }
       <Button type="submit" variant="success" size="sm" pending={pending}>
         Mark paid
       </Button>
+      <ActionStatus state={state} pending={pending} label="Saved." />
+      <ActionStatus state={state} pending={pending} label="Saved." />
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
   );
@@ -215,6 +218,7 @@ function AddCommissionForm({
           their own ledger.
         </p>
       )}
+      <ActionStatus state={state} pending={pending} label="Saved." />
       {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
     </form>
   );

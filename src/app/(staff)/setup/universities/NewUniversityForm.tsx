@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { createUniversity } from "@/lib/actions/universities";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export function NewUniversityForm({ destinations }: { destinations: { id: string; display_name: string }[] }) {
   const [state, formAction, pending] = useActionState(createUniversity, undefined);
@@ -28,6 +29,7 @@ export function NewUniversityForm({ destinations }: { destinations: { id: string
       <Button type="submit" variant="primary" pending={pending}>
         Add university
       </Button>
+      <ActionStatus state={state} pending={pending} label="University added." />
       {state?.error && <p className="text-sm text-danger">{state.error}</p>}
     </form>
   );

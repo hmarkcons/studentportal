@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { createMessageTemplate } from "@/lib/actions/messageTemplates";
 import { Input, Select, Textarea } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export function NewTemplateForm() {
   const [state, formAction, pending] = useActionState(createMessageTemplate, undefined);
@@ -23,6 +24,7 @@ export function NewTemplateForm() {
       <Button type="submit" variant="primary" pending={pending} className="self-start">
         Add template
       </Button>
+      <ActionStatus state={state} pending={pending} label="Template added." />
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
   );

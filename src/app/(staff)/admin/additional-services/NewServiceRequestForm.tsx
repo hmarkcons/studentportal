@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/Button";
 import { FileField } from "@/components/FileField";
 import { Input, Select } from "@/components/ui/Input";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export function NewServiceRequestForm({ students }: { students: { id: string; full_name: string }[] }) {
   const [serviceType, setServiceType] = useState<(typeof ADDITIONAL_SERVICE_TYPES)[number]>(ADDITIONAL_SERVICE_TYPES[0]);
@@ -104,6 +105,7 @@ export function NewServiceRequestForm({ students }: { students: { id: string; fu
       <Button type="submit" disabled={pending || blocked} variant="primary" className="self-start">
         {pending ? "Adding…" : "Add request"}
       </Button>
+      <ActionStatus state={state} pending={pending} label="Request added." />
     </form>
   );
 }

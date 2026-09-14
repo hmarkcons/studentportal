@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { isLowStock } from "@/lib/inventory";
+import { ActionStatus } from "@/components/ActionStatus";
 
 type Item = {
   id: string;
@@ -55,6 +56,7 @@ export function ItemRow({ item, canManage }: { item: Item; canManage: boolean })
             <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>
               Cancel
             </Button>
+            <ActionStatus state={state} pending={pending} label="Saved." />
             {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
           </form>
         </td>

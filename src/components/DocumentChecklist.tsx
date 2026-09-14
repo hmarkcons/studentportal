@@ -14,6 +14,7 @@ import { uploadedLine, reviewedLine, addedLine, type UploaderRole } from "@/lib/
 import { DocumentHistory, type ArchivedUpload } from "@/components/DocumentHistory";
 import { DocumentSectionShell, ExpandAllToggle } from "@/components/DocumentSectionShell";
 import { FileField } from "@/components/FileField";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export type DocRow = {
   id: string;
@@ -142,6 +143,7 @@ function UploadRow({
           <Button type="submit" pending={pending} size="sm" disabled={!ready} className="mt-0.5">
             Upload
           </Button>
+          <ActionStatus state={state} pending={pending} label="Uploaded." className="mt-1.5" />
           {isVerified && (
             <button type="button" onClick={() => setShowReplace(false)} className="text-xs text-muted hover:underline">
               Cancel
@@ -228,6 +230,7 @@ function AddRequirementForm({
       <Button type="submit" variant="primary" size="sm" pending={pending}>
         Add
       </Button>
+      <ActionStatus state={state} pending={pending} label="Uploaded." />
       <button type="button" onClick={() => setOpen(false)} className="pb-2 text-xs text-muted hover:underline">
         Cancel
       </button>

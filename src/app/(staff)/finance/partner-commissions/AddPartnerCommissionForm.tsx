@@ -4,6 +4,7 @@ import { useActionState, useMemo, useState } from "react";
 import { createPartnerCommission } from "@/lib/actions/finance";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export type PartnerApplicationOption = {
   id: string;
@@ -176,6 +177,7 @@ export function AddPartnerCommissionForm({
         <Button type="submit" variant="primary" size="sm" pending={pending}>
           + Add commission record
         </Button>
+        <ActionStatus state={state} pending={pending} label="Commission added." />
       </div>
       {suggestion.amount != null && !amountEdited && (
         <p className="text-xs text-muted">

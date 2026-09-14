@@ -9,6 +9,7 @@ import { PrimaryBackupDestinationSelect } from "@/components/PrimaryBackupDestin
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { phoneBounds } from "@/lib/phoneNumber";
+import { ActionStatus } from "@/components/ActionStatus";
 
 const labelClass = "text-sm font-medium text-ink";
 
@@ -118,6 +119,7 @@ export function RegisterStudentForm({
       <Button type="submit" variant="primary" pending={pending} className="mt-2">
         Register student
       </Button>
+      <ActionStatus state={state} pending={pending} label="Student registered." />
     </form>
   );
 }

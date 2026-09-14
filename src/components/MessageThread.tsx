@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Select, Textarea } from "@/components/ui/Input";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatStamp } from "@/lib/activityStamp";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export type TemplateRow = { id: string; purpose: string; channel: string; body: string };
 
@@ -127,6 +128,7 @@ export function MessageThread({
         <Button type="submit" variant="primary" pending={pending}>
           Send
         </Button>
+        <ActionStatus state={state} pending={pending} label="Sent." />
       </form>
       {state?.error && <p className="mt-1 text-xs text-danger">{state.error}</p>}
     </div>

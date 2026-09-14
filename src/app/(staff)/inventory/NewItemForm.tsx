@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { createInventoryItem } from "@/lib/actions/inventory";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export function NewItemForm() {
   const [state, formAction, pending] = useActionState(createInventoryItem, undefined);
@@ -18,6 +19,7 @@ export function NewItemForm() {
       <Button type="submit" variant="primary" pending={pending}>
         Add item
       </Button>
+      <ActionStatus state={state} pending={pending} label="Item added." />
       {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
     </form>
   );

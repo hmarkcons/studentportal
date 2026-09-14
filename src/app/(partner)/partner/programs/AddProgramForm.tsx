@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { partnerAddProgram } from "@/lib/actions/partner";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
+import { ActionStatus } from "@/components/ActionStatus";
 
 const STUDY_LEVELS = ["bachelors", "masters", "phd"];
 
@@ -32,6 +33,7 @@ export function AddProgramForm() {
       <Button type="submit" disabled={pending} variant="primary">
         {pending ? "Adding…" : "Add program"}
       </Button>
+      <ActionStatus state={state} pending={pending} label="Programme added." />
       {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
     </form>
   );

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { addBackupPrograms } from "@/lib/actions/applications";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Input";
+import { ActionStatus } from "@/components/ActionStatus";
 
 /**
  * Adds further programmes at this application's university.
@@ -103,6 +104,7 @@ export function AddBackupPrograms({
             <Button type="submit" variant="primary" size="sm" pending={pending} disabled={!slots.some(Boolean)}>
               Add
             </Button>
+            <ActionStatus state={state} pending={pending} label="Added." />
             <Button
               type="button"
               variant="ghost"

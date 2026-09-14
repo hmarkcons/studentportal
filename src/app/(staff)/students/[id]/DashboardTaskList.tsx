@@ -6,6 +6,7 @@ import { formatDateOnly } from "@/lib/formatDate";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input, Select } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export type DashboardTaskRow = {
   id: string;
@@ -100,6 +101,7 @@ export function DashboardTaskList({
           <Button type="submit" variant="outline-primary" size="sm" pending={pending}>
             Add
           </Button>
+          <ActionStatus state={state} pending={pending} label="Saved." />
         </form>
       )}
       {state?.error && <p className="mt-1 text-xs text-danger">{state.error}</p>}

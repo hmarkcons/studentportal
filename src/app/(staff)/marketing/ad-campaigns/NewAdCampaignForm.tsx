@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { createAdCampaign } from "@/lib/actions/marketing";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export function NewAdCampaignForm({ universities }: { universities: { id: string; name: string }[] }) {
   const [state, formAction, pending] = useActionState(createAdCampaign, undefined);
@@ -36,6 +37,7 @@ export function NewAdCampaignForm({ universities }: { universities: { id: string
       <Button type="submit" variant="primary" pending={pending}>
         Add campaign
       </Button>
+      <ActionStatus state={state} pending={pending} label="Campaign added." />
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
   );

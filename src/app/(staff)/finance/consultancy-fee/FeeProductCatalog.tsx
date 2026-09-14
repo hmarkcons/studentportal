@@ -5,6 +5,7 @@ import { createFeeProduct, updateFeeProduct, deleteFeeProduct } from "@/lib/acti
 import { Input, Select } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { ActionStatus } from "@/components/ActionStatus";
 
 type Product = { id: string; name: string; default_amount: number | null; default_currency: string };
 
@@ -22,6 +23,7 @@ function NewProductForm() {
       <Button type="submit" variant="primary" pending={pending}>
         + Add product
       </Button>
+      <ActionStatus state={state} pending={pending} label="Saved." />
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
   );
@@ -53,6 +55,7 @@ function ProductRow({ product, canManage }: { product: Product; canManage: boole
         <Button type="submit" variant="primary" size="sm" pending={pending}>
           Save
         </Button>
+        <ActionStatus state={state} pending={pending} label="Saved." />
         <button type="button" onClick={() => setEditing(false)} className="text-xs text-muted hover:underline">
           Cancel
         </button>

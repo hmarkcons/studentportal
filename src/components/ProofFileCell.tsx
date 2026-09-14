@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { FileField } from "@/components/FileField";
 import { addedLine } from "@/lib/activityStamp";
+import { ActionStatus } from "@/components/ActionStatus";
 
 type ActionState = { error?: string; success?: boolean } | undefined;
 
@@ -42,6 +43,7 @@ export function ProofFileCell({
         <Button type="submit" size="sm" pending={pending} disabled={blocked}>
           {viewUrl ? "Replace" : "Upload"}
         </Button>
+        <ActionStatus state={state} pending={pending} label="Uploaded." />
       </form>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </div>

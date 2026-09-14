@@ -8,6 +8,7 @@ import { Input, Select } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { EventFieldsFieldset } from "./EventFieldsFieldset";
 import type { CalendarRecurrence } from "./types";
+import { ActionStatus } from "@/components/ActionStatus";
 
 const PRIORITY_TONE: Record<string, "danger" | "warning" | "neutral"> = {
   urgent: "danger",
@@ -101,6 +102,7 @@ export function PersonalTaskRow({
           <Button type="submit" variant="primary" size="sm" pending={pending}>
             Save
           </Button>
+          <ActionStatus state={state} pending={pending} label="Saved." />
           <button type="button" onClick={() => setEditing(false)} className="text-xs text-muted hover:underline">
             Cancel
           </button>

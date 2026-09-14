@@ -5,6 +5,7 @@ import { partnerUploadDocument } from "@/lib/actions/partner";
 import { Button } from "@/components/ui/Button";
 import { FileField } from "@/components/FileField";
 import { Input } from "@/components/ui/Input";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export function UploadExchangeForm({ universityId }: { universityId: string }) {
   const action = partnerUploadDocument.bind(null, universityId);
@@ -20,6 +21,7 @@ export function UploadExchangeForm({ universityId }: { universityId: string }) {
       <Button type="submit" pending={pending} variant="primary" disabled={!ready}>
         Upload
       </Button>
+      <ActionStatus state={state} pending={pending} label="Uploaded." />
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
   );
