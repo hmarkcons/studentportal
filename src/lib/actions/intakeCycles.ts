@@ -9,7 +9,7 @@ import { recommendRestart, type Cycle, type DeadlineEvidence, type RestartRecomm
 import { isIntakeMode, type IntakeMode } from "@/lib/intake";
 import { ensureCurrentCycle, ensureCurrentCycleId } from "@/lib/ensureCycle";
 import { ensureCommissionForStudent } from "@/lib/actions/commissionAuto";
-import { closeGhostChaseTasks } from "@/lib/actions/ghostChase";
+import { syncStudentFollowUpTask } from "@/lib/actions/studentFollowUp";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -215,9 +215,10 @@ export async function startNewCycle(_prevState: unknown, formData: FormData) {
   // first registered and would otherwise stay missing for good.
   if (backToRegistered) await ensureCommissionForStudent(studentId);
 
-  // They are back, so stop chasing them. Closed rather than deleted, so the
-  // counsellor's calendar still shows the chase happened and ended.
-  await closeGhostChaseTasks(studentId);
+  // They are back, so stop chasing them — or stop trying to win them back,
+  // whichever was open. Closed rather than deleted, so the counsellor's
+  // calendar still shows it happened and ended.
+  await syncStudentFollowUpTask(studentId);
 
   revalidatePath(`/students/${studentId}`);
   revalidatePath(`/students/${studentId}/applications`);
