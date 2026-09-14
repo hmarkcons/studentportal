@@ -10,6 +10,7 @@ import { wordingToBlocks, DEFAULT_OFFICE_LINE } from "@/lib/pdf/templateWording"
 import { requirePermission } from "@/lib/auth/permissions";
 import { ensureCommissionForStudent } from "@/lib/actions/commissionAuto";
 import { validateDocumentFile, sanitizeFilename } from "@/lib/documentUpload";
+import { templateNotForStudentError } from "@/lib/agreementTemplateChoices";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -57,6 +58,35 @@ async function resolveIsBackup(supabase: SupabaseServerClient, studentId: string
   return destRow?.is_backup ?? false;
 }
 
+/**
+ * Refuses a template for a country this student is not registered for.
+ *
+ * The dropdown is already narrowed to their own countries, but a form can
+ * always be resubmitted with another template's id — and an agreement naming
+ * the wrong country is a signed legal document naming the wrong country. Of
+ * the agreements already on file, twenty-one are for a country their student
+ * is not registered for, which is what a dropdown listing all twenty-six
+ * templates produced.
+ */
+async function templateCountryError(
+  supabase: SupabaseServerClient,
+  studentId: string,
+  templateId: string | null
+): Promise<string | null> {
+  if (!templateId) return "Choose a template.";
+
+  const [{ data: template }, { data: destRows }] = await Promise.all([
+    supabase.from("agreement_templates").select("destination_id").eq("id", templateId).maybeSingle(),
+    supabase.from("lead_destinations").select("destination_id").eq("lead_id", studentId),
+  ]);
+  if (!template) return "That template no longer exists — reload the page.";
+
+  return templateNotForStudentError(
+    template.destination_id,
+    (destRows ?? []).map((d) => d.destination_id as string)
+  );
+}
+
 export async function generateAgreement(studentId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
   const fields = parseAgreementFields(formData);
@@ -64,6 +94,9 @@ export async function generateAgreement(studentId: string, _prevState: unknown, 
   if (!["paper", "e_signature"].includes(fields.signing_method)) {
     return { error: "Choose a signing method." };
   }
+
+  const countryIssue = await templateCountryError(supabase, studentId, fields.template_id);
+  if (countryIssue) return { error: countryIssue };
 
   const is_backup = await resolveIsBackup(supabase, studentId, fields.template_id);
   if (is_backup) {
@@ -109,6 +142,12 @@ export async function updateAgreement(agreementId: string, studentId: string, _p
   if (!["paper", "e_signature"].includes(fields.signing_method)) {
     return { error: "Choose a signing method." };
   }
+
+  // The same country rule as generating one. Without it the check is
+  // bypassable in two steps: generate for a country they are registered for,
+  // then edit it to any other.
+  const countryIssue = await templateCountryError(supabase, studentId, fields.template_id);
+  if (countryIssue) return { error: countryIssue };
 
   // Re-resolve is_backup here too — staff may have switched the template to
   // a different destination since the agreement was first generated.

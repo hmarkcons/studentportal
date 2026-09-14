@@ -4,6 +4,7 @@ import { getStaffSession } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { agreementCountry, agreementLabel } from "@/lib/agreementLabel";
+import { agreementTemplateChoices } from "@/lib/agreementTemplateChoices";
 import { StatCard } from "@/components/ui/StatCard";
 import { categorizeApplicationStage } from "@/lib/applicationStage";
 import type { DocRow } from "@/components/DocumentChecklist";
@@ -266,6 +267,22 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   const primaryDestinationId = nonBackupDestinations[0]?.destination_id ?? null;
   const legacyExtraDestinationIds = nonBackupDestinations.slice(1).map((d) => d.destination_id);
   const resolvedBackupDestinationIds = [...explicitBackupIds, ...legacyExtraDestinationIds].slice(0, 3);
+
+  // The agreement can only be for a country this student registered for —
+  // their primary and their backups. The dropdown used to list every
+  // template in the system, so an agreement for the wrong country was one
+  // mis-click away.
+  const registeredForTemplates = (selectedDestinations ?? [])
+    .map((row) => {
+      const dest = one(row.destination as never) as { display_name?: string } | null;
+      return {
+        id: row.destination_id as string,
+        display_name: dest?.display_name ?? "",
+        isBackup: resolvedBackupDestinationIds.includes(row.destination_id as string),
+      };
+    })
+    .filter((r) => r.id);
+  const templateChoices = agreementTemplateChoices(templates ?? [], registeredForTemplates);
 
   const destinationPipelineGroups = new Map<
     string,
@@ -751,9 +768,11 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         {canModifyAgreement && (
           <GenerateAgreementForm
             studentId={id}
-            templates={templates ?? []}
+            templates={templateChoices.available}
             discountAmount={leadRegistration?.discount_amount ?? null}
             backupDestinationIds={explicitBackupIds}
+            missingTemplateFor={templateChoices.missingTemplateFor}
+            hasCountry={templateChoices.hasCountry}
           />
         )}
         {agreements && agreements.length > 0 && (
@@ -812,7 +831,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                       <AgreementActionsMenu
                         agreement={a}
                         studentId={id}
-                        templates={templates ?? []}
+                        templates={templateChoices.available}
                         backupDestinationIds={explicitBackupIds}
                         links={links}
                         canEdit={isSuperAdmin && a.status !== "signed"}

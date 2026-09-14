@@ -28,11 +28,18 @@ export function GenerateAgreementForm({
   templates,
   discountAmount,
   backupDestinationIds = [],
+  missingTemplateFor = [],
+  hasCountry = true,
 }: {
   studentId: string;
+  /** Already narrowed to this student's own countries — see agreementTemplateChoices. */
   templates: AgreementTemplateOption[];
   discountAmount?: number | null;
   backupDestinationIds?: string[];
+  /** Countries they are registered for that nobody has written a template for. */
+  missingTemplateFor?: string[];
+  /** False when their registration has no country at all. */
+  hasCountry?: boolean;
 }) {
   const action = generateAgreement.bind(null, studentId);
   const [state, formAction, pending] = useActionState(action, undefined);
@@ -40,6 +47,27 @@ export function GenerateAgreementForm({
   const isBackup = backupDestinationIds.includes(
     templateDest(templates.find((t) => t.id === templateId)?.destination ?? null)?.id ?? ""
   );
+
+  // An empty dropdown with no explanation is the worst version of this. The
+  // two reasons it can be empty need different people to do different things,
+  // so they are said apart.
+  if (!hasCountry) {
+    return (
+      <p className="rounded-md border border-warning bg-warning-bg px-3 py-2 text-xs text-warning">
+        This student has no country on their registration yet, so there is no agreement to generate. Set their country
+        in the <strong className="font-medium">Registration &amp; Portal Access</strong> card above.
+      </p>
+    );
+  }
+  if (templates.length === 0) {
+    return (
+      <p className="rounded-md border border-warning bg-warning-bg px-3 py-2 text-xs text-warning">
+        No agreement template has been written for{" "}
+        <strong className="font-medium">{missingTemplateFor.join(", ") || "their country"}</strong> yet. Add one in
+        Setup › Agreement templates and it will appear here.
+      </p>
+    );
+  }
 
   return (
     <form action={formAction} className="flex flex-wrap items-end gap-2">
@@ -80,6 +108,14 @@ export function GenerateAgreementForm({
       </Button>
       {isBackup && (
         <p className="w-full text-xs text-muted">Backup country — this agreement will show the administrative fee only, no consultancy fee.</p>
+      )}
+      {/* Some of their countries are covered and some are not, which reads as
+          a missing option unless it is said. */}
+      {missingTemplateFor.length > 0 && (
+        <p className="w-full text-xs text-warning">
+          No template exists yet for {missingTemplateFor.join(", ")} — add one in Setup › Agreement templates to
+          generate that one.
+        </p>
       )}
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
