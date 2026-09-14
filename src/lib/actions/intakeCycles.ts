@@ -8,6 +8,7 @@ import { visaOutcomes } from "@/lib/studentVisaApproval";
 import { recommendRestart, type Cycle, type DeadlineEvidence, type RestartRecommendation } from "@/lib/intakeCycle";
 import { isIntakeMode, type IntakeMode } from "@/lib/intake";
 import { ensureCurrentCycle, ensureCurrentCycleId } from "@/lib/ensureCycle";
+import { ensureCommissionForStudent } from "@/lib/actions/commissionAuto";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -201,9 +202,17 @@ export async function startNewCycle(_prevState: unknown, formData: FormData) {
   // The student is back in the process: their intake is the new one, and a
   // ghosted or withdrawn student is registered again.
   const update: Record<string, unknown> = { intake };
-  if (reason === "ghost" || reason === "withdrawn") update.registration_status = "registered";
+  const backToRegistered = reason === "ghost" || reason === "withdrawn";
+  if (backToRegistered) update.registration_status = "registered";
   const { error: leadError } = await supabase.from("leads").update(update).eq("id", studentId);
   if (leadError) return { error: leadError.message };
+
+  // Setting the status back to 'registered' anywhere else retries the
+  // counselor's commission, so this has to as well. It is idempotent — one
+  // commission per student ever, whatever they go on to do — so the only case
+  // it changes is the student whose commission could not be priced when they
+  // first registered and would otherwise stay missing for good.
+  if (backToRegistered) await ensureCommissionForStudent(studentId);
 
   revalidatePath(`/students/${studentId}`);
   revalidatePath(`/students/${studentId}/applications`);
