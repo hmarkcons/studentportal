@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useState } from "react";
 import { togglePersonalTask, deletePersonalTask, updatePersonalTask } from "@/lib/actions/personalTasks";
 import { Badge } from "@/components/ui/Badge";
@@ -24,6 +25,8 @@ export function PersonalTaskRow({
   taskId,
   title,
   description,
+  studentId,
+  studentName,
   dueDate,
   dueTime,
   priority,
@@ -40,6 +43,9 @@ export function PersonalTaskRow({
   taskId: string;
   title: string;
   description: string;
+  /** Set when the task is about a student, so it can link to them. */
+  studentId?: string | null;
+  studentName?: string | null;
   dueDate: string;
   dueTime: string | null;
   priority: string;
@@ -139,6 +145,14 @@ export function PersonalTaskRow({
             </span>
           )}
         </label>
+        {studentId && (
+          <Link
+            href={`/students/${studentId}`}
+            className="shrink-0 pl-6 text-xs text-primary hover:underline lg:pl-0"
+          >
+            {studentName ?? "Open student"} →
+          </Link>
+        )}
         <div className="flex shrink-0 items-center gap-2 pl-6 lg:pl-0">
           <Badge tone={PRIORITY_TONE[priority] ?? "neutral"}>{priority}</Badge>
           <Badge tone="primary">Personal</Badge>

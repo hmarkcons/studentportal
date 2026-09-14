@@ -26,4 +26,7 @@ export type CalendarEvent = {
   recurrence?: CalendarRecurrence;
   recurrenceEndDate?: string | null;
   isRecurrenceInstance?: boolean;
+  /** Set on a personal task that is about a student, so it can link to them. */
+  studentId?: string | null;
+  studentName?: string | null;
 };

@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { ensureCommissionForStudent } from "@/lib/actions/commissionAuto";
+import { openGhostChaseTask, closeGhostChaseTasks } from "@/lib/actions/ghostChase";
 import { createClient } from "@/lib/supabase/server";
 import { LEAD_STATUSES } from "@/lib/constants";
 import { dateOfBirthError } from "@/lib/dateOfBirth";
@@ -391,8 +392,20 @@ export async function updateRegistrationStatus(studentId: string, _prevState: un
     await ensureCommissionForStudent(studentId);
   }
 
+  // Going quiet used to be a dead end: the status changed, the student left
+  // everyone's attention, and nothing prompted anybody to try again. Marking
+  // them ghosted now puts a chase on their counsellor's own list and calendar,
+  // and coming back closes it — so nobody chases a student who is already
+  // back, and nobody forgets one who is not.
+  if (registration_status === "ghost") {
+    await openGhostChaseTask(studentId);
+  } else {
+    await closeGhostChaseTasks(studentId);
+  }
+
   revalidatePath(`/students/${studentId}`);
   revalidatePath("/students");
+  revalidatePath("/calendar");
   return { success: true };
 }
 

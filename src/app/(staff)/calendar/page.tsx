@@ -122,7 +122,7 @@ export default async function CalendarPage(props: {
     ? await supabase
         .from("personal_tasks")
         .select(
-          "id, title, description, due_date, due_time, end_date, all_day, priority, status, color, guest_emails, recurrence, recurrence_end_date"
+          "id, title, description, due_date, due_time, end_date, all_day, priority, status, color, guest_emails, recurrence, recurrence_end_date, student_id, student:leads!personal_tasks_student_id_fkey(full_name)"
         )
         .eq("owner_id", targetStaffId)
         .eq("status", "pending")
@@ -299,6 +299,10 @@ export default async function CalendarPage(props: {
         recurrence: (p.recurrence as CalendarRecurrence) ?? "none",
         recurrenceEndDate: p.recurrence_end_date,
         isRecurrenceInstance: dates.length > 1,
+        studentId: p.student_id ?? null,
+        // PostgREST returns an embedded row as an object or a single-element
+        // array depending on the relationship it infers; `one` handles both.
+        studentName: (one(p.student as never) as { full_name?: string } | null)?.full_name ?? null,
       });
     });
   });

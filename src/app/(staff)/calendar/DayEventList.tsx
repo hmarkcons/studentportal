@@ -56,6 +56,8 @@ export function DayEventList({ day, events, revalidateTo }: { day: string; event
               key={e.id}
               taskId={e.personalTaskId!}
               title={e.label}
+              studentId={e.studentId}
+              studentName={e.studentName}
               description={e.notes ?? ""}
               dueDate={e.startDate ?? day}
               dueTime={e.time}
