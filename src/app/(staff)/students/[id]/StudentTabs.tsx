@@ -18,8 +18,11 @@ export function StudentTabs({
   const tabs = [
     { label: "Dashboard", href: `/students/${studentId}` },
     { label: "Profile", href: `/students/${studentId}/profile` },
-    { label: "Applications", href: `/students/${studentId}/applications` },
+    // Documents before Applications: the documents come first in the real
+    // process — nothing is applied for until they are collected and checked —
+    // so the strip now reads in the order the work is actually done.
     { label: "Documents", href: `/students/${studentId}/documents` },
+    { label: "Applications", href: `/students/${studentId}/applications` },
     // Visa lives on the student's own portal now and is sourced entirely from
     // the documentation tracker, which is where staff maintain it.
     ...(showScholarship ? [{ label: "Scholarship", href: `/students/${studentId}/scholarship` }] : []),
