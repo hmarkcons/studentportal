@@ -41,21 +41,28 @@ export function SidebarToggle({ variant }: { variant: "hide" | "show" }) {
   }
 
   if (variant === "hide") {
+    // A bare « in muted grey read as decoration, so nobody found it. Bordered,
+    // labelled and at the same contrast as the menu items it sits above: it is
+    // a control, and it should look like one.
     return (
       <button
         type="button"
         onClick={() => set(true)}
         title="Hide the menu"
         aria-label="Hide the menu"
-        className="hidden rounded-md p-1 text-sidebar-muted hover:bg-sidebar-active-bg hover:text-sidebar-ink md:block"
+        className="hidden shrink-0 items-center gap-1 rounded-md border border-sidebar-border bg-sidebar-active-bg px-2 py-1.5 text-xs font-semibold text-sidebar-ink transition-colors hover:border-sidebar-ink hover:bg-sidebar-border md:inline-flex"
       >
-        «
+        <span aria-hidden className="text-sm leading-none">&laquo;</span>
+        Hide
       </button>
     );
   }
 
   // Rendered in the header and hidden by CSS until the menu is away, so the
   // button appears the moment the page paints rather than after hydration.
+  //
+  // Labelled for the same reason as Hide: a lone ☰ in a header full of other
+  // controls is where the menu goes to be lost.
   return (
     <button
       type="button"
@@ -65,9 +72,10 @@ export function SidebarToggle({ variant }: { variant: "hide" | "show" }) {
       title="Show the menu"
       aria-label="Show the menu"
       aria-expanded={!hidden}
-      className="hidden rounded-md p-1.5 text-ink hover:bg-bg md:block"
+      className="hidden shrink-0 items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-ink transition-colors hover:border-ink hover:bg-bg md:inline-flex"
     >
-      ☰
+      <span aria-hidden className="text-sm leading-none">&#9776;</span>
+      Menu
     </button>
   );
 }

@@ -74,9 +74,11 @@ export function AppShell({
       >
         <div className="flex items-center justify-between border-b border-sidebar-border px-5 py-5">
           <div>
-            <div className="inline-block rounded-md bg-white px-2 py-1.5">
+            <div className="inline-block rounded-md bg-white px-2.5 py-2">
+              {/* h-11: the asset is 1667x617, so this comes out ~119px wide in
+                  a 216px-wide header — room for the Hide control beside it. */}
               {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset, not worth next/image's overhead in a fixed-size sidebar header */}
-              <img src="/hmark-logo.png" alt="HMARK Consultants" className="h-6 w-auto" />
+              <img src="/hmark-logo.png" alt="HMARK Consultants" className="h-11 w-auto" />
             </div>
             <p className="mt-2 text-xs font-medium text-sidebar-ink">{brand}</p>
           </div>
