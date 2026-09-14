@@ -17,7 +17,21 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * INSERT grant here, and this is bookkeeping rather than user-submitted data —
  * every value it writes is derived from rows the caller can already see.
  */
-export async function ensureCurrentCycleId(studentId: string): Promise<string | null> {
+export type CurrentCycle = { id: string; sequence: number };
+
+/**
+ * Returns the cycle, not just its id, because callers must not re-read it.
+ *
+ * Next.js memoizes identical fetch GETs within one render, and
+ * @supabase/supabase-js is built on fetch. A caller that ran this and then
+ * issued the same `student_cycles` query got the memoized response from
+ * BEFORE the insert — an empty list — and carried on as though the student
+ * had no cycle. That is exactly how every document on a re-registering
+ * student's first page load ended up stamped with no intake: the cycle was
+ * created 0.6s before the documents were inserted, and the insert still saw
+ * no cycle. Verified against production.
+ */
+export async function ensureCurrentCycle(studentId: string): Promise<CurrentCycle | null> {
   const admin = createAdminClient();
 
   const { data: existing } = await admin
@@ -27,7 +41,7 @@ export async function ensureCurrentCycleId(studentId: string): Promise<string | 
     .order("sequence");
 
   const current = (existing ?? []).find((c) => c.is_current) ?? (existing ?? []).at(-1) ?? null;
-  if (current) return current.id;
+  if (current) return { id: current.id, sequence: current.sequence };
 
   // Only a student who is actually in the process. Browsing an unregistered
   // lead should not create bookkeeping for them.
@@ -48,7 +62,7 @@ export async function ensureCurrentCycleId(studentId: string): Promise<string | 
       decision: "initial",
       started_at: lead?.registered_at ?? new Date().toISOString(),
     })
-    .select("id")
+    .select("id, sequence")
     .single();
 
   // 23505 is two page loads racing for the same first cycle; the partial
@@ -57,11 +71,11 @@ export async function ensureCurrentCycleId(studentId: string): Promise<string | 
     if (error.code !== "23505") throw error;
     const { data: raced } = await admin
       .from("student_cycles")
-      .select("id")
+      .select("id, sequence")
       .eq("student_id", studentId)
       .eq("is_current", true)
       .maybeSingle();
-    return raced?.id ?? null;
+    return raced ? { id: raced.id, sequence: raced.sequence } : null;
   }
 
   // Adopt anything raised before the cycle existed, so the first intake's tab
@@ -72,5 +86,10 @@ export async function ensureCurrentCycleId(studentId: string): Promise<string | 
     admin.from("student_scholarships").update({ cycle_id: created.id }).eq("student_id", studentId).is("cycle_id", null),
   ]);
 
-  return created.id;
+  return { id: created.id, sequence: created.sequence };
+}
+
+/** The id alone, for callers that need nothing else. */
+export async function ensureCurrentCycleId(studentId: string): Promise<string | null> {
+  return (await ensureCurrentCycle(studentId))?.id ?? null;
 }

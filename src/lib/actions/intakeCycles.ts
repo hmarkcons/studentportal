@@ -7,7 +7,7 @@ import { getStaffSession } from "@/lib/auth/session";
 import { visaOutcomes } from "@/lib/studentVisaApproval";
 import { recommendRestart, type Cycle, type DeadlineEvidence, type RestartRecommendation } from "@/lib/intakeCycle";
 import { isIntakeMode, type IntakeMode } from "@/lib/intake";
-import { ensureCurrentCycleId } from "@/lib/ensureCycle";
+import { ensureCurrentCycle, ensureCurrentCycleId } from "@/lib/ensureCycle";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -155,24 +155,20 @@ export async function startNewCycle(_prevState: unknown, formData: FormData) {
 
   // The first cycle has to exist before a second can open, or last intake's
   // applications end up belonging to no intake and its tab is empty.
-  await ensureCurrentCycleId(studentId);
-
-  const { data: cycles, error: readError } = await supabase
-    .from("student_cycles")
-    .select("id, sequence, is_current")
-    .eq("student_id", studentId)
-    .order("sequence");
-  if (readError) return { error: readError.message };
-  if ((cycles ?? []).length === 0) {
+  //
+  // Taken from the return value rather than re-read — Next memoizes identical
+  // fetch GETs within a request, so a second query for student_cycles here
+  // could hand back the response from before this created the first one, and
+  // the "new" cycle would be numbered 1 on top of it.
+  const previous = await ensureCurrentCycle(studentId);
+  if (!previous) {
     return { error: "This student is not registered yet, so there is no process to start again." };
   }
-
-  const last = (cycles ?? []).at(-1);
-  const nextSequence = (last?.sequence ?? 0) + 1;
+  const nextSequence = previous.sequence + 1;
 
   // One current cycle at a time — the database enforces it too, so the old one
   // has to be closed before the new one opens rather than after.
-  if ((cycles ?? []).some((c) => c.is_current)) {
+  {
     const { error } = await supabase
       .from("student_cycles")
       .update({ is_current: false })
@@ -198,7 +194,7 @@ export async function startNewCycle(_prevState: unknown, formData: FormData) {
   if (insertError) {
     // Put the previous cycle back rather than leaving the student with none
     // current, which would hide every tab on both screens.
-    if (last?.id) await supabase.from("student_cycles").update({ is_current: true }).eq("id", last.id);
+    await supabase.from("student_cycles").update({ is_current: true }).eq("id", previous.id);
     return { error: insertError.message };
   }
 
