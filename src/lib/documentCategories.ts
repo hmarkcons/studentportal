@@ -8,12 +8,17 @@
 // "interview" has no document rows of its own in DocumentChecklist (it's a
 // separate scheduling feature rendered via the `interviewSection` prop) but
 // still occupies its place in the order.
+// Attestation second and scholarship documents third, matching what the
+// per-destination checklists say (migration 0189). This list is only the
+// fallback for a student whose destinations have no sections configured, but a
+// fallback that disagrees with every real checklist is a trap for whoever
+// reads one and then the other.
 export const CATEGORY_ORDER = [
   "admission",
-  "interview",
   "attestation",
-  "visa",
   "scholarship_documents",
+  "interview",
+  "visa",
   "italian_translations",
   "visa_sticker",
   "travel",
