@@ -32,8 +32,17 @@ export function ReengagementDraft({
   templatesMissing: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const [subject, setSubject] = useState(draft?.subject ?? "");
-  const [body, setBody] = useState(draft?.body ?? "");
+  // Held as "what the counsellor changed", not "the message" — null until they
+  // actually type. Seeding state from the prop instead meant a draft rebuilt
+  // on the server could not reach the box: React does not reseed state when
+  // props change, so switching a student from ghosted to withdrawn left the
+  // chase message sitting there under a panel that said "Withdrawn". Caught on
+  // production. Derived this way, the newest draft always shows unless
+  // somebody has deliberately edited it.
+  const [editedSubject, setEditedSubject] = useState<string | null>(null);
+  const [editedBody, setEditedBody] = useState<string | null>(null);
+  const subject = editedSubject ?? draft?.subject ?? "";
+  const body = editedBody ?? draft?.body ?? "";
   const [copied, setCopied] = useState(false);
   const send = sendReengagementMessage.bind(null, studentId);
   const logIt = logWhatsappReengagement.bind(null, studentId);
@@ -94,11 +103,11 @@ export function ReengagementDraft({
       <form action={sendAction} className="flex flex-col gap-2">
         <label className="flex flex-col gap-1 text-[11px] text-muted">
           Subject (used for the email)
-          <Input name="subject" value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={300} />
+          <Input name="subject" value={subject} onChange={(e) => setEditedSubject(e.target.value)} maxLength={300} />
         </label>
         <label className="flex flex-col gap-1 text-[11px] text-muted">
           Message
-          <Textarea name="body" value={body} onChange={(e) => setBody(e.target.value)} rows={10} maxLength={6000} />
+          <Textarea name="body" value={body} onChange={(e) => setEditedBody(e.target.value)} rows={10} maxLength={6000} />
         </label>
 
         <label className="flex items-center gap-1.5 text-xs text-ink">
