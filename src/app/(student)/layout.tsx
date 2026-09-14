@@ -5,6 +5,7 @@ import { STUDENT_NAV } from "@/lib/nav";
 import { evaluateAgreementGate, isGateAllowedPath } from "@/lib/portalGate";
 import { countUnreadMessages } from "@/lib/unreadMessages";
 import { loadTicketActivity, loadTicketReadMarkers, hasUnseenStaffReply } from "@/lib/supportSignals";
+import { approvedVisaDestinations } from "@/lib/studentVisaApproval";
 
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
   const { supabase, userId } = await getStudentUser();
@@ -47,6 +48,16 @@ export default async function StudentLayout({ children }: { children: React.Reac
       ? [...visible, { label: "Scholarship", href: "/portal/scholarship", icon: "🎓" }]
       : visible;
 
+  // Travel & Arrival appears only once a visa has actually been issued. Not in
+  // the menu before that, and never for a refusal: a student who has just been
+  // refused should not be looking at a tab about what to pack. The page asks
+  // the same question, so the entry and the page cannot disagree.
+  const approvedVisas = gate.locked ? [] : await approvedVisaDestinations(supabase, studentRow.id);
+  const withTravel =
+    approvedVisas.length > 0
+      ? [...withScholarship, { label: "Travel & Arrival", href: "/portal/travel", icon: "✈️" }]
+      : withScholarship;
+
   // A message from their counsellor is worth surfacing in the menu — the whole
   // point of the channel is that the student does not have to think to look.
   const unread = await countUnreadMessages(supabase, studentRow.id, "student");
@@ -65,7 +76,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
     "/portal/messages": unread,
     "/portal/support": unreadTickets,
   };
-  const nav = withScholarship.map((i) => {
+  const nav = withTravel.map((i) => {
     const badge = i.href ? badges[i.href] ?? 0 : 0;
     return badge > 0 ? { ...i, badge } : i;
   });
