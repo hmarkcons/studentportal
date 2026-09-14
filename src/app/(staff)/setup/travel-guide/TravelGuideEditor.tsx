@@ -5,6 +5,7 @@ import { Input, Textarea } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { useFormAction } from "@/components/useFormAction";
 import { saveTravelGuide } from "@/lib/actions/travelGuide";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export type EditorItem = { id?: string; label: string; detail: string; daysAfterArrival: string; tickedBy?: number };
 export type EditorSection = { id?: string; title: string; intro: string; items: EditorItem[] };
@@ -33,7 +34,7 @@ export function TravelGuideEditor({
   canEdit: boolean;
 }) {
   const [sections, setSections] = useState<EditorSection[]>(initial);
-  const { onSubmit, pending, error, success } = useFormAction(saveTravelGuide);
+  const { onSubmit, pending, error, result } = useFormAction(saveTravelGuide);
 
   function patchSection(index: number, patch: Partial<EditorSection>) {
     setSections((prev) => prev.map((s, i) => (i === index ? { ...s, ...patch } : s)));
@@ -263,7 +264,7 @@ export function TravelGuideEditor({
             {pending ? "Saving…" : "Save guide"}
           </Button>
           {error && <span className="text-xs text-danger">{error}</span>}
-          {success && !error && <span className="text-xs text-success">Saved.</span>}
+          <ActionStatus state={result} pending={pending} label="Guide saved." />
         </div>
       )}
     </form>

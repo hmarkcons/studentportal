@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input, Textarea } from "@/components/ui/Input";
 import { fillVisaTemplate, splitParagraphs } from "@/lib/visaOutcome";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export type VisaMessageRow = {
   approved_heading: string;
@@ -45,7 +46,7 @@ function Preview({ heading, body, signoff, tone }: { heading: string; body: stri
  */
 export function VisaMessagesForm({ initial, canEdit }: { initial: VisaMessageRow; canEdit: boolean }) {
   const [v, setV] = useState<VisaMessageRow>(initial);
-  const { onSubmit, pending, error, success } = useFormAction(updateVisaMessages);
+  const { onSubmit, pending, error, result } = useFormAction(updateVisaMessages);
 
   const set = (k: keyof VisaMessageRow) => (e: { target: { value: string } }) => setV((prev) => ({ ...prev, [k]: e.target.value }));
 
@@ -98,7 +99,7 @@ export function VisaMessagesForm({ initial, canEdit }: { initial: VisaMessageRow
       ))}
 
       {error && <p className="rounded-md border border-danger bg-danger-bg px-3 py-2 text-sm text-danger">{error}</p>}
-      {success && <p className="rounded-md border border-success bg-success-bg px-3 py-2 text-sm text-success">Saved.</p>}
+      <ActionStatus state={result} pending={pending} label="Saved." />
       <div className="flex items-center gap-2">
         <Button type="submit" variant="primary" pending={pending}>
           Save messages

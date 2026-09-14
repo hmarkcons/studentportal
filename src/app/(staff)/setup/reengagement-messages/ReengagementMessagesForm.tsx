@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { useFormAction } from "@/components/useFormAction";
 import { updateReengagementMessages } from "@/lib/actions/reengagement";
 import { REENGAGEMENT_PLACEHOLDERS } from "@/lib/reengagement";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export type ReengagementRow = {
   ghost_subject: string;
@@ -22,7 +23,7 @@ export type ReengagementRow = {
  * just written. See the note in useFormAction.
  */
 export function ReengagementMessagesForm({ initial, canEdit }: { initial: ReengagementRow; canEdit: boolean }) {
-  const { onSubmit, pending, error, success } = useFormAction(updateReengagementMessages);
+  const { onSubmit, pending, error, result } = useFormAction(updateReengagementMessages);
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-6">
@@ -83,7 +84,7 @@ export function ReengagementMessagesForm({ initial, canEdit }: { initial: Reenga
             {pending ? "Saving…" : "Save messages"}
           </Button>
           {error && <span className="text-xs text-danger">{error}</span>}
-          {success && !error && <span className="text-xs text-success">Saved.</span>}
+          <ActionStatus state={result} pending={pending} label="Saved." />
         </div>
       )}
       {!canEdit && (

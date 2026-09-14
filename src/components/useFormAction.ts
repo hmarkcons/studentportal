@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type ActionResult = { error?: string; success?: boolean } | undefined;
@@ -67,5 +67,10 @@ export function useFormAction(
     if (refreshOnSuccess) router.refresh();
   }
 
-  return { onSubmit, pending, error, success, setError };
+  // A single object per outcome, so <ActionStatus> can tell this result
+  // from the next one by identity — a fresh object every render would make
+  // its "has the form been touched since" check useless.
+  const result = useMemo(() => ({ success, error: error ?? undefined }), [success, error]);
+
+  return { onSubmit, pending, error, success, result, setError };
 }
