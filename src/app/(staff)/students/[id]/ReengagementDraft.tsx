@@ -33,12 +33,15 @@ export function ReengagementDraft({
 }) {
   const [open, setOpen] = useState(false);
   // Held as "what the counsellor changed", not "the message" — null until they
-  // actually type. Seeding state from the prop instead meant a draft rebuilt
-  // on the server could not reach the box: React does not reseed state when
-  // props change, so switching a student from ghosted to withdrawn left the
-  // chase message sitting there under a panel that said "Withdrawn". Caught on
-  // production. Derived this way, the newest draft always shows unless
-  // somebody has deliberately edited it.
+  // actually type, so the text shown is always the newest draft from the
+  // server unless somebody has deliberately edited it.
+  //
+  // Seeded state would have been wrong here. React does not reseed state when
+  // props change, so a student switched from ghosted to withdrawn would keep
+  // whichever message was on screen when the component mounted: the chase
+  // message, under a panel that now says Withdrawn. The dashboard does re-render
+  // and would correct itself — it just takes several seconds on a page this
+  // heavy, and "wrong for a few seconds" is long enough to press Send.
   const [editedSubject, setEditedSubject] = useState<string | null>(null);
   const [editedBody, setEditedBody] = useState<string | null>(null);
   const subject = editedSubject ?? draft?.subject ?? "";

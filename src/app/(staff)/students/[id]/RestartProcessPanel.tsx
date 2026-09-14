@@ -72,11 +72,8 @@ export function RestartProcessPanel({
       {reengagement && (
         <ReengagementDraft
           // Keyed on which message it is, so switching a student from ghosted
-          // to withdrawn rebuilds the draft. The subject and body are editable,
-          // so they live in state seeded from these props — and React does not
-          // reseed state when props change, which left the chase message in the
-          // box for a student who had just been marked withdrawn. Caught on
-          // production: the counsellor would have sent the wrong one.
+          // to withdrawn discards any half-written edit to the other one along
+          // with the draft it belonged to.
           key={reengagement.draft?.kind ?? "none"}
           studentId={studentId}
           draft={reengagement.draft}
