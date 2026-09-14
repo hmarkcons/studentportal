@@ -95,7 +95,7 @@ export default async function InvoiceGeneratorPage() {
   const { data: installments } = invoiceIds.length
     ? await supabase
         .from("invoice_installments")
-        .select("id, invoice_id, installment_no, amount, amount_paid, status, due_date, paid_date, payment_method")
+        .select("id, invoice_id, installment_no, amount, amount_paid, status, due_date, paid_date, payment_method, carried_from_installment_no, carried_part_paid, carried_paid_date")
         .in("invoice_id", invoiceIds)
         .order("installment_no", { ascending: true })
     : { data: [] };

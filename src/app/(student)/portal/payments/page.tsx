@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { formatDateOnly } from "@/lib/formatDate";
+import { carriedFromNote } from "@/lib/partialPayment";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -50,7 +51,7 @@ export default async function PortalPaymentsPage() {
   const { data: installments } = invoiceIds.length
     ? await supabase
         .from("invoice_installments")
-        .select("id, invoice_id, installment_no, amount, amount_paid, status, due_date, paid_date")
+        .select("id, invoice_id, installment_no, amount, amount_paid, status, due_date, paid_date, carried_from_installment_no, carried_part_paid, carried_paid_date")
         .in("invoice_id", invoiceIds)
         .order("installment_no", { ascending: true })
     : { data: [] };
@@ -96,6 +97,19 @@ export default async function PortalPaymentsPage() {
                   <p className={`text-2xl font-semibold ${settled ? "text-success" : "text-ink"}`}>
                     {money(cur, settled ? progress.paid : progress.outstanding)}
                   </p>
+                  {/* What they have already paid, called out rather than left
+                      as one line in the breakdown below. A student part-way
+                      through a plan wants this figure first, and it is the one
+                      piece of the page that is reassuring. */}
+                  {!settled && progress.paid > 0 && (
+                    <p className="mt-1 inline-flex items-baseline gap-1.5 rounded-md bg-success-bg px-2 py-1">
+                      <span className="text-xs font-medium text-success">Paid so far</span>
+                      <span className="text-base font-semibold text-success">{money(cur, progress.paid)}</span>
+                      <span className="text-[11px] text-success opacity-80">
+                        of {money(cur, total)}
+                      </span>
+                    </p>
+                  )}
                   <p className="mt-1 text-xs text-muted">
                     {inv.invoice_number ?? "Invoice"}
                     {inv.intake && ` · ${inv.intake} intake`}
@@ -145,6 +159,27 @@ export default async function PortalPaymentsPage() {
                             )}
                             {i.status === "partial" && Number(i.amount_paid ?? 0) > 0 && (
                               <span className="text-muted"> · {money(cur, Number(i.amount_paid))} received</span>
+                            )}
+                            {/* An instalment the student only part-paid was
+                                split, and this is the rest of it. Said plainly,
+                                or an extra instalment nobody recognises looks
+                                like a mistake in their plan. */}
+                            {carriedFromNote(
+                              i.carried_from_installment_no,
+                              i.carried_part_paid ? Number(i.carried_part_paid) : null,
+                              i.carried_paid_date,
+                              (n) => money(cur, n),
+                              (d) => formatDateOnly(d, LONG_DATE)
+                            ) && (
+                              <span className="mt-0.5 block text-xs text-muted">
+                                {carriedFromNote(
+                                  i.carried_from_installment_no,
+                                  i.carried_part_paid ? Number(i.carried_part_paid) : null,
+                                  i.carried_paid_date,
+                                  (n) => money(cur, n),
+                                  (d) => formatDateOnly(d, LONG_DATE)
+                                )}
+                              </span>
                             )}
                           </span>
                           <span className="flex shrink-0 items-center gap-2">

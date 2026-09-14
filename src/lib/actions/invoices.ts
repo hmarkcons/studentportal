@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatDateOnly } from "@/lib/formatDate";
 import { requirePermission } from "@/lib/auth/permissions";
 import { computeInvoiceMath, buildInstallmentPlan, SRB_TAX_RATE, conversionNote } from "@/lib/invoiceMath";
+import { balanceDueDate, checkPartialSplit } from "@/lib/partialPayment";
 import { buildInvoiceEmail } from "@/lib/invoiceEmail";
 import { sendEmail, accountsFrom } from "@/lib/email";
 import { getSiteUrl } from "@/lib/siteUrl";
@@ -295,6 +296,42 @@ export async function updateInstallment(installmentId: string, studentId: string
   // installment invisible to computeInvoiceStatus's overdue check and the
   // daily reminder cron, permanently, with no error shown anywhere.
   if (!due_date) return { error: "Due date is required." };
+
+  // A part payment splits the installment rather than sitting on it.
+  //
+  // Left as 'partial', the balance had no due date of its own — so nothing
+  // chased it, the overdue cron could not see it, and the student was never
+  // told when the rest was expected. Now what was paid is closed off at that
+  // amount and the remainder becomes an installment in its own right, due a
+  // week later or on a date staff choose.
+  if (status === "partial") {
+    const effectivePaidDate = paid_date || new Date().toISOString().slice(0, 10);
+    const balance_due_date = String(formData.get("balance_due_date") ?? "") || balanceDueDate(effectivePaidDate);
+    const check = checkPartialSplit(amount, amount_paid, balance_due_date);
+    if (!check.ok) return { error: check.error };
+
+    // The amount and due date staff may also have edited on the same row are
+    // saved first, so the split works from what they meant to split.
+    const { error: preError } = await supabase
+      .from("invoice_installments")
+      .update({ amount, due_date })
+      .eq("id", installmentId);
+    if (preError) return { error: preError.message };
+
+    const { error: splitError } = await supabase.rpc("split_partial_installment", {
+      p_installment_id: installmentId,
+      p_amount_paid: amount_paid,
+      p_paid_date: effectivePaidDate,
+      p_balance_due_date: balance_due_date,
+      p_payment_method: payment_method,
+    });
+    if (splitError) return { error: splitError.message };
+
+    revalidatePath(revalidateTo);
+    revalidatePath(`/students/${studentId}`);
+    revalidatePath("/portal/payments");
+    return { success: true };
+  }
 
   const { error } = await supabase
     .from("invoice_installments")

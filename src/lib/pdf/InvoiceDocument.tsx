@@ -57,6 +57,12 @@ const styles = StyleSheet.create({
   totalsNumBold: { fontFamily: "Helvetica-Bold", fontSize: 11, color: INK_STRONG },
   totalsRule: { borderTopWidth: 1, borderTopColor: RULE, marginTop: 6, paddingTop: 8 },
 
+  // Payments received, called out. A tinted band rather than a colour alone,
+  // so it still reads as emphasised on the black-and-white printer the office
+  // actually uses.
+  paidRow: { backgroundColor: "#eef7ef", paddingHorizontal: 6, paddingVertical: 3, marginVertical: 2 },
+  paidText: { color: "#1f7a35" },
+
   sectionLabel: { fontSize: 9, color: GREY, marginTop: 16, marginBottom: 5 },
   ledgerRow: { flexDirection: "row", paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: RULE },
 
@@ -248,10 +254,16 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
               {money(data.currencySymbol, data.subtotal)}
             </Text>
           </View>
+          {/* What has been received, emphasised rather than printed as one
+              more grey row. On a part-paid invoice this is the figure a student
+              checks against their own records first, and a mismatch here is
+              what brings them to the office. */}
           {data.amountPaid > 0 && (
-            <View style={styles.totalsRow}>
-              <Text style={styles.totalsKey}>Payments Received:</Text>
-              <Text style={styles.totalsNum}>-{money(data.currencySymbol, data.amountPaid)}</Text>
+            <View style={[styles.totalsRow, styles.paidRow]}>
+              <Text style={[styles.totalsKey, styles.totalsKeyBold, styles.paidText]}>Payments Received:</Text>
+              <Text style={[styles.totalsNum, styles.totalsNumBold, styles.paidText]}>
+                -{money(data.currencySymbol, data.amountPaid)}
+              </Text>
             </View>
           )}
           <View style={[styles.totalsRow, styles.totalsRule]}>

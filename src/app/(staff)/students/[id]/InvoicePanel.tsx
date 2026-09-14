@@ -13,11 +13,17 @@ import {
 } from "@/lib/actions/invoices";
 import { addLineItem, deleteLineItem } from "@/lib/actions/consultancyFee";
 import { computeInvoiceStatus, INVOICE_STATUS_LABELS } from "@/lib/invoiceStatus";
-import { computeInvoiceMath } from "@/lib/invoiceMath";
+import { computeInvoiceMath, computePaymentProgress } from "@/lib/invoiceMath";
 import { formatDateOnly } from "@/lib/formatDate";
+import { balanceDueDate, carriedFromNote } from "@/lib/partialPayment";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input, Select, Textarea } from "@/components/ui/Input";
+
+/** Karachi's day, not the browser's — the office books payments by its own date. */
+function today(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Karachi" });
+}
 
 const DEFAULT_TERMS =
   "Only upon refusal from the university, 100% of the paid consultancy charges only will be refundable. There is no refund on withdrawal or rejection from the embassy or on failing the admission test, or under any other condition. Refunds are processed within 90 working days of the refusal notice.";
@@ -209,6 +215,7 @@ function EditInstallmentForm({
 }: {
   installment: {
     id: string;
+    installment_no: number;
     amount: number;
     amount_paid?: number | null;
     status: string;
@@ -222,22 +229,39 @@ function EditInstallmentForm({
 }) {
   const action = updateInstallment.bind(null, installment.id, studentId, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
+  const [status, setStatus] = useState(installment.status);
+  const [paidDate, setPaidDate] = useState(installment.paid_date ?? today());
+  const [amountPaid, setAmountPaid] = useState(String(installment.amount_paid ?? ""));
+  // Staff can move it, but it defaults to a week after the payment so the
+  // balance never ends up with no date at all.
+  const [balanceDue, setBalanceDue] = useState(() => balanceDueDate(installment.paid_date ?? today()));
+  const [balanceTouched, setBalanceTouched] = useState(false);
+
+  const isPartial = status === "partial";
+  const balance = Math.round((installment.amount - Number(amountPaid || 0)) * 100) / 100;
+
+  function choosePaidDate(value: string) {
+    setPaidDate(value);
+    // Follows the payment date until staff set it themselves.
+    if (!balanceTouched) setBalanceDue(balanceDueDate(value || today()));
+  }
 
   return (
     <form action={formAction} className="flex flex-wrap items-center gap-1 rounded-md border border-border p-2">
       <Input name="amount" type="number" step="0.01" defaultValue={installment.amount} required className="w-24" />
       <Input name="due_date" type="date" defaultValue={installment.due_date ?? ""} required />
-      <Select name="status" defaultValue={installment.status}>
+      <Select name="status" value={status} onChange={(e) => setStatus(e.target.value)}>
         <option value="unpaid">unpaid</option>
         <option value="paid">paid</option>
-        <option value="partial">partial</option>
+        <option value="partial">part-paid</option>
       </Select>
       <Input
         name="amount_paid"
         type="number"
         step="0.01"
-        placeholder="Amount paid (if partial)"
-        defaultValue={installment.amount_paid ?? 0}
+        placeholder="Amount paid (if part-paid)"
+        value={amountPaid}
+        onChange={(e) => setAmountPaid(e.target.value)}
         className="w-36"
       />
       <Select name="payment_method" defaultValue={installment.payment_method ?? ""}>
@@ -247,7 +271,40 @@ function EditInstallmentForm({
         <option value="Card">Card</option>
         <option value="Other">Other</option>
       </Select>
-      <Input name="paid_date" type="date" defaultValue={installment.paid_date ?? ""} />
+      <Input name="paid_date" type="date" value={paidDate} onChange={(e) => choosePaidDate(e.target.value)} />
+
+      {/* A part payment splits this installment: what was paid is closed off
+          at that amount, and the rest becomes an installment of its own. It
+          needs its own due date or nothing will ever chase it. */}
+      {isPartial && (
+        <div className="w-full rounded-md border border-warning bg-warning-bg p-2">
+          <p className="mb-1 text-xs text-warning">
+            {balance > 0 ? (
+              <>
+                The remaining <strong className="font-semibold">{balance.toFixed(2)}</strong> becomes installment{" "}
+                {installment.installment_no + 1}, and the later ones shift down. Choose when it is due:
+              </>
+            ) : (
+              <>Enter how much was actually paid — it has to be less than the installment.</>
+            )}
+          </p>
+          <label className="flex flex-wrap items-center gap-1 text-xs text-warning">
+            Balance due
+            <Input
+              name="balance_due_date"
+              type="date"
+              value={balanceDue}
+              onChange={(e) => {
+                setBalanceDue(e.target.value);
+                setBalanceTouched(true);
+              }}
+              required
+            />
+            {!balanceTouched && <span className="opacity-80">a week after the payment</span>}
+          </label>
+        </div>
+      )}
+
       <Button type="submit" variant="primary" pending={pending} size="sm">
         Save
       </Button>
@@ -443,6 +500,9 @@ export function InvoiceCard({
     due_date: string | null;
     payment_method?: string | null;
     paid_date?: string | null;
+    carried_from_installment_no?: number | null;
+    carried_part_paid?: number | null;
+    carried_paid_date?: string | null;
   }[];
   lineItems?: { id: string; name: string; amount: number }[];
   feeProducts?: { id: string; name: string; default_amount: number | null; default_currency: string }[];
@@ -471,6 +531,9 @@ export function InvoiceCard({
       taxRate: invoice.tax_rate ?? 0,
     }).total + lineItemsTotal;
   const status = computeInvoiceStatus(installments);
+  // The same figures the student sees on their own Payments page and the
+  // receipt prints, so the three cannot disagree about what has been received.
+  const progress = computePaymentProgress(installments);
 
   // Says who it reached, not just that it went: this button used to report
   // success without sending anything at all, and "Sent." alone reads the same
@@ -518,12 +581,50 @@ export function InvoiceCard({
         <EditInvoiceForm invoice={invoice} studentId={studentId} revalidateTo={revalidateTo} onDone={() => setEditingInvoice(false)} />
       )}
 
+      {/* Received and outstanding, side by side and large enough to read at a
+          glance. A counsellor asked where a student stands should not have to
+          add up the installment rows to answer. */}
+      <div className="mt-3 flex flex-wrap items-stretch gap-2">
+        <div className="min-w-[9rem] flex-1 rounded-md bg-success-bg px-3 py-2">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-success">Received</p>
+          <p className="text-xl font-semibold text-success">
+            {invoice.currency} {progress.paid.toFixed(2)}
+          </p>
+          <p className="text-[11px] text-success opacity-80">
+            {progress.installmentsPaid} of {progress.installmentsTotal} installments
+          </p>
+        </div>
+        <div
+          className={`min-w-[9rem] flex-1 rounded-md px-3 py-2 ${
+            progress.outstanding <= 0 ? "bg-success-bg" : "bg-warning-bg"
+          }`}
+        >
+          <p
+            className={`text-[11px] font-medium uppercase tracking-wide ${
+              progress.outstanding <= 0 ? "text-success" : "text-warning"
+            }`}
+          >
+            Outstanding
+          </p>
+          <p className={`text-xl font-semibold ${progress.outstanding <= 0 ? "text-success" : "text-warning"}`}>
+            {invoice.currency} {progress.outstanding.toFixed(2)}
+          </p>
+          <p className={`text-[11px] opacity-80 ${progress.outstanding <= 0 ? "text-success" : "text-warning"}`}>
+            {progress.outstanding <= 0
+              ? "Nothing owed"
+              : progress.nextDueDate
+                ? `next due ${formatDateOnly(progress.nextDueDate)}`
+                : "no due date set"}
+          </p>
+        </div>
+      </div>
+
       <div className="mt-2 flex flex-col gap-1 border-t border-border pt-2">
         {installments.map((i) =>
           editingInstallmentId === i.id && canManage ? (
             <EditInstallmentForm key={i.id} installment={i} studentId={studentId} revalidateTo={revalidateTo} onDone={() => setEditingInstallmentId(null)} />
           ) : (
-            <div key={i.id} className="flex items-center justify-between text-xs text-muted">
+            <div key={i.id} className="flex items-start justify-between text-xs text-muted">
               <span>
                 Installment {i.installment_no} — {invoice.currency} {i.amount.toFixed(2)}
                 {/* The admin charge is collected with the first installment, so
@@ -533,6 +634,25 @@ export function InvoiceCard({
                 )}
                 {i.due_date && ` · due ${formatDateOnly(i.due_date)}`}
                 {i.status === "partial" && ` · paid ${invoice.currency} ${(i.amount_paid ?? 0).toFixed(2)}`}
+                {/* Where a balance installment came from, so a schedule with
+                    more installments than the agreement explains itself. */}
+                {carriedFromNote(
+                  i.carried_from_installment_no,
+                  i.carried_part_paid,
+                  i.carried_paid_date,
+                  (n) => `${invoice.currency} ${n.toFixed(2)}`,
+                  (d) => formatDateOnly(d)
+                ) && (
+                  <span className="mt-0.5 block italic opacity-80">
+                    {carriedFromNote(
+                      i.carried_from_installment_no,
+                      i.carried_part_paid,
+                      i.carried_paid_date,
+                      (n) => `${invoice.currency} ${n.toFixed(2)}`,
+                      (d) => formatDateOnly(d)
+                    )}
+                  </span>
+                )}
               </span>
               <div className="flex items-center gap-1">
                 {i.status === "paid" ? (

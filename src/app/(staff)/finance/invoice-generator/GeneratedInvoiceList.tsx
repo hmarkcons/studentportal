@@ -109,9 +109,15 @@ function InvoiceRow({ inv, canDelete }: { inv: GeneratedInvoice; canDelete: bool
             {inv.studentName}
             {inv.invoiceNumber ? <span className="text-muted"> · {inv.invoiceNumber}</span> : null}
           </p>
-          <p className="text-xs text-muted">
-            {fmt(inv.currency, inv.math.total)} total · paid {fmt(inv.currency, inv.paid)} · outstanding{" "}
-            <span className={inv.outstanding > 0 ? "text-warning" : ""}>{fmt(inv.currency, inv.outstanding)}</span>
+          {/* The paid figure is what this list is scanned for when chasing
+              payments, so it is not left as one grey word among four. */}
+          <p className="flex flex-wrap items-baseline gap-x-1.5 text-xs text-muted">
+            {fmt(inv.currency, inv.math.total)} total ·
+            <span className="rounded bg-success-bg px-1.5 py-0.5 text-sm font-semibold text-success">
+              {fmt(inv.currency, inv.paid)}
+            </span>
+            <span className="text-success">paid</span>· outstanding{" "}
+            <span className={inv.outstanding > 0 ? "font-medium text-warning" : ""}>{fmt(inv.currency, inv.outstanding)}</span>
             {inv.nextDueDate ? ` · next due ${formatDateOnly(inv.nextDueDate)}` : ""}
           </p>
           <p className="text-xs text-muted">
