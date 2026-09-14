@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { importUniversities } from "@/lib/actions/universities";
 import { SampleCsvButton } from "@/components/ui/SampleCsvButton";
 import { Button } from "@/components/ui/Button";
+import { FileField } from "@/components/FileField";
 import { Select } from "@/components/ui/Input";
 
 const HEADERS = ["name", "city", "region", "type", "levels_offered", "fields_offered"];
@@ -11,6 +12,7 @@ const EXAMPLE = ["Sapienza University of Rome", "Rome", "Lazio", "public", "bach
 
 export function ImportUniversitiesForm({ destinations }: { destinations: { id: string; display_name: string }[] }) {
   const [state, formAction, pending] = useActionState(importUniversities, undefined);
+  const [ready, setReady] = useState(false);
 
   return (
     <details className="mt-3 rounded-md border border-border p-3">
@@ -24,8 +26,8 @@ export function ImportUniversitiesForm({ destinations }: { destinations: { id: s
             </option>
           ))}
         </Select>
-        <input name="file" type="file" accept=".csv" required className="max-w-full text-sm" />
-        <Button type="submit" variant="primary" pending={pending}>
+        <FileField accept=".csv" required hint="CSV" inputClassName="text-sm" onChange={(s) => setReady(Boolean(s.file))} />
+        <Button type="submit" variant="primary" pending={pending} disabled={!ready}>
           Import
         </Button>
         <SampleCsvButton filename="universities-sample.csv" headers={HEADERS} exampleRow={EXAMPLE} />

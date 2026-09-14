@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { FileField } from "@/components/FileField";
 import { addedLine } from "@/lib/activityStamp";
 
 type ActionState = { error?: string; success?: boolean } | undefined;
@@ -17,6 +18,7 @@ export function ProofFileCell({
   uploadAction: (prevState: ActionState, formData: FormData) => Promise<ActionState>;
 }) {
   const [state, formAction, pending] = useActionState(uploadAction, undefined);
+  const [blocked, setBlocked] = useState(false);
 
   return (
     <div className="flex flex-col gap-1">
@@ -35,9 +37,9 @@ export function ProofFileCell({
       {addedLine(uploadedAt, "Uploaded") && (
         <span className="text-xs text-muted">{addedLine(uploadedAt, "Uploaded")}</span>
       )}
-      <form action={formAction} className="flex items-center gap-1">
-        <input type="file" name="file" className="w-28 text-xs" />
-        <Button type="submit" size="sm" pending={pending}>
+      <form action={formAction} className="flex items-start gap-1">
+        <FileField hint="PDF or image" className="w-40" onChange={(s) => setBlocked(Boolean(s.error) || s.busy)} />
+        <Button type="submit" size="sm" pending={pending} disabled={blocked}>
           {viewUrl ? "Replace" : "Upload"}
         </Button>
       </form>

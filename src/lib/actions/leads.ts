@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { LEAD_STATUSES } from "@/lib/constants";
 import { dateOfBirthError } from "@/lib/dateOfBirth";
 import { phoneError, phoneChangeError } from "@/lib/phoneNumber";
+import { MAX_UPLOAD_BYTES, fileSizeError } from "@/lib/fileSize";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -209,6 +210,10 @@ export async function updateLeadDestinations(leadId: string, _prevState: unknown
 export async function importLeads(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
   const file = formData.get("file") as File | null;
+  if (file) {
+    const tooLarge = fileSizeError(file.size, MAX_UPLOAD_BYTES, "file");
+    if (tooLarge) return { error: `${tooLarge} A spreadsheet this large is usually a mistake — split it and import in batches.` };
+  }
   if (!file || file.size === 0) return { error: "Choose a CSV file first." };
 
   const { parseCsvWithHeader } = await import("@/lib/csv");
@@ -246,6 +251,10 @@ export async function importLeads(_prevState: unknown, formData: FormData) {
 export async function importRegisteredStudents(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
   const file = formData.get("file") as File | null;
+  if (file) {
+    const tooLarge = fileSizeError(file.size, MAX_UPLOAD_BYTES, "file");
+    if (tooLarge) return { error: `${tooLarge} A spreadsheet this large is usually a mistake — split it and import in batches.` };
+  }
   if (!file || file.size === 0) return { error: "Choose a CSV file first." };
 
   const { parseCsvWithHeader } = await import("@/lib/csv");

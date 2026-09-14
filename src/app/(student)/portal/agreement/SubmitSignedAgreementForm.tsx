@@ -4,6 +4,8 @@ import { useActionState, useRef, useState } from "react";
 import { submitSignedAgreement } from "@/lib/actions/portal-agreement";
 import { Button } from "@/components/ui/Button";
 import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
+import { MAX_UPLOAD_BYTES, fileSizeError, formatFileSize, limitHint, reduceHint, shrunkNote } from "@/lib/fileSize";
+import { shrinkImageToFit } from "@/components/shrinkImage";
 import { ConsentVideoRecorder } from "./ConsentVideoRecorder";
 
 function WhyVideoDialog({ onClose }: { onClose: () => void }) {
@@ -60,10 +62,61 @@ export function SubmitSignedAgreementForm({
   const [video, setVideo] = useState<File | null>(null);
   const [documentName, setDocumentName] = useState<string | null>(null);
   const [showWhy, setShowWhy] = useState(false);
+  const [documentError, setDocumentError] = useState<string | null>(null);
+  const [documentNote, setDocumentNote] = useState<string | null>(null);
   const videoInputRef = useRef<HTMLInputElement | null>(null);
+  const documentInputRef = useRef<HTMLInputElement | null>(null);
   const both = needsDocument && needsVideo;
   // Only what is being asked for can block the button.
   const ready = (!needsVideo || Boolean(video)) && (!needsDocument || Boolean(documentName));
+
+  /**
+   * The signed agreement, held to the same 2 MB as every other document.
+   *
+   * This input is visually hidden behind its label, so FileField cannot be
+   * dropped in here — the check and the shrink are done inline and the result
+   * is reported under the picker, in red.
+   *
+   * A photographed signed agreement is the commonest case and routinely over
+   * the limit, so an image is resized rather than refused. A scanned PDF that
+   * is too big is refused: re-encoding a signed legal document is not
+   * something to do behind someone's back.
+   */
+  async function chooseDocument(chosen: File | null) {
+    setDocumentError(null);
+    setDocumentNote(null);
+    if (!chosen) {
+      setDocumentName(null);
+      return;
+    }
+
+    const tooLarge = fileSizeError(chosen.size, MAX_UPLOAD_BYTES, "agreement");
+    if (!tooLarge) {
+      setDocumentName(chosen.name);
+      return;
+    }
+
+    setDocumentName(null);
+    setDocumentNote(`Reducing ${formatFileSize(chosen.size)}…`);
+    const result = await shrinkImageToFit(chosen, MAX_UPLOAD_BYTES);
+    setDocumentNote(null);
+
+    if (result.ok && documentInputRef.current && typeof DataTransfer !== "undefined") {
+      const dt = new DataTransfer();
+      dt.items.add(result.file);
+      documentInputRef.current.files = dt.files;
+      setDocumentName(result.file.name);
+      setDocumentNote(shrunkNote(result.from, result.to, MAX_UPLOAD_BYTES));
+      return;
+    }
+
+    const advice = result.ok
+      ? null
+      : result.reason === "still_too_large"
+        ? `Even fully compressed it is ${formatFileSize(result.smallest)}. Photograph one page at a time, or crop it.`
+        : reduceHint(chosen.type, chosen.name);
+    setDocumentError([tooLarge, advice].filter(Boolean).join(" "));
+  }
 
   // The recorded Blob only exists in memory, so mirror it into a real file
   // input the form can post. DataTransfer is the supported way to set one.
@@ -122,12 +175,13 @@ export function SubmitSignedAgreementForm({
           <label className="cursor-pointer whitespace-nowrap rounded-md border border-border px-2 py-1 text-xs text-ink hover:bg-bg">
             {documentName ? "Change file" : "Choose file"}
             <input
+              ref={documentInputRef}
               type="file"
               name="agreement"
               accept={ACCEPTED_DOCUMENT_ACCEPT}
               className="sr-only"
               disabled={pending}
-              onChange={(e) => setDocumentName(e.target.files?.[0]?.name ?? null)}
+              onChange={(e) => void chooseDocument(e.target.files?.[0] ?? null)}
             />
           </label>
         )}
@@ -138,7 +192,19 @@ export function SubmitSignedAgreementForm({
           {both ? "Submit signed agreement" : needsVideo ? "Submit new video" : "Submit signed agreement"}
         </Button>
       </div>
-      {needsDocument && <p className="truncate text-xs text-muted">{documentName ?? "No file chosen"}</p>}
+      {needsDocument && (
+        <>
+          <p className="truncate text-xs text-muted">
+            {documentName ?? "No file chosen"} · {limitHint()}
+          </p>
+          {documentNote && <p className="text-xs text-muted">{documentNote}</p>}
+          {documentError && (
+            <p role="alert" className="rounded-md border border-danger bg-danger-bg px-2 py-1 text-xs font-medium text-danger">
+              {documentError}
+            </p>
+          )}
+        </>
+      )}
       {!ready && (
         <p className="text-xs text-muted">
           {needsVideo && needsDocument && !video && !documentName

@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePermission } from "@/lib/auth/permissions";
 import { dateOfBirthError } from "@/lib/dateOfBirth";
 import { phoneError } from "@/lib/phoneNumber";
+import { MAX_PHOTO_BYTES, fileSizeError, reduceHint } from "@/lib/fileSize";
 
 // "Suspended" just freezes the account (blocked from every staff route by
 // the (staff) layout's `status !== "active"` check, same as deactivated) —
@@ -231,6 +232,10 @@ export async function uploadStaffPhoto(staffId: string, _prevState: unknown, for
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) return { error: "Choose a photo to upload." };
   if (!file.type.startsWith("image/")) return { error: "Choose an image file." };
+  // 500 KB for a photo. The browser resizes an oversized one before it gets
+  // here, so this is the backstop for a request that skipped that.
+  const tooLarge = fileSizeError(file.size, MAX_PHOTO_BYTES, "photo");
+  if (tooLarge) return { error: tooLarge };
 
   const path = `staff-photos/${staffId}/photo-${Date.now()}-${file.name}`;
   const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: true });
@@ -421,6 +426,8 @@ export async function createServiceRequest(_prevState: unknown, formData: FormDa
   let proof_of_payment_path: string | null = null;
   const proofFile = formData.get("proof_of_payment") as File | null;
   if (proofFile && proofFile.size > 0) {
+    const proofTooLarge = fileSizeError(proofFile.size, undefined, "file");
+    if (proofTooLarge) return { error: `${proofTooLarge} ${reduceHint(proofFile.type, proofFile.name) ?? ""}`.trim() };
     const path = `${student_id}/additional-services/${id}-${proofFile.name}`;
     const { error: uploadError } = await supabase.storage.from("documents").upload(path, proofFile, { upsert: true });
     if (uploadError) return { error: uploadError.message };

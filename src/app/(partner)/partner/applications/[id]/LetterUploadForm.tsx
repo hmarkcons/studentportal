@@ -24,6 +24,7 @@ export function LetterUploadForm({
     <ConfirmedUploadForm
       action={action}
       accept={ACCEPTED_DOCUMENT_ACCEPT}
+      hint="PDF, Word or image"
       submitLabel={`${alreadySent ? "Replace" : "Upload"} ${label}`}
       replacing={alreadySent}
     />

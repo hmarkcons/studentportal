@@ -13,6 +13,7 @@ import { CATEGORY_ORDER, CATEGORY_LABELS } from "@/lib/documentCategories";
 import { uploadedLine, reviewedLine, addedLine, type UploaderRole } from "@/lib/activityStamp";
 import { DocumentHistory, type ArchivedUpload } from "@/components/DocumentHistory";
 import { DocumentSectionShell, ExpandAllToggle } from "@/components/DocumentSectionShell";
+import { FileField } from "@/components/FileField";
 
 export type DocRow = {
   id: string;
@@ -56,6 +57,9 @@ function UploadRow({
   const [state, formAction, pending] = useActionState(action, undefined);
   const [reason, setReason] = useState("");
   const [showReplace, setShowReplace] = useState(false);
+  // Upload stays disabled until a file within the limit is chosen, so an
+  // oversized one is refused where it was picked rather than after the wait.
+  const [ready, setReady] = useState(false);
   const [reviewPending, startReview] = useTransition();
   const [reviewError, setReviewError] = useState<string | null>(null);
 
@@ -133,9 +137,9 @@ function UploadRow({
       </div>
 
       {showUploadForm ? (
-        <form action={formAction} className="flex flex-wrap items-center gap-2">
-          <input type="file" name="file" accept={ACCEPTED_DOCUMENT_ACCEPT} className="max-w-full text-xs" />
-          <Button type="submit" pending={pending} size="sm">
+        <form action={formAction} className="flex flex-wrap items-start gap-2">
+          <FileField accept={ACCEPTED_DOCUMENT_ACCEPT} hint="PDF, Word or image" onChange={(s) => setReady(Boolean(s.file))} />
+          <Button type="submit" pending={pending} size="sm" disabled={!ready} className="mt-0.5">
             Upload
           </Button>
           {isVerified && (

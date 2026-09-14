@@ -5,6 +5,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { parseCsvWithHeader } from "@/lib/csv";
 import { requirePermission } from "@/lib/auth/permissions";
+import { MAX_UPLOAD_BYTES, fileSizeError } from "@/lib/fileSize";
 
 export async function createUniversity(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
@@ -159,6 +160,10 @@ export async function importUniversities(_prevState: unknown, formData: FormData
   if (!destinationId) return { error: "Choose a destination first." };
 
   const file = formData.get("file") as File | null;
+  if (file) {
+    const tooLarge = fileSizeError(file.size, MAX_UPLOAD_BYTES, "file");
+    if (tooLarge) return { error: `${tooLarge} A spreadsheet this large is usually a mistake — split it and import in batches.` };
+  }
   if (!file || file.size === 0) return { error: "Choose a CSV file first." };
 
   const text = await file.text();
@@ -209,6 +214,10 @@ export async function importUniversities(_prevState: unknown, formData: FormData
 export async function importPrograms(universityId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
   const file = formData.get("file") as File | null;
+  if (file) {
+    const tooLarge = fileSizeError(file.size, MAX_UPLOAD_BYTES, "file");
+    if (tooLarge) return { error: `${tooLarge} A spreadsheet this large is usually a mistake — split it and import in batches.` };
+  }
   if (!file || file.size === 0) return { error: "Choose a CSV file first." };
 
   const text = await file.text();

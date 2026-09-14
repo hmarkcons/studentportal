@@ -13,6 +13,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { TEST_TYPES, needsCustomName } from "@/lib/testScores";
+import { MAX_PHOTO_BYTES, fileSizeError } from "@/lib/fileSize";
 
 // Was a third hand-written copy of this list, and it lacked GMAT and CEnT-S —
 // so the two types just added to the picker would have been rejected here as
@@ -103,6 +104,10 @@ export async function uploadStudentPhoto(studentId: string, revalidateTo: string
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) return { error: "Choose a photo to upload." };
   if (!file.type.startsWith("image/")) return { error: "Choose an image file." };
+  // 500 KB for a photo. The browser resizes an oversized one before it
+  // gets here, so this is the backstop for a request that skipped that.
+  const tooLarge = fileSizeError(file.size, MAX_PHOTO_BYTES, "photo");
+  if (tooLarge) return { error: tooLarge };
 
   const path = `${studentId}/photo-${Date.now()}-${file.name}`;
   const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: true });

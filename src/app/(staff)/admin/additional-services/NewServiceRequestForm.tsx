@@ -9,11 +9,13 @@ import {
   ADDITIONAL_SERVICE_FIELDS,
 } from "@/lib/additionalServiceFields";
 import { Button } from "@/components/ui/Button";
+import { FileField } from "@/components/FileField";
 import { Input, Select } from "@/components/ui/Input";
 
 export function NewServiceRequestForm({ students }: { students: { id: string; full_name: string }[] }) {
   const [serviceType, setServiceType] = useState<(typeof ADDITIONAL_SERVICE_TYPES)[number]>(ADDITIONAL_SERVICE_TYPES[0]);
   const [state, formAction, pending] = useActionState(createServiceRequest, undefined);
+  const [blocked, setBlocked] = useState(false);
   const extraFields = ADDITIONAL_SERVICE_FIELDS[serviceType] ?? [];
 
   return (
@@ -61,7 +63,7 @@ export function NewServiceRequestForm({ students }: { students: { id: string; fu
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
           Proof of payment
-          <input name="proof_of_payment" type="file" className="max-w-full text-xs" />
+          <FileField name="proof_of_payment" hint="PDF or image" onChange={(s) => setBlocked(Boolean(s.error) || s.busy)} />
         </label>
       </div>
 
@@ -97,7 +99,9 @@ export function NewServiceRequestForm({ students }: { students: { id: string; fu
       <input type="hidden" name="extra_field_keys" value={extraFields.map((f) => f.key).join(",")} />
 
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
-      <Button type="submit" disabled={pending} variant="primary" className="self-start">
+      {/* The proof is optional, so this gates only on a chosen file being
+          unusable — not on there being one. */}
+      <Button type="submit" disabled={pending || blocked} variant="primary" className="self-start">
         {pending ? "Adding…" : "Add request"}
       </Button>
     </form>

@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { generateAgreement, updateAgreement, uploadSignedAgreement, deleteAgreement } from "@/lib/actions/agreements";
 import { Button } from "@/components/ui/Button";
+import { FileField } from "@/components/FileField";
 import { Input, Select } from "@/components/ui/Input";
 
 type AgreementTemplateOption = {
@@ -218,14 +219,15 @@ export function UploadSignedAgreementForm({
 }) {
   const action = uploadSignedAgreement.bind(null, agreementId, studentId);
   const [state, formAction, pending] = useActionState(action, undefined);
+  const [ready, setReady] = useState(false);
 
   return (
     <form action={formAction} className="mt-2 flex flex-col gap-2">
       {replace && <p className="text-xs text-muted">Replaces the signed copy on file. The previous scan is deleted.</p>}
       {/* File input sits directly next to the button it feeds. */}
-      <div className="flex flex-wrap items-center gap-2">
-        <input type="file" name="file" required className="max-w-full text-xs" />
-        <Button type="submit" variant="outline-primary" size="sm" pending={pending}>
+      <div className="flex flex-wrap items-start gap-2">
+        <FileField required noun="agreement" hint="Scan or photo of the signed copy" onChange={(s) => setReady(Boolean(s.file))} />
+        <Button type="submit" variant="outline-primary" size="sm" pending={pending} disabled={!ready}>
           {replace ? "Replace signed agreement" : "Upload signed agreement"}
         </Button>
       </div>

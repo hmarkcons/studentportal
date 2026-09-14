@@ -1,4 +1,8 @@
-export const MAX_DOCUMENT_SIZE_BYTES = 15 * 1024 * 1024; // 15MB
+import { MAX_UPLOAD_BYTES, fileSizeError, reduceHint } from "./fileSize.ts";
+
+// The office set 2 MB per document. Held here rather than repeated, so the
+// browser hint, the browser check and this backstop can never disagree.
+export const MAX_DOCUMENT_SIZE_BYTES = MAX_UPLOAD_BYTES;
 
 export const ACCEPTED_DOCUMENT_TYPES = [
   "application/pdf",
@@ -14,9 +18,14 @@ export const ACCEPTED_DOCUMENT_TYPES = [
 // A hint for the <input accept> attribute — kept in sync with ACCEPTED_DOCUMENT_TYPES.
 export const ACCEPTED_DOCUMENT_ACCEPT = ".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.doc,.docx";
 
-export function validateDocumentFile(file: File): string | null {
-  if (file.size > MAX_DOCUMENT_SIZE_BYTES) {
-    return `File is too large (max ${MAX_DOCUMENT_SIZE_BYTES / (1024 * 1024)}MB).`;
+export function validateDocumentFile(file: File, noun = "document"): string | null {
+  // The same sentence the browser would have shown. Reached when the browser
+  // check was bypassed or the file grew between the two — so it has to stand
+  // on its own, naming the size and what to do about it.
+  const tooLarge = fileSizeError(file.size, MAX_DOCUMENT_SIZE_BYTES, noun);
+  if (tooLarge) {
+    const advice = reduceHint(file.type, file.name);
+    return advice ? `${tooLarge} ${advice}` : tooLarge;
   }
   // Some mobile browsers/cameras omit a MIME type on capture — only reject
   // when a type IS reported and it's not one we accept, rather than requiring one.

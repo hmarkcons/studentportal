@@ -85,6 +85,8 @@ export async function partnerUploadCommissionProof(commissionId: string, _prevSt
   const supabase = await createClient();
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) return { error: "Choose a file." };
+  const proofTooLarge = validateDocumentFile(file, "file");
+  if (proofTooLarge) return { error: proofTooLarge };
 
   const path = `${commissionId}/proof-${file.name}`;
   const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: true });
@@ -113,6 +115,8 @@ export async function partnerUploadDocument(universityId: string, _prevState: un
   const file = formData.get("file") as File | null;
   const description = String(formData.get("description") ?? "").trim() || null;
   if (!file || file.size === 0) return { error: "Choose a file." };
+  const exchangeTooLarge = validateDocumentFile(file, "file");
+  if (exchangeTooLarge) return { error: exchangeTooLarge };
 
   const {
     data: { user },

@@ -6,6 +6,7 @@ import { extractDocxHtml } from "@/lib/extractDocxText";
 import { MERGE_FIELDS } from "@/lib/pdf/templateWording";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { Button } from "@/components/ui/Button";
+import { FileField } from "@/components/FileField";
 import { Input, Select } from "@/components/ui/Input";
 
 // Templates saved before the rich-text editor was added stored plain text
@@ -34,6 +35,7 @@ export function EditAgreementTemplateForm({
   const [wording, setWording] = useState(() => plainTextToHtml(template.wording));
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
+  const [blocked, setBlocked] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function handleDelete() {
@@ -82,12 +84,18 @@ export function EditAgreementTemplateForm({
         <label className="text-xs text-muted">
           Replace with a new .docx to re-fill the wording below with its formatting preserved (optional), or edit directly.
         </label>
-        <input
-          name="file"
-          type="file"
+        {/* Only a file within the limit is read — extracting the wording from
+            an oversized .docx would work and then be refused on submit, which
+            reads as the upload having succeeded. */}
+        <FileField
           accept=".docx"
-          className="max-w-full text-sm"
-          onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
+          noun="template"
+          hint="Word .docx"
+          inputClassName="text-sm"
+          onChange={(s) => {
+            setBlocked(Boolean(s.error) || s.busy);
+            void handleFile(s.file);
+          }}
         />
         {extracting && <p className="text-xs text-muted">Reading document…</p>}
         {extractError && <p className="text-xs text-danger">{extractError}</p>}
@@ -108,7 +116,7 @@ export function EditAgreementTemplateForm({
         </ul>
       </details>
       <div className="flex items-center gap-3">
-        <Button type="submit" variant="primary" disabled={pending}>
+        <Button type="submit" variant="primary" disabled={pending || blocked}>
           {pending ? "Saving…" : "Save changes"}
         </Button>
         <button type="button" className="text-xs text-danger hover:underline" onClick={handleDelete}>

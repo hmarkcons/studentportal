@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { importLeads } from "@/lib/actions/leads";
 import { SampleCsvButton } from "@/components/ui/SampleCsvButton";
 import { Button } from "@/components/ui/Button";
+import { FileField } from "@/components/FileField";
 
 const HEADERS = [
   "full_name",
@@ -19,13 +20,14 @@ const EXAMPLE = ["Jane Doe", "+92 300 1234567", "jane@example.com", "Referral", 
 
 export function ImportLeadsForm() {
   const [state, formAction, pending] = useActionState(importLeads, undefined);
+  const [ready, setReady] = useState(false);
 
   return (
     <details className="mt-3 rounded-md border border-border p-3">
       <summary className="cursor-pointer text-sm font-medium text-ink">Import leads from CSV</summary>
       <form action={formAction} className="mt-3 flex flex-wrap items-end gap-2">
-        <input name="file" type="file" accept=".csv" required className="max-w-full text-sm" />
-        <Button type="submit" variant="primary" disabled={pending}>
+        <FileField accept=".csv" required hint="CSV" inputClassName="text-sm" onChange={(s) => setReady(Boolean(s.file))} />
+        <Button type="submit" variant="primary" disabled={pending || !ready}>
           {pending ? "Importing…" : "Import"}
         </Button>
         <SampleCsvButton filename="leads-sample.csv" headers={HEADERS} exampleRow={EXAMPLE} />

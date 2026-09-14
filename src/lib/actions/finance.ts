@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { PARTNER_COMMISSION_STATUSES } from "@/lib/constants";
 import { requirePermission } from "@/lib/auth/permissions";
 import { listVisaDecisions } from "@/lib/visaDecisions";
+import { validateDocumentFile } from "@/lib/documentUpload";
 
 const REFUND_PERCENT: Record<string, number> = {
   no_admission: 100,
@@ -286,6 +287,8 @@ export async function markStaffCommissionPaid(id: string, revalidateTo: string, 
   let payment_proof_path: string | undefined;
 
   if (file && file.size > 0) {
+    const tooLarge = validateDocumentFile(file, "file");
+    if (tooLarge) return { error: tooLarge };
     const path = `${id}/proof-${file.name}`;
     const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: true });
     if (uploadError) return { error: uploadError.message };
@@ -387,6 +390,8 @@ export async function uploadStaffCommissionProof(id: string, revalidateTo: strin
 
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) return { error: "Choose a file to upload." };
+  const tooLarge = validateDocumentFile(file, "file");
+  if (tooLarge) return { error: tooLarge };
 
   const path = `${id}/proof-${Date.now()}-${file.name}`;
   const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: true });
@@ -449,6 +454,8 @@ export async function uploadPartnerCommissionProof(id: string, revalidateTo: str
 
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) return { error: "Choose a file to upload." };
+  const tooLarge = validateDocumentFile(file, "file");
+  if (tooLarge) return { error: tooLarge };
 
   const path = `${id}/proof-${Date.now()}-${file.name}`;
   const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: true });

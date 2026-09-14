@@ -7,12 +7,14 @@ import { MERGE_FIELDS } from "@/lib/pdf/templateWording";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
+import { FileField } from "@/components/FileField";
 
 export function NewAgreementTemplateForm({ destinations }: { destinations: { id: string; display_name: string }[] }) {
   const [state, formAction, pending] = useActionState(createAgreementTemplate, undefined);
   const [wording, setWording] = useState("");
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
+  const [blocked, setBlocked] = useState(false);
 
   async function handleFile(file: File | null) {
     if (!file || !file.name.toLowerCase().endsWith(".docx")) return;
@@ -47,12 +49,18 @@ export function NewAgreementTemplateForm({ destinations }: { destinations: { id:
           Upload a .docx to auto-fill the wording below with its headings/bold/italic/underline/tables preserved (optional), or
           type/paste and format it directly.
         </label>
-        <input
-          name="file"
-          type="file"
+        {/* Only a file within the limit is read — extracting the wording from
+            an oversized .docx would work and then be refused on submit, which
+            reads as the upload having succeeded. */}
+        <FileField
           accept=".docx"
-          className="max-w-full text-sm"
-          onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
+          noun="template"
+          hint="Word .docx"
+          inputClassName="text-sm"
+          onChange={(s) => {
+            setBlocked(Boolean(s.error) || s.busy);
+            void handleFile(s.file);
+          }}
         />
         {extracting && <p className="text-xs text-muted">Reading document…</p>}
         {extractError && <p className="text-xs text-danger">{extractError}</p>}
@@ -73,7 +81,7 @@ export function NewAgreementTemplateForm({ destinations }: { destinations: { id:
         </ul>
       </details>
       <div>
-        <Button type="submit" variant="primary" disabled={pending}>
+        <Button type="submit" variant="primary" disabled={pending || blocked}>
           {pending ? "Saving…" : "Add template"}
         </Button>
       </div>

@@ -1,7 +1,9 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { FileField } from "@/components/FileField";
+import { MAX_PHOTO_BYTES } from "@/lib/fileSize";
 
 type PhotoUploadState = { error?: string; success?: boolean } | undefined;
 
@@ -25,6 +27,7 @@ export function PhotoUpload({
   hasPhoto?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
+  const [ready, setReady] = useState(false);
   const showsReplace = hasPhoto ?? Boolean(photoUrl);
 
   // Photo on top, its controls stacked underneath and matched to the same
@@ -43,13 +46,18 @@ export function PhotoUpload({
           </div>
         ))}
       <form action={formAction} className="flex w-full min-w-0 flex-col items-stretch gap-1.5">
-        <input
-          type="file"
-          name="file"
-          accept="image/*"
-          className="w-full min-w-0 max-w-full rounded-md border border-border px-2 py-1 text-xs file:mr-2 file:rounded file:border-0 file:bg-bg file:px-1.5 file:py-0.5 file:text-xs file:text-ink"
+        {/* 500 KB, lower than everything else: a head-and-shoulders photo has
+            no reason to be larger, and a phone photo is resized to fit rather
+            than refused, so the smaller limit costs nobody anything. */}
+        <FileField
+          accept="image/jpeg,image/png,image/webp"
+          limitBytes={MAX_PHOTO_BYTES}
+          noun="photo"
+          hint="JPG or PNG"
+          onChange={(s) => setReady(Boolean(s.file))}
+          inputClassName="w-full min-w-0 rounded-md border border-border px-2 py-1 text-xs file:mr-2 file:rounded file:border-0 file:bg-bg file:px-1.5 file:py-0.5 file:text-xs file:text-ink"
         />
-        <Button type="submit" variant="outline" size="sm" pending={pending}>
+        <Button type="submit" variant="outline" size="sm" pending={pending} disabled={!ready}>
           {showsReplace ? "Replace photo" : "Upload photo"}
         </Button>
         {state?.error && <p className="text-center text-xs text-danger">{state.error}</p>}

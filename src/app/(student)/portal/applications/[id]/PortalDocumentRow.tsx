@@ -111,6 +111,7 @@ export function PortalDocumentRow({
           action={action}
           accept={ACCEPTED_DOCUMENT_ACCEPT}
           capture="environment"
+          hint="PDF, Word or photo"
           submitLabel={doc.status === "rejected" ? "Replace" : "Upload"}
           replacing={doc.status === "rejected"}
           className="sm:shrink-0"

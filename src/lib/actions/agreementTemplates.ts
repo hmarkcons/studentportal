@@ -3,6 +3,7 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { validateDocumentFile } from "@/lib/documentUpload";
 
 async function requireSuperAdmin(supabase: Awaited<ReturnType<typeof createClient>>) {
   const {
@@ -28,6 +29,8 @@ export async function createAgreementTemplate(_prevState: unknown, formData: For
 
   let file_path: string | null = null;
   if (file && file.size > 0) {
+    const tooLarge = validateDocumentFile(file, "template");
+    if (tooLarge) return { error: tooLarge };
     file_path = `agreement-templates/${destination_id}-${Date.now()}-${file.name}`;
     const { error: uploadError } = await supabase.storage.from("documents").upload(file_path, file, { upsert: true });
     if (uploadError) return { error: uploadError.message };

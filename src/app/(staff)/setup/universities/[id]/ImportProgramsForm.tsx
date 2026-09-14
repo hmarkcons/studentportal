@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { importPrograms } from "@/lib/actions/universities";
 import { SampleCsvButton } from "@/components/ui/SampleCsvButton";
 import { Button } from "@/components/ui/Button";
+import { FileField } from "@/components/FileField";
 
 const HEADERS = [
   "level",
@@ -45,13 +46,14 @@ const EXAMPLE = [
 export function ImportProgramsForm({ universityId }: { universityId: string }) {
   const action = importPrograms.bind(null, universityId);
   const [state, formAction, pending] = useActionState(action, undefined);
+  const [ready, setReady] = useState(false);
 
   return (
     <details className="mt-3 rounded-md border border-border p-3">
       <summary className="cursor-pointer text-sm font-medium text-ink">Import programs from CSV</summary>
       <form action={formAction} className="mt-3 flex flex-wrap items-end gap-2">
-        <input name="file" type="file" accept=".csv" required className="max-w-full text-sm" />
-        <Button type="submit" variant="primary" pending={pending}>
+        <FileField accept=".csv" required hint="CSV" inputClassName="text-sm" onChange={(s) => setReady(Boolean(s.file))} />
+        <Button type="submit" variant="primary" pending={pending} disabled={!ready}>
           Import
         </Button>
         <SampleCsvButton filename="programs-sample.csv" headers={HEADERS} exampleRow={EXAMPLE} />
