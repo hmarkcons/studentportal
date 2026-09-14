@@ -28,6 +28,7 @@ const BASE_STAFF_NAV: NavItem[] = [
       { label: "Invoice settings", href: "/setup/invoice-settings" },
       { label: "Attendance policy", href: "/setup/attendance-policy" },
       { label: "Visa messages", href: "/setup/visa-messages" },
+      { label: "Re-engagement messages", href: "/setup/reengagement-messages" },
       { label: "Travel & arrival guides", href: "/setup/travel-guide" },
       { label: "Support FAQ", href: "/setup/support-faqs" },
       { label: "Guide tutorials", href: "/setup/guide-videos" },

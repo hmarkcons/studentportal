@@ -28,6 +28,7 @@ export const PERMISSION_KEYS = [
   "settings.visa_messages",
   "settings.travel_guide",
   "students.restart_process",
+  "settings.reengagement_messages",
   "inventory.manage",
 ] as const;
 

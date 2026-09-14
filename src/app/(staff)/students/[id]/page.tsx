@@ -27,6 +27,7 @@ import { listCredentialTypesAction } from "@/lib/actions/countryTracker";
 import { RegistrationEditForm } from "./RegistrationEditForm";
 import { RestartProcessPanel } from "./RestartProcessPanel";
 import { loadRestartContext } from "@/lib/actions/intakeCycles";
+import { loadReengagementContext } from "@/lib/actions/reengagement";
 import { getCachedDestinations, getCachedCounselors, getCachedAgreementTemplates, getCachedFeeProducts } from "@/lib/cachedQueries";
 import { getEffectivePermissions } from "@/lib/auth/permissions";
 import { CollapsibleCard } from "@/components/CollapsibleCard";
@@ -572,6 +573,9 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   // Visa tab reads it from.
   const restartContext = await loadRestartContext(id);
   const canRestart = perms["students.restart_process"] === true;
+  // The message to reach them with, when they have stopped. Only looked up
+  // for a student the panel will actually show.
+  const reengagement = restartContext.eligibility ? await loadReengagementContext(id) : null;
 
   // Primary country first, then backups, matching the Applications tab. The
   // student's lead_destinations rows are what say which is which; a country
@@ -601,7 +605,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       {/* Above everything, because a refused or ghosted student is not a
           detail — it is the thing the counsellor opened this page about. The
           panel renders nothing at all for a student who is neither. */}
-      <RestartProcessPanel studentId={id} context={restartContext} canEdit={canRestart} />
+      <RestartProcessPanel studentId={id} context={restartContext} canEdit={canRestart} reengagement={reengagement} />
 
       {destinationPipelineRows.length > 0 && (
         <>

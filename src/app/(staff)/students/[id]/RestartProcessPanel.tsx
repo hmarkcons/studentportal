@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { useFormAction } from "@/components/useFormAction";
 import { startNewCycle } from "@/lib/actions/intakeCycles";
+import { ReengagementDraft } from "./ReengagementDraft";
+import type { ReengagementContext } from "@/lib/actions/reengagement";
 import type { RestartContext } from "@/lib/actions/intakeCycles";
 
 /**
@@ -25,10 +27,12 @@ export function RestartProcessPanel({
   studentId,
   context,
   canEdit,
+  reengagement,
 }: {
   studentId: string;
   context: RestartContext;
   canEdit: boolean;
+  reengagement?: ReengagementContext | null;
 }) {
   const { eligibility, recommendation, currentIntake, deadlines, cycles } = context;
   const [open, setOpen] = useState(false);
@@ -62,6 +66,18 @@ export function RestartProcessPanel({
         {eligibility.detail} If they want to try again, open a new intake for them. Everything already in the portal
         stays — their documents, their profile, and last intake&rsquo;s applications under their own tab.
       </p>
+
+      {/* Reaching them comes before restarting them: a ghosted student cannot
+          ask for a new intake until somebody gets hold of them. */}
+      {reengagement && (
+        <ReengagementDraft
+          studentId={studentId}
+          draft={reengagement.draft}
+          studentEmail={reengagement.studentEmail}
+          contactNumber={reengagement.contactNumber}
+          templatesMissing={reengagement.templatesMissing}
+        />
+      )}
 
       {success ? (
         <p className="text-sm font-medium text-success">
