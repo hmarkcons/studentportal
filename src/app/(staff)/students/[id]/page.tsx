@@ -10,6 +10,8 @@ import { categorizeApplicationStage } from "@/lib/applicationStage";
 import type { DocRow } from "@/components/DocumentChecklist";
 import { CATEGORY_LABELS, CATEGORY_ORDER } from "@/lib/documentCategories";
 import { CountryTrackerForm } from "@/components/CountryTrackerForm";
+import { loadTrackerPrefillSource } from "@/lib/trackerPrefillSource";
+import { trackerSuggestions } from "@/lib/trackerPrefill";
 import { listTrackerDefinitions } from "@/lib/actions/countryTracker";
 import { DestinationPipelineCard } from "@/components/DestinationPipelineCard";
 import type { DashboardStageDef } from "@/lib/dashboardPipeline";
@@ -610,6 +612,12 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     if (dest.finalize_action_label) finalizeLabelByCode.set(dest.country_code, dest.finalize_action_label);
   });
 
+  // What the rest of the record already says about the fields the tracker
+  // leaves empty. Offered beside each one; nothing is written by this.
+  const prefillSource = trackerSections.length > 0
+    ? await loadTrackerPrefillSource(id, rawDocs ?? [])
+    : null;
+
   const trackerTabs = trackerSections
     .map((section) => ({
       section,
@@ -753,6 +761,15 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                   regionByUniversityValue={section.regionByUniversityValue}
                   studentId={id}
                   finalizeActionLabel={finalizeLabelByCode.get(section.entry.countryCode) ?? "Finalize for visa"}
+                  suggestions={
+                    prefillSource
+                      ? trackerSuggestions(
+                          section.fields.map((f) => ({ key: f.key, type: f.type, options: f.options })),
+                          section.values,
+                          prefillSource
+                        )
+                      : {}
+                  }
                 />
               ),
             }))}

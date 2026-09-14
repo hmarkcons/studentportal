@@ -8,6 +8,27 @@ import { Button } from "@/components/ui/Button";
 import { Input, Select, Textarea } from "@/components/ui/Input";
 import type { TrackerFieldDef } from "@/lib/countryTrackers";
 import { parseMultiValue } from "@/lib/trackerValue";
+import { ActionStatus } from "@/components/ActionStatus";
+import type { Suggestion } from "@/lib/trackerPrefill";
+
+/**
+ * What the record already knows, offered beside an empty field.
+ *
+ * Resolved on the server in trackerPrefill and only ever shown — taking it is
+ * a click, so the counselor who knows the profile is three months stale can
+ * ignore it, and nothing is written behind their back.
+ */
+function PrefillHint({ suggestion, onUse, display }: { suggestion: Suggestion; onUse: () => void; display?: string }) {
+  return (
+    <p className="text-[11px] leading-snug text-muted">
+      From {suggestion.from}:{" "}
+      <span className="text-ink">{display ?? suggestion.value}</span>{" "}
+      <button type="button" onClick={onUse} className="font-medium text-primary hover:underline">
+        use this
+      </button>
+    </p>
+  );
+}
 
 function parseJsonArray(raw: string | undefined): unknown[] {
   if (!raw) return [];
@@ -29,6 +50,7 @@ export function CountryTrackerForm({
   universityOptions = [],
   studentId,
   finalizeActionLabel = "Finalize for visa",
+  suggestions = {},
 }: {
   applicationId: string;
   fields: TrackerFieldDef[];
@@ -49,6 +71,9 @@ export function CountryTrackerForm({
   /** What this destination calls finalising a university, e.g. "Pre-Enroll
    *  University" — set per destination in Setup, not hardcoded per country. */
   finalizeActionLabel?: string;
+  /** Resolved on the server: what the rest of the record already says about
+   *  the fields that are still empty. Offered, never applied. */
+  suggestions?: Record<string, Suggestion>;
 }) {
   // Portal logins live in their own section on the student dashboard, so the
   // tracker no longer carries credential fields at all.
@@ -90,6 +115,13 @@ export function CountryTrackerForm({
             staticOptions ?? (dynamic as { value: string; label: string }[]);
           const multiOptions: string[] = staticOptions ? f.options! : (dynamic as string[]);
 
+          // Only while the field is still empty. The server decided there was
+          // something to offer; whether it still applies is decided here,
+          // because taking a suggestion fills the field without a round trip.
+          const suggestion = suggestions[f.key];
+          const current = (live[f.key] ?? "").trim();
+          const offer = suggestion && !current ? suggestion : null;
+
           return (
             <div key={f.key} className={f.type === "multi_university_status" ? "col-span-full flex flex-col gap-1" : "flex flex-col gap-1"}>
               <label className="text-xs text-muted">{f.label}</label>
@@ -129,7 +161,12 @@ export function CountryTrackerForm({
                   ))}
                 </Select>
               ) : f.type === "multi_select" ? (
-                <MultiSelectField fieldKey={f.key} options={multiOptions} initial={values[f.key]} />
+                <MultiSelectField
+                  fieldKey={f.key}
+                  options={multiOptions}
+                  initial={values[f.key]}
+                  suggestion={suggestions[f.key]}
+                />
               ) : f.type === "multi_text" ? (
                 <MultiTextField fieldKey={f.key} initial={values[f.key]} />
               ) : f.type === "multi_university_status" ? (
@@ -155,15 +192,23 @@ export function CountryTrackerForm({
                   onChange={(e) => setLive((prev) => ({ ...prev, [f.key]: e.target.value }))}
                 />
               )}
+              {/* multi_select carries its own, next to its own ticks. */}
+              {offer && f.type !== "multi_select" && (
+                <PrefillHint suggestion={offer} onUse={() => setLive((prev) => ({ ...prev, [f.key]: offer.value }))} />
+              )}
             </div>
           );
         })}
         <div className="col-span-full">
           {state?.error && <p className="mb-2 text-xs text-danger">{state.error}</p>}
-          {state?.success && <p className="mb-2 text-xs text-success">Saved.</p>}
-          <Button type="submit" variant="primary" pending={pending}>
-            Save tracker fields
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button type="submit" variant="primary" pending={pending}>
+              Save tracker fields
+            </Button>
+            {/* Was a bare "Saved." that stayed put while the next field was
+                being typed, which reads as though that one saved too. */}
+            <ActionStatus state={state} pending={pending} />
+          </div>
         </div>
       </form>
 
@@ -173,7 +218,17 @@ export function CountryTrackerForm({
 
 // Checkbox list JSON-encoded into a single hidden input — no schema change
 // needed since application_country_extra.field_value is generic text.
-function MultiSelectField({ fieldKey, options, initial }: { fieldKey: string; options: string[]; initial?: string }) {
+function MultiSelectField({
+  fieldKey,
+  options,
+  initial,
+  suggestion,
+}: {
+  fieldKey: string;
+  options: string[];
+  initial?: string;
+  suggestion?: Suggestion;
+}) {
   // parseMultiValue, not parseJsonArray: a field that used to be a single
   // select stores its old answers unquoted ("CEnT-S", not ["CEnT-S"]), and
   // reading those as nothing would drop a student's recorded test from the
@@ -193,6 +248,15 @@ function MultiSelectField({ fieldKey, options, initial }: { fieldKey: string; op
         </label>
       ))}
       {options.length === 0 && <p className="text-xs text-muted">Nothing to select yet.</p>}
+      {/* Offered only while nothing is ticked — a half-ticked list is an
+          answer, and overwriting it with the profile's guess would lose it. */}
+      {suggestion && selected.length === 0 && (
+        <PrefillHint
+          suggestion={suggestion}
+          display={parseMultiValue(suggestion.value).join(", ")}
+          onUse={() => setSelected(parseMultiValue(suggestion.value))}
+        />
+      )}
       <input type="hidden" name={fieldKey} value={JSON.stringify(selected)} />
     </div>
   );
