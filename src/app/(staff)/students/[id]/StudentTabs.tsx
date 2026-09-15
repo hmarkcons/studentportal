@@ -26,12 +26,16 @@ export function StudentTabs({
     // so the strip now reads in the order the work is actually done.
     { label: "Documents", href: `/students/${studentId}/documents` },
     { label: "Applications", href: `/students/${studentId}/applications` },
+    ...(showScholarship ? [{ label: "Scholarship", href: `/students/${studentId}/scholarship` }] : []),
+    // After Scholarship, because that is the order the work happens in: the
+    // pre-enrolment settles, the DSU application goes in on its own deadline,
+    // and the visa is applied for after both.
+    //
     // Sourced entirely from the documentation tracker, which is still where
     // the whole tracker is maintained — this tab gathers the visa fields with
     // the appointment login and what the student is being shown. Super Admin
     // and Processing only: it carries a refusal history and a portal password.
     ...(showVisa ? [{ label: "Visa", href: `/students/${studentId}/visa` }] : []),
-    ...(showScholarship ? [{ label: "Scholarship", href: `/students/${studentId}/scholarship` }] : []),
     { label: "Communication", href: `/students/${studentId}/communication`, badge: unreadMessages },
   ];
 
