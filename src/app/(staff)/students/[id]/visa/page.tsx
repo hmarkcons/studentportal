@@ -12,6 +12,9 @@ import { visaCountries, type VisaApplication } from "@/lib/visaCountries";
 import { canSeeVisaSection } from "@/lib/visaAccess";
 import { VisaOfficeList } from "@/components/VisaOfficeList";
 import { loadVisaOffices } from "@/lib/actions/visaOfficeQueries";
+import { loadVisaPageContent } from "@/lib/actions/visaPageQueries";
+import { VisaPageSections } from "@/components/VisaPageSections";
+import { mergeVisaMessages, sectionsFor, toMessageTemplates } from "@/lib/visaPage";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -80,9 +83,10 @@ export default async function StudentVisaTab(props: PageProps<"/students/[id]/vi
   // disagree about whose visa is under way.
   const countries = visaCountries(rows);
   const defsByCountry = countries.length ? await listTrackerDefinitions(countries.map((c) => c.code)) : {};
-  const officesByDestination = await loadVisaOffices(
-    countries.map((c) => c.destinationId).filter((d): d is string => Boolean(d))
-  );
+  const destinationIds = countries.map((c) => c.destinationId).filter((d): d is string => Boolean(d));
+  const officesByDestination = await loadVisaOffices(destinationIds);
+  // The sections and per-country wording set in Setup > Visa page builder.
+  const built = await loadVisaPageContent(destinationIds);
 
   const sections = await Promise.all(
     countries.map(async (c) => {
@@ -119,11 +123,8 @@ export default async function StudentVisaTab(props: PageProps<"/students/[id]/vi
     credentialTypes.find((t) => t !== "portal_login" && /vfs|appointment|visa/i.test(t)) ??
     null;
 
-  const { data: templates } = await client
-    .from("visa_messages")
-    .select("approved_heading, approved_body, approved_signoff, refused_heading, refused_body, refused_signoff")
-    .eq("id", true)
-    .maybeSingle();
+  // The shared wording comes from loadVisaPageContent and is merged per
+  // country below, so this page no longer reads visa_messages itself.
 
   return (
     <div className="flex flex-col gap-6">
@@ -136,7 +137,15 @@ export default async function StudentVisaTab(props: PageProps<"/students/[id]/vi
         </Card>
       ) : (
         visible.map((s) => {
-          const message = visaMessage(s.decision, student?.full_name ?? "", s.country.name, templates ?? null);
+          const message = visaMessage(
+            s.decision,
+            student?.full_name ?? "",
+            s.country.name,
+            toMessageTemplates(
+              mergeVisaMessages(built.shared, s.country.destinationId ? built.overrides[s.country.destinationId] ?? null : null)
+            )
+          );
+          const extraSections = sectionsFor(built.sections, s.country.destinationId, "staff");
           return (
             <Card key={s.country.code}>
               <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
@@ -204,13 +213,26 @@ export default async function StudentVisaTab(props: PageProps<"/students/[id]/vi
                 studentId={id}
               />
 
+              {/* Whatever the office added in the builder, staff-only ones
+                  included — those are the notes a counselor needs and the
+                  student should not read. */}
+              {extraSections.length > 0 && (
+                <div className="mt-4 border-t border-border pt-4">
+                  <VisaPageSections sections={extraSections} showAudience />
+                </div>
+              )}
+
               <p className="mt-3 text-xs text-muted">
                 These are the tracker fields marked for the visa view. The rest of {s.country.name}&rsquo;s tracker is on
                 the{" "}
                 <Link href={`/students/${id}`} className="text-primary hover:underline">
                   Dashboard
                 </Link>
-                , and which fields appear here is set in Setup &rsaquo; Document trackers.
+                . What appears on this page is built in{" "}
+                <Link href="/setup/visa-page-builder" className="text-primary hover:underline">
+                  Setup &rsaquo; Visa page builder
+                </Link>
+                .
               </p>
             </Card>
           );

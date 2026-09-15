@@ -9,6 +9,9 @@ import { VisaCredentials } from "./VisaCredentials";
 import { VisaOfficeList } from "@/components/VisaOfficeList";
 import { visaCountries } from "@/lib/visaCountries";
 import { loadVisaOffices } from "@/lib/actions/visaOfficeQueries";
+import { loadVisaPageContent } from "@/lib/actions/visaPageQueries";
+import { VisaPageSections } from "@/components/VisaPageSections";
+import { mergeVisaMessages, sectionsFor, toMessageTemplates } from "@/lib/visaPage";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -72,9 +75,10 @@ export default async function PortalVisaPage() {
   const defsByCountry = codes.length ? await listTrackerDefinitions(codes) : {};
   // The same table the staff tab reads: the address a counsellor gives on the
   // phone and the one the student turns up to have to be the same address.
-  const officesByDestination = await loadVisaOffices(
-    countries.map((c) => c.destinationId).filter((d): d is string => Boolean(d))
-  );
+  const destinationIds = countries.map((c) => c.destinationId).filter((d): d is string => Boolean(d));
+  const officesByDestination = await loadVisaOffices(destinationIds);
+  // The sections and per-country wording set in Setup › Visa page builder.
+  const built = await loadVisaPageContent(destinationIds);
 
   const sections = await Promise.all(
     countries.map(async (c) => {
@@ -102,7 +106,8 @@ export default async function PortalVisaPage() {
       // finalised, and an address is not a dash.
       const anythingRecorded = fields.some((f) => (values[f.key] ?? "").trim() !== "");
       const offices = c.destinationId ? officesByDestination[c.destinationId] ?? [] : [];
-      if (!anythingRecorded && offices.length === 0) return null;
+      const extraSections = sectionsFor(built.sections, c.destinationId, "student");
+      if (!anythingRecorded && offices.length === 0 && extraSections.length === 0) return null;
 
       return {
         country: c,
@@ -115,6 +120,10 @@ export default async function PortalVisaPage() {
         reason: reasonField ? values[reasonField.key] ?? "" : "",
         anythingRecorded,
         offices,
+        extraSections,
+        // The shared wording with this country's own laid over it, field by
+        // field, so an override that changes only a heading keeps the rest.
+        messages: mergeVisaMessages(built.shared, c.destinationId ? built.overrides[c.destinationId] ?? null : null),
       };
     })
   );
@@ -138,14 +147,9 @@ export default async function PortalVisaPage() {
     credentialTypes.find((t) => t !== "portal_login" && /vfs|appointment|visa/i.test(t)) ??
     null;
 
-  // Edited in Setup › Visa messages. Null only on a database where the row was
-  // deleted, and visaMessage falls back to its built-in copy then rather than
-  // leaving a badge with nothing under it.
-  const { data: templates } = await supabase
-    .from("visa_messages")
-    .select("approved_heading, approved_body, approved_signoff, refused_heading, refused_body, refused_signoff")
-    .eq("id", true)
-    .maybeSingle();
+  // The shared wording is read once in loadVisaPageContent and merged per
+  // country above, so this page no longer fetches visa_messages itself —
+  // two reads of the same row was how the two could have disagreed.
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -162,7 +166,7 @@ export default async function PortalVisaPage() {
       ) : (
         <div className="flex flex-col gap-6">
           {visible.map((s) => {
-            const message = visaMessage(s.decision, student.full_name, s.country.name, templates ?? null);
+            const message = visaMessage(s.decision, student.full_name, s.country.name, toMessageTemplates(s.messages));
             return (
               <Card key={s.country.code}>
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -222,6 +226,14 @@ export default async function PortalVisaPage() {
                       Where to apply
                     </h4>
                     <VisaOfficeList offices={s.offices} countryName={s.country.name} />
+                  </div>
+                )}
+
+                {/* Whatever the office added in the builder. Last, because it
+                    is guidance around the process rather than the process. */}
+                {s.extraSections.length > 0 && (
+                  <div className="mt-4 border-t border-border pt-4">
+                    <VisaPageSections sections={s.extraSections} />
                   </div>
                 )}
               </Card>

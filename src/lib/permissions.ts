@@ -27,6 +27,7 @@ export const PERMISSION_KEYS = [
   "marketing.referrals.manage",
   "settings.visa_messages",
   "settings.visa_offices",
+  "settings.visa_page",
   "settings.travel_guide",
   "students.restart_process",
   "settings.reengagement_messages",
