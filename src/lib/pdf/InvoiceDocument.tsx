@@ -1,6 +1,14 @@
-import { Document, Page, Text, View, Image, StyleSheet } from "@react-pdf/renderer";
+import { Document, Page, Text, View, Image, StyleSheet, Font } from "@react-pdf/renderer";
 import { BRAND_LOGO_DATA_URI, BRAND_LOGO_RATIO } from "./brandLogo";
 import { pkrLine, pkrRateNote } from "../receiptPkr";
+
+// Never break a word across lines.
+//
+// react-pdf hyphenates by default, which put "On admission ap- proval from
+// your first public university" in the schedule's narrow date column. On a
+// financial document a hyphenated word reads as a typo, and this is a column
+// of short phrases where wrapping at spaces is always available.
+Font.registerHyphenationCallback((word) => [word]);
 
 // Laid out to match HMARK's existing Wave-generated invoice
 // (reference/Invoice Samples/Invoice Sample - WaveApps.pdf) so students who
