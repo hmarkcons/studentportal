@@ -7,6 +7,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { dateOfBirthError } from "@/lib/dateOfBirth";
 import { phoneError } from "@/lib/phoneNumber";
 import { MAX_PHOTO_BYTES, fileSizeError, reduceHint } from "@/lib/fileSize";
+import { notifyAssignedStaff } from "@/lib/actions/registrationNotice";
 
 // "Suspended" just freezes the account (blocked from every staff route by
 // the (staff) layout's `status !== "active"` check, same as deactivated) —
@@ -183,6 +184,12 @@ export async function updateStaffDetails(staffId: string, _prevState: unknown, f
         assignedLeads.map((l) => ({ from_staff_id: staffId, to_staff_id: reassignToStaffId, student_id: l.id }))
       );
       if (logError) return { error: logError.message };
+
+      // Deactivating somebody hands their whole caseload to a stand-in. That
+      // stand-in is told about each student, which is the case the office
+      // most needs the mail for — nobody should discover a caseload by
+      // opening the students list one morning.
+      for (const l of assignedLeads) await notifyAssignedStaff(l.id);
     }
   }
 
@@ -210,6 +217,10 @@ export async function updateStaffDetails(staffId: string, _prevState: unknown, f
       if (revertError) continue;
 
       await supabase.from("staff_reassignment_log").update({ reversed_at: new Date().toISOString() }).eq("id", entry.id);
+      // Handed back on reactivation. They were told about this student once
+      // before, so the notice table keeps this quiet — which is right: it is
+      // their own student returning, not news.
+      await notifyAssignedStaff(entry.student_id);
       restoredCount++;
     }
   }

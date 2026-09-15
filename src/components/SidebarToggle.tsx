@@ -41,19 +41,18 @@ export function SidebarToggle({ variant }: { variant: "hide" | "show" }) {
   }
 
   if (variant === "hide") {
-    // A bare « in muted grey read as decoration, so nobody found it. Bordered,
-    // labelled and at the same contrast as the menu items it sits above: it is
-    // a control, and it should look like one.
+    // A bare « in muted grey at p-1 read as decoration and nobody found it.
+    // The answer is the same arrow, large and in the brand green — a coloured
+    // 24px glyph carries on its own, where a 12px grey one did not.
     return (
       <button
         type="button"
         onClick={() => set(true)}
         title="Hide the menu"
         aria-label="Hide the menu"
-        className="hidden shrink-0 items-center gap-1 rounded-md border border-sidebar-border bg-sidebar-active-bg px-2 py-1.5 text-xs font-semibold text-sidebar-ink transition-colors hover:border-sidebar-ink hover:bg-sidebar-border md:inline-flex"
+        className="hidden shrink-0 items-center justify-center rounded-md px-1.5 py-0.5 text-2xl leading-none text-primary transition-colors hover:bg-sidebar-active-bg md:inline-flex"
       >
-        <span aria-hidden className="text-sm leading-none">&laquo;</span>
-        Hide
+        &laquo;
       </button>
     );
   }
@@ -61,8 +60,8 @@ export function SidebarToggle({ variant }: { variant: "hide" | "show" }) {
   // Rendered in the header and hidden by CSS until the menu is away, so the
   // button appears the moment the page paints rather than after hydration.
   //
-  // Labelled for the same reason as Hide: a lone ☰ in a header full of other
-  // controls is where the menu goes to be lost.
+  // Matched to Hide: the same size and the same green, pointing the other way.
+  // A prominent Hide with an unfindable Show would be worse than neither.
   return (
     <button
       type="button"
@@ -72,10 +71,9 @@ export function SidebarToggle({ variant }: { variant: "hide" | "show" }) {
       title="Show the menu"
       aria-label="Show the menu"
       aria-expanded={!hidden}
-      className="hidden shrink-0 items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-ink transition-colors hover:border-ink hover:bg-bg md:inline-flex"
+      className="hidden shrink-0 items-center justify-center rounded-md px-1.5 py-0.5 text-2xl leading-none text-primary transition-colors hover:bg-bg md:inline-flex"
     >
-      <span aria-hidden className="text-sm leading-none">&#9776;</span>
-      Menu
+      &raquo;
     </button>
   );
 }

@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { ensureCommissionForStudent } from "@/lib/actions/commissionAuto";
+import { notifyAssignedStaff } from "@/lib/actions/registrationNotice";
 import { syncStudentFollowUpTask } from "@/lib/actions/studentFollowUp";
 import { createClient } from "@/lib/supabase/server";
 import { LEAD_STATUSES } from "@/lib/constants";
@@ -365,6 +366,7 @@ export async function registerStudentManually(_prevState: unknown, formData: For
   }
 
   await ensureCommissionForStudent(id);
+  await notifyAssignedStaff(id);
 
   revalidatePath("/students");
   // Same reasoning as registerLead: this form only captures a handful of
@@ -437,6 +439,10 @@ export async function reassignLead(leadId: string, _prevState: unknown, formData
   const { error } = await supabase.from("leads").update({ assigned_counselor_id }).eq("id", leadId);
   if (error) return { error: error.message };
 
+  // A counselor handed a student is told so. Does nothing for a lead that has
+  // not registered, and nothing twice for a person already told about them.
+  await notifyAssignedStaff(leadId);
+
   revalidatePath(`/leads/${leadId}`);
   revalidatePath("/leads");
   return { success: true };
@@ -479,6 +485,9 @@ export async function updateRegistrationDetails(studentId: string, revalidateTo:
 
   const { error } = await supabase.from("leads").update(patch).eq("id", studentId);
   if (error) return { error: error.message };
+
+  // The counselor or the processing officer may have changed in that patch.
+  await notifyAssignedStaff(studentId);
 
   revalidatePath(revalidateTo);
   revalidatePath("/students");
@@ -537,6 +546,7 @@ export async function registerLead(leadId: string, _formData: FormData) {
   // handle_lead_registration() on the transition, and the commission is
   // keyed to the month that date falls in.
   await ensureCommissionForStudent(leadId);
+  await notifyAssignedStaff(leadId);
 
   revalidatePath(`/leads/${leadId}`);
   revalidatePath("/leads");
