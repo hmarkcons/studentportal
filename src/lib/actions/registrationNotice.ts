@@ -54,7 +54,7 @@ export async function notifyAssignedStaff(studentId: string) {
   }
   const { data: managers } = await admin
     .from("staff")
-    .select("id, full_name, email, role")
+    .select("id, role")
     .in("role", ["management", "super_admin"])
     .eq("status", "active");
   for (const m of managers ?? []) if (!targets.has(m.id)) targets.set(m.id, "management");
@@ -97,8 +97,24 @@ export async function notifyAssignedStaff(studentId: string) {
   const moreActions = Math.max(0, outstanding.length - firstActions.length);
 
   const staffIds = [...targets.keys()];
-  const { data: staffRows } = await admin.from("staff").select("id, full_name, email").in("id", staffIds);
-  const byId = new Map((staffRows ?? []).map((s) => [s.id, s]));
+  const { data: staffRows } = await admin
+    .from("staff")
+    .select("id, full_name, email_official, email_personal")
+    .in("id", staffIds);
+
+  // There is no staff.email column: the work address is email_official, and
+  // the only address guaranteed to exist is the one they sign in with. Office
+  // address first, personal second, login last — a notice sent to a login
+  // address nobody reads is a notice that did not arrive.
+  const byId = new Map<string, { full_name: string; email: string | null }>();
+  for (const s of staffRows ?? []) {
+    let email = (s.email_official || s.email_personal || "").trim() || null;
+    if (!email) {
+      const { data: authUser } = await admin.auth.admin.getUserById(s.id);
+      email = authUser?.user?.email ?? null;
+    }
+    byId.set(s.id, { full_name: s.full_name, email });
+  }
 
   const counselorName = student.assigned_counselor_id ? byId.get(student.assigned_counselor_id)?.full_name ?? null : null;
   const processingOfficerName = student.processing_officer_id
