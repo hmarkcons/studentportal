@@ -135,6 +135,52 @@ export async function applyScholarshipProposal(runId: string, acceptedFields: st
 }
 
 /**
+ * Applies several proposals in one press.
+ *
+ * A sweep of twenty-one bodies that gets twenty of them right is twenty
+ * separate presses, and the office asked not to do that. What this is not is
+ * "accept everything": each entry carries the fields that are still ticked on
+ * its own card, so a field somebody deliberately unticked because it looked
+ * wrong stays unticked here too. That is the whole reason the per-field
+ * choice exists, and a bulk button that ignored it would quietly undo it.
+ *
+ * Runs one body at a time and reports each outcome rather than stopping at
+ * the first failure: nineteen applied and two named is a useful answer, and
+ * "it failed" after nineteen silent successes is not.
+ */
+export async function applyScholarshipProposals(
+  entries: { runId: string; fields: string[] }[]
+): Promise<{
+  applied: { runId: string; fields: number }[];
+  failed: { runId: string; error: string }[];
+  skipped: string[];
+}> {
+  const error = await gate();
+  if (error) return { applied: [], failed: [{ runId: "", error }], skipped: [] };
+
+  const applied: { runId: string; fields: number }[] = [];
+  const failed: { runId: string; error: string }[] = [];
+  const skipped: string[] = [];
+
+  for (const entry of entries) {
+    // Nothing ticked is a deliberate "not this one", not an error.
+    if (entry.fields.length === 0) {
+      skipped.push(entry.runId);
+      continue;
+    }
+    const result = await applyScholarshipProposal(entry.runId, entry.fields);
+    if (result && "error" in result && result.error) {
+      failed.push({ runId: entry.runId, error: result.error });
+    } else {
+      applied.push({ runId: entry.runId, fields: result?.applied ?? entry.fields.length });
+    }
+  }
+
+  revalidatePath(PAGE);
+  return { applied, failed, skipped };
+}
+
+/**
  * Takes the next queued body, reads its call, and records the outcome.
  *
  * One at a time and called from the browser in a loop: a serverless function

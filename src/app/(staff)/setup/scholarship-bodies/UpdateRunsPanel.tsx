@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   requestScholarshipUpdate,
   applyScholarshipProposal,
+  applyScholarshipProposals,
   dismissScholarshipProposal,
   processNextScholarshipUpdate,
   testScholarshipResearch,
@@ -59,9 +60,27 @@ function show(value: unknown): string {
  * and one thing wrong, and an all-or-nothing choice means either taking the
  * wrong one or throwing away the rest.
  */
-function Proposal({ run, onDone }: { run: UpdateRun; onDone: () => void }) {
+function Proposal({
+  run,
+  accepted,
+  onToggle,
+  onDone,
+  busy = false,
+}: {
+  run: UpdateRun;
+  /**
+   * Which fields are ticked, held by the panel rather than here — the
+   * "Apply all" button has to be able to read every card's choice, and a
+   * bulk button that re-accepted a field somebody had deliberately unticked
+   * would quietly undo the per-field decision this card exists to offer.
+   */
+  accepted: Set<string>;
+  onToggle: (field: string, checked: boolean) => void;
+  onDone: () => void;
+  /** The bulk apply is running; this card's own buttons stand down. */
+  busy?: boolean;
+}) {
   const fields = Object.keys(run.proposal ?? {});
-  const [accepted, setAccepted] = useState<Set<string>>(new Set(fields));
   const [pending, setPending] = useState<"apply" | "dismiss" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -97,10 +116,17 @@ function Proposal({ run, onDone }: { run: UpdateRun; onDone: () => void }) {
               source ↗
             </a>
           )}
-          <Button type="button" size="sm" variant="primary" pending={pending === "apply"} onClick={apply}>
+          <Button
+            type="button"
+            size="sm"
+            variant="primary"
+            pending={pending === "apply"}
+            disabled={busy || accepted.size === 0}
+            onClick={apply}
+          >
             Apply {accepted.size === fields.length ? "all" : `${accepted.size}`}
           </Button>
-          <Button type="button" size="sm" pending={pending === "dismiss"} onClick={dismiss}>
+          <Button type="button" size="sm" pending={pending === "dismiss"} disabled={busy} onClick={dismiss}>
             Reject
           </Button>
         </span>
@@ -114,14 +140,8 @@ function Proposal({ run, onDone }: { run: UpdateRun; onDone: () => void }) {
               <input
                 type="checkbox"
                 checked={accepted.has(field)}
-                onChange={(e) =>
-                  setAccepted((prev) => {
-                    const next = new Set(prev);
-                    if (e.target.checked) next.add(field);
-                    else next.delete(field);
-                    return next;
-                  })
-                }
+                onChange={(e) => onToggle(field, e.target.checked)}
+                disabled={busy}
                 className="mt-0.5 h-4 w-4"
               />
               <span className="min-w-0 flex-1">
@@ -165,6 +185,86 @@ export function UpdateRunsPanel({
   const working = runs.filter((r) => r.status === "queued" || r.status === "running");
   const awaiting = runs.filter((r) => r.status === "awaiting");
   const failed = runs.filter((r) => r.status === "failed");
+
+  /**
+   * Which fields are ticked on each proposal, held here rather than in the
+   * cards so that "Apply all" can honour what somebody has already unticked.
+   *
+   * Derived from the runs rather than seeded by an effect: a refresh brings
+   * new runs, and an effect that reset this on every render would undo a
+   * choice made a second earlier. A run appearing for the first time starts
+   * with everything ticked, which is what the single-card button always did.
+   */
+  const [unticked, setUnticked] = useState<Record<string, string[]>>({});
+  const selectionFor = (run: UpdateRun) => {
+    const all = Object.keys(run.proposal ?? {});
+    const off = new Set(unticked[run.id] ?? []);
+    return new Set(all.filter((f) => !off.has(f)));
+  };
+  const toggle = (runId: string, field: string, checked: boolean) =>
+    setUnticked((prev) => {
+      const off = new Set(prev[runId] ?? []);
+      if (checked) off.delete(field);
+      else off.add(field);
+      return { ...prev, [runId]: [...off] };
+    });
+
+  const [applyingAll, setApplyingAll] = useState(false);
+  const totalTicked = proposed.reduce((sum, r) => sum + selectionFor(r).size, 0);
+  const withNotes = proposed.filter((r) => r.notes).length;
+
+  /**
+   * Applies every proposal that still has something ticked, in one press.
+   *
+   * The confirmation says how many bodies and how many fields, and calls out
+   * how many carry a note — the note is where the reading says what it was
+   * unsure about, and it is the one thing worth having read before accepting
+   * twenty of these at once.
+   */
+  async function applyAll() {
+    const entries = proposed
+      .map((r) => ({ runId: r.id, fields: [...selectionFor(r)] }))
+      .filter((e) => e.fields.length > 0);
+    if (entries.length === 0) return;
+
+    const noteWarning = withNotes
+      ? `\n\n${withNotes} of them carries a note saying what the reading was unsure about. Those are worth reading first.`
+      : "";
+    if (
+      !confirm(
+        `Apply ${totalTicked} change${totalTicked === 1 ? "" : "s"} across ${entries.length} scholarship ${
+          entries.length === 1 ? "body" : "bodies"
+        }?${noteWarning}`
+      )
+    ) {
+      return;
+    }
+
+    setApplyingAll(true);
+    setError(null);
+    setMessage(null);
+    const result = await applyScholarshipProposals(entries);
+    setApplyingAll(false);
+
+    const appliedFields = result.applied.reduce((s, a) => s + a.fields, 0);
+    const parts = [
+      `Applied ${appliedFields} change${appliedFields === 1 ? "" : "s"} across ${result.applied.length} ${
+        result.applied.length === 1 ? "body" : "bodies"
+      }.`,
+    ];
+    if (result.skipped.length > 0) {
+      parts.push(`${result.skipped.length} left alone — nothing was ticked on them.`);
+    }
+    if (result.failed.length > 0) {
+      // Named, not counted: which one failed is the actionable part.
+      const names = result.failed
+        .map((f) => proposed.find((p) => p.id === f.runId)?.bodyName ?? "one body")
+        .join(", ");
+      setError(`${result.failed.length} could not be applied (${names}) — they are still below.`);
+    }
+    setMessage(parts.join(" "));
+    router.refresh();
+  }
 
   /**
    * Queues the work, then drains it one body at a time from here.
@@ -274,8 +374,39 @@ export function UpdateRunsPanel({
       {message && <p className="text-xs text-success">{message}</p>}
       {error && <p className="text-xs text-danger">{error}</p>}
 
+      {/* One press for a sweep that got most of it right, above the cards so
+          it is found before working through twenty of them — and saying how
+          many it will change, because "Apply all" with no number is a button
+          nobody presses twice. The per-body buttons stay: this is the
+          shortcut, not the replacement. */}
+      {proposed.length > 1 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-info bg-info-bg px-3 py-2">
+          <p className="text-xs text-info">
+            {proposed.length} bodies proposed {totalTicked} change{totalTicked === 1 ? "" : "s"} between them
+            {withNotes > 0 && `, and ${withNotes} carr${withNotes === 1 ? "ies" : "y"} a note worth reading first`}.
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            variant="primary"
+            pending={applyingAll}
+            disabled={totalTicked === 0}
+            onClick={applyAll}
+          >
+            Apply all {totalTicked} across {proposed.length} bodies
+          </Button>
+        </div>
+      )}
+
       {proposed.map((run) => (
-        <Proposal key={run.id} run={run} onDone={() => router.refresh()} />
+        <Proposal
+          key={run.id}
+          run={run}
+          accepted={selectionFor(run)}
+          onToggle={(field, checked) => toggle(run.id, field, checked)}
+          busy={applyingAll}
+          onDone={() => router.refresh()}
+        />
       ))}
 
       {awaiting.length > 0 && (
