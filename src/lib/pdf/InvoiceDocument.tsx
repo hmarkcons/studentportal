@@ -1,5 +1,6 @@
 import { Document, Page, Text, View, Image, StyleSheet } from "@react-pdf/renderer";
 import { BRAND_LOGO_DATA_URI, BRAND_LOGO_RATIO } from "./brandLogo";
+import { pkrLine, pkrRateNote } from "../receiptPkr";
 
 // Laid out to match HMARK's existing Wave-generated invoice
 // (reference/Invoice Samples/Invoice Sample - WaveApps.pdf) so students who
@@ -54,6 +55,10 @@ const styles = StyleSheet.create({
   totalsKey: { flex: 1, textAlign: "right", paddingRight: 14, fontSize: 9.5, color: INK },
   totalsKeyBold: { fontFamily: "Helvetica-Bold", color: INK_STRONG },
   totalsNum: { width: 96, textAlign: "right", fontSize: 9.5, color: INK },
+  // The rupee figure sits under its euro one, smaller and grey: the receipt is
+  // denominated in euro and this is the same number said again.
+  pkrNum: { width: 96, textAlign: "right", fontSize: 8, color: GREY, marginTop: -1, marginBottom: 2 },
+  pkrRowWrap: { flexDirection: "row", alignItems: "baseline" },
   totalsNumBold: { fontFamily: "Helvetica-Bold", fontSize: 11, color: INK_STRONG },
   totalsRule: { borderTopWidth: 1, borderTopColor: RULE, marginTop: 6, paddingTop: 8 },
 
@@ -90,7 +95,6 @@ export type InvoicePdfData = {
   studentEmail: string | null;
   destination: string | null;
   intake: string | null;
-  counselor: string | null;
   installmentPlan: string | null;
   adminCharge: number;
   consultancyFee: number;
@@ -126,10 +130,34 @@ export type InvoicePdfData = {
   } | null;
   /** Set when the invoice currency differs from the account currency. */
   conversionNote: string | null;
+  /**
+   * Rupees per euro, as stamped on this invoice when it was issued.
+   *
+   * Null on an invoice issued before the rate existed: those print in euro
+   * only rather than restating themselves at a rate nobody quoted.
+   */
+  pkrPerEur?: number | null;
 };
 
 function money(symbol: string, n: number) {
   return `${symbol}${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/**
+ * A euro figure said again in rupees, directly under it.
+ *
+ * Renders nothing when the invoice carries no rate — an invoice issued before
+ * the rate existed was never quoted in rupees.
+ */
+function Pkr({ amount, rate, bold = false }: { amount: number; rate: number | null | undefined; bold?: boolean }) {
+  const line = pkrLine(amount, rate);
+  if (!line) return null;
+  return (
+    <View style={styles.pkrRowWrap}>
+      <Text style={styles.totalsKey} />
+      <Text style={[styles.pkrNum, bold ? { color: INK } : {}]}>{line}</Text>
+    </View>
+  );
 }
 
 export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
@@ -178,7 +206,10 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
               <Text style={styles.metaKey}>Invoice Date:</Text>
               <Text style={styles.metaVal}>{data.issuedDate}</Text>
             </View>
-            {data.dueDate && (
+            {/* Only when there is no schedule below to say it better. With a
+                schedule this line repeated one of its dates out of context,
+                and a reader had two "due" dates to reconcile. */}
+            {data.dueDate && data.payments.length === 0 && (
               <View style={styles.metaLine}>
                 <Text style={styles.metaKey}>Payment Due:</Text>
                 <Text style={styles.metaVal}>{data.dueDate}</Text>
@@ -215,7 +246,9 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
             <Text style={styles.itemName}>{data.destination ?? "Consultancy Services"}</Text>
             {data.intake && <Text style={styles.itemDesc}>Intake: {data.intake}</Text>}
             {data.installmentPlan && <Text style={styles.itemDesc}>Installment plan: {data.installmentPlan}</Text>}
-            {data.counselor && <Text style={styles.itemDesc}>Counselor: {data.counselor}</Text>}
+            {/* The counselor used to be named here. It is a receipt for money,
+                not a record of who sold the service, and a student who changes
+                counselor should not have to hold a receipt naming the old one. */}
             {data.terms && <Text style={styles.itemDesc}>{data.terms}</Text>}
           </View>
           <Text style={[styles.num, { flex: 1, textAlign: "right" }]}>{money(data.currencySymbol, data.consultancyFee)}</Text>
@@ -254,6 +287,7 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
               {money(data.currencySymbol, data.subtotal)}
             </Text>
           </View>
+          <Pkr amount={data.subtotal} rate={data.pkrPerEur} />
           {/* What has been received, emphasised rather than printed as one
               more grey row. On a part-paid invoice this is the figure a student
               checks against their own records first, and a mismatch here is
@@ -266,10 +300,12 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
               </Text>
             </View>
           )}
+          {data.amountPaid > 0 && <Pkr amount={data.amountPaid} rate={data.pkrPerEur} />}
           <View style={[styles.totalsRow, styles.totalsRule]}>
             <Text style={[styles.totalsKey, styles.totalsKeyBold]}>Amount Due ({data.currencyCode}):</Text>
             <Text style={[styles.totalsNum, styles.totalsNumBold]}>{money(data.currencySymbol, data.balanceDue)}</Text>
           </View>
+          <Pkr amount={data.balanceDue} rate={data.pkrPerEur} bold />
         </View>
 
         {/* Side by side so a routine invoice — fee, schedule and where to pay —
@@ -320,7 +356,12 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
                     {p.note && <Text style={{ fontSize: 7.5, color: GREY }}>{p.note}</Text>}
                   </View>
                   <Text style={{ flex: 1.5, fontSize: 8.5, color: GREY }}>{p.method ?? "—"}</Text>
-                  <Text style={{ flex: 1.2, fontSize: 8.5, textAlign: "right" }}>{money(data.currencySymbol, p.amount)}</Text>
+                  <View style={{ flex: 1.2 }}>
+                    <Text style={{ fontSize: 8.5, textAlign: "right" }}>{money(data.currencySymbol, p.amount)}</Text>
+                    {pkrLine(p.amount, data.pkrPerEur) && (
+                      <Text style={{ fontSize: 7.5, textAlign: "right", color: GREY }}>{pkrLine(p.amount, data.pkrPerEur)}</Text>
+                    )}
+                  </View>
                   <Text style={{ flex: 1, fontSize: 8.5, textAlign: "right", color: p.status === "paid" ? INK_STRONG : GREY }}>
                     {p.status === "paid" ? "Received" : "Due"}
                   </Text>
@@ -329,6 +370,14 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
             </View>
           )}
         </View>
+
+        {/* Said once, at the foot, so the rupee figures above are checkable
+            and it is clear which rate they were struck at. */}
+        {pkrRateNote(data.pkrPerEur) && (
+          <View style={styles.note}>
+            <Text>{pkrRateNote(data.pkrPerEur)}</Text>
+          </View>
+        )}
 
         {data.conversionNote && (
           <View style={styles.note}>

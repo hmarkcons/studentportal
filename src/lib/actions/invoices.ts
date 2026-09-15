@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { formatDateOnly } from "@/lib/formatDate";
 import { requirePermission } from "@/lib/auth/permissions";
+import { installmentDuePlan, missingDueDates } from "@/lib/installmentDueConditions";
 import { computeInvoiceMath, buildInstallmentPlan, SRB_TAX_RATE, conversionNote } from "@/lib/invoiceMath";
 import { balanceDueDate, checkPartialSplit } from "@/lib/partialPayment";
 import { buildInvoiceEmail } from "@/lib/invoiceEmail";
@@ -39,16 +40,17 @@ function addMonthsClampedUTC(dateStr: string, months: number): string {
 }
 
 /**
- * Whether an agreement's destination is a public-university track, which is
- * billed in EUR. Returns false when there is no agreement to read a track
- * from — an unlinked invoice keeps whatever currency staff chose, since there
- * is nothing to contradict them with.
+ * An agreement's destination track, which decides two things: the currency
+ * (public is billed in EUR) and which kind of university the last installment
+ * waits on. Null when there is no agreement to read a track from — an
+ * unlinked invoice keeps whatever currency staff chose, since there is
+ * nothing to contradict them with.
  */
-async function isPublicTrackAgreement(
+async function agreementTrack(
   supabase: Awaited<ReturnType<typeof createClient>>,
   agreementId: string | null
-): Promise<boolean> {
-  if (!agreementId) return false;
+): Promise<"public" | "private" | null> {
+  if (!agreementId) return null;
   const { data } = await supabase
     .from("agreements")
     .select("template:agreement_templates(destination:destinations(track))")
@@ -56,7 +58,7 @@ async function isPublicTrackAgreement(
     .maybeSingle();
   const template = one(data?.template as never) as { destination?: unknown } | null;
   const destination = template?.destination ? (one(template.destination as never) as { track?: string } | null) : null;
-  return destination?.track === "public";
+  return destination?.track === "public" ? "public" : destination?.track === "private" ? "private" : null;
 }
 
 const DEFAULT_TERMS =
@@ -83,7 +85,8 @@ export async function generateInvoice(studentId: string, agreementId: string, _p
   // in the form's default: a stale or hand-posted form must not be able to
   // raise a public-track invoice in rupees.
   const requestedCurrency = String(formData.get("currency") ?? "EUR");
-  const currency = (await isPublicTrackAgreement(supabase, agreement_id)) ? "EUR" : requestedCurrency;
+  const track = await agreementTrack(supabase, agreement_id);
+  const currency = track === "public" ? "EUR" : requestedCurrency;
   const firstDueDate = String(formData.get("first_due_date") ?? "") || null;
   const installment_plan = String(formData.get("installment_plan") ?? "").trim() || null;
 
@@ -111,10 +114,28 @@ export async function generateInvoice(studentId: string, agreementId: string, _p
   // The administrative charge rides on installment 1, because that is how it
   // is collected — the student pays it together with their first installment.
   const amounts = buildInstallmentPlan(math, installmentCount);
+
+  // Dates cascade monthly from the first, as before — but the last
+  // installment of a two- or three-payment plan falls due on the admission
+  // coming through, not on a date. installmentDuePlan decides which is which
+  // and drops the derived date for the ones that wait on an event.
+  const duePlan = installmentDuePlan(
+    installmentCount,
+    track,
+    amounts.map((_, i) => (firstDueDate ? addMonthsClampedUTC(firstDueDate, i) : null))
+  );
+  const stillNeeded = missingDueDates(duePlan);
+  if (stillNeeded.length > 0) {
+    return {
+      error: `Installment ${stillNeeded.join(" and ")} needs a due date before this can be issued.`,
+    };
+  }
+
   const installments = amounts.map((amount, i) => ({
     installment_no: i + 1,
     amount,
-    due_date: firstDueDate ? addMonthsClampedUTC(firstDueDate, i) : null,
+    due_date: duePlan[i]?.date ?? null,
+    due_condition: duePlan[i]?.condition ?? null,
   }));
 
   // Staff may type their own reference; otherwise take the next HMC number for
@@ -420,7 +441,7 @@ export async function buildAndSendInvoiceEmail(
 
   const { data: installments } = await supabase
     .from("invoice_installments")
-    .select("installment_no, amount, amount_paid, status, due_date")
+    .select("installment_no, amount, amount_paid, status, due_date, due_condition")
     .eq("invoice_id", invoiceId)
     .order("installment_no", { ascending: true });
 
@@ -486,6 +507,7 @@ export async function buildAndSendInvoiceEmail(
       no: i.installment_no,
       amount: Number(i.amount ?? 0),
       dueDate: i.due_date,
+      dueCondition: i.due_condition,
       paid: i.status === "paid",
     })),
     amountPaid,
@@ -560,7 +582,7 @@ export async function buildAndStoreInvoicePdf(
     .from("invoices")
     .select(
       `id, invoice_number, intake, terms, admin_charge, consultancy_fee, currency, installment_plan, created_at,
-       discount_amount, discount_reason, tax_rate, tax_amount,
+       discount_amount, discount_reason, tax_rate, tax_amount, pkr_per_eur,
        agreement:agreements(generated_by, template:agreement_templates(signatory_name, destination:destinations(display_name)))`
     )
     .eq("id", invoiceId)
@@ -572,7 +594,7 @@ export async function buildAndStoreInvoicePdf(
 
   const { data: installments } = await supabase
     .from("invoice_installments")
-    .select("installment_no, amount, amount_paid, status, due_date, paid_date, payment_method")
+    .select("installment_no, amount, amount_paid, status, due_date, due_condition, paid_date, payment_method")
     .eq("invoice_id", invoiceId)
     .order("installment_no", { ascending: true });
 
@@ -580,11 +602,9 @@ export async function buildAndStoreInvoicePdf(
   const template = agreement?.template ? (one(agreement.template as never) as { signatory_name?: string | null; destination?: unknown } | null) : null;
   const destination = template?.destination ? (one(template.destination as never) as { display_name?: string | null } | null) : null;
 
-  let counselorName: string | null = null;
-  if (agreement?.generated_by) {
-    const { data: staffRow } = await supabase.from("staff").select("full_name").eq("id", agreement.generated_by).maybeSingle();
-    counselorName = staffRow?.full_name ?? null;
-  }
+  // The counselor's name used to be looked up here and printed on the receipt.
+  // It is off the document now, so the query goes with it rather than costing
+  // a round trip per PDF for a value nothing reads.
 
   // Recomputed from the figures stored ON THIS INVOICE, using its own stored
   // tax_rate — never the current SRB rate — so reprinting an old invoice
@@ -609,7 +629,8 @@ export async function buildAndStoreInvoicePdf(
         ? formatDateOnly(i.paid_date)
         : i.due_date
           ? formatDateOnly(i.due_date)
-          : "—",
+          // Falls due on an event, not a date: print what the event is.
+          : i.due_condition ?? "—",
     method: i.payment_method,
     amount: i.amount,
     status: (i.status === "paid" ? "paid" : "unpaid") as "paid" | "unpaid",
@@ -665,7 +686,6 @@ export async function buildAndStoreInvoicePdf(
       studentEmail: student?.email ?? null,
       destination: destination?.display_name ?? null,
       intake: invoice.intake,
-      counselor: counselorName,
       installmentPlan: invoice.installment_plan,
       adminCharge: math.adminCharge,
       consultancyFee: math.consultancyFee,
@@ -681,6 +701,9 @@ export async function buildAndStoreInvoicePdf(
       balanceDue,
       bank,
       conversionNote: conversionNote(invoice.currency, bankRow?.account_currency),
+      // The rate stamped on this invoice, never today's: a receipt already
+      // in a student's hands must not restate itself.
+      pkrPerEur: invoice.pkr_per_eur == null ? null : Number(invoice.pkr_per_eur),
     },
   });
 

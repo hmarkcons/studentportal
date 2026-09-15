@@ -18,7 +18,7 @@ export type InvoiceEmailData = {
   destination: string | null;
   discountReason: string | null;
   math: InvoiceMath;
-  installments: { no: number; amount: number; dueDate: string | null; paid: boolean }[];
+  installments: { no: number; amount: number; dueDate: string | null; dueCondition?: string | null; paid: boolean }[];
   amountPaid: number;
   balanceDue: number;
   receiptUrl: string;
@@ -47,6 +47,14 @@ function money(currency: string, n: number) {
 /** Bare figure, for columns where the currency is stated once at the top. */
 function amount(n: number) {
   return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// An installment that falls due on an event has no date. The wording goes
+// where the date would have been rather than leaving a dash the student has
+// to ask about.
+function dueText(i: { dueDate: string | null; dueCondition?: string | null }) {
+  if (i.dueDate) return `due ${fmtDate(i.dueDate)}`;
+  return i.dueCondition ? i.dueCondition.toLowerCase() : "due —";
 }
 
 function fmtDate(d: string | null) {
@@ -87,8 +95,11 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
 
   const accent = receipt ? GREEN : overdue ? AMBER : INK;
 
+  // "Receipt", not "Receipt for invoice": what is being sent against a payment
+  // of the administrative and consultancy fee is a receipt, and a subject line
+  // carrying both words makes a student look for an invoice they do not owe.
   const subject = receipt
-    ? `Receipt for invoice ${data.invoiceNumber} — ${money(data.currency, data.amountPaid)} received`
+    ? `Receipt ${data.invoiceNumber} — ${money(data.currency, data.amountPaid)} received`
     : overdue
       ? `Payment overdue — Invoice ${data.invoiceNumber} — ${money(data.currency, data.balanceDue)} outstanding`
       : `Invoice ${data.invoiceNumber} from HMARK Consultants — ${money(data.currency, data.balanceDue)} due`;
@@ -141,7 +152,7 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
     ``,
     data.installments.length > 1 ? `Payment schedule:` : "",
     ...data.installments.map(
-      (i) => `  ${i.no}. ${money(data.currency, i.amount)} — ${i.paid ? "paid" : `due ${fmtDate(i.dueDate)}`}${adminNote(i.no)}`
+      (i) => `  ${i.no}. ${money(data.currency, i.amount)} — ${i.paid ? "paid" : dueText(i)}${adminNote(i.no)}`
     ),
     ``,
     `View your receipt: ${data.receiptUrl}`,
@@ -195,7 +206,7 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
                     }
                   </td>
                   <td style="padding:8px 0;border-bottom:1px solid ${HAIR};text-align:right;white-space:nowrap;font:13px ${FONT};color:${i.paid ? GREEN : FAINT}">
-                    ${i.paid ? "Paid" : `Due ${esc(fmtDate(i.dueDate))}`}
+                    ${i.paid ? "Paid" : esc(i.dueDate ? `Due ${fmtDate(i.dueDate)}` : i.dueCondition ?? "Due —")}
                   </td>
                 </tr>`
               )

@@ -4,8 +4,12 @@ import { useActionState } from "react";
 import { updateInvoiceBankSettings, type InvoiceBankSettings } from "@/lib/actions/invoiceSettings";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { ActionStatus } from "@/components/ActionStatus";
+import { DEFAULT_PKR_PER_EUR } from "@/lib/receiptPkr";
 
-const FIELDS: { name: keyof InvoiceBankSettings; label: string; placeholder: string; wide?: boolean }[] = [
+// The text fields. pkr_per_eur is a number and is rendered on its own below,
+// because it is not a bank detail and wants its own explanation.
+const FIELDS: { name: Exclude<keyof InvoiceBankSettings, "pkr_per_eur">; label: string; placeholder: string; wide?: boolean }[] = [
   { name: "account_title", label: "Account title", placeholder: "HMARK Consultants (Pvt.) Ltd." },
   { name: "bank_name", label: "Bank name", placeholder: "e.g. Meezan Bank" },
   { name: "branch", label: "Branch", placeholder: "e.g. Shahrah-e-Faisal" },
@@ -28,13 +32,34 @@ export function InvoiceSettingsForm({ settings, canEdit }: { settings: InvoiceBa
         </label>
       ))}
 
+      <label className="flex flex-col gap-1 text-xs text-muted sm:col-span-2">
+        Rupees per euro
+        <Input
+          name="pkr_per_eur"
+          type="number"
+          step="0.01"
+          min="0.01"
+          defaultValue={settings?.pkr_per_eur ?? DEFAULT_PKR_PER_EUR}
+          disabled={!canEdit}
+          className="sm:max-w-[12rem]"
+        />
+        <span className="text-[11px] text-muted">
+          Shown beside every euro total on a receipt. Each receipt keeps the rate it was issued at, so changing this
+          never restates one already in a student&rsquo;s hands.
+        </span>
+      </label>
+
       {canEdit ? (
         <div className="sm:col-span-2">
           {state?.error && <p className="mb-2 text-xs text-danger">{state.error}</p>}
-          {state?.success && <p className="mb-2 text-xs text-success">Saved.</p>}
-          <Button type="submit" variant="primary" pending={pending}>
-            Save bank details
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button type="submit" variant="primary" pending={pending}>
+              Save bank details
+            </Button>
+            {/* Was a bare "Saved." that stayed put while the next field was
+                being edited, reading as though that change had saved too. */}
+            <ActionStatus state={state} pending={pending} />
+          </div>
         </div>
       ) : (
         <p className="text-xs text-muted sm:col-span-2">Only a Super Admin can change where payments are sent.</p>
