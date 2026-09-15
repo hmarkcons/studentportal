@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { StickyScrollArea } from "@/components/ui/StickyScrollArea";
 
 // Server Component pages build `cells`/`csv` for every row up front (calling
 // their own render logic server-side) instead of passing render/csv
@@ -144,7 +145,10 @@ export function DataTable({
   const showToolbar = exportFilename || searchable || filters.length > 0;
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-border">
+    // The card is the frame; the scrolling and the pinned sideways bar are
+    // StickyScrollArea's. The toolbar and the pager stay inside the scroller
+    // so they keep their alignment with the columns above them.
+    <StickyScrollArea className="rounded-lg border border-border">
       {showToolbar && (
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-bg px-3 py-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -263,6 +267,6 @@ export function DataTable({
           </div>
         </div>
       )}
-    </div>
+    </StickyScrollArea>
   );
 }

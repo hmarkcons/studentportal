@@ -204,3 +204,43 @@ body {
     color: #000 !important;
   }
 }
+
+/* ------------------------------------------------ the pinned sideways bar
+   The scrollbar StickyScrollArea keeps within reach at the bottom of the
+   window. It has to be visible at rest, which the platform default is not on
+   macOS or on a touchpad-only Windows machine — an overlay scrollbar that
+   only appears once you are already scrolling solves nothing for somebody
+   looking for a way to scroll. */
+.sticky-hscroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.sticky-hscroll::-webkit-scrollbar {
+  height: 11px;
+}
+
+.sticky-hscroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sticky-hscroll::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+  /* Inset, so the thumb reads as a control sitting in a trough rather than a
+     bar wedged against the edge of the card. */
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+.sticky-hscroll::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+  background-clip: content-box;
+}
+
+/* Nothing on paper scrolls. */
+@media print {
+  .sticky-hscroll {
+    display: none !important;
+  }
+}
