@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+/** Never smaller than this, or the thumb on a very wide table is un-grabbable. */
+const MIN_THUMB = 44;
+
 /**
  * A wide table whose sideways scrollbar stays within reach.
  *
@@ -10,12 +13,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * moving sideways meant scrolling to the end of the page, scrolling across,
  * then scrolling back up to read the row you wanted.
  *
- * This keeps a second scrollbar pinned to the bottom of the window while any
- * part of the table is on screen, and the two are kept in step. It appears
- * only when it earns its place: when the table is actually wider than its
- * box, and when the table's own scrollbar is below the fold. Scroll far
- * enough down that the real one is visible and this one gets out of the way,
- * rather than leaving two bars doing the same job.
+ * This pins a bar to the bottom of the window while any part of the table is
+ * on screen. It shows only when it earns its place: when the table really is
+ * wider than its box, and when the table's own scrollbar is below the fold.
+ * Scroll far enough that the real one is visible, or filter the list down to
+ * three rows, and this one gets out of the way rather than leaving two bars
+ * doing the same job.
+ *
+ * The thumb is drawn rather than borrowed from a second native scroller. A
+ * native one cannot be relied on to be visible when nobody is touching it —
+ * macOS and most touchpad-only machines use overlay scrollbars that fade out,
+ * and Chromium ignores ::-webkit-scrollbar sizing once scrollbar-width is set.
+ * A bar you cannot see is exactly the problem this is here to fix, so it is
+ * drawn: always visible, the same on every platform, and testable.
  */
 export function StickyScrollArea({
   children,
@@ -25,94 +35,95 @@ export function StickyScrollArea({
   className?: string;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
-  const proxy = useRef<HTMLDivElement>(null);
-  // Set while one element is being scrolled from the other, so the two do not
-  // chase each other.
-  const syncing = useRef(false);
+  const track = useRef<HTMLDivElement>(null);
 
-  const [contentWidth, setContentWidth] = useState(0);
   const [visible, setVisible] = useState(false);
+  const [thumb, setThumb] = useState({ width: 0, left: 0 });
+  const [dragging, setDragging] = useState(false);
 
   /**
-   * Whether the pinned bar is worth showing, and how wide its content is.
+   * Whether the bar is worth showing, and where its thumb sits.
    *
-   * Run on scroll, on resize, and whenever the table's own size changes —
-   * filtering a list to three rows should take the bar away, because the real
-   * one is on screen by then.
+   * Run on both scrolls, on resize, and whenever the table's own size changes
+   * — a filter narrowing the list changes the answer without either.
    */
   const measure = useCallback(() => {
     const el = scroller.current;
+    const rail = track.current;
     if (!el) return;
 
-    const overflowing = el.scrollWidth - el.clientWidth > 1;
-    setContentWidth(el.scrollWidth);
-
-    if (!overflowing) {
+    const maxScroll = el.scrollWidth - el.clientWidth;
+    if (maxScroll <= 1) {
       setVisible(false);
       return;
     }
-    // The real scrollbar sits on the bottom edge of the scroller. If that edge
-    // is already on screen there is nothing to solve.
-    const bottom = el.getBoundingClientRect().bottom;
+
+    // The table's own scrollbar sits on its bottom edge. If that edge is on
+    // screen there is nothing to solve.
     const viewport = window.innerHeight || document.documentElement.clientHeight;
-    setVisible(bottom > viewport);
+    setVisible(el.getBoundingClientRect().bottom > viewport);
+
+    const railWidth = rail?.clientWidth ?? 0;
+    if (railWidth === 0) return;
+    const width = Math.max(MIN_THUMB, Math.round((el.clientWidth / el.scrollWidth) * railWidth));
+    const left = Math.round((railWidth - width) * (el.scrollLeft / maxScroll));
+    setThumb({ width, left });
   }, []);
 
   useEffect(() => {
     measure();
-
     const el = scroller.current;
+
     window.addEventListener("scroll", measure, { passive: true });
     window.addEventListener("resize", measure);
+    el?.addEventListener("scroll", measure, { passive: true });
 
-    // Rows appearing, a filter narrowing the table, a column of inline editors
-    // opening — all change the answer without a scroll or a resize.
     const observer = new ResizeObserver(measure);
     if (el) {
       observer.observe(el);
       if (el.firstElementChild) observer.observe(el.firstElementChild);
     }
+    if (track.current) observer.observe(track.current);
 
     return () => {
       window.removeEventListener("scroll", measure);
       window.removeEventListener("resize", measure);
+      el?.removeEventListener("scroll", measure);
       observer.disconnect();
     };
   }, [measure]);
 
-  // Keep the pinned bar's position in step with the table when the table is
-  // scrolled by any other means — a trackpad swipe, a keyboard, a wide cell
-  // being focused.
-  useEffect(() => {
+  /** Puts the thumb's centre at a point on the rail, and the table with it. */
+  const scrollToPointer = useCallback((clientX: number) => {
     const el = scroller.current;
-    if (!el) return;
-    const onScroll = () => {
-      if (syncing.current) return;
-      const bar = proxy.current;
-      if (!bar) return;
-      syncing.current = true;
-      bar.scrollLeft = el.scrollLeft;
-      // Released on the next frame rather than immediately: the assignment
-      // above fires the other element's scroll event asynchronously.
-      requestAnimationFrame(() => {
-        syncing.current = false;
-      });
-    };
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
+    const rail = track.current;
+    if (!el || !rail) return;
+    const rect = rail.getBoundingClientRect();
+    const width = Math.max(MIN_THUMB, (el.clientWidth / el.scrollWidth) * rect.width);
+    const usable = rect.width - width;
+    if (usable <= 0) return;
+    const ratio = Math.min(1, Math.max(0, (clientX - rect.left - width / 2) / usable));
+    el.scrollLeft = ratio * (el.scrollWidth - el.clientWidth);
   }, []);
 
-  function onProxyScroll() {
-    if (syncing.current) return;
-    const el = scroller.current;
-    const bar = proxy.current;
-    if (!el || !bar) return;
-    syncing.current = true;
-    el.scrollLeft = bar.scrollLeft;
-    requestAnimationFrame(() => {
-      syncing.current = false;
-    });
-  }
+  // Dragging continues outside the bar, which is what a scrollbar does — let
+  // go of the pointer and it stops, wherever the cursor happens to be.
+  useEffect(() => {
+    if (!dragging) return;
+    const onMove = (e: PointerEvent) => {
+      e.preventDefault();
+      scrollToPointer(e.clientX);
+    };
+    const stop = () => setDragging(false);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+    };
+  }, [dragging, scrollToPointer]);
 
   return (
     <div className={`relative ${className}`}>
@@ -120,23 +131,35 @@ export function StickyScrollArea({
         {children}
       </div>
 
-      {/* Rendered always and hidden with a class rather than unmounted: the
-          proxy has to keep its scrollLeft while it is out of the way, or the
-          table jumps back to the left the moment it reappears. */}
+      {/* Hidden with a class rather than unmounted: measuring the rail needs
+          it in the layout, and unmounting would make the thumb jump the first
+          time it reappeared. Hidden from assistive technology because it is a
+          second handle on a container that is already reachable and already
+          announced. */}
       <div
-        ref={proxy}
-        onScroll={onProxyScroll}
-        // Hidden from assistive technology on purpose. It is a second handle
-        // on a scroll container that is already reachable and already
-        // announced; giving it role="scrollbar" would promise aria-valuenow
-        // and a controlled element it cannot honestly provide, and would have
-        // a screen reader announce the same region twice.
         aria-hidden="true"
-        className={`sticky bottom-0 z-20 overflow-x-auto overflow-y-hidden border-t border-border bg-card/95 backdrop-blur-sm sticky-hscroll ${
-          visible ? "" : "pointer-events-none invisible h-0 border-t-0"
+        className={`sticky bottom-0 z-20 select-none border-t border-border bg-card/95 px-1 py-1 backdrop-blur-sm ${
+          visible ? "" : "pointer-events-none invisible h-0 overflow-hidden border-t-0 p-0"
         }`}
       >
-        <div style={{ width: contentWidth, height: 1 }} />
+        <div
+          ref={track}
+          onPointerDown={(e) => {
+            // Anywhere on the rail: jump there, then keep following the
+            // pointer, so a click and a drag are the same gesture.
+            e.preventDefault();
+            scrollToPointer(e.clientX);
+            setDragging(true);
+          }}
+          className="relative h-2.5 w-full cursor-pointer rounded-full bg-bg"
+        >
+          <div
+            style={{ width: thumb.width, transform: `translateX(${thumb.left}px)` }}
+            className={`absolute inset-y-0 left-0 rounded-full transition-colors ${
+              dragging ? "bg-muted" : "bg-border hover:bg-muted"
+            }`}
+          />
+        </div>
       </div>
     </div>
   );
