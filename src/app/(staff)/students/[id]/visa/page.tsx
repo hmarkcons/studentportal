@@ -10,6 +10,8 @@ import { listTrackerDefinitions, listCredentialTypesAction } from "@/lib/actions
 import { readVisaDecision, visaMessage } from "@/lib/visaOutcome";
 import { visaCountries, type VisaApplication } from "@/lib/visaCountries";
 import { canSeeVisaSection } from "@/lib/visaAccess";
+import { VisaOfficeList } from "@/components/VisaOfficeList";
+import { loadVisaOffices } from "@/lib/actions/visaOfficeQueries";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -55,20 +57,21 @@ export default async function StudentVisaTab(props: PageProps<"/students/[id]/vi
     client.from("students").select("id, full_name").eq("id", id).maybeSingle(),
     client
       .from("applications")
-      .select("id, is_finalized, university:universities(name, destination:destinations(country_code, display_name, finalize_action_label))")
+      .select("id, is_finalized, university:universities(name, destination:destinations(id, country_code, display_name))")
       .eq("student_id", id),
   ]);
 
   const rows: VisaApplication[] = (applications ?? []).map((a) => {
     const uni = one(a.university as never) as { name?: string; destination?: unknown } | null;
     const dest = uni?.destination
-      ? (one(uni.destination as never) as { country_code?: string; display_name?: string } | null)
+      ? (one(uni.destination as never) as { id?: string; country_code?: string; display_name?: string } | null)
       : null;
     return {
       id: a.id,
       isFinalized: Boolean(a.is_finalized),
       countryCode: dest?.country_code ?? null,
       countryName: dest?.display_name ?? null,
+      destinationId: dest?.id ?? null,
       universityName: uni?.name ?? null,
     };
   });
@@ -77,6 +80,9 @@ export default async function StudentVisaTab(props: PageProps<"/students/[id]/vi
   // disagree about whose visa is under way.
   const countries = visaCountries(rows);
   const defsByCountry = countries.length ? await listTrackerDefinitions(countries.map((c) => c.code)) : {};
+  const officesByDestination = await loadVisaOffices(
+    countries.map((c) => c.destinationId).filter((d): d is string => Boolean(d))
+  );
 
   const sections = await Promise.all(
     countries.map(async (c) => {
@@ -175,6 +181,20 @@ export default async function StudentVisaTab(props: PageProps<"/students/[id]/vi
                   </div>
                 )
               )}
+
+              {/* Where the application actually goes. Above the tracker
+                  because it is what a counselor is asked for on the phone,
+                  and the tracker is what they fill in afterwards. */}
+              <div className="mb-4">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                  Where to apply &mdash; {s.country.name}
+                </p>
+                <VisaOfficeList
+                  offices={s.country.destinationId ? officesByDestination[s.country.destinationId] ?? [] : []}
+                  countryName={s.country.name}
+                  showProvenance
+                />
+              </div>
 
               <CountryTrackerForm
                 applicationId={s.country.appId}

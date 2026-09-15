@@ -17,12 +17,15 @@ export type VisaApplication = {
   isFinalized: boolean;
   countryCode: string | null;
   countryName: string | null;
+  /** Needed to look up the country's embassies and visa centres. */
+  destinationId?: string | null;
   universityName: string | null;
 };
 
 export type VisaCountry = {
   code: string;
   name: string;
+  destinationId: string | null;
   /** The application the visa hangs off — the finalised one. */
   appId: string;
   universities: string[];
@@ -51,6 +54,7 @@ export function visaCountries(applications: VisaApplication[]): VisaCountry[] {
     byCountry.set(a.countryCode, {
       code: a.countryCode,
       name: a.countryName ?? a.countryCode,
+      destinationId: a.destinationId ?? null,
       appId: a.id,
       universities: a.universityName ? [a.universityName] : [],
     });

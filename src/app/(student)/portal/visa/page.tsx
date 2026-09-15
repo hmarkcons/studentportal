@@ -6,6 +6,9 @@ import { listTrackerDefinitions, listCredentialTypesAction } from "@/lib/actions
 import { formatDateOnly } from "@/lib/formatDate";
 import { readVisaDecision, visaMessage } from "@/lib/visaOutcome";
 import { VisaCredentials } from "./VisaCredentials";
+import { VisaOfficeList } from "@/components/VisaOfficeList";
+import { visaCountries } from "@/lib/visaCountries";
+import { loadVisaOffices } from "@/lib/actions/visaOfficeQueries";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -42,53 +45,39 @@ export default async function PortalVisaPage() {
   // Setup › Document trackers, so a country added later needs no code change.
   const { data: applications } = await supabase
     .from("applications")
-    .select("id, is_finalized, university:universities(name, destination:destinations(country_code, display_name))")
+    .select("id, is_finalized, university:universities(name, destination:destinations(id, country_code, display_name))")
     .eq("student_id", student.id);
 
-  // The visa belongs to the university the student is actually going to. Until
-  // one is finalised there is no visa process to report, and showing every
-  // country they applied to would suggest several are under way at once.
-  //
-  // Per country rather than across the student: a finalised Italian
-  // pre-enrolment says nothing about a German application that is still open.
-  const finalisedByCountry = new Set<string>();
-  for (const a of applications ?? []) {
-    if (!a.is_finalized) continue;
-    const uni = one(a.university as never) as { destination?: unknown } | null;
-    const dest = uni?.destination ? (one(uni.destination as never) as { country_code?: string } | null) : null;
-    if (dest?.country_code) finalisedByCountry.add(dest.country_code);
-  }
+  // Which countries are actually in the visa process is decided in
+  // visaCountries, shared with the staff Visa tab so the two cannot disagree
+  // about whose visa is under way.
+  const countries = visaCountries(
+    (applications ?? []).map((a) => {
+      const uni = one(a.university as never) as { name?: string; destination?: unknown } | null;
+      const dest = uni?.destination
+        ? (one(uni.destination as never) as { id?: string; country_code?: string; display_name?: string } | null)
+        : null;
+      return {
+        id: a.id,
+        isFinalized: Boolean(a.is_finalized),
+        countryCode: dest?.country_code ?? null,
+        countryName: dest?.display_name ?? null,
+        destinationId: dest?.id ?? null,
+        universityName: uni?.name ?? null,
+      };
+    })
+  );
 
-  const byCountry = new Map<string, { code: string; name: string; appId: string; universities: string[] }>();
-  for (const a of applications ?? []) {
-    // Only the finalised application for a country that has one.
-    const uniForGate = one(a.university as never) as { destination?: unknown } | null;
-    const destForGate = uniForGate?.destination
-      ? (one(uniForGate.destination as never) as { country_code?: string } | null)
-      : null;
-    if (destForGate?.country_code && finalisedByCountry.has(destForGate.country_code) && !a.is_finalized) continue;
-    if (destForGate?.country_code && !finalisedByCountry.has(destForGate.country_code)) continue;
-    const uni = one(a.university as never) as { name?: string; destination?: unknown } | null;
-    const dest = uni?.destination ? (one(uni.destination as never) as { country_code?: string; display_name?: string } | null) : null;
-    if (!dest?.country_code) continue;
-    const existing = byCountry.get(dest.country_code);
-    if (existing) {
-      if (uni?.name && !existing.universities.includes(uni.name)) existing.universities.push(uni.name);
-    } else {
-      byCountry.set(dest.country_code, {
-        code: dest.country_code,
-        name: dest.display_name ?? dest.country_code,
-        appId: a.id,
-        universities: uni?.name ? [uni.name] : [],
-      });
-    }
-  }
-
-  const codes = Array.from(byCountry.keys());
+  const codes = countries.map((c) => c.code);
   const defsByCountry = codes.length ? await listTrackerDefinitions(codes) : {};
+  // The same table the staff tab reads: the address a counsellor gives on the
+  // phone and the one the student turns up to have to be the same address.
+  const officesByDestination = await loadVisaOffices(
+    countries.map((c) => c.destinationId).filter((d): d is string => Boolean(d))
+  );
 
   const sections = await Promise.all(
-    Array.from(byCountry.values()).map(async (c) => {
+    countries.map(async (c) => {
       const fields = (defsByCountry[c.code] ?? []).filter((f) => f.showOnStudentVisa);
       if (fields.length === 0) return null;
 
@@ -107,16 +96,25 @@ export default async function PortalVisaPage() {
       // of dashes under an "In progress" badge tells a student less than the
       // empty state does — it reads as the page being broken rather than as
       // their visa process not having started.
+      //
+      // The addresses are the exception, and the reason the rule is now "or":
+      // knowing which centre to go to is useful from the day a university is
+      // finalised, and an address is not a dash.
       const anythingRecorded = fields.some((f) => (values[f.key] ?? "").trim() !== "");
-      if (!anythingRecorded) return null;
+      const offices = c.destinationId ? officesByDestination[c.destinationId] ?? [] : [];
+      if (!anythingRecorded && offices.length === 0) return null;
 
       return {
         country: c,
         // The decision and its reason are shown in the message, not repeated
         // as ordinary rows.
-        rows: fields.filter((f) => !f.visaRole).map((f) => ({ label: f.label, value: display(values[f.key] ?? "", f.type) })),
+        rows: anythingRecorded
+          ? fields.filter((f) => !f.visaRole).map((f) => ({ label: f.label, value: display(values[f.key] ?? "", f.type) }))
+          : [],
         decision,
         reason: reasonField ? values[reasonField.key] ?? "" : "",
+        anythingRecorded,
+        offices,
       };
     })
   );
@@ -213,6 +211,18 @@ export default async function PortalVisaPage() {
                       </div>
                     ))}
                   </dl>
+                )}
+
+                {/* Where they actually go, and how to reach it. Not a
+                    reference section: the first line answers which of the
+                    offices below is theirs. */}
+                {s.offices.length > 0 && (
+                  <div className={s.rows.length > 0 ? "mt-4 border-t border-border pt-4" : ""}>
+                    <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+                      Where to apply
+                    </h4>
+                    <VisaOfficeList offices={s.offices} countryName={s.country.name} />
+                  </div>
                 )}
               </Card>
             );
