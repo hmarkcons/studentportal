@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { evaluateAgreementGate, isGateAllowedPath } from "@/lib/portalGate";
+import { accessVerdict, clientIp, isAccessAllowedPath, type AccessState } from "@/lib/officeAccess";
 
 export async function proxy(request: NextRequest) {
   // Cron endpoints authenticate themselves with the CRON_SECRET bearer token
@@ -59,6 +60,29 @@ export async function proxy(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);
+  }
+
+  // Staff signing in from outside the office network get a waiting screen and
+  // nothing else until somebody approves them (0202). Checked here because
+  // this is the only place every request passes through: fewer than half the
+  // server actions call requirePermission, so a per-action gate would leak.
+  //
+  // One round trip, and only for a signed-in user on a page that is gated at
+  // all. staff_access_state answers allowed=true for students, partners,
+  // anyone on the office network, any Super Admin, and — while no office
+  // network has been configured — everybody, so this costs an unconfigured
+  // installation one cheap query and changes nothing.
+  if (user && !isAccessAllowedPath(request.nextUrl.pathname)) {
+    const { data: accessState } = await supabase.rpc("staff_access_state", {
+      p_ip: clientIp(request.headers),
+    });
+    const verdict = accessVerdict((accessState as AccessState | null) ?? null, request.nextUrl.pathname);
+    if (!verdict.allow) {
+      const url = request.nextUrl.clone();
+      url.pathname = verdict.redirectTo;
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
   }
 
   // Hold an e-signature student on the agreement page until they have attached

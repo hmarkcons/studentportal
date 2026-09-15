@@ -5,6 +5,7 @@
 // only fixes the key strings at compile time so call sites can't typo them.
 export const PERMISSION_KEYS = [
   "staff.manage",
+  "staff.approve_offsite_access",
   "partners.approve",
   "attendance.qr_admin",
   "finance.commissions.manage",
