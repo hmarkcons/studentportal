@@ -6,6 +6,7 @@ import { StudentTabs } from "./StudentTabs";
 import { DeleteStudentButton } from "./DeleteStudentButton";
 import { InlineRegistrationStatusCell } from "../InlineRegistrationStatusCell";
 import { countUnreadMessages } from "@/lib/unreadMessages";
+import { canSeeVisaSection } from "@/lib/visaAccess";
 
 export default async function StudentLayout({ children, params }: { children: React.ReactNode; params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -117,7 +118,7 @@ export default async function StudentLayout({ children, params }: { children: Re
         </div>
       </div>
 
-      <StudentTabs studentId={id} showScholarship={showScholarship} unreadMessages={unreadMessages} />
+      <StudentTabs studentId={id} showScholarship={showScholarship} showVisa={canSeeVisaSection(staffRow?.role)} unreadMessages={unreadMessages} />
 
       {children}
     </div>
