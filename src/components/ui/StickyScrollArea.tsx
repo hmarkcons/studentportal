@@ -138,12 +138,14 @@ export function StickyScrollArea({
           announced. */}
       <div
         aria-hidden="true"
+        data-sticky-bar
         className={`sticky bottom-0 z-20 select-none border-t border-border bg-card/95 px-1 py-1 backdrop-blur-sm ${
           visible ? "" : "pointer-events-none invisible h-0 overflow-hidden border-t-0 p-0"
         }`}
       >
         <div
           ref={track}
+          data-sticky-rail
           onPointerDown={(e) => {
             // Anywhere on the rail: jump there, then keep following the
             // pointer, so a click and a drag are the same gesture.
