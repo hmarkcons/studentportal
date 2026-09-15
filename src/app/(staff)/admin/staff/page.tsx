@@ -81,6 +81,7 @@ export default async function StaffAdminPage() {
         staff={staff ?? []}
         photoUrls={photoUrls}
         canManagePermissions={isSuperAdminViewer}
+        canManagePhoto={isSuperAdminViewer}
         permissionDefs={permissionDefs ?? []}
         roleOverrides={roleOverrides ?? []}
         staffOverrides={staffOverrides ?? []}

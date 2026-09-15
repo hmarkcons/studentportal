@@ -13,6 +13,8 @@ export function PhotoUpload({
   photoUrl,
   hidePreview = false,
   hasPhoto,
+  onDelete,
+  deleteLabel,
 }: {
   // A bound server action (studentId/staffId + revalidateTo already applied)
   // — shared by the student Profile pages and the staff Admin form so both
@@ -26,10 +28,30 @@ export function PhotoUpload({
   // Only needed alongside hidePreview, where there's no photoUrl to infer
   // from but the button should still read "Replace photo".
   hasPhoto?: boolean;
+  /**
+   * Removes the photo entirely. Omitted where the viewer may not — a staff
+   * member's photo is the Super Admin's to change, so everyone else gets the
+   * picture and no controls at all.
+   */
+  onDelete?: () => Promise<{ error?: string; success?: boolean } | undefined>;
+  /** What the confirmation asks about, e.g. "Ali Raza's photo". */
+  deleteLabel?: string;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const [ready, setReady] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState<string | null>(null);
   const showsReplace = hasPhoto ?? Boolean(photoUrl);
+
+  async function remove() {
+    if (!onDelete) return;
+    if (!confirm(`Remove ${deleteLabel ?? "this photo"}? The picture is deleted, not just hidden.`)) return;
+    setRemoving(true);
+    setRemoveError(null);
+    const result = await onDelete();
+    if (result?.error) setRemoveError(result.error);
+    setRemoving(false);
+  }
 
   // Photo on top, its controls stacked underneath and matched to the same
   // column width, so the block reads as one unit wherever it's dropped in
@@ -64,6 +86,22 @@ export function PhotoUpload({
         <ActionStatus state={state} pending={pending} label="Photo uploaded." />
         {state?.error && <p className="text-center text-xs text-danger">{state.error}</p>}
       </form>
+
+      {/* Only where there is something to remove. A Remove control beside an
+          empty circle is a button that can only ever fail. */}
+      {onDelete && showsReplace && (
+        <>
+          <button
+            type="button"
+            onClick={remove}
+            disabled={removing}
+            className="text-xs text-danger hover:underline disabled:opacity-40"
+          >
+            {removing ? "Removing…" : "Remove photo"}
+          </button>
+          {removeError && <p className="text-center text-xs text-danger">{removeError}</p>}
+        </>
+      )}
     </div>
   );
 }

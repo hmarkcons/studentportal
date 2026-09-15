@@ -6,7 +6,7 @@ import { TestScoresSection } from "@/components/TestScoresSection";
 import { TravelVisaHistorySection } from "@/components/TravelVisaHistorySection";
 import { ProfileForm } from "./ProfileForm";
 import { ProfileCompleteness } from "@/components/ProfileCompleteness";
-import { uploadStudentPhoto } from "@/lib/actions/studentProfileExtras";
+import { uploadStudentPhoto, deleteStudentPhoto } from "@/lib/actions/studentProfileExtras";
 
 export default async function PortalProfilePage() {
   const supabase = await createClient();
@@ -70,7 +70,15 @@ export default async function PortalProfilePage() {
         <p className="mb-4 text-xs text-muted">Your email and case status can only be changed by your counsellor.</p>
 
         <div className="mb-4">
-          <PhotoUpload action={uploadStudentPhoto.bind(null, student.id, revalidateTo)} photoUrl={photoUrl} />
+          {/* The student's own photo is theirs to change and theirs to
+              remove — student_profiles_write is staff-or-self, so the same
+              rule covers both sides of this. */}
+          <PhotoUpload
+            action={uploadStudentPhoto.bind(null, student.id, revalidateTo)}
+            photoUrl={photoUrl}
+            onDelete={deleteStudentPhoto.bind(null, student.id, revalidateTo)}
+            deleteLabel="your photo"
+          />
         </div>
 
         <ProfileForm

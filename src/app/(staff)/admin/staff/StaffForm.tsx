@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useActionState } from "react";
-import { createStaffAccount, updateStaffDetails, uploadStaffPhoto } from "@/lib/actions/admin";
+import { createStaffAccount, updateStaffDetails, uploadStaffPhoto, deleteStaffPhoto } from "@/lib/actions/admin";
 import { PhotoUpload } from "@/components/PhotoUpload";
 import {
   STAFF_ROLES,
@@ -95,12 +95,20 @@ export function StaffForm({
   onSuccess,
   allStaff = [],
   assignedStudentCount = 0,
+  canManagePhoto = false,
 }: {
   staff?: StaffRecord;
   photoUrl?: string | null;
   onSuccess: () => void;
   allStaff?: StaffRecord[];
   assignedStudentCount?: number;
+  /**
+   * A staff member's photo is the Super Admin's to set and to remove. Anyone
+   * else editing this form sees the picture and no controls — the actions are
+   * gated on staff.manage too, so this only stops them being offered a button
+   * that would refuse them.
+   */
+  canManagePhoto?: boolean;
 }) {
   const isEdit = Boolean(staff);
   const action = isEdit ? updateStaffDetails.bind(null, staff!.id) : createStaffAccount;
@@ -124,7 +132,23 @@ export function StaffForm({
         <div className="mb-6">
           <span className={labelClass}>Photo</span>
           <div className="mt-1">
-            <PhotoUpload action={uploadStaffPhoto.bind(null, staff!.id)} photoUrl={photoUrl ?? null} />
+            {canManagePhoto ? (
+              <PhotoUpload
+                action={uploadStaffPhoto.bind(null, staff!.id)}
+                photoUrl={photoUrl ?? null}
+                onDelete={deleteStaffPhoto.bind(null, staff!.id)}
+                deleteLabel={`${staff!.full_name}'s photo`}
+              />
+            ) : photoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={photoUrl}
+                alt={`${staff!.full_name}'s photo`}
+                className="h-20 w-20 rounded-full border border-border object-cover"
+              />
+            ) : (
+              <p className="text-xs text-muted">No photo. Only a Super Admin can set one.</p>
+            )}
           </div>
         </div>
       )}

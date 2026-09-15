@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { AcademicsSection } from "@/components/AcademicsSection";
 import { PhotoUpload } from "@/components/PhotoUpload";
-import { uploadStudentPhoto } from "@/lib/actions/studentProfileExtras";
+import { uploadStudentPhoto, deleteStudentPhoto } from "@/lib/actions/studentProfileExtras";
 import { TestScoresSection } from "@/components/TestScoresSection";
 import { TravelVisaHistorySection } from "@/components/TravelVisaHistorySection";
 import { RegisteredStudentProfileForm } from "../RegisteredStudentProfileForm";
@@ -41,6 +41,8 @@ export default async function StudentProfileTab(props: PageProps<"/students/[id]
               photoUrl={null}
               hidePreview
               hasPhoto={Boolean(profile?.photo_path)}
+              onDelete={deleteStudentPhoto.bind(null, id, `/students/${id}`)}
+              deleteLabel={`${student?.full_name ?? "this student"}'s photo`}
             />
           </div>
         </div>

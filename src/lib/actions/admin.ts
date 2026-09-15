@@ -248,12 +248,47 @@ export async function uploadStaffPhoto(staffId: string, _prevState: unknown, for
   const tooLarge = fileSizeError(file.size, MAX_PHOTO_BYTES, "photo");
   if (tooLarge) return { error: tooLarge };
 
+  const { data: existing } = await supabase.from("staff").select("photo_path").eq("id", staffId).maybeSingle();
+
   const path = `staff-photos/${staffId}/photo-${Date.now()}-${file.name}`;
   const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: true });
   if (uploadError) return { error: uploadError.message };
 
   const { error } = await supabase.from("staff").update({ photo_path: path }).eq("id", staffId);
   if (error) return { error: error.message };
+
+  // The one it replaced. Paths are timestamped, so without this every photo a
+  // staff member has ever had stays in the bucket with nothing pointing at it.
+  if (existing?.photo_path && existing.photo_path !== path) {
+    await supabase.storage.from("documents").remove([existing.photo_path]);
+  }
+
+  revalidatePath("/admin/staff");
+  revalidateTag("staff-directory", { expire: 0 });
+  return { success: true };
+}
+
+/**
+ * Removes a staff member's photo.
+ *
+ * Super Admin only, the same as setting one — staff.manage here, and
+ * documents_storage_staff_photos_write restricts the bucket to a super admin
+ * underneath, so a staff member cannot remove their own or anyone else's.
+ */
+export async function deleteStaffPhoto(staffId: string) {
+  const supabase = await createClient();
+  const denied = await requirePermission("staff.manage", "Only Super Admin can remove a staff member's photo.");
+  if (denied) return { error: denied.error };
+
+  const { data: staffRow } = await supabase.from("staff").select("photo_path").eq("id", staffId).maybeSingle();
+  if (!staffRow?.photo_path) return { error: "There is no photo to remove." };
+
+  // The row first: a bucket with no photo and a row still pointing at one is a
+  // broken avatar everywhere the directory is shown.
+  const { error } = await supabase.from("staff").update({ photo_path: null }).eq("id", staffId);
+  if (error) return { error: error.message };
+
+  await supabase.storage.from("documents").remove([staffRow.photo_path]);
 
   revalidatePath("/admin/staff");
   revalidateTag("staff-directory", { expire: 0 });

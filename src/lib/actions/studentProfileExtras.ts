@@ -12,6 +12,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { TEST_TYPES, needsCustomName } from "@/lib/testScores";
 import { MAX_PHOTO_BYTES, fileSizeError } from "@/lib/fileSize";
 
@@ -109,6 +110,13 @@ export async function uploadStudentPhoto(studentId: string, revalidateTo: string
   const tooLarge = fileSizeError(file.size, MAX_PHOTO_BYTES, "photo");
   if (tooLarge) return { error: tooLarge };
 
+  // The one being replaced, read before the row is repointed.
+  const { data: existing } = await supabase
+    .from("student_profiles")
+    .select("photo_path")
+    .eq("student_id", studentId)
+    .maybeSingle();
+
   const path = `${studentId}/photo-${Date.now()}-${file.name}`;
   const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: true });
   if (uploadError) return { error: uploadError.message };
@@ -116,8 +124,55 @@ export async function uploadStudentPhoto(studentId: string, revalidateTo: string
   const { error } = await supabase.from("student_profiles").upsert({ student_id: studentId, photo_path: path }, { onConflict: "student_id" });
   if (error) return { error: error.message };
 
+  // The old object, now that nothing points at it. Every path is stamped with
+  // a timestamp, so replacing a photo used to leave the previous one in the
+  // bucket for good — readable by anyone who still had its signed link, and
+  // never cleaned up by anything.
+  if (existing?.photo_path && existing.photo_path !== path) {
+    await createAdminClient().storage.from("documents").remove([existing.photo_path]);
+  }
+
   // "layout" so the header photo (shown on every tab under students/[id])
   // updates immediately no matter which tab triggered the upload.
+  revalidatePath(revalidateTo, "layout");
+  return { success: true };
+}
+
+/**
+ * Takes a student's photo off their profile, and out of the bucket.
+ *
+ * Who may do it is decided by the write to student_profiles, not by a check
+ * here: student_profiles_write is staff-or-self, so a counselor who can see
+ * the student and the student themselves both pass, and nobody else does.
+ * That is the same rule the upload runs under.
+ *
+ * The row goes first. If RLS refuses it, the file stays — the alternative is
+ * deleting somebody's photo and then failing to record that it is gone, which
+ * leaves a profile pointing at nothing.
+ *
+ * The object is removed with the admin client because there is no DELETE
+ * storage policy for a student on their own folder, and adding one would let
+ * them delete their passport scan as well. Authorisation has already been
+ * settled by the line above.
+ */
+export async function deleteStudentPhoto(studentId: string, revalidateTo: string) {
+  const supabase = await createClient();
+
+  const { data: profile } = await supabase
+    .from("student_profiles")
+    .select("photo_path")
+    .eq("student_id", studentId)
+    .maybeSingle();
+  if (!profile?.photo_path) return { error: "There is no photo to remove." };
+
+  const { error } = await supabase
+    .from("student_profiles")
+    .update({ photo_path: null })
+    .eq("student_id", studentId);
+  if (error) return { error: error.message };
+
+  await createAdminClient().storage.from("documents").remove([profile.photo_path]);
+
   revalidatePath(revalidateTo, "layout");
   return { success: true };
 }

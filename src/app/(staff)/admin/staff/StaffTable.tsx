@@ -16,6 +16,7 @@ export function StaffTable({
   staff,
   photoUrls = {},
   canManagePermissions = false,
+  canManagePhoto = false,
   permissionDefs = [],
   roleOverrides = [],
   staffOverrides = [],
@@ -24,6 +25,8 @@ export function StaffTable({
   staff: StaffRecord[];
   photoUrls?: Record<string, string>;
   canManagePermissions?: boolean;
+  /** Only a Super Admin may set or remove a staff photo. */
+  canManagePhoto?: boolean;
   permissionDefs?: PermissionDef[];
   roleOverrides?: RoleOverrideRow[];
   staffOverrides?: StaffOverrideRow[];
@@ -125,6 +128,7 @@ export function StaffTable({
                     staff={s}
                     photoUrl={photoUrls[s.id]}
                     canManagePermissions={canManagePermissions}
+                    canManagePhoto={canManagePhoto}
                     permissionDefs={permissionDefs}
                     roleOverrides={roleOverrides.filter((o) => o.role === s.role)}
                     staffOverrides={staffOverrides.filter((o) => o.staff_id === s.id)}

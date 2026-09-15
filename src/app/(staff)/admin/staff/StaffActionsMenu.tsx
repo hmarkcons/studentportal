@@ -25,6 +25,7 @@ export function StaffActionsMenu({
   staff,
   photoUrl,
   canManagePermissions = false,
+  canManagePhoto = false,
   permissionDefs = [],
   roleOverrides = [],
   staffOverrides = [],
@@ -34,6 +35,7 @@ export function StaffActionsMenu({
   staff: StaffRecord;
   photoUrl?: string | null;
   canManagePermissions?: boolean;
+  canManagePhoto?: boolean;
   permissionDefs?: PermissionDef[];
   roleOverrides?: RoleOverrideRow[];
   staffOverrides?: StaffOverrideRow[];
@@ -162,7 +164,7 @@ export function StaffActionsMenu({
       </SlideOver>
 
       <SlideOver open={editOpen} onClose={() => setEditOpen(false)} title={`Edit — ${staff.full_name}`}>
-        <StaffForm staff={staff} photoUrl={photoUrl} onSuccess={() => setEditOpen(false)} allStaff={allStaff} assignedStudentCount={assignedStudentCount} />
+        <StaffForm staff={staff} photoUrl={photoUrl} onSuccess={() => setEditOpen(false)} allStaff={allStaff} assignedStudentCount={assignedStudentCount} canManagePhoto={canManagePhoto} />
       </SlideOver>
 
       {showPermissions && (
