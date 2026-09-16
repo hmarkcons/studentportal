@@ -91,8 +91,22 @@ export function whereToApply(offices: VisaOffice[]): string | null {
   if (missions.length > 0 && centres.length === 0) {
     const where = cities(missions);
     const what = missions[0].kind === "consulate" ? "the consulate" : "the mission";
-    // The case the office named: no centre for this country at all.
-    return `There is no visa application centre for this country — applications are submitted at ${what}${where ? ` in ${where}` : ""}, by appointment.`;
+    // Two different situations reach here and they must not be worded the same.
+    //
+    // The one the office asked for is Ukraine: no visa centre exists at all, so
+    // a student who has only ever heard of VFS goes looking for one that is not
+    // there. Saying so is the whole point of the sentence.
+    //
+    // France is the other: a centre exists and the student will deal with it —
+    // AEG books the appointment — but the application itself is handed in at
+    // the consulate. Telling that student "there is no visa application centre
+    // for this country" is simply false, and it is false about the one step
+    // they have to take first. The sections below explain the split; this
+    // sentence only has to not lie about it.
+    const centreExists = offices.some((o) => o.kind === "visa_centre");
+    return centreExists
+      ? `Applications are submitted at ${what}${where ? ` in ${where}` : ""}, by appointment — not at the visa application centre.`
+      : `There is no visa application centre for this country — applications are submitted at ${what}${where ? ` in ${where}` : ""}, by appointment.`;
   }
   return `Applications are submitted at ${lodging.map((o) => o.name).join(" or ")}.`;
 }
