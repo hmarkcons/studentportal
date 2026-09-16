@@ -74,9 +74,11 @@ export async function translateScholarshipValues(values: Record<string, unknown>
     for (const field of changed) original[field] = values[field];
 
     return { values: merged, changed, original };
-  } catch {
+  } catch (e) {
     // A bad key, no credit, a malformed answer, the API being down. None of
-    // those is a reason to refuse somebody's edit.
+    // those is a reason to refuse somebody's edit — but swallowing it without
+    // a word means nobody can ever find out why the page is still in Italian.
+    console.error("[translateScholarship] failed:", e instanceof Error ? e.message : String(e));
     return { values, changed: [], original: null };
   }
 }
