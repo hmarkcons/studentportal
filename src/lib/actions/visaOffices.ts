@@ -40,6 +40,7 @@ function readForm(formData: FormData) {
       jurisdiction: text("jurisdiction"),
       submits_applications: formData.get("submits_applications") === "on",
       notes: text("notes"),
+      internal_notes: text("internal_notes"),
       source_url: text("source_url"),
       // Ticking "confirmed" stamps the moment somebody took responsibility for
       // it; unticking clears it, so an entry that turns out to be wrong can be

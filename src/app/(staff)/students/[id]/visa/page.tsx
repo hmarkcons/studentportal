@@ -84,7 +84,7 @@ export default async function StudentVisaTab(props: PageProps<"/students/[id]/vi
   const countries = visaCountries(rows);
   const defsByCountry = countries.length ? await listTrackerDefinitions(countries.map((c) => c.code)) : {};
   const destinationIds = countries.map((c) => c.destinationId).filter((d): d is string => Boolean(d));
-  const officesByDestination = await loadVisaOffices(destinationIds);
+  const officesByDestination = await loadVisaOffices(destinationIds, { includeInternal: true });
   // The sections and per-country wording set in Setup > Visa page builder.
   const built = await loadVisaPageContent(destinationIds);
 

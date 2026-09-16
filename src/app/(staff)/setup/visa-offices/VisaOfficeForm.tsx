@@ -125,8 +125,21 @@ export function VisaOfficeForm({
             </span>
           </label>
 
-          <Field label="Notes">
+          <Field label="Notes" hint="The student reads this on their Visa page. Anything that is not for them goes in the box below.">
             <Textarea name="notes" defaultValue={office?.notes ?? ""} rows={2} maxLength={600} />
+          </Field>
+
+          <Field
+            label="Staff note"
+            hint="Never shown to the student — what still needs checking, which source disagreed, who to ring."
+          >
+            <Textarea
+              name="internal_notes"
+              defaultValue={office?.internalNotes ?? ""}
+              rows={2}
+              maxLength={600}
+              placeholder="Address unconfirmed — the consulate's own page and VFS disagree."
+            />
           </Field>
 
           <p className="mt-2 border-t border-border pt-3 text-xs font-semibold uppercase tracking-wide text-muted">

@@ -24,7 +24,14 @@ export type VisaOffice = {
   officeHours: string | null;
   jurisdiction: string | null;
   submitsApplications: boolean;
+  /** Shown to the student. Only what a student should read. */
   notes: string | null;
+  /**
+   * Staff only, and absent entirely on the student's page rather than merely
+   * unrendered — see loadVisaOffices. What still needs checking, which source
+   * disagreed, who to ring.
+   */
+  internalNotes?: string | null;
   sourceUrl: string | null;
   verifiedAt: string | null;
 };

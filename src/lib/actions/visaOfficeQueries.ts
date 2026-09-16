@@ -9,14 +9,26 @@ import type { VisaOffice, VisaOfficeKind } from "@/lib/visaOffices";
  * per card — a student with Italy and Germany finalised would otherwise cost
  * two round trips to render one page.
  */
-export async function loadVisaOffices(destinationIds: string[]): Promise<Record<string, VisaOffice[]>> {
+export async function loadVisaOffices(
+  destinationIds: string[],
+  // Staff pages only. On the student side internal_notes is dropped here
+  // rather than left for the component to skip rendering: a field that reaches
+  // the browser is readable in the RSC payload whether or not it is drawn, and
+  // "address unconfirmed, ring them first" is not a student's business.
+  //
+  // It is dropped rather than left out of the select because building the
+  // column list conditionally turns it into a plain string, which defeats
+  // supabase-js's inference of the row type and loses every field's type with
+  // it. Fetching one unused text column server-side costs nothing.
+  { includeInternal = false }: { includeInternal?: boolean } = {}
+): Promise<Record<string, VisaOffice[]>> {
   if (destinationIds.length === 0) return {};
   const supabase = await createClient();
 
   const { data } = await supabase
     .from("visa_offices")
     .select(
-      "id, destination_id, kind, name, city, operator, address, phone, email, website, appointment_url, office_hours, jurisdiction, submits_applications, notes, source_url, verified_at"
+      "id, destination_id, kind, name, city, operator, address, phone, email, website, appointment_url, office_hours, jurisdiction, submits_applications, notes, internal_notes, source_url, verified_at"
     )
     .in("destination_id", destinationIds)
     .eq("status", "active")
@@ -40,6 +52,7 @@ export async function loadVisaOffices(destinationIds: string[]): Promise<Record<
       jurisdiction: row.jurisdiction,
       submitsApplications: Boolean(row.submits_applications),
       notes: row.notes,
+      ...(includeInternal ? { internalNotes: row.internal_notes } : {}),
       sourceUrl: row.source_url,
       verifiedAt: row.verified_at,
     });

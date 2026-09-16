@@ -47,7 +47,7 @@ export default async function VisaPageBuilder({
     supabase
       .from("visa_offices")
       .select(
-        "id, destination_id, kind, name, city, operator, address, phone, email, website, appointment_url, office_hours, jurisdiction, submits_applications, notes, source_url, verified_at, status"
+        "id, destination_id, kind, name, city, operator, address, phone, email, website, appointment_url, office_hours, jurisdiction, submits_applications, notes, internal_notes, source_url, verified_at, status"
       )
       .eq("status", "active")
       .order("sort_order"),
@@ -99,6 +99,7 @@ export default async function VisaPageBuilder({
             jurisdiction: r.jurisdiction,
             submitsApplications: Boolean(r.submits_applications),
             notes: r.notes,
+            internalNotes: r.internal_notes,
             sourceUrl: r.source_url,
             verifiedAt: r.verified_at,
           }))

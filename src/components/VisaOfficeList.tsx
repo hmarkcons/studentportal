@@ -97,6 +97,14 @@ export function VisaOfficeList({
             <LinkLine label="Website" href={o.website} />
             <LinkLine label="Appointments" href={o.appointmentUrl} />
             {o.notes && <p className="mt-1 text-xs text-muted">{o.notes}</p>}
+            {/* Staff only, and marked as such: a counselor reading this aloud
+                to a student needs to know it is not part of the answer. The
+                student's page never fetches the field at all. */}
+            {showProvenance && o.internalNotes && (
+              <p className="mt-1 rounded border border-warning/40 bg-warning/5 px-2 py-1 text-xs text-muted">
+                <span className="font-medium text-ink">Staff note:</span> {o.internalNotes}
+              </p>
+            )}
             {/* Staff only: where this came from, so a wrong address can be
                 rechecked against the same page it was taken from. */}
             {showProvenance && o.sourceUrl && <LinkLine label="Source" href={o.sourceUrl} />}
