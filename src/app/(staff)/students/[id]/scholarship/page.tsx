@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getStaffSession } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
 import { Card } from "@/components/ui/Card";
@@ -10,6 +11,7 @@ import { scholarshipPortals } from "@/lib/scholarshipPortal";
 import { listCredentialTypesAction } from "@/lib/actions/countryTracker";
 import { listScholarshipProofs } from "@/lib/actions/scholarshipProofs";
 import { ScholarshipProofs } from "./ScholarshipProofs";
+import { AddScholarships } from "./AddScholarships";
 import { ScholarshipPortals } from "./ScholarshipPortals";
 import { guideFreshness } from "@/lib/academicYear";
 import { ScholarshipGuide } from "@/components/ScholarshipGuide";
@@ -82,6 +84,16 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
   // none: the body, its deadlines and its income thresholds all follow the
   // region the chosen university sits in, so there is nothing to apply for
   // until one is chosen.
+  // Whether the office has said it is pursuing a scholarship here, read from
+  // each application's own tracker. Italy carries no such field and arrives
+  // as undefined, which the gate treats as "not declined" — exactly as before.
+  const { data: intentRows } = await supabase
+    .from("application_country_extra")
+    .select("application_id, field_value")
+    .eq("field_key", "scholarship_intent")
+    .in("application_id", withDestination.map((w) => w.app.id));
+  const intentByApp = new Map((intentRows ?? []).map((r) => [r.application_id, r.field_value]));
+
   const gate = scholarshipGate(
     withDestination.map((w) => ({
       applicationId: w.app.id,
@@ -90,6 +102,7 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
       // is_finalized by the trigger in migration 0173.
       preenrollmentFinalized: Boolean(w.app.preenrollment_finalized || w.app.is_finalized),
       hasBody: Boolean(w.destinationId && destinationsWithBodies.has(w.destinationId)),
+      intent: intentByApp.get(w.app.id) ?? null,
     }))
   );
 
@@ -234,6 +247,37 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
                 ))}
               </div>
             )}
+            {/* Outside Italy, a scholarship is a decision somebody takes on
+                the Dashboard tracker. Until they answer Yes, the list of
+                bodies is reference material, not a thing to fill in — and
+                offering the picker would be answering the question for them. */}
+            {canManage && intentByApp.get(w.app.id) === "Yes" && (
+              <div className="mb-3">
+                <AddScholarships
+                  studentId={id}
+                  applicationId={w.app.id}
+                  revalidateTo={`/students/${id}/scholarship`}
+                  countryName={w.country ?? "this country"}
+                  bodies={offeredBodies.map((b) => ({
+                    id: b.id,
+                    name: b.name,
+                    region: b.region,
+                    alreadyAdded: scholarships.some((s) => s.scholarship_body_id === b.id),
+                  }))}
+                />
+              </div>
+            )}
+            {canManage && intentByApp.get(w.app.id) === "Not decided" && (
+              <p className="mb-3 rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted">
+                Nobody has decided yet whether this student is applying for a {w.country ?? ""} scholarship. Answer
+                &ldquo;Applying for a scholarship?&rdquo; on the{" "}
+                <Link href={`/students/${id}`} className="text-primary hover:underline">
+                  Dashboard tracker
+                </Link>
+                , and the ones to choose from appear here.
+              </p>
+            )}
+
             <ScholarshipSection
               studentId={id}
               applicationId={w.app.id}

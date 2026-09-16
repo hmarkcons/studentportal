@@ -69,7 +69,21 @@ export default async function StudentLayout({ children, params }: { children: Re
     .from("scholarship_body_destinations")
     .select("destination_id");
   const destinationsWithBodies = new Set((scholarshipBodyLinks ?? []).map((l) => l.destination_id as string));
+
+  // A country somebody has answered "No" for on the tracker does not count
+  // towards showing the tab. If that is every country the student has, the
+  // tab goes away entirely rather than opening onto an explanation — the
+  // decision was taken and there is nothing there to manage.
+  const { data: declinedRows } = await supabase
+    .from("application_country_extra")
+    .select("application_id")
+    .eq("field_key", "scholarship_intent")
+    .eq("field_value", "No")
+    .in("application_id", (italyApp ?? []).map((a) => a.id));
+  const declined = new Set((declinedRows ?? []).map((r) => r.application_id));
+
   const showScholarship = (italyApp ?? []).some((a) => {
+    if (declined.has(a.id)) return false;
     const uni = Array.isArray(a.university) ? a.university[0] : a.university;
     const dest = uni ? (Array.isArray(uni.destination) ? uni.destination[0] : uni.destination) : null;
     return Boolean(dest?.id && destinationsWithBodies.has(dest.id));

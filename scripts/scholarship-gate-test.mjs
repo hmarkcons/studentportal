@@ -85,3 +85,57 @@ test("the unfinalised message explains why, not just that", () => {
   assert.match(m, /depends on the region/);
   assert.match(m, /deadlines and income thresholds/);
 });
+
+// ------------------------------------------------- the office's decision
+// Italy never asks: its DSU is offered to everyone and the body follows the
+// finalised university. Every other country does, and "No" means the tab
+// has nothing to show for it.
+
+test("a country answered No is gone from the tab", () => {
+  const out = scholarshipGate([
+    { applicationId: "a", destinationId: "de", preenrollmentFinalized: true, hasBody: true, intent: "No" },
+  ]);
+  assert.deepEqual(out.visible, []);
+  assert.equal(out.reason, "declined");
+});
+
+test("declined reads differently from nobody having looked", () => {
+  // The whole reason there are three answers rather than two.
+  assert.match(scholarshipGateMessage("declined"), /No scholarship is being pursued/);
+  assert.match(scholarshipGateMessage("not_finalised"), /until a university is finalised/);
+  assert.notEqual(scholarshipGateMessage("declined"), scholarshipGateMessage("not_finalised"));
+});
+
+test("Not decided behaves as it always did", () => {
+  const out = scholarshipGate([
+    { applicationId: "a", destinationId: "de", preenrollmentFinalized: true, hasBody: true, intent: "Not decided" },
+  ]);
+  assert.equal(out.visible.length, 1);
+  assert.equal(out.reason, null);
+});
+
+test("Italy, which never asks, is unaffected", () => {
+  // No intent at all on the row — Italy does not carry the field.
+  const out = scholarshipGate([
+    { applicationId: "a", destinationId: "it", preenrollmentFinalized: true, hasBody: true },
+  ]);
+  assert.equal(out.visible.length, 1);
+  assert.equal(out.reason, null);
+});
+
+test("declining one country does not hide another", () => {
+  const out = scholarshipGate([
+    { applicationId: "a", destinationId: "de", preenrollmentFinalized: true, hasBody: true, intent: "No" },
+    { applicationId: "b", destinationId: "it", preenrollmentFinalized: true, hasBody: true },
+  ]);
+  assert.deepEqual(out.visible.map((r) => r.destinationId), ["it"]);
+  assert.equal(out.reason, null);
+});
+
+test("a declined country is not mistaken for one awaiting pre-enrolment", () => {
+  // Declined AND not finalised: the decision is the more useful answer.
+  const out = scholarshipGate([
+    { applicationId: "a", destinationId: "de", preenrollmentFinalized: false, hasBody: true, intent: "No" },
+  ]);
+  assert.equal(out.reason, "declined");
+});

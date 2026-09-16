@@ -287,6 +287,62 @@ export async function addStudentScholarship(
   return { success: true };
 }
 
+/**
+ * Records several of a country's scholarships against a student at once.
+ *
+ * Outside Italy a student is usually put forward for more than one — Erasmus
+ * Mundus alongside the national scheme, say — and adding them one at a time
+ * through a single-select was four presses and four page reloads for one
+ * decision.
+ *
+ * Skips a body that is already recorded for this application rather than
+ * refusing the whole batch: ticking one that is already there is an easy
+ * mistake, and losing the other three to it would be a poor answer.
+ */
+export async function addStudentScholarships(
+  studentId: string,
+  applicationId: string,
+  revalidateTo: string,
+  bodyIds: string[]
+) {
+  const error = await gate();
+  if (error) return { error };
+  if (bodyIds.length === 0) return { error: "Choose at least one scholarship to add." };
+
+  const supabase = await createClient();
+
+  const { data: already } = await supabase
+    .from("student_scholarships")
+    .select("scholarship_body_id")
+    .eq("application_id", applicationId);
+  const have = new Set((already ?? []).map((r) => r.scholarship_body_id));
+
+  const toAdd = bodyIds.filter((id) => !have.has(id));
+  if (toAdd.length === 0) return { error: "Those are already recorded for this application." };
+
+  const { data: bodies } = await supabase.from("scholarship_bodies").select("id, name").in("id", toAdd);
+  const nameById = new Map((bodies ?? []).map((b) => [b.id, b.name]));
+
+  const { error: insertError } = await supabase.from("student_scholarships").insert(
+    toAdd.map((id) => ({
+      student_id: studentId,
+      application_id: applicationId,
+      scholarship_body_id: id,
+      // Named after the body so the record reads as something on its own in
+      // the student's portal, where the body is not otherwise shown.
+      name: nameById.get(id) ?? "Scholarship",
+      // "pending", not "submitted": ticking a body records an intention to
+      // apply, and the CHECK on this column has no separate "planned". Staff
+      // move it on once the application actually goes in.
+      status: "pending",
+    }))
+  );
+  if (insertError) return { error: insertError.message };
+
+  revalidatePath(revalidateTo);
+  return { success: true, added: toAdd.length, skipped: bodyIds.length - toAdd.length };
+}
+
 export async function updateStudentScholarship(
   scholarshipId: string,
   revalidateTo: string,
