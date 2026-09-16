@@ -211,7 +211,7 @@ export default async function ScholarshipBodiesPage() {
           searchable
           searchPlaceholder="Search body, country, region or university…"
           exportFilename="scholarship-bodies"
-          minTableWidthClassName="min-w-[1200px]"
+          minTableWidthClassName="min-w-[980px]"
           filters={[
             {
               key: "country",
@@ -220,15 +220,19 @@ export default async function ScholarshipBodiesPage() {
             },
           ]}
           columns={[
-            { key: "country", header: "Country" },
-            { key: "body", header: "Body" },
-            { key: "region", header: "Region" },
-            { key: "covers", header: "Covers" },
+            { key: "country", header: "Country", wrap: true, widthClassName: "max-w-[12rem]" },
+            { key: "body", header: "Body", wrap: true, widthClassName: "max-w-[16rem]" },
+            { key: "region", header: "Region", wrap: true, widthClassName: "max-w-[11rem]" },
+            // The four that made this table scroll. A national scheme's
+            // "covers" can list six cities and a stipend note can be a
+            // sentence; on one line each of those pushed the whole table
+            // sideways, so they wrap and are capped instead.
+            { key: "covers", header: "Covers", wrap: true, widthClassName: "max-w-[16rem]" },
             { key: "academic_year", header: "Academic year" },
-            { key: "deadline", header: "Deadline" },
+            { key: "deadline", header: "Deadline", wrap: true, widthClassName: "max-w-[13rem]" },
             { key: "guide", header: "Guide" },
-            { key: "stipend", header: "Stipend / notes" },
-            { key: "source", header: "Source" },
+            { key: "stipend", header: "Stipend / notes", wrap: true, widthClassName: "max-w-[20rem]" },
+            { key: "source", header: "Source", wrap: true, widthClassName: "max-w-[10rem]" },
             { key: "actions", header: "", exportable: false },
           ]}
           rows={rows.map((r) => ({

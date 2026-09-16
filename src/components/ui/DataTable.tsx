@@ -17,6 +17,15 @@ type Column = {
    * that hold an inline editor and need the room rather than a single line.
    */
   wrap?: boolean;
+  /**
+   * A ceiling on how wide this column may get, e.g. "max-w-[22rem]".
+   *
+   * Only useful with `wrap`: a cell holding a paragraph will otherwise take
+   * whatever width it likes and push the table sideways, which is the thing
+   * wrapping was supposed to prevent. Capped, the text runs onto as many
+   * lines as it needs and the table stays within the screen.
+   */
+  widthClassName?: string;
 };
 
 type Row = {
@@ -224,8 +233,8 @@ export function DataTable({
                 <td
                   key={c.key}
                   className={`px-4 py-3 ${oneLine && !c.wrap ? "whitespace-nowrap" : ""} ${
-                    c.align === "right" ? "text-right tabular-nums" : c.align === "center" ? "text-center" : ""
-                  }`}
+                    c.widthClassName ?? ""
+                  } ${c.align === "right" ? "text-right tabular-nums" : c.align === "center" ? "text-center" : ""}`}
                 >
                   {row.cells[c.key]}
                 </td>

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requirePermission } from "@/lib/auth/permissions";
+import { translateScholarshipValues } from "@/lib/translateScholarship";
 import { isScholarshipStatus, scholarshipIdentityError, SCHOLARSHIP_STATUSES } from "@/lib/scholarships";
 
 // Everything here needs scholarships.manage, which now defaults to Super Admin
@@ -153,9 +154,19 @@ export async function createScholarshipBody(_prevState: unknown, formData: FormD
   const call = readCallStatus(formData);
   if ("error" in call) return { error: call.error };
 
+  // Into English before it is stored, if it is not already. Costs nothing and
+  // asks nothing when the text is English, and never fails the save.
+  const englished = await translateScholarshipValues({ ...fields, guide_sections: guide.sections });
+
   const { data: created, error: insertError } = await supabase
     .from("scholarship_bodies")
-    .insert({ ...fields, ...call, guide_sections: guide.sections, guide_updated_at: new Date().toISOString() })
+    .insert({
+      ...englished.values,
+      ...call,
+      guide_updated_at: new Date().toISOString(),
+      original_text: englished.original,
+      translated_at: englished.changed.length > 0 ? new Date().toISOString() : null,
+    })
     .select("id")
     .single();
   if (insertError) return { error: insertError.message };
@@ -192,16 +203,22 @@ export async function updateScholarshipBody(bodyId: string, _prevState: unknown,
     data: { user },
   } = await supabase.auth.getUser();
 
+  const englished = await translateScholarshipValues({ ...fields, guide_sections: guide.sections });
+
   const { error: updateError } = await supabase
     .from("scholarship_bodies")
     .update({
-      ...fields,
+      ...englished.values,
       ...call,
-      guide_sections: guide.sections,
       // Stamped on every save: this is what says a guide has been looked at
       // for the current year, which is the whole point of tracking staleness.
       guide_updated_at: new Date().toISOString(),
       guide_updated_by: user?.id ?? null,
+      // Only written when something was actually translated, so a save of
+      // English text does not wipe the record of an earlier translation.
+      ...(englished.changed.length > 0
+        ? { original_text: englished.original, translated_at: new Date().toISOString() }
+        : {}),
     })
     .eq("id", bodyId);
   if (updateError) return { error: updateError.message };

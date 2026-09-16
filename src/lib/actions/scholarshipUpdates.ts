@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requirePermission } from "@/lib/auth/permissions";
+import { translateScholarshipValues } from "@/lib/translateScholarship";
 import { currentAcademicYear } from "@/lib/academicYear";
 import {
   PROPOSABLE_FIELDS,
@@ -109,6 +110,16 @@ export async function applyScholarshipProposal(runId: string, acceptedFields: st
 
   if (Object.keys(patch).length === 0) {
     return { error: "Nothing was selected to apply." };
+  }
+
+  // A proposal read off an Italian bando comes back in whatever language the
+  // bando was written in. Put it into English on the way in, so the office
+  // never has to think about which pages are translated and which are not.
+  const englished = await translateScholarshipValues(patch);
+  for (const [key, value] of Object.entries(englished.values)) patch[key] = value;
+  if (englished.changed.length > 0) {
+    patch.original_text = englished.original;
+    patch.translated_at = new Date().toISOString();
   }
 
   // Accepting a proposal is a person confirming the guide for this year, which
