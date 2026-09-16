@@ -233,10 +233,18 @@ export function DataTable({
                 <td
                   key={c.key}
                   className={`px-4 py-3 ${oneLine && !c.wrap ? "whitespace-nowrap" : ""} ${
-                    c.widthClassName ?? ""
-                  } ${c.align === "right" ? "text-right tabular-nums" : c.align === "center" ? "text-center" : ""}`}
+                    c.align === "right" ? "text-right tabular-nums" : c.align === "center" ? "text-center" : ""
+                  }`}
                 >
-                  {row.cells[c.key]}
+                  {/* The cap goes on an inner block, not the cell. A max-width
+                      on a <td> is ignored under automatic table layout, so
+                      putting it there looked right and left a paragraph free
+                      to stretch the table to ten thousand pixels. */}
+                  {c.widthClassName ? (
+                    <div className={`${c.widthClassName} whitespace-normal break-words`}>{row.cells[c.key]}</div>
+                  ) : (
+                    row.cells[c.key]
+                  )}
                 </td>
               ))}
             </tr>
