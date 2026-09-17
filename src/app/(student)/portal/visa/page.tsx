@@ -83,7 +83,12 @@ export default async function PortalVisaPage() {
   const sections = await Promise.all(
     countries.map(async (c) => {
       const fields = (defsByCountry[c.code] ?? []).filter((f) => f.showOnStudentVisa);
-      if (fields.length === 0) return null;
+      // No early return on an empty list. A country can have no visa tracker
+      // fields defined yet and still have an address to go to and sections
+      // written in the builder — Ireland is exactly that, and returning here
+      // made both silently unreachable however much had been written for it.
+      // The combined test further down is the one that decides whether there
+      // is anything worth showing.
 
       const { data: extras } = await supabase
         .from("application_country_extra")

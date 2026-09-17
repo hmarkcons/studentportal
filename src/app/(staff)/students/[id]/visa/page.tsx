@@ -91,7 +91,9 @@ export default async function StudentVisaTab(props: PageProps<"/students/[id]/vi
   const sections = await Promise.all(
     countries.map(async (c) => {
       const fields = (defsByCountry[c.code] ?? []).filter((f) => f.showOnStudentVisa);
-      if (fields.length === 0) return null;
+      // Deliberately no early return — see the student page. A country with no
+      // visa tracker fields still has offices and builder sections a counselor
+      // needs, and dropping the card here hid them from both sides at once.
 
       const { data: extras } = await client
         .from("application_country_extra")
@@ -205,13 +207,22 @@ export default async function StudentVisaTab(props: PageProps<"/students/[id]/vi
                 />
               </div>
 
-              <CountryTrackerForm
-                applicationId={s.country.appId}
-                fields={s.fields}
-                values={s.values}
-                revalidateTo={revalidateTo}
-                studentId={id}
-              />
+              {/* Only where the country has visa fields to fill in. An empty
+                  form is a row of nothing with a Save button under it. */}
+              {s.fields.length > 0 ? (
+                <CountryTrackerForm
+                  applicationId={s.country.appId}
+                  fields={s.fields}
+                  values={s.values}
+                  revalidateTo={revalidateTo}
+                  studentId={id}
+                />
+              ) : (
+                <p className="rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted">
+                  No visa progress fields are set up for {s.country.name} yet. Add them in Setup &rsaquo; Document
+                  trackers to record decisions and appointment dates here.
+                </p>
+              )}
 
               {/* Whatever the office added in the builder, staff-only ones
                   included — those are the notes a counselor needs and the
