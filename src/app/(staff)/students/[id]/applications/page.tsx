@@ -9,6 +9,9 @@ import { DeleteApplicationButton } from "./DeleteApplicationButton";
 import { FinalizeApplicationButton } from "./FinalizeApplicationButton";
 import { ApplicationOrderList } from "./ApplicationOrderList";
 import { orderCycles, cycleTabLabel, intakeLabel, type Cycle } from "@/lib/intakeCycle";
+import { applicationDeadline, deadlineSource, daysUntil } from "@/lib/applicationDeadline";
+import { ROUND_DATE_FORMAT } from "@/lib/programRounds";
+import { karachiToday } from "@/lib/calendarDates";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -27,9 +30,10 @@ export default async function StudentApplicationsTab(props: {
     supabase
       .from("applications")
       .select(
-        `id, current_stage, intake, deadline, is_finalized, cycle_id,
+        `id, current_stage, intake, deadline, is_finalized, cycle_id, round_id,
        university:universities(name, destination:destinations(display_name, country_code, pipeline_stages, finalize_action_label, finalized_badge_label)),
-       program:programs(name)`
+       program:programs(name, application_deadline, rounds:program_intake_rounds(id)),
+       round:program_intake_rounds(label, start_date, application_deadline)`
       )
       .eq("student_id", id)
       // The priority staff set, then creation order for anything that somehow
@@ -52,6 +56,11 @@ export default async function StudentApplicationsTab(props: {
   ]);
 
   const revalidateTo = `/students/${id}/applications`;
+
+  // Karachi's business day, read once on the server — a deadline is overdue on
+  // the office's calendar, not the viewer's, and no component may read the
+  // clock during render.
+  const today = karachiToday();
 
   // One tab per intake the student has been through, the current one first.
   // A student who has only gone round once — almost all of them — gets no
@@ -237,7 +246,34 @@ export default async function StudentApplicationsTab(props: {
                     finalized_badge_label?: string;
                   } | null)
                 : null;
-              const program = one(a.program as never) as { name?: string } | null;
+              const program = one(a.program as never) as
+                | { name?: string; application_deadline?: string | null; rounds?: { id: string }[] }
+                | null;
+              const round = one(a.round as never) as
+                | { label?: string; start_date?: string | null; application_deadline?: string | null }
+                | null;
+
+              // The effective deadline, and which of the three sources it came
+              // from. This line used to print a.deadline alone, so an
+              // application whose date comes from its intake round — or from
+              // the programme catalogue — read "No deadline set" while the
+              // reminder cron and the calendar were both acting on a real
+              // date. Saying which source it is matters too: a date somebody
+              // typed for this student is a commitment, a catalogue date is a
+              // default.
+              const due = applicationDeadline(a.deadline, round?.application_deadline, program?.application_deadline);
+              const source = deadlineSource(a.deadline, round?.application_deadline, program?.application_deadline);
+              const when = due ? formatDateOnly(due, ROUND_DATE_FORMAT) : null;
+              const overdue = due ? daysUntil(due, today) < 0 : false;
+              const deadlineText = !when
+                ? "No deadline set"
+                : source === "application"
+                  ? `Deadline: ${when}`
+                  : source === "round"
+                    ? `${round?.label ?? "Round"} ${overdue ? "closed" : "closes"} ${when}`
+                    : `Programme deadline ${when}`;
+
+              const roundCount = program?.rounds?.length ?? 0;
 
               const orderableStage = a.current_stage;
               const number = numberById.get(a.id) ?? 0;
@@ -268,9 +304,27 @@ export default async function StudentApplicationsTab(props: {
                       pipelineStages={dest?.pipeline_stages ?? []}
                     />
                   </Link>
+                  {/* Which intake round this application is for. Only where
+                      the programme actually runs rounds — most do not, and a
+                      "no round chosen" note on a programme that has none would
+                      be asking for something that does not exist. */}
+                  {roundCount > 0 && (
+                    <div className="mt-1 px-1 text-xs text-muted">
+                      {round?.label ? (
+                        <>
+                          Round: <span className="font-medium text-ink">{round.label}</span>
+                          {round.start_date && <> · starts {formatDateOnly(round.start_date, ROUND_DATE_FORMAT)}</>}
+                        </>
+                      ) : (
+                        <span className="text-warning">
+                          No round chosen — {roundCount} to pick from
+                        </span>
+                      )}
+                    </div>
+                  )}
                   <div className="mt-1 flex items-center justify-between px-1">
                     <span className="text-xs text-muted">
-                      {a.deadline ? `Deadline: ${formatDateOnly(a.deadline)}` : "No deadline set"}
+                      <span className={overdue ? "font-medium text-danger" : ""}>{deadlineText}</span>
                       {" · "}
                       <Badge tone="info">{a.current_stage.replace(/_/g, " ")}</Badge>
                       {a.is_finalized && (
