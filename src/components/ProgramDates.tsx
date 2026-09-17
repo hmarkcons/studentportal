@@ -1,6 +1,14 @@
 import { formatDateOnly } from "@/lib/formatDate";
 import { nextRound, roundIsClosed, sortRounds, type ProgramRound } from "@/lib/programRounds";
 
+// Named month rather than the en-US numeric default formatDateOnly falls back
+// to. "12/15/2026" and "15/12/2026" are the same glyphs in a different order,
+// and the readers here are in Karachi, where the second reading is the
+// habitual one — so a numeric apply-by date is a genuine eight-month error
+// waiting to happen. Several rounds now sit on one line and the whole point of
+// the line is deciding which is still open, so the month is spelled.
+const DATE_FORMAT: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", year: "numeric" };
+
 // Built as a list and joined, rather than each piece carrying its own leading
 // separator — a round is allowed to have only one of the two dates, and a
 // separator attached to the deadline produced " ·  · apply by 3 Jan" whenever
@@ -18,11 +26,11 @@ function RoundLine({
   const parts: React.ReactNode[] = [];
 
   if (withLabel) parts.push(<span className="font-medium">{round.label}</span>);
-  if (round.start_date) parts.push(<>starts {formatDateOnly(round.start_date)}</>);
+  if (round.start_date) parts.push(<>starts {formatDateOnly(round.start_date, DATE_FORMAT)}</>);
   if (round.application_deadline) {
     parts.push(
       <span className={closed ? "font-medium text-danger" : ""}>
-        {closed ? "applications closed" : "apply by"} {formatDateOnly(round.application_deadline)}
+        {closed ? "applications closed" : "apply by"} {formatDateOnly(round.application_deadline, DATE_FORMAT)}
       </span>
     );
   }
