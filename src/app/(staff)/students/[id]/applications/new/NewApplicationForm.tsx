@@ -8,6 +8,7 @@ import { IntakeField } from "@/components/IntakeField";
 import { intakeConfigFor, type DestinationOption } from "@/app/(staff)/students/new/RegisterStudentForm";
 import { ActionStatus } from "@/components/ActionStatus";
 import { ProgramDates } from "@/components/ProgramDates";
+import type { ProgramRound } from "@/lib/programRounds";
 
 type Destination = DestinationOption;
 type University = { id: string; name: string; destination_id: string };
@@ -15,8 +16,7 @@ type Program = {
   id: string;
   university_id: string;
   name: string;
-  start_date: string | null;
-  application_deadline: string | null;
+  rounds: ProgramRound[];
 };
 
 export function NewApplicationForm({
@@ -106,15 +106,12 @@ export function NewApplicationForm({
               </Select>
               {/* The catalogue's own dates for whatever was just picked, so
                   the Deadline box below is filled in knowing them rather than
-                  from memory. Renders nothing where the programme has none. */}
-              {chosen && (
-                <ProgramDates
-                  startDate={chosen.start_date}
-                  deadline={chosen.application_deadline}
-                  today={today}
-                  className="pl-1"
-                />
-              )}
+                  from memory. Every round is listed, not just the open one —
+                  the deadline being typed here is for a particular round, and
+                  a closed Round 1 above an open Round 2 is exactly what the
+                  person needs to see. Renders nothing where the programme has
+                  no dates at all. */}
+              {chosen && <ProgramDates rounds={chosen.rounds} today={today} showAll className="pl-1" />}
             </div>
           );
         })}

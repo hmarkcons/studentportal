@@ -16,7 +16,9 @@ export default async function PartnerProgramsPage() {
 
   const { data: programs } = await supabase
     .from("programs")
-    .select("id, level, name, core_field, sub_field, duration, tuition_fee, language_requirement, start_date, application_deadline")
+    .select(
+      "id, level, name, core_field, sub_field, duration, tuition_fee, language_requirement, rounds:program_intake_rounds(id, label, start_date, application_deadline, sort_order)"
+    )
     .eq("university_id", account.university_id)
     .order("level");
 
@@ -42,8 +44,11 @@ export default async function PartnerProgramsPage() {
               <p className="text-xs text-muted">
                 {p.duration ?? "—"} · {p.language_requirement ?? "—"}
                 {p.tuition_fee != null ? ` · ${p.tuition_fee}` : ""}
-                <ProgramDates startDate={p.start_date} deadline={p.application_deadline} today={today} />
               </p>
+              {/* Every round, not just the open one: a partner has no edit form
+                  for a programme once it is added, so this list is the only
+                  place they can check what they entered. */}
+              <ProgramDates rounds={p.rounds ?? []} today={today} showAll className="mt-0.5" />
             </div>
             <DeleteProgramButton id={p.id} />
           </div>

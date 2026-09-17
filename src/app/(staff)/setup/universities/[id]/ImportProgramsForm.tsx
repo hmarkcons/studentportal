@@ -19,6 +19,7 @@ const HEADERS = [
   "application_portal_name",
   "application_portal_link",
   "intake_dates",
+  "rounds",
   "start_date",
   "application_deadline",
   "tuition_fee",
@@ -31,6 +32,9 @@ const HEADERS = [
 // column and the sample people downloaded carried application_deadline=3000,
 // tuition_fee="3 years" and duration="B2 English". A date of "3000" does not
 // parse, so an import built by filling in the sample was rejected outright.
+//
+// start_date and application_deadline are shown empty beside a filled-in
+// `rounds` cell, which is what makes the precedence between them readable.
 const EXAMPLE = [
   "bachelors",
   "Computer Science",
@@ -44,8 +48,9 @@ const EXAMPLE = [
   "Universitaly",
   "https://universitaly.it",
   "Fall;Spring",
-  "2026-08-01",
-  "2026-01-15",
+  "Round 1|2026-09-01|2026-01-15; Round 2|2027-02-01|2026-09-15",
+  "",
+  "",
   "3000",
   "3 years",
   "B2 English",
@@ -71,9 +76,16 @@ export function ImportProgramsForm({ universityId }: { universityId: string }) {
         <code>core_field</code>, <code>sub_field</code>, <code>page_link</code>, <code>interview_required</code> (yes/no),{" "}
         <code>interview_details</code>, <code>admission_test_required</code> (yes/no), <code>admission_test_type</code>,{" "}
         <code>application_portal_name</code>, <code>application_portal_link</code>,{" "}
-        <code>intake_dates</code> (semicolon-separated), <code>start_date</code> (YYYY-MM-DD, when the course
-        begins), <code>application_deadline</code> (YYYY-MM-DD, when applications close), <code>tuition_fee</code>,{" "}
-        <code>duration</code>, <code>language_requirement</code>.
+        <code>intake_dates</code> (semicolon-separated), <code>rounds</code>, <code>start_date</code> (YYYY-MM-DD,
+        when the course begins), <code>application_deadline</code> (YYYY-MM-DD, when applications close),{" "}
+        <code>tuition_fee</code>, <code>duration</code>, <code>language_requirement</code>.
+      </p>
+      <p className="mt-1 text-xs text-muted">
+        A programme can run several intake rounds. Put them in <code>rounds</code> as{" "}
+        <code>label|course start|apply by</code>, semicolons between rounds — e.g.{" "}
+        <code>Round 1|2026-09-01|2026-01-15; Round 2|2027-02-01|2026-09-15</code>. For a single intake,{" "}
+        <code>start_date</code> and <code>application_deadline</code> still work on their own and become Round 1.{" "}
+        <code>rounds</code> wins if both are filled in.
       </p>
       {state?.error && <p className="mt-2 text-xs text-danger">{state.error}</p>}
       {state?.success && (

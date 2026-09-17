@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import { parseCsvWithHeader } from "@/lib/csv";
 import { requirePermission } from "@/lib/auth/permissions";
 import { MAX_UPLOAD_BYTES, fileSizeError } from "@/lib/fileSize";
+import { parseRoundsFromFormData, type ProgramRound } from "@/lib/programRounds";
+import { saveProgramRounds } from "@/lib/actions/programRoundsWrite";
 
 export async function createUniversity(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
@@ -67,21 +69,25 @@ export async function updateProgram(programId: string, universityId: string, _pr
   const tuition_fee = formData.get("tuition_fee") ? Number(formData.get("tuition_fee")) : null;
   const duration = String(formData.get("duration") ?? "").trim() || null;
   const language_requirement = String(formData.get("language_requirement") ?? "").trim() || null;
-  const start_date = String(formData.get("start_date") ?? "").trim() || null;
-  const application_deadline = String(formData.get("application_deadline") ?? "").trim() || null;
 
   if (!level || !name) return { error: "Level and name are required." };
 
-  // No check that the deadline falls before the start date. It usually does,
-  // but rolling admission runs the other way round and a programme is allowed
-  // to be odd — rejecting it here would be guessing at the data rather than
-  // validating it. The two inputs are labelled instead, which is what actually
+  // No check that a round's deadline falls before its start date. It usually
+  // does, but rolling admission runs the other way round and a programme is
+  // allowed to be odd — rejecting it here would be guessing at the data rather
+  // than validating it. The inputs are labelled instead, which is what actually
   // prevents them being typed the wrong way round.
   const { error } = await supabase
     .from("programs")
-    .update({ level, name, core_field, sub_field, tuition_fee, duration, language_requirement, start_date, application_deadline })
+    .update({ level, name, core_field, sub_field, tuition_fee, duration, language_requirement })
     .eq("id", programId);
   if (error) return { error: error.message };
+
+  // The dates live in program_intake_rounds now; programs.start_date and
+  // programs.application_deadline are a trigger-maintained mirror of the first
+  // round and are deliberately not written here.
+  const roundsError = await saveProgramRounds(supabase, programId, parseRoundsFromFormData(formData));
+  if (roundsError) return { error: roundsError };
 
   revalidatePath(`/setup/universities/${universityId}`);
   return { success: true };
@@ -133,15 +139,25 @@ export async function addProgram(universityId: string, _prevState: unknown, form
   const core_field = String(formData.get("core_field") ?? "").trim() || null;
   const sub_field = String(formData.get("sub_field") ?? "").trim() || null;
   const tuition_fee = formData.get("tuition_fee") ? Number(formData.get("tuition_fee")) : null;
-  const start_date = String(formData.get("start_date") ?? "").trim() || null;
-  const application_deadline = String(formData.get("application_deadline") ?? "").trim() || null;
 
   if (!level || !name) return { error: "Level and name are required." };
 
-  const { error } = await supabase
+  // The id comes back so the intake rounds can be attached — they are a child
+  // table now, not two columns on this row.
+  const { data: created, error } = await supabase
     .from("programs")
-    .insert({ university_id: universityId, level, name, core_field, sub_field, tuition_fee, start_date, application_deadline });
+    .insert({ university_id: universityId, level, name, core_field, sub_field, tuition_fee })
+    .select("id")
+    .single();
   if (error) return { error: error.message };
+
+  const rounds = parseRoundsFromFormData(formData);
+  if (rounds.length > 0) {
+    const roundsError = await saveProgramRounds(supabase, created.id, rounds);
+    // The programme itself was created, so this reports the partial outcome
+    // rather than pretending the whole thing failed.
+    if (roundsError) return { error: `Programme added, but its intake rounds could not be saved: ${roundsError}` };
+  }
 
   revalidatePath(`/setup/universities/${universityId}`);
   return { success: true };
@@ -214,14 +230,45 @@ export async function importUniversities(_prevState: unknown, formData: FormData
   return { success: true, count: toInsert.length, skipped };
 }
 
+// One cell holding a programme's intake rounds, for the bulk import:
+//
+//   Round 1|2026-09-01|2026-01-15; Round 2|2027-02-01|2026-09-15
+//
+// Semicolons between rounds (the convention the other multi-value columns in
+// this file already use, since commas are the CSV delimiter) and pipes between
+// label, course start and apply-by. A round needs at least one of the two dates
+// or there is nothing to record; the label may be left empty and is numbered.
+function parseRoundsCell(cell: string | undefined): ProgramRound[] {
+  const rounds: ProgramRound[] = [];
+
+  for (const entry of splitList(cell)) {
+    const [label, start, deadline] = entry.split("|").map((s) => s.trim());
+    const start_date = start || null;
+    const application_deadline = deadline || null;
+    if (!start_date && !application_deadline) continue;
+    rounds.push({
+      label: label || `Round ${rounds.length + 1}`,
+      start_date,
+      application_deadline,
+      sort_order: rounds.length + 1,
+    });
+  }
+
+  return rounds;
+}
+
 // Program bulk import — one university per file. Expected CSV columns
 // (header row required): level, name, core_field, sub_field, page_link,
 // interview_required, interview_details, admission_test_required,
 // admission_test_type, application_portal_name, application_portal_link,
-// intake_dates (semicolon-separated), start_date (YYYY-MM-DD),
-// application_deadline (YYYY-MM-DD), tuition_fee, duration,
-// language_requirement. Only `level` and `name` are required; `level` must be
-// bachelors/masters/phd.
+// intake_dates (semicolon-separated), rounds (see parseRoundsCell),
+// start_date (YYYY-MM-DD), application_deadline (YYYY-MM-DD), tuition_fee,
+// duration, language_requirement. Only `level` and `name` are required;
+// `level` must be bachelors/masters/phd.
+//
+// start_date and application_deadline are still accepted — they are the
+// documented single-intake columns — and become the programme's first round.
+// `rounds` takes precedence where both are given.
 export async function importPrograms(universityId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
   const file = formData.get("file") as File | null;
@@ -237,43 +284,101 @@ export async function importPrograms(universityId: string, _prevState: unknown, 
 
   const records = rows
     .filter((r) => r.name && ["bachelors", "masters", "phd"].includes(r.level))
-    .map((r) => ({
-      university_id: universityId,
-      level: r.level,
-      name: r.name,
-      core_field: r.core_field || null,
-      sub_field: r.sub_field || null,
-      page_link: r.page_link || null,
-      interview_required: parseBool(r.interview_required),
-      interview_details: r.interview_details || null,
-      admission_test_required: parseBool(r.admission_test_required),
-      admission_test_type: r.admission_test_type || null,
-      application_portal_name: r.application_portal_name || null,
-      application_portal_link: r.application_portal_link || null,
-      intake_dates: splitList(r.intake_dates),
-      start_date: r.start_date || null,
-      application_deadline: r.application_deadline || null,
-      tuition_fee: r.tuition_fee ? Number(r.tuition_fee) : null,
-      duration: r.duration || null,
-      language_requirement: r.language_requirement || null,
-    }));
+    .map((r) => {
+      // `rounds` wins where it is given; otherwise the single-intake columns
+      // become the first round. Either way the dates end up in
+      // program_intake_rounds, never on the programme row — start_date and
+      // application_deadline there are a trigger-maintained mirror now.
+      const rounds = parseRoundsCell(r.rounds);
+      if (rounds.length === 0 && (r.start_date || r.application_deadline)) {
+        rounds.push({
+          label: "Round 1",
+          start_date: r.start_date || null,
+          application_deadline: r.application_deadline || null,
+          sort_order: 1,
+        });
+      }
+
+      return {
+        rounds,
+        program: {
+          university_id: universityId,
+          level: r.level,
+          name: r.name,
+          core_field: r.core_field || null,
+          sub_field: r.sub_field || null,
+          page_link: r.page_link || null,
+          interview_required: parseBool(r.interview_required),
+          interview_details: r.interview_details || null,
+          admission_test_required: parseBool(r.admission_test_required),
+          admission_test_type: r.admission_test_type || null,
+          application_portal_name: r.application_portal_name || null,
+          application_portal_link: r.application_portal_link || null,
+          intake_dates: splitList(r.intake_dates),
+          tuition_fee: r.tuition_fee ? Number(r.tuition_fee) : null,
+          duration: r.duration || null,
+          language_requirement: r.language_requirement || null,
+        },
+      };
+    });
 
   if (records.length === 0) return { error: "No rows had valid 'name' and 'level' (bachelors/masters/phd) columns." };
+
+  const keyOf = (name: string, level: string) => `${name.trim().toLowerCase()}__${level}`;
 
   // programs has no unique constraint on (name, level) — without this
   // check, re-uploading the same (or an overlapping) file would silently
   // create duplicate program rows every time.
   const { data: existing } = await supabase.from("programs").select("name, level").eq("university_id", universityId);
-  const existingKeys = new Set((existing ?? []).map((p) => `${p.name.trim().toLowerCase()}__${p.level}`));
-  const toInsert = records.filter((r) => !existingKeys.has(`${r.name.trim().toLowerCase()}__${r.level}`));
+  const seen = new Set((existing ?? []).map((p) => keyOf(p.name, p.level)));
+
+  // Duplicates *within* one file were not caught before, only duplicates
+  // against what was already stored — so a spreadsheet that listed the same
+  // programme twice created it twice. Adding the key to the same set as it
+  // passes closes that, and makes name+level unique among the inserted rows,
+  // which is what lets the rounds below be matched back to their programme.
+  const toInsert: typeof records = [];
+  for (const record of records) {
+    const key = keyOf(record.program.name, record.program.level);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    toInsert.push(record);
+  }
   const skipped = records.length - toInsert.length;
 
   if (toInsert.length === 0) {
     return { error: "Every row's name+level already matches an existing program — nothing new to import." };
   }
 
-  const { error } = await supabase.from("programs").insert(toInsert);
+  const { data: inserted, error } = await supabase
+    .from("programs")
+    .insert(toInsert.map((r) => r.program))
+    .select("id, name, level");
   if (error) return { error: error.message };
+
+  const idByKey = new Map((inserted ?? []).map((p) => [keyOf(p.name, p.level), p.id]));
+  const roundRows = toInsert.flatMap((record) => {
+    const programId = idByKey.get(keyOf(record.program.name, record.program.level));
+    if (!programId) return [];
+    return record.rounds.map((round) => ({
+      program_id: programId,
+      label: round.label,
+      start_date: round.start_date,
+      application_deadline: round.application_deadline,
+      sort_order: round.sort_order ?? 0,
+    }));
+  });
+
+  if (roundRows.length > 0) {
+    const { error: roundsError } = await supabase.from("program_intake_rounds").insert(roundRows);
+    // The programmes are already in. Reporting the import as a failure would
+    // be wrong and would invite a re-upload that the dedupe then rejects
+    // wholesale, so this names what is missing instead.
+    if (roundsError) {
+      revalidatePath(`/setup/universities/${universityId}`);
+      return { error: `Imported ${toInsert.length} programme(s), but their intake dates could not be saved: ${roundsError.message}` };
+    }
+  }
 
   revalidatePath(`/setup/universities/${universityId}`);
   return { success: true, count: toInsert.length, skipped };

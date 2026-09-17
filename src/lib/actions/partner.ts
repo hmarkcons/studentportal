@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { sanitizeFilename, validateDocumentFile } from "@/lib/documentUpload";
+import { parseRoundsFromFormData } from "@/lib/programRounds";
+import { saveProgramRounds } from "@/lib/actions/programRoundsWrite";
 
 export async function partnerUpdateStage(applicationId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
@@ -163,24 +165,32 @@ export async function partnerAddProgram(_prevState: unknown, formData: FormData)
   const tuition_fee = formData.get("tuition_fee") ? Number(formData.get("tuition_fee")) : null;
   const duration = String(formData.get("duration") ?? "").trim() || null;
   const language_requirement = String(formData.get("language_requirement") ?? "").trim() || null;
-  const start_date = String(formData.get("start_date") ?? "").trim() || null;
-  const application_deadline = String(formData.get("application_deadline") ?? "").trim() || null;
 
   if (!level || !name) return { error: "Level and name are required." };
 
-  const { error } = await supabase.from("programs").insert({
-    university_id: universityId,
-    level,
-    name,
-    core_field,
-    sub_field,
-    tuition_fee,
-    duration,
-    language_requirement,
-    start_date,
-    application_deadline,
-  });
+  // The dates are intake rounds in their own table, not two columns here —
+  // see supabase/migrations/0232_program_intake_rounds.sql.
+  const { data: created, error } = await supabase
+    .from("programs")
+    .insert({
+      university_id: universityId,
+      level,
+      name,
+      core_field,
+      sub_field,
+      tuition_fee,
+      duration,
+      language_requirement,
+    })
+    .select("id")
+    .single();
   if (error) return { error: error.message };
+
+  const rounds = parseRoundsFromFormData(formData);
+  if (rounds.length > 0) {
+    const roundsError = await saveProgramRounds(supabase, created.id, rounds);
+    if (roundsError) return { error: `Programme added, but its intake rounds could not be saved: ${roundsError}` };
+  }
 
   revalidatePath("/partner/programs");
   return { success: true };

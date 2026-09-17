@@ -1,15 +1,23 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { partnerAddProgram } from "@/lib/actions/partner";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { ActionStatus } from "@/components/ActionStatus";
+import { ProgramRoundsFields } from "@/components/ProgramRoundsFields";
 
 const STUDY_LEVELS = ["bachelors", "masters", "phd"];
 
 export function AddProgramForm() {
   const [state, formAction, pending] = useActionState(partnerAddProgram, undefined);
+
+  // See the staff form: the rounds widget keeps its rows in state, so it has
+  // to be remounted to clear after a programme is added.
+  const [roundsKey, setRoundsKey] = useState(0);
+  useEffect(() => {
+    if (state?.success) setRoundsKey((k) => k + 1);
+  }, [state]);
 
   return (
     <form action={formAction} className="flex flex-wrap items-end gap-2">
@@ -26,14 +34,7 @@ export function AddProgramForm() {
       <Input name="duration" placeholder="Duration" className="w-28" />
       <Input name="tuition_fee" type="number" step="0.01" placeholder="Tuition fee" className="w-32" />
       <Input name="language_requirement" placeholder="Language requirement" />
-      <label className="flex flex-col gap-1 text-xs text-muted">
-        Course starts
-        <Input name="start_date" type="date" />
-      </label>
-      <label className="flex flex-col gap-1 text-xs text-muted">
-        Application deadline
-        <Input name="application_deadline" type="date" />
-      </label>
+      <ProgramRoundsFields key={roundsKey} />
       <Button type="submit" disabled={pending} variant="primary">
         {pending ? "Adding…" : "Add program"}
       </Button>

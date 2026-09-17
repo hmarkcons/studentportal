@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/Card";
 import { NewApplicationForm } from "./NewApplicationForm";
 import { getCachedActiveUniversities, getCachedDestinations } from "@/lib/cachedQueries";
 import { karachiToday } from "@/lib/calendarDates";
+import type { ProgramRound } from "@/lib/programRounds";
 
 /** PostgREST returns at most 1,000 rows per request unless a range is given. */
 const PAGE = 1000;
@@ -37,14 +38,15 @@ export default async function NewApplicationPage(props: PageProps<"/students/[id
   // programmes cannot bring the bug back silently.
   //
   // The catalogue dates come along so the form can show them beside the
-  // Deadline box a staff member is about to fill in by hand.
+  // Deadline box a staff member is about to fill in by hand — every intake
+  // round, since which round is still open is the thing being judged.
   const universityIds = universities.map((u) => u.id);
-  const programs: { id: string; university_id: string; name: string; start_date: string | null; application_deadline: string | null }[] = [];
+  const programs: { id: string; university_id: string; name: string; rounds: ProgramRound[] }[] = [];
   if (universityIds.length > 0) {
     for (let from = 0; ; from += PAGE) {
       const { data, error } = await supabase
         .from("programs")
-        .select("id, university_id, name, start_date, application_deadline")
+        .select("id, university_id, name, rounds:program_intake_rounds(id, label, start_date, application_deadline, sort_order)")
         .in("university_id", universityIds)
         .order("name")
         .range(from, from + PAGE - 1);

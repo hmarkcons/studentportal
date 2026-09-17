@@ -34,7 +34,7 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
   const { data: programsRaw } = await supabase
     .from("programs")
     .select(
-      "id, level, name, core_field, sub_field, tuition_fee, duration, language_requirement, start_date, application_deadline, commission_rate:program_commission_rates(rate_percent, fixed_amount, currency)"
+      "id, level, name, core_field, sub_field, tuition_fee, duration, language_requirement, rounds:program_intake_rounds(id, label, start_date, application_deadline, sort_order), commission_rate:program_commission_rates(rate_percent, fixed_amount, currency)"
     )
     .eq("university_id", id)
     .order("level");
@@ -43,7 +43,11 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
     return Array.isArray(v) ? v[0] ?? null : v;
   }
 
-  const programs = (programsRaw ?? []).map((p) => ({ ...p, commission_rate: one(p.commission_rate) }));
+  const programs = (programsRaw ?? []).map((p) => ({
+    ...p,
+    commission_rate: one(p.commission_rate),
+    rounds: p.rounds ?? [],
+  }));
 
   // Read on the server and handed down, so a closed deadline is judged against
   // Karachi's day rather than the viewer's clock — and so no component reads
