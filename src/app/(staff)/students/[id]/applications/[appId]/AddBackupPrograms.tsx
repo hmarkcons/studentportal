@@ -91,6 +91,7 @@ export function AddBackupPrograms({
                 <input type="hidden" name="program_ids" value={slot.programId} />
                 <input type="hidden" name="round_ids" value={slot.roundId} />
                 <Select
+                  aria-label={`Backup programme ${i + 1}`}
                   value={slot.programId}
                   onChange={(e) =>
                     setSlots((prev) =>
@@ -111,6 +112,7 @@ export function AddBackupPrograms({
                 </Select>
                 {rounds.length > 0 && (
                   <Select
+                    aria-label={`Intake round for backup programme ${i + 1}`}
                     value={slot.roundId}
                     onChange={(e) =>
                       setSlots((prev) => prev.map((s, idx) => (idx === i ? { ...s, roundId: e.target.value } : s)))

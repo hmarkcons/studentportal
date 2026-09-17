@@ -111,7 +111,11 @@ export function NewApplicationForm({
                   the lists are read back by index. */}
               <input type="hidden" name="program_ids" value={slot.programId} />
               <input type="hidden" name="round_ids" value={slot.roundId} />
+              {/* One "Programs" label sits above every slot, so each control
+                  names itself — otherwise a screen reader reads four selects
+                  all called "Programs". */}
               <Select
+                aria-label={`Programme ${i + 1}`}
                 value={slot.programId}
                 onChange={(e) =>
                   setSlots((prev) =>
@@ -130,6 +134,7 @@ export function NewApplicationForm({
               </Select>
               {rounds.length > 0 && (
                 <Select
+                  aria-label={`Intake round for programme ${i + 1}`}
                   value={slot.roundId}
                   onChange={(e) =>
                     setSlots((prev) => prev.map((s, idx) => (idx === i ? { ...s, roundId: e.target.value } : s)))
