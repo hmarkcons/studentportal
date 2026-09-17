@@ -1,13 +1,9 @@
 import { formatDateOnly } from "@/lib/formatDate";
-import { nextRound, roundIsClosed, sortRounds, type ProgramRound } from "@/lib/programRounds";
+import { ROUND_DATE_FORMAT, nextRound, roundIsClosed, sortRounds, type ProgramRound } from "@/lib/programRounds";
 
-// Named month rather than the en-US numeric default formatDateOnly falls back
-// to. "12/15/2026" and "15/12/2026" are the same glyphs in a different order,
-// and the readers here are in Karachi, where the second reading is the
-// habitual one — so a numeric apply-by date is a genuine eight-month error
-// waiting to happen. Several rounds now sit on one line and the whole point of
-// the line is deciding which is still open, so the month is spelled.
-const DATE_FORMAT: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", year: "numeric" };
+// Shared with the round dropdowns, so a date does not read one way in a form
+// and another in the list beside it.
+const DATE_FORMAT = ROUND_DATE_FORMAT;
 
 // Built as a list and joined, rather than each piece carrying its own leading
 // separator — a round is allowed to have only one of the two dates, and a
@@ -70,11 +66,22 @@ export function ProgramDates({
   today,
   showAll = false,
   inline = false,
+  highlightRoundId = null,
+  highlightLabel = "this application",
   className = "",
 }: {
   rounds?: readonly ProgramRound[] | null;
   today?: string;
   showAll?: boolean;
+  /**
+   * The round this application is actually for (applications.round_id), marked
+   * out of the list. Without it the list says which rounds exist but not which
+   * one the reader is in, and a closed round above an open one reads as a
+   * missed deadline rather than as somebody else's round.
+   */
+  highlightRoundId?: string | null;
+  /** What the marker says next to the highlighted round. */
+  highlightLabel?: string;
   /**
    * Continues a sentence that is already running — prepends the separator that
    * joins it to whatever precedes it. Callers that put this on a line of its
@@ -89,16 +96,24 @@ export function ProgramDates({
   if (showAll) {
     return (
       <span className={`flex flex-col text-xs text-muted ${className}`}>
-        {all.map((round, i) => (
-          <span key={round.id ?? i}>
-            <RoundLine round={round} today={today} withLabel={all.length > 1} />
-          </span>
-        ))}
+        {all.map((round, i) => {
+          const mine = Boolean(highlightRoundId) && round.id === highlightRoundId;
+          return (
+            <span key={round.id ?? i} className={mine ? "text-ink" : ""}>
+              <RoundLine round={round} today={today} withLabel={all.length > 1} />
+              {mine && <span className="ml-1 font-medium text-primary">· {highlightLabel}</span>}
+            </span>
+          );
+        })}
       </span>
     );
   }
 
-  const lead = nextRound(all, today) ?? all[0];
+  // Where the application names a round, that round leads — "the round you are
+  // in" beats "the round still open", and they are often not the same one.
+  // Otherwise fall back to whichever is still open.
+  const named = highlightRoundId ? all.find((r) => r.id === highlightRoundId) : null;
+  const lead = named ?? nextRound(all, today) ?? all[0];
   const others = all.length - 1;
 
   return (

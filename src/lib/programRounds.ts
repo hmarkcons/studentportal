@@ -10,6 +10,16 @@
 // is in src/lib/actions/programRoundsWrite.ts.
 
 import { daysUntil } from "@/lib/applicationDeadline";
+import { formatDateOnly } from "@/lib/formatDate";
+
+/**
+ * Named month rather than the en-US numeric default formatDateOnly falls back
+ * to. "12/15/2026" and "15/12/2026" are the same glyphs in a different order,
+ * and the readers here are in Karachi, where the second reading is the
+ * habitual one — so a numeric apply-by date is a genuine eight-month error
+ * waiting to happen.
+ */
+export const ROUND_DATE_FORMAT: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", year: "numeric" };
 
 export type ProgramRound = {
   /** Null/absent for a round the form has just added. */
@@ -53,6 +63,25 @@ export function nextRound<T extends ProgramRound>(rounds: readonly T[], today?: 
   });
 
   return stillOpen ?? ordered[ordered.length - 1];
+}
+
+/**
+ * How a round reads in a dropdown.
+ *
+ * The dates are in the option text rather than beside the field, because the
+ * choice being made IS between dates — "Round 1" and "Round 2" on their own
+ * give the person picking nothing to pick on. A round that has closed says so,
+ * since staff do legitimately file against a passed round and should be able
+ * to see that is what they are doing.
+ */
+export function roundOptionLabel(round: ProgramRound, today?: string): string {
+  const parts: string[] = [];
+  if (round.start_date) parts.push(`starts ${formatDateOnly(round.start_date, ROUND_DATE_FORMAT)}`);
+  if (round.application_deadline) {
+    const when = formatDateOnly(round.application_deadline, ROUND_DATE_FORMAT);
+    parts.push(roundIsClosed(round, today) ? `closed ${when}` : `apply by ${when}`);
+  }
+  return parts.length > 0 ? `${round.label} — ${parts.join(", ")}` : round.label;
 }
 
 /** True once this round can no longer be applied for. */

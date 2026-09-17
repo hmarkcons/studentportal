@@ -8,7 +8,7 @@ import { IntakeField } from "@/components/IntakeField";
 import { intakeConfigFor, type DestinationOption } from "@/app/(staff)/students/new/RegisterStudentForm";
 import { ActionStatus } from "@/components/ActionStatus";
 import { ProgramDates } from "@/components/ProgramDates";
-import type { ProgramRound } from "@/lib/programRounds";
+import { roundOptionLabel, sortRounds, type ProgramRound } from "@/lib/programRounds";
 
 type Destination = DestinationOption;
 type University = { id: string; name: string; destination_id: string };
@@ -37,7 +37,20 @@ export function NewApplicationForm({
   const [state, formAction, pending] = useActionState(action, undefined);
   const [destinationId, setDestinationId] = useState("");
   const [universityId, setUniversityId] = useState("");
-  const [programSlots, setProgramSlots] = useState<string[]>([""]);
+  // One slot per programme being applied for, each carrying its own intake
+  // round. Kept as one array of pairs rather than two parallel arrays, so a
+  // programme and its round cannot drift out of step.
+  const [slots, setSlots] = useState<{ programId: string; roundId: string }[]>([{ programId: "", roundId: "" }]);
+
+  // Changing the university invalidates every programme already chosen. This
+  // used to leave them in state: the <Select> showed blank because the old id
+  // matched none of the new options, but the id was still there and was still
+  // submitted, filing an application against a programme from the university
+  // the user had just navigated away from.
+  function chooseUniversity(id: string) {
+    setUniversityId(id);
+    setSlots([{ programId: "", roundId: "" }]);
+  }
 
   const filteredUniversities = useMemo(
     () => universities.filter((u) => !destinationId || u.destination_id === destinationId),
@@ -54,7 +67,7 @@ export function NewApplicationForm({
           value={destinationId}
           onChange={(e) => {
             setDestinationId(e.target.value);
-            setUniversityId("");
+            chooseUniversity("");
           }}
         >
           <option value="">Choose…</option>
@@ -74,7 +87,7 @@ export function NewApplicationForm({
           name="university_id"
           required
           value={universityId}
-          onChange={(e) => setUniversityId(e.target.value)}
+          onChange={(e) => chooseUniversity(e.target.value)}
         >
           <option value="">Choose…</option>
           {filteredUniversities.map((u) => (
@@ -86,15 +99,26 @@ export function NewApplicationForm({
       </div>
       <div className="flex flex-col gap-2">
         <label className="text-sm font-medium text-ink">Programs</label>
-        {programSlots.map((value, i) => {
-          const chosen = programs.find((p) => p.id === value) ?? null;
+        {slots.map((slot, i) => {
+          const chosen = programs.find((p) => p.id === slot.programId) ?? null;
+          const rounds = sortRounds(chosen?.rounds ?? []);
           return (
             <div key={i} className="flex flex-col gap-0.5">
+              {/* The values are submitted as hidden inputs, not by naming the
+                  selects. A controlled <select> whose value matches none of
+                  its options submits nothing at all, which would shorten one
+                  of the two lists and pair a round with the wrong programme —
+                  the lists are read back by index. */}
+              <input type="hidden" name="program_ids" value={slot.programId} />
+              <input type="hidden" name="round_ids" value={slot.roundId} />
               <Select
-                name="program_ids"
-                value={value}
+                value={slot.programId}
                 onChange={(e) =>
-                  setProgramSlots((prev) => prev.map((v, idx) => (idx === i ? e.target.value : v)))
+                  setSlots((prev) =>
+                    // The round is cleared with the programme: a round belongs
+                    // to one programme, so keeping it would point at another.
+                    prev.map((s, idx) => (idx === i ? { programId: e.target.value, roundId: "" } : s))
+                  )
                 }
               >
                 <option value="">Program {i + 1}…</option>
@@ -104,10 +128,28 @@ export function NewApplicationForm({
                   </option>
                 ))}
               </Select>
+              {rounds.length > 0 && (
+                <Select
+                  value={slot.roundId}
+                  onChange={(e) =>
+                    setSlots((prev) => prev.map((s, idx) => (idx === i ? { ...s, roundId: e.target.value } : s)))
+                  }
+                  className="text-xs"
+                >
+                  {/* Optional: staff often add the application before the round
+                      is settled, and forcing a guess would put a wrong date
+                      into the reminder cron. */}
+                  <option value="">No specific round yet</option>
+                  {rounds.map((r) => (
+                    <option key={r.id} value={r.id ?? ""}>
+                      {roundOptionLabel(r, today)}
+                    </option>
+                  ))}
+                </Select>
+              )}
               {/* The catalogue's own dates for whatever was just picked, so
                   the Deadline box below is filled in knowing them rather than
                   from memory. Every round is listed, not just the open one —
-                  the deadline being typed here is for a particular round, and
                   a closed Round 1 above an open Round 2 is exactly what the
                   person needs to see. Renders nothing where the programme has
                   no dates at all. */}
@@ -117,7 +159,7 @@ export function NewApplicationForm({
         })}
         <button
           type="button"
-          onClick={() => setProgramSlots((prev) => [...prev, ""])}
+          onClick={() => setSlots((prev) => [...prev, { programId: "", roundId: "" }])}
           className="self-start text-xs font-medium text-primary hover:underline"
         >
           + Add another program

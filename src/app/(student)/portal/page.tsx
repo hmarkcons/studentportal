@@ -31,7 +31,7 @@ export default async function PortalDashboardPage() {
     supabase
       .from("applications")
       .select(
-        "id, current_stage, intake, university:universities(name, destination:destinations(id, display_name, pipeline_stages, dashboard_pipeline_stages)), program:programs(name, rounds:program_intake_rounds(id, label, start_date, application_deadline, sort_order))"
+        "id, current_stage, intake, round_id, university:universities(name, destination:destinations(id, display_name, pipeline_stages, dashboard_pipeline_stages)), program:programs(name, rounds:program_intake_rounds(id, label, start_date, application_deadline, sort_order))"
       )
       .eq("student_id", student.id),
     loadPortalSummary(supabase, student.id),
@@ -170,9 +170,16 @@ export default async function PortalDashboardPage() {
                   pipelineStages={(dest as { pipeline_stages?: string[] } | null)?.pipeline_stages ?? []}
                 />
               </Link>
-              {/* Just the round still open, so the dashboard stays scannable —
-                  the full list is on the application page. Read-only. */}
-              <ProgramDates rounds={program?.rounds ?? []} today={today} className="px-1" />
+              {/* One round, so the dashboard stays scannable — the round this
+                  application is actually for where one is set, otherwise
+                  whichever is still open. The full list is on the application
+                  page. Read-only. */}
+              <ProgramDates
+                rounds={program?.rounds ?? []}
+                today={today}
+                highlightRoundId={app.round_id}
+                className="px-1"
+              />
             </div>
           );
         })}

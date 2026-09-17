@@ -100,15 +100,17 @@ export default async function CalendarPage(props: {
         .lte("field_value", rangeEndStr)
     : { data: [] };
 
-  // The application's own deadline as well as the programme's. This read only
-  // programs.application_deadline, which is the imported catalogue date and is
-  // null for almost every programme — so the deadline a processing officer
-  // typed on the Application Details form never reached their calendar. It also
-  // required a programme, so an application recorded before one was chosen was
-  // skipped even when it had a date.
+  // The application's own deadline, the chosen intake round's, and the
+  // programme's. This read only programs.application_deadline, which is the
+  // imported catalogue date and is null for almost every programme — so the
+  // deadline a processing officer typed on the Application Details form never
+  // reached their calendar. It also required a programme, so an application
+  // recorded before one was chosen was skipped even when it had a date.
   const { data: programDeadlines } = await supabase
     .from("applications")
-    .select("id, deadline, program:programs(name, application_deadline), student:leads(full_name, processing_officer_id)");
+    .select(
+      "id, deadline, program:programs(name, application_deadline), round:program_intake_rounds(label, application_deadline), student:leads(full_name, processing_officer_id)"
+    );
 
   const { data: documentDeadlines } = await supabase
     .from("student_documents")
@@ -246,11 +248,16 @@ export default async function CalendarPage(props: {
 
   (programDeadlines ?? []).forEach((a) => {
     const program = one(a.program);
-    const deadline = applicationDeadline(a.deadline, program?.application_deadline);
+    const round = one(a.round) as { label?: string; application_deadline?: string | null } | null;
+    const deadline = applicationDeadline(a.deadline, round?.application_deadline, program?.application_deadline);
     if (!deadline) return;
     if (deadline < rangeStartStr || deadline > rangeEndStr) return;
     const student = one(a.student);
     if (!deadlineBelongsToTarget(student?.processing_officer_id)) return;
+    // The round, where one is chosen — two rounds of the same programme are
+    // two different dates, and an entry naming only the programme cannot say
+    // which of them this is.
+    const what = program?.name ? `${program.name}${round?.label ? ` (${round.label})` : ""} deadline` : "Application deadline";
     events.push({
       id: `deadline-${a.id}`,
       date: deadline,
@@ -258,7 +265,7 @@ export default async function CalendarPage(props: {
       kind: "deadline",
       // "Application deadline" when no programme is chosen yet, rather than
       // the "undefined deadline" the old template produced.
-      label: `${program?.name ? `${program.name} deadline` : "Application deadline"} — ${student?.full_name ?? "?"}`,
+      label: `${what} — ${student?.full_name ?? "?"}`,
       tone: "danger",
     });
   });

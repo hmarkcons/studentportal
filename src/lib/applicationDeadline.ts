@@ -16,13 +16,26 @@
 // fallback for an application nobody has dated yet. That keeps the imported
 // programme dates useful without letting them override what staff typed for
 // this student.
+//
+// Since 0233 there is a third source in the middle. A programme runs several
+// intake rounds (0232) and an application can now name the one it is for, so
+// that round's own closing date sits between the two: more specific than the
+// programme, less authoritative than what a person typed for this student.
+//
+// It matters because programs.application_deadline is only a mirror of the
+// FIRST round. Without this step, an application aimed at Round 2 was chased
+// on Round 1's date — a deadline that had usually already passed, which is
+// both wrong and the kind of wrong that trains people to ignore the reminder.
 
 export function applicationDeadline(
   applicationDeadline: string | null | undefined,
+  roundDeadline: string | null | undefined,
   programDeadline: string | null | undefined
 ): string | null {
   const own = (applicationDeadline ?? "").trim();
   if (own) return own.slice(0, 10);
+  const round = (roundDeadline ?? "").trim();
+  if (round) return round.slice(0, 10);
   const catalogue = (programDeadline ?? "").trim();
   return catalogue ? catalogue.slice(0, 10) : null;
 }
@@ -30,9 +43,11 @@ export function applicationDeadline(
 /** Where the date came from, so a reader knows whether it is theirs or the catalogue's. */
 export function deadlineSource(
   applicationDeadline: string | null | undefined,
+  roundDeadline: string | null | undefined,
   programDeadline: string | null | undefined
-): "application" | "programme" | null {
+): "application" | "round" | "programme" | null {
   if ((applicationDeadline ?? "").trim()) return "application";
+  if ((roundDeadline ?? "").trim()) return "round";
   if ((programDeadline ?? "").trim()) return "programme";
   return null;
 }

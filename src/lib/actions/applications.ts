@@ -34,9 +34,18 @@ export async function createApplication(studentId: string, _prevState: unknown, 
   const supabase = await createClient();
 
   const university_id = String(formData.get("university_id") ?? "");
-  const program_ids = formData.getAll("program_ids").map(String).filter(Boolean);
   const intake = String(formData.get("intake") ?? "").trim() || null;
   const deadline = String(formData.get("deadline") ?? "") || null;
+
+  // Each programme slot on the form carries its own round, so the two lists
+  // are paired by index. They have to be zipped BEFORE the empty slots are
+  // dropped: filtering program_ids on its own would shift the remaining
+  // round_ids up and attach a round to the wrong programme.
+  const rawProgramIds = formData.getAll("program_ids").map(String);
+  const rawRoundIds = formData.getAll("round_ids").map(String);
+  const picks = rawProgramIds
+    .map((program_id, i) => ({ program_id, round_id: (rawRoundIds[i] ?? "").trim() || null }))
+    .filter((p) => p.program_id);
 
   if (!university_id) return { error: "Choose a university." };
 
@@ -50,10 +59,44 @@ export async function createApplication(studentId: string, _prevState: unknown, 
   // previous-intake tab starts filling up with this year's work.
   const cycle_id = await currentCycleId(supabase, studentId);
 
-  const rows = (program_ids.length > 0 ? program_ids : [null]).map((program_id) => ({
+  // Every programme has to actually be one of this university's. The edit form
+  // has always checked this and the create path never did — it only checked
+  // that the university was active. Worth closing now that the form submits
+  // the programme ids explicitly: a stale selection reaches the server as a
+  // real id rather than being dropped by the browser.
+  if (picks.length > 0) {
+    const { data: chosenPrograms } = await supabase
+      .from("programs")
+      .select("id, university_id")
+      .in("id", picks.map((p) => p.program_id));
+    const universityByProgram = new Map((chosenPrograms ?? []).map((p) => [p.id, p.university_id]));
+    if (picks.some((p) => universityByProgram.get(p.program_id) !== university_id)) {
+      return { error: "One of those programmes isn't at the university selected — reload the page and pick again." };
+    }
+  }
+
+  // A round has to belong to the programme it is filed against. The composite
+  // foreign key in 0233 enforces it, but that surfaces as a constraint name, so
+  // it is checked here to say something a person can act on. A mismatch means
+  // the page was stale, so "reload" is the actionable part.
+  const chosenRoundIds = picks.map((p) => p.round_id).filter((id): id is string => Boolean(id));
+  if (chosenRoundIds.length > 0) {
+    const { data: validRounds } = await supabase
+      .from("program_intake_rounds")
+      .select("id, program_id")
+      .in("id", chosenRoundIds);
+    const programByRound = new Map((validRounds ?? []).map((r) => [r.id, r.program_id]));
+    const mismatch = picks.find((p) => p.round_id && programByRound.get(p.round_id) !== p.program_id);
+    if (mismatch) {
+      return { error: "One of the intake rounds doesn't belong to the programme it was chosen for — reload the page and pick again." };
+    }
+  }
+
+  const rows = (picks.length > 0 ? picks : [{ program_id: null, round_id: null }]).map((pick) => ({
     student_id: studentId,
     university_id,
-    program_id,
+    program_id: pick.program_id,
+    round_id: pick.round_id,
     intake,
     deadline,
     cycle_id,
@@ -148,6 +191,9 @@ export async function updateApplicationDetails(applicationId: string, studentId:
   const programField = formData.get("program_id");
   const programSubmitted = programField !== null;
   const program_id = String(programField ?? "") || null;
+  const roundField = formData.get("round_id");
+  const roundSubmitted = roundField !== null;
+  const round_id = String(roundField ?? "") || null;
 
   if (application_fee !== null && (!Number.isFinite(application_fee) || application_fee < 0)) {
     return { error: "An application fee cannot be negative." };
@@ -155,7 +201,7 @@ export async function updateApplicationDetails(applicationId: string, studentId:
 
   const { data: existing } = await supabase
     .from("applications")
-    .select("university_id, program_id, is_finalized")
+    .select("university_id, program_id, round_id, is_finalized")
     .eq("id", applicationId)
     .maybeSingle();
   if (!existing) return { error: "That application no longer exists." };
@@ -187,6 +233,36 @@ export async function updateApplicationDetails(applicationId: string, studentId:
     }
   }
 
+  // The round has to be one of the rounds of whichever programme this
+  // application ends up on — the newly chosen one when it is changing, the
+  // stored one otherwise.
+  const effectiveProgramId = programSubmitted ? program_id : existing.program_id;
+  let nextRoundId = roundSubmitted ? round_id : existing.round_id;
+
+  // Losing the programme means losing the round with it: a round belongs to a
+  // programme, and the CHECK in 0233 refuses the pair on its own anyway.
+  if (!effectiveProgramId) nextRoundId = null;
+
+  if (nextRoundId) {
+    const { data: round } = await supabase
+      .from("program_intake_rounds")
+      .select("program_id")
+      .eq("id", nextRoundId)
+      .maybeSingle();
+    if (!round) {
+      // Deleted underneath the open page. Clearing it is right: the round it
+      // named genuinely no longer exists, and the database would have nulled
+      // it anyway on delete.
+      nextRoundId = null;
+    } else if (round.program_id !== effectiveProgramId) {
+      return {
+        error: changingProgram
+          ? "That intake round belongs to the previous programme. Reload the page and pick a round for the new one."
+          : "That intake round doesn't belong to this application's programme — reload the page and pick again.",
+      };
+    }
+  }
+
   const { error } = await supabase
     .from("applications")
     .update({
@@ -194,6 +270,7 @@ export async function updateApplicationDetails(applicationId: string, studentId:
       application_fee,
       special_requirements,
       intake,
+      round_id: nextRoundId,
       ...(programSubmitted ? { program_id } : {}),
     })
     .eq("id", applicationId);
@@ -230,8 +307,21 @@ export async function updateApplicationDetails(applicationId: string, studentId:
 export async function addBackupPrograms(applicationId: string, studentId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
 
-  const programIds = Array.from(new Set(formData.getAll("program_ids").map(String).filter(Boolean)));
-  if (programIds.length === 0) return { error: "Choose at least one programme to add." };
+  // Zipped by index before anything is dropped, then de-duplicated on the
+  // programme. Filtering or de-duplicating program_ids on its own would shift
+  // the round_ids beside them and give a programme somebody else's round.
+  const rawProgramIds = formData.getAll("program_ids").map(String);
+  const rawRoundIds = formData.getAll("round_ids").map(String);
+  const seenProgram = new Set<string>();
+  const picks: { program_id: string; round_id: string | null }[] = [];
+  rawProgramIds.forEach((program_id, i) => {
+    if (!program_id || seenProgram.has(program_id)) return;
+    seenProgram.add(program_id);
+    picks.push({ program_id, round_id: (rawRoundIds[i] ?? "").trim() || null });
+  });
+
+  if (picks.length === 0) return { error: "Choose at least one programme to add." };
+  const programIds = picks.map((p) => p.program_id);
 
   const { data: source } = await supabase
     .from("applications")
@@ -274,11 +364,23 @@ export async function addBackupPrograms(applicationId: string, studentId: string
     return { error: `Already applied for ${names || "that programme"} at this university in this intake.` };
   }
 
+  // Each round must belong to the programme it was chosen for. Enforced by the
+  // composite FK in 0233 too, but that reports a constraint name.
+  const roundIds = picks.map((p) => p.round_id).filter((id): id is string => Boolean(id));
+  if (roundIds.length > 0) {
+    const { data: rounds } = await supabase.from("program_intake_rounds").select("id, program_id").in("id", roundIds);
+    const programByRound = new Map((rounds ?? []).map((r) => [r.id, r.program_id]));
+    if (picks.some((p) => p.round_id && programByRound.get(p.round_id) !== p.program_id)) {
+      return { error: "One of the intake rounds doesn't belong to the programme it was chosen for — reload the page and pick again." };
+    }
+  }
+
   const { error } = await supabase.from("applications").insert(
-    programIds.map((program_id) => ({
+    picks.map(({ program_id, round_id }) => ({
       student_id: studentId,
       university_id: source.university_id,
       program_id,
+      round_id,
       intake: source.intake,
       deadline: source.deadline,
       // The same intake as the application it is a backup for.

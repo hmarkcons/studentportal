@@ -39,14 +39,18 @@ export async function GET(request: NextRequest) {
 
   const [{ data: programRows }, { data: taskRows }, { data: documentRows }, { data: staffRows }] = await Promise.all([
     admin
-      // Both dates. The application's own deadline is what staff type on the
-      // Application Details form; the programme's is the imported catalogue
-      // date. This query used to require a programme and read only the
-      // catalogue column, which is why nothing was ever sent: on production,
-      // all 10 dated applications had a null catalogue date and only 2 of
-      // 1,957 programmes had one at all.
+      // All three dates. The application's own deadline is what staff type on
+      // the Application Details form; the chosen intake round's is the date for
+      // the round this application is actually aimed at; the programme's is the
+      // imported catalogue date, which is only a mirror of the FIRST round.
+      // This query used to require a programme and read only the catalogue
+      // column, which is why nothing was ever sent: on production, all 10 dated
+      // applications had a null catalogue date and only 2 of 1,957 programmes
+      // had one at all.
       .from("applications")
-      .select("id, deadline, program:programs(name, application_deadline), student:leads(full_name, processing_officer_id)"),
+      .select(
+        "id, deadline, program:programs(name, application_deadline), round:program_intake_rounds(label, application_deadline), student:leads(full_name, processing_officer_id)"
+      ),
     admin
       .from("application_tasks")
       .select("id, description, due_date, application:applications(student:leads(full_name, processing_officer_id))")
@@ -64,12 +68,16 @@ export async function GET(request: NextRequest) {
 
   (programRows ?? []).forEach((a) => {
     const program = one(a.program) as { name?: string; application_deadline?: string | null } | null;
+    const round = one(a.round) as { label?: string; application_deadline?: string | null } | null;
     const student = one(a.student) as StudentRef;
-    const due = applicationDeadline(a.deadline, program?.application_deadline);
+    const due = applicationDeadline(a.deadline, round?.application_deadline, program?.application_deadline);
     if (!due) return;
     deadlines.push({
       kind: "program",
-      title: program?.name ?? "Application",
+      // The round is named where there is one, so the reminder says which
+      // deadline it means rather than repeating the programme name for two
+      // rounds with different dates.
+      title: round?.label ? `${program?.name ?? "Application"} — ${round.label}` : program?.name ?? "Application",
       studentName: student?.full_name ?? "Unknown student",
       dueDate: due,
       processingOfficerId: student?.processing_officer_id ?? null,

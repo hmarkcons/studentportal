@@ -96,7 +96,9 @@ export async function loadStaffQueue(supabase: SupabaseClient): Promise<StaffQue
     // to the ones they are the processing officer for.
     supabase
       .from("applications")
-      .select("id, deadline, student_id, program:programs(name, application_deadline), student:leads(full_name, processing_officer_id)"),
+      .select(
+        "id, deadline, student_id, program:programs(name, application_deadline), round:program_intake_rounds(label, application_deadline), student:leads(full_name, processing_officer_id)"
+      ),
   ]);
 
   // Support: derived from the thread rather than a marker (see supportSignals).
@@ -136,15 +138,16 @@ export async function loadStaffQueue(supabase: SupabaseClient): Promise<StaffQue
   const upcomingDeadlines = (deadlineRows.data ?? [])
     .flatMap((a) => {
       const program = one(a.program as never) as { name?: string; application_deadline?: string | null } | null;
+      const round = one(a.round as never) as { label?: string; application_deadline?: string | null } | null;
       const student = one(a.student as never) as { full_name?: string; processing_officer_id?: string | null } | null;
       if (student?.processing_officer_id !== viewerId) return [];
-      const due = applicationDeadline(a.deadline as string | null, program?.application_deadline);
+      const due = applicationDeadline(a.deadline as string | null, round?.application_deadline, program?.application_deadline);
       if (!due || !isUpcoming(due, today, DEADLINE_WINDOW_DAYS)) return [];
       return [
         {
           studentId: a.student_id as string,
           studentName: student?.full_name ?? "Unknown student",
-          label: program?.name ?? "Application",
+          label: round?.label && program?.name ? `${program.name} (${round.label})` : program?.name ?? "Application",
           dueDate: due,
           urgency: deadlineUrgency(due, today),
         },

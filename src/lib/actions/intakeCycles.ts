@@ -54,7 +54,9 @@ export async function loadRestartContext(studentId: string): Promise<RestartCont
       .eq("lead_id", studentId),
     supabase
       .from("applications")
-      .select("id, deadline, cycle_id, university:universities(name), program:programs(name, application_deadline)")
+      .select(
+        "id, deadline, cycle_id, university:universities(name), program:programs(name, application_deadline), round:program_intake_rounds(label, application_deadline)"
+      )
       .eq("student_id", studentId),
   ]);
 
@@ -79,14 +81,23 @@ export async function loadRestartContext(studentId: string): Promise<RestartCont
   for (const a of currentApps) {
     const uni = one(a.university as never) as { name?: string } | null;
     const program = one(a.program as never) as { name?: string; application_deadline?: string | null } | null;
+    const round = one(a.round as never) as { label?: string; application_deadline?: string | null } | null;
     const who = uni?.name ?? "This application";
+
+    // The chosen round's date where there is one, otherwise the programme's.
+    // Not both: programs.application_deadline is a mirror of the FIRST round,
+    // so for an application aimed at Round 2 it is a date for a different
+    // round — offering it as extra evidence would argue from the wrong one.
+    const catalogueDate = round?.application_deadline ?? program?.application_deadline ?? null;
+
     if (a.deadline) deadlines.push({ label: `${who} deadline`, date: a.deadline });
-    if (program?.application_deadline) {
-      deadlines.push({ label: `${who} — ${program.name ?? "program"} application`, date: program.application_deadline });
+    if (catalogueDate) {
+      const what = `${program?.name ?? "program"}${round?.label ? ` ${round.label}` : " application"}`;
+      deadlines.push({ label: `${who} — ${what}`, date: catalogueDate });
     }
     // Recorded even when blank, so the recommendation can tell "no deadline
     // is known" apart from "every deadline has passed".
-    if (!a.deadline && !program?.application_deadline) {
+    if (!a.deadline && !catalogueDate) {
       deadlines.push({ label: `${who} deadline`, date: null });
     }
   }

@@ -17,6 +17,8 @@ import { loadStudentChecklistSections } from "@/lib/studentChecklistSections";
 import { hasPermission } from "@/lib/auth/permissions";
 import { InterviewSection, type InterviewRow } from "@/components/InterviewSection";
 import { isIntakeMode, type IntakeMode } from "@/lib/intake";
+import { karachiToday } from "@/lib/calendarDates";
+import type { ProgramRound } from "@/lib/programRounds";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -29,9 +31,10 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
   const { data: app, error } = await supabase
     .from("applications")
     .select(
-      `id, current_stage, intake, deadline, application_fee, special_requirements, program_id, is_finalized,
+      `id, current_stage, intake, deadline, application_fee, special_requirements, program_id, round_id, is_finalized,
        university:universities(id, name, city, contact_email, destination:destinations(pipeline_stages, country_code, display_name, intake_mode, intake_seasons)),
-       program:programs(id, name, page_link, requirements_link, application_portal_link)`
+       program:programs(id, name, page_link, requirements_link, application_portal_link),
+       round:program_intake_rounds(id, label, start_date, application_deadline, sort_order)`
     )
     .eq("id", appId)
     .eq("student_id", id)
@@ -52,8 +55,14 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
   // picker each need.
   const [{ data: universityPrograms }, { data: siblingApps }] = await Promise.all([
     university?.id
-      ? supabase.from("programs").select("id, name").eq("university_id", university.id).order("name")
-      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+      ? supabase
+          .from("programs")
+          // The rounds come along so the Details form can offer them without a
+          // second round-trip when the programme is changed.
+          .select("id, name, rounds:program_intake_rounds(id, label, start_date, application_deadline, sort_order)")
+          .eq("university_id", university.id)
+          .order("name")
+      : Promise.resolve({ data: [] as { id: string; name: string; rounds: ProgramRound[] }[] }),
     university?.id
       ? supabase
           .from("applications")
@@ -192,9 +201,11 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
               : null
           }
           programId={app.program_id}
+          roundId={app.round_id}
           programs={universityPrograms ?? []}
           isFinalized={app.is_finalized}
           universityName={university?.name ?? "this university"}
+          today={karachiToday()}
         />
         {/* The office applies to two or three programmes at one university.
             Creation handles that with its "+ Add another program" slots;
@@ -207,6 +218,7 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
             universityName={university?.name ?? "this university"}
             available={availablePrograms}
             siblings={siblings}
+            today={karachiToday()}
           />
         </div>
       </Card>
