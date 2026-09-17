@@ -8,6 +8,9 @@ import type { DashboardStageDef } from "@/lib/dashboardPipeline";
 import { loadPortalSummary } from "@/lib/portalSummary";
 import { PortalAttention } from "@/components/PortalAttention";
 import { WHATSAPP_LINK } from "@/lib/constants";
+import { ProgramDates } from "@/components/ProgramDates";
+import { karachiToday } from "@/lib/calendarDates";
+import type { ProgramRound } from "@/lib/programRounds";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -28,7 +31,7 @@ export default async function PortalDashboardPage() {
     supabase
       .from("applications")
       .select(
-        "id, current_stage, intake, university:universities(name, destination:destinations(id, display_name, pipeline_stages, dashboard_pipeline_stages)), program:programs(name)"
+        "id, current_stage, intake, university:universities(name, destination:destinations(id, display_name, pipeline_stages, dashboard_pipeline_stages)), program:programs(name, rounds:program_intake_rounds(id, label, start_date, application_deadline, sort_order))"
       )
       .eq("student_id", student.id),
     loadPortalSummary(supabase, student.id),
@@ -39,6 +42,11 @@ export default async function PortalDashboardPage() {
   ]);
 
   const counselor = one(student.assigned_counselor);
+
+  // Read on the server so "applications closed" is judged on Karachi's
+  // business day rather than wherever the student happens to be, and so no
+  // component reads the clock during render.
+  const today = karachiToday();
 
   // Same destination-level grouping as the staff Dashboard (see
   // students/[id]/page.tsx) — one card per destination the student has a
@@ -150,16 +158,22 @@ export default async function PortalDashboardPage() {
         {(applications ?? []).map((app) => {
           const uni = one(app.university);
           const dest = uni ? one(uni.destination as never) : null;
+          const program = one(app.program) as { name?: string; rounds?: ProgramRound[] } | null;
           return (
-            <Link key={app.id} href={`/portal/applications/${app.id}`}>
-              <BoardingPassTracker
-                universityName={uni?.name ?? "University"}
-                programName={one(app.program)?.name}
-                intake={app.intake}
-                currentStage={app.current_stage}
-                pipelineStages={(dest as { pipeline_stages?: string[] } | null)?.pipeline_stages ?? []}
-              />
-            </Link>
+            <div key={app.id} className="flex flex-col gap-1">
+              <Link href={`/portal/applications/${app.id}`}>
+                <BoardingPassTracker
+                  universityName={uni?.name ?? "University"}
+                  programName={program?.name}
+                  intake={app.intake}
+                  currentStage={app.current_stage}
+                  pipelineStages={(dest as { pipeline_stages?: string[] } | null)?.pipeline_stages ?? []}
+                />
+              </Link>
+              {/* Just the round still open, so the dashboard stays scannable —
+                  the full list is on the application page. Read-only. */}
+              <ProgramDates rounds={program?.rounds ?? []} today={today} className="px-1" />
+            </div>
           );
         })}
         {(!applications || applications.length === 0) && <EmptyState>No applications yet.</EmptyState>}

@@ -108,7 +108,7 @@ export function ProgramRow({
                 A counselor scanning a university's programmes is usually
                 looking for the one whose deadline has not gone yet — which is
                 also why this leads with the open round rather than the first. */}
-            <ProgramDates rounds={program.rounds} today={today} />
+            <ProgramDates rounds={program.rounds} today={today} inline />
           </span>
           <div className="flex items-center gap-3">
             {program.tuition_fee != null && <span className="text-muted">{program.tuition_fee}</span>}

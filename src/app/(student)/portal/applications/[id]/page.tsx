@@ -6,6 +6,9 @@ import { Card } from "@/components/ui/Card";
 import { BoardingPassTracker } from "@/components/ui/BoardingPassTracker";
 import { PortalDocumentRow } from "./PortalDocumentRow";
 import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
+import { ProgramDates } from "@/components/ProgramDates";
+import { karachiToday } from "@/lib/calendarDates";
+import { sortRounds, type ProgramRound } from "@/lib/programRounds";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -18,7 +21,7 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
   const { data: app, error } = await supabase
     .from("applications")
     .select(
-      "id, student_id, current_stage, intake, university:universities(name, destination:destinations(pipeline_stages)), program:programs(name), student:leads!inner(auth_user_id)"
+      "id, student_id, current_stage, intake, university:universities(name, destination:destinations(pipeline_stages)), program:programs(name, rounds:program_intake_rounds(id, label, start_date, application_deadline, sort_order)), student:leads!inner(auth_user_id)"
     )
     .eq("id", id)
     .maybeSingle();
@@ -27,6 +30,8 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
 
   const university = one(app.university);
   const destination = university ? one(university.destination as never) : null;
+  const program = one(app.program) as { name?: string; rounds?: ProgramRound[] } | null;
+  const rounds = sortRounds(program?.rounds ?? []);
 
   await ensureStudentDocumentRequirements(app.student_id);
 
@@ -61,12 +66,28 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
       <div className="mt-4 mb-6">
         <BoardingPassTracker
           universityName={university?.name ?? "University"}
-          programName={one(app.program)?.name}
+          programName={program?.name}
           intake={app.intake}
           currentStage={app.current_stage}
           pipelineStages={(destination as { pipeline_stages?: string[] } | null)?.pipeline_stages ?? []}
         />
       </div>
+
+      {/* Read-only. Every round the programme runs, not "yours" — an
+          application records its intake as free text and is not tied to a
+          round, so naming one here would be asserting something the data does
+          not say. The wording is explicit that submitting is not the student's
+          job, so a date they can see cannot read as a date they have missed. */}
+      {rounds.length > 0 && (
+        <Card className="mb-6">
+          <h3 className="mb-1 text-sm font-medium text-ink">Intake rounds</h3>
+          <p className="mb-2 text-xs text-muted">
+            When this programme starts, and the last date to apply for each round. Your counsellor submits the
+            application — these dates are here for your information.
+          </p>
+          <ProgramDates rounds={rounds} today={karachiToday()} showAll />
+        </Card>
+      )}
 
       <Card>
         <h3 className="mb-3 text-sm font-medium text-ink">Documents</h3>

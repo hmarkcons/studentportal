@@ -69,11 +69,18 @@ export function ProgramDates({
   rounds,
   today,
   showAll = false,
+  inline = false,
   className = "",
 }: {
   rounds?: readonly ProgramRound[] | null;
   today?: string;
   showAll?: boolean;
+  /**
+   * Continues a sentence that is already running — prepends the separator that
+   * joins it to whatever precedes it. Callers that put this on a line of its
+   * own leave it off, or it reads as " · Round 2 · starts …".
+   */
+  inline?: boolean;
   className?: string;
 }) {
   const all = sortRounds(rounds ?? []);
@@ -96,7 +103,7 @@ export function ProgramDates({
 
   return (
     <span className={`text-xs text-muted ${className}`}>
-      {" · "}
+      {inline && " · "}
       <RoundLine round={lead} today={today} withLabel={all.length > 1} />
       {others > 0 && <> · +{others} more round{others === 1 ? "" : "s"}</>}
     </span>
