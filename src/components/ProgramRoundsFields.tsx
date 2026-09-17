@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Input } from "@/components/ui/Input";
-import { defaultRoundLabel, sortRounds, type ProgramRound } from "@/lib/programRounds";
+import { ROUNDS_PRESENT_FIELD, defaultRoundLabel, sortRounds, type ProgramRound } from "@/lib/programRounds";
 
 type Row = ProgramRound & { key: string };
 
@@ -55,6 +55,10 @@ export function ProgramRoundsFields({
 
   return (
     <div className={`w-full ${className}`}>
+      {/* Says "this form carried the rounds widget", so removing every row
+          clears the programme's rounds while a form that simply has no widget
+          leaves them untouched. See roundsWereSubmitted. */}
+      <input type="hidden" name={ROUNDS_PRESENT_FIELD} value="1" />
       <p className="mb-1 text-[11px] font-medium text-muted">
         Intake rounds
         <span className="ml-1 font-normal">

@@ -64,6 +64,23 @@ export function roundIsClosed(round: ProgramRound, today?: string): boolean {
 }
 
 /**
+ * Whether the form that was submitted actually carried the rounds widget.
+ *
+ * "No round fields" and "the widget was there and every row was removed" are
+ * different intentions with the same empty field list, and only the second one
+ * should clear a programme's rounds. Without this, a form that posted to
+ * updateProgram without the widget — a future quick-edit, a partial save —
+ * would delete every round the programme had, silently and with no way back.
+ * The widget emits the marker; a form without it leaves the rounds alone.
+ */
+export function roundsWereSubmitted(formData: FormData): boolean {
+  return formData.has(ROUNDS_PRESENT_FIELD);
+}
+
+/** The hidden marker ProgramRoundsFields emits once per form. */
+export const ROUNDS_PRESENT_FIELD = "rounds_present";
+
+/**
  * Reads the repeated round fields out of a submitted form.
  *
  * The widget emits one set of same-named inputs per row — round_id,

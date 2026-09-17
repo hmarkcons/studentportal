@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { parseCsvWithHeader } from "@/lib/csv";
 import { requirePermission } from "@/lib/auth/permissions";
 import { MAX_UPLOAD_BYTES, fileSizeError } from "@/lib/fileSize";
-import { parseRoundsFromFormData, type ProgramRound } from "@/lib/programRounds";
+import { parseRoundsFromFormData, roundsWereSubmitted, type ProgramRound } from "@/lib/programRounds";
 import { saveProgramRounds } from "@/lib/actions/programRoundsWrite";
 
 export async function createUniversity(_prevState: unknown, formData: FormData) {
@@ -86,8 +86,13 @@ export async function updateProgram(programId: string, universityId: string, _pr
   // The dates live in program_intake_rounds now; programs.start_date and
   // programs.application_deadline are a trigger-maintained mirror of the first
   // round and are deliberately not written here.
-  const roundsError = await saveProgramRounds(supabase, programId, parseRoundsFromFormData(formData));
-  if (roundsError) return { error: roundsError };
+  //
+  // Only when the form actually carried the widget — otherwise a form that
+  // does not edit rounds would delete the ones the programme has.
+  if (roundsWereSubmitted(formData)) {
+    const roundsError = await saveProgramRounds(supabase, programId, parseRoundsFromFormData(formData));
+    if (roundsError) return { error: roundsError };
+  }
 
   revalidatePath(`/setup/universities/${universityId}`);
   return { success: true };
