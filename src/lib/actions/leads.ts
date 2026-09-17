@@ -10,6 +10,7 @@ import { LEAD_STATUSES } from "@/lib/constants";
 import { dateOfBirthError } from "@/lib/dateOfBirth";
 import { phoneError, phoneChangeError } from "@/lib/phoneNumber";
 import { MAX_UPLOAD_BYTES, fileSizeError } from "@/lib/fileSize";
+import { removeStoragePrefix } from "@/lib/storageCleanup";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -529,6 +530,22 @@ export async function deleteStudent(studentId: string) {
     const admin = createAdminClient();
     await admin.auth.admin.deleteUser(lead.auth_user_id).catch(() => {});
   }
+
+  // Their files, which nothing else was removing.
+  //
+  // Deleting a student cleaned up the rows, the credentials and the login but
+  // left every uploaded document in the bucket for ever — their documents,
+  // agreement PDFs and consent recordings, invoice copies, additional-service
+  // uploads and profile photo. Production had 47 such folders, 111 files,
+  // from students deleted over the project's life. These are passports,
+  // transcripts, tax returns and signed agreements, so keeping them after the
+  // record has gone is a retention problem rather than just clutter.
+  //
+  // After the row, never before: if the delete had failed we would have
+  // destroyed the files of a student who still existed. Everything a student
+  // owns is stored under their id as a prefix, so clearing the prefix catches
+  // all of it without having to remember each feature's path column.
+  await removeStoragePrefix(supabase, studentId);
 
   revalidatePath("/students");
   revalidatePath("/leads");
