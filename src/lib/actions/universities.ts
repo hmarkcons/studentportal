@@ -67,13 +67,19 @@ export async function updateProgram(programId: string, universityId: string, _pr
   const tuition_fee = formData.get("tuition_fee") ? Number(formData.get("tuition_fee")) : null;
   const duration = String(formData.get("duration") ?? "").trim() || null;
   const language_requirement = String(formData.get("language_requirement") ?? "").trim() || null;
+  const start_date = String(formData.get("start_date") ?? "").trim() || null;
   const application_deadline = String(formData.get("application_deadline") ?? "").trim() || null;
 
   if (!level || !name) return { error: "Level and name are required." };
 
+  // No check that the deadline falls before the start date. It usually does,
+  // but rolling admission runs the other way round and a programme is allowed
+  // to be odd — rejecting it here would be guessing at the data rather than
+  // validating it. The two inputs are labelled instead, which is what actually
+  // prevents them being typed the wrong way round.
   const { error } = await supabase
     .from("programs")
-    .update({ level, name, core_field, sub_field, tuition_fee, duration, language_requirement, application_deadline })
+    .update({ level, name, core_field, sub_field, tuition_fee, duration, language_requirement, start_date, application_deadline })
     .eq("id", programId);
   if (error) return { error: error.message };
 
@@ -127,10 +133,14 @@ export async function addProgram(universityId: string, _prevState: unknown, form
   const core_field = String(formData.get("core_field") ?? "").trim() || null;
   const sub_field = String(formData.get("sub_field") ?? "").trim() || null;
   const tuition_fee = formData.get("tuition_fee") ? Number(formData.get("tuition_fee")) : null;
+  const start_date = String(formData.get("start_date") ?? "").trim() || null;
+  const application_deadline = String(formData.get("application_deadline") ?? "").trim() || null;
 
   if (!level || !name) return { error: "Level and name are required." };
 
-  const { error } = await supabase.from("programs").insert({ university_id: universityId, level, name, core_field, sub_field, tuition_fee });
+  const { error } = await supabase
+    .from("programs")
+    .insert({ university_id: universityId, level, name, core_field, sub_field, tuition_fee, start_date, application_deadline });
   if (error) return { error: error.message };
 
   revalidatePath(`/setup/universities/${universityId}`);
@@ -208,9 +218,10 @@ export async function importUniversities(_prevState: unknown, formData: FormData
 // (header row required): level, name, core_field, sub_field, page_link,
 // interview_required, interview_details, admission_test_required,
 // admission_test_type, application_portal_name, application_portal_link,
-// intake_dates (semicolon-separated), application_deadline (YYYY-MM-DD),
-// tuition_fee, duration, language_requirement. Only `level` and `name` are
-// required; `level` must be bachelors/masters/phd.
+// intake_dates (semicolon-separated), start_date (YYYY-MM-DD),
+// application_deadline (YYYY-MM-DD), tuition_fee, duration,
+// language_requirement. Only `level` and `name` are required; `level` must be
+// bachelors/masters/phd.
 export async function importPrograms(universityId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
   const file = formData.get("file") as File | null;
@@ -240,6 +251,7 @@ export async function importPrograms(universityId: string, _prevState: unknown, 
       application_portal_name: r.application_portal_name || null,
       application_portal_link: r.application_portal_link || null,
       intake_dates: splitList(r.intake_dates),
+      start_date: r.start_date || null,
       application_deadline: r.application_deadline || null,
       tuition_fee: r.tuition_fee ? Number(r.tuition_fee) : null,
       duration: r.duration || null,

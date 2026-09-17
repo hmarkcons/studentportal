@@ -9,6 +9,7 @@ import { ImportProgramsForm } from "./ImportProgramsForm";
 import { UniversityEditForm } from "./UniversityEditForm";
 import { ProgramRow } from "./ProgramRow";
 import { uploadedLine } from "@/lib/activityStamp";
+import { karachiToday } from "@/lib/calendarDates";
 
 export default async function UniversityDetailPage(props: PageProps<"/setup/universities/[id]">) {
   const { id } = await props.params;
@@ -33,7 +34,7 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
   const { data: programsRaw } = await supabase
     .from("programs")
     .select(
-      "id, level, name, core_field, sub_field, tuition_fee, duration, language_requirement, application_deadline, commission_rate:program_commission_rates(rate_percent, fixed_amount, currency)"
+      "id, level, name, core_field, sub_field, tuition_fee, duration, language_requirement, start_date, application_deadline, commission_rate:program_commission_rates(rate_percent, fixed_amount, currency)"
     )
     .eq("university_id", id)
     .order("level");
@@ -43,6 +44,11 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
   }
 
   const programs = (programsRaw ?? []).map((p) => ({ ...p, commission_rate: one(p.commission_rate) }));
+
+  // Read on the server and handed down, so a closed deadline is judged against
+  // Karachi's day rather than the viewer's clock — and so no component reads
+  // the date during render.
+  const today = karachiToday();
 
   // What the university has shared with HMARK through its own portal.
   //
@@ -101,6 +107,7 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
               canEdit={isSuperAdmin}
               canViewRate={canViewRates}
               canManageRate={canManageRates}
+              today={today}
             />
           ))}
           {programs.length === 0 && (

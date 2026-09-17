@@ -7,21 +7,31 @@ import { Input, Select } from "@/components/ui/Input";
 import { IntakeField } from "@/components/IntakeField";
 import { intakeConfigFor, type DestinationOption } from "@/app/(staff)/students/new/RegisterStudentForm";
 import { ActionStatus } from "@/components/ActionStatus";
+import { ProgramDates } from "@/components/ProgramDates";
 
 type Destination = DestinationOption;
 type University = { id: string; name: string; destination_id: string };
-type Program = { id: string; university_id: string; name: string };
+type Program = {
+  id: string;
+  university_id: string;
+  name: string;
+  start_date: string | null;
+  application_deadline: string | null;
+};
 
 export function NewApplicationForm({
   studentId,
   destinations,
   universities,
   programs,
+  today,
 }: {
   studentId: string;
   destinations: Destination[];
   universities: University[];
   programs: Program[];
+  /** Karachi's today, so "applications closed" is judged on the business day. */
+  today?: string;
 }) {
   const action = createApplication.bind(null, studentId);
   const [state, formAction, pending] = useActionState(action, undefined);
@@ -76,23 +86,38 @@ export function NewApplicationForm({
       </div>
       <div className="flex flex-col gap-2">
         <label className="text-sm font-medium text-ink">Programs</label>
-        {programSlots.map((value, i) => (
-          <Select
-            key={i}
-            name="program_ids"
-            value={value}
-            onChange={(e) =>
-              setProgramSlots((prev) => prev.map((v, idx) => (idx === i ? e.target.value : v)))
-            }
-          >
-            <option value="">Program {i + 1}…</option>
-            {filteredPrograms.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </Select>
-        ))}
+        {programSlots.map((value, i) => {
+          const chosen = programs.find((p) => p.id === value) ?? null;
+          return (
+            <div key={i} className="flex flex-col gap-0.5">
+              <Select
+                name="program_ids"
+                value={value}
+                onChange={(e) =>
+                  setProgramSlots((prev) => prev.map((v, idx) => (idx === i ? e.target.value : v)))
+                }
+              >
+                <option value="">Program {i + 1}…</option>
+                {filteredPrograms.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </Select>
+              {/* The catalogue's own dates for whatever was just picked, so
+                  the Deadline box below is filled in knowing them rather than
+                  from memory. Renders nothing where the programme has none. */}
+              {chosen && (
+                <ProgramDates
+                  startDate={chosen.start_date}
+                  deadline={chosen.application_deadline}
+                  today={today}
+                  className="pl-1"
+                />
+              )}
+            </div>
+          );
+        })}
         <button
           type="button"
           onClick={() => setProgramSlots((prev) => [...prev, ""])}

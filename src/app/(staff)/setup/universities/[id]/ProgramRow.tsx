@@ -6,6 +6,7 @@ import { STUDY_LEVELS } from "@/lib/constants";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { ActionStatus } from "@/components/ActionStatus";
+import { ProgramDates } from "@/components/ProgramDates";
 
 export type ProgramCommissionRate = { rate_percent: number | null; fixed_amount: number | null; currency: string } | null;
 
@@ -18,6 +19,7 @@ export type ProgramRowData = {
   tuition_fee: number | null;
   duration: string | null;
   language_requirement: string | null;
+  start_date: string | null;
   application_deadline: string | null;
   commission_rate: ProgramCommissionRate;
 };
@@ -71,12 +73,15 @@ export function ProgramRow({
   canEdit = false,
   canViewRate = false,
   canManageRate = false,
+  today,
 }: {
   program: ProgramRowData;
   universityId: string;
   canEdit?: boolean;
   canViewRate?: boolean;
   canManageRate?: boolean;
+  /** Karachi's today, from the server — see ProgramDates. */
+  today?: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [editingRate, setEditingRate] = useState(false);
@@ -98,6 +103,10 @@ export function ProgramRow({
           <span className="text-ink">
             {program.level} · {program.name}
             {program.core_field && <span className="text-muted"> · {program.core_field}</span>}
+            {/* The dates belong in the list, not only behind the edit pencil.
+                A counselor scanning a university's programmes is usually
+                looking for the one whose deadline has not gone yet. */}
+            <ProgramDates startDate={program.start_date} deadline={program.application_deadline} today={today} />
           </span>
           <div className="flex items-center gap-3">
             {program.tuition_fee != null && <span className="text-muted">{program.tuition_fee}</span>}
@@ -153,7 +162,14 @@ export function ProgramRow({
       <Input name="duration" defaultValue={program.duration ?? ""} placeholder="Duration" className="w-24" />
       <Input name="tuition_fee" type="number" step="0.01" defaultValue={program.tuition_fee ?? ""} placeholder="Fee" className="w-24" />
       <Input name="language_requirement" defaultValue={program.language_requirement ?? ""} placeholder="Language req." />
-      <Input name="application_deadline" type="date" defaultValue={program.application_deadline ?? ""} />
+      <label className="flex flex-col gap-0.5 text-[11px] text-muted">
+        Course starts
+        <Input name="start_date" type="date" defaultValue={program.start_date ?? ""} />
+      </label>
+      <label className="flex flex-col gap-0.5 text-[11px] text-muted">
+        Application deadline
+        <Input name="application_deadline" type="date" defaultValue={program.application_deadline ?? ""} />
+      </label>
       <Button type="submit" variant="outline-primary" size="sm" pending={pending}>
         Save
       </Button>

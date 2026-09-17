@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
-import { formatDateOnly } from "@/lib/formatDate";
 import { Card } from "@/components/ui/Card";
+import { ProgramDates } from "@/components/ProgramDates";
+import { karachiToday } from "@/lib/calendarDates";
 import { AddProgramForm } from "./AddProgramForm";
 import { DeleteProgramButton } from "./DeleteProgramButton";
 
@@ -15,9 +16,11 @@ export default async function PartnerProgramsPage() {
 
   const { data: programs } = await supabase
     .from("programs")
-    .select("id, level, name, core_field, sub_field, duration, tuition_fee, language_requirement, application_deadline")
+    .select("id, level, name, core_field, sub_field, duration, tuition_fee, language_requirement, start_date, application_deadline")
     .eq("university_id", account.university_id)
     .order("level");
+
+  const today = karachiToday();
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -39,7 +42,7 @@ export default async function PartnerProgramsPage() {
               <p className="text-xs text-muted">
                 {p.duration ?? "—"} · {p.language_requirement ?? "—"}
                 {p.tuition_fee != null ? ` · ${p.tuition_fee}` : ""}
-                {p.application_deadline ? ` · deadline ${formatDateOnly(p.application_deadline)}` : ""}
+                <ProgramDates startDate={p.start_date} deadline={p.application_deadline} today={today} />
               </p>
             </div>
             <DeleteProgramButton id={p.id} />

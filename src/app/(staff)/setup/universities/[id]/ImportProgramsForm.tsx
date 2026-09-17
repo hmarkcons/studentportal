@@ -19,6 +19,7 @@ const HEADERS = [
   "application_portal_name",
   "application_portal_link",
   "intake_dates",
+  "start_date",
   "application_deadline",
   "tuition_fee",
   "duration",
@@ -63,8 +64,9 @@ export function ImportProgramsForm({ universityId }: { universityId: string }) {
         <code>core_field</code>, <code>sub_field</code>, <code>page_link</code>, <code>interview_required</code> (yes/no),{" "}
         <code>interview_details</code>, <code>admission_test_required</code> (yes/no), <code>admission_test_type</code>,{" "}
         <code>application_portal_name</code>, <code>application_portal_link</code>,{" "}
-        <code>intake_dates</code> (semicolon-separated), <code>application_deadline</code> (YYYY-MM-DD),{" "}
-        <code>tuition_fee</code>, <code>duration</code>, <code>language_requirement</code>.
+        <code>intake_dates</code> (semicolon-separated), <code>start_date</code> (YYYY-MM-DD, when the course
+        begins), <code>application_deadline</code> (YYYY-MM-DD, when applications close), <code>tuition_fee</code>,{" "}
+        <code>duration</code>, <code>language_requirement</code>.
       </p>
       {state?.error && <p className="mt-2 text-xs text-danger">{state.error}</p>}
       {state?.success && (

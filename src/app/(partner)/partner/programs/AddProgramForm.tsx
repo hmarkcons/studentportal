@@ -27,6 +27,10 @@ export function AddProgramForm() {
       <Input name="tuition_fee" type="number" step="0.01" placeholder="Tuition fee" className="w-32" />
       <Input name="language_requirement" placeholder="Language requirement" />
       <label className="flex flex-col gap-1 text-xs text-muted">
+        Course starts
+        <Input name="start_date" type="date" />
+      </label>
+      <label className="flex flex-col gap-1 text-xs text-muted">
         Application deadline
         <Input name="application_deadline" type="date" />
       </label>

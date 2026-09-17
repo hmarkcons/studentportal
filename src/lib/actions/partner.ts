@@ -163,6 +163,7 @@ export async function partnerAddProgram(_prevState: unknown, formData: FormData)
   const tuition_fee = formData.get("tuition_fee") ? Number(formData.get("tuition_fee")) : null;
   const duration = String(formData.get("duration") ?? "").trim() || null;
   const language_requirement = String(formData.get("language_requirement") ?? "").trim() || null;
+  const start_date = String(formData.get("start_date") ?? "").trim() || null;
   const application_deadline = String(formData.get("application_deadline") ?? "").trim() || null;
 
   if (!level || !name) return { error: "Level and name are required." };
@@ -176,6 +177,7 @@ export async function partnerAddProgram(_prevState: unknown, formData: FormData)
     tuition_fee,
     duration,
     language_requirement,
+    start_date,
     application_deadline,
   });
   if (error) return { error: error.message };
