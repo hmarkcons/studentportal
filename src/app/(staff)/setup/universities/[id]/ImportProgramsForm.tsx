@@ -25,6 +25,12 @@ const HEADERS = [
   "duration",
   "language_requirement",
 ];
+
+// One value per header, in the same order. It was one short — nothing sat
+// under application_deadline, so every value from there on was shifted up a
+// column and the sample people downloaded carried application_deadline=3000,
+// tuition_fee="3 years" and duration="B2 English". A date of "3000" does not
+// parse, so an import built by filling in the sample was rejected outright.
 const EXAMPLE = [
   "bachelors",
   "Computer Science",
@@ -39,6 +45,7 @@ const EXAMPLE = [
   "https://universitaly.it",
   "Fall;Spring",
   "2026-08-01",
+  "2026-01-15",
   "3000",
   "3 years",
   "B2 English",
