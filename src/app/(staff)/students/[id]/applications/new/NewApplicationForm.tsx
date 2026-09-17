@@ -62,7 +62,12 @@ export function NewApplicationForm({
     <form action={formAction} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-medium text-ink">Country</label>
+        {/* The visible <label> above is not associated with this select — it
+            has no htmlFor and the select has no id — and the select carries no
+            name either, since the destination only drives the filtering. So it
+            announced as an unlabelled combobox. */}
         <Select
+          aria-label="Country"
           required
           value={destinationId}
           onChange={(e) => {
@@ -84,6 +89,7 @@ export function NewApplicationForm({
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-medium text-ink">University</label>
         <Select
+          aria-label="University"
           name="university_id"
           required
           value={universityId}
