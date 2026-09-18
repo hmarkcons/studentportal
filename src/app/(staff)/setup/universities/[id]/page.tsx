@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AddProgramForm } from "./AddProgramForm";
 import { ImportProgramsForm } from "./ImportProgramsForm";
+import { BulkProgramRoundsForm } from "./BulkProgramRoundsForm";
 import { UniversityEditForm } from "./UniversityEditForm";
 import { ProgramRow } from "./ProgramRow";
 import { uploadedLine } from "@/lib/activityStamp";
@@ -121,6 +122,14 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
           )}
         </div>
         <AddProgramForm universityId={id} />
+        {/* Bachelor's and master's programmes at one university usually share
+            their closing dates, and typing the same pair into thirty-odd
+            programmes one at a time is how they end up inconsistent. */}
+        <BulkProgramRoundsForm
+          universityId={id}
+          programs={programs.map((p) => ({ id: p.id, level: p.level, name: p.name }))}
+          canReplace={isSuperAdmin}
+        />
         <ImportProgramsForm universityId={id} />
       </Card>
 
