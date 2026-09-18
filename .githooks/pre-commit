@@ -1,37 +1,77 @@
 #!/bin/sh
-# Pre-commit gate: the unit tests.
+# Pre-commit gate: typecheck, lint, unit tests.
 #
-# They are here rather than left to be remembered because they catch a class of
-# problem nothing else in the gate does. scripts/*-test.mjs import src/lib
-# modules directly under plain Node, so they notice a TypeScript path alias in
-# a tested module (Node cannot resolve "@/"), a missing .ts extension on a
-# relative import, and a stale call after a signature changed. All four of
-# tsc --noEmit, eslint, next build and the production checks stayed green for
-# several commits while two of those were broken.
+# All three ran green for several commits while two unit tests were broken,
+# which is why the tests are here. They catch what the others cannot:
+# scripts/*-test.mjs import src/lib modules directly under plain Node, so they
+# notice a TypeScript path alias in a tested module (Node cannot resolve "@/"),
+# a missing .ts extension on a relative import, and a stale call left behind
+# when a signature changed.
 #
-# `next build` is deliberately NOT here: it takes over a minute, and a slow
-# hook is one people switch off. This runs in about four seconds.
+# Timings on this repo, which decided the shape of this:
+#
+#   npm test              ~4s
+#   tsc --noEmit          ~9s    whole project
+#   eslint <staged files> ~10s   mostly fixed startup cost
+#   eslint src            ~49s   <- not this
+#   next build            >60s   <- nor this
+#
+# So eslint runs over the staged files only. Its cost is almost all config and
+# plugin loading rather than per-file work, so a full-tree lint would cost a
+# minute for no more information on a commit touching three files -- and a slow
+# hook is one people switch off. tsc, by contrast, has to see everything:
+# types cross files, so a staged-only typecheck would miss the breakage it
+# exists to catch.
+#
+# All three run even if an earlier one fails, so one commit attempt reports
+# everything that is wrong rather than making you fix them one at a time.
 #
 # Wired up by scripts/install-hooks.mjs, which npm's `prepare` runs after an
 # install. To bypass once, for a work-in-progress commit:
 #
 #   git commit --no-verify
-set -e
 
 # A fresh clone commits before its first install on occasion; failing there
 # would be confusing and is not what this guards against.
 if [ ! -d node_modules ]; then
-  echo "pre-commit: node_modules is missing, skipping the tests."
+  echo "pre-commit: node_modules is missing, skipping the checks."
   echo "            run \`npm install\` to have them run on future commits."
   exit 0
 fi
 
-echo "pre-commit: running unit tests..."
-if npm test --silent; then
-  exit 0
+failed=""
+
+echo "pre-commit: typecheck..."
+if ! npm run --silent typecheck; then
+  failed="$failed typecheck"
 fi
 
-echo ""
-echo "pre-commit: unit tests failed, so nothing was committed."
-echo "            fix them, or commit with --no-verify if this is deliberate."
-exit 1
+# Only the files this commit actually touches, and only the ones eslint has
+# anything to say about. --diff-filter=ACM leaves out deletions, whose paths no
+# longer exist; -z survives the parentheses in src/app/(staff)/... and any
+# future path with a space in it.
+staged=$(git diff --cached --name-only --diff-filter=ACM -z -- '*.ts' '*.tsx' '*.mjs' '*.js' '*.jsx' | tr '\0' '\n' | grep -c '' || true)
+if [ "$staged" -gt 0 ]; then
+  echo "pre-commit: eslint on $staged staged file(s)..."
+  if ! git diff --cached --name-only --diff-filter=ACM -z -- '*.ts' '*.tsx' '*.mjs' '*.js' '*.jsx' \
+    | xargs -0 -r npx eslint --; then
+    failed="$failed eslint"
+  fi
+else
+  echo "pre-commit: no source files staged, skipping eslint."
+fi
+
+echo "pre-commit: unit tests..."
+if ! npm test --silent; then
+  failed="$failed tests"
+fi
+
+if [ -n "$failed" ]; then
+  echo ""
+  echo "pre-commit: failed ->$failed"
+  echo "            nothing was committed. fix the above, or use --no-verify"
+  echo "            if this commit is deliberately work in progress."
+  exit 1
+fi
+
+exit 0
