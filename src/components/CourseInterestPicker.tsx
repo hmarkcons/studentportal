@@ -127,7 +127,16 @@ export function CourseInterestPicker({
             <div key={option.slug} className="border-b border-border py-1.5 last:border-0">
               <div className="flex items-center gap-2">
                 <label className="flex flex-1 items-center gap-2 text-sm text-ink">
-                  <input type="checkbox" checked={on} onChange={() => toggleGroup(option.slug)} />
+                  {/* Named explicitly: the label also carries the "17
+                      programme fields" counter, so its text content reads as
+                      "Medicine17 programme fields" to anything that takes the
+                      accessible name from the label as a whole. */}
+                  <input
+                    type="checkbox"
+                    aria-label={option.name}
+                    checked={on}
+                    onChange={() => toggleGroup(option.slug)}
+                  />
                   <span className={on ? "font-medium" : ""}>{option.name}</span>
                   <span className="text-[11px] text-muted">
                     {option.specifics.length} programme field{option.specifics.length === 1 ? "" : "s"}
@@ -158,6 +167,7 @@ export function CourseInterestPicker({
                     <label key={value} className="flex items-start gap-2 text-xs text-muted">
                       <input
                         type="checkbox"
+                        aria-label={value}
                         className="mt-0.5"
                         checked={specifics.has(value)}
                         onChange={() => toggleSpecific(value)}
