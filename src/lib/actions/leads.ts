@@ -251,6 +251,26 @@ export async function importLeads(_prevState: unknown, formData: FormData) {
 // Bulk import for already-registered students — same columns as leads, plus
 // date_of_birth, address, home_phone. Inserted with status='registered' so
 // the DB trigger stamps registered_at immediately.
+/**
+ * Bulk import of already-registered students, from the .xlsx template or a CSV.
+ *
+ * This used to insert lead rows and nothing else, which left two things broken
+ * that nobody would notice until they mattered:
+ *
+ *   * No student code. The code is stamped by a trigger (0194) from the
+ *     student's PRIMARY DESTINATION, and the import wrote only the legacy
+ *     free-text country_of_interest column — never a lead_destinations row —
+ *     so student_primary_country() returned null and the trigger deliberately
+ *     left the code unstamped. Every imported student had a blank Student ID
+ *     on their profile, their agreement and their receipt.
+ *   * No destination. lead_destinations is what the rest of the app reads: the
+ *     new-application form offers only countries a student is registered for,
+ *     so an imported student could not have an application created for them at
+ *     all, and their visa page had nothing to show.
+ *
+ * Both are the same omission, and both are fixed by resolving the country
+ * columns to real destinations and writing the join rows.
+ */
 export async function importRegisteredStudents(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
   const file = formData.get("file") as File | null;
@@ -258,60 +278,218 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
     const tooLarge = fileSizeError(file.size, MAX_UPLOAD_BYTES, "file");
     if (tooLarge) return { error: `${tooLarge} A spreadsheet this large is usually a mistake — split it and import in batches.` };
   }
-  if (!file || file.size === 0) return { error: "Choose a CSV file first." };
+  if (!file || file.size === 0) return { error: "Choose the filled-in template, or a CSV." };
 
-  const { parseCsvWithHeader } = await import("@/lib/csv");
-  const text = await file.text();
-  const rows = parseCsvWithHeader(text);
+  const { isXlsx, parseXlsx, isTemplateExampleRow } = await import("@/lib/spreadsheet");
+  let rows: Record<string, string>[];
+  if (isXlsx(file)) {
+    rows = await parseXlsx(file);
+  } else {
+    const { parseCsvWithHeader } = await import("@/lib/csv");
+    rows = parseCsvWithHeader(await file.text());
+  }
   if (rows.length === 0) return { error: "The file has no data rows." };
 
-  const records = rows
-    .filter((r) => r.full_name)
-    .map((r) => ({
-      full_name: r.full_name,
-      contact_number: phoneError(r.contact_number) ? null : r.contact_number || null,
-      email: r.email || null,
-      current_qualification: r.current_qualification || null,
-      level_applying_for: ["bachelors", "masters", "phd"].includes(r.level_applying_for) ? r.level_applying_for : null,
-      course_of_interest: r.course_of_interest || null,
-      country_of_interest: r.country_of_interest || null,
-      // A bad DOB in a spreadsheet is dropped rather than failing the whole
-      // import — the row still carries a name and contact details worth having.
-      date_of_birth: dateOfBirthError(r.date_of_birth) ? null : r.date_of_birth || null,
-      address: r.address || null,
-      home_phone: phoneError(r.home_phone) ? null : r.home_phone || null,
-      status: "registered" as const,
-      // See registerStudentManually's comment — handle_lead_registration()
-      // only stamps this on UPDATE, not INSERT, so it must be set explicitly
-      // or these rows would never satisfy the students view's filter.
-      registered_at: new Date().toISOString(),
-    }));
+  const exampleRows = rows.filter(isTemplateExampleRow).length;
+  rows = rows.filter((r) => !isTemplateExampleRow(r));
+  if (rows.length === 0) {
+    return { error: "The file holds only the template's example row. Replace it with your students and upload again." };
+  }
 
-  if (records.length === 0) {
-    return { error: "No valid rows found — the full_name column is required." };
+  const { resolveDestination, splitCountries } = await import("@/lib/destinationMatch");
+  const [{ data: destinations }, { data: counselors }] = await Promise.all([
+    supabase.from("destinations").select("id, country, display_name, country_code"),
+    // Active counsellors only, matching the definition the assignment
+    // dropdowns already use (getCachedCounselors) — read directly rather than
+    // through the cache so a counsellor added minutes ago is not rejected.
+    supabase.from("staff").select("id, full_name").eq("role", "counselor").eq("status", "active"),
+  ]);
+  const allDestinations = destinations ?? [];
+  const counselorByName = new Map<string, string[]>();
+  for (const c of counselors ?? []) {
+    const key = c.full_name.trim().toLowerCase();
+    counselorByName.set(key, [...(counselorByName.get(key) ?? []), c.id]);
+  }
+
+  type Prepared = {
+    lead: Record<string, unknown>;
+    primary: string;
+    backups: string[];
+  };
+
+  const prepared: Prepared[] = [];
+  const badCountry: string[] = [];
+  const noCountry: string[] = [];
+  const unknownCounselor: string[] = [];
+  const ambiguousCounselor: string[] = [];
+
+  for (const r of rows) {
+    const full_name = (r.full_name ?? "").trim();
+    if (!full_name) continue;
+
+    // The country is required here, unlike in the lead import. A registered
+    // student without a destination gets no student code and cannot have an
+    // application created — importing them would produce a record that looks
+    // fine in the list and fails at every next step.
+    const primaryRaw = (r.country_of_interest ?? "").trim();
+    if (!primaryRaw) {
+      noCountry.push(full_name);
+      continue;
+    }
+    const primary = resolveDestination(primaryRaw, allDestinations);
+    if (!primary) {
+      badCountry.push(`${full_name}: "${primaryRaw}"`);
+      continue;
+    }
+
+    // Several backups are accepted from a hand-typed cell, though the
+    // template's dropdown offers one.
+    const backups: string[] = [];
+    for (const raw of splitCountries(r.backup_country)) {
+      const match = resolveDestination(raw, allDestinations);
+      if (!match) {
+        badCountry.push(`${full_name}: backup "${raw}"`);
+        continue;
+      }
+      if (match.id !== primary.id && !backups.includes(match.id)) backups.push(match.id);
+    }
+
+    let assigned_counselor_id: string | null = null;
+    const counselorRaw = (r.assigned_counselor ?? "").trim();
+    if (counselorRaw) {
+      const found = counselorByName.get(counselorRaw.toLowerCase());
+      if (!found) {
+        // Reported, not fatal: losing the student over a misspelled staff name
+        // would be worse than importing them unassigned, which staff can fix
+        // in one click from the students list.
+        unknownCounselor.push(`${full_name}: "${counselorRaw}"`);
+      } else if (found.length > 1) {
+        ambiguousCounselor.push(counselorRaw);
+      } else {
+        assigned_counselor_id = found[0];
+      }
+    }
+
+    prepared.push({
+      primary: primary.id,
+      backups,
+      lead: {
+        full_name,
+        contact_number: phoneError(r.contact_number) ? null : r.contact_number || null,
+        email: r.email || null,
+        current_qualification: r.current_qualification || null,
+        level_applying_for: ["bachelors", "masters", "phd"].includes(r.level_applying_for ?? "")
+          ? r.level_applying_for
+          : null,
+        course_of_interest: r.course_of_interest || null,
+        // The legacy free-text column keeps the RESOLVED name, so the students
+        // list shows "Italy (Public)" rather than whatever was typed.
+        country_of_interest: primary.display_name,
+        intake: (r.intake ?? "").trim() || null,
+        assigned_counselor_id,
+        // A bad DOB in a spreadsheet is dropped rather than failing the whole
+        // import — the row still carries a name and contact details worth having.
+        date_of_birth: dateOfBirthError(r.date_of_birth) ? null : r.date_of_birth || null,
+        address: r.address || null,
+        home_phone: phoneError(r.home_phone) ? null : r.home_phone || null,
+        status: "registered" as const,
+        // See registerStudentManually's comment — handle_lead_registration()
+        // only stamps this on UPDATE, not INSERT, so it must be set explicitly
+        // or these rows would never satisfy the students view's filter.
+        registered_at: new Date().toISOString(),
+      },
+    });
+  }
+
+  if (prepared.length === 0) {
+    const reasons = [
+      badCountry.length ? `${badCountry.length} with a country that could not be matched` : "",
+      noCountry.length ? `${noCountry.length} with no country` : "",
+    ].filter(Boolean).join(", ");
+    return {
+      error: `No rows could be imported${reasons ? ` — ${reasons}` : ""}. full_name and country_of_interest are both required.`,
+    };
   }
 
   // No unique constraint on leads.email — without this check, re-uploading
   // the same (or an overlapping) file would silently create duplicate
   // student records every time.
-  const emailsInFile = [...new Set(records.map((r) => r.email).filter((e): e is string => !!e).map((e) => e.toLowerCase()))];
-  let existingEmails = new Set<string>();
-  if (emailsInFile.length > 0) {
-    const { data: existing } = await supabase.from("leads").select("email").not("email", "is", null);
-    existingEmails = new Set((existing ?? []).map((e) => (e.email as string).toLowerCase()));
+  const { data: existing } = await supabase.from("leads").select("email").not("email", "is", null);
+  const existingEmails = new Set((existing ?? []).map((e) => (e.email as string).toLowerCase()));
+  const seenInFile = new Set<string>();
+  const toInsert: Prepared[] = [];
+  let duplicates = 0;
+  for (const p of prepared) {
+    const email = (p.lead.email as string | null)?.toLowerCase() ?? null;
+    if (email && (existingEmails.has(email) || seenInFile.has(email))) {
+      duplicates += 1;
+      continue;
+    }
+    if (email) seenInFile.add(email);
+    toInsert.push(p);
   }
-  const toInsert = records.filter((r) => !r.email || !existingEmails.has(r.email.toLowerCase()));
-  const skipped = records.length - toInsert.length;
 
   if (toInsert.length === 0) {
     return { error: "Every row's email already matches an existing student — nothing new to import." };
   }
 
-  const { error } = await supabase.from("leads").insert(toInsert);
+  const { data: inserted, error } = await supabase
+    .from("leads")
+    .insert(toInsert.map((p) => p.lead))
+    .select("id, full_name, email");
   if (error) return { error: error.message };
 
+  // Destinations, which is what makes the student code get stamped.
+  //
+  // The primaries go in as their own statement, BEFORE any backup. The
+  // stamping trigger fires per row and reads whichever destinations exist at
+  // that moment, so a backup landing first would have the code built from the
+  // backup country. Ordering within one multi-row insert is not something to
+  // rely on, hence two statements.
+  const byIndex = inserted ?? [];
+  const primaries = toInsert
+    .map((p, i) => (byIndex[i] ? { lead_id: byIndex[i].id, destination_id: p.primary, is_backup: false } : null))
+    .filter((r): r is { lead_id: string; destination_id: string; is_backup: boolean } => r !== null);
+
+  let destinationWarning: string | null = null;
+  if (primaries.length > 0) {
+    const { error: primaryError } = await supabase.from("lead_destinations").insert(primaries);
+    if (primaryError) {
+      // The students exist; say so rather than implying nothing happened.
+      destinationWarning = `the students were created but their countries could not be saved (${primaryError.message}), so no Student IDs were issued`;
+    }
+  }
+
+  if (!destinationWarning) {
+    const backupRows = toInsert.flatMap((p, i) =>
+      byIndex[i] ? p.backups.map((destination_id) => ({ lead_id: byIndex[i].id, destination_id, is_backup: true })) : []
+    );
+    if (backupRows.length > 0) {
+      const { error: backupError } = await supabase.from("lead_destinations").insert(backupRows);
+      if (backupError) destinationWarning = `backup countries could not be saved (${backupError.message})`;
+    }
+  }
+
+  // Report the codes actually issued rather than assuming the trigger ran.
+  const { count: coded } = await supabase
+    .from("leads")
+    .select("id", { count: "exact", head: true })
+    .in("id", byIndex.map((r) => r.id))
+    .not("student_code", "is", null);
+
   revalidatePath("/students");
-  return { success: true, count: toInsert.length, skipped };
+  return {
+    success: true,
+    count: toInsert.length,
+    skipped: duplicates,
+    coded: coded ?? 0,
+    exampleRows,
+    badCountry,
+    noCountry,
+    unknownCounselor,
+    ambiguousCounselor: [...new Set(ambiguousCounselor)],
+    destinationWarning,
+  };
 }
 
 export async function registerStudentManually(_prevState: unknown, formData: FormData) {

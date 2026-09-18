@@ -2,34 +2,8 @@
 
 import { useActionState, useState } from "react";
 import { importRegisteredStudents } from "@/lib/actions/leads";
-import { SampleCsvButton } from "@/components/ui/SampleCsvButton";
 import { Button } from "@/components/ui/Button";
 import { FileField } from "@/components/FileField";
-
-const HEADERS = [
-  "full_name",
-  "contact_number",
-  "email",
-  "current_qualification",
-  "level_applying_for",
-  "course_of_interest",
-  "country_of_interest",
-  "date_of_birth",
-  "address",
-  "home_phone",
-];
-const EXAMPLE = [
-  "Jane Doe",
-  "+92 300 1234567",
-  "jane@example.com",
-  "A-Levels",
-  "bachelors",
-  "Computer Science",
-  "Italy",
-  "2003-05-14",
-  "123 Main St, Lahore",
-  "+92 42 1234567",
-];
 
 export function ImportRegisteredStudentsForm() {
   const [state, formAction, pending] = useActionState(importRegisteredStudents, undefined);
@@ -37,25 +11,86 @@ export function ImportRegisteredStudentsForm() {
 
   return (
     <details className="mt-3 rounded-md border border-border p-3">
-      <summary className="cursor-pointer text-sm font-medium text-ink">Import registered students from CSV</summary>
+      <summary className="cursor-pointer text-sm font-medium text-ink">Import registered students from a spreadsheet</summary>
+
       <form action={formAction} className="mt-3 flex flex-wrap items-end gap-2">
-        <FileField accept=".csv" required hint="CSV" inputClassName="text-sm" onChange={(s) => setReady(Boolean(s.file))} />
+        <FileField
+          accept=".xlsx,.csv"
+          required
+          hint="Excel or CSV"
+          inputClassName="text-sm"
+          onChange={(s) => setReady(Boolean(s.file))}
+        />
         <Button type="submit" variant="primary" pending={pending} disabled={!ready}>
           Import
         </Button>
-        <SampleCsvButton filename="registered-students-sample.csv" headers={HEADERS} exampleRow={EXAMPLE} />
+        {/* A plain link, not the CSV sample button the other imports use: the
+            template is built on the server because its dropdowns are filled
+            from live data — the counsellors on it are whoever is active right
+            now, so a template downloaded today cannot offer somebody who has
+            since left. */}
+        <a
+          href="/api/samples/registered-students"
+          className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-primary hover:bg-bg"
+        >
+          Download Excel template
+        </a>
       </form>
+
       <p className="mt-2 text-xs text-muted">
-        CSV columns: <code>full_name</code> (required), plus optional <code>contact_number</code>, <code>email</code>,{" "}
-        <code>current_qualification</code>, <code>level_applying_for</code>, <code>course_of_interest</code>,{" "}
-        <code>country_of_interest</code>, <code>date_of_birth</code>, <code>address</code>, <code>home_phone</code>. Rows are
-        inserted as already-registered students.
+        The template has dropdowns for <strong className="text-ink">assigned_counselor</strong> (only counsellors
+        currently active on payroll), <strong className="text-ink">country_of_interest</strong>,{" "}
+        <strong className="text-ink">backup_country</strong> and <strong className="text-ink">level_applying_for</strong>,
+        so those cannot be mistyped. <code>full_name</code> and <code>country_of_interest</code> are required; everything
+        else is optional.
       </p>
+      <p className="mt-1 text-xs text-muted">
+        Country names do not need the track suffix — <code>Italy</code> is matched to{" "}
+        <strong className="text-ink">Italy (Public)</strong>, <code>UK</code> to{" "}
+        <strong className="text-ink">United Kingdom (Private)</strong>, and so on. Each student is registered for their
+        country on import, which is what issues their <strong className="text-ink">Student ID</strong> and lets
+        applications be created for them.
+      </p>
+
       {state?.error && <p className="mt-2 text-xs text-danger">{state.error}</p>}
+
       {state?.success && (
-        <p className="mt-2 text-xs text-success">
-          Imported {state.count} students.{state.skipped ? ` Skipped ${state.skipped} already matching an existing student's email.` : ""}
-        </p>
+        <div className="mt-2 flex flex-col gap-1 text-xs">
+          <p className="text-success">
+            Imported {state.count} student{state.count === 1 ? "" : "s"}
+            {typeof state.coded === "number" && ` · ${state.coded} Student ID${state.coded === 1 ? "" : "s"} issued`}.
+            {state.skipped ? ` Skipped ${state.skipped} whose email already matches an existing student.` : ""}
+            {state.exampleRows ? " The template's example row was ignored." : ""}
+          </p>
+
+          {state.destinationWarning && <p className="text-danger">Note: {state.destinationWarning}.</p>}
+
+          {/* Every row that did not make it, named. A count alone would leave
+              staff diffing the spreadsheet against the students list to find
+              out who is missing. */}
+          {(state.noCountry?.length ?? 0) > 0 && (
+            <p className="text-warning">
+              Not imported — no country given: {state.noCountry!.join(", ")}.
+            </p>
+          )}
+          {(state.badCountry?.length ?? 0) > 0 && (
+            <p className="text-warning">
+              Not imported — country not recognised: {state.badCountry!.join("; ")}. Use the dropdown, or the country&rsquo;s
+              plain name.
+            </p>
+          )}
+          {(state.unknownCounselor?.length ?? 0) > 0 && (
+            <p className="text-warning">
+              Imported unassigned — not an active counsellor: {state.unknownCounselor!.join("; ")}.
+            </p>
+          )}
+          {(state.ambiguousCounselor?.length ?? 0) > 0 && (
+            <p className="text-warning">
+              Imported unassigned — more than one active counsellor has this name:{" "}
+              {state.ambiguousCounselor!.join(", ")}.
+            </p>
+          )}
+        </div>
       )}
     </details>
   );
