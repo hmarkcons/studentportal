@@ -4,6 +4,8 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { MessageThread, type MessageRow } from "@/components/MessageThread";
 import { ReferralTrendChart } from "@/components/ReferralTrendChart";
+import { formatDateOnly } from "@/lib/formatDate";
+import { ROUND_DATE_FORMAT } from "@/lib/programRounds";
 
 type PartnerApplicationRow = {
   application_id: string;
@@ -12,7 +14,17 @@ type PartnerApplicationRow = {
   intake: string | null;
   current_stage: string;
   submitted_at: string;
+  /**
+   * The effective deadline, as 0235 computes it: the date HMARK typed for this
+   * student, else the chosen intake round's, else the programme's catalogue
+   * date. It used to be the programme's alone, which is a mirror of the FIRST
+   * round — so an application working to a later round showed a date that had
+   * already passed and then vanished from the list below, which filters to
+   * dates still ahead.
+   */
   application_deadline: string | null;
+  /** Which intake round, where one is chosen. Two applications for one programme differ only by this. */
+  round_label: string | null;
   student_email: string | null;
   student_phone: string | null;
   // An array since 0154 — see the detail page for why the category→status map
@@ -192,8 +204,18 @@ export default async function PartnerDashboardPage() {
             <div key={a.application_id} className="flex items-center justify-between py-2 text-sm">
               <span className="text-ink">
                 {a.student_name} {a.program_name && `· ${a.program_name}`}
+                {/* Two applications for one programme differ only by the
+                    round, and each round has its own closing date — without
+                    this the two rows read as a duplicate with two dates. */}
+                {a.round_label && <span className="text-muted"> · {a.round_label}</span>}
               </span>
-              <span className="text-muted">{new Date(a.application_deadline!).toLocaleDateString()}</span>
+              {/* formatDateOnly rather than toLocaleDateString: a date-only
+                  value parses as UTC midnight but renders in the local zone,
+                  showing the previous day to any viewer behind UTC, and the
+                  server and browser disagree about locale, which React reports
+                  as a hydration mismatch and recovers from by throwing away
+                  the server's HTML. */}
+              <span className="text-muted">{formatDateOnly(a.application_deadline!, ROUND_DATE_FORMAT)}</span>
             </div>
           ))}
           {upcomingDeadlines.length === 0 && <p className="py-2 text-sm text-muted">No upcoming deadlines on file.</p>}
