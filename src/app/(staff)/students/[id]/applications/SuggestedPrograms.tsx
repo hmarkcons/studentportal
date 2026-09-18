@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { addSuggestedApplication } from "@/lib/actions/suggestedApplications";
 import { Button } from "@/components/ui/Button";
@@ -19,6 +19,17 @@ export type Suggested = {
 
 /** How many to show before "show the rest". */
 const VISIBLE = 8;
+
+/**
+ * Whether the panel is minimised, remembered across pages and visits.
+ *
+ * Not per student: somebody who has folded this away is telling us how they
+ * want to work, not something about one student, and having it spring open
+ * again on the next record would be ignoring that. Read in an effect rather
+ * than during render — the server has no localStorage, and seeding state from
+ * it directly makes the first client render disagree with the HTML.
+ */
+const MINIMISED_KEY = "hmark.suggestedPrograms.minimised";
 
 /**
  * Programmes this student's course of interest points at, with a way to apply.
@@ -48,10 +59,30 @@ export function SuggestedPrograms({
   hasInterests: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [minimised, setMinimised] = useState(false);
   const [pending, startTransition] = useTransition();
   const [added, setAdded] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(MINIMISED_KEY) === "1") setMinimised(true);
+    } catch {
+      // A browser with site data blocked still gets a working panel, just
+      // without the preference being remembered.
+    }
+  }, []);
+
+  function setMinimisedRemembered(value: boolean) {
+    setMinimised(value);
+    // Collapsing it also drops back to the short list, so restoring it does
+    // not reopen onto twenty-five rows somebody expanded a week ago.
+    if (value) setExpanded(false);
+    try {
+      window.localStorage.setItem(MINIMISED_KEY, value ? "1" : "0");
+    } catch {}
+  }
 
   // No course of interest recorded: say what to do about it rather than
   // rendering an empty box, and link to the one screen that fixes it.
@@ -84,6 +115,29 @@ export function SuggestedPrograms({
 
   const shown = expanded ? suggestions : suggestions.slice(0, VISIBLE);
 
+  // Minimised: one line that still carries the count, so it says what is
+  // behind it rather than becoming a blank bar nobody reopens.
+  if (minimised) {
+    return (
+      <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-2 px-4 py-2">
+        <p className="truncate text-xs text-muted">
+          <span className="font-medium text-ink">Suggested programmes</span> · {suggestions.length} match
+          {suggestions.length === 1 ? "" : "es"} for {interestSummary}
+        </p>
+        <button
+          type="button"
+          onClick={() => setMinimisedRemembered(false)}
+          aria-expanded={false}
+          aria-label="Maximise suggested programmes"
+          title="Maximise"
+          className="shrink-0 rounded border border-border px-2 py-0.5 text-xs font-medium text-primary hover:bg-bg"
+        >
+          Maximise
+        </button>
+      </div>
+    );
+  }
+
   function add(programId: string) {
     setError(null);
     setBusy(programId);
@@ -107,12 +161,24 @@ export function SuggestedPrograms({
             · {suggestions.length} match{suggestions.length === 1 ? "" : "es"} for {interestSummary}
           </span>
         </p>
-        <Link
-          href={`/students/${studentId}/applications/new`}
-          className="text-xs font-medium text-primary hover:underline"
-        >
-          Search all programmes →
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            href={`/students/${studentId}/applications/new`}
+            className="text-xs font-medium text-primary hover:underline"
+          >
+            Search all programmes →
+          </Link>
+          <button
+            type="button"
+            onClick={() => setMinimisedRemembered(true)}
+            aria-expanded={true}
+            aria-label="Minimise suggested programmes"
+            title="Minimise"
+            className="rounded border border-border px-2 py-0.5 text-xs font-medium text-muted hover:text-ink"
+          >
+            Minimise
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-col divide-y divide-border">
