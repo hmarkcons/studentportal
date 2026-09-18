@@ -256,7 +256,6 @@ export async function updateTrackerField(id: string, _prevState: unknown, formDa
   // Constrained to date fields in the schema, so drop the flag rather than
   // letting the insert fail on a check violation staff cannot interpret.
   const is_appointment = formData.get("is_appointment") === "on" && field_type === "date";
-  const sort_order = Number(formData.get("sort_order") ?? 0);
 
   if (!label || !field_type) return { error: "Label and type are required." };
 

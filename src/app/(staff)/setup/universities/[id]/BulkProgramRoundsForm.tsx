@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useState } from "react";
+import { useActionState, useMemo, useState } from "react";
 import { setRoundsForPrograms } from "@/lib/actions/programRoundsBulk";
 import { STUDY_LEVELS } from "@/lib/constants";
 import { Button } from "@/components/ui/Button";
@@ -38,14 +38,18 @@ export function BulkProgramRoundsForm({
 
   // The rounds widget keeps its rows in state, so React's form reset does not
   // clear them — it is remounted on success instead, along with the selection,
-  // so the next use does not silently start from the last one.
+  // so the next use does not silently start from the last one. Done during
+  // render, guarded on the last result seen, rather than from an effect: an
+  // effect would paint the previous selection once before clearing it.
+  const [handledState, setHandledState] = useState(state);
   const [resetKey, setResetKey] = useState(0);
-  useEffect(() => {
+  if (handledState !== state) {
+    setHandledState(state);
     if (state?.success) {
       setResetKey((k) => k + 1);
       setSelected(new Set());
     }
-  }, [state]);
+  }
 
   const byLevel = useMemo(() => {
     const groups = new Map<string, BulkProgram[]>();

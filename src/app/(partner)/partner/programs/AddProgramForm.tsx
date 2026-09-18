@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useState } from "react";
 import { partnerAddProgram } from "@/lib/actions/partner";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
@@ -13,11 +13,14 @@ export function AddProgramForm() {
   const [state, formAction, pending] = useActionState(partnerAddProgram, undefined);
 
   // See the staff form: the rounds widget keeps its rows in state, so it has
-  // to be remounted to clear after a programme is added.
+  // to be remounted to clear after a programme is added, and the remount is
+  // triggered during render rather than from an effect.
+  const [handledState, setHandledState] = useState(state);
   const [roundsKey, setRoundsKey] = useState(0);
-  useEffect(() => {
+  if (handledState !== state) {
+    setHandledState(state);
     if (state?.success) setRoundsKey((k) => k + 1);
-  }, [state]);
+  }
 
   return (
     <form action={formAction} className="flex flex-wrap items-end gap-2">

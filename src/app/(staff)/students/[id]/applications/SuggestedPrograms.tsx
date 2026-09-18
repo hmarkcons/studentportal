@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useSyncExternalStore, useTransition } from "react";
 import Link from "next/link";
 import { addSuggestedApplication } from "@/lib/actions/suggestedApplications";
 import { Button } from "@/components/ui/Button";
@@ -25,11 +25,58 @@ const VISIBLE = 8;
  *
  * Not per student: somebody who has folded this away is telling us how they
  * want to work, not something about one student, and having it spring open
- * again on the next record would be ignoring that. Read in an effect rather
- * than during render — the server has no localStorage, and seeding state from
- * it directly makes the first client render disagree with the HTML.
+ * again on the next record would be ignoring that.
+ *
+ * It lives in localStorage, which the server cannot read, so it is exposed as
+ * an external store rather than as component state. useSyncExternalStore
+ * renders the server snapshot (never minimised) for the SSR pass and the first
+ * client render — so the HTML always agrees — then re-renders with the stored
+ * value. Reading it into state from an effect instead would be a setState in
+ * an effect, and seeding useState from it directly would make the first client
+ * render disagree with the HTML.
  */
 const MINIMISED_KEY = "hmark.suggestedPrograms.minimised";
+
+const minimisedListeners = new Set<() => void>();
+
+function subscribeMinimised(onChange: () => void) {
+  minimisedListeners.add(onChange);
+  // Also follows the preference when it is changed in another tab, which is
+  // free here and matches what "remembered across pages and visits" implies.
+  window.addEventListener("storage", onChange);
+  return () => {
+    minimisedListeners.delete(onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
+
+/** A boolean, so React's snapshot comparison is stable without caching. */
+function readMinimised() {
+  try {
+    return window.localStorage.getItem(MINIMISED_KEY) === "1";
+  } catch {
+    // A browser with site data blocked still gets a working panel, just
+    // without the preference being remembered.
+    return false;
+  }
+}
+
+/** The server has no preference to read, and neither does the first paint. */
+function readMinimisedOnServer() {
+  return false;
+}
+
+function writeMinimised(value: boolean) {
+  try {
+    window.localStorage.setItem(MINIMISED_KEY, value ? "1" : "0");
+  } catch {
+    // Same as above — the panel still opens and closes, it just won't be
+    // remembered, so there is nothing to tell the user about.
+  }
+  // localStorage fires no event in the tab that wrote it, so subscribers are
+  // told directly or this panel would not re-render.
+  minimisedListeners.forEach((l) => l());
+}
 
 /**
  * Programmes this student's course of interest points at, with a way to apply.
@@ -59,29 +106,17 @@ export function SuggestedPrograms({
   hasInterests: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [minimised, setMinimised] = useState(false);
+  const minimised = useSyncExternalStore(subscribeMinimised, readMinimised, readMinimisedOnServer);
   const [pending, startTransition] = useTransition();
   const [added, setAdded] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    try {
-      if (window.localStorage.getItem(MINIMISED_KEY) === "1") setMinimised(true);
-    } catch {
-      // A browser with site data blocked still gets a working panel, just
-      // without the preference being remembered.
-    }
-  }, []);
-
   function setMinimisedRemembered(value: boolean) {
-    setMinimised(value);
     // Collapsing it also drops back to the short list, so restoring it does
     // not reopen onto twenty-five rows somebody expanded a week ago.
     if (value) setExpanded(false);
-    try {
-      window.localStorage.setItem(MINIMISED_KEY, value ? "1" : "0");
-    } catch {}
+    writeMinimised(value);
   }
 
   // No course of interest recorded: say what to do about it rather than

@@ -5,7 +5,6 @@ import { DocumentHistory, type ArchivedUpload } from "@/components/DocumentHisto
 import { studentUploadDocument } from "@/lib/actions/portal-documents";
 import { formatDateOnly } from "@/lib/formatDate";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
 import { DOCUMENT_STATUS_TONE, DOCUMENT_STATUS_LABELS } from "@/lib/constants";
 import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
 import { uploadedLine, reviewedLine, type UploaderRole } from "@/lib/activityStamp";

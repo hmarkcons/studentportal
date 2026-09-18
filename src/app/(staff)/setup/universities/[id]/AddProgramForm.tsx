@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useState } from "react";
 import { addProgram } from "@/lib/actions/universities";
 import { STUDY_LEVELS } from "@/lib/constants";
 import { Button } from "@/components/ui/Button";
@@ -16,10 +16,18 @@ export function AddProgramForm({ universityId }: { universityId: string }) {
   // clear them the way it clears the plain inputs. On this form that would
   // carry the programme just added over to the next one — remounting it on
   // success empties it to match the rest of the form.
+  //
+  // Adjusted during render rather than in an effect. useActionState hands back
+  // a new object per submission, so comparing against the last one seen makes
+  // this run exactly once per result; React then re-renders immediately
+  // without committing the discarded output, where an effect would have
+  // painted the stale widget first and cleared it on a second pass.
+  const [handledState, setHandledState] = useState(state);
   const [roundsKey, setRoundsKey] = useState(0);
-  useEffect(() => {
+  if (handledState !== state) {
+    setHandledState(state);
     if (state?.success) setRoundsKey((k) => k + 1);
-  }, [state]);
+  }
 
   return (
     <form action={formAction} className="flex flex-wrap items-end gap-2">
