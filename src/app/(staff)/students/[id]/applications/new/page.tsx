@@ -40,12 +40,15 @@ export default async function NewApplicationPage(props: PageProps<"/students/[id
   // The catalogue dates come along so the form can show them beside the
   // Deadline box a staff member is about to fill in by hand — every intake
   // round, since which round is still open is the thing being judged.
-  // The field names for the finder's dropdown. A small fixed reference list,
-  // so it is read whole rather than derived from the programmes.
-  const { data: fieldGroups } = await supabase
-    .from("field_groups")
-    .select("slug, name")
-    .order("sort_order");
+  // The field names for the finder's chips. A small fixed reference list, so
+  // it is read whole rather than derived from the programmes.
+  const [{ data: fieldGroups }, { data: student }] = await Promise.all([
+    supabase.from("field_groups").select("slug, name").order("sort_order"),
+    // The student's own chosen fields, offered in the finder as a one-click
+    // preset — the commonest search is "what does this university have in the
+    // fields they actually asked for".
+    supabase.from("students").select("interest_field_groups").eq("id", id).maybeSingle(),
+  ]);
 
   const universityIds = universities.map((u) => u.id);
   // level and field_group come along so the finder can filter on them without
@@ -85,6 +88,7 @@ export default async function NewApplicationPage(props: PageProps<"/students/[id
           universities={universities}
           programs={programs}
           fieldGroups={fieldGroups ?? []}
+          studentFieldGroups={(student?.interest_field_groups ?? []) as string[]}
           today={karachiToday()}
         />
       </Card>

@@ -28,14 +28,22 @@ export function NewApplicationForm({
   universities,
   programs,
   fieldGroups,
+  studentFieldGroups,
   today,
 }: {
   studentId: string;
   destinations: Destination[];
   universities: University[];
   programs: Program[];
-  /** The field taxonomy, for the finder's Field dropdown. */
+  /** The field taxonomy, for the finder's field chips. */
   fieldGroups: { slug: string; name: string }[];
+  /**
+   * The broad fields this student chose on their profile. Offered as a
+   * one-click preset, so the commonest search — "what does this university
+   * have in the fields they actually asked for" — is one button rather than
+   * hunting for the same fields by eye every time.
+   */
+  studentFieldGroups: string[];
   /** Karachi's today, so "applications closed" is judged on the business day. */
   today?: string;
 }) {
@@ -74,7 +82,13 @@ export function NewApplicationForm({
   // already loaded for the picker; re-querying per keystroke would be slower
   // and no more correct.
   const [findLevel, setFindLevel] = useState("");
-  const [findField, setFindField] = useState("");
+  // Several fields, not one. A student's interests routinely span more than a
+  // single field — the three on file ask for things like
+  // "Mechanical/Mechatronics/Robotics/Industrial/Energy Engineering" — so a
+  // one-field filter forces staff to search the same university repeatedly and
+  // hold the union in their head. Selecting more fields BROADENS the result,
+  // which is the opposite of how the level and text filters narrow it.
+  const [findFields, setFindFields] = useState<Set<string>>(new Set());
   const [findText, setFindText] = useState("");
 
   const universityPrograms = useMemo(
@@ -93,16 +107,47 @@ export function NewApplicationForm({
     const needle = findText.trim().toLowerCase();
     return universityPrograms.filter((p) => {
       if (findLevel && p.level !== findLevel) return false;
-      if (findField && p.field_group !== findField) return false;
+      // Any of the chosen fields, not all of them: the fields are alternatives,
+      // and requiring a programme to be in several at once would return
+      // nothing every time more than one was picked.
+      if (findFields.size > 0 && !(p.field_group && findFields.has(p.field_group))) return false;
       if (needle) {
         const haystack = `${p.name} ${p.core_field ?? ""}`.toLowerCase();
         if (!haystack.includes(needle)) return false;
       }
       return true;
     });
-  }, [universityPrograms, findLevel, findField, findText]);
+  }, [universityPrograms, findLevel, findFields, findText]);
 
-  const narrowed = findLevel !== "" || findField !== "" || findText.trim() !== "";
+  const narrowed = findLevel !== "" || findFields.size > 0 || findText.trim() !== "";
+
+  // Counts per field, so staff can see what picking one would add before
+  // picking it — and so a field offering nothing at this level is visibly
+  // empty rather than a dead click.
+  const countByField = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of universityPrograms) {
+      if (!p.field_group) continue;
+      if (findLevel && p.level !== findLevel) continue;
+      counts.set(p.field_group, (counts.get(p.field_group) ?? 0) + 1);
+    }
+    return counts;
+  }, [universityPrograms, findLevel]);
+
+  function toggleField(slug: string) {
+    setFindFields((prev) => {
+      const next = new Set(prev);
+      if (next.has(slug)) next.delete(slug);
+      else next.add(slug);
+      return next;
+    });
+  }
+
+  /** The student's own interests, where this university teaches them. */
+  const interestFields = useMemo(
+    () => availableFields.filter((g) => studentFieldGroups.includes(g.slug)),
+    [availableFields, studentFieldGroups]
+  );
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
@@ -172,22 +217,6 @@ export function NewApplicationForm({
                   ))}
               </Select>
             </label>
-            <label className="flex flex-col gap-0.5 text-[11px] text-muted">
-              Field
-              <Select
-                aria-label="Filter by field"
-                value={findField}
-                onChange={(e) => setFindField(e.target.value)}
-                className="w-56"
-              >
-                <option value="">Any field</option>
-                {availableFields.map((g) => (
-                  <option key={g.slug} value={g.slug}>
-                    {g.name}
-                  </option>
-                ))}
-              </Select>
-            </label>
             <label className="flex flex-1 flex-col gap-0.5 text-[11px] text-muted">
               Search
               <Input
@@ -203,7 +232,7 @@ export function NewApplicationForm({
                 type="button"
                 onClick={() => {
                   setFindLevel("");
-                  setFindField("");
+                  setFindFields(new Set());
                   setFindText("");
                 }}
                 className="pb-1.5 text-xs text-muted hover:text-ink"
@@ -211,6 +240,59 @@ export function NewApplicationForm({
                 Clear
               </button>
             )}
+          </div>
+
+          {/* Fields as toggles rather than a dropdown, because several can be
+              on at once and a multi-select dropdown hides what is selected
+              behind a closed control. Each carries its count at the current
+              level, so picking one is never a dead click. */}
+          <div className="mt-1 flex flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] text-muted">Fields</span>
+              {interestFields.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setFindFields(new Set(interestFields.map((g) => g.slug)))}
+                  className="rounded-full border border-primary px-2 py-0.5 text-[11px] font-medium text-primary hover:bg-[color-mix(in_srgb,var(--primary)_10%,transparent)]"
+                >
+                  Their course of interest ({interestFields.length})
+                </button>
+              )}
+              {findFields.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setFindFields(new Set())}
+                  className="text-[11px] text-muted hover:text-ink"
+                >
+                  any field
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {availableFields.map((g) => {
+                const on = findFields.has(g.slug);
+                const count = countByField.get(g.slug) ?? 0;
+                return (
+                  <button
+                    key={g.slug}
+                    type="button"
+                    aria-pressed={on}
+                    aria-label={`Field: ${g.name}`}
+                    onClick={() => toggleField(g.slug)}
+                    className={`rounded-full border px-2 py-0.5 text-[11px] ${
+                      on
+                        ? "border-primary bg-primary text-primary-ink"
+                        : count === 0
+                          ? "border-border text-muted opacity-50"
+                          : "border-border text-ink hover:border-primary"
+                    }`}
+                  >
+                    {g.name}
+                    <span className={on ? "ml-1 opacity-80" : "ml-1 text-muted"}>{count}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
           <p className="text-[11px] text-muted">
             {narrowed
