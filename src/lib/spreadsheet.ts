@@ -4,6 +4,24 @@
 // dropdown, so the importer has to accept what it hands out. CSV is still
 // accepted: existing files and exports from other systems are csv, and
 // refusing them to force a re-save would be a pointless obstacle.
+//
+// ---------------------------------------------------------------------------
+// If you are here to upgrade exceljs: check whether package.json's `overrides`
+// entry can go with it.
+//
+// exceljs declares uuid ^8.3.0, and uuid before 11.1.1 carries
+// GHSA-w5hq-g745-h8pq. The override forces the fixed uuid under exceljs
+// instead, because npm's own remedy was a downgrade to exceljs 3.4.0 — which
+// would cost the dropdowns this whole flow is built on. It is safe because
+// exceljs touches uuid in exactly one file (cf-ext/cf-rule-ext-xform.js, for
+// conditional-formatting ids) via the named `v4` export, unchanged since uuid
+// 7, and nothing here writes conditional formatting at all.
+//
+// As of Sept 2026 there is nothing to upgrade TO: 4.4.0 is still `latest`
+// (Oct 2023), and the one newer publish, 4.4.1-prerelease.0 (Dec 2024), still
+// declares uuid ^8.3.0. So the override stays until exceljs widens that range
+// — at which point delete it and run `npm audit`.
+// ---------------------------------------------------------------------------
 
 export type SheetRow = Record<string, string>;
 
