@@ -705,7 +705,7 @@ export async function deleteStudent(studentId: string) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  const { data: staffRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
   if (!hasRole(staffRow, "super_admin") && !hasRole(staffRow, "processing"))
     return { error: "Only Super Admin or Processing can delete a lead/student record." };
 

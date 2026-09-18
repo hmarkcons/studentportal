@@ -59,7 +59,7 @@ export default async function AttendancePage(props: { searchParams: Promise<{ mo
   // Only the roles whose policy returns other people's rows get a staff
   // filter; for everyone else the list is their own by definition and a
   // one-name dropdown would be furniture.
-  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  const { data: staffRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
   const seesEveryone = hasRole(staffRow, "super_admin") || hasRole(staffRow, "management");
   const { data: staffList } = seesEveryone
     ? await supabase.from("staff").select("id, full_name").eq("status", "active").order("full_name")

@@ -19,7 +19,7 @@ export default async function ReportsPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  const { data: staffRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
   const catalogue = visibleReports(staffRow?.role as never);
 
   const { data: leads } = await supabase.from("leads").select("id, status, assigned_counselor_id, registered_at, date_of_inquiry");

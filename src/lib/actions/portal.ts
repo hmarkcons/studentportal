@@ -117,7 +117,7 @@ async function requireSuperAdmin(supabase: Awaited<ReturnType<typeof createClien
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  const { data: staffRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
   if (!hasRole(staffRow, "super_admin")) return "Only Super Admin can manage a student's portal access.";
   return null;
 }

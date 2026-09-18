@@ -19,7 +19,7 @@ export default async function UniversitiesPage(props: { searchParams: Promise<{ 
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  const { data: staffRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
   const isSuperAdmin = hasRole(staffRow, "super_admin");
 
   let query = supabase

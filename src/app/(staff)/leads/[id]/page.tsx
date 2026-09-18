@@ -26,7 +26,7 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  const { data: staffRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
   const canDeleteLead = hasRole(staffRow, "super_admin") || hasRole(staffRow, "processing");
 
   const { data: lead, error } = await supabase

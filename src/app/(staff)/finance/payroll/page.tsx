@@ -40,7 +40,7 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const { data: viewerRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  const { data: viewerRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
   const canManage = hasRole(viewerRow, "finance") || hasRole(viewerRow, "super_admin");
 
   const now = new Date();

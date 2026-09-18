@@ -26,7 +26,7 @@ export default async function ReferralsPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  const { data: staffRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
   const orgWideRoles = ["management", "super_admin", "marketing", "digital_marketing", "finance"];
 
   // Referral work is org-wide — who referred a student isn't a case-ownership

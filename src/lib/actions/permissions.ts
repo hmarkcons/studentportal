@@ -15,7 +15,7 @@ async function requireSuperAdmin(supabase: Awaited<ReturnType<typeof createClien
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
+  const { data: staffRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
   return hasRole(staffRow, "super_admin");
 }
 
@@ -50,7 +50,10 @@ export async function resetRolePermissionOverride(role: StaffRole, key: Permissi
 }
 
 async function assertNotSuperAdmin(supabase: Awaited<ReturnType<typeof createClient>>, staffId: string) {
-  const { data: row } = await supabase.from("staff").select("role").eq("id", staffId).maybeSingle();
+  // `roles`, not `role` alone: somebody who holds Super Admin as a second
+  // role is still a Super Admin, and a per-staff override on them would be
+  // meaningless (they pass every check anyway) while looking effective.
+  const { data: row } = await supabase.from("staff").select("role, roles").eq("id", staffId).maybeSingle();
   return !hasRole(row, "super_admin");
 }
 
