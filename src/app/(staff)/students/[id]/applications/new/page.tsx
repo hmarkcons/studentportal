@@ -40,13 +40,32 @@ export default async function NewApplicationPage(props: PageProps<"/students/[id
   // The catalogue dates come along so the form can show them beside the
   // Deadline box a staff member is about to fill in by hand — every intake
   // round, since which round is still open is the thing being judged.
+  // The field names for the finder's dropdown. A small fixed reference list,
+  // so it is read whole rather than derived from the programmes.
+  const { data: fieldGroups } = await supabase
+    .from("field_groups")
+    .select("slug, name")
+    .order("sort_order");
+
   const universityIds = universities.map((u) => u.id);
-  const programs: { id: string; university_id: string; name: string; rounds: ProgramRound[] }[] = [];
+  // level and field_group come along so the finder can filter on them without
+  // another round trip — the rows are already here for the picker.
+  const programs: {
+    id: string;
+    university_id: string;
+    name: string;
+    level: string;
+    core_field: string | null;
+    field_group: string | null;
+    rounds: ProgramRound[];
+  }[] = [];
   if (universityIds.length > 0) {
     for (let from = 0; ; from += PAGE) {
       const { data, error } = await supabase
         .from("programs")
-        .select("id, university_id, name, rounds:program_intake_rounds(id, label, start_date, application_deadline, sort_order)")
+        .select(
+          "id, university_id, name, level, core_field, field_group, rounds:program_intake_rounds(id, label, start_date, application_deadline, sort_order)"
+        )
         .in("university_id", universityIds)
         .order("name")
         .range(from, from + PAGE - 1);
@@ -65,6 +84,7 @@ export default async function NewApplicationPage(props: PageProps<"/students/[id
           destinations={destinations}
           universities={universities}
           programs={programs}
+          fieldGroups={fieldGroups ?? []}
           today={karachiToday()}
         />
       </Card>

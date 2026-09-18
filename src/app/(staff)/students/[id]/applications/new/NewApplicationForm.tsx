@@ -16,6 +16,9 @@ type Program = {
   id: string;
   university_id: string;
   name: string;
+  level: string;
+  core_field: string | null;
+  field_group: string | null;
   rounds: ProgramRound[];
 };
 
@@ -24,12 +27,15 @@ export function NewApplicationForm({
   destinations,
   universities,
   programs,
+  fieldGroups,
   today,
 }: {
   studentId: string;
   destinations: Destination[];
   universities: University[];
   programs: Program[];
+  /** The field taxonomy, for the finder's Field dropdown. */
+  fieldGroups: { slug: string; name: string }[];
   /** Karachi's today, so "applications closed" is judged on the business day. */
   today?: string;
 }) {
@@ -56,7 +62,47 @@ export function NewApplicationForm({
     () => universities.filter((u) => !destinationId || u.destination_id === destinationId),
     [universities, destinationId]
   );
-  const filteredPrograms = useMemo(() => programs.filter((p) => p.university_id === universityId), [programs, universityId]);
+  // ------------------------------------------------------------- the finder
+  //
+  // A university can offer hundreds of programmes — Germany's catalogue runs to
+  // 421 across its universities — so picking one from a bare dropdown means
+  // reading the whole list. These three narrow it: the level the student is
+  // applying at, the field they want, and free text over the programme name
+  // and its field.
+  //
+  // Filtering happens here rather than on the server because these rows are
+  // already loaded for the picker; re-querying per keystroke would be slower
+  // and no more correct.
+  const [findLevel, setFindLevel] = useState("");
+  const [findField, setFindField] = useState("");
+  const [findText, setFindText] = useState("");
+
+  const universityPrograms = useMemo(
+    () => programs.filter((p) => p.university_id === universityId),
+    [programs, universityId]
+  );
+
+  // Only the fields this university actually offers, so the dropdown never
+  // presents a choice that yields nothing.
+  const availableFields = useMemo(() => {
+    const present = new Set(universityPrograms.map((p) => p.field_group).filter(Boolean));
+    return fieldGroups.filter((g) => present.has(g.slug));
+  }, [universityPrograms, fieldGroups]);
+
+  const filteredPrograms = useMemo(() => {
+    const needle = findText.trim().toLowerCase();
+    return universityPrograms.filter((p) => {
+      if (findLevel && p.level !== findLevel) return false;
+      if (findField && p.field_group !== findField) return false;
+      if (needle) {
+        const haystack = `${p.name} ${p.core_field ?? ""}`.toLowerCase();
+        if (!haystack.includes(needle)) return false;
+      }
+      return true;
+    });
+  }, [universityPrograms, findLevel, findField, findText]);
+
+  const narrowed = findLevel !== "" || findField !== "" || findText.trim() !== "";
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
@@ -103,6 +149,78 @@ export function NewApplicationForm({
           ))}
         </Select>
       </div>
+      {/* Shown once a university is chosen: before that there is nothing to
+          narrow, and an empty finder above an empty list is just clutter. */}
+      {universityId && universityPrograms.length > 0 && (
+        <div className="flex flex-col gap-1.5 rounded-md border border-border bg-bg p-3">
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="flex flex-col gap-0.5 text-[11px] text-muted">
+              Level
+              <Select
+                aria-label="Filter by level"
+                value={findLevel}
+                onChange={(e) => setFindLevel(e.target.value)}
+                className="w-32"
+              >
+                <option value="">Any</option>
+                {["bachelors", "masters", "phd"]
+                  .filter((l) => universityPrograms.some((p) => p.level === l))
+                  .map((l) => (
+                    <option key={l} value={l}>
+                      {l}
+                    </option>
+                  ))}
+              </Select>
+            </label>
+            <label className="flex flex-col gap-0.5 text-[11px] text-muted">
+              Field
+              <Select
+                aria-label="Filter by field"
+                value={findField}
+                onChange={(e) => setFindField(e.target.value)}
+                className="w-56"
+              >
+                <option value="">Any field</option>
+                {availableFields.map((g) => (
+                  <option key={g.slug} value={g.slug}>
+                    {g.name}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <label className="flex flex-1 flex-col gap-0.5 text-[11px] text-muted">
+              Search
+              <Input
+                aria-label="Search programmes"
+                value={findText}
+                onChange={(e) => setFindText(e.target.value)}
+                placeholder="Programme name or field…"
+                className="min-w-[180px]"
+              />
+            </label>
+            {narrowed && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFindLevel("");
+                  setFindField("");
+                  setFindText("");
+                }}
+                className="pb-1.5 text-xs text-muted hover:text-ink"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <p className="text-[11px] text-muted">
+            {narrowed
+              ? `${filteredPrograms.length} of ${universityPrograms.length} programmes match.`
+              : `${universityPrograms.length} programme${universityPrograms.length === 1 ? "" : "s"} at this university.`}
+            {narrowed && filteredPrograms.length === 0 && " Widen the filters to see more."}
+          </p>
+        </div>
+      )}
+
       <div className="flex flex-col gap-2">
         <label className="text-sm font-medium text-ink">Programs</label>
         {slots.map((slot, i) => {

@@ -9,6 +9,7 @@ import { DeleteApplicationButton } from "./DeleteApplicationButton";
 import { FinalizeApplicationButton } from "./FinalizeApplicationButton";
 import { ApplicationOrderList } from "./ApplicationOrderList";
 import { orderCycles, cycleTabLabel, intakeLabel, type Cycle } from "@/lib/intakeCycle";
+import { SuggestedPrograms, type Suggested } from "./SuggestedPrograms";
 import { applicationDeadline, deadlineSource, daysUntil } from "@/lib/applicationDeadline";
 import { ROUND_DATE_FORMAT } from "@/lib/programRounds";
 import { karachiToday } from "@/lib/calendarDates";
@@ -26,7 +27,13 @@ export default async function StudentApplicationsTab(props: {
   const { supabase, staff: staffRow } = await getStaffSession();
   const canDelete = staffRow?.role === "super_admin" || staffRow?.role === "management";
 
-  const [{ data: applications }, { data: destinationRows }, { data: cycleRows }] = await Promise.all([
+  const [
+    { data: applications },
+    { data: destinationRows },
+    { data: cycleRows },
+    { data: interests },
+    { data: suggestions },
+  ] = await Promise.all([
     supabase
       .from("applications")
       .select(
@@ -53,9 +60,30 @@ export default async function StudentApplicationsTab(props: {
       .select("id, sequence, intake, is_current")
       .eq("student_id", id)
       .order("sequence"),
+    // What the student asked for, to say back to the reader beside the
+    // suggestions — a list of programmes with no statement of why is a list
+    // nobody can disagree with knowingly.
+    supabase
+      .from("students")
+      .select("interest_field_groups, interest_core_fields, course_of_interest, level_applying_for")
+      .eq("id", id)
+      .maybeSingle(),
+    // Programmes their interests point at, ranked, excluding anything already
+    // applied for. One call; see 0245 for why this is not done in the app.
+    supabase.rpc("suggested_programs", { lead: id, max_results: 25 }),
   ]);
 
   const revalidateTo = `/students/${id}/applications`;
+
+  // What the student asked for, in their own terms. course_of_interest is
+  // already the trigger-rendered version of the same selections (0243), so it
+  // is the readable form and needs no reassembling here.
+  const interestGroups = (interests?.interest_field_groups ?? []) as string[];
+  const interestSpecifics = (interests?.interest_core_fields ?? []) as string[];
+  const interestCount = interestGroups.length + interestSpecifics.length;
+  const interestSummary =
+    (interests?.course_of_interest ?? "").trim() ||
+    (interestCount > 0 ? `${interestCount} chosen field${interestCount === 1 ? "" : "s"}` : "their course of interest");
 
   // Karachi's business day, read once on the server — a deadline is overdue on
   // the office's calendar, not the viewer's, and no component may read the
@@ -181,6 +209,19 @@ export default async function StudentApplicationsTab(props: {
           </Link>
         )}
       </div>
+
+      {/* Suggestions sit above the list and only for the intake being worked:
+          a closed intake is a record, and recommending new applications into
+          it would invite reopening finished work. */}
+      {!isPreviousIntake && (
+        <SuggestedPrograms
+          studentId={id}
+          revalidateTo={revalidateTo}
+          suggestions={(suggestions ?? []) as Suggested[]}
+          hasInterests={interestCount > 0}
+          interestSummary={interestSummary}
+        />
+      )}
 
       {isPreviousIntake && (
         <p className="mb-4 rounded-md border border-border bg-surface-2 px-3 py-2 text-xs text-muted">
