@@ -59,6 +59,14 @@ export function BulkProgramRoundsForm({
     return ordered.map((level) => ({ level, items: groups.get(level) ?? [] }));
   }, [programs]);
 
+  // Only meaningful when the university actually has both, which not all do —
+  // several German ones in the catalogue are master's-only.
+  const bachelorsAndMasters = useMemo(() => {
+    const levels = new Set(programs.map((p) => p.level));
+    if (!levels.has("bachelors") || !levels.has("masters")) return [];
+    return programs.filter((p) => p.level === "bachelors" || p.level === "masters").map((p) => p.id);
+  }, [programs]);
+
   const toggle = (id: string) =>
     setSelected((prev) => {
       const next = new Set(prev);
@@ -82,13 +90,26 @@ export function BulkProgramRoundsForm({
   return (
     <details className="mt-3 rounded-md border border-border p-3">
       <summary className="cursor-pointer text-sm font-medium text-ink">
-        Set the same intake rounds on several programmes
+        Set the same start date and deadline on several programmes
       </summary>
 
       <form action={formAction} className="mt-3 flex flex-col gap-3">
         <div>
           <div className="mb-1 flex flex-wrap items-center gap-2">
             <span className="text-[11px] font-medium text-muted">Apply to</span>
+            {/* Bachelor's and master's programmes are the pair that share
+                dates, and picking both was two clicks with nothing saying they
+                could be combined. The selection has always been one set across
+                levels; this just names the combination. */}
+            {bachelorsAndMasters.length > 0 && (
+              <button
+                type="button"
+                onClick={() => selectMany(bachelorsAndMasters, true)}
+                className="text-xs font-medium text-primary hover:underline"
+              >
+                All bachelor&rsquo;s + master&rsquo;s ({bachelorsAndMasters.length})
+              </button>
+            )}
             <button
               type="button"
               onClick={() => selectMany(programs.map((p) => p.id), true)}
