@@ -3,7 +3,15 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requirePermission } from "@/lib/auth/permissions";
+import { requirePermission, hasPermission } from "@/lib/auth/permissions";
+import { getStaffSession } from "@/lib/auth/session";
+import {
+  canGrantSuperAdmin,
+  parseRolesFromFormData,
+  rolesWereSubmitted,
+  staffRoles,
+} from "@/lib/auth/roles";
+import type { StaffRole } from "@/lib/constants";
 import { dateOfBirthError } from "@/lib/dateOfBirth";
 import { phoneError } from "@/lib/phoneNumber";
 import { MAX_PHOTO_BYTES, fileSizeError, reduceHint } from "@/lib/fileSize";
@@ -19,10 +27,65 @@ function statusFromFormValue(value: string): "active" | "suspended" | "deactivat
   return "active";
 }
 
+/**
+ * Which of a person's roles is their primary one — the single role the staff
+ * list, the directory and role-keyed email wording show.
+ *
+ * Keep the one they already had wherever it is still held, so giving a
+ * counselor an extra Finance role doesn't rename them in every list. Otherwise
+ * take the first in STAFF_ROLES order, which runs most-senior first — the same
+ * answer 0247's trigger reaches on its own, since the staff_role enum is
+ * declared in that same order and Postgres sorts an enum by declaration order.
+ */
+function primaryRole(next: StaffRole[], previous: StaffRole | null): StaffRole {
+  return previous && next.includes(previous) ? previous : next[0];
+}
+
+/**
+ * How much of a staff record the signed-in person may change.
+ *
+ * `staff.manage` is the whole thing — salary, commission, status, hours. It is
+ * the Super Admin's. `staff.assign_roles` is the roles alone, and it is what
+ * Management holds: deciding who does which job is their call, while what
+ * anyone is paid is not theirs to see or set.
+ */
+async function staffEditScope(): Promise<"all" | "roles" | "none"> {
+  if (await hasPermission("staff.manage")) return "all";
+  if (await hasPermission("staff.assign_roles")) return "roles";
+  return "none";
+}
+
+/**
+ * Whether this role change is allowed, as a message to show if it isn't.
+ *
+ * Two rules. Everybody keeps at least one role — a staff row with none would
+ * be denied by every permission check while still being an active account,
+ * which looks like a broken portal rather than a deliberate lockout (use
+ * Suspended for that). And Super Admin is granted by Super Admins only:
+ * anyone who can hand it out can hand it to themselves, and with it the
+ * permissions editor and every salary in the company. The form hides that tick
+ * box, but hiding a control is not a restriction — this is where it's enforced.
+ */
+async function roleChangeError(next: StaffRole[], previous: StaffRole[]): Promise<string | null> {
+  if (next.length === 0) {
+    return "Pick at least one role. To stop someone signing in, set their status to Suspended instead.";
+  }
+  const wasSuper = previous.includes("super_admin");
+  const isSuper = next.includes("super_admin");
+  if (wasSuper !== isSuper) {
+    const { staff } = await getStaffSession();
+    if (!canGrantSuperAdmin(staff)) {
+      return isSuper
+        ? "Only a Super Admin can grant the Super Admin role."
+        : "Only a Super Admin can remove the Super Admin role.";
+    }
+  }
+  return null;
+}
+
 function staffFieldsFromFormData(formData: FormData) {
   return {
     full_name: String(formData.get("full_name") ?? "").trim(),
-    role: String(formData.get("role") ?? ""),
     designation: String(formData.get("designation") ?? "").trim() || null,
     status: statusFromFormValue(String(formData.get("status") ?? "active")),
     gender: String(formData.get("gender") ?? "").trim() || null,
@@ -107,8 +170,11 @@ export async function createStaffAccount(_prevState: unknown, formData: FormData
 
   const email = String(formData.get("email_official") ?? "").trim();
   const fields = staffFieldsFromFormData(formData);
+  const roles = parseRolesFromFormData(formData);
 
-  if (!email || !fields.full_name || !fields.role) return { error: "Email (official), name, and role are required." };
+  if (!email || !fields.full_name) return { error: "Email (official) and name are required." };
+  const roleIssue = await roleChangeError(roles, []);
+  if (roleIssue) return { error: roleIssue };
   const dobError = dateOfBirthError(fields.date_of_birth);
   if (dobError) return { error: dobError };
   const phoneIssue = staffPhoneError(fields);
@@ -126,7 +192,9 @@ export async function createStaffAccount(_prevState: unknown, formData: FormData
 
   if (createError || !created.user) return { error: createError?.message ?? "Could not create the account." };
 
-  const { error } = await supabase.from("staff").insert({ id: created.user.id, ...fields });
+  const { error } = await supabase
+    .from("staff")
+    .insert({ id: created.user.id, ...fields, roles, role: primaryRole(roles, null) });
   if (error) return { error: error.message };
 
   revalidatePath("/admin/staff");
@@ -136,11 +204,42 @@ export async function createStaffAccount(_prevState: unknown, formData: FormData
 
 export async function updateStaffDetails(staffId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  const denied = await requirePermission("staff.manage", "Only Super Admin can edit staff.");
-  if (denied) return { error: denied.error };
+  const scope = await staffEditScope();
+  if (scope === "none") return { error: "Only Super Admin can edit staff." };
+
+  // The roles the form posted, if it posted any. A form with no roles field at
+  // all leaves the existing set alone rather than clearing it.
+  let roles: StaffRole[] | null = null;
+  if (rolesWereSubmitted(formData)) {
+    const { data: current } = await supabase.from("staff").select("role, roles").eq("id", staffId).maybeSingle();
+    if (!current) return { error: "That staff member no longer exists." };
+
+    roles = parseRolesFromFormData(formData);
+    // Checked here so a mistake comes back as a sentence rather than a
+    // Postgres exception. set_staff_roles() enforces the same two rules
+    // itself — that is the one that binds.
+    const roleIssue = await roleChangeError(roles, staffRoles(current));
+    if (roleIssue) return { error: roleIssue };
+  }
+
+  // Management holds staff.assign_roles and nothing else on this form: roles
+  // are theirs to set, and salary, commission, status and hours are neither
+  // theirs to see nor to change. Everything else the request carried is
+  // dropped unread rather than trusted.
+  if (scope === "roles") {
+    if (!roles) return { error: "No role change was submitted." };
+    const { error } = await supabase.rpc("set_staff_roles", { p_staff: staffId, p_roles: roles });
+    if (error) return { error: error.message };
+
+    revalidatePath("/admin/staff");
+    revalidatePath("/students");
+    revalidatePath("/leads");
+    revalidateTag("staff-directory", { expire: 0 });
+    return { success: true };
+  }
 
   const fields = staffFieldsFromFormData(formData);
-  if (!fields.full_name || !fields.role) return { error: "Name and role are required." };
+  if (!fields.full_name) return { error: "Name is required." };
   const dobError = dateOfBirthError(fields.date_of_birth);
   if (dobError) return { error: dobError };
   const phoneIssue = staffPhoneError(fields);
@@ -227,6 +326,15 @@ export async function updateStaffDetails(staffId: string, _prevState: unknown, f
 
   const { error } = await supabase.from("staff").update(fields).eq("id", staffId);
   if (error) return { error: error.message };
+
+  // Roles go through the same function Management uses, rather than being
+  // folded into the update above — so the "at least one role" and "Super Admin
+  // grants Super Admin" rules are applied by one piece of code on every path,
+  // including a staff.manage granted to some other role by an override.
+  if (roles) {
+    const { error: roleError } = await supabase.rpc("set_staff_roles", { p_staff: staffId, p_roles: roles });
+    if (roleError) return { error: roleError.message };
+  }
 
   revalidatePath("/admin/staff");
   revalidatePath("/students");

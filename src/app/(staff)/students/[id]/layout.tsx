@@ -1,3 +1,4 @@
+import { hasRole } from "@/lib/auth/roles";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getStaffSession } from "@/lib/auth/session";
@@ -11,7 +12,7 @@ import { canSeeVisaSection } from "@/lib/visaAccess";
 export default async function StudentLayout({ children, params }: { children: React.ReactNode; params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { supabase, staff: staffRow } = await getStaffSession();
-  const canDeleteStudent = staffRow?.role === "super_admin" || staffRow?.role === "processing";
+  const canDeleteStudent = hasRole(staffRow, "super_admin") || hasRole(staffRow, "processing");
 
   const [{ data: student, error }, { data: italyApp }, { data: profile }, { data: finalizedApp }] = await Promise.all([
     supabase

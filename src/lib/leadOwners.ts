@@ -16,6 +16,7 @@
 // member who still holds history stays visible and marked — dropping them
 // would delete their registrations from last month's totals.
 
+import { hasRole } from "@/lib/auth/roles";
 import type { StaffRole } from "./constants";
 
 export const UNASSIGNED_ID = "unassigned";
@@ -24,6 +25,8 @@ export type StaffLike = {
   id: string;
   full_name: string;
   role?: StaffRole | string | null;
+  /** Every role they hold; a counselor among several still counts as a counselor. */
+  roles?: (StaffRole | string)[] | null;
   status?: string | null;
   monthly_target?: number | string | null;
 };
@@ -78,7 +81,7 @@ export function buildLeadOwners(staff: StaffLike[], leads: LeadLike[]): LeadOwne
   const ids = new Set<string>();
   for (const id of held.keys()) ids.add(id);
   for (const s of staff) {
-    if (s.role === "counselor" && s.status === "active") ids.add(s.id);
+    if (hasRole(s, "counselor") && s.status === "active") ids.add(s.id);
   }
 
   const owners: LeadOwner[] = [...ids].map((id) => {
@@ -92,7 +95,7 @@ export function buildLeadOwners(staff: StaffLike[], leads: LeadLike[]): LeadOwne
       status: s?.status ?? null,
       monthlyTarget: targetOf(s?.monthly_target),
       isUnassigned: false,
-      isOtherRole: Boolean(s) && s!.role !== "counselor",
+      isOtherRole: Boolean(s) && !hasRole(s ?? null, "counselor"),
       isInactive: !s || s.status !== "active",
     };
   });

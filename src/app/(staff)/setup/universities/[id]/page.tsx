@@ -1,3 +1,4 @@
+import { hasRole } from "@/lib/auth/roles";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -20,9 +21,9 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
     data: { user },
   } = await supabase.auth.getUser();
   const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  const isSuperAdmin = staffRow?.role === "super_admin";
+  const isSuperAdmin = hasRole(staffRow, "super_admin");
   const canManageRates = await hasPermission("finance.program_rates.manage");
-  const canViewRates = canManageRates || staffRow?.role === "management" || staffRow?.role === "finance";
+  const canViewRates = canManageRates || hasRole(staffRow, "management") || hasRole(staffRow, "finance");
 
   const { data: university, error } = await supabase
     .from("universities")
@@ -62,7 +63,7 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
   // template and nobody at HMARK would ever see it — it arrived into a table
   // with no reader. Restricted to the same two roles the policy names, so the
   // card is absent rather than empty for anyone else.
-  const canSeeExchange = staffRow?.role === "super_admin" || staffRow?.role === "processing";
+  const canSeeExchange = hasRole(staffRow, "super_admin") || hasRole(staffRow, "processing");
   const { data: exchange } = canSeeExchange
     ? await supabase
         .from("partner_document_exchange")

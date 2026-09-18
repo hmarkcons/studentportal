@@ -1,3 +1,4 @@
+import { hasRole } from "@/lib/auth/roles";
 import { getStaffSession } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { NewAgreementTemplateForm } from "./NewAgreementTemplateForm";
@@ -9,7 +10,7 @@ function one<T>(v: T | T[] | null) {
 
 export default async function AgreementTemplatesPage() {
   const { supabase, staff } = await getStaffSession();
-  const isSuperAdmin = staff?.role === "super_admin";
+  const isSuperAdmin = hasRole(staff, "super_admin");
 
   const { data: destinations } = await supabase.from("destinations").select("id, display_name").order("display_name");
   const { data: templates } = await supabase

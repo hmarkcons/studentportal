@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
       .select("id, custom_name, category, deadline, student:leads(full_name, processing_officer_id)")
       .not("deadline", "is", null)
       .neq("status", "verified"),
-    admin.from("staff").select("id, full_name").eq("role", "processing").eq("status", "active"),
+    admin.from("staff").select("id, full_name").contains("roles", ["processing"]).eq("status", "active"),
   ]);
 
   const deadlines: DeadlineRow[] = [];

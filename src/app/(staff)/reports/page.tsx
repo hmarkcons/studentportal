@@ -25,7 +25,7 @@ export default async function ReportsPage() {
   const { data: leads } = await supabase.from("leads").select("id, status, assigned_counselor_id, registered_at, date_of_inquiry");
   const { data: logs } = await supabase.from("lead_call_logs").select("id, counselor:staff(full_name), created_at");
   const visaDecisions = await listVisaDecisions(supabase);
-  const { data: staff } = await supabase.from("staff").select("id, full_name, role, status, monthly_target");
+  const { data: staff } = await supabase.from("staff").select("id, full_name, role, roles, status, monthly_target");
 
   const today = new Date().toISOString().slice(0, 10);
   const { count: overdueTasks } = await supabase

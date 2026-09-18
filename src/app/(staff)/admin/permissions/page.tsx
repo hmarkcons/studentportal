@@ -1,3 +1,4 @@
+import { hasRole } from "@/lib/auth/roles";
 import { Fragment } from "react";
 import { redirect } from "next/navigation";
 import { getStaffSession } from "@/lib/auth/session";
@@ -22,12 +23,12 @@ const EDITABLE_ROLES = STAFF_ROLES.filter((r) => r !== "super_admin");
 export default async function RolePermissionsPage(props: { searchParams: Promise<{ staff?: string }> }) {
   const { staff: selectedStaffId } = await props.searchParams;
   const { supabase, staff } = await getStaffSession();
-  if (!staff || staff.role !== "super_admin") redirect("/dashboard");
+  if (!staff || !hasRole(staff, "super_admin")) redirect("/dashboard");
 
   const [{ data: defs }, { data: overrides }, { data: allStaff }] = await Promise.all([
     supabase.from("permission_definitions").select("key, category, label, description, default_roles, sort_order").order("sort_order"),
     supabase.from("role_permission_overrides").select("role, permission_key, allowed"),
-    supabase.from("staff").select("id, full_name, role").neq("role", "super_admin").order("full_name"),
+    supabase.from("staff").select("id, full_name, role").not("roles", "cs", "{super_admin}").order("full_name"),
   ]);
 
   const overrideMap = new Map((overrides ?? []).map((o) => [`${o.role}:${o.permission_key}`, o.allowed]));

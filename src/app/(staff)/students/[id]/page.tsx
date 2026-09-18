@@ -1,3 +1,4 @@
+import { hasRole } from "@/lib/auth/roles";
 import { loadDocumentHistory } from "@/lib/documentHistory";
 import Link from "next/link";
 import { getStaffSession } from "@/lib/auth/session";
@@ -61,7 +62,7 @@ function generatedAgreementFilename(studentName: string | undefined | null, dest
 export default async function StudentDashboardPage(props: PageProps<"/students/[id]">) {
   const { id } = await props.params;
   const { supabase, staff: viewerStaff } = await getStaffSession();
-  const isSuperAdminRole = viewerStaff?.role === "super_admin";
+  const isSuperAdminRole = hasRole(viewerStaff, "super_admin");
   const perms = await getEffectivePermissions();
   const isSuperAdmin = perms["agreements.edit_delete"] === true;
   const canModifyAgreement = perms["agreements.process"] === true;
@@ -442,7 +443,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     supabase
       .from("staff")
       .select("id, full_name, designation, mobile_official, mobile_personal, email_official, photo_path")
-      .eq("role", "processing")
+      .contains("roles", ["processing"])
       .eq("status", "active")
       .order("full_name"),
   ]);

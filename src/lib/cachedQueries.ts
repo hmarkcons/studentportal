@@ -67,7 +67,7 @@ export const getCachedCounselors = unstable_cache(
     const { data } = await supabase
       .from("staff")
       .select("id, full_name")
-      .eq("role", "counselor")
+      .contains("roles", ["counselor"])
       .eq("status", "active")
       .order("full_name");
     return data ?? [];

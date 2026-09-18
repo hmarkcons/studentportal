@@ -1,3 +1,4 @@
+import { hasRole } from "@/lib/auth/roles";
 import { redirect } from "next/navigation";
 import { getStaffSession } from "@/lib/auth/session";
 import { getEffectivePermissions } from "@/lib/auth/permissions";
@@ -21,9 +22,15 @@ export default async function StaffLayout({ children }: { children: React.ReactN
     redirect("/");
   }
 
-  const isSuperAdmin = staffRow.role === "super_admin";
+  const isSuperAdmin = hasRole(staffRow, "super_admin");
   const perms = await getEffectivePermissions();
-  const nav = buildStaffNav({ canManageStaff: perms["staff.manage"] === true, isSuperAdmin });
+  // Staff Management is also where roles are assigned, so someone who holds
+  // staff.assign_roles but not staff.manage still needs the link — the page
+  // itself shows them the roles and withholds the rest.
+  const nav = buildStaffNav({
+    canManageStaff: perms["staff.manage"] === true || perms["staff.assign_roles"] === true,
+    isSuperAdmin,
+  });
 
   return (
     <AppShell

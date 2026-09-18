@@ -1,5 +1,6 @@
 "use server";
 
+import { hasRole } from "@/lib/auth/roles";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -10,7 +11,7 @@ async function requireSuperAdmin(supabase: Awaited<ReturnType<typeof createClien
     data: { user },
   } = await supabase.auth.getUser();
   const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  return staffRow?.role === "super_admin";
+  return hasRole(staffRow, "super_admin");
 }
 
 export async function createAgreementTemplate(_prevState: unknown, formData: FormData) {

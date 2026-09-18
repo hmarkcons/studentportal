@@ -15,7 +15,7 @@ export default async function DashboardPage() {
   const { data: counselors } = await supabase
     .from("staff")
     .select("id, full_name, monthly_target")
-    .eq("role", "counselor")
+    .contains("roles", ["counselor"])
     .eq("status", "active")
     .order("full_name");
 

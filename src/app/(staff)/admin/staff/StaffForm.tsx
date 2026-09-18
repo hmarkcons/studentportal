@@ -15,11 +15,13 @@ import {
   COMMISSION_TYPES,
   COMMISSION_TYPE_LABELS,
   BONUS_RATE_OPTIONS,
+  type StaffRole,
 } from "@/lib/constants";
 import { Input, Select } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { dobBounds } from "@/lib/dateOfBirth";
 import { phoneBounds } from "@/lib/phoneNumber";
+import { staffRoles, ROLES_PRESENT_FIELD } from "@/lib/auth/roles";
 
 const labelClass = "text-xs font-medium text-muted";
 
@@ -32,6 +34,7 @@ export type StaffRecord = {
   id: string;
   full_name: string;
   role: string;
+  roles?: (string | null)[] | null;
   designation: string | null;
   status: string;
   gender: string | null;
@@ -79,6 +82,79 @@ function Field({ label, children, full }: { label: string; children: React.React
   );
 }
 
+/**
+ * Field, but for a group of controls that each carry their own <label>.
+ * Field itself IS a <label>, and a label inside a label is invalid HTML — the
+ * browser resolves a click on the inner one against the outer's first control,
+ * so ticking "Finance" could toggle something else entirely.
+ */
+function FieldGroup({ label, children, full }: { label: string; children: React.ReactNode; full?: boolean }) {
+  return (
+    <fieldset className={`flex flex-col gap-1 border-0 p-0 ${full ? "sm:col-span-2" : ""}`}>
+      <legend className={labelClass}>{label}</legend>
+      {children}
+    </fieldset>
+  );
+}
+
+/**
+ * Roles, plural. One person commonly does two jobs here — counselling and
+ * finance, processing and marketing — and with a single slot they had to be
+ * given whichever role's access mattered most and worked around for the rest.
+ */
+function RolesField({
+  selectedRoles,
+  primary,
+  canGrantSuperAdmin,
+}: {
+  selectedRoles: readonly StaffRole[];
+  primary?: string;
+  canGrantSuperAdmin: boolean;
+}) {
+  return (
+    <FieldGroup label="Roles (system access)">
+      <div className="flex flex-col gap-1 rounded-md border border-border bg-bg p-2">
+        {STAFF_ROLES.map((r) => {
+          const locked = r === "super_admin" && !canGrantSuperAdmin;
+          return (
+            <label
+              key={r}
+              className={`flex items-center gap-2 text-xs ${locked ? "text-muted" : "text-ink"}`}
+              title={locked ? "Only a Super Admin can grant the Super Admin role." : undefined}
+            >
+              <input
+                type="checkbox"
+                name="roles"
+                value={r}
+                aria-label={STAFF_ROLE_LABELS[r]}
+                defaultChecked={selectedRoles.includes(r)}
+                disabled={locked}
+              />
+              <span>{STAFF_ROLE_LABELS[r]}</span>
+              {locked && <span className="text-[10px] text-muted">(Super Admin only)</span>}
+              {/* Named against the role that actually IS primary on the record,
+                  not the first tick — the two differ, and guessing would label
+                  the wrong row. */}
+              {r === primary && selectedRoles.length > 1 && <span className="text-[10px] text-primary">primary</span>}
+            </label>
+          );
+        })}
+        {/* Carried through so the server can tell "unticked everything" from
+            "this form has no roles field", and so a locked Super Admin tick is
+            not silently dropped by the disabled input. */}
+        <input type="hidden" name={ROLES_PRESENT_FIELD} value="1" />
+        {!canGrantSuperAdmin && selectedRoles.includes("super_admin") && (
+          <input type="hidden" name="roles" value="super_admin" />
+        )}
+      </div>
+      <p className="mt-1 text-[11px] text-muted">
+        Tick at least one. Access is the sum of every role ticked. Their primary role — the one the staff
+        list shows — stays as it is unless you untick it.
+      </p>
+    </FieldGroup>
+  );
+}
+
 const WORK_DAYS = [
   { value: 1, label: "Mon" },
   { value: 2, label: "Tue" },
@@ -94,6 +170,8 @@ export function StaffForm({
   photoUrl,
   onSuccess,
   allStaff = [],
+  canGrantSuperAdmin = false,
+  rolesOnly = false,
   assignedStudentCount = 0,
   canManagePhoto = false,
 }: {
@@ -102,6 +180,14 @@ export function StaffForm({
   onSuccess: () => void;
   allStaff?: StaffRecord[];
   assignedStudentCount?: number;
+  /** Only a Super Admin may grant or remove the Super Admin role itself. */
+  canGrantSuperAdmin?: boolean;
+  /**
+   * Render the roles alone. For a viewer who holds staff.assign_roles without
+   * staff.manage: Management decides who does which job, and pay stays with
+   * the Super Admin.
+   */
+  rolesOnly?: boolean;
   /**
    * A staff member's photo is the Super Admin's to set and to remove. Anyone
    * else editing this form sees the picture and no controls — the actions are
@@ -121,8 +207,40 @@ export function StaffForm({
     staff ? (staff.status === "suspended" ? "suspended" : staff.status === "active" ? "active" : "inactive") : "active"
   );
 
+  const held = staffRoles(staff ?? null);
+  const selectedRoles = STAFF_ROLES.filter((r) => held.includes(r));
+
   const needsReplacement = isEdit && statusValue === "inactive" && assignedStudentCount > 0;
   const replacementOptions = allStaff.filter((s) => s.id !== staff?.id && s.status === "active");
+
+  // Somebody holding staff.assign_roles alone gets the roles and nothing else.
+  // Showing them the full form would mean rows of blank pay and personal
+  // fields — the page never fetched those values for them — which reads as
+  // data loss and would post empties back if the action didn't ignore them.
+  if (rolesOnly) {
+    return (
+      <form action={formAction} onReset={(e) => e.preventDefault()} className="flex flex-col">
+        <p className="mb-4 text-sm text-ink">
+          Roles for <span className="font-medium">{staff?.full_name}</span>
+        </p>
+        <div className="mb-6">
+          <RolesField selectedRoles={selectedRoles} primary={staff?.role} canGrantSuperAdmin={canGrantSuperAdmin} />
+        </div>
+        {state?.error && <p className="mb-3 text-sm text-danger">{state.error}</p>}
+        {state?.success && (
+          <div className="mb-3 rounded-md border border-success bg-success-bg px-3 py-2 text-sm text-success">Saved.</div>
+        )}
+        <div className="flex items-center gap-2">
+          <Button type="submit" variant="primary" size="lg" pending={pending}>
+            Save roles
+          </Button>
+          <Button type="button" variant="outline" size="lg" onClick={onSuccess}>
+            {state?.success ? "Close" : "Cancel"}
+          </Button>
+        </div>
+      </form>
+    );
+  }
 
   return (
     <div className="flex flex-col">
@@ -175,16 +293,7 @@ export function StaffForm({
             ))}
           </Select>
         </Field>
-        <Field label="Role (system access)">
-          <Select name="role" defaultValue={staff?.role ?? ""} required>
-            <option value="">—</option>
-            {STAFF_ROLES.map((r) => (
-              <option key={r} value={r}>
-                {STAFF_ROLE_LABELS[r]}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        <RolesField selectedRoles={selectedRoles} primary={staff?.role} canGrantSuperAdmin={canGrantSuperAdmin} />
         <Field label="Gender">
           <Select name="gender" defaultValue={staff?.gender ?? ""}>
             <option value="">—</option>

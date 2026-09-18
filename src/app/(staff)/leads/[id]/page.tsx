@@ -1,3 +1,4 @@
+import { hasRole } from "@/lib/auth/roles";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -26,7 +27,7 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
     data: { user },
   } = await supabase.auth.getUser();
   const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  const canDeleteLead = staffRow?.role === "super_admin" || staffRow?.role === "processing";
+  const canDeleteLead = hasRole(staffRow, "super_admin") || hasRole(staffRow, "processing");
 
   const { data: lead, error } = await supabase
     .from("leads")

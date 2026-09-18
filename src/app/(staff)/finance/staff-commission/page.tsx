@@ -1,3 +1,4 @@
+import { hasRole } from "@/lib/auth/roles";
 import { createClient } from "@/lib/supabase/server";
 import { computeInvoiceStatus } from "@/lib/invoiceStatus";
 import { StaffCommissionTable, type CommissionRow } from "./StaffCommissionTable";
@@ -18,7 +19,7 @@ export default async function StaffCommissionPage() {
     data: { user },
   } = await supabase.auth.getUser();
   const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  const allowed = staffRow?.role === "super_admin" || staffRow?.role === "finance";
+  const allowed = hasRole(staffRow, "super_admin") || hasRole(staffRow, "finance");
 
   if (!allowed) {
     return (

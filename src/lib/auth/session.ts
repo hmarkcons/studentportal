@@ -5,7 +5,7 @@ import type { StaffRole } from "@/lib/constants";
 export type StaffSession = {
   supabase: Awaited<ReturnType<typeof createClient>>;
   userId: string | null;
-  staff: { id: string; full_name: string; role: StaffRole; status: string } | null;
+  staff: { id: string; full_name: string; role: StaffRole; roles: StaffRole[] | null; status: string } | null;
 };
 
 // React's cache() dedupes this per request: layout.tsx + page.tsx (+ nested
@@ -21,7 +21,7 @@ export const getStaffSession = cache(async (): Promise<StaffSession> => {
 
   const { data: staff } = await supabase
     .from("staff")
-    .select("id, full_name, role, status")
+    .select("id, full_name, role, roles, status")
     .eq("id", user.id)
     .maybeSingle();
 

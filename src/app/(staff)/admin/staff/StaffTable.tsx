@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { STAFF_ROLE_LABELS, CURRENCY_SYMBOLS } from "@/lib/constants";
 import { StaffActionsMenu } from "./StaffActionsMenu";
 import type { StaffRecord } from "./StaffForm";
+import { staffRoles } from "@/lib/auth/roles";
 
 type PermissionDef = { key: string; category: string; label: string; description: string; default_roles: string[] };
 type RoleOverrideRow = { role: string; permission_key: string; allowed: boolean };
@@ -17,6 +18,8 @@ export function StaffTable({
   photoUrls = {},
   canManagePermissions = false,
   canManagePhoto = false,
+  canGrantSuperAdmin = false,
+  canSeePay = true,
   permissionDefs = [],
   roleOverrides = [],
   staffOverrides = [],
@@ -27,6 +30,14 @@ export function StaffTable({
   canManagePermissions?: boolean;
   /** Only a Super Admin may set or remove a staff photo. */
   canManagePhoto?: boolean;
+  /** Only a Super Admin may grant or remove the Super Admin role. */
+  canGrantSuperAdmin?: boolean;
+  /**
+   * False for a viewer who holds staff.assign_roles alone: roles are theirs to
+   * set, pay is not theirs to see. The page does not fetch the pay columns for
+   * them either, so the column would be empty regardless.
+   */
+  canSeePay?: boolean;
   permissionDefs?: PermissionDef[];
   roleOverrides?: RoleOverrideRow[];
   staffOverrides?: StaffOverrideRow[];
@@ -85,7 +96,7 @@ export function StaffTable({
               <th className="px-4 py-3">Staff Name</th>
               <th className="px-4 py-3">Designation</th>
               <th className="px-4 py-3">Mobile (Official)</th>
-              <th className="px-4 py-3">Commission Rate</th>
+              {canSeePay && <th className="px-4 py-3">Commission Rate</th>}
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Actions</th>
             </tr>
@@ -105,12 +116,18 @@ export function StaffTable({
                     )}
                     <div>
                       <span className="font-medium text-ink">{s.full_name}</span>{" "}
-                      <span className="text-xs text-muted">· {STAFF_ROLE_LABELS[s.role as never] ?? s.role}</span>
+                      <span className="text-xs text-muted">
+                        {" · "}
+                        {staffRoles(s)
+                          .map((r) => STAFF_ROLE_LABELS[r] ?? r)
+                          .join(", ")}
+                      </span>
                     </div>
                   </div>
                 </td>
                 <td className="px-4 py-3 text-ink">{s.designation ?? "—"}</td>
                 <td className="px-4 py-3 text-ink">{s.mobile_official ?? "—"}</td>
+                {canSeePay && (
                 <td className="px-4 py-3 text-ink">
                   {s.commission_rate_general != null
                     ? s.commission_type_general === "flat"
@@ -118,6 +135,7 @@ export function StaffTable({
                       : `${s.commission_rate_general}%`
                     : "—"}
                 </td>
+                )}
                 <td className="px-4 py-3">
                   <Badge tone={s.status === "active" ? "success" : s.status === "suspended" ? "warning" : "neutral"}>
                     {s.status === "active" ? "Active" : s.status === "suspended" ? "Suspended" : "Inactive"}
@@ -129,8 +147,10 @@ export function StaffTable({
                     photoUrl={photoUrls[s.id]}
                     canManagePermissions={canManagePermissions}
                     canManagePhoto={canManagePhoto}
+                    canGrantSuperAdmin={canGrantSuperAdmin}
+                    rolesOnly={!canSeePay}
                     permissionDefs={permissionDefs}
-                    roleOverrides={roleOverrides.filter((o) => o.role === s.role)}
+                    roleOverrides={roleOverrides.filter((o) => staffRoles(s).includes(o.role as never))}
                     staffOverrides={staffOverrides.filter((o) => o.staff_id === s.id)}
                     allStaff={staff}
                     assignedStudentCount={assignedStudentCounts[s.id] ?? 0}
@@ -140,7 +160,7 @@ export function StaffTable({
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-muted">
+                <td colSpan={canSeePay ? 6 : 5} className="px-4 py-10 text-center text-muted">
                   No staff match this search.
                 </td>
               </tr>

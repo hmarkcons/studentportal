@@ -1,3 +1,4 @@
+import { hasRole } from "@/lib/auth/roles";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { DataTable } from "@/components/ui/DataTable";
@@ -46,7 +47,7 @@ export default async function StudentsPage() {
     data: { user },
   } = await supabase.auth.getUser();
   const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  const canDelete = staffRow?.role === "super_admin" || staffRow?.role === "processing";
+  const canDelete = hasRole(staffRow, "super_admin") || hasRole(staffRow, "processing");
 
   const { data: students, error } = await supabase
     .from("students")

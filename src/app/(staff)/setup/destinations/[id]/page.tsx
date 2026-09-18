@@ -1,3 +1,4 @@
+import { hasRole } from "@/lib/auth/roles";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -15,7 +16,7 @@ export default async function DestinationDetailPage(props: PageProps<"/setup/des
     data: { user },
   } = await supabase.auth.getUser();
   const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  const isSuperAdmin = staffRow?.role === "super_admin";
+  const isSuperAdmin = hasRole(staffRow, "super_admin");
 
   const { data: destination, error } = await supabase.from("destinations").select("*").eq("id", id).maybeSingle();
   if (error || !destination) notFound();

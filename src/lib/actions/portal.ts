@@ -1,5 +1,6 @@
 "use server";
 
+import { hasRole } from "@/lib/auth/roles";
 import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
@@ -117,7 +118,7 @@ async function requireSuperAdmin(supabase: Awaited<ReturnType<typeof createClien
     data: { user },
   } = await supabase.auth.getUser();
   const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  if (staffRow?.role !== "super_admin") return "Only Super Admin can manage a student's portal access.";
+  if (!hasRole(staffRow, "super_admin")) return "Only Super Admin can manage a student's portal access.";
   return null;
 }
 

@@ -1,5 +1,6 @@
 "use server";
 
+import { hasRole } from "@/lib/auth/roles";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { PermissionKey } from "@/lib/permissions";
@@ -15,7 +16,7 @@ async function requireSuperAdmin(supabase: Awaited<ReturnType<typeof createClien
     data: { user },
   } = await supabase.auth.getUser();
   const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  return staffRow?.role === "super_admin";
+  return hasRole(staffRow, "super_admin");
 }
 
 export async function setRolePermissionOverride(role: StaffRole, key: PermissionKey, allowed: boolean) {
@@ -50,7 +51,7 @@ export async function resetRolePermissionOverride(role: StaffRole, key: Permissi
 
 async function assertNotSuperAdmin(supabase: Awaited<ReturnType<typeof createClient>>, staffId: string) {
   const { data: row } = await supabase.from("staff").select("role").eq("id", staffId).maybeSingle();
-  return row?.role !== "super_admin";
+  return !hasRole(row, "super_admin");
 }
 
 export async function setStaffPermissionOverride(staffId: string, key: PermissionKey, allowed: boolean) {

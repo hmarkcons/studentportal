@@ -1,3 +1,4 @@
+import { hasRole } from "@/lib/auth/roles";
 import Link from "next/link";
 import { headers } from "next/headers";
 import QRCode from "qrcode";
@@ -59,7 +60,7 @@ export default async function AttendancePage(props: { searchParams: Promise<{ mo
   // filter; for everyone else the list is their own by definition and a
   // one-name dropdown would be furniture.
   const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  const seesEveryone = staffRow?.role === "super_admin" || staffRow?.role === "management";
+  const seesEveryone = hasRole(staffRow, "super_admin") || hasRole(staffRow, "management");
   const { data: staffList } = seesEveryone
     ? await supabase.from("staff").select("id, full_name").eq("status", "active").order("full_name")
     : { data: null };

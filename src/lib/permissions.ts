@@ -5,6 +5,9 @@
 // only fixes the key strings at compile time so call sites can't typo them.
 export const PERMISSION_KEYS = [
   "staff.manage",
+  // Roles alone — deliberately separate from staff.manage, which carries
+  // salary and commission with it. See 0247.
+  "staff.assign_roles",
   "staff.approve_offsite_access",
   "partners.approve",
   "attendance.qr_admin",

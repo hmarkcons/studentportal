@@ -1,3 +1,4 @@
+import { hasRole } from "@/lib/auth/roles";
 import { createClient } from "@/lib/supabase/server";
 import { Badge } from "@/components/ui/Badge";
 import { RefundActions } from "./RefundActions";
@@ -39,8 +40,8 @@ export default async function RefundsPage() {
     data: { user },
   } = await supabase.auth.getUser();
   const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  const isSuperAdmin = staffRow?.role === "super_admin";
-  const canManage = staffRow?.role === "finance" || staffRow?.role === "management" || staffRow?.role === "super_admin";
+  const isSuperAdmin = hasRole(staffRow, "super_admin");
+  const canManage = hasRole(staffRow, "finance") || hasRole(staffRow, "management") || hasRole(staffRow, "super_admin");
 
   const { errors: syncErrors } = await syncVisaRefusalRefunds();
 

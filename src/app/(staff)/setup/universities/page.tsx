@@ -1,3 +1,4 @@
+import { hasRole } from "@/lib/auth/roles";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
@@ -19,7 +20,7 @@ export default async function UniversitiesPage(props: { searchParams: Promise<{ 
     data: { user },
   } = await supabase.auth.getUser();
   const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  const isSuperAdmin = staffRow?.role === "super_admin";
+  const isSuperAdmin = hasRole(staffRow, "super_admin");
 
   let query = supabase
     .from("universities")

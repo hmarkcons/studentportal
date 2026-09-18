@@ -1,3 +1,4 @@
+import { hasRole } from "@/lib/auth/roles";
 import Link from "next/link";
 import { getStaffSession } from "@/lib/auth/session";
 import { formatDateOnly } from "@/lib/formatDate";
@@ -25,7 +26,7 @@ export default async function StudentApplicationsTab(props: {
   const { id } = await props.params;
   const { country: countryParam, cycle: cycleParam } = await props.searchParams;
   const { supabase, staff: staffRow } = await getStaffSession();
-  const canDelete = staffRow?.role === "super_admin" || staffRow?.role === "management";
+  const canDelete = hasRole(staffRow, "super_admin") || hasRole(staffRow, "management");
 
   const [
     { data: applications },

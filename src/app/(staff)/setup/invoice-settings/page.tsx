@@ -1,3 +1,4 @@
+import { hasRole } from "@/lib/auth/roles";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { getInvoiceBankSettings } from "@/lib/actions/invoiceSettings";
@@ -9,7 +10,7 @@ export default async function InvoiceSettingsPage() {
     data: { user },
   } = await supabase.auth.getUser();
   const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  const isSuperAdmin = staffRow?.role === "super_admin";
+  const isSuperAdmin = hasRole(staffRow, "super_admin");
 
   const settings = await getInvoiceBankSettings();
   const configured = Boolean(

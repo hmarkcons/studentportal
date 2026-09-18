@@ -10,7 +10,7 @@ export default async function MonthlyRegistrationsPage() {
   // registrations on file belong to management, super_admin or
   // digital_marketing staff and were absent from this grid entirely. See
   // buildLeadOwners.
-  const { data: staff } = await supabase.from("staff").select("id, full_name, role, status, monthly_target");
+  const { data: staff } = await supabase.from("staff").select("id, full_name, role, roles, status, monthly_target");
   const { data: leads } = await supabase
     .from("leads")
     .select("assigned_counselor_id, registered_at")

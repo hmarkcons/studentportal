@@ -1,3 +1,4 @@
+import { hasRole } from "@/lib/auth/roles";
 import { getStaffSession } from "@/lib/auth/session";
 import { toYMD, parseYMD, getMonthGridDays, getWeekDays, eachDateInRange, expandRecurrence, karachiToday } from "@/lib/calendarDates";
 import { CalendarShell } from "./CalendarShell";
@@ -33,17 +34,20 @@ export default async function CalendarPage(props: {
 
   const { supabase, staff: viewerStaff } = await getStaffSession();
   const viewerId = viewerStaff?.id ?? "";
-  const canViewOthers = viewerStaff?.role === "management" || viewerStaff?.role === "super_admin";
+  const canViewOthers = hasRole(viewerStaff, "management") || hasRole(viewerStaff, "super_admin");
   const targetStaffId = canViewOthers && staffParam ? staffParam : viewerId;
 
   // Whose calendar is actually on screen — deadlines below are scoped to the
   // student's processing officer, so a management user browsing someone
   // else's calendar needs that person's role, not their own.
-  const targetRole =
+  // The whole role set, not just the primary: somebody who covers processing
+  // alongside another job still has the deadlines of a processing officer, and
+  // reading only their primary role would empty their calendar.
+  const targetStaffRoles =
     targetStaffId === viewerId
-      ? viewerStaff?.role ?? null
-      : (await supabase.from("staff").select("role").eq("id", targetStaffId).maybeSingle()).data?.role ?? null;
-  const targetIsProcessing = targetRole === "processing";
+      ? viewerStaff
+      : (await supabase.from("staff").select("role, roles").eq("id", targetStaffId).maybeSingle()).data;
+  const targetIsProcessing = hasRole(targetStaffRoles, "processing");
 
   // Karachi's day, not the server's. toISOString() is UTC, so for the first
   // five hours of every Karachi day the grid highlighted yesterday as today and

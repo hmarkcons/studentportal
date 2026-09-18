@@ -1,3 +1,4 @@
+import { hasRole } from "@/lib/auth/roles";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getStaffSession } from "@/lib/auth/session";
@@ -11,7 +12,7 @@ function one<T>(v: T | T[] | null) {
 export default async function AgreementTemplateDetailPage(props: PageProps<"/setup/agreement-templates/[id]">) {
   const { id } = await props.params;
   const { supabase, staff } = await getStaffSession();
-  const isSuperAdmin = staff?.role === "super_admin";
+  const isSuperAdmin = hasRole(staff, "super_admin");
 
   const [{ data: template }, { data: destinations }] = await Promise.all([
     supabase

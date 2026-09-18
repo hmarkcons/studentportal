@@ -1,3 +1,4 @@
+import { hasRole } from "@/lib/auth/roles";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -40,7 +41,7 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
     data: { user },
   } = await supabase.auth.getUser();
   const { data: viewerRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  const canManage = viewerRow?.role === "finance" || viewerRow?.role === "super_admin";
+  const canManage = hasRole(viewerRow, "finance") || hasRole(viewerRow, "super_admin");
 
   const now = new Date();
   const month = monthParam || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -260,7 +261,7 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
         commission_type_general: staff.commission_type_general,
         commission_type_public_universities: staff.commission_type_public_universities,
       };
-      const shareableStaffOptions: CommissionStaffOption[] = (staffList ?? []).filter((s) => s.id !== staffId && s.role !== "super_admin");
+      const shareableStaffOptions: CommissionStaffOption[] = (staffList ?? []).filter((s) => s.id !== staffId && !hasRole(s, "super_admin"));
 
       panel = (
         <>

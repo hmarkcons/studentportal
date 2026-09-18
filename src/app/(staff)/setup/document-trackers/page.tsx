@@ -1,3 +1,4 @@
+import { hasRole } from "@/lib/auth/roles";
 import { createClient } from "@/lib/supabase/server";
 import { TrackerOrderBoard } from "./TrackerOrderBoard";
 import { listTrackerDefinitions, listTrackerCountries } from "@/lib/actions/countryTracker";
@@ -12,7 +13,7 @@ export default async function DocumentTrackersPage() {
     data: { user },
   } = await supabase.auth.getUser();
   const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  const isSuperAdmin = staffRow?.role === "super_admin";
+  const isSuperAdmin = hasRole(staffRow, "super_admin");
 
   const countries = await listTrackerCountries();
   const defsByCountry = await listTrackerDefinitions(countries);

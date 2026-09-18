@@ -1,5 +1,6 @@
 "use client";
 
+import { hasRole, staffRoles } from "@/lib/auth/roles";
 import { useState } from "react";
 import { deleteStaffAccount } from "@/lib/actions/admin";
 import { formatDateOnly } from "@/lib/formatDate";
@@ -26,6 +27,8 @@ export function StaffActionsMenu({
   photoUrl,
   canManagePermissions = false,
   canManagePhoto = false,
+  canGrantSuperAdmin = false,
+  rolesOnly = false,
   permissionDefs = [],
   roleOverrides = [],
   staffOverrides = [],
@@ -36,6 +39,10 @@ export function StaffActionsMenu({
   photoUrl?: string | null;
   canManagePermissions?: boolean;
   canManagePhoto?: boolean;
+  /** Only a Super Admin may grant or remove the Super Admin role. */
+  canGrantSuperAdmin?: boolean;
+  /** Roles-only editing, for a viewer without staff.manage. */
+  rolesOnly?: boolean;
   permissionDefs?: PermissionDef[];
   roleOverrides?: RoleOverrideRow[];
   staffOverrides?: StaffOverrideRow[];
@@ -47,7 +54,7 @@ export function StaffActionsMenu({
   const [editOpen, setEditOpen] = useState(false);
   const [permissionsOpen, setPermissionsOpen] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const showPermissions = canManagePermissions && staff.role !== "super_admin";
+  const showPermissions = canManagePermissions && !hasRole(staff, "super_admin");
 
   async function handleDelete() {
     if (!confirm(`Delete ${staff.full_name}? This fails if they have historical records — use Inactive status instead if so.`)) return;
@@ -81,7 +88,7 @@ export function StaffActionsMenu({
               }}
               className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
             >
-              ✏️ Edit
+              {rolesOnly ? "🔑 Roles" : "✏️ Edit"}
             </button>
             {showPermissions && (
               <button
@@ -94,9 +101,13 @@ export function StaffActionsMenu({
                 🔑 Permissions
               </button>
             )}
-            <button onClick={handleDelete} className="block w-full px-3 py-1.5 text-left text-sm text-danger hover:bg-bg">
-              🗑️ Delete
-            </button>
+            {/* Deleting a staff account is not a role change — it belongs
+                with staff.manage, same as the action behind it. */}
+            {!rolesOnly && (
+              <button onClick={handleDelete} className="block w-full px-3 py-1.5 text-left text-sm text-danger hover:bg-bg">
+                🗑️ Delete
+              </button>
+            )}
           </div>
         </>
       )}
@@ -110,7 +121,10 @@ export function StaffActionsMenu({
           )}
           <h4 className="mb-2 border-b border-border pb-1 text-xs font-semibold uppercase tracking-wide text-primary">Personal Information</h4>
           <Row label="Designation" value={staff.designation} />
-          <Row label="Role" value={STAFF_ROLE_LABELS[staff.role as never] ?? staff.role} />
+          <Row
+            label={staffRoles(staff).length > 1 ? "Roles" : "Role"}
+            value={staffRoles(staff).map((r) => STAFF_ROLE_LABELS[r] ?? r).join(", ")}
+          />
           <Row label="Gender" value={staff.gender} />
           <Row label="Date of birth" value={staff.date_of_birth ? formatDateOnly(staff.date_of_birth) : null} />
           <Row label="Marital status" value={staff.marital_status} />
@@ -126,45 +140,52 @@ export function StaffActionsMenu({
           <Row label="Emergency number" value={staff.emergency_contact_number} />
           <Row label="Emergency relation" value={staff.emergency_contact_relation} />
 
-          <h4 className="mt-4 mb-2 border-b border-border pb-1 text-xs font-semibold uppercase tracking-wide text-primary">Compensation</h4>
-          <Row
-            label="Monthly salary"
-            value={staff.monthly_salary != null ? `${CURRENCY_SYMBOLS[staff.currency] ?? staff.currency} ${staff.monthly_salary}` : null}
-          />
-          <Row label="Allowance" value={staff.allowance != null ? `${CURRENCY_SYMBOLS[staff.currency] ?? staff.currency} ${staff.allowance}` : null} />
-          <Row
-            label="Commission — private universities"
-            value={
-              staff.commission_rate_general != null
-                ? staff.commission_type_general === "flat"
-                  ? `${CURRENCY_SYMBOLS[staff.currency] ?? staff.currency} ${staff.commission_rate_general} (flat)`
-                  : `${staff.commission_rate_general}%`
-                : null
-            }
-          />
-          <Row
-            label="Commission — public universities"
-            value={
-              staff.commission_rate_public_universities != null
-                ? staff.commission_type_public_universities === "flat"
-                  ? `${CURRENCY_SYMBOLS[staff.currency] ?? staff.currency} ${staff.commission_rate_public_universities} (flat)`
-                  : `${staff.commission_rate_public_universities}%`
-                : null
-            }
-          />
-          <Row label="Monthly target" value={staff.monthly_target} />
-          <Row
-            label="Monthly bonus"
-            value={staff.bonus_eligible ? `Eligible — ${staff.bonus_rate_percent}% increment when target is hit` : "Not eligible"}
-          />
+          {/* Withheld, not blanked: the page doesn't fetch pay for a
+              roles-only viewer, so every row here would read "—" and look like
+              missing data rather than data that isn't theirs. */}
+          {!rolesOnly && (
+            <>
+            <h4 className="mt-4 mb-2 border-b border-border pb-1 text-xs font-semibold uppercase tracking-wide text-primary">Compensation</h4>
+            <Row
+              label="Monthly salary"
+              value={staff.monthly_salary != null ? `${CURRENCY_SYMBOLS[staff.currency] ?? staff.currency} ${staff.monthly_salary}` : null}
+            />
+            <Row label="Allowance" value={staff.allowance != null ? `${CURRENCY_SYMBOLS[staff.currency] ?? staff.currency} ${staff.allowance}` : null} />
+            <Row
+              label="Commission — private universities"
+              value={
+                staff.commission_rate_general != null
+                  ? staff.commission_type_general === "flat"
+                    ? `${CURRENCY_SYMBOLS[staff.currency] ?? staff.currency} ${staff.commission_rate_general} (flat)`
+                    : `${staff.commission_rate_general}%`
+                  : null
+              }
+            />
+            <Row
+              label="Commission — public universities"
+              value={
+                staff.commission_rate_public_universities != null
+                  ? staff.commission_type_public_universities === "flat"
+                    ? `${CURRENCY_SYMBOLS[staff.currency] ?? staff.currency} ${staff.commission_rate_public_universities} (flat)`
+                    : `${staff.commission_rate_public_universities}%`
+                  : null
+              }
+            />
+            <Row label="Monthly target" value={staff.monthly_target} />
+            <Row
+              label="Monthly bonus"
+              value={staff.bonus_eligible ? `Eligible — ${staff.bonus_rate_percent}% increment when target is hit` : "Not eligible"}
+            />
+            </>
+          )}
 
           <h4 className="mt-4 mb-2 border-b border-border pb-1 text-xs font-semibold uppercase tracking-wide text-primary">Status</h4>
           <Row label="Status" value={staff.status === "active" ? "Active" : staff.status === "suspended" ? "Suspended" : "Inactive"} />
         </div>
       </SlideOver>
 
-      <SlideOver open={editOpen} onClose={() => setEditOpen(false)} title={`Edit — ${staff.full_name}`}>
-        <StaffForm staff={staff} photoUrl={photoUrl} onSuccess={() => setEditOpen(false)} allStaff={allStaff} assignedStudentCount={assignedStudentCount} canManagePhoto={canManagePhoto} />
+      <SlideOver open={editOpen} onClose={() => setEditOpen(false)} title={`${rolesOnly ? "Roles" : "Edit"} — ${staff.full_name}`}>
+        <StaffForm staff={staff} photoUrl={photoUrl} onSuccess={() => setEditOpen(false)} allStaff={allStaff} assignedStudentCount={assignedStudentCount} canManagePhoto={canManagePhoto} canGrantSuperAdmin={canGrantSuperAdmin} rolesOnly={rolesOnly} />
       </SlideOver>
 
       {showPermissions && (

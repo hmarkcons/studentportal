@@ -1,5 +1,6 @@
 "use client";
 
+import { hasRole } from "@/lib/auth/roles";
 import { useMemo, useState } from "react";
 import { useActionState } from "react";
 import { Badge } from "@/components/ui/Badge";
@@ -112,7 +113,7 @@ function AddCommissionForm({
 
   // The share-with dropdown excludes Super Admin (not a commission-earning
   // sales role) and whoever is already picked as the primary staff member.
-  const shareableStaff = staffList.filter((s) => s.id !== staffId && s.role !== "super_admin");
+  const shareableStaff = staffList.filter((s) => s.id !== staffId && !hasRole(s, "super_admin"));
 
   // Auto-fill on each new staff/student pick — adjusting state during render
   // (React's documented pattern for this) rather than in an effect, so it

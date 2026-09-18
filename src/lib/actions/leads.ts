@@ -1,5 +1,6 @@
 "use server";
 
+import { hasRole } from "@/lib/auth/roles";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { ensureCommissionForStudent } from "@/lib/actions/commissionAuto";
@@ -309,7 +310,7 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
     // Active counsellors only, matching the definition the assignment
     // dropdowns already use (getCachedCounselors) — read directly rather than
     // through the cache so a counsellor added minutes ago is not rejected.
-    supabase.from("staff").select("id, full_name").eq("role", "counselor").eq("status", "active"),
+    supabase.from("staff").select("id, full_name").contains("roles", ["counselor"]).eq("status", "active"),
   ]);
   const allDestinations = destinations ?? [];
   const counselorByName = new Map<string, string[]>();
@@ -705,7 +706,7 @@ export async function deleteStudent(studentId: string) {
     data: { user },
   } = await supabase.auth.getUser();
   const { data: staffRow } = await supabase.from("staff").select("role").eq("id", user?.id ?? "").maybeSingle();
-  if (staffRow?.role !== "super_admin" && staffRow?.role !== "processing")
+  if (!hasRole(staffRow, "super_admin") && !hasRole(staffRow, "processing"))
     return { error: "Only Super Admin or Processing can delete a lead/student record." };
 
   const { data: lead } = await supabase.from("leads").select("auth_user_id").eq("id", studentId).maybeSingle();
