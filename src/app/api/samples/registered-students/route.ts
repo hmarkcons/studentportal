@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 import { getStaffSession } from "@/lib/auth/session";
-import { getCachedCounselors, getCachedDestinations } from "@/lib/cachedQueries";
+import { getCachedCounselors, getCachedDestinations, selectableDestinations } from "@/lib/cachedQueries";
 
 /**
  * The registered-student import template, as a real .xlsx.
@@ -47,7 +47,10 @@ export async function GET() {
   const { staff } = await getStaffSession();
   if (!staff) return new Response("Not authorized", { status: 403 });
 
-  const [counselors, destinations] = await Promise.all([getCachedCounselors(), getCachedDestinations()]);
+  const [counselors, allDestinations] = await Promise.all([getCachedCounselors(), getCachedDestinations()]);
+  // The sheet dropdown offers only what we can deliver — a paused country in
+  // the template would be filled in by staff and then rejected on upload.
+  const destinations = selectableDestinations(allDestinations);
 
   const wb = new ExcelJS.Workbook();
   wb.creator = "HMARK Student Portal";

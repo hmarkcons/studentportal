@@ -18,7 +18,7 @@ export const getCachedDestinations = unstable_cache(
       // sets one — Italy has a single intake a year, Germany two, the UK is
       // written out — so they travel with the destination list (0170).
       .select(
-        "id, display_name, installment_plan, admin_charge, consultancy_fee, consultancy_fee_currency, intake_mode, intake_seasons"
+        "id, display_name, status, installment_plan, admin_charge, consultancy_fee, consultancy_fee_currency, intake_mode, intake_seasons"
       )
       .order("display_name");
     return data ?? [];
@@ -26,6 +26,34 @@ export const getCachedDestinations = unstable_cache(
   ["destinations-list"],
   { tags: ["destinations"], revalidate: 300 }
 );
+
+/**
+ * The destinations a NEW record may be pointed at — paused ones removed.
+ *
+ * This list is deliberately NOT filtered at source: several callers use it as
+ * a lookup table (a student's own destination, an agreement template's
+ * country), and dropping a paused destination from those would blank out
+ * details for students already registered for it. So the filtering belongs at
+ * the pickers, which is what this is for.
+ *
+ * `keepIds` is how an editing form keeps a destination a student already has,
+ * even once it is paused: without it, re-saving their registration would
+ * silently drop the country they are actually going to.
+ *
+ * Note the test is "is it explicitly inactive", not "is it active". This list
+ * is cached for five minutes and Vercel's Data Cache survives deployments, so
+ * for a few minutes after a release an entry can come back from cache without
+ * the `status` field at all. Treating unknown as usable keeps the dropdown
+ * populated; treating it as paused would empty every destination picker in the
+ * portal until the cache turned over.
+ */
+export function selectableDestinations<T extends { id: string; status?: string | null }>(
+  all: T[],
+  keepIds: (string | null | undefined)[] = []
+): T[] {
+  const keep = new Set(keepIds.filter((k): k is string => Boolean(k)));
+  return all.filter((d) => d.status !== "inactive" || keep.has(d.id));
+}
 
 export const getCachedActiveUniversities = unstable_cache(
   async () => {

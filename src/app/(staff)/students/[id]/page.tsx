@@ -32,7 +32,13 @@ import { RegistrationEditForm } from "./RegistrationEditForm";
 import { RestartProcessPanel } from "./RestartProcessPanel";
 import { loadRestartContext } from "@/lib/actions/intakeCycles";
 import { loadReengagementContext } from "@/lib/actions/reengagement";
-import { getCachedDestinations, getCachedCounselors, getCachedAgreementTemplates, getCachedFeeProducts } from "@/lib/cachedQueries";
+import {
+  getCachedDestinations,
+  getCachedCounselors,
+  getCachedAgreementTemplates,
+  getCachedFeeProducts,
+  selectableDestinations,
+} from "@/lib/cachedQueries";
 import { getEffectivePermissions } from "@/lib/auth/permissions";
 import { CollapsibleCard } from "@/components/CollapsibleCard";
 import { TrackerCountryTabs } from "@/components/TrackerCountryTabs";
@@ -702,7 +708,10 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
             destinationWork={destinationWork}
             studentId={id}
             revalidateTo={`/students/${id}`}
-            destinations={allDestinations ?? []}
+            destinations={selectableDestinations(allDestinations ?? [], [
+              primaryDestinationId,
+              ...resolvedBackupDestinationIds,
+            ])}
             defaultPrimaryId={primaryDestinationId}
             defaultBackupIds={resolvedBackupDestinationIds}
             counselors={counselors ?? []}

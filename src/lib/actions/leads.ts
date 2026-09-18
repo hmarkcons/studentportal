@@ -306,7 +306,7 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
 
   const { resolveDestination, splitCountries } = await import("@/lib/destinationMatch");
   const [{ data: destinations }, { data: counselors }] = await Promise.all([
-    supabase.from("destinations").select("id, country, display_name, country_code"),
+    supabase.from("destinations").select("id, country, display_name, country_code, status"),
     // Active counsellors only, matching the definition the assignment
     // dropdowns already use (getCachedCounselors) — read directly rather than
     // through the cache so a counsellor added minutes ago is not rejected.
@@ -327,6 +327,9 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
 
   const prepared: Prepared[] = [];
   const badCountry: string[] = [];
+  // Matched a real destination, but one we have paused — a different problem
+  // from a typo, and a different fix, so it is reported separately.
+  const pausedCountry: string[] = [];
   const noCountry: string[] = [];
   const unknownCounselor: string[] = [];
   const ambiguousCounselor: string[] = [];
@@ -349,6 +352,10 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
       badCountry.push(`${full_name}: "${primaryRaw}"`);
       continue;
     }
+    if (primary.status === "inactive") {
+      pausedCountry.push(`${full_name}: "${primaryRaw}"`);
+      continue;
+    }
 
     // Several backups are accepted from a hand-typed cell, though the
     // template's dropdown offers one.
@@ -357,6 +364,10 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
       const match = resolveDestination(raw, allDestinations);
       if (!match) {
         badCountry.push(`${full_name}: backup "${raw}"`);
+        continue;
+      }
+      if (match.status === "inactive") {
+        pausedCountry.push(`${full_name}: backup "${raw}"`);
         continue;
       }
       if (match.id !== primary.id && !backups.includes(match.id)) backups.push(match.id);
@@ -412,6 +423,7 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
   if (prepared.length === 0) {
     const reasons = [
       badCountry.length ? `${badCountry.length} with a country that could not be matched` : "",
+      pausedCountry.length ? `${pausedCountry.length} for a country we have paused` : "",
       noCountry.length ? `${noCountry.length} with no country` : "",
     ].filter(Boolean).join(", ");
     return {
@@ -493,6 +505,7 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
     coded: coded ?? 0,
     exampleRows,
     badCountry,
+    pausedCountry,
     noCountry,
     unknownCounselor,
     ambiguousCounselor: [...new Set(ambiguousCounselor)],

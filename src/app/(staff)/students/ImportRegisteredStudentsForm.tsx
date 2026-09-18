@@ -79,6 +79,16 @@ export function ImportRegisteredStudentsForm() {
               plain name.
             </p>
           )}
+          {/* Separate from "not recognised": the country is spelled fine and
+              we simply aren't sending students there at the moment, so the fix
+              is to pick a different destination, not to correct the spelling. */}
+          {(state.pausedCountry?.length ?? 0) > 0 && (
+            <p className="text-warning">
+              Not imported — we have paused this country and aren&rsquo;t taking new students for it:{" "}
+              {state.pausedCountry!.join("; ")}. Pick another destination, or ask a Super Admin to reopen it under
+              Setup &rsaquo; Destinations.
+            </p>
+          )}
           {(state.unknownCounselor?.length ?? 0) > 0 && (
             <p className="text-warning">
               Imported unassigned — not an active counsellor: {state.unknownCounselor!.join("; ")}.
