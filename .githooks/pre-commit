@@ -1,30 +1,40 @@
 #!/bin/sh
-# Pre-commit gate: typecheck, lint, unit tests.
+# Pre-commit gate: typecheck, lint, unit tests, production build.
 #
-# All three ran green for several commits while two unit tests were broken,
-# which is why the tests are here. They catch what the others cannot:
-# scripts/*-test.mjs import src/lib modules directly under plain Node, so they
-# notice a TypeScript path alias in a tested module (Node cannot resolve "@/"),
-# a missing .ts extension on a relative import, and a stale call left behind
-# when a signature changed.
+# Measured on this repo, not estimated:
 #
-# Timings on this repo, which decided the shape of this:
+#   npm run typecheck        ~5s   whole project
+#   npm test                 ~6s
+#   eslint <staged files>    ~8s   mostly fixed startup cost
+#   next build              ~30s   warm cache; longer after a dependency change
+#                                  clears .next/cache
+#   eslint src              ~49s   <- not this
 #
-#   npm test              ~4s
-#   tsc --noEmit          ~9s    whole project
-#   eslint <staged files> ~10s   mostly fixed startup cost
-#   eslint src            ~49s   <- not this
-#   next build            >60s   <- nor this
+# End to end:
 #
-# So eslint runs over the staged files only. Its cost is almost all config and
+#   ~50s   a commit that changes source
+#   ~18s   a commit where a cheap check fails, so the build is skipped
+#    ~9s   a commit touching nothing that affects a build
+#
+# Expect worse than that immediately after a full build: .next/ is thousands of
+# fresh files, and a virus scanner working through them slowed a run from 18s to
+# 61s here. It settles.
+#
+# Two things keep that from being worse than it needs to be.
+#
+# eslint runs over the staged files only. Its cost is almost all config and
 # plugin loading rather than per-file work, so a full-tree lint would cost a
-# minute for no more information on a commit touching three files -- and a slow
-# hook is one people switch off. tsc, by contrast, has to see everything:
-# types cross files, so a staged-only typecheck would miss the breakage it
-# exists to catch.
+# minute to learn nothing more about a commit touching three files. tsc cannot
+# be narrowed the same way -- types cross files, so a staged-only typecheck
+# would miss exactly the breakage it is there to catch.
 #
-# All three run even if an earlier one fails, so one commit attempt reports
-# everything that is wrong rather than making you fix them one at a time.
+# The build runs last, and only if the three fast checks passed. Next
+# typechecks during the build, so building after a known type error spends 25s
+# to be told what tsc already said. It is also skipped entirely when nothing
+# that affects a build is staged: a migration or a README cannot break it.
+#
+# Note: the build writes .next/, so it will fight a `next dev` server over that
+# directory. If you keep one running, expect dev to rebuild after a commit.
 #
 # Wired up by scripts/install-hooks.mjs, which npm's `prepare` runs after an
 # install. To bypass once, for a work-in-progress commit:
@@ -39,31 +49,68 @@ if [ ! -d node_modules ]; then
   exit 0
 fi
 
+# --diff-filter=ACM leaves out deletions, whose paths no longer exist. -z
+# survives the parentheses in src/app/(staff)/... and any future path with a
+# space in it.
+staged() {
+  git diff --cached --name-only --diff-filter=ACM -z -- "$@"
+}
+count() {
+  tr '\0' '\n' | grep -c '' || true
+}
+
+LINTABLE="*.ts *.tsx *.mjs *.js *.jsx"
+# Anything that can change what the build produces, which is wider than what
+# eslint has an opinion about.
+BUILDABLE="*.ts *.tsx *.mjs *.js *.jsx *.css *.json next.config.ts tsconfig.json"
+
+# shellcheck disable=SC2086
+lint_count=$(staged $LINTABLE | count)
+# shellcheck disable=SC2086
+build_count=$(staged $BUILDABLE | count)
+
 failed=""
+
+# tsconfig includes .next/types, where `next build` writes a validator that
+# imports every route file it found. Delete a page and that validator still
+# points at it, so the typecheck fails on generated output rather than on
+# anything staged -- and because a failed typecheck skips the build below, the
+# validator never gets regenerated and the failure repeats forever. Clearing it
+# breaks that loop; `next build` writes it again, and the build is what really
+# validates the routes.
+rm -rf .next/types
 
 echo "pre-commit: typecheck..."
 if ! npm run --silent typecheck; then
   failed="$failed typecheck"
 fi
 
-# Only the files this commit actually touches, and only the ones eslint has
-# anything to say about. --diff-filter=ACM leaves out deletions, whose paths no
-# longer exist; -z survives the parentheses in src/app/(staff)/... and any
-# future path with a space in it.
-staged=$(git diff --cached --name-only --diff-filter=ACM -z -- '*.ts' '*.tsx' '*.mjs' '*.js' '*.jsx' | tr '\0' '\n' | grep -c '' || true)
-if [ "$staged" -gt 0 ]; then
-  echo "pre-commit: eslint on $staged staged file(s)..."
-  if ! git diff --cached --name-only --diff-filter=ACM -z -- '*.ts' '*.tsx' '*.mjs' '*.js' '*.jsx' \
-    | xargs -0 -r npx eslint --; then
+if [ "$lint_count" -gt 0 ]; then
+  echo "pre-commit: eslint on $lint_count staged file(s)..."
+  # shellcheck disable=SC2086
+  if ! staged $LINTABLE | xargs -0 -r npx eslint --; then
     failed="$failed eslint"
   fi
 else
-  echo "pre-commit: no source files staged, skipping eslint."
+  echo "pre-commit: no lintable files staged, skipping eslint."
 fi
 
 echo "pre-commit: unit tests..."
 if ! npm test --silent; then
   failed="$failed tests"
+fi
+
+# Only worth the time if the cheap checks are happy and something staged can
+# actually affect the build.
+if [ -n "$failed" ]; then
+  echo "pre-commit: skipping the build -- fix the above first."
+elif [ "$build_count" -eq 0 ]; then
+  echo "pre-commit: nothing staged that affects the build, skipping it."
+else
+  echo "pre-commit: production build..."
+  if ! npm run --silent build; then
+    failed="$failed build"
+  fi
 fi
 
 if [ -n "$failed" ]; then
