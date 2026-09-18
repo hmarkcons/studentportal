@@ -23,9 +23,9 @@
     "@tiptap/starter-kit": "^3.30.5",
     "exceljs": "^4.4.0",
     "mammoth": "^1.12.2",
-    "next": "16.3.1",
+    "next": "16.3.5",
     "node-html-parser": "^9.0.2",
-    "nodemailer": "^9.0.5",
+    "nodemailer": "^9.1.1",
     "qrcode": "^1.5.4",
     "react": "19.2.8",
     "react-dom": "19.2.8"
@@ -39,7 +39,7 @@
     "@types/react-dom": "^19",
     "dotenv": "^17.4.2",
     "eslint": "^9",
-    "eslint-config-next": "16.3.1",
+    "eslint-config-next": "16.3.5",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
