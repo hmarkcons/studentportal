@@ -10,7 +10,8 @@
     "test:e2e": "node scripts/e2e-test.js",
     "test:unit": "node --test --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/*-test.mjs",
     "test": "npm run test:unit",
-    "check:xlsx": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-xlsx-in-excel.ps1"
+    "check:xlsx": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-xlsx-in-excel.ps1",
+    "prepare": "node scripts/install-hooks.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

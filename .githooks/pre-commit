@@ -1,0 +1,37 @@
+#!/bin/sh
+# Pre-commit gate: the unit tests.
+#
+# They are here rather than left to be remembered because they catch a class of
+# problem nothing else in the gate does. scripts/*-test.mjs import src/lib
+# modules directly under plain Node, so they notice a TypeScript path alias in
+# a tested module (Node cannot resolve "@/"), a missing .ts extension on a
+# relative import, and a stale call after a signature changed. All four of
+# tsc --noEmit, eslint, next build and the production checks stayed green for
+# several commits while two of those were broken.
+#
+# `next build` is deliberately NOT here: it takes over a minute, and a slow
+# hook is one people switch off. This runs in about four seconds.
+#
+# Wired up by scripts/install-hooks.mjs, which npm's `prepare` runs after an
+# install. To bypass once, for a work-in-progress commit:
+#
+#   git commit --no-verify
+set -e
+
+# A fresh clone commits before its first install on occasion; failing there
+# would be confusing and is not what this guards against.
+if [ ! -d node_modules ]; then
+  echo "pre-commit: node_modules is missing, skipping the tests."
+  echo "            run \`npm install\` to have them run on future commits."
+  exit 0
+fi
+
+echo "pre-commit: running unit tests..."
+if npm test --silent; then
+  exit 0
+fi
+
+echo ""
+echo "pre-commit: unit tests failed, so nothing was committed."
+echo "            fix them, or commit with --no-verify if this is deliberate."
+exit 1
