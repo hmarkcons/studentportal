@@ -1,4 +1,5 @@
 import { hasRole } from "@/lib/auth/roles";
+import { COMPENSATION_EMBED, withCompensationAll } from "@/lib/staffCompensation";
 import { createClient } from "@/lib/supabase/server";
 import { computeInvoiceStatus } from "@/lib/invoiceStatus";
 import { StaffCommissionTable, type CommissionRow } from "./StaffCommissionTable";
@@ -160,10 +161,11 @@ export default async function StaffCommissionPage() {
     };
   });
 
-  const { data: staffList } = await supabase
+  const { data: staffListRows } = await supabase
     .from("staff")
-    .select("id, full_name, role, currency, commission_rate_general, commission_rate_public_universities, commission_type_general, commission_type_public_universities")
+    .select(`id, full_name, role, roles, ${COMPENSATION_EMBED}`)
     .order("full_name");
+  const staffList = withCompensationAll(staffListRows);
   const { data: students } = await supabase.from("students").select("id, full_name, assigned_counselor_id").order("full_name");
 
   // Suggested-commission data: each student's SIGNED agreement (if any),

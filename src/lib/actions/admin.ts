@@ -16,6 +16,7 @@ import { dateOfBirthError } from "@/lib/dateOfBirth";
 import { phoneError } from "@/lib/phoneNumber";
 import { MAX_PHOTO_BYTES, fileSizeError, reduceHint } from "@/lib/fileSize";
 import { notifyAssignedStaff } from "@/lib/actions/registrationNotice";
+import { compensationFromFormData } from "@/lib/staffCompensation";
 
 // "Suspended" just freezes the account (blocked from every staff route by
 // the (staff) layout's `status !== "active"` check, same as deactivated) —
@@ -100,16 +101,6 @@ function staffFieldsFromFormData(formData: FormData) {
     emergency_contact_number: String(formData.get("emergency_contact_number") ?? "").trim() || null,
     emergency_contact_name: String(formData.get("emergency_contact_name") ?? "").trim() || null,
     emergency_contact_relation: String(formData.get("emergency_contact_relation") ?? "").trim() || null,
-    monthly_salary: formData.get("monthly_salary") ? Number(formData.get("monthly_salary")) : null,
-    currency: String(formData.get("currency") ?? "PKR"),
-    allowance: formData.get("allowance") ? Number(formData.get("allowance")) : null,
-    commission_rate_general: formData.get("commission_rate_general") ? Number(formData.get("commission_rate_general")) : null,
-    commission_rate_public_universities: formData.get("commission_rate_public_universities")
-      ? Number(formData.get("commission_rate_public_universities"))
-      : null,
-    commission_type_general: String(formData.get("commission_type_general") ?? "percentage") === "flat" ? "flat" : "percentage",
-    commission_type_public_universities:
-      String(formData.get("commission_type_public_universities") ?? "percentage") === "flat" ? "flat" : "percentage",
     monthly_target: formData.get("monthly_target") ? Number(formData.get("monthly_target")) : null,
     // Blank means "the office default" (0168), so a schedule only has to be
     // filled in for somebody who actually differs from it. A time input sends
@@ -117,9 +108,6 @@ function staffFieldsFromFormData(formData: FormData) {
     work_start_time: readWorkTime(formData.get("work_start_time")),
     work_end_time: readWorkTime(formData.get("work_end_time")),
     work_days: readWorkDays(formData),
-    bonus_eligible: formData.get("bonus_eligible") === "on",
-    bonus_rate_percent:
-      formData.get("bonus_eligible") === "on" && formData.get("bonus_rate_percent") ? Number(formData.get("bonus_rate_percent")) : null,
   };
 }
 
@@ -163,6 +151,35 @@ function staffPhoneError(fields: ReturnType<typeof staffFieldsFromFormData>) {
   );
 }
 
+/**
+ * Writes the pay the form carried, returning a message if it was refused.
+ *
+ * An UPDATE, not an upsert: `staff_ensure_compensation` (0249) creates the row
+ * with the old column defaults the moment a staff member is inserted, so there
+ * is always something to update, and an upsert here would quietly re-create a
+ * row that a cascade had deliberately removed.
+ *
+ * Only ever reached on the staff.manage path. RLS on staff_compensation is
+ * Super Admin for writes regardless, so a caller who somehow got here without
+ * it is refused by the database rather than by this function.
+ */
+async function savePay(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  staffId: string,
+  formData: FormData
+): Promise<string | null> {
+  const { staff: actor } = await getStaffSession();
+  const { error } = await supabase
+    .from("staff_compensation")
+    .update({
+      ...compensationFromFormData(formData),
+      updated_at: new Date().toISOString(),
+      updated_by: actor?.id ?? null,
+    })
+    .eq("staff_id", staffId);
+  return error ? error.message : null;
+}
+
 export async function createStaffAccount(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
   const denied = await requirePermission("staff.manage", "Only Super Admin can add staff.");
@@ -196,6 +213,12 @@ export async function createStaffAccount(_prevState: unknown, formData: FormData
     .from("staff")
     .insert({ id: created.user.id, ...fields, roles, role: primaryRole(roles, null) });
   if (error) return { error: error.message };
+
+  // Pay lives on its own table now (0249). The staff insert's trigger has
+  // already created the row with column defaults, so this only has to fill in
+  // what the form actually carried.
+  const payError = await savePay(supabase, created.user.id, formData);
+  if (payError) return { error: payError };
 
   revalidatePath("/admin/staff");
   revalidateTag("staff-directory", { expire: 0 });
@@ -326,6 +349,9 @@ export async function updateStaffDetails(staffId: string, _prevState: unknown, f
 
   const { error } = await supabase.from("staff").update(fields).eq("id", staffId);
   if (error) return { error: error.message };
+
+  const payError = await savePay(supabase, staffId, formData);
+  if (payError) return { error: payError };
 
   // Roles go through the same function Management uses, rather than being
   // folded into the update above — so the "at least one role" and "Super Admin

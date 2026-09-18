@@ -8,19 +8,19 @@ import { AddStaffButton } from "./AddStaffButton";
 import { StaffTable } from "./StaffTable";
 import { PartnerApprovalButton } from "./PartnerApprovalButton";
 import type { StaffRecord } from "./StaffForm";
+import { COMPENSATION_EMBED, withCompensationAll, type Compensation } from "@/lib/staffCompensation";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
 }
 
-// Columns every viewer of this page may see. Pay is added separately below.
+// monthly_target is here rather than with pay on purpose: it is a
+// registrations target, shown to Management and counselors on the dashboard
+// and in two reports, not compensation. See 0249.
 const BASE_COLUMNS = `id, full_name, role, roles, designation, status, gender, date_of_birth, marital_status, cnic, address,
    mobile_personal, mobile_official, email_personal, email_official,
    emergency_contact_number, emergency_contact_name, emergency_contact_relation,
-   photo_path`;
-
-const PAY_COLUMNS = `monthly_salary, currency, allowance, commission_rate_general, commission_rate_public_universities,
-   commission_type_general, commission_type_public_universities, monthly_target, bonus_eligible, bonus_rate_percent`;
+   monthly_target, photo_path`;
 
 export default async function StaffAdminPage() {
   const { supabase, staff: viewer } = await getStaffSession();
@@ -41,15 +41,19 @@ export default async function StaffAdminPage() {
     );
   }
 
-  // A roles-only viewer never receives anyone's pay. RLS on `staff` does still
-  // permit Management to read these columns (policy "staff_select", 0006), so
-  // this is what keeps the figures out of their browser rather than a database
-  // boundary — noted because the two are easy to confuse.
-  const { data: staff } = await supabase
+  // A roles-only viewer never receives anyone's pay, and since 0250 that is
+  // enforced by the database as well: staff_compensation's own policy is
+  // Super Admin, Finance, or your own row, so the embed comes back null for
+  // Management even if this page asked for it.
+  const { data: staffRows } = await supabase
     .from("staff")
-    .select(canManageStaff ? `${BASE_COLUMNS}, ${PAY_COLUMNS}` : BASE_COLUMNS)
+    .select(canManageStaff ? `${BASE_COLUMNS}, ${COMPENSATION_EMBED}` : BASE_COLUMNS)
     .order("full_name")
-    .returns<(StaffRecord & { photo_path: string | null })[]>();
+    .returns<(Omit<StaffRecord, keyof Compensation> & { photo_path: string | null; compensation?: Compensation | null })[]>();
+
+  // Flattened, so the form, the table and the View panel keep reading
+  // `staff.monthly_salary` the way they did when it was a column.
+  const staff = withCompensationAll(staffRows) as (StaffRecord & { photo_path: string | null })[];
 
   const photoUrls: Record<string, string> = {};
   await Promise.all(
@@ -82,8 +86,8 @@ export default async function StaffAdminPage() {
       ])
     : [{ data: null }, { data: null }, { data: null }];
 
-  const total = staff?.length ?? 0;
-  const active = (staff ?? []).filter((s) => s.status === "active").length;
+  const total = staff.length;
+  const active = staff.filter((s) => s.status === "active").length;
   const inactive = total - active;
 
   return (
@@ -103,7 +107,7 @@ export default async function StaffAdminPage() {
       </div>
 
       <StaffTable
-        staff={staff ?? []}
+        staff={staff}
         photoUrls={photoUrls}
         canManagePermissions={isSuperAdminViewer}
         canManagePhoto={isSuperAdminViewer}

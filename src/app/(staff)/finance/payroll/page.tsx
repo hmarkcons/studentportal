@@ -1,4 +1,5 @@
 import { hasRole } from "@/lib/auth/roles";
+import { COMPENSATION_EMBED, withCompensation, withCompensationAll } from "@/lib/staffCompensation";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -49,22 +50,24 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
   const [y, m] = month.split("-").map(Number);
   const nextMonthStart = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10);
 
-  const { data: staffList } = await supabase
+  const { data: staffListRows } = await supabase
     .from("staff")
-    .select("id, full_name, role, currency, commission_rate_general, commission_rate_public_universities, commission_type_general, commission_type_public_universities")
+    .select(`id, full_name, role, roles, ${COMPENSATION_EMBED}`)
     .order("full_name");
+  const staffList = withCompensationAll(staffListRows);
 
   let panel: React.ReactNode = null;
 
   if (staffId) {
-    const { data: staff } = await supabase
+    const { data: staffRow } = await supabase
       .from("staff")
       .select(
-        "id, full_name, role, designation, monthly_salary, currency, allowance, commission_rate_general, commission_rate_public_universities, commission_type_general, commission_type_public_universities, monthly_target, bonus_eligible, bonus_rate_percent, work_start_time, work_end_time, work_days"
+        `id, full_name, role, roles, designation, monthly_target, work_start_time, work_end_time, work_days, ${COMPENSATION_EMBED}`
       )
       .eq("id", staffId)
       .maybeSingle();
 
+    const staff = staffRow ? withCompensation(staffRow) : null;
     if (staff) {
       const { data: registeredStudents } = await supabase
         .from("leads")

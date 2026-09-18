@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { COMPENSATION_EMBED, withCompensation } from "@/lib/staffCompensation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePermission } from "@/lib/auth/permissions";
 import { commissionFor, type CommissionBasis, type CommissionRates } from "@/lib/staffCommissionBasis";
@@ -83,13 +84,14 @@ export async function ensureCommissionForStudent(studentId: string): Promise<{ c
     .eq("student_id", studentId);
   if ((count ?? 0) > 0) return { created: false, reason: "Already in the ledger" };
 
-  const { data: staff } = await admin
+  const { data: staffRow } = await admin
     .from("staff")
-    .select(
-      "id, currency, commission_rate_general, commission_rate_public_universities, commission_type_general, commission_type_public_universities"
-    )
+    .select(`id, ${COMPENSATION_EMBED}`)
     .eq("id", student.assigned_counselor_id)
     .maybeSingle();
+  // Rates live on staff_compensation now (0249). This runs with the service
+  // role, so the embed is never filtered by RLS.
+  const staff = staffRow ? withCompensation(staffRow) : null;
 
   const outcome = commissionFor(staff as CommissionRates | null, await basisFor(admin, studentId));
   if (!outcome.ok) return { created: false, reason: outcome.reason };
