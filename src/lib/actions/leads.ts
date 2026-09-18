@@ -55,6 +55,13 @@ function parseDestinationSelection(formData: FormData) {
   if (new Set(backupDestinationIds).size !== backupDestinationIds.length) {
     return { error: "The same backup country was selected twice." } as const;
   }
+  // Backups with nothing to back up. The student code is built from the
+  // PRIMARY destination (0194), so this state leaves a registered student with
+  // countries on file and still no code — and the country column reading as a
+  // backup would say the wrong thing about where they are going.
+  if (!primaryDestinationId && backupDestinationIds.length > 0) {
+    return { error: "Choose the primary country before adding backup countries." } as const;
+  }
 
   return { primaryDestinationId, primaryDestinationName, backupDestinationIds, backupDestinationNames } as const;
 }
@@ -508,6 +515,16 @@ export async function registerStudentManually(_prevState: unknown, formData: For
   const assigned_counselor_id = String(formData.get("assigned_counselor_id") ?? "") || null;
   const intake = String(formData.get("intake") ?? "").trim() || null;
 
+  // A registered student needs a country, for the same reason the import now
+  // requires one: the student code is stamped from the primary destination, and
+  // the new-application form only offers countries the student is registered
+  // for. Without it they appear in the students list with a blank Student ID
+  // and cannot be applied for — which is how one real record ended up needing
+  // repair by hand.
+  if (!selection.primaryDestinationId) {
+    return { error: "Choose the primary country — it issues the Student ID and is what applications are created against." };
+  }
+
   const phoneIssue = phoneError(contact_number);
   if (phoneIssue) return { error: phoneIssue };
 
@@ -526,7 +543,13 @@ export async function registerStudentManually(_prevState: unknown, formData: For
     current_qualification,
     level_applying_for,
     course_of_interest,
-    country_of_interest: [selection.primaryDestinationName, ...selection.backupDestinationNames].filter(Boolean).join(", ") || null,
+    // The PRIMARY country only, not a comma-joined list of primary plus
+    // backups. The students list already has its own Backup Country column
+    // fed from lead_destinations, so including them here duplicated that and
+    // turned the Country filter into combined strings — "Italy (Public),
+    // Germany (Public)" became its own filter option, matching one student.
+    // It also now agrees with what the spreadsheet import writes.
+    country_of_interest: selection.primaryDestinationName,
     assigned_counselor_id,
     intake,
     status: "registered",
@@ -659,7 +682,10 @@ export async function updateRegistrationDetails(studentId: string, revalidateTo:
 
   const patch: Record<string, unknown> = { assigned_counselor_id, processing_officer_id, intake, discount_amount, discount_reason };
   if (hasNewSelection || hadExistingDestinations) {
-    patch.country_of_interest = [selection.primaryDestinationName, ...selection.backupDestinationNames].filter(Boolean).join(", ") || null;
+    // The primary only, matching registerStudentManually and the import. The
+    // guard above still decides WHETHER to touch this field at all, so a
+    // picker that merely started empty cannot wipe the legacy text.
+    patch.country_of_interest = selection.primaryDestinationName;
   }
 
   const { error } = await supabase.from("leads").update(patch).eq("id", studentId);

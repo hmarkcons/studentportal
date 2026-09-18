@@ -93,8 +93,16 @@ export function RegisterStudentForm({
         <Input name="course_of_interest" />
       </div>
       <div className="flex flex-col gap-1.5">
-        <label className={labelClass}>Country of interest</label>
+        <label className={labelClass}>
+          Country of interest <span className="text-danger">*</span>
+        </label>
         <PrimaryBackupDestinationSelect destinations={destinations} onPrimaryChange={setPrimaryId} />
+        {/* Said here rather than only in the error, because the picker posts
+            hidden inputs and cannot carry HTML `required` — so the browser
+            gives no hint that this one is not optional. */}
+        <p className="text-xs text-muted">
+          The primary country issues the Student ID and is what applications are created against.
+        </p>
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-1.5">
