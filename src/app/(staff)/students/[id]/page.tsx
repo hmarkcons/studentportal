@@ -115,9 +115,10 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       supabase
         .from("applications")
         .select(
-          `id, current_stage, intake, deadline,
+          `id, current_stage, intake, deadline, round_id,
            university:universities(name, destination:destinations(id, country_code, display_name, pipeline_stages, dashboard_pipeline_stages)),
-           program:programs(name)`
+           program:programs(name),
+           round:program_intake_rounds(label)`
         )
         .eq("student_id", id)
         .order("created_at", { ascending: true }),
@@ -196,7 +197,27 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   const defaultInvoiceCurrency = signedAgreementDestination?.consultancy_fee_currency ?? null;
   const invoiceIds = (invoices ?? []).map((i) => i.id);
   const appIds = (applications ?? []).map((a) => a.id);
-  const appLabel = new Map((applications ?? []).map((a) => [a.id, one(a.university as never) as { name?: string } | null]));
+
+  /**
+   * How an application reads where it has to be picked out from the student's
+   * others — the task list's "which application" dropdown, and the label on a
+   * task already assigned.
+   *
+   * The university name alone was not enough even before rounds existed: a
+   * student applying to three programmes at one university got three options
+   * all reading "Aalto University", with nothing to choose between them. With
+   * two applications for the same programme in different rounds (0234) the
+   * programme name is not enough either, so the round goes on the end.
+   */
+  const describeApplication = (a: NonNullable<typeof applications>[number]) => {
+    const uni = (one(a.university as never) as { name?: string } | null)?.name ?? "University";
+    const programName = (one(a.program as never) as { name?: string } | null)?.name ?? null;
+    const roundLabel = (one(a.round as never) as { label?: string } | null)?.label ?? null;
+    const base = programName ? `${uni} · ${programName}` : uni;
+    return roundLabel ? `${base} (${roundLabel})` : base;
+  };
+
+  const appLabel = new Map((applications ?? []).map((a) => [a.id, describeApplication(a)]));
 
   // ---- Documentation trackers, grouped by country (one card per country the
   // student has an application in, keyed to that country's first application
@@ -388,8 +409,11 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     Promise.all(
       (rawDocs ?? []).map(async (d) => {
         const templateName = one(d.template as never) as { name?: string } | null;
-        const uni = d.application_id ? appLabel.get(d.application_id) : null;
-        const name = `${d.custom_name ?? templateName?.name ?? d.category ?? "Document"}${uni?.name ? ` — ${uni.name}` : " — Student-level"}`;
+        // Which application this requirement belongs to, now named down to the
+        // programme and round — "— Aalto University" was the same string for
+        // every application a student had there.
+        const belongsTo = d.application_id ? appLabel.get(d.application_id) : null;
+        const name = `${d.custom_name ?? templateName?.name ?? d.category ?? "Document"}${belongsTo ? ` — ${belongsTo}` : " — Student-level"}`;
         const past = docHistory.get(d.id) ?? [];
         if (!d.file_path) return { ...d, name, history: past };
         const { data } = await supabase.storage.from("documents").createSignedUrl(d.file_path, 3600);
@@ -495,12 +519,12 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     due_date: t.due_date,
     status: t.status,
     priority: t.priority,
-    applicationLabel: appLabel.get(t.application_id)?.name ?? "Application",
+    applicationLabel: appLabel.get(t.application_id) ?? "Application",
   }));
 
   const applicationOptions = (applications ?? []).map((a) => ({
     id: a.id,
-    label: (one(a.university as never) as { name?: string } | null)?.name ?? "University",
+    label: describeApplication(a),
   }));
 
   // ---- Missing documents, collapsed to a per-category count for the
