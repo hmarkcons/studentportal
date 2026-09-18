@@ -159,6 +159,10 @@ export default async function PortalDashboardPage() {
           const uni = one(app.university);
           const dest = uni ? one(uni.destination as never) : null;
           const program = one(app.program) as { name?: string; rounds?: ProgramRound[] } | null;
+          // From the rounds already loaded for the dates line — no extra query.
+          // Without it, two applications for the same programme in different
+          // rounds render as two identical cards.
+          const roundLabel = (program?.rounds ?? []).find((r) => r.id === app.round_id)?.label ?? null;
           return (
             <div key={app.id} className="flex flex-col gap-1">
               <Link href={`/portal/applications/${app.id}`}>
@@ -166,6 +170,7 @@ export default async function PortalDashboardPage() {
                   universityName={uni?.name ?? "University"}
                   programName={program?.name}
                   intake={app.intake}
+                  round={roundLabel}
                   currentStage={app.current_stage}
                   pipelineStages={(dest as { pipeline_stages?: string[] } | null)?.pipeline_stages ?? []}
                 />

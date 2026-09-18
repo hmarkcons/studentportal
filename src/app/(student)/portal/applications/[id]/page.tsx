@@ -68,6 +68,7 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
           universityName={university?.name ?? "University"}
           programName={program?.name}
           intake={app.intake}
+          round={rounds.find((r) => r.id === app.round_id)?.label ?? null}
           currentStage={app.current_stage}
           pipelineStages={(destination as { pipeline_stages?: string[] } | null)?.pipeline_stages ?? []}
         />

@@ -13,12 +13,22 @@ export function BoardingPassTracker({
   universityName,
   programName,
   intake,
+  round,
   currentStage,
   pipelineStages,
 }: {
   universityName: string;
   programName?: string | null;
   intake?: string | null;
+  /**
+   * Which intake round this application is for.
+   *
+   * Part of the card's identity, not a detail: a student can hold two
+   * applications for the same programme in two different rounds (0234), and
+   * without the round those two cards are identical down to the university,
+   * the programme and the intake.
+   */
+  round?: string | null;
   currentStage: string;
   pipelineStages: string[];
 }) {
@@ -32,7 +42,12 @@ export function BoardingPassTracker({
           <p className="text-sm font-semibold">{universityName}</p>
           {programName && <p className="text-xs opacity-90">{programName}</p>}
         </div>
-        {intake && <span className="text-xs opacity-90">Intake: {intake}</span>}
+        {(intake || round) && (
+          <div className="flex shrink-0 flex-col items-end gap-0.5 pl-3">
+            {intake && <span className="text-xs opacity-90">Intake: {intake}</span>}
+            {round && <span className="text-xs font-semibold">{round}</span>}
+          </div>
+        )}
       </div>
 
       <div className="relative border-t border-dashed border-border px-5 py-4">
