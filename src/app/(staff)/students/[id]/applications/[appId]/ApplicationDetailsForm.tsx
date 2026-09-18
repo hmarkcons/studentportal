@@ -18,6 +18,7 @@ export function ApplicationDetailsForm({
   programId,
   roundId,
   programs,
+  roundsTakenElsewhere = {},
   isFinalized,
   universityName,
   today,
@@ -35,6 +36,12 @@ export function ApplicationDetailsForm({
   roundId: string | null;
   /** Every programme at this application's university, with its intake rounds. */
   programs: { id: string; name: string; rounds?: ProgramRound[] }[];
+  /**
+   * Rounds this student's OTHER applications already occupy, by programme.
+   * One application per programme per round (0234), so offering one of these
+   * would fail on save — they are left out rather than discovered.
+   */
+  roundsTakenElsewhere?: Record<string, string[]>;
   /** Finalised for the visa: the programme is what the visa record describes. */
   isFinalized: boolean;
   universityName: string;
@@ -50,7 +57,13 @@ export function ApplicationDetailsForm({
   // not match.
   const [selectedProgramId, setSelectedProgramId] = useState(programId ?? "");
   const [selectedRoundId, setSelectedRoundId] = useState(roundId ?? "");
-  const rounds = sortRounds(programs.find((p) => p.id === selectedProgramId)?.rounds ?? []);
+  // The round currently saved on this application stays offered even if it
+  // appears in the taken list — otherwise the field would silently drop the
+  // application's own round and saving would clear it.
+  const taken = new Set((roundsTakenElsewhere[selectedProgramId] ?? []).filter((rid) => rid !== roundId));
+  const rounds = sortRounds(programs.find((p) => p.id === selectedProgramId)?.rounds ?? []).filter(
+    (r) => !r.id || !taken.has(r.id)
+  );
 
   return (
     <form action={formAction} className="grid grid-cols-1 gap-3 sm:grid-cols-2">

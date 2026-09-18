@@ -31,8 +31,14 @@ export function AddBackupPrograms({
   applicationId: string;
   studentId: string;
   universityName: string;
-  /** Programmes at this university the student has not applied for. */
-  available: { id: string; name: string; rounds?: ProgramRound[] }[];
+  /**
+   * Programmes at this university with at least one round slot still free.
+   * Since 0234 a programme is not taken outright — the same programme in a
+   * different round is a separate application — so each entry carries only
+   * the rounds still available, and whether the "no specific round" slot is
+   * still free.
+   */
+  available: { id: string; name: string; rounds: ProgramRound[]; allowNoRound: boolean }[];
   /** The other programmes already on file at this university. */
   siblings: { id: string; name: string | null }[];
   /** Karachi's today, so a closed round is labelled on the business day. */
@@ -76,12 +82,27 @@ export function AddBackupPrograms({
         <form action={formAction} className="flex flex-col gap-2 rounded-md border border-border p-3">
           <p className="text-xs text-muted">
             Another programme at {universityName}. Each one becomes its own application, starting at the beginning of the
-            pipeline, and inherits this one&rsquo;s intake and deadline — both editable afterwards.
+            pipeline, and inherits this one&rsquo;s intake and deadline — both editable afterwards. The same programme in a
+            different intake round counts as its own application, so a second attempt can be added here too.
           </p>
           {slots.map((slot, i) => {
             const chosen = available.find((p) => p.id === slot.programId) ?? null;
-            const rounds = sortRounds(chosen?.rounds ?? []);
-            const takenIds = slots.map((s) => s.programId);
+
+            // A programme may now legitimately appear in two slots, in two
+            // different rounds — so slots no longer exclude each other by
+            // programme. What they exclude is a round another slot has already
+            // taken for that same programme.
+            const roundsUsedInOtherSlots = slots
+              .filter((s, idx) => idx !== i && s.programId === slot.programId)
+              .map((s) => s.roundId);
+            const rounds = sortRounds(chosen?.rounds ?? []).filter(
+              (r) => !roundsUsedInOtherSlots.includes(r.id ?? "")
+            );
+            // "No specific round" is a slot of its own in the unique key, so it
+            // can be used up too — by an existing application or by a sibling
+            // slot in this same submit.
+            const noRoundFree = Boolean(chosen?.allowNoRound) && !roundsUsedInOtherSlots.includes("");
+
             return (
               <div key={i} className="flex flex-col gap-1">
                 {/* Submitted as hidden inputs rather than by naming the
@@ -93,22 +114,23 @@ export function AddBackupPrograms({
                 <Select
                   aria-label={`Backup programme ${i + 1}`}
                   value={slot.programId}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const next = available.find((p) => p.id === e.target.value) ?? null;
+                    // Where "no specific round" is already used up, a round has
+                    // to be chosen — so it defaults to the first free one
+                    // rather than to an option that cannot be submitted.
+                    const firstFree = next && !next.allowNoRound ? next.rounds[0]?.id ?? "" : "";
                     setSlots((prev) =>
-                      // The round goes with the programme it belonged to.
-                      prev.map((s, idx) => (idx === i ? { programId: e.target.value, roundId: "" } : s))
-                    )
-                  }
+                      prev.map((s, idx) => (idx === i ? { programId: e.target.value, roundId: firstFree } : s))
+                    );
+                  }}
                 >
                   <option value="">Programme {i + 1}…</option>
-                  {available
-                    // Keeps one slot from offering what another slot has taken.
-                    .filter((p) => p.id === slot.programId || !takenIds.includes(p.id))
-                    .map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
+                  {available.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
                 </Select>
                 {rounds.length > 0 && (
                   <Select
@@ -119,7 +141,7 @@ export function AddBackupPrograms({
                     }
                     className="text-xs"
                   >
-                    <option value="">No specific round yet</option>
+                    {noRoundFree && <option value="">No specific round yet</option>}
                     {rounds.map((r) => (
                       <option key={r.id} value={r.id ?? ""}>
                         {roundOptionLabel(r, today)}
@@ -127,10 +149,18 @@ export function AddBackupPrograms({
                     ))}
                   </Select>
                 )}
+                {chosen && rounds.length === 0 && !noRoundFree && (
+                  <p className="text-xs text-warning">
+                    Every round of {chosen.name} is already applied for in this intake.
+                  </p>
+                )}
               </div>
             );
           })}
-          {slots.length < available.length && (
+          {/* Capacity is the number of free round slots, not the number of
+              programmes — one programme with three free rounds is three
+              addable applications. */}
+          {slots.length < available.reduce((n, p) => n + p.rounds.length + (p.allowNoRound ? 1 : 0), 0) && (
             <button
               type="button"
               onClick={() => setSlots((prev) => [...prev, { programId: "", roundId: "" }])}

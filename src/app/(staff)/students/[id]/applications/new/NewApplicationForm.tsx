@@ -107,7 +107,16 @@ export function NewApplicationForm({
         <label className="text-sm font-medium text-ink">Programs</label>
         {slots.map((slot, i) => {
           const chosen = programs.find((p) => p.id === slot.programId) ?? null;
-          const rounds = sortRounds(chosen?.rounds ?? []);
+
+          // The same programme may appear in two slots, in two different
+          // rounds — that is one application each. What cannot repeat is the
+          // pair, so a round another slot has taken for this same programme is
+          // left out rather than accepted and then refused on submit.
+          const usedInOtherSlots = slots
+            .filter((s, idx) => idx !== i && s.programId === slot.programId)
+            .map((s) => s.roundId);
+          const rounds = sortRounds(chosen?.rounds ?? []).filter((r) => !usedInOtherSlots.includes(r.id ?? ""));
+          const noRoundFree = !usedInOtherSlots.includes("");
           return (
             <div key={i} className="flex flex-col gap-0.5">
               {/* The values are submitted as hidden inputs, not by naming the
@@ -123,13 +132,26 @@ export function NewApplicationForm({
               <Select
                 aria-label={`Programme ${i + 1}`}
                 value={slot.programId}
-                onChange={(e) =>
+                onChange={(e) => {
+                  // Where another slot already holds this programme with no
+                  // round, the free option is a round — so default to the
+                  // first one rather than to a pair that cannot be submitted.
+                  const alreadyNoRound = slots.some(
+                    (s, idx) => idx !== i && s.programId === e.target.value && s.roundId === ""
+                  );
+                  const next = programs.find((p) => p.id === e.target.value) ?? null;
+                  const usedHere = slots
+                    .filter((s, idx) => idx !== i && s.programId === e.target.value)
+                    .map((s) => s.roundId);
+                  const firstFree = alreadyNoRound
+                    ? sortRounds(next?.rounds ?? []).find((r) => !usedHere.includes(r.id ?? ""))?.id ?? ""
+                    : "";
                   setSlots((prev) =>
                     // The round is cleared with the programme: a round belongs
                     // to one programme, so keeping it would point at another.
-                    prev.map((s, idx) => (idx === i ? { programId: e.target.value, roundId: "" } : s))
-                  )
-                }
+                    prev.map((s, idx) => (idx === i ? { programId: e.target.value, roundId: firstFree } : s))
+                  );
+                }}
               >
                 <option value="">Program {i + 1}…</option>
                 {filteredPrograms.map((p) => (
@@ -149,8 +171,10 @@ export function NewApplicationForm({
                 >
                   {/* Optional: staff often add the application before the round
                       is settled, and forcing a guess would put a wrong date
-                      into the reminder cron. */}
-                  <option value="">No specific round yet</option>
+                      into the reminder cron. Withheld only when another slot
+                      already holds this programme with no round, since that is
+                      a slot in the unique key like any other. */}
+                  {noRoundFree && <option value="">No specific round yet</option>}
                   {rounds.map((r) => (
                     <option key={r.id} value={r.id ?? ""}>
                       {roundOptionLabel(r, today)}

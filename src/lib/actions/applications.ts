@@ -105,7 +105,13 @@ export async function createApplication(studentId: string, _prevState: unknown, 
   const { data, error } = await supabase.from("applications").insert(rows).select("id");
   if (error) {
     if (error.code === "23505") {
-      return { error: "This student already has an application for one of those programmes in this intake." };
+      // Since 0234 the key includes the round, so a clash means the same
+      // programme AND the same round — the same programme in a different round
+      // is allowed and is the normal way to go again after missing one.
+      return {
+        error:
+          "This student already has an application for one of those programmes in the same intake round. Choose a different round, or a different programme.",
+      };
     }
     return { error: error.message };
   }
@@ -275,11 +281,14 @@ export async function updateApplicationDetails(applicationId: string, studentId:
     })
     .eq("id", applicationId);
   if (error) {
-    // unique (student_id, university_id, program_id): the student already has
-    // an application for that programme, which is a sentence rather than a
-    // constraint name.
+    // The (student, cycle, university, programme, round) unique index: the
+    // student already has this exact application, which is a sentence rather
+    // than a constraint name. Round is part of the key since 0234, so this
+    // only fires when the round matches too.
     if (error.code === "23505") {
-      return { error: "This student already has an application for that programme at this university." };
+      return {
+        error: "This student already has an application for that programme in that intake round at this university.",
+      };
     }
     return { error: error.message };
   }
@@ -312,12 +321,19 @@ export async function addBackupPrograms(applicationId: string, studentId: string
   // the round_ids beside them and give a programme somebody else's round.
   const rawProgramIds = formData.getAll("program_ids").map(String);
   const rawRoundIds = formData.getAll("round_ids").map(String);
-  const seenProgram = new Set<string>();
+  // De-duplicated on the programme AND the round, not the programme alone.
+  // Since 0234 the same programme in two different rounds is two legitimate
+  // applications, so collapsing them on the programme would silently drop the
+  // second one.
+  const seenPair = new Set<string>();
   const picks: { program_id: string; round_id: string | null }[] = [];
   rawProgramIds.forEach((program_id, i) => {
-    if (!program_id || seenProgram.has(program_id)) return;
-    seenProgram.add(program_id);
-    picks.push({ program_id, round_id: (rawRoundIds[i] ?? "").trim() || null });
+    if (!program_id) return;
+    const round_id = (rawRoundIds[i] ?? "").trim() || null;
+    const key = `${program_id}__${round_id ?? ""}`;
+    if (seenPair.has(key)) return;
+    seenPair.add(key);
+    picks.push({ program_id, round_id });
   });
 
   if (picks.length === 0) return { error: "Choose at least one programme to add." };
@@ -349,19 +365,31 @@ export async function addBackupPrograms(applicationId: string, studentId: string
   // to the same programmes again on purpose; last year's row is not a clash.
   const duplicates = supabase
     .from("applications")
-    .select("program_id, program:programs(name)")
+    .select("program_id, round_id, program:programs(name), round:program_intake_rounds(label)")
     .eq("student_id", studentId)
     .eq("university_id", source.university_id)
     .in("program_id", programIds);
   const { data: already } = await (source.cycle_id
     ? duplicates.eq("cycle_id", source.cycle_id)
     : duplicates.is("cycle_id", null));
-  if ((already ?? []).length > 0) {
-    const names = (already ?? [])
-      .map((a) => (one(a.program as never) as { name?: string } | null)?.name)
-      .filter(Boolean)
-      .join(", ");
-    return { error: `Already applied for ${names || "that programme"} at this university in this intake.` };
+
+  // Keyed on the pair, matching the index. Flagging on the programme alone
+  // would now refuse exactly the thing this is meant to allow: a second
+  // application for the same programme in a different round.
+  const takenPairs = new Map(
+    (already ?? []).map((a) => {
+      const name = (one(a.program as never) as { name?: string } | null)?.name ?? "that programme";
+      const label = (one(a.round as never) as { label?: string } | null)?.label ?? null;
+      return [`${a.program_id}__${a.round_id ?? ""}`, label ? `${name} (${label})` : name];
+    })
+  );
+  const clashes = picks
+    .map((p) => takenPairs.get(`${p.program_id}__${p.round_id ?? ""}`))
+    .filter((v): v is string => Boolean(v));
+  if (clashes.length > 0) {
+    return {
+      error: `Already applied for ${[...new Set(clashes)].join(", ")} at this university in this intake. The same programme in a different round is fine — pick another round.`,
+    };
   }
 
   // Each round must belong to the programme it was chosen for. Enforced by the
@@ -393,7 +421,7 @@ export async function addBackupPrograms(applicationId: string, studentId: string
   );
   if (error) {
     if (error.code === "23505") {
-      return { error: "This student already has an application for one of those programmes." };
+      return { error: "This student already has an application for one of those programmes in the same intake round." };
     }
     return { error: error.message };
   }

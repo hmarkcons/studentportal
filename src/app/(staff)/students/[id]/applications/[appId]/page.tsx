@@ -31,7 +31,7 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
   const { data: app, error } = await supabase
     .from("applications")
     .select(
-      `id, current_stage, intake, deadline, application_fee, special_requirements, program_id, round_id, is_finalized,
+      `id, current_stage, intake, deadline, application_fee, special_requirements, program_id, round_id, is_finalized, cycle_id,
        university:universities(id, name, city, contact_email, destination:destinations(pipeline_stages, country_code, display_name, intake_mode, intake_seasons)),
        program:programs(id, name, page_link, requirements_link, application_portal_link),
        round:program_intake_rounds(id, label, start_date, application_deadline, sort_order)`
@@ -66,17 +66,51 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
     university?.id
       ? supabase
           .from("applications")
-          .select("id, program_id, program:programs(name)")
+          .select("id, program_id, round_id, cycle_id, program:programs(name)")
           .eq("student_id", id)
           .eq("university_id", university.id)
           .neq("id", appId)
-      : Promise.resolve({ data: [] as { id: string; program_id: string | null; program: unknown }[] }),
+      : Promise.resolve({
+          data: [] as { id: string; program_id: string | null; round_id: string | null; cycle_id: string | null; program: unknown }[],
+        }),
   ]);
 
-  const takenProgramIds = new Set(
-    [app.program_id, ...(siblingApps ?? []).map((a) => a.program_id)].filter(Boolean) as string[]
-  );
-  const availablePrograms = (universityPrograms ?? []).filter((p) => !takenProgramIds.has(p.id));
+  // Only this intake's applications block a programme. The query above is not
+  // scoped by cycle — the uniqueness rule is per cycle, so a programme applied
+  // for in a PREVIOUS intake was being hidden from the backup picker even
+  // though a fresh attempt at it is exactly what a re-applying student wants.
+  const sameCycle = (siblingApps ?? []).filter((a) => (a.cycle_id ?? null) === (app.cycle_id ?? null));
+
+  // Keyed on (programme, round), mirroring the unique index. A programme is no
+  // longer "taken" outright: since 0234 the same programme in a different round
+  // is a separate application, so what is taken is the pair.
+  const pairKey = (programId: string | null, roundId: string | null) => `${programId ?? ""}__${roundId ?? ""}`;
+  const takenPairs = new Set<string>([
+    pairKey(app.program_id, app.round_id),
+    ...sameCycle.map((a) => pairKey(a.program_id, a.round_id)),
+  ]);
+
+  // Each programme with only the round slots still free — including the "no
+  // specific round" slot, which the index treats as a value of its own.
+  // Offering a round that is already used would guarantee a duplicate error on
+  // submit, so the filtering happens here rather than being discovered there.
+  const availablePrograms = (universityPrograms ?? [])
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      rounds: ((p.rounds ?? []) as ProgramRound[]).filter((r) => r.id && !takenPairs.has(pairKey(p.id, r.id))),
+      allowNoRound: !takenPairs.has(pairKey(p.id, null)),
+    }))
+    .filter((p) => p.rounds.length > 0 || p.allowNoRound);
+
+  // Which rounds the student's OTHER applications already occupy, so the
+  // Details form does not offer a round that would clash on save.
+  const roundsTakenElsewhere: Record<string, string[]> = {};
+  for (const a of sameCycle) {
+    if (!a.program_id || !a.round_id) continue;
+    (roundsTakenElsewhere[a.program_id] ??= []).push(a.round_id);
+  }
+
   const siblings = (siblingApps ?? []).map((a) => ({
     id: a.id,
     name: (one(a.program as never) as { name?: string } | null)?.name ?? null,
@@ -203,6 +237,7 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
           programId={app.program_id}
           roundId={app.round_id}
           programs={universityPrograms ?? []}
+          roundsTakenElsewhere={roundsTakenElsewhere}
           isFinalized={app.is_finalized}
           universityName={university?.name ?? "this university"}
           today={karachiToday()}
