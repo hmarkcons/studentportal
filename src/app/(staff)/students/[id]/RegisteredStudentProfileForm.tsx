@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { dobBounds, dateOfBirthError } from "@/lib/dateOfBirth";
 import { phoneBounds, phoneError } from "@/lib/phoneNumber";
+import { CourseInterestPicker, type FieldGroupOption } from "@/components/CourseInterestPicker";
 
 type Lead = {
   full_name: string;
@@ -17,6 +18,8 @@ type Lead = {
   current_qualification: string | null;
   level_applying_for: string | null;
   course_of_interest: string | null;
+  interest_field_groups: string[] | null;
+  interest_core_fields: string[] | null;
   date_of_birth: string | null;
   address: string | null;
   home_phone: string | null;
@@ -48,11 +51,14 @@ export function RegisteredStudentProfileForm({
   revalidateTo,
   lead,
   profile,
+  courseInterestOptions,
 }: {
   studentId: string;
   revalidateTo: string;
   lead: Lead;
   profile: Profile;
+  /** Field groups with their specifics, for the countries this student is registered for. */
+  courseInterestOptions: FieldGroupOption[];
 }) {
   const action = updateRegisteredStudentProfile.bind(null, studentId, revalidateTo);
   // Not useActionState: React clears a form once its action finishes, and it
@@ -136,10 +142,20 @@ export function RegisteredStudentProfileForm({
               ))}
             </Select>
           </label>
-          <label className="col-span-full flex flex-col gap-1 text-xs text-muted">
+          <div className="col-span-full flex flex-col gap-1 text-xs text-muted">
             Course of interest
-            <Input name="course_of_interest" defaultValue={lead.course_of_interest ?? ""} />
-          </label>
+            {/* Chosen from the student's own countries rather than typed. The
+                free-text box it replaces is why one student's interest reads
+                "Mechanical/Mechatronics/Robotics/Industrial/ Energy
+                Engineering/Relevant Fields" — several fields crammed into one
+                string that nothing can filter or report on. */}
+            <CourseInterestPicker
+              options={courseInterestOptions}
+              selectedGroups={lead.interest_field_groups ?? []}
+              selectedSpecifics={lead.interest_core_fields ?? []}
+              legacyText={lead.course_of_interest}
+            />
+          </div>
           <label className="flex flex-col gap-1 text-xs text-muted">
             Date of birth
             <Input name="date_of_birth" type="date" defaultValue={lead.date_of_birth ?? ""} required {...dobBounds()} />

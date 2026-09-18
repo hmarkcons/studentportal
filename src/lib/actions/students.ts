@@ -46,7 +46,21 @@ export async function updateRegisteredStudentProfile(
       platform_source: String(formData.get("platform_source") ?? "").trim() || null,
       current_qualification: String(formData.get("current_qualification") ?? "").trim() || null,
       level_applying_for: String(formData.get("level_applying_for") ?? "") || null,
-      course_of_interest: String(formData.get("course_of_interest") ?? "").trim() || null,
+      // course_of_interest is NOT written here any more. It is derived from the
+      // two selections below by the sync_course_of_interest trigger (0243), so
+      // that the agreement PDF and the lead pages — which both read that
+      // column — keep working without each learning about arrays.
+      //
+      // The marker distinguishes "the picker was on this form and everything
+      // was unticked" from "this form has no picker". Only the first should
+      // clear a student's interests; without it, any future form that posts to
+      // this action would wipe them.
+      ...(formData.has("course_interest_present")
+        ? {
+            interest_field_groups: formData.getAll("interest_field_groups").map(String).filter(Boolean),
+            interest_core_fields: formData.getAll("interest_core_fields").map(String).filter(Boolean),
+          }
+        : {}),
       date_of_birth,
       address: String(formData.get("address") ?? "").trim() || null,
       home_phone: String(formData.get("home_phone") ?? "").trim() || null,

@@ -11,17 +11,28 @@ export default async function StudentProfileTab(props: PageProps<"/students/[id]
   const { id } = await props.params;
   const supabase = await createClient();
 
-  const [{ data: student }, { data: profile }, { data: qualifications }, { data: testScores }] = await Promise.all([
+  const [
+    { data: student },
+    { data: profile },
+    { data: qualifications },
+    { data: testScores },
+    { data: courseInterestOptions },
+  ] = await Promise.all([
     supabase
       .from("students")
       .select(
-        "full_name, contact_number, email, platform_source, current_qualification, level_applying_for, course_of_interest, date_of_birth, address, home_phone"
+        "full_name, contact_number, email, platform_source, current_qualification, level_applying_for, course_of_interest, interest_field_groups, interest_core_fields, date_of_birth, address, home_phone"
       )
       .eq("id", id)
       .maybeSingle(),
     supabase.from("student_profiles").select("*").eq("student_id", id).maybeSingle(),
     supabase.from("student_qualifications").select("*").eq("student_id", id),
     supabase.from("student_test_scores").select("id, test_type, score, test_date, custom_test_name").eq("student_id", id).order("test_date", { ascending: false }),
+    // One RPC rather than lead_destinations -> universities -> programs read
+    // back and reduced here: Germany alone has 421 programmes, so a student
+    // with three countries would fetch about a thousand rows to derive a few
+    // dozen labels. See 0244.
+    supabase.rpc("course_interest_options", { lead: id }),
   ]);
 
   const revalidateTo = `/students/${id}/profile`;
@@ -47,7 +58,15 @@ export default async function StudentProfileTab(props: PageProps<"/students/[id]
           </div>
         </div>
 
-        {student && <RegisteredStudentProfileForm studentId={id} revalidateTo={revalidateTo} lead={student} profile={profile} />}
+        {student && (
+          <RegisteredStudentProfileForm
+            studentId={id}
+            revalidateTo={revalidateTo}
+            lead={student}
+            profile={profile}
+            courseInterestOptions={courseInterestOptions ?? []}
+          />
+        )}
       </Card>
 
       <Card>
