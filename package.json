@@ -11,6 +11,9 @@
     "test:unit": "node --test --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/*-test.mjs",
     "test": "npm run test:unit"
   },
+  "overrides": {
+    "uuid": "^11.1.1"
+  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",
     "@react-pdf/renderer": "^4.8.1",
