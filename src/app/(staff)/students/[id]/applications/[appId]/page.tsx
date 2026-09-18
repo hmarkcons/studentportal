@@ -18,6 +18,7 @@ import { hasPermission } from "@/lib/auth/permissions";
 import { InterviewSection, type InterviewRow } from "@/components/InterviewSection";
 import { isIntakeMode, type IntakeMode } from "@/lib/intake";
 import { karachiToday } from "@/lib/calendarDates";
+import { ProgramDates } from "@/components/ProgramDates";
 import type { ProgramRound } from "@/lib/programRounds";
 
 function one<T>(v: T | T[] | null) {
@@ -116,6 +117,17 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
     name: (one(a.program as never) as { name?: string } | null)?.name ?? null,
   }));
 
+  // This application's programme's rounds, for the header. Taken from the
+  // university's programme list, which already carries them for the Details
+  // form, rather than embedding them a second time on the application row.
+  const programRounds = ((universityPrograms ?? []).find((p) => p.id === app.program_id)?.rounds ??
+    []) as ProgramRound[];
+
+  // Karachi's business day, read once on the server: a round is closed on the
+  // office's calendar, not the viewer's, and no component may read the clock
+  // during render.
+  const today = karachiToday();
+
   const revalidateTo = `/students/${id}/applications/${appId}`;
 
   await ensureStudentDocumentRequirements(id);
@@ -188,12 +200,33 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
         &larr; Back to applications
       </Link>
 
-      <div className="mt-4 mb-6 flex items-center justify-between">
+      <div className="mt-4 mb-6 flex items-start justify-between">
         <div>
           <h2 className="text-lg font-semibold text-ink">{university?.name ?? "University"}</h2>
           <p className="text-sm text-muted">
             {program?.name ?? "No program selected"} {university?.city && `· ${university.city}`}
           </p>
+          {/* Which round this application is for, against the programme's
+              others. Part of the page's identity: a student can hold two
+              applications for the same programme in different rounds (0234),
+              and without this the two pages are identical down to the heading.
+              Every round is listed because staff are judging one against
+              another — the closed one above an open one is the reason a second
+              application exists. */}
+          {programRounds.length > 0 && (
+            <ProgramDates
+              rounds={programRounds}
+              today={today}
+              showAll
+              highlightRoundId={app.round_id}
+              className="mt-1"
+            />
+          )}
+          {programRounds.length > 0 && !app.round_id && (
+            <p className="mt-1 text-xs text-warning">
+              No intake round chosen — this application&rsquo;s dates fall back to the programme&rsquo;s first round.
+            </p>
+          )}
         </div>
         <Badge tone="info">{app.current_stage.replace(/_/g, " ")}</Badge>
       </div>
@@ -240,7 +273,7 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
           roundsTakenElsewhere={roundsTakenElsewhere}
           isFinalized={app.is_finalized}
           universityName={university?.name ?? "this university"}
-          today={karachiToday()}
+          today={today}
         />
         {/* The office applies to two or three programmes at one university.
             Creation handles that with its "+ Add another program" slots;
@@ -253,7 +286,7 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
             universityName={university?.name ?? "this university"}
             available={availablePrograms}
             siblings={siblings}
-            today={karachiToday()}
+            today={today}
           />
         </div>
       </Card>
