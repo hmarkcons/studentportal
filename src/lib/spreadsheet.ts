@@ -5,28 +5,26 @@
 // accepted: existing files and exports from other systems are csv, and
 // refusing them to force a re-save would be a pointless obstacle.
 //
-// ---------------------------------------------------------------------------
-// If you are here to upgrade exceljs: check whether package.json's `overrides`
-// entry can go with it.
-//
-// exceljs declares uuid ^8.3.0, and uuid before 11.1.1 carries
-// GHSA-w5hq-g745-h8pq. The override forces the fixed uuid under exceljs
-// instead, because npm's own remedy was a downgrade to exceljs 3.4.0 — which
-// would cost the dropdowns this whole flow is built on. It is safe because
-// exceljs touches uuid in exactly one file (cf-ext/cf-rule-ext-xform.js, for
-// conditional-formatting ids) via the named `v4` export, unchanged since uuid
-// 7, and nothing here writes conditional formatting at all.
-//
-// As of Sept 2026 there is nothing to upgrade TO: 4.4.0 is still `latest`
-// (Oct 2023), and the one newer publish, 4.4.1-prerelease.0 (Dec 2024), still
-// declares uuid ^8.3.0. So the override stays until exceljs widens that range
-// — at which point delete it and run `npm audit`.
-// ---------------------------------------------------------------------------
+// Reading is read-excel-file's job and writing is write-excel-file's, both
+// actively maintained and between them pulling only fflate and a SAX parser.
+// They replaced exceljs, which had not been released since Oct 2023 and whose
+// own remedy for a uuid advisory was a downgrade that would have cost the
+// dropdowns. The one thing neither does is data validation — see
+// src/lib/xlsxDropdowns.ts.
 
 export type SheetRow = Record<string, string>;
 
 /** The sheet the template writes its data to; falls back to the first one. */
 const PREFERRED_SHEET = "Students";
+
+/**
+ * Enough of the template's headers to tell a data sheet from a helper one.
+ *
+ * Only needed because read-excel-file reports every sheet without saying which
+ * are hidden — the old reader could prefer "the first visible sheet", and the
+ * template's own list of dropdown values sits on a hidden one.
+ */
+const KNOWN_HEADERS = ["full_name", "email", "contact_number", "country_of_interest", "assigned_counselor"];
 
 function cellText(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -55,38 +53,38 @@ function cellText(value: unknown): string {
  * "Full_Name" still lines up.
  */
 export async function parseXlsx(file: File): Promise<SheetRow[]> {
-  const ExcelJS = (await import("exceljs")).default;
-  const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(await file.arrayBuffer());
+  const readXlsxFile = (await import("read-excel-file/node")).default;
+  // Buffer, not the File: the node build takes a Buffer or a stream.
+  const sheets = await readXlsxFile(Buffer.from(await file.arrayBuffer()));
+  if (sheets.length === 0) return [];
 
-  const sheet =
-    wb.worksheets.find((w) => w.name === PREFERRED_SHEET) ??
-    wb.worksheets.find((w) => w.state === "visible") ??
-    wb.worksheets[0];
-  if (!sheet) return [];
-
-  const headerRow = sheet.getRow(1);
-  const headers: string[] = [];
-  headerRow.eachCell({ includeEmpty: true }, (cell, col) => {
-    headers[col] = cellText(cell.value).toLowerCase();
+  // Our own template always names the data sheet. Failing that, take the first
+  // sheet whose header row is recognisable, which is a better guess than the
+  // first sheet outright: the template carries a "Lists" sheet of dropdown
+  // values, and a workbook saved from elsewhere may lead with a cover sheet.
+  const named = sheets.find((s) => s.sheet === PREFERRED_SHEET);
+  const recognisable = sheets.find((s) => {
+    const headers = (s.data[0] ?? []).map((v) => cellText(v).toLowerCase());
+    return KNOWN_HEADERS.some((h) => headers.includes(h));
   });
+  const data = (named ?? recognisable ?? sheets[0]).data;
+
+  const headers = (data[0] ?? []).map((v) => cellText(v).toLowerCase());
   if (headers.filter(Boolean).length === 0) return [];
 
   const rows: SheetRow[] = [];
-  sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-    if (rowNumber === 1) return;
+  for (const row of data.slice(1)) {
     const record: SheetRow = {};
     let any = false;
-    row.eachCell({ includeEmpty: true }, (cell, col) => {
-      const header = headers[col];
+    headers.forEach((header, i) => {
       if (!header) return;
-      const text = cellText(cell.value);
+      const text = cellText(row[i]);
       record[header] = text;
       if (text) any = true;
     });
     // Excel keeps formatted-but-empty rows; they are not data.
     if (any) rows.push(record);
-  });
+  }
 
   return rows;
 }
