@@ -16,7 +16,9 @@
 // member who still holds history stays visible and marked — dropping them
 // would delete their registrations from last month's totals.
 
-import { hasRole } from "@/lib/auth/roles";
+// Relative because scripts/lead-owners-test.mjs imports this file directly
+// under plain Node, which cannot resolve the "@/" alias.
+import { hasRole } from "./auth/roles.ts";
 import type { StaffRole } from "./constants";
 
 export const UNASSIGNED_ID = "unassigned";

@@ -13,26 +13,36 @@ import {
 // catalogue date instead. On production every dated application had a null
 // catalogue date, so nothing was ever notified or shown.
 test("the application's own deadline wins", () => {
-  assert.equal(applicationDeadline("2026-09-14", "2026-12-01"), "2026-09-14");
-  assert.equal(deadlineSource("2026-09-14", "2026-12-01"), "application");
+  assert.equal(applicationDeadline("2026-09-14", "2026-10-01", "2026-12-01"), "2026-09-14");
+  assert.equal(deadlineSource("2026-09-14", "2026-10-01", "2026-12-01"), "application");
 });
 
-test("the programme's catalogue date is the fallback, not the source of truth", () => {
-  assert.equal(applicationDeadline(null, "2026-12-01"), "2026-12-01");
-  assert.equal(deadlineSource(null, "2026-12-01"), "programme");
+// Added with the intake rounds (0232/0233). programs.application_deadline is
+// only a mirror of the FIRST round, so an application aimed at round 2 was
+// being chased on round 1's date — usually one already past.
+test("the chosen round's date beats the programme's catalogue date", () => {
+  assert.equal(applicationDeadline(null, "2026-10-01", "2026-12-01"), "2026-10-01");
+  assert.equal(deadlineSource(null, "2026-10-01", "2026-12-01"), "round");
 });
 
-test("an application with neither has no deadline", () => {
-  assert.equal(applicationDeadline(null, null), null);
-  assert.equal(applicationDeadline("", "  "), null);
-  assert.equal(deadlineSource(null, null), null);
+test("the programme's catalogue date is the last fallback, not the source of truth", () => {
+  assert.equal(applicationDeadline(null, null, "2026-12-01"), "2026-12-01");
+  assert.equal(deadlineSource(null, null, "2026-12-01"), "programme");
 });
 
-test("a timestamp is reduced to its date", () => {
+test("an application with none of the three has no deadline", () => {
+  assert.equal(applicationDeadline(null, null, null), null);
+  assert.equal(applicationDeadline("", "  ", "   "), null);
+  assert.equal(deadlineSource(null, null, null), null);
+});
+
+test("a timestamp is reduced to its date, from whichever source", () => {
   // applications.deadline is a date column, but PostgREST hands back
   // "2026-09-14T19:00:00.000Z" for some clients, and the comparisons
   // downstream are all string compares against YYYY-MM-DD.
-  assert.equal(applicationDeadline("2026-09-14T19:00:00.000Z", null), "2026-09-14");
+  assert.equal(applicationDeadline("2026-09-14T19:00:00.000Z", null, null), "2026-09-14");
+  assert.equal(applicationDeadline(null, "2026-10-01T19:00:00.000Z", null), "2026-10-01");
+  assert.equal(applicationDeadline(null, null, "2026-12-01T19:00:00.000Z"), "2026-12-01");
 });
 
 // ------------------------------------------------------------- the counting

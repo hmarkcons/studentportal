@@ -1,4 +1,8 @@
-import { STAFF_ROLES, type StaffRole } from "@/lib/constants";
+// Relative, not "@/lib/constants", on purpose: scripts/*-test.mjs import
+// src/lib modules directly under plain Node, which has no TypeScript path
+// aliases. Every unit-tested module here is alias-free for that reason, and
+// this file is now in that chain via leadOwners.
+import { STAFF_ROLES, type StaffRole } from "../constants.ts";
 
 /**
  * Which roles a staff member holds.
