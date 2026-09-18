@@ -6,33 +6,21 @@
 --
 -- Apply only AFTER the app that reads staff_compensation is deployed.
 
--- Anything edited between 0249 and this migration was written to the old
--- columns by the still-deployed app, so re-sync before dropping rather than
--- trusting the earlier backfill to still be current.
-update public.staff_compensation k set
-  monthly_salary = s.monthly_salary,
-  currency = s.currency,
-  allowance = s.allowance,
-  commission_rate_general = s.commission_rate_general,
-  commission_rate_public_universities = s.commission_rate_public_universities,
-  commission_type_general = s.commission_type_general,
-  commission_type_public_universities = s.commission_type_public_universities,
-  bonus_eligible = s.bonus_eligible,
-  bonus_rate_percent = s.bonus_rate_percent
-from public.staff s
-where s.id = k.staff_id
-  and (s.monthly_salary is distinct from k.monthly_salary
-    or s.currency is distinct from k.currency
-    or s.allowance is distinct from k.allowance
-    or s.commission_rate_general is distinct from k.commission_rate_general
-    or s.commission_rate_public_universities is distinct from k.commission_rate_public_universities
-    or s.commission_type_general is distinct from k.commission_type_general
-    or s.commission_type_public_universities is distinct from k.commission_type_public_universities
-    or s.bonus_eligible is distinct from k.bonus_eligible
-    or s.bonus_rate_percent is distinct from k.bonus_rate_percent);
-
--- Same guard as 0249. The drop is irreversible; it does not run unless every
--- staff member has a compensation row holding exactly their current values.
+-- This migration deliberately does NOT re-copy from the old columns before
+-- dropping them. By the time it runs the deployed app writes
+-- staff_compensation and no longer touches staff's pay columns, so those
+-- columns are the stale copy — copying from them would silently revert any pay
+-- set since 0249.
+--
+-- So the two are required to agree instead, and the migration stops if they
+-- don't. Disagreement means pay was changed in the window between 0249 and the
+-- deploy: staff_compensation is authoritative from the deploy onwards, and
+-- reconciling the difference is a judgement call for whoever is applying this,
+-- not something to paper over here. (Checked before applying: 0 of 6 rows
+-- differed.)
+--
+-- The drop is irreversible; it does not run unless every staff member has a
+-- compensation row holding exactly their current values.
 do $$
 declare
   v_staff int;
@@ -58,7 +46,7 @@ begin
      or s.bonus_eligible is distinct from k.bonus_eligible
      or s.bonus_rate_percent is distinct from k.bonus_rate_percent;
   if v_bad > 0 then
-    raise exception '% staff rows do not match staff_compensation', v_bad;
+    raise exception '% staff rows do not match staff_compensation — reconcile before dropping (staff_compensation is the authority once the app is deployed)', v_bad;
   end if;
 end $$;
 
