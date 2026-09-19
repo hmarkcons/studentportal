@@ -276,10 +276,17 @@ try {
           Number(afterReprice.consultancy_fee) === FEE && (repriced.data?.length ?? 0) === 0,
           `fee=${afterReprice.consultancy_fee} rows=${repriced.data?.length ?? 0}`);
 
-        // Reading is untouched on purpose: a processing officer still sees the
-        // invoices of the students they handle.
-        const { data: readable } = await asThem.from("invoices").select("id").eq("id", invoice.id).maybeSingle();
-        ok(`...but a ${role} can still read it`, Boolean(readable));
+        // Reading is untouched on purpose, and worth proving for processing:
+        // 0255 must not read as locking the processing team out of the
+        // students they handle. Not asserted for a counselor, who is excluded
+        // from this student by invoices_select's staff_can_view_student — a
+        // different rule, about whose students they are, that 0255 never
+        // touched.
+        if (role === "processing") {
+          const { data: readable } = await asThem.from("invoices").select("id").eq("id", invoice.id).maybeSingle();
+          ok("...but processing can still read it", Boolean(readable),
+            "0255 locked the processing team out of their own students' invoices");
+        }
       }
 
       // ------------------------------------------- the tokenised receipt
