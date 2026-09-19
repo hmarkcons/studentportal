@@ -18,11 +18,17 @@
 //                  invoices as delivered that nobody had received.
 //   payment        marking an installment paid, and what the invoice then
 //                  reports as paid and outstanding.
+//   the receipt    a tokenised link is the one public, unauthenticated surface
+//                  that serves a named person's financial document: it must
+//                  open without a session, refuse a guess, refuse an expired
+//                  link, die when a newer one is issued, and never be cached.
+//   the portal     what the student is actually shown — the total, what they
+//                  have paid, what is left, and when each instalment is due.
 //   deleting       the invoice and its installments together.
 //
 // The agreement is set up directly rather than through its own UI: it is the
 // invoice under test here, and check:agreement already drives that path.
-import { clients, fixtures, openBrowser, signIn, apiAs, requireConfirmation, BASE } from "./verify-portal-lib.mjs";
+import { clients, fixtures, openBrowser, signIn, apiAs, requireConfirmation, BASE, FIXTURE_PASSWORD } from "./verify-portal-lib.mjs";
 
 requireConfirmation("check:invoice");
 
@@ -65,9 +71,16 @@ const FEE = 1800;
 const ADMIN_CHARGE = 300;
 const FIRST_DUE = "2026-10-05";
 
+const PORTAL_EMAIL = "zztmp-invoice-student@hmark-test.local";
 let studentId = null;
+let portalUserId = null;
 
 try {
+  const { data: leftovers } = await admin.auth.admin.listUsers({ perPage: 1000 });
+  for (const u of leftovers?.users ?? []) {
+    if (u.email === PORTAL_EMAIL) await admin.auth.admin.deleteUser(u.id).catch(() => {});
+  }
+
   const sup = await fx.staff("invsuper", ["super_admin"]);
   const page = await signIn(browser, sup.email);
 
@@ -244,6 +257,96 @@ try {
         afterAttempt.status !== "paid" && (attempt.data?.length ?? 0) === 0,
         `rows=${attempt.data?.length ?? 0} status=${afterAttempt.status}`);
 
+      // ------------------------------------------- the tokenised receipt
+      // Students may have no portal login at all, so the receipt is reached
+      // by an unguessable token with an expiry rather than a session. That
+      // makes it the one public, unauthenticated surface in the system that
+      // serves a named person's financial document.
+      console.log("\n--- the receipt link ---");
+      const asSuper = await apiAs(url, anonKey, sup.email);
+      const { data: token, error: tokenError } = await asSuper.rpc("issue_receipt_token", {
+        p_invoice_id: invoice.id, p_days: 90,
+      });
+      ok("a receipt token can be issued", Boolean(token), tokenError?.message ?? "");
+
+      if (token) {
+        const res = await fetch(`${BASE}/receipt/${token}`);
+        const body = Buffer.from(await res.arrayBuffer());
+        ok("the link opens the receipt with no session at all", res.status === 200, String(res.status));
+        ok("...as a PDF", body.subarray(0, 4).toString() === "%PDF", body.subarray(0, 8).toString());
+        ok("...shown in the tab rather than downloaded, named by the invoice number",
+          (res.headers.get("content-disposition") ?? "").includes(`inline; filename="${invoice.invoice_number}.pdf"`),
+          String(res.headers.get("content-disposition")));
+        // No cookie is involved, so a shared cache holding this would serve
+        // one student's invoice to whoever asked next.
+        ok("...never cached by anything in between",
+          /no-store/.test(res.headers.get("cache-control") ?? ""), String(res.headers.get("cache-control")));
+        ok("...and kept out of search results",
+          /noindex/.test(res.headers.get("x-robots-tag") ?? ""), String(res.headers.get("x-robots-tag")));
+
+        const guessed = await fetch(`${BASE}/receipt/11111111-2222-3333-4444-555555555555`);
+        ok("a guessed token opens nothing", guessed.status === 404, String(guessed.status));
+        const junk = await fetch(`${BASE}/receipt/not-a-token`);
+        ok("...and neither does a string that was never a token", junk.status === 404, String(junk.status));
+
+        // Issuing a new link invalidates the one already in the student's
+        // inbox — otherwise every receipt ever emailed stays live for 90 days.
+        const { data: fresh } = await asSuper.rpc("issue_receipt_token", { p_invoice_id: invoice.id, p_days: 90 });
+        ok("issuing a new link kills the previous one",
+          (await fetch(`${BASE}/receipt/${token}`)).status === 404 && fresh !== token);
+        ok("...and the new one works", (await fetch(`${BASE}/receipt/${fresh}`)).status === 200);
+
+        await admin.from("invoices")
+          .update({ receipt_token_expires_at: new Date(Date.now() - 86400_000).toISOString() })
+          .eq("id", invoice.id);
+        const expired = await fetch(`${BASE}/receipt/${fresh}`);
+        const expiredText = await expired.text();
+        ok("an expired link is refused, and says so", expired.status === 404 && /expired/i.test(expiredText),
+          `${expired.status} ${expiredText.slice(0, 120)}`);
+      }
+
+      // ------------------------------------------- what the student sees
+      console.log("\n--- the student's payments page ---");
+      const { data: openedPortal } = await admin.from("leads").select("portal_active").eq("id", studentId).single();
+      ok("a signed agreement has opened their portal", openedPortal.portal_active === true);
+
+      const { data: made } = await admin.auth.admin.createUser({
+        email: PORTAL_EMAIL, password: FIXTURE_PASSWORD, email_confirm: true,
+      });
+      if (made?.user) {
+        portalUserId = made.user.id;
+        await admin.from("leads").update({ auth_user_id: portalUserId }).eq("id", studentId);
+
+        const studentPage = await browser.newPage({ viewport: { width: 1100, height: 1600 } });
+        await studentPage.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
+        await studentPage.fill('input[type="email"]', PORTAL_EMAIL);
+        await studentPage.fill('input[type="password"]', FIXTURE_PASSWORD);
+        await studentPage.click('button[type="submit"]');
+        await studentPage.waitForURL((u) => !u.pathname.includes("/login"), { timeout: 40000 });
+        await studentPage.goto(`${BASE}/portal/payments`, { waitUntil: "domcontentloaded" });
+        const seen = await studentPage.locator("body").innerText();
+
+        ok("the student can see the invoice", seen.includes(invoice.invoice_number),
+          seen.replace(/\s+/g, " ").slice(0, 300));
+        ok("...its total", /EUR 2,190\.00/.test(seen), seen.replace(/\s+/g, " ").slice(0, 400));
+        // 930 of 2190 paid, so 1260 left.
+        ok("...what they have paid", /EUR 930\.00/.test(seen));
+        ok("...and what is left", /EUR 1,260\.00/.test(seen));
+        ok("...told why the first instalment is the big one",
+          /includes the EUR 300\.00 admin fee/.test(seen), seen.replace(/\s+/g, " ").slice(0, 600));
+
+        // The last instalment has no date on purpose — it falls due on the
+        // admission. This page did not select due_condition, so the one
+        // instalment whose timing is most carefully explained everywhere else
+        // was shown to the student as "No due date".
+        ok("...and when the last instalment actually falls due",
+          /admission approval from your first public university/i.test(seen)
+          && !/No due date/.test(seen),
+          seen.replace(/\s+/g, " ").slice(-500));
+
+        await studentPage.close();
+      }
+
       // --------------------------------------------------------- deleting
       console.log("\n--- deleting it ---");
       await page.reload({ waitUntil: "domcontentloaded" });
@@ -278,6 +381,7 @@ try {
     await admin.from("invoices").delete().eq("student_id", studentId);
     await admin.from("agreements").delete().eq("student_id", studentId);
   }
+  if (portalUserId) await admin.auth.admin.deleteUser(portalUserId).catch(() => {});
   const n = await fx.cleanup();
   await browser.close();
   console.log(`\n${pass} passed, ${fail} failed  (${n} fixtures removed)`);

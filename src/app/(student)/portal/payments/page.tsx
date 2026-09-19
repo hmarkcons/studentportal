@@ -51,7 +51,12 @@ export default async function PortalPaymentsPage() {
   const { data: installments } = invoiceIds.length
     ? await supabase
         .from("invoice_installments")
-        .select("id, invoice_id, installment_no, amount, amount_paid, status, due_date, paid_date, carried_from_installment_no, carried_part_paid, carried_paid_date")
+        // due_condition matters as much as due_date: the last instalment of a
+        // two- or three-payment plan deliberately has no date and falls due on
+        // the admission instead (installmentDueConditions). Without it this
+        // page told the student "No due date" for the one instalment whose
+        // timing is most carefully explained everywhere else.
+        .select("id, invoice_id, installment_no, amount, amount_paid, status, due_date, due_condition, paid_date, carried_from_installment_no, carried_part_paid, carried_paid_date")
         .in("invoice_id", invoiceIds)
         .order("installment_no", { ascending: true })
     : { data: [] };
@@ -183,14 +188,20 @@ export default async function PortalPaymentsPage() {
                             )}
                           </span>
                           <span className="flex shrink-0 items-center gap-2">
-                            <span className={`whitespace-nowrap text-xs ${overdue ? "text-danger" : "text-muted"}`}>
+                            {/* Not nowrap when it is a condition: the sentence
+                                is far longer than a date and has to wrap. */}
+                            <span className={`text-xs ${i.due_condition && i.status !== "paid" ? "" : "whitespace-nowrap"} ${overdue ? "text-danger" : "text-muted"}`}>
                               {i.status === "paid"
                                 ? i.paid_date
                                   ? `Paid ${formatDateOnly(i.paid_date, LONG_DATE)}`
                                   : "Paid"
                                 : i.due_date
                                   ? `Due ${formatDateOnly(i.due_date, LONG_DATE)}`
-                                  : "No due date"}
+                                  // The condition reads as a sentence of its
+                                  // own ("On admission approval from your
+                                  // first public university"), so no "Due"
+                                  // prefix in front of it.
+                                  : (i.due_condition ?? "No due date")}
                             </span>
                             <Badge tone={i.status === "paid" ? "success" : overdue ? "danger" : "warning"}>
                               {i.status === "paid" ? "Paid" : overdue ? "Overdue" : i.status === "partial" ? "Part paid" : "Due"}
