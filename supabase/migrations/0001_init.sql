@@ -1,4 +1,9 @@
--- Case Flow — initial schema, RLS policies, and document checklist seed data.
+-- HMARK Student Portal CRM — initial schema, RLS policies, and document
+-- checklist seed data. Written while the product was called "Case Flow".
+--
+-- Superseded: 0005 tears this schema down and rebuilds it. Nothing defined here
+-- still exists, so read it as history rather than as the current model.
+--
 -- Run this once in the Supabase dashboard: SQL Editor -> New query -> paste -> Run.
 
 -- ---------------------------------------------------------------------------

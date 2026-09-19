@@ -1,4 +1,6 @@
--- HMARK CRM rebuild — step 1: tear down the old "Case Flow" schema (0001-0004).
+-- HMARK Student Portal CRM rebuild — step 1: tear down the old "Case Flow"
+-- schema (0001-0004). That name is deliberate: it is what 0001-0004 built, and
+-- what this migration removes.
 -- Confirmed with the user that no real data needs to survive this reset.
 -- Run after 0004_student_counselor_visibility.sql.
 

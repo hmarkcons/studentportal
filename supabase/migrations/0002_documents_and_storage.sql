@@ -1,4 +1,9 @@
--- Case Flow — document tracker storage + auto-seeded checklists.
+-- HMARK Student Portal CRM — document tracker storage + auto-seeded checklists.
+-- Written while the product was called "Case Flow".
+--
+-- Superseded: 0005 tears this schema down and rebuilds it. Read it as history
+-- rather than as the current model.
+--
 -- Run after 0001_init.sql: SQL Editor -> New query -> paste -> Run.
 
 -- ---------------------------------------------------------------------------

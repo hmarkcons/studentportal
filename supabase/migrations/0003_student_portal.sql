@@ -1,4 +1,10 @@
--- Case Flow — Phase 2: student self-service portal.
+-- HMARK Student Portal CRM — the student self-service portal, as first built.
+-- Written while the product was called "Case Flow", under a "Phase 2" plan that
+-- the current three-module scope replaced.
+--
+-- Superseded: 0005 tears this schema down and rebuilds it. Read it as history
+-- rather than as the current model.
+--
 -- Adds a student's own auth account (linked via students.auth_user_id) with
 -- tightly scoped access: their own case + document checklist + timeline,
 -- and upload rights limited to setting a document to "submitted" — never
