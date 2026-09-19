@@ -381,8 +381,10 @@ try {
     await admin.from("invoices").delete().eq("student_id", studentId);
     await admin.from("agreements").delete().eq("student_id", studentId);
   }
-  if (portalUserId) await admin.auth.admin.deleteUser(portalUserId).catch(() => {});
   const n = await fx.cleanup();
+  // After the lead, not before: leads.auth_user_id still references this login
+  // until the lead goes, so deleting it first fails and the catch hides that.
+  if (portalUserId) await admin.auth.admin.deleteUser(portalUserId).catch(() => {});
   await browser.close();
   console.log(`\n${pass} passed, ${fail} failed  (${n} fixtures removed)`);
   process.exitCode = fail ? 1 : 0;

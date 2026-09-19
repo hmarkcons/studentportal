@@ -66,6 +66,7 @@ const waitForAgreement = async (page, studentId, done, seconds = 45) => {
 
 const PDF_BYTES = Buffer.from("%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n");
 const students = [];
+let portalUserId = null;
 const STUDENT_EMAIL = "zztmp-esign-student@hmark-test.local";
 
 async function makeStudent(label, counselorId) {
@@ -739,7 +740,7 @@ try {
       }
     }
     await studentPage.close();
-    await admin.auth.admin.deleteUser(made.user.id).catch(() => {});
+    portalUserId = made.user.id;
   }
 
   await page.close();
@@ -752,6 +753,9 @@ try {
     await admin.from("agreements").delete().eq("student_id", id);
   }
   const n = await fx.cleanup();
+  // After the lead, not before: leads.auth_user_id still references this login
+  // until the lead goes, so deleting it first fails and the catch hides that.
+  if (portalUserId) await admin.auth.admin.deleteUser(portalUserId).catch(() => {});
   await browser.close();
   console.log(`\n${pass} passed, ${fail} failed  (${n} fixtures removed)`);
   process.exitCode = fail ? 1 : 0;
