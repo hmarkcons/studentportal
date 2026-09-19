@@ -15,6 +15,12 @@
 //                      -> staff approve again. Run for the video and for the
 //                      signed agreement, since each is a separate branch in
 //                      the RPC and in both UIs.
+//   editing            correct an unsigned agreement's fees without touching
+//                      the PDF, then apply it with Regenerate PDF. Closed
+//                      once the agreement is signed.
+//   deleting           Super Admin only, and it must take every file with it
+//                      — the PDF, the signed copy, the video and everything
+//                      archived by a rejection.
 //
 // Both are driven through the deployed UI rather than by writing rows, because
 // three of the four things it found were only reachable that way: an
@@ -22,11 +28,12 @@
 // (migration 0253), a paper agreement never booked its commission, and the
 // button that renders the PDF answered to the same name as the button that
 // creates the agreement.
-import { clients, fixtures, openBrowser, signIn, requireConfirmation, BASE, FIXTURE_PASSWORD } from "./verify-portal-lib.mjs";
+import { createHash } from "node:crypto";
+import { clients, fixtures, openBrowser, signIn, apiAs, requireConfirmation, BASE, FIXTURE_PASSWORD } from "./verify-portal-lib.mjs";
 
 requireConfirmation("check:agreement");
 
-const { admin } = clients();
+const { admin, url, anonKey } = clients();
 const browser = await openBrowser();
 const fx = fixtures(admin);
 let pass = 0, fail = 0;
@@ -120,6 +127,29 @@ async function renderPdf(page, studentId) {
   return { found: true, row, error: said.join(" ").trim() };
 }
 
+// Same shape as waitForAgreement, but addressed by agreement id and with the
+// columns the caller actually wants — the student-wide lookup returns the one
+// agreement, which stops being true the moment a student has two.
+const waitForRow = async (page, agreementId, done, seconds, columns) => {
+  for (let i = 0; i < seconds; i++) {
+    const { data } = await admin.from("agreements").select(columns).eq("id", agreementId).maybeSingle();
+    if (data && done(data)) return data;
+    await page.waitForTimeout(1000);
+  }
+  return null;
+};
+
+// Content, not the path. Regenerating writes to the same key, so comparing
+// pdf_path would call an unchanged document changed and a rewritten one
+// identical — the exact two mistakes this is here to catch.
+async function pdfFingerprint(path) {
+  if (!path) return null;
+  const { data } = await admin.storage.from("documents").download(path);
+  if (!data) return null;
+  const bytes = Buffer.from(await data.arrayBuffer());
+  return createHash("sha256").update(bytes).digest("hex").slice(0, 16);
+}
+
 async function checkStoredPdf(path) {
   const { data: file } = await admin.storage.from("documents").download(path);
   if (!file) return "nothing at that path";
@@ -169,6 +199,78 @@ try {
       ok("...which is a real PDF", bad === null, bad ?? "");
     }
 
+    // ============================================ editing an unsigned one
+    // A wrong override typed at generation time used to mean deleting the
+    // agreement and starting again. Editing is Super Admin only, closed once
+    // the agreement is signed, and deliberately does NOT touch the PDF: a
+    // student may already be reading the one on file, so applying an edit to
+    // the document is a second, explicit step.
+    console.log("\n--- editing an unsigned agreement ---");
+    const beforeEdit = await pdfFingerprint(pdf.row?.pdf_path);
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expand(page, "Agreement");
+    await page.getByRole("button", { name: "Actions" }).first().click();
+    // Exact. "Edit registration" sits in another card on the same page, and
+    // only escapes this by being collapsed — which is not something to rely on.
+    const edit = page.getByRole("button", { name: "✏️ Edit", exact: true }).first();
+    ok("Super Admin is offered the edit", (await edit.count()) > 0,
+      (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(-200));
+
+    if (await edit.count()) {
+      await edit.click();
+
+      // The country rule, at the only place a person can reach it: the picker
+      // is narrowed to templates for countries this student is registered
+      // for. Without that, an agreement generated for their own country could
+      // be edited onto any other in a second step.
+      // The generate form is still on the page behind the slide-over and
+      // carries the same field names, so the edit form is identified by the
+      // pair only it has: the instalment picker and a Save button.
+      const editForm = page.locator("form")
+        .filter({ has: page.locator('select[name="installment_count"]') })
+        .filter({ has: page.getByRole("button", { name: /^Save$/ }) })
+        .first();
+      const offered = await editForm.locator('select[name="template_id"] option').allInnerTexts();
+      ok("...offering only templates for a country they are registered for",
+        offered.filter((t) => t.trim() && !/^Template/.test(t)).every((t) => /Italy \(Public\)/.test(t)),
+        JSON.stringify(offered));
+
+      await editForm.locator('input[name="admin_charge_override"]').fill("777");
+      await editForm.locator('input[name="consultancy_fee_override"]').fill("2500");
+      await editForm.locator('input[name="discount_amount"]').fill("100");
+      await editForm.locator('select[name="installment_count"]').selectOption("3");
+      await editForm.getByRole("button", { name: /^Save$/ }).click();
+
+      const edited = await waitForRow(page, paper.id, (a) => a.admin_charge_override === 777, 45,
+        "id, admin_charge_override, consultancy_fee_override, discount_amount, installment_count, pdf_path");
+      ok("the edit is saved", edited !== null,
+        (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(-300));
+      ok("...including the fee, the discount and the instalments",
+        edited?.consultancy_fee_override === 2500 && edited?.discount_amount === 100
+        && edited?.installment_count === 3,
+        JSON.stringify(edited));
+
+      // The promise made in the form's own helper text.
+      const afterEdit = await pdfFingerprint(edited?.pdf_path);
+      ok("...without rewriting the PDF the student may already be reading",
+        afterEdit !== null && afterEdit === beforeEdit, `${beforeEdit} -> ${afterEdit}`);
+
+      // And the second step does apply it, otherwise the edit would be
+      // unreachable in the document for ever.
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await expand(page, "Agreement");
+      await page.getByRole("button", { name: /^Regenerate PDF$/i }).first().click();
+      let regenerated = null;
+      for (let i = 0; i < 60; i++) {
+        const fp = await pdfFingerprint(edited?.pdf_path);
+        if (fp && fp !== beforeEdit) { regenerated = fp; break; }
+        await page.waitForTimeout(1000);
+      }
+      ok("...until Regenerate PDF is pressed, which applies it", regenerated !== null,
+        "the document never changed, so the edit is invisible to the student");
+    }
+
     // The signed scan comes back over the counter and staff upload it.
     await page.reload({ waitUntil: "domcontentloaded" });
     await expand(page, "Agreement");
@@ -203,6 +305,15 @@ try {
       }
       ok("signing a paper agreement books the counselor's commission", paperCommission !== null,
         "nothing in staff_commissions for this student");
+
+      // An agreement somebody has signed is not something to re-price.
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await expand(page, "Agreement");
+      await page.getByRole("button", { name: "Actions" }).first().click();
+      ok("...and the edit closes once it is signed",
+        (await page.getByRole("button", { name: "✏️ Edit", exact: true }).count()) === 0,
+        "Edit is still offered on a signed agreement");
+      await page.keyboard.press("Escape");
     }
   }
 
@@ -502,6 +613,73 @@ try {
             .select("id", { count: "exact", head: true })
             .eq("student_id", eId);
           ok("...without booking the commission twice", ledger === 1, `${ledger} rows`);
+        }
+
+        // ================================================ deleting one
+        // Done last and on this agreement deliberately: after two rounds of
+        // send-back it carries every kind of file the delete has to account
+        // for — the generated PDF, the signed copy, the consent video, and
+        // the artefacts archived by each rejection.
+        //
+        // Deleting used to remove only the row. A leftover file is not just
+        // clutter: documents_storage_select_self grants a student read on
+        // everything under their own id folder, so an orphan stays readable
+        // by them — and a signed copy uploaded against the wrong student
+        // would stay readable by the wrong one.
+        console.log("\n--- deleting an agreement ---");
+        const { data: doomed } = await admin.from("agreements")
+          .select("pdf_path, signed_file_path, video_recording_path").eq("id", esign.id).single();
+        const { data: archiveRows } = await admin.from("agreement_submission_archive")
+          .select("file_path").eq("agreement_id", esign.id);
+        const shouldVanish = [...new Set([
+          doomed.pdf_path, doomed.signed_file_path, doomed.video_recording_path,
+          ...(archiveRows ?? []).map((r) => r.file_path),
+        ].filter(Boolean))];
+        ok("the agreement has files of every kind to account for",
+          shouldVanish.length >= 5, `${shouldVanish.length} paths, ${(archiveRows ?? []).length} archived`);
+
+        // Deletion is Super Admin's alone, and the database says so too — not
+        // only the menu that hides the button.
+        const processing = await fx.staff("agrproc", ["processing"]);
+        const asProcessing = await apiAs(url, anonKey, processing.email);
+        await asProcessing.from("agreements").delete().eq("id", esign.id);
+        const { count: survived } = await admin.from("agreements")
+          .select("id", { count: "exact", head: true }).eq("id", esign.id);
+        ok("...and Processing cannot delete it, RLS not just the menu", survived === 1,
+          "a processing-only account deleted an agreement through the API");
+
+        await page.reload({ waitUntil: "domcontentloaded" });
+        await expand(page, "Agreement");
+        page.once("dialog", (d) => d.accept());
+        await page.getByRole("button", { name: "Actions" }).first().click();
+        // Exact: "🗑️ Delete student" is on the same page and matched first,
+        // then sat behind the open menu's overlay waiting to be clickable.
+        const del = page.getByRole("button", { name: "🗑️ Delete", exact: true }).first();
+        ok("Super Admin is offered the delete", (await del.count()) > 0);
+
+        if (await del.count()) {
+          await del.click();
+          let gone = false;
+          for (let i = 0; i < 45; i++) {
+            const { count } = await admin.from("agreements")
+              .select("id", { count: "exact", head: true }).eq("id", esign.id);
+            if (count === 0) { gone = true; break; }
+            await page.waitForTimeout(1000);
+          }
+          ok("deleting removes the agreement", gone,
+            (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(-300));
+
+          const left = [];
+          for (const path of shouldVanish) {
+            const { data } = await admin.storage.from("documents").download(path);
+            if (data) left.push(path);
+          }
+          ok("...and takes every file with it, including the archived ones",
+            left.length === 0, `${left.length} still readable: ${JSON.stringify(left.slice(0, 3))}`);
+
+          const { count: archiveLeft } = await admin.from("agreement_submission_archive")
+            .select("id", { count: "exact", head: true }).eq("agreement_id", esign.id);
+          ok("...and the archive rows go with it", archiveLeft === 0, `${archiveLeft} rows`);
         }
       }
     }
