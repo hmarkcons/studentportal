@@ -10,6 +10,11 @@
 //   paper (Karachi)    generate -> PDF -> staff upload the signed scan
 //   e-signature        generate -> PDF -> the student submits the signed copy
 //                      and a consent video from their portal -> staff approve
+//   sending it back    undo the approval of one half -> send that half back
+//                      with a reason -> the student replaces only that half
+//                      -> staff approve again. Run for the video and for the
+//                      signed agreement, since each is a separate branch in
+//                      the RPC and in both UIs.
 //
 // Both are driven through the deployed UI rather than by writing rows, because
 // three of the four things it found were only reachable that way: an
@@ -41,7 +46,8 @@ const waitForAgreement = async (page, studentId, done, seconds = 45) => {
   for (let i = 0; i < seconds; i++) {
     const { data } = await admin
       .from("agreements")
-      .select("id, status, signing_method, template_id, pdf_path, signed_file_path, document_status, video_status, email_verified")
+      .select("id, status, signing_method, template_id, pdf_path, signed_file_path, video_recording_path, " +
+              "document_status, video_status, document_review_note, video_review_note, email_verified")
       .eq("student_id", studentId)
       .maybeSingle();
     if (data && done(data)) return data;
@@ -316,6 +322,187 @@ try {
         }
         ok("approving an e-signature agreement books the counselor's commission", esignCommission !== null,
           "nothing in staff_commissions for this student");
+
+        // ================================================== sending it back
+        // The path a mistake takes, run for each half in turn.
+        //
+        // Undoing one half alone is what makes the interesting state
+        // reachable: an approved artefact sitting beside one that is going
+        // back to the student. Migration 0124 exists so that replacing the
+        // rejected half does not cost the student the half they already got
+        // right, and an undo of a single half is the only way to get there —
+        // approving writes both at once.
+        //
+        // Both halves are driven, because they are separate branches in the
+        // RPC and in both UIs: the staff panel hides itself when the document
+        // is the missing one (submitted is Boolean(signed_file_path)), and the
+        // student's form picks its inputs per artefact.
+        const HALVES = [
+          {
+            noun: "video",
+            other: "agreement",
+            undoLabel: /Only the consent video/,
+            rejectLabel: /Ask to re-record video/i,
+            reasonPlaceholder: 'input[placeholder*="Face not visible"]',
+            reason: "zztmp - audio is unclear",
+            pathField: "video_recording_path",
+            statusField: "video_status",
+            otherPathField: "signed_file_path",
+            otherStatusField: "document_status",
+            studentInput: 'input[type="file"][accept*="video"]',
+            absentInput: 'input[type="file"][name="agreement"]',
+            file: { name: "consent-take-2.webm", mimeType: "video/webm", buffer: Buffer.from("zztmp second take") },
+          },
+          {
+            noun: "signed agreement",
+            other: "video",
+            undoLabel: /Only the signed agreement/,
+            rejectLabel: /Reject agreement/i,
+            reasonPlaceholder: 'input[placeholder*="Signature missing"]',
+            reason: "zztmp - page 3 is not signed",
+            pathField: "signed_file_path",
+            statusField: "document_status",
+            otherPathField: "video_recording_path",
+            otherStatusField: "video_status",
+            studentInput: 'input[type="file"][name="agreement"]',
+            absentInput: 'input[type="file"][accept*="video"]',
+            file: { name: "signed-take-2.pdf", mimeType: "application/pdf", buffer: PDF_BYTES },
+          },
+        ];
+
+        for (const half of HALVES) {
+          console.log(`\n--- sending back the ${half.noun}: undo, reject, resubmit, re-approve ---`);
+
+          const approved = await waitForAgreement(page, eId, (a) => a[half.statusField] === "approved");
+          const keptOther = approved[half.otherPathField];
+          const rejectedPath = approved[half.pathField];
+
+          await page.reload({ waitUntil: "domcontentloaded" });
+          await expand(page, "Agreement");
+          const undo = page.getByRole("button", { name: /^Undo approval$/ }).first();
+          ok(`an approval of the ${half.noun} can be taken back`, (await undo.count()) > 0,
+            (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(-300));
+          if (!(await undo.count())) break;
+
+          await undo.click();
+          await page.locator("label").filter({ hasText: half.undoLabel }).first().locator("input").check();
+          await page.getByRole("button", { name: /^Undo approval$/ }).last().click();
+
+          const undone = await waitForAgreement(page, eId, (a) => a[half.statusField] === "pending", 60);
+          ok(`undoing the ${half.noun} alone leaves the ${half.other} approved`,
+            undone !== null && undone[half.otherStatusField] === "approved",
+            `${half.statusField}=${undone?.[half.statusField]} ${half.otherStatusField}=${undone?.[half.otherStatusField]}`);
+          ok("...and puts the agreement back in front of staff",
+            undone?.status === "pending_signature", String(undone?.status));
+          ok("...without touching either file",
+            Boolean(undone?.signed_file_path) && Boolean(undone?.video_recording_path),
+            `document=${undone?.signed_file_path} video=${undone?.video_recording_path}`);
+
+          // Nothing is missing, so the student must not be asked to resend.
+          await studentPage.goto(`${BASE}/portal/agreement`, { waitUntil: "domcontentloaded" });
+          const undoneText = await studentPage.locator("body").innerText();
+          ok("the student is told we are re-checking, not asked to resend",
+            /checking your agreement again/i.test(undoneText)
+            && (await studentPage.getByRole("button", { name: /Submit/i }).count()) === 0,
+            undoneText.replace(/\s+/g, " ").slice(0, 300));
+          await studentPage.goto(`${BASE}/portal/documents`, { waitUntil: "domcontentloaded" });
+          ok("...and the portal closes again while it is unapproved",
+            new URL(studentPage.url()).pathname === "/portal/agreement", studentPage.url());
+
+          // --------------------------------------------- send this half back
+          await page.reload({ waitUntil: "domcontentloaded" });
+          await expand(page, "Agreement");
+          const sendBack = page.getByRole("button", { name: half.rejectLabel }).first();
+          ok(`staff can send the ${half.noun} back on its own`, (await sendBack.count()) > 0,
+            (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(-300));
+          if (!(await sendBack.count())) break;
+
+          await sendBack.click();
+          await page.locator(half.reasonPlaceholder).fill(half.reason);
+          await page.getByRole("button", { name: /^Send back$/ }).click();
+
+          const sentBack = await waitForAgreement(page, eId, (a) => a[half.statusField] === "rejected", 60);
+          ok(`the ${half.noun} is sent back with a reason`, sentBack !== null,
+            (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(-300));
+          ok("...unlinked so the student can replace it",
+            sentBack?.[half.pathField] === null, String(sentBack?.[half.pathField]));
+          ok(`...while the approved ${half.other} is left alone`,
+            sentBack?.[half.otherStatusField] === "approved" && sentBack?.[half.otherPathField] === keptOther,
+            `${half.otherStatusField}=${sentBack?.[half.otherStatusField]} path changed=${sentBack?.[half.otherPathField] !== keptOther}`);
+
+          // A rejection archives rather than deletes. Holding a consent video
+          // at all is pointless if sending one back destroys it.
+          const { data: archived } = await admin
+            .from("agreement_submission_archive")
+            .select("kind, file_path, reason")
+            .eq("agreement_id", esign.id);
+          ok("...and the original is kept on record",
+            (archived ?? []).some((r) => r.file_path === rejectedPath),
+            JSON.stringify(archived));
+          const stillThere = await admin.storage.from("documents").download(rejectedPath);
+          ok("...as a file, not just a row", Boolean(stillThere.data),
+            "the archive points at an object that is no longer in the bucket");
+
+          // ----------------------------------- the student replaces one half
+          await studentPage.goto(`${BASE}/portal/agreement`, { waitUntil: "domcontentloaded" });
+          const redoText = await studentPage.locator("body").innerText();
+          ok("the student is told what was wrong with it",
+            redoText.includes(half.reason), redoText.replace(/\s+/g, " ").slice(0, 400));
+          ok(`...and is asked for the ${half.noun} only`,
+            (await studentPage.locator(half.absentInput).count()) === 0
+            && (await studentPage.locator(half.studentInput).count()) > 0,
+            `the ${half.other} was asked for again, which the student already got right`);
+
+          await studentPage.locator(half.studentInput).first().setInputFiles(half.file);
+          await studentPage.getByRole("button", { name: /Submit new video|Submit signed agreement/i }).first().click();
+
+          const replaced = await waitForAgreement(studentPage, eId, (a) => a[half.pathField] !== null, 60);
+          ok("the replacement is recorded", replaced !== null,
+            (await studentPage.locator("body").innerText()).replace(/\s+/g, " ").slice(0, 300));
+          ok("...as a different file from the one sent back",
+            replaced?.[half.pathField] !== rejectedPath, String(replaced?.[half.pathField]));
+          ok(`...and the ${half.other} they already got right stays approved`,
+            replaced?.[half.otherStatusField] === "approved" && replaced?.[half.otherPathField] === keptOther,
+            `${half.otherStatusField}=${replaced?.[half.otherStatusField]}`);
+
+          // ---------------------------------------------- staff approve again
+          await page.reload({ waitUntil: "domcontentloaded" });
+          await expand(page, "Agreement");
+          const reapprove = page.getByRole("button", { name: /Approve .* mark signed/i }).first();
+          ok("the resubmission comes back for review", (await reapprove.count()) > 0,
+            (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(-300));
+          if (!(await reapprove.count())) break;
+
+          for (const label of [/The signed agreement is correct/, /watched the video/]) {
+            await page.locator("label").filter({ hasText: label }).first().locator("input").check();
+          }
+          await reapprove.click();
+          const resigned = await waitForAgreement(page, eId, (a) => a.status === "signed", 60);
+          ok("re-approving signs it again", resigned !== null,
+            (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(-300));
+
+          // These fields describe a live situation or nothing at all — the
+          // trigger clears them, rather than leaving a stale note behind.
+          const { data: cleared } = await admin.from("agreements")
+            .select("approval_undone_at, document_review_note, video_review_note").eq("id", esign.id).single();
+          ok("...and the withdrawn-approval mark is cleared",
+            cleared.approval_undone_at === null, String(cleared.approval_undone_at));
+          ok("...along with the note about what was wrong",
+            cleared.document_review_note === null && cleared.video_review_note === null,
+            `document=${cleared.document_review_note} video=${cleared.video_review_note}`);
+
+          await studentPage.goto(`${BASE}/portal/documents`, { waitUntil: "domcontentloaded" });
+          ok("...and the student's portal opens back up",
+            new URL(studentPage.url()).pathname === "/portal/documents", studentPage.url());
+
+          // The commission was booked at the first approval. Going round the
+          // loop again must not book a second one.
+          const { count: ledger } = await admin
+            .from("staff_commissions")
+            .select("id", { count: "exact", head: true })
+            .eq("student_id", eId);
+          ok("...without booking the commission twice", ledger === 1, `${ledger} rows`);
+        }
       }
     }
     await studentPage.close();
