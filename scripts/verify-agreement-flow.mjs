@@ -18,9 +18,10 @@
 //   editing            correct an unsigned agreement's fees without touching
 //                      the PDF, then apply it with Regenerate PDF. Closed
 //                      once the agreement is signed.
-//   deleting           Super Admin only, and it must take every file with it
-//                      — the PDF, the signed copy, the video and everything
-//                      archived by a rejection.
+//   deleting           Super Admin only; takes every file with it — the PDF,
+//                      the signed copy, the video and everything archived by
+//                      a rejection — and closes the portal it was the last
+//                      justification for, while leaving the login intact.
 //
 // Both are driven through the deployed UI rather than by writing rows, because
 // three of the four things it found were only reachable that way: an
@@ -680,6 +681,60 @@ try {
           const { count: archiveLeft } = await admin.from("agreement_submission_archive")
             .select("id", { count: "exact", head: true }).eq("agreement_id", esign.id);
           ok("...and the archive rows go with it", archiveLeft === 0, `${archiveLeft} rows`);
+
+          // Nothing is left to justify the portal, so it closes (0254). It
+          // used to stay wide open: no code path ever wrote portal_active
+          // false except a deliberate Suspend, and no trigger fired on delete
+          // at all — so a student whose only signed agreement was deleted kept
+          // full access with nothing on file.
+          let closed = false;
+          for (let i = 0; i < 20; i++) {
+            const { data } = await admin.from("leads").select("portal_active").eq("id", eId).single();
+            if (data.portal_active === false) { closed = true; break; }
+            await page.waitForTimeout(500);
+          }
+          ok("...and closes the portal it was the only justification for", closed,
+            "the student keeps a fully open portal with no agreement on file");
+
+          // The login is untouched, as Suspend leaves it — nothing here is
+          // destroyed, and a Super Admin re-activates in one click.
+          const { data: keptLogin } = await admin.from("leads")
+            .select("auth_user_id").eq("id", eId).single();
+          ok("...without destroying their login", Boolean(keptLogin.auth_user_id));
+
+          // A student may hold one agreement for their primary country and
+          // another for a backup, so the rule is "is anything left", not "is
+          // this one going". Driven with the service role rather than the
+          // button: this lives in a trigger, and that is what is being
+          // checked — every path that removes an agreement, not one of them.
+          const twin = async (suffix) => {
+            const path = `${eId}/agreements/zztmp-${suffix}.pdf`;
+            await admin.storage.from("documents").upload(path, PDF_BYTES, {
+              contentType: "application/pdf", upsert: true,
+            });
+            const { data } = await admin.from("agreements").insert({
+              student_id: eId, template_id: esign.template_id, signing_method: "paper",
+              status: "signed", signed_file_path: path,
+            }).select("id").single();
+            return data.id;
+          };
+          const primary = await twin("primary");
+          const backup = await twin("backup");
+          const { data: reopened } = await admin.from("leads")
+            .select("portal_active").eq("id", eId).single();
+          ok("a fresh signed agreement opens it again", reopened.portal_active === true);
+
+          await admin.from("agreements").delete().eq("id", primary);
+          const { data: stillOpen } = await admin.from("leads")
+            .select("portal_active").eq("id", eId).single();
+          ok("...deleting one of two leaves it open", stillOpen.portal_active === true,
+            "the student was locked out over an agreement they still hold another of");
+
+          await admin.from("agreements").delete().eq("id", backup);
+          const { data: shut } = await admin.from("leads")
+            .select("portal_active").eq("id", eId).single();
+          ok("...and only the last one closes it", shut.portal_active === false,
+            String(shut.portal_active));
         }
       }
     }
