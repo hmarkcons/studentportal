@@ -246,16 +246,41 @@ try {
       // database and the permission defaults disagree about processing. That
       // is a business decision, not something this check should assume — what
       // it does pin is that the two halves of the app agree with each other.
-      console.log("\n--- who may record a payment ---");
-      const financeOnly = await fx.staff("invnofin", ["counselor"]);
-      const asCounselor = await apiAs(url, anonKey, financeOnly.email);
+      // Recording money as received is a finance act, and every layer has to
+      // say so — not just the button. The app gates on finance.invoices.manage
+      // (finance, super_admin); the RPCs that create and send an invoice raise
+      // 'Only Finance/Super Admin'; and since 0255 the policies agree.
+      //
+      // Processing is the one worth naming. Five policies used to grant it
+      // write access while no invoice control anywhere was reachable by it, so
+      // it could not raise or send an invoice but could PATCH the rows
+      // directly — change an amount, or mark money received.
+      console.log("\n--- who may write to an invoice ---");
       const target = (await installmentsOf(invoice.id))[2];
-      const attempt = await asCounselor.from("invoice_installments")
-        .update({ status: "paid", amount_paid: target.amount }).eq("id", target.id).select("id");
-      const afterAttempt = (await installmentsOf(invoice.id))[2];
-      ok("a counselor cannot settle an installment through the API",
-        afterAttempt.status !== "paid" && (attempt.data?.length ?? 0) === 0,
-        `rows=${attempt.data?.length ?? 0} status=${afterAttempt.status}`);
+      for (const role of ["counselor", "processing"]) {
+        const who = await fx.staff(`invno${role.slice(0, 4)}`, [role]);
+        const asThem = await apiAs(url, anonKey, who.email);
+
+        const settle = await asThem.from("invoice_installments")
+          .update({ status: "paid", amount_paid: target.amount }).eq("id", target.id).select("id");
+        const afterSettle = (await installmentsOf(invoice.id))[2];
+        ok(`a ${role} cannot settle an installment through the API`,
+          afterSettle.status !== "paid" && (settle.data?.length ?? 0) === 0,
+          `rows=${settle.data?.length ?? 0} status=${afterSettle.status}`);
+
+        const repriced = await asThem.from("invoices")
+          .update({ consultancy_fee: 1 }).eq("id", invoice.id).select("id");
+        const { data: afterReprice } = await admin.from("invoices")
+          .select("consultancy_fee").eq("id", invoice.id).single();
+        ok(`...nor change what the student owes`,
+          Number(afterReprice.consultancy_fee) === FEE && (repriced.data?.length ?? 0) === 0,
+          `fee=${afterReprice.consultancy_fee} rows=${repriced.data?.length ?? 0}`);
+
+        // Reading is untouched on purpose: a processing officer still sees the
+        // invoices of the students they handle.
+        const { data: readable } = await asThem.from("invoices").select("id").eq("id", invoice.id).maybeSingle();
+        ok(`...but a ${role} can still read it`, Boolean(readable));
+      }
 
       // ------------------------------------------- the tokenised receipt
       // Students may have no portal login at all, so the receipt is reached

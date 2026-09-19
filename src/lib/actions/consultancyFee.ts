@@ -5,20 +5,27 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isEmailConfigured } from "@/lib/email";
 import { buildAndSendInvoiceEmail } from "@/lib/actions/invoices";
+import { requirePermission } from "@/lib/auth/permissions";
 
-async function requireProcessingOrAbove(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
-  return ["super_admin", "finance", "processing"].includes(staffRow?.role ?? "");
-}
+// These used to go through a hand-rolled requireProcessingOrAbove, which was
+// wrong twice over.
+//
+// It read staff.role — the primary one shown in lists — while selecting
+// "role, roles", so a colleague whose SECOND role is finance was refused and
+// nobody would have found out until it happened to them. staff.roles is the
+// authority, which is what requirePermission goes through.
+//
+// And it granted processing, while invoices.ts and every invoice control in
+// the UI gate on finance.invoices.manage, which does not. Two halves of the
+// same surface disagreed about who may touch an invoice; the half users can
+// actually reach is this one. See migration 0255 for the database side.
 
 // ---- Fee / product catalog -------------------------------------------------
 
 export async function createFeeProduct(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  if (!(await requireProcessingOrAbove(supabase))) return { error: "You don't have permission to manage the fee catalog." };
+  const denied = await requirePermission("finance.invoices.manage", "You don't have permission to manage the fee catalog.");
+  if (denied) return { error: denied.error };
 
   const name = String(formData.get("name") ?? "").trim();
   const default_amount = formData.get("default_amount") ? Number(formData.get("default_amount")) : null;
@@ -39,7 +46,8 @@ export async function createFeeProduct(_prevState: unknown, formData: FormData) 
 
 export async function updateFeeProduct(productId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  if (!(await requireProcessingOrAbove(supabase))) return { error: "You don't have permission to manage the fee catalog." };
+  const denied = await requirePermission("finance.invoices.manage", "You don't have permission to manage the fee catalog.");
+  if (denied) return { error: denied.error };
 
   const name = String(formData.get("name") ?? "").trim();
   const default_amount = formData.get("default_amount") ? Number(formData.get("default_amount")) : null;
@@ -56,7 +64,8 @@ export async function updateFeeProduct(productId: string, _prevState: unknown, f
 
 export async function deleteFeeProduct(productId: string) {
   const supabase = await createClient();
-  if (!(await requireProcessingOrAbove(supabase))) return { error: "You don't have permission to manage the fee catalog." };
+  const denied = await requirePermission("finance.invoices.manage", "You don't have permission to manage the fee catalog.");
+  if (denied) return { error: denied.error };
 
   const { error } = await supabase.from("fee_products").delete().eq("id", productId);
   if (error) return { error: error.message };
@@ -70,7 +79,8 @@ export async function deleteFeeProduct(productId: string) {
 
 export async function addLineItem(invoiceId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  if (!(await requireProcessingOrAbove(supabase))) return { error: "You don't have permission to edit invoices." };
+  const denied = await requirePermission("finance.invoices.manage", "You don't have permission to edit invoices.");
+  if (denied) return { error: denied.error };
 
   const product_id = String(formData.get("product_id") ?? "") || null;
   const name = String(formData.get("name") ?? "").trim();
@@ -86,7 +96,8 @@ export async function addLineItem(invoiceId: string, revalidateTo: string, _prev
 
 export async function deleteLineItem(lineItemId: string, revalidateTo: string) {
   const supabase = await createClient();
-  if (!(await requireProcessingOrAbove(supabase))) return { error: "You don't have permission to edit invoices." };
+  const denied = await requirePermission("finance.invoices.manage", "You don't have permission to edit invoices.");
+  if (denied) return { error: denied.error };
 
   const { error } = await supabase.from("invoice_line_items").delete().eq("id", lineItemId);
   if (error) return { error: error.message };
@@ -99,7 +110,8 @@ export async function deleteLineItem(lineItemId: string, revalidateTo: string) {
 
 export async function updateAdminFeeStatus(invoiceId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  if (!(await requireProcessingOrAbove(supabase))) return { error: "You don't have permission to edit invoices." };
+  const denied = await requirePermission("finance.invoices.manage", "You don't have permission to edit invoices.");
+  if (denied) return { error: denied.error };
 
   const admin_fee_status = String(formData.get("admin_fee_status") ?? "unpaid");
   const admin_fee_paid_date = String(formData.get("admin_fee_paid_date") ?? "") || (admin_fee_status === "paid" ? new Date().toISOString().slice(0, 10) : null);
@@ -119,7 +131,8 @@ export async function updateAdminFeeStatus(invoiceId: string, revalidateTo: stri
 
 export async function sendInvoiceEmail(invoiceId: string, studentId: string, revalidateTo: string) {
   const supabase = await createClient();
-  if (!(await requireProcessingOrAbove(supabase))) return { error: "You don't have permission to send invoices." };
+  const denied = await requirePermission("finance.invoices.manage", "You don't have permission to send invoices.");
+  if (denied) return { error: denied.error };
 
   const { data: student } = await supabase.from("leads").select("full_name, email").eq("id", studentId).maybeSingle();
   if (!student?.email) return { error: "This student has no email address on file." };
