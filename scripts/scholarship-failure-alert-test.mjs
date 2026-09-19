@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   FAILURE_STREAK,
+  RECENT_RUNS,
   buildScholarshipFailureEmail,
   decideFailureAlert,
   isoDay,
@@ -139,4 +140,23 @@ test("the email builds from Date timestamps without throwing", () => {
   assert.equal(d.alert, true);
   const { text } = buildScholarshipFailureEmail(d);
   assert.match(text, /the oldest on 2026-09-19/);
+});
+
+test("an outage nobody fixes is raised again, not forgotten", () => {
+  // The caller passes the newest RECENT_RUNS runs. Once that many new failures
+  // have accumulated on top of an already-reported outage, no stamped run is
+  // still in view — so it speaks up again rather than staying silent forever
+  // over a key that died while somebody was away.
+  const window = Array.from({ length: RECENT_RUNS }, () => run());
+  const d = decideFailureAlert(window);
+  assert.equal(d.alert, true);
+  assert.equal(d.streak, RECENT_RUNS);
+});
+
+test("...but stays quiet while a stamped run is still in view", () => {
+  const window = [
+    ...Array.from({ length: RECENT_RUNS - 1 }, () => run()),
+    run({ failure_notified_at: "2026-09-19T06:00:00.000Z" }),
+  ];
+  assert.equal(decideFailureAlert(window).alert, false);
 });

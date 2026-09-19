@@ -5,7 +5,7 @@ import { researchConfigured } from "@/lib/scholarshipResearch";
 import { runScholarshipCheck } from "@/lib/scholarshipCheckRunner";
 import { sendEmail, isEmailConfigured } from "@/lib/email";
 import {
-  FAILURE_STREAK,
+  RECENT_RUNS,
   buildScholarshipFailureEmail,
   decideFailureAlert,
   type RunRow,
@@ -126,7 +126,7 @@ async function reportRepeatedFailures(
     .select("id, status, finished_at, error, failure_notified_at, body:scholarship_bodies(name)")
     .not("finished_at", "is", null)
     .order("finished_at", { ascending: false })
-    .limit(FAILURE_STREAK * 3);
+    .limit(RECENT_RUNS);
 
   const rows: RunRow[] = (runs ?? []).map((r) => ({
     id: r.id as string,

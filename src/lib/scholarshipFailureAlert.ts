@@ -14,6 +14,21 @@
 /** Consecutive failures before anybody is told. Below this it is just weather. */
 export const FAILURE_STREAK = 3;
 
+/**
+ * How many recent runs the decision looks at.
+ *
+ * This doubles as the reminder cadence, which is worth stating rather than
+ * leaving to be discovered. An alert stamps every failure it saw, so silence
+ * holds while a stamped one is still in view — and once this many newer
+ * failures have piled up on an outage nobody fixed, the window no longer
+ * contains a stamped run and it speaks up again. At one cron a day that is a
+ * nudge roughly every nine days.
+ *
+ * Deliberate: reporting an unresolved outage exactly once means a key that
+ * dies the day somebody goes on leave is never mentioned again.
+ */
+export const RECENT_RUNS = FAILURE_STREAK * 3;
+
 export type RunRow = {
   id: string;
   status: string;
@@ -48,11 +63,14 @@ export type AlertDecision =
  *
  * `runs` must be newest first and already filtered to finished runs.
  *
- * Silent once told: the streak is only reported if none of its runs has been
- * reported already. Otherwise a key left dead over a weekend would send the
+ * Quiet while it is already known: the streak is only reported if none of its
+ * runs carries a stamp. Otherwise a key left dead over a weekend would send the
  * same mail every morning, which is how people learn to filter a sender.
- * A success breaks the streak, so the next outage is a fresh one and does get
- * reported.
+ *
+ * Two things end the silence. A success breaks the streak, so the next outage
+ * is a fresh one. And an outage nobody fixes eventually pushes every stamped
+ * run out of the caller's window — see RECENT_RUNS — so it is raised again as
+ * a reminder rather than forgotten.
  */
 export function decideFailureAlert(runs: RunRow[], streakNeeded = FAILURE_STREAK): AlertDecision {
   const streakRuns: RunRow[] = [];
