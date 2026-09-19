@@ -43,7 +43,7 @@ About 35s for a commit that changes source, 9s for one that cannot affect a buil
 
 ### By hand
 
-These four exist because each covers something that **fails silently** — no error, no failed build, just a wrong result nobody notices. That is also why none of them is in the commit gate: they are slow, and two of them write to the live database.
+These five exist because each covers something that **fails silently** — no error, no failed build, just a wrong result nobody notices. That is also why none of them is in the commit gate: they are slow, and two of them write to the live database.
 
 | | what it covers |
 | --- | --- |
@@ -51,8 +51,9 @@ These four exist because each covers something that **fails silently** — no er
 | `npm run check:xlsx -- -Path <file.xlsx>` | Opens a generated workbook in real Excel over COM. The import template's dropdowns are hand-written OOXML (`src/lib/xlsxDropdowns.ts`); a wrong element order makes Excel offer to "repair" the file, and every reader in the test suite parses it happily. Windows and Excel only. |
 | `npm run check:roles` | Multi-role staff: access is the union of roles, only a Super Admin grants Super Admin, everybody keeps at least one role. The refusals are enforced by `set_staff_roles`, so they are checked against the database, not the form. |
 | `npm run check:pay` | Pay lives on `staff_compensation`, not `staff`. Checks both halves: Super Admin and Finance still get what payroll needs through the app, and nobody else can reach it through the API. |
+| `npm run check:agreement` | Both branches of the agreement flow — paper (staff upload the scan) and e-signature (the student submits, staff approve) — through the deployed UI, to a signed agreement, an open portal and a booked commission. It is the hinge of the system and the hardest thing to notice going wrong: the e-signature student was locked out of the only page that could advance it, and paper agreements booked no commission at all. |
 
-`check:roles` and `check:pay` drive a browser against the deployed portal and create real (self-deleting) staff accounts in the live Supabase project, so they refuse to start without an explicit opt-in:
+`check:roles`, `check:pay` and `check:agreement` drive a browser against the deployed portal and create real (self-deleting) staff, student and agreement records in the live Supabase project, so they refuse to start without an explicit opt-in:
 
 ```bash
 VERIFY_AGAINST_PRODUCTION=yes npm run check:roles
