@@ -18,6 +18,12 @@
 //                  invoices as delivered that nobody had received.
 //   payment        marking an installment paid, and what the invoice then
 //                  reports as paid and outstanding.
+//   a part payment splitting an installment: what was paid is closed off at
+//                  that amount and the balance becomes an installment of its
+//                  own, with a due date so something chases it. The rule is
+//                  unit-tested; what is checked here is the write — the
+//                  renumbering, the trace of where the balance came from, and
+//                  that the schedule still adds up to what the student owes.
 //   the receipt    a tokenised link is the one public, unauthenticated surface
 //                  that serves a named person's financial document: it must
 //                  open without a session, refuse a guess, refuse an expired
@@ -65,7 +71,8 @@ const waitForInvoice = async (page, studentId, done, seconds = 45) => {
 const installmentsOf = async (invoiceId) => {
   const { data } = await admin
     .from("invoice_installments")
-    .select("id, installment_no, amount, status, due_date, due_condition, amount_paid, payment_method, paid_date")
+    .select("id, installment_no, amount, status, due_date, due_condition, amount_paid, payment_method, paid_date, " +
+            "carried_from_installment_no, carried_part_paid, carried_paid_date")
     .eq("invoice_id", invoiceId)
     .order("installment_no");
   return data ?? [];
@@ -472,8 +479,16 @@ try {
           seen.replace(/\s+/g, " ").slice(0, 300));
         ok("...its total", /EUR 2,190\.00/.test(seen), seen.replace(/\s+/g, " ").slice(0, 400));
         // 930 of 2190 paid, so 1260 left.
-        ok("...what they have paid", /EUR 930\.00/.test(seen));
-        ok("...and what is left", /EUR 1,260\.00/.test(seen));
+        // Anchored to the labels. A bare amount also appears in the instalment
+        // list, so matching the number alone passed while reading the wrong
+        // figure entirely.
+        //
+        // 930 settled in full plus the 200 that part-paid the second
+        // instalment: 1,130 of 2,190, leaving 1,060.
+        ok("...what they have paid", /Paid\s*-?\s*EUR 1,130\.00/.test(seen),
+          seen.replace(/\s+/g, " ").slice(0, 500));
+        ok("...and what is left", /Balance\s+EUR 1,060\.00/.test(seen),
+          seen.replace(/\s+/g, " ").slice(0, 500));
         ok("...told why the first instalment is the big one",
           /includes the EUR 300\.00 admin fee/.test(seen), seen.replace(/\s+/g, " ").slice(0, 600));
 
