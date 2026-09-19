@@ -4,6 +4,7 @@ import {
   FAILURE_STREAK,
   buildScholarshipFailureEmail,
   decideFailureAlert,
+  isoDay,
   summariseError,
 } from "../src/lib/scholarshipFailureAlert.ts";
 
@@ -114,4 +115,28 @@ test("a missing error still reads as a sentence", () => {
 
 test("whitespace in an error is collapsed, so the mail stays readable", () => {
   assert.equal(summariseError("a\n\n  b\tc"), "a b c");
+});
+
+// --------------------------------------------------- timestamps of any shape
+// Found by running the real thing: a direct pg client returns Date objects
+// where PostgREST returns ISO strings, and .slice() on a Date threw. The
+// earlier tests missed it because their fixtures were strings — they mirrored
+// the assumption instead of challenging it. A throw here would kill the alert
+// inside the cron, silently, which is the failure it exists to report.
+test("a Date is handled as readily as an ISO string", () => {
+  assert.equal(isoDay("2026-09-19T06:00:00.000Z"), "2026-09-19");
+  assert.equal(isoDay(new Date("2026-09-19T06:00:00.000Z")), "2026-09-19");
+  assert.equal(isoDay(null), null);
+  assert.equal(isoDay(undefined), null);
+  assert.equal(isoDay(new Date("nonsense")), null);
+});
+
+test("the email builds from Date timestamps without throwing", () => {
+  const runs = Array.from({ length: FAILURE_STREAK }, () =>
+    run({ finished_at: new Date("2026-09-19T06:00:00.000Z") })
+  );
+  const d = decideFailureAlert(runs);
+  assert.equal(d.alert, true);
+  const { text } = buildScholarshipFailureEmail(d);
+  assert.match(text, /the oldest on 2026-09-19/);
 });

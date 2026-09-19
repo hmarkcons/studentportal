@@ -17,11 +17,27 @@ export const FAILURE_STREAK = 3;
 export type RunRow = {
   id: string;
   status: string;
-  finished_at: string | null;
+  /** PostgREST hands these back as ISO strings; a direct pg client hands back Date. */
+  finished_at: string | Date | null;
   error: string | null;
-  failure_notified_at: string | null;
+  failure_notified_at: string | Date | null;
   body?: string | null;
 };
+
+/**
+ * The day part of a timestamp, whatever shape it arrived in.
+ *
+ * Worth the defensiveness: this runs inside an unattended cron, and the whole
+ * point of the alert is that it speaks up when things are broken. A throw in
+ * here would take the alert down silently and leave nobody to say so — the
+ * failure this exists to prevent, caused by the thing meant to prevent it.
+ */
+export function isoDay(value: string | Date | null | undefined): string | null {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.toISOString().slice(0, 10);
+  const text = String(value);
+  return text.length >= 10 ? text.slice(0, 10) : null;
+}
 
 export type AlertDecision =
   | { alert: false; reason: string; streak: number }
@@ -86,7 +102,7 @@ export function summariseError(error: string | null, limit = 300): string {
 export function buildScholarshipFailureEmail(decision: Extract<AlertDecision, { alert: true }>) {
   const { streak, runs, lastError } = decision;
   const bodies = [...new Set(runs.map((r) => r.body).filter(Boolean))] as string[];
-  const since = runs[runs.length - 1]?.finished_at?.slice(0, 10) ?? "recently";
+  const since = isoDay(runs[runs.length - 1]?.finished_at) ?? "an earlier run";
 
   const subject = `Scholarship research has failed ${streak} times in a row`;
 

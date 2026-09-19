@@ -131,9 +131,9 @@ async function reportRepeatedFailures(
   const rows: RunRow[] = (runs ?? []).map((r) => ({
     id: r.id as string,
     status: r.status as string,
-    finished_at: r.finished_at as string | null,
+    finished_at: r.finished_at as string | Date | null,
     error: r.error as string | null,
-    failure_notified_at: r.failure_notified_at as string | null,
+    failure_notified_at: r.failure_notified_at as string | Date | null,
     body: (Array.isArray(r.body) ? r.body[0]?.name : (r.body as { name?: string } | null)?.name) ?? null,
   }));
 
