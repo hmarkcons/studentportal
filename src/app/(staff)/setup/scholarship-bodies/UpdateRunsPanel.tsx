@@ -359,6 +359,22 @@ export function UpdateRunsPanel({
         </p>
       )}
 
+      {/* Shown once there is a working key, because that is the point at which
+          it can start costing money. The nightly check calls it unattended and
+          nobody is watching the bill; a run of failures now emails whoever
+          manages scholarships, but there is no equivalent for spending too
+          much, and only the Console can raise that. Said here rather than left
+          as something somebody meant to get round to. */}
+      {researchConfigured && (
+        <p className="rounded-md border border-border bg-bg px-3 py-2 text-xs text-muted">
+          This key is billed per call, and the nightly check uses it without anybody watching. Set a{" "}
+          <strong>usage alert</strong> on it in the Anthropic Console, under Settings → Limits — and a spend
+          limit too if you want a hard stop, bearing in mind that hitting one looks exactly like running out
+          of credit. Repeated failures are emailed to whoever manages scholarships; overspending is not, and
+          the Console is the only thing that can tell you about it.
+        </p>
+      )}
+
       {progress.length > 0 && (
         <div className="max-h-40 overflow-y-auto rounded-md border border-border bg-card px-3 py-2 text-xs">
           {progress.map((line, i) => (
