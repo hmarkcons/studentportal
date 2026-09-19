@@ -10,9 +10,11 @@
 #                                  clears .next/cache
 #   eslint src              ~49s   <- not this
 #
-# End to end:
+# End to end, all four running:
 #
-#   ~50s   a commit that changes source
+#   ~36s   typical commit that changes source
+#   ~80s   worst seen, when the build had real work and .next/types had just
+#          been cleared
 #   ~18s   a commit where a cheap check fails, so the build is skipped
 #    ~9s   a commit touching nothing that affects a build
 #
@@ -59,15 +61,23 @@ count() {
   tr '\0' '\n' | grep -c '' || true
 }
 
-LINTABLE="*.ts *.tsx *.mjs *.js *.jsx"
+# The patterns are quoted at every call site and must stay that way. Held in a
+# variable and passed unquoted, the shell expands them against the working
+# directory before git ever sees them: in this repo's root "*.ts" becomes
+# "next-env.d.ts next.config.ts", so git is handed two literal paths instead of
+# a pattern and matches no staged .ts file at all. It fails silently, by
+# skipping the checks rather than by erroring.
+lint_staged() {
+  staged '*.ts' '*.tsx' '*.mjs' '*.js' '*.jsx'
+}
 # Anything that can change what the build produces, which is wider than what
 # eslint has an opinion about.
-BUILDABLE="*.ts *.tsx *.mjs *.js *.jsx *.css *.json next.config.ts tsconfig.json"
+build_staged() {
+  staged '*.ts' '*.tsx' '*.mjs' '*.js' '*.jsx' '*.css' '*.json'
+}
 
-# shellcheck disable=SC2086
-lint_count=$(staged $LINTABLE | count)
-# shellcheck disable=SC2086
-build_count=$(staged $BUILDABLE | count)
+lint_count=$(lint_staged | count)
+build_count=$(build_staged | count)
 
 failed=""
 
@@ -87,8 +97,7 @@ fi
 
 if [ "$lint_count" -gt 0 ]; then
   echo "pre-commit: eslint on $lint_count staged file(s)..."
-  # shellcheck disable=SC2086
-  if ! staged $LINTABLE | xargs -0 -r npx eslint --; then
+  if ! lint_staged | xargs -0 -r npx eslint --; then
     failed="$failed eslint"
   fi
 else

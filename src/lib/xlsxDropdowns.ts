@@ -101,6 +101,16 @@ export function listRange(sheet: string, column: string, count: number): string 
 function dataValidationsXml(dropdowns: Dropdown[]): string {
   const entries = dropdowns.map((d) => {
     const letter = columnLetter(d.column);
+    // An inverted or zero range writes something like sqref="D5:D2", which is
+    // not a reference Excel accepts. Caught here rather than left for Excel to
+    // reject the whole workbook over, since by then the only symptom is a file
+    // that will not open.
+    if (!Number.isInteger(d.fromRow) || d.fromRow < 1) {
+      throw new Error(`Dropdown rows start at 1, got fromRow=${d.fromRow}`);
+    }
+    if (!Number.isInteger(d.toRow) || d.toRow < d.fromRow) {
+      throw new Error(`Dropdown range ends before it starts: ${d.fromRow}..${d.toRow}`);
+    }
     return (
       `<dataValidation type="list" allowBlank="1" showInputMessage="1" showErrorMessage="1"` +
       // A warning, not a hard stop: a country typed by hand that the importer
