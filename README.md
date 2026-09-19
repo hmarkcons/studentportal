@@ -59,6 +59,9 @@ These six exist because each covers something that **fails silently** — no err
 VERIFY_AGAINST_PRODUCTION=yes npm run check:roles
 ```
 
+They point at `https://portal.hmarkconsultants.com`. Set `PORTAL_URL` to aim
+them somewhere else — a preview deployment, or a local `next dev`.
+
 They need Playwright, which is deliberately not a dependency — Vercel would download a browser on every build for tooling the app never uses:
 
 ```bash

@@ -12,7 +12,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync, existsSync } from "node:fs";
 
-export const BASE = process.env.PORTAL_URL ?? "https://studentportal-self.vercel.app";
+export const BASE = process.env.PORTAL_URL ?? "https://portal.hmarkconsultants.com";
 
 /** The password every fixture account is given. They are deleted at the end. */
 export const FIXTURE_PASSWORD = "TestQA123!@#";
