@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isEmailConfigured } from "@/lib/email";
 import { buildAndSendInvoiceEmail } from "@/lib/actions/invoices";
 import { requirePermission } from "@/lib/auth/permissions";
+import { shouldSendOverdueReminder } from "@/lib/overdueReminder";
 
 // These used to go through a hand-rolled requireProcessingOrAbove, which was
 // wrong twice over.
@@ -179,10 +180,9 @@ export async function sendOverdueReminderIfDue(invoiceId: string, studentId: str
     .maybeSingle();
   if (!invoice) return { error: "Invoice not found." };
 
-  if (invoice.last_reminder_sent_at) {
-    const hoursSince = (Date.now() - new Date(invoice.last_reminder_sent_at).getTime()) / 36e5;
-    if (hoursSince < 24) return { skipped: true };
-  }
+  // The interval rule lives in overdueReminder.ts so it can be tested without
+  // a database and without sending mail.
+  if (!shouldSendOverdueReminder(invoice.last_reminder_sent_at)) return { skipped: true };
 
   const { data: student } = await supabase.from("leads").select("full_name, email").eq("id", studentId).maybeSingle();
   if (!student?.email) return { skipped: true };

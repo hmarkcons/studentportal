@@ -24,6 +24,11 @@
 //                  link, die when a newer one is issued, and never be cached.
 //   the portal     what the student is actually shown — the total, what they
 //                  have paid, what is left, and when each instalment is due.
+//   the cron       the daily overdue reminder emails students about money, so
+//                  neither a plain run nor a dry one may be triggered by a
+//                  stranger. Which invoices it picks and how often it may
+//                  chase the same one are pure rules, covered by
+//                  scripts/overdue-invoices-test.mjs.
 //   deleting       the invoice and its installments together.
 //
 // The agreement is set up directly rather than through its own UI: it is the
@@ -378,6 +383,33 @@ try {
 
         await studentPage.close();
       }
+
+      // ------------------------------------- the daily overdue reminder
+      // The cron that chases unpaid instalments emails real students about
+      // money, so the thing worth checking from outside is that a stranger
+      // cannot make it do either of its jobs.
+      //
+      // All three cron routes once carried `if (process.env.CRON_SECRET &&
+      // ...)`, which authenticates nothing while the variable is unset — and
+      // it was unset. The dry run is the half that leaks: it names the
+      // students it would chase. CRON_SECRET is set now, so both halves must
+      // refuse. Which invoices it picks and how often it may chase the same
+      // one are decided by computeInvoiceStatus and shouldSendOverdueReminder,
+      // covered by scripts/overdue-invoices-test.mjs — they need no secret and
+      // send no mail.
+      console.log("\n--- the overdue reminder cron ---");
+      const cron = `${BASE}/api/cron/overdue-invoices`;
+      for (const [label, suffix] of [["a plain run", ""], ["a dry run", "?dry=1"]]) {
+        const res = await fetch(`${cron}${suffix}`);
+        ok(`${label} is refused without the secret`, res.status === 401,
+          `${res.status} ${(await res.text()).slice(0, 160)}`);
+      }
+      const wrong = await fetch(cron, { headers: { authorization: "Bearer not-the-secret" } });
+      ok("...and refused with the wrong one", wrong.status === 401, String(wrong.status));
+      const guessy = await fetch(`${cron}?dry=1`, { headers: { authorization: "Bearer not-the-secret" } });
+      const guessyBody = await guessy.text();
+      ok("...without naming a single student on the way out",
+        guessy.status === 401 && !guessyBody.includes("zztmp"), `${guessy.status} ${guessyBody.slice(0, 160)}`);
 
       // --------------------------------------------------------- deleting
       console.log("\n--- deleting it ---");
