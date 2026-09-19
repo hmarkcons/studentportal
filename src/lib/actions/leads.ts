@@ -3,6 +3,7 @@
 import { hasRole } from "@/lib/auth/roles";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { assignProcessingOfficers } from "@/lib/actions/processingHandoffWrite";
 import { ensureCommissionForStudent } from "@/lib/actions/commissionAuto";
 import { notifyAssignedStaff } from "@/lib/actions/registrationNotice";
 import { syncStudentFollowUpTask } from "@/lib/actions/studentFollowUp";
@@ -490,6 +491,10 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
     }
   }
 
+  // Spread the batch across the team rather than giving one officer all of
+  // them, which is what assigning each in isolation would do.
+  await assignProcessingOfficers(byIndex.map((r) => r.id));
+
   // Report the codes actually issued rather than assuming the trigger ran.
   const { count: coded } = await supabase
     .from("leads")
@@ -581,6 +586,9 @@ export async function registerStudentManually(_prevState: unknown, formData: For
     await supabase.from("lead_destinations").insert(destinationRows);
   }
 
+  // The counselor keeps the relationship; the Processing Team takes the work.
+  // Before the notice, so the mail names the officer it has just assigned.
+  await assignProcessingOfficers([id]);
   await ensureCommissionForStudent(id);
   await notifyAssignedStaff(id);
 
@@ -607,6 +615,7 @@ export async function updateRegistrationStatus(studentId: string, _prevState: un
   // remembered simply never earned one. Quiet when it cannot be priced yet —
   // Payroll lists those with the reason, which is where they can be acted on.
   if (registration_status === "registered") {
+    await assignProcessingOfficers([studentId]);
     await ensureCommissionForStudent(studentId);
   }
 
