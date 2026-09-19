@@ -55,8 +55,11 @@ async function basisFor(
  *
  * Called where the facts change — when a student is marked registered, and
  * when their agreement is signed, which is usually when the fee becomes known
- * at all. Silent about the cases it cannot price: Payroll lists those with the
- * reason, which is the right place to act on them.
+ * at all. Both ways of signing one count: staff uploading the scan of a paper
+ * agreement, and staff approving an e-signed submission. For a while only the
+ * second called this, so paper agreements never booked a commission at all.
+ * Silent about the cases it cannot price: Payroll lists those with the reason,
+ * which is the right place to act on them.
  *
  * Uses the admin client deliberately. This runs as a consequence of somebody
  * else's action — a counselor registering their own student — and that person

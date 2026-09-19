@@ -473,6 +473,17 @@ export async function uploadSignedAgreement(agreementId: string, studentId: stri
     }
   }
 
+  // As the e-signature approval does. Signing is when the consultancy fee
+  // becomes known, and the commission is a share of it — a counselor who
+  // registers a student before the agreement is signed cannot be priced at
+  // registration time, because basisFor only reads a signed agreement.
+  //
+  // Only the e-signature path asked for this, so every paper agreement — the
+  // Karachi students, which is most of them — went unpaid until somebody
+  // noticed and ran the Payroll backfill by hand. Idempotent: a re-upload over
+  // an already-signed agreement finds the row already there.
+  await ensureCommissionForStudent(studentId);
+
   revalidatePath(`/students/${studentId}`);
   return { success: true };
 }
