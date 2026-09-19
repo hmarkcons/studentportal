@@ -1,6 +1,7 @@
-// Absolute base URL for links that leave the app (currently the "View
-// receipt" button in invoice emails). A relative path is useless in an email
-// client, so this has to resolve to a real origin.
+// Absolute base URL for links that leave the app: the "View receipt" button in
+// invoice and receipt emails, and the link to a student in the registration
+// notice staff are sent. A relative path is useless in an email client, so this
+// has to resolve to a real origin.
 //
 // NEXT_PUBLIC_SITE_URL wins when set — use it to point emails at a custom
 // domain. Otherwise Vercel's own production-domain variable is used, so
