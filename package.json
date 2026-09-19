@@ -12,6 +12,7 @@
     "test:unit": "node --test --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/*-test.mjs",
     "test": "npm run test:unit",
     "check:agreement": "node scripts/verify-agreement-flow.mjs",
+    "check:invoice": "node scripts/verify-invoice-flow.mjs",
     "check:pay": "node scripts/verify-pay-split.mjs",
     "check:roles": "node scripts/verify-multi-role.mjs",
     "check:hook": "sh scripts/verify-hook.sh",

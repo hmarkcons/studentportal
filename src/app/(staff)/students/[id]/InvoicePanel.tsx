@@ -191,9 +191,11 @@ function DeleteInvoiceButton({ invoiceId, studentId, revalidateTo }: { invoiceId
 
 function MarkPaidForm({ installmentId, studentId }: { installmentId: string; studentId: string }) {
   const action = markInstallmentPaid.bind(null, installmentId, studentId);
-  const [, formAction] = useActionState(action, undefined);
+  // The state was discarded here, so a refused or failed payment looked
+  // exactly like a successful one: the row stayed unpaid and nothing said why.
+  const [state, formAction] = useActionState(action, undefined);
   return (
-    <form action={formAction} className="flex items-center gap-1">
+    <form action={formAction} className="flex flex-wrap items-center gap-1">
       <Select name="payment_method">
         <option value="Cash">Cash</option>
         <option value="Bank transfer">Bank transfer</option>
@@ -203,6 +205,7 @@ function MarkPaidForm({ installmentId, studentId }: { installmentId: string; stu
       <Button type="submit" variant="success" size="sm">
         Mark paid
       </Button>
+      {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
     </form>
   );
 }

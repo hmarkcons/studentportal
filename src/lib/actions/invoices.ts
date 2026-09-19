@@ -67,6 +67,14 @@ const DEFAULT_TERMS =
 export async function generateInvoice(studentId: string, agreementId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
 
+  // Raising an invoice is the act that tells a student what to pay, so it
+  // takes the same permission as editing or sending one. It had none: every
+  // other write in this file checks, and three did not, which meant a role
+  // override that revoked finance.invoices.manage still left the person able
+  // to create invoices, mark them paid and render their PDFs.
+  const denied = await requirePermission("finance.invoices.manage", "Only Finance/Super Admin can raise an invoice.");
+  if (denied) return { error: denied.error };
+
   // A student may have no agreement yet — the invoice is still valid, just
   // unlinked. An empty string here reaches Postgres as an invalid uuid and the
   // whole generation fails, so normalise it to null.
@@ -373,6 +381,12 @@ export async function updateInstallment(installmentId: string, studentId: string
 
 export async function markInstallmentPaid(installmentId: string, studentId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
+
+  // Recording money as received is a finance act, and the same one
+  // updateInstallment already guards — which this bypassed entirely, since it
+  // writes the identical fields by another route.
+  const denied = await requirePermission("finance.invoices.manage", "Only Finance/Super Admin can record a payment.");
+  if (denied) return { error: denied.error };
   const paid_date = String(formData.get("paid_date") ?? new Date().toISOString().slice(0, 10));
   const payment_method = String(formData.get("payment_method") ?? "").trim() || null;
 
@@ -725,6 +739,11 @@ export async function buildAndStoreInvoicePdf(
 }
 
 export async function generateInvoicePdf(invoiceId: string, studentId: string, revalidateTo: string) {
+  // As generateAgreementPdf does. The PDF is the document the student is sent,
+  // and rendering it writes pdf_path.
+  const denied = await requirePermission("finance.invoices.manage", "Only Finance/Super Admin can generate an invoice PDF.");
+  if (denied) return { error: denied.error };
+
   const supabase = await createClient();
   const result = await buildAndStoreInvoicePdf(supabase, invoiceId, studentId);
   if ("error" in result) return { error: result.error };
