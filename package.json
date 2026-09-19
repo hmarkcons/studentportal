@@ -11,6 +11,8 @@
     "test:e2e": "node scripts/e2e-test.js",
     "test:unit": "node --test --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/*-test.mjs",
     "test": "npm run test:unit",
+    "check:pay": "node scripts/verify-pay-split.mjs",
+    "check:roles": "node scripts/verify-multi-role.mjs",
     "check:hook": "sh scripts/verify-hook.sh",
     "check:xlsx": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-xlsx-in-excel.ps1",
     "prepare": "node scripts/install-hooks.mjs"
