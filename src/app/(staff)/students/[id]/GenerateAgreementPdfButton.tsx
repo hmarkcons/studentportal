@@ -29,7 +29,12 @@ export function GenerateAgreementPdfButton({
   return (
     <div className="flex items-center gap-1">
       <Button type="button" variant="outline-primary" size="sm" onClick={handle} pending={pending}>
-        {hasPdf ? "Regenerate agreement" : "Generate agreement"}
+        {/* "PDF", not "agreement": the button that creates the agreement itself
+            says "Generate agreement", and two controls a few lines apart with
+            the same words is a coin toss. The edit form already tells staff to
+            use "Regenerate PDF" afterward, and the invoice panel next door
+            labels the identical action "Generate PDF" / "Regenerate PDF". */}
+        {hasPdf ? "Regenerate PDF" : "Generate PDF"}
       </Button>
       {error && <p className="text-xs text-danger">{error}</p>}
     </div>
