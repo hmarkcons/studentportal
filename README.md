@@ -1,8 +1,14 @@
-# Case Flow
+# HMARK Student Portal CRM
 
-Internal student-case management portal for HMark Consultants — tracks students through the study-abroad journey from inquiry to enrollment, with a document checklist tracker for counselors and admin.
+The study-abroad CRM for HMARK Consultants, in three parts:
 
-Phase 1 scope, design rationale, and build plan: see the published design artifacts (Case Flow Canvas, Case Flow Blueprint) shared in project discussion.
+- **Company & Staff Portal** — the core CRM: leads through registered students, applications, visa and enrollment, with the university and course catalogue, document management, finance and commission, marketing, reporting, and a per-country documentation tracker whose stages and requirements differ by destination.
+- **Student Portal** — self-service for the student once their signed agreement is on file: documents, application progress, payments, appointments, messages and support.
+- **Partner University Portal** — university staff review applications, maintain their own course directory, and track commissions, feeding back into the staff portal's catalogue.
+
+Seven roles, from Super Admin to Digital Marketing; a staff member can hold several at once and their access is the union of them.
+
+This supersedes the earlier "Case Flow" scope, which described a lighter internal case tracker.
 
 ## Stack
 
