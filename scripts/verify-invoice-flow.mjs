@@ -36,6 +36,12 @@
 //                  chase the same one are pure rules, covered by
 //                  scripts/overdue-invoices-test.mjs.
 //   deleting       the invoice and its installments together.
+//   the generator  the other way in, at /finance/invoice-generator: a discount,
+//                  an instalment count up to 24 rather than a choice of three,
+//                  and a live preview. The preview's figures are read off the
+//                  screen and compared with what was written, since "computed
+//                  once, printed in four places" is the claim the module rests
+//                  on and recomputing them here would only restate the formula.
 //
 // The agreement is set up directly rather than through its own UI: it is the
 // invoice under test here, and check:agreement already drives that path.
@@ -58,8 +64,11 @@ const waitForInvoice = async (page, studentId, done, seconds = 45) => {
   for (let i = 0; i < seconds; i++) {
     const { data } = await admin
       .from("invoices")
-      .select("id, invoice_number, currency, admin_charge, consultancy_fee, discount_amount, " +
-              "tax_rate, tax_amount, sent_status, sent_at, pdf_path, intake, terms, receipt_token")
+      // Every column, deliberately. Naming them cost three assertions that
+      // silently read undefined and reported the app broken when it was not —
+      // an assertion that passes or fails on a column nobody selected is worse
+      // than no assertion. These read one fixture row; there is nothing to save.
+      .select("*")
       .eq("student_id", studentId)
       .maybeSingle();
     if (data && done(data)) return data;
@@ -71,8 +80,7 @@ const waitForInvoice = async (page, studentId, done, seconds = 45) => {
 const installmentsOf = async (invoiceId) => {
   const { data } = await admin
     .from("invoice_installments")
-    .select("id, installment_no, amount, status, due_date, due_condition, amount_paid, payment_method, paid_date, " +
-            "carried_from_installment_no, carried_part_paid, carried_paid_date")
+    .select("*")
     .eq("invoice_id", invoiceId)
     .order("installment_no");
   return data ?? [];
@@ -556,6 +564,100 @@ try {
         const left = await installmentsOf(invoice.id);
         ok("...and its installments with it", left.length === 0, `${left.length} left behind`);
       }
+    }
+
+    // ================================================ the Invoice Generator
+    // The other way in. It carries what the student-page panel does not — a
+    // discount, an instalment count up to 24 rather than a choice of three,
+    // and a live preview of the breakdown.
+    //
+    // Run last, once the first invoice has been deleted, so this student has
+    // exactly one again.
+    //
+    // The preview is the thing worth checking here. The claim the whole module
+    // rests on is that the figures are computed once and printed in four
+    // places — this page, the stored instalments, the PDF and the email — so
+    // the numbers are read off the screen and compared against what was
+    // written, rather than both being recomputed here from the same formula
+    // this script would have to duplicate.
+    console.log("\n--- the Invoice Generator ---");
+    const GEN = { fee: 2000, admin: 300, discount: 150, reason: "zztmp early registration", count: 9 };
+
+    await page.goto(`${BASE}/finance/invoice-generator`, { waitUntil: "domcontentloaded" });
+    const picker = page.locator("select").first();
+    ok("the generator lists registered students", (await picker.count()) > 0);
+
+    if (await picker.count()) {
+      // By value: the option's value is the student id, and its label carries
+      // their country and intake, so matching on text is needlessly brittle.
+      await picker.selectOption(studentId);
+      await page.locator('input[name="consultancy_fee"]').fill(String(GEN.fee));
+      await page.locator('input[name="admin_charge"]').fill(String(GEN.admin));
+      await page.locator('input[name="discount_amount"]').fill(String(GEN.discount));
+      await page.locator('input[name="discount_reason"]').fill(GEN.reason);
+      await page.locator('input[name="installment_count"]').fill(String(GEN.count));
+      await page.locator('input[name="first_due_date"]').fill(FIRST_DUE);
+
+      const preview = page.locator("div").filter({ hasText: /Invoice preview/ }).last();
+      const shown = (await preview.innerText()).replace(/−/g, "-");
+
+      // 2000 less a 150 discount is 1850; 5% of that is 92.50; plus the 300
+      // administrative fee, which is outside the tax base.
+      ok("the preview shows the discount coming off the fee first",
+        /Net consultancy fee\s+EUR 1,850\.00/.test(shown), shown.replace(/\s+/g, " ").slice(0, 400));
+      ok("...the tax charged on what is left, not on the whole fee",
+        /SRB tax \(5% of net fee\)\s+EUR 92\.50/.test(shown), shown.replace(/\s+/g, " ").slice(0, 400));
+      ok("...and the discount reason beside it",
+        shown.includes(GEN.reason), shown.replace(/\s+/g, " ").slice(0, 400));
+      ok("...totalling the fee, its tax and the administrative charge",
+        /Total payable\s+EUR 2,242\.50/.test(shown), shown.replace(/\s+/g, " ").slice(0, 400));
+
+      // "9 installments of EUR 515.83 + EUR 215.83 + ... + EUR 215.86"
+      const previewed = [...shown.matchAll(/EUR ([\d,]+\.\d{2})/g)]
+        .map((m) => Number(m[1].replace(/,/g, "")))
+        .slice(-GEN.count);
+      ok(`...and the ${GEN.count} instalments it would write`, previewed.length === GEN.count,
+        JSON.stringify(previewed));
+
+      await page.getByRole("button", { name: "Generate invoice" }).click();
+
+      const made = await waitForInvoice(page, studentId, (i) => i.id);
+      ok("an invoice is generated from this page", made !== null,
+        (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(-300));
+
+      if (made) {
+        ok("...with the discount and its reason recorded",
+          Number(made.discount_amount) === GEN.discount && made.discount_reason === GEN.reason,
+          `${made.discount_amount} / ${made.discount_reason}`);
+        ok("...and the tax the preview showed",
+          Number(made.tax_amount) === 92.5, String(made.tax_amount));
+
+        const written = (await installmentsOf(made.id)).map((r) => Number(r.amount));
+        ok("...the instalments written are exactly the ones previewed",
+          JSON.stringify(written) === JSON.stringify(previewed),
+          `previewed ${JSON.stringify(previewed)} vs written ${JSON.stringify(written)}`);
+
+        // 1942.50 over nine does not divide evenly. The parts must still sum
+        // to the whole, so the remainder lands on the last one rather than
+        // leaving the invoice a few cents short of ever reading as paid.
+        const sum = Math.round(written.reduce((a, b) => a + b, 0) * 100) / 100;
+        ok("...summing exactly to the total, despite not dividing evenly",
+          sum === 2242.5, `${sum}`);
+        ok("...with the administrative charge on the first",
+          written[0] === Math.round((written[1] + GEN.admin) * 100) / 100,
+          `${written[0]} vs ${written[1]} + ${GEN.admin}`);
+        ok("...and the rounding remainder on the last",
+          written[written.length - 1] !== written[1],
+          `last ${written[written.length - 1]}, middle ${written[1]}`);
+      }
+
+      // A discount bigger than the fee would invert the invoice. The button
+      // refuses before the server has to.
+      await page.locator('input[name="discount_amount"]').fill(String(GEN.fee + 1));
+      const submit = page.getByRole("button", { name: "Generate invoice" });
+      ok("a discount larger than the fee cannot be submitted", await submit.isDisabled());
+      ok("...and says why", /Discount cannot exceed the consultancy fee/.test(
+        await page.locator("body").innerText()));
     }
   }
 
