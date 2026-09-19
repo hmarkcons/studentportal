@@ -116,6 +116,60 @@ test("a checklist with nothing required says nothing", () => {
 });
 
 // --------------------------------------------------------- refusal history
+//
+// student_profiles.visa_refusal_history is jsonb holding a list of rows, and
+// defaults to '[]'. It was typed as a string and read with .trim(), so every
+// student whose tracker carried a visa_refusal_reason field crashed the whole
+// dashboard — no unusual data required, just the field existing.
+test("the list the column actually holds is read, not crashed on", () => {
+  const s = trackerSuggestion(REFUSAL, {
+    visaRefusalHistory: [
+      { id: "1", country: "Italy", type: "refusal", date: "2025-03-04", reason: "insufficient funds" },
+    ],
+  });
+  assert.equal(s.value, "Refused by Italy on 2025-03-04: insufficient funds");
+});
+
+test("an empty history suggests nothing, which is the common case", () => {
+  // The column's default. This is the exact value that brought the page down.
+  assert.equal(trackerSuggestion(REFUSAL, { visaRefusalHistory: [] }), null);
+  assert.equal(trackerSuggestion(REFUSAL, { visaRefusalHistory: null }), null);
+  assert.equal(trackerSuggestion(REFUSAL, {}), null);
+});
+
+test("a deportation is not called a refusal", () => {
+  const s = trackerSuggestion(REFUSAL, {
+    visaRefusalHistory: [{ country: "UAE", type: "deportation", date: "2023-01-09", reason: "overstay" }],
+  });
+  assert.equal(s.value, "Deported from UAE on 2023-01-09: overstay");
+});
+
+test("several are listed in order", () => {
+  const s = trackerSuggestion(REFUSAL, {
+    visaRefusalHistory: [
+      { country: "Italy", type: "refusal", date: "2025-03-04", reason: "insufficient funds" },
+      { country: "Germany", type: "refusal", date: "2025-08-01", reason: "incomplete documents" },
+    ],
+  });
+  assert.equal(
+    s.value,
+    "Refused by Italy on 2025-03-04: insufficient funds; Refused by Germany on 2025-08-01: incomplete documents"
+  );
+});
+
+test("missing pieces are dropped rather than printed at the student", () => {
+  // The form requires a country now, but rows written before it did not.
+  const s = trackerSuggestion(REFUSAL, {
+    visaRefusalHistory: [{ country: "Italy", type: "refusal" }, { type: "refusal", reason: "no country recorded" }],
+  });
+  assert.equal(s.value, "Refused by Italy");
+  assert.doesNotMatch(s.value, /undefined|null/);
+});
+
+test("a row that is not an object does not bring the page down", () => {
+  assert.equal(trackerSuggestion(REFUSAL, { visaRefusalHistory: [null, "junk"] }), null);
+});
+
 test("the refusal history is offered with a warning attached", () => {
   const s = trackerSuggestion(REFUSAL, { visaRefusalHistory: "Refused 2024, insufficient funds" });
   assert.equal(s.value, "Refused 2024, insufficient funds");

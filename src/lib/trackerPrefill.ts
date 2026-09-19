@@ -19,17 +19,66 @@ export type TestScore = {
   customTestName?: string | null;
 };
 
+/** One row of student_profiles.visa_refusal_history. */
+export type VisaRefusalEntry = {
+  country?: string | null;
+  /** 'refusal' or 'deportation' — see studentProfileExtras. */
+  type?: string | null;
+  date?: string | null;
+  reason?: string | null;
+};
+
 export type PrefillSource = {
   /** leads.course_of_interest */
   courseOfInterest?: string | null;
   /** leads.finalized_course_of_interest, which wins when it is set. */
   finalizedCourseOfInterest?: string | null;
-  /** student_profiles.visa_refusal_history */
-  visaRefusalHistory?: string | null;
+  /**
+   * student_profiles.visa_refusal_history, which is jsonb and holds a list —
+   * `[{ country, type, date, reason }]` — never a string. It was typed as one
+   * and read with `.trim()`, so every student whose tracker has a
+   * visa_refusal_reason field crashed the whole dashboard on `[].trim is not a
+   * function`. The column defaults to `'[]'`, so this did not need unusual
+   * data to happen; it needed the field to exist on their tracker.
+   *
+   * A string is still accepted because one is what a caller would naturally
+   * pass, and because throwing is never the right answer here.
+   */
+  visaRefusalHistory?: VisaRefusalEntry[] | string | null;
   testScores?: TestScore[];
   /** The scholarship_documents section of this student's checklist. */
   scholarshipDocs?: { required: number; uploaded: number; verified: number };
 };
+
+/**
+ * The refusal history as a sentence the student can read.
+ *
+ * Each row is "<Refused by|Deported from> <country> on <date>: <reason>",
+ * dropping whatever is missing rather than printing "undefined" at somebody
+ * who is already having a bad time with a visa.
+ */
+export function refusalHistoryText(history: VisaRefusalEntry[] | string | null | undefined): string {
+  if (typeof history === "string") return history.trim();
+  if (!Array.isArray(history)) return "";
+
+  return history
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return "";
+      const verb = entry.type === "deportation" ? "Deported from" : "Refused by";
+      const country = (entry.country ?? "").trim();
+      const date = (entry.date ?? "").trim();
+      const reason = (entry.reason ?? "").trim();
+
+      const head = [verb, country].filter(Boolean).join(" ");
+      const when = date ? ` on ${date}` : "";
+      const why = reason ? `: ${reason}` : "";
+      // A row with no country at all says nothing worth putting in front of a
+      // student — the form refuses to save one, but old rows predate that.
+      return country ? `${head}${when}${why}` : "";
+    })
+    .filter(Boolean)
+    .join("; ");
+}
 
 export type Suggestion = {
   /** Exactly what would go in the field. */
@@ -159,7 +208,7 @@ export function trackerSuggestion(
     }
 
     case "visa_refusal_reason": {
-      const history = (source.visaRefusalHistory ?? "").trim();
+      const history = refusalHistoryText(source.visaRefusalHistory);
       if (!history) return null;
       return {
         value: history,

@@ -65,7 +65,7 @@ const waitForInvoice = async (page, studentId, done, seconds = 45) => {
 const installmentsOf = async (invoiceId) => {
   const { data } = await admin
     .from("invoice_installments")
-    .select("installment_no, amount, status, due_date, due_condition, amount_paid, payment_method, paid_date")
+    .select("id, installment_no, amount, status, due_date, due_condition, amount_paid, payment_method, paid_date")
     .eq("invoice_id", invoiceId)
     .order("installment_no");
   return data ?? [];
@@ -294,6 +294,111 @@ try {
         }
       }
 
+      // ------------------------------------- a part payment, and its balance
+      // A student pays some of an instalment. Left as 'partial' the remainder
+      // had no due date of its own, so nothing chased it: the overdue cron
+      // cannot see an instalment without a date, and the student was never
+      // told when the rest was expected. So the instalment is closed off at
+      // what was actually paid and the balance becomes an instalment in its
+      // own right, a week later unless staff choose otherwise.
+      //
+      // The rule is unit-tested (partial-payment-test.mjs). What is checked
+      // here is the write: the renumbering, and that the schedule still adds
+      // up to what the student owes.
+      console.log("\n--- a part payment ---");
+      const PAID_DATE = "2026-10-10";
+      const PART = 200;
+
+      const before = await installmentsOf(invoice.id);
+      const second = before[1];
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await expand(page, "Invoice");
+      // The pencil on each instalment row opens its editor.
+      const pencils = page.getByRole("button", { name: "✏️", exact: true });
+      ok("an instalment can be edited", (await pencils.count()) >= 2, `${await pencils.count()} found`);
+
+      if ((await pencils.count()) >= 2) {
+        await pencils.nth(1).click();
+        const editor = page.locator("form").filter({ has: page.locator('select[name="status"]') }).first();
+        await editor.locator('select[name="status"]').selectOption("partial");
+        await editor.locator('input[name="amount_paid"]').fill(String(PART));
+        await editor.locator('input[name="paid_date"]').fill(PAID_DATE);
+
+        // The balance date defaults to a week after the payment, filled in by
+        // the form rather than left for staff to work out.
+        const defaulted = await editor.locator('input[name="balance_due_date"]').inputValue();
+        ok("...and the balance is dated a week later by default", defaulted === "2026-10-17", defaulted);
+
+        await editor.getByRole("button", { name: /^Save$/ }).click();
+
+        let split = null;
+        for (let i = 0; i < 30; i++) {
+          const rows = await installmentsOf(invoice.id);
+          if (rows.length === before.length + 1) { split = rows; break; }
+          await page.waitForTimeout(1000);
+        }
+        ok("the instalment splits in two", split !== null,
+          (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(-300));
+
+        if (split) {
+          const paidPart = split.find((r) => r.installment_no === second.installment_no);
+          const balance = split.find((r) => r.installment_no === second.installment_no + 1);
+
+          ok("...what was paid is closed off at that amount",
+            Number(paidPart.amount) === PART && paidPart.status === "paid"
+            && Number(paidPart.amount_paid) === PART,
+            JSON.stringify(paidPart));
+          ok("...the rest becomes an instalment of its own",
+            Number(balance.amount) === Number(second.amount) - PART && balance.status === "unpaid",
+            JSON.stringify(balance));
+          // The whole point of the split: something has to chase the balance.
+          ok("...with a due date, so the overdue cron can see it",
+            balance.due_date === "2026-10-17", String(balance.due_date));
+          ok("...saying where it came from",
+            balance.carried_from_installment_no === second.installment_no
+            && Number(balance.carried_part_paid) === PART
+            && balance.carried_paid_date === PAID_DATE,
+            JSON.stringify(balance));
+
+          // The instalment that waits on the admission was after the one that
+          // split, so it has been renumbered. It must not have lost what makes
+          // it different from the others.
+          const waiting = split.find((r) => r.due_condition);
+          ok("...and the admission instalment survives the renumbering",
+            Boolean(waiting) && waiting.due_date === null
+            && waiting.installment_no === split.length,
+            JSON.stringify(waiting));
+          ok("...numbered 1..n with no gaps or repeats",
+            JSON.stringify(split.map((r) => r.installment_no))
+            === JSON.stringify(split.map((_, i) => i + 1)),
+            JSON.stringify(split.map((r) => r.installment_no)));
+
+          // The invariant that matters: splitting moves money between rows, it
+          // never creates or destroys any.
+          const sum = split.reduce((s, r) => s + Number(r.amount), 0);
+          ok("...and the schedule still adds up to what the student owes",
+            sum === FEE + 90 + ADMIN_CHARGE, `${sum} vs ${FEE + 90 + ADMIN_CHARGE}`);
+
+          // Both refusals are enforced in the RPC as well as the form, so the
+          // database is checked directly rather than the message being taken
+          // on trust.
+          const whole = split.find((r) => r.status === "unpaid");
+          const asSuperRpc = await apiAs(url, anonKey, sup.email);
+          const full = await asSuperRpc.rpc("split_partial_installment", {
+            p_installment_id: whole.id ?? balance.id, p_amount_paid: Number(whole.amount),
+            p_paid_date: PAID_DATE, p_balance_due_date: "2026-10-20", p_payment_method: "Cash",
+          });
+          ok("paying the whole instalment is not a part payment, says the database",
+            Boolean(full.error), JSON.stringify(full.error?.message ?? full.data));
+          const nothing = await asSuperRpc.rpc("split_partial_installment", {
+            p_installment_id: whole.id ?? balance.id, p_amount_paid: 0,
+            p_paid_date: PAID_DATE, p_balance_due_date: "2026-10-20", p_payment_method: "Cash",
+          });
+          ok("...and neither is nothing", Boolean(nothing.error),
+            JSON.stringify(nothing.error?.message ?? nothing.data));
+        }
+      }
+
       // ------------------------------------------- the tokenised receipt
       // Students may have no portal login at all, so the receipt is reached
       // by an unguessable token with an expiry rather than a session. That
@@ -376,6 +481,10 @@ try {
         // admission. This page did not select due_condition, so the one
         // instalment whose timing is most carefully explained everywhere else
         // was shown to the student as "No due date".
+        ok("...where the extra instalment on their schedule came from",
+          /Balance carried from instalment 2|Balance carried from installment 2/i.test(seen),
+          seen.replace(/s+/g, " ").slice(-600));
+
         ok("...and when the last instalment actually falls due",
           /admission approval from your first public university/i.test(seen)
           && !/No due date/.test(seen),

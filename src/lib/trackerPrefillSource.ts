@@ -1,6 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import type { PrefillSource } from "@/lib/trackerPrefill";
+import type { PrefillSource, VisaRefusalEntry } from "@/lib/trackerPrefill";
 
 /**
  * Gathers what the rest of the record already knows about this student, for
@@ -30,7 +30,8 @@ export async function loadTrackerPrefillSource(
   return {
     courseOfInterest: lead?.course_of_interest ?? null,
     finalizedCourseOfInterest: lead?.finalized_course_of_interest ?? null,
-    visaRefusalHistory: profile?.visa_refusal_history ?? null,
+    // jsonb: a list of refusal rows, not a string. See trackerPrefill.
+    visaRefusalHistory: (profile?.visa_refusal_history ?? null) as VisaRefusalEntry[] | null,
     testScores: (scores ?? []).map((s) => ({
       testType: s.test_type,
       score: s.score,
