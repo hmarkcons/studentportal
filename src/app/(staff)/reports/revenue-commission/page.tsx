@@ -74,13 +74,16 @@ export default async function RevenueCommissionPage() {
 
   for (const i of invoices ?? []) {
     const currency = i.currency ?? "EUR";
-    const billed =
-      computeInvoiceMath({
-        consultancyFee: Number(i.consultancy_fee ?? 0),
-        adminCharge: Number(i.admin_charge ?? 0),
-        discountAmount: Number(i.discount_amount ?? 0),
-        taxRate: Number(i.tax_rate ?? 0),
-      }).total + (extrasByInvoice.get(i.id) ?? 0);
+    // Added items go through the same computation as the fees rather than
+    // being added on afterwards: they are taxed, and adding them untaxed here
+    // understated invoiced revenue by the tax on every item.
+    const billed = computeInvoiceMath({
+      consultancyFee: Number(i.consultancy_fee ?? 0),
+      adminCharge: Number(i.admin_charge ?? 0),
+      discountAmount: Number(i.discount_amount ?? 0),
+      taxRate: Number(i.tax_rate ?? 0),
+      extras: extrasByInvoice.get(i.id) ?? 0,
+    }).total;
     // paid, not a raw amount_paid sum: computePaymentProgress counts a settled
     // installment by its amount and a partial one by what was actually
     // received, so an installment marked paid without a recorded figure still

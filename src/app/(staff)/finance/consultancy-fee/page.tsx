@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { StatCard } from "@/components/ui/StatCard";
 import { computeInvoiceStatus } from "@/lib/invoiceStatus";
-import { computeInvoiceMath, computePaymentProgress } from "@/lib/invoiceMath";
+import { computeInvoiceMath, computePaymentProgress, sumLineItems } from "@/lib/invoiceMath";
 import { getEffectivePermissions } from "@/lib/auth/permissions";
 import { FeeProductCatalog } from "./FeeProductCatalog";
 import { ConsultancyFeeList } from "./ConsultancyFeeList";
@@ -117,6 +117,9 @@ export default async function ConsultancyFeePage() {
           adminCharge,
           discountAmount: Number(inv.discount_amount ?? 0),
           taxRate: Number(inv.tax_rate ?? 0),
+          // Added items count towards what the student owes here as
+          // everywhere else; the overview used to leave them out.
+          extras: sumLineItems(r?.lineItems),
         })
       : null;
 

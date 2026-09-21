@@ -4,7 +4,7 @@ import { carriedFromNote } from "@/lib/partialPayment";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { computeInvoiceMath, computePaymentProgress, PAYMENT_STATUS_LABELS } from "@/lib/invoiceMath";
+import { computeInvoiceMath, computePaymentProgress, installmentNote, sumLineItems, PAYMENT_STATUS_LABELS } from "@/lib/invoiceMath";
 
 // The figures here go through computeInvoiceMath and computePaymentProgress,
 // the same functions behind the receipt PDF and the invoice email. This page
@@ -56,9 +56,20 @@ export default async function PortalPaymentsPage() {
         // the admission instead (installmentDueConditions). Without it this
         // page told the student "No due date" for the one instalment whose
         // timing is most carefully explained everywhere else.
-        .select("id, invoice_id, installment_no, amount, amount_paid, status, due_date, due_condition, paid_date, carried_from_installment_no, carried_part_paid, carried_paid_date")
+        .select("id, invoice_id, installment_no, amount, amount_paid, status, due_date, due_condition, paid_date, carried_from_installment_no, carried_part_paid, carried_paid_date, extras_amount")
         .in("invoice_id", invoiceIds)
         .order("installment_no", { ascending: true })
+    : { data: [] };
+
+  // Items added after the invoice was raised. Readable by the student since
+  // migration 0256; before it the policy named staff only, so this page could
+  // not have shown them even if it had asked.
+  const { data: lineItems } = invoiceIds.length
+    ? await supabase
+        .from("invoice_line_items")
+        .select("id, invoice_id, name, amount")
+        .in("invoice_id", invoiceIds)
+        .order("created_at", { ascending: true })
     : { data: [] };
 
   const today = new Date().toISOString().slice(0, 10);
@@ -75,11 +86,13 @@ export default async function PortalPaymentsPage() {
       <div className="flex flex-col gap-6">
         {(invoices ?? []).map((inv) => {
           const mine = (installments ?? []).filter((i) => i.invoice_id === inv.id);
+          const items = (lineItems ?? []).filter((li) => li.invoice_id === inv.id);
           const math = computeInvoiceMath({
             consultancyFee: Number(inv.consultancy_fee ?? 0),
             adminCharge: Number(inv.admin_charge ?? 0),
             discountAmount: Number(inv.discount_amount ?? 0),
             taxRate: Number(inv.tax_rate ?? 0),
+            extras: sumLineItems(items),
           });
           const progress = computePaymentProgress(mine);
           const settled = progress.outstanding <= 0;
@@ -133,6 +146,11 @@ export default async function PortalPaymentsPage() {
                     value={`- ${money(cur, math.discountAmount)}`}
                   />
                 )}
+                {/* Each added item on its own line, beside the fee it is taxed
+                    with, so every figure in the total has a name. */}
+                {items.map((li) => (
+                  <Line key={li.id} label={li.name} value={money(cur, Number(li.amount ?? 0))} />
+                ))}
                 {math.taxAmount > 0 && <Line label={`SRB tax · ${math.taxRate}%`} value={money(cur, math.taxAmount)} />}
                 {math.adminCharge > 0 && <Line label="Administrative fee" value={money(cur, math.adminCharge)} />}
                 <Line label="Total" value={money(cur, total)} strong />
@@ -158,9 +176,11 @@ export default async function PortalPaymentsPage() {
                           <span className="text-ink">
                             {i.installment_no}. {money(cur, Number(i.amount ?? 0))}
                             {/* The administrative charge is collected with the
-                                first instalment, so it is larger by design. */}
-                            {i.installment_no === 1 && math.adminCharge > 0 && (
-                              <span className="text-muted"> · includes the {money(cur, math.adminCharge)} admin fee</span>
+                                first instalment, and an added item with the
+                                next one to be paid, so either can be larger
+                                by design. */}
+                            {installmentNote(i, math, (n) => money(cur, n)) && (
+                              <span className="text-muted"> · {installmentNote(i, math, (n) => money(cur, n))}</span>
                             )}
                             {i.status === "partial" && Number(i.amount_paid ?? 0) > 0 && (
                               <span className="text-muted"> · {money(cur, Number(i.amount_paid))} received</span>

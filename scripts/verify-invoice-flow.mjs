@@ -13,6 +13,13 @@
 //                  whatever the form says, and the last installment of a plan
 //                  falls due on an admission rather than on a date.
 //   the PDF        stored, and a real PDF.
+//   an added item  a product put on the invoice after it was raised. It is
+//                  taxed at the invoice's rate and the schedule is re-priced
+//                  to collect it: on the first instalment while nothing is
+//                  paid, on the next unpaid one once money has come in, and
+//                  removing it undoes exactly that. The student sees it on
+//                  their Payments page. The row used to be written and shown
+//                  on the staff card and nowhere else.
 //   sending        the status is written only after the mail actually goes —
 //                  it used to be stamped regardless, so the CRM reported
 //                  invoices as delivered that nobody had received.
@@ -84,6 +91,50 @@ const installmentsOf = async (invoiceId) => {
     .eq("invoice_id", invoiceId)
     .order("installment_no");
   return data ?? [];
+};
+
+const lineItemsOf = async (invoiceId) => {
+  const { data } = await admin.from("invoice_line_items").select("*").eq("invoice_id", invoiceId);
+  return data ?? [];
+};
+
+// Waits for the line-item table to hold `n` rows for the invoice. The
+// instalments are re-priced in the same transaction, so once the row is there
+// the schedule can be read straight away.
+const waitForLineItems = async (page, invoiceId, n, seconds = 30) => {
+  for (let i = 0; i < seconds; i++) {
+    const rows = await lineItemsOf(invoiceId);
+    if (rows.length === n) return rows;
+    await page.waitForTimeout(1000);
+  }
+  return null;
+};
+
+// Adds a custom item through the card's "+ Add item" form. Returns the line
+// item rows afterwards, or null if the row never appeared.
+const addItemViaCard = async (page, invoiceId, name, amount, expectCount) => {
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expand(page, "Invoice");
+  const button = page.getByRole("button", { name: "+ Add item" }).first();
+  if ((await button.count()) === 0) return { offered: false, rows: null };
+  const form = page.locator("form").filter({ has: button }).first();
+  await form.locator('input[name="name"]').fill(name);
+  await form.locator('input[name="amount"]').fill(String(amount));
+  await button.click();
+  return { offered: true, rows: await waitForLineItems(page, invoiceId, expectCount) };
+};
+
+// Removes an item by the Remove button on its own row, not the first Remove
+// on the page — the student page has other sections with one.
+const removeItemViaCard = async (page, invoiceId, name, amount, currency, expectCount) => {
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expand(page, "Invoice");
+  const rowText = page.getByText(`${name} — ${currency} ${amount.toFixed(2)}`, { exact: true });
+  if ((await rowText.count()) === 0) return { offered: false, rows: null };
+  const remove = rowText.locator("..").getByRole("button", { name: "Remove" });
+  if ((await remove.count()) === 0) return { offered: false, rows: null };
+  await remove.click();
+  return { offered: true, rows: await waitForLineItems(page, invoiceId, expectCount) };
 };
 
 // Italy (Public): a public track, so EUR and a public-university condition.
@@ -198,6 +249,99 @@ try {
         }
       }
 
+      // ------------------------------------------------------ an added item
+      // A product from the fee catalog, or a custom charge, put on the invoice
+      // after it was raised. The row used to be written and shown on the
+      // staff card and nowhere else: the schedule was not re-priced, so
+      // paid/outstanding (derived from the instalments) never included it; the
+      // PDF and the email never read the table; and the student could not
+      // read it at all. Now it is taxed at the invoice's rate and collected
+      // with the first instalment, like the administrative charge.
+      //
+      // Added and then removed, so the rest of this run proceeds from the
+      // figures it was written against — and because removal has to undo
+      // exactly what adding did.
+      console.log("\n--- an added item ---");
+      const ITEM = { name: "zztmp Courier", amount: 100 };
+      {
+        const added = await addItemViaCard(page, invoice.id, ITEM.name, ITEM.amount, 1);
+        ok("an item can be added to the invoice", added.offered,
+          (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(-300));
+        ok("...and is recorded", added.rows !== null,
+          (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(-300));
+
+        if (added.rows) {
+          ok("...at the amount entered, under the name given",
+            Number(added.rows[0].amount) === ITEM.amount && added.rows[0].name === ITEM.name,
+            JSON.stringify(added.rows[0]));
+
+          // 100 plus 5% tax is 105, on the first instalment with the admin charge.
+          const withItem = await installmentsOf(invoice.id);
+          const amounts = withItem.map((p) => Number(p.amount));
+          ok("the schedule is re-priced to collect it with the first instalment",
+            JSON.stringify(amounts) === JSON.stringify([1035, 630, 630]), JSON.stringify(amounts));
+          ok("...recording how much of that instalment is the item",
+            Number(withItem[0]?.extras_amount) === 105 && withItem.slice(1).every((p) => Number(p.extras_amount) === 0),
+            JSON.stringify(withItem.map((p) => p.extras_amount)));
+          ok("...and the tax on record now includes the tax on the item",
+            (await waitForInvoice(page, studentId, (i) => Number(i.tax_amount) === 95, 5)) !== null,
+            String((await waitForInvoice(page, studentId, () => true, 1))?.tax_amount));
+
+          // The card, once the page has caught up with the write.
+          let card = "";
+          for (let i = 0; i < 30; i++) {
+            card = (await page.locator("body").innerText()).replace(/\s+/g, " ");
+            if (/EUR 2295\.00/.test(card)) break;
+            await page.waitForTimeout(1000);
+          }
+          ok("the card's total includes the item and its tax", /EUR 2295\.00/.test(card), card.slice(-600));
+          ok("...names the item", card.includes(`${ITEM.name} — EUR 100.00`), card.slice(-600));
+          ok("...and says the first instalment carries it",
+            /includes the EUR 300\.00 admin fee and EUR 105\.00 for added items/.test(card), card.slice(-600));
+
+          // Rebuilt with the item on it, the receipt lists it as its own row.
+          // The file is upserted at the same path, so the thing to poll for is
+          // the storage object's timestamp moving, not the path appearing.
+          const rebuild = page.getByRole("button", { name: /^(Re)?generate PDF$/i }).first();
+          if (await rebuild.count()) {
+            const folder = `${studentId}/invoices`;
+            const stampOf = async () => {
+              const { data } = await admin.storage.from("documents").list(folder);
+              return data?.find((f) => f.name === `${invoice.id}.pdf`)?.updated_at ?? null;
+            };
+            const before = await stampOf();
+            await rebuild.click();
+            let rebuilt = false;
+            for (let i = 0; i < 60; i++) {
+              const now = await stampOf();
+              if (now && now !== before) { rebuilt = true; break; }
+              await page.waitForTimeout(1000);
+            }
+            ok("the PDF is rebuilt with the item on it", rebuilt, `before=${before} after=${await stampOf()}`);
+            const { data: file } = await admin.storage.from("documents").download(`${folder}/${invoice.id}.pdf`);
+            const bytes = file ? Buffer.from(await file.arrayBuffer()) : null;
+            // react-pdf compresses the page stream, so the text is not
+            // greppable from here; what can be checked is that a real PDF
+            // came back. The rows it prints are read from the same line-item
+            // query as the email and the Payments page.
+            ok("...and is still a real PDF", Boolean(bytes) && bytes.subarray(0, 4).toString() === "%PDF",
+              bytes ? `${bytes.length} bytes` : "no file");
+          }
+
+          const removed = await removeItemViaCard(page, invoice.id, ITEM.name, ITEM.amount, "EUR", 0);
+          ok("...and can be removed again", removed.offered);
+          ok("removing the item takes it off the invoice", removed.rows !== null,
+            (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(-300));
+          const restored = (await installmentsOf(invoice.id));
+          ok("...and the schedule returns to exactly what it was",
+            JSON.stringify(restored.map((p) => Number(p.amount))) === JSON.stringify([930, 630, 630])
+            && restored.every((p) => Number(p.extras_amount) === 0),
+            JSON.stringify(restored.map((p) => [Number(p.amount), Number(p.extras_amount)])));
+          ok("...with the tax back to the fee alone",
+            (await waitForInvoice(page, studentId, (i) => Number(i.tax_amount) === 90, 5)) !== null);
+        }
+      }
+
       // ----------------------------------------------------------- sending
       // sent_status used to be stamped whether or not any mail went, so the
       // CRM reported invoices as delivered that nobody had received. What
@@ -252,6 +396,53 @@ try {
         ok("...leaving the other two outstanding",
           settled?.slice(1).every((r) => r.status !== "paid"),
           JSON.stringify(settled?.map((r) => r.status)));
+      }
+
+      // ------------------------------------ an item added after a payment
+      // A settled instalment is a record of money that changed hands, so an
+      // item added now cannot go on the first one. It lands on the next unpaid
+      // instalment, which then says so — and removing it comes off that same
+      // instalment, not the first unpaid one at random.
+      console.log("\n--- an item added after a payment ---");
+      {
+        const LATER = { name: "zztmp Translation", amount: 100 };
+        const added = await addItemViaCard(page, invoice.id, LATER.name, LATER.amount, 1);
+        ok("an item can still be added once money has come in", added.offered && added.rows !== null,
+          (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(-300));
+        if (added.rows) {
+          const shifted = await installmentsOf(invoice.id);
+          ok("the paid first instalment is left exactly as it was",
+            Number(shifted[0]?.amount) === 930 && shifted[0]?.status === "paid" && Number(shifted[0]?.extras_amount) === 0,
+            JSON.stringify(shifted[0]));
+          ok("...and the item lands on the next unpaid one, with its tax",
+            Number(shifted[1]?.amount) === 735 && Number(shifted[1]?.extras_amount) === 105,
+            JSON.stringify(shifted[1]));
+          ok("...so the schedule still sums to what is owed",
+            Math.round(shifted.reduce((s, r) => s + Number(r.amount), 0) * 100) / 100 === 2295,
+            String(shifted.reduce((s, r) => s + Number(r.amount), 0)));
+
+          // The database refuses what the app never asks for: re-pricing an
+          // instalment with a payment on it. Checked against the RPC directly.
+          const asSuperItems = await apiAs(url, anonKey, sup.email);
+          const repriced = await asSuperItems.rpc("apply_invoice_line_item_change", {
+            p_invoice_id: invoice.id,
+            p_add: { product_id: null, name: "zztmp Should Fail", amount: 1 },
+            p_delete_id: null,
+            p_installments: [{ id: shifted[0].id, amount: 1, extras_amount: 0 }],
+            p_tax_amount: 95,
+          });
+          ok("the database refuses to re-price a paid instalment, whatever the app asks",
+            Boolean(repriced.error) && /payment recorded/.test(repriced.error?.message ?? ""),
+            JSON.stringify(repriced.error?.message ?? repriced.data));
+          ok("...and writes nothing when it refuses", (await lineItemsOf(invoice.id)).length === 1
+            && Number((await installmentsOf(invoice.id))[0].amount) === 930);
+
+          const removed = await removeItemViaCard(page, invoice.id, LATER.name, LATER.amount, "EUR", 0);
+          ok("removing it comes off the instalment that carried it", removed.rows !== null
+            && JSON.stringify((await installmentsOf(invoice.id)).map((p) => [Number(p.amount), Number(p.extras_amount)]))
+              === JSON.stringify([[930, 0], [630, 0], [630, 0]]),
+            JSON.stringify((await installmentsOf(invoice.id)).map((p) => [Number(p.amount), Number(p.extras_amount)])));
+        }
       }
 
       // Recording money as received is a finance act, and the app agrees:
@@ -463,7 +654,21 @@ try {
       }
 
       // ------------------------------------------- what the student sees
+      // With an item on the invoice this time, and left there: the student
+      // could not read invoice_line_items at all before 0256, so the item
+      // appearing on their page is the policy working, and the totals moving
+      // with it is the arithmetic being the same one everywhere else.
+      //
+      // The schedule now is: 1 paid 930, 2 paid 200, 3 the 430 balance, 4 the
+      // 630 that waits on the admission. The item's 105 lands on 3.
       console.log("\n--- the student's payments page ---");
+      {
+        const added = await addItemViaCard(page, invoice.id, ITEM.name, ITEM.amount, 1);
+        const carried = (await installmentsOf(invoice.id)).find((p) => p.installment_no === 3);
+        ok("an item added after a part payment lands on the balance instalment",
+          added.rows !== null && Number(carried?.amount) === 535 && Number(carried?.extras_amount) === 105,
+          JSON.stringify(carried));
+      }
       const { data: openedPortal } = await admin.from("leads").select("portal_active").eq("id", studentId).single();
       ok("a signed agreement has opened their portal", openedPortal.portal_active === true);
 
@@ -485,20 +690,30 @@ try {
 
         ok("the student can see the invoice", seen.includes(invoice.invoice_number),
           seen.replace(/\s+/g, " ").slice(0, 300));
-        ok("...its total", /EUR 2,190\.00/.test(seen), seen.replace(/\s+/g, " ").slice(0, 400));
-        // 930 of 2190 paid, so 1260 left.
+        // 2,190 for the fee, its tax and the admin charge, plus the 100 item
+        // and the 5 tax on it.
+        ok("...its total, including the added item and its tax", /Total\s+EUR 2,295\.00/.test(seen),
+          seen.replace(/\s+/g, " ").slice(0, 400));
+        ok("...the item itself, on a line of its own",
+          new RegExp(`${ITEM.name}\\s+EUR 100\\.00`).test(seen), seen.replace(/\s+/g, " ").slice(0, 600));
+        ok("...with the tax charged on the fee and the item together", /SRB tax · 5%\s+EUR 95\.00/.test(seen),
+          seen.replace(/\s+/g, " ").slice(0, 600));
         // Anchored to the labels. A bare amount also appears in the instalment
         // list, so matching the number alone passed while reading the wrong
         // figure entirely.
         //
         // 930 settled in full plus the 200 that part-paid the second
-        // instalment: 1,130 of 2,190, leaving 1,060.
+        // instalment: 1,130 of 2,295, leaving 1,165.
         ok("...what they have paid", /Paid\s*-?\s*EUR 1,130\.00/.test(seen),
           seen.replace(/\s+/g, " ").slice(0, 500));
-        ok("...and what is left", /Balance\s+EUR 1,060\.00/.test(seen),
+        ok("...and what is left", /Balance\s+EUR 1,165\.00/.test(seen),
           seen.replace(/\s+/g, " ").slice(0, 500));
         ok("...told why the first instalment is the big one",
           /includes the EUR 300\.00 admin fee/.test(seen), seen.replace(/\s+/g, " ").slice(0, 600));
+        ok("...and why the balance instalment grew",
+          /includes EUR 105\.00 for added items/.test(seen), seen.replace(/\s+/g, " ").slice(-800));
+        ok("...with no warning that the breakdown and the schedule disagree",
+          !/don.t currently add up/.test(seen), seen.replace(/\s+/g, " ").slice(0, 800));
 
         // The last instalment has no date on purpose — it falls due on the
         // admission. This page did not select due_condition, so the one
@@ -563,6 +778,8 @@ try {
           (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(-300));
         const left = await installmentsOf(invoice.id);
         ok("...and its installments with it", left.length === 0, `${left.length} left behind`);
+        const items = await lineItemsOf(invoice.id);
+        ok("...and its added items", items.length === 0, `${items.length} left behind`);
       }
     }
 

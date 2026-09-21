@@ -7,6 +7,8 @@ import { isEmailConfigured } from "@/lib/email";
 import { buildAndSendInvoiceEmail } from "@/lib/actions/invoices";
 import { requirePermission } from "@/lib/auth/permissions";
 import { shouldSendOverdueReminder } from "@/lib/overdueReminder";
+import { computeInvoiceMath, sumLineItems } from "@/lib/invoiceMath";
+import { planScheduleChange } from "@/lib/invoiceSchedule";
 
 // These used to go through a hand-rolled requireProcessingOrAbove, which was
 // wrong twice over.
@@ -78,33 +80,93 @@ export async function deleteFeeProduct(productId: string) {
 
 // ---- Invoice line items (extra products beyond admin + consultancy fee) ---
 
-export async function addLineItem(invoiceId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
+/**
+ * Adds an item to an invoice or removes one — and re-prices the schedule to
+ * match, in the same transaction.
+ *
+ * These used to write the line item row and nothing else. The instalments
+ * were never rebuilt, so paid/outstanding — derived from the instalments —
+ * never included the item; the PDF and the email did not read the table; and
+ * the student could not read it at all. The staff card added the items to
+ * its headline total by hand, which is how the one place that showed them
+ * came to disagree with the schedule printed directly beneath it.
+ *
+ * The new amounts are decided by planScheduleChange (unit-tested) and written
+ * by apply_invoice_line_item_change (migration 0256), which refuses to touch
+ * an instalment that already has a payment against it.
+ */
+async function changeLineItems(
+  invoiceId: string,
+  change: { add: { product_id: string | null; name: string; amount: number } } | { deleteId: string },
+  revalidateTo: string
+) {
   const supabase = await createClient();
   const denied = await requirePermission("finance.invoices.manage", "You don't have permission to edit invoices.");
   if (denied) return { error: denied.error };
 
-  const product_id = String(formData.get("product_id") ?? "") || null;
-  const name = String(formData.get("name") ?? "").trim();
-  const amount = Number(formData.get("amount") ?? 0);
-  if (!name || !amount) return { error: "Name and amount are required." };
+  const { data: invoice } = await supabase
+    .from("invoices")
+    .select("id, student_id, consultancy_fee, admin_charge, discount_amount, tax_rate")
+    .eq("id", invoiceId)
+    .maybeSingle();
+  if (!invoice) return { error: "Invoice not found." };
 
-  const { error } = await supabase.from("invoice_line_items").insert({ invoice_id: invoiceId, product_id, name, amount });
+  const [{ data: items }, { data: schedule }] = await Promise.all([
+    supabase.from("invoice_line_items").select("id, amount").eq("invoice_id", invoiceId),
+    supabase
+      .from("invoice_installments")
+      .select("id, installment_no, amount, amount_paid, status, extras_amount")
+      .eq("invoice_id", invoiceId)
+      .order("installment_no", { ascending: true }),
+  ]);
+
+  // The items as they will be once this change has gone through.
+  const after = (items ?? []).filter((li) => !("deleteId" in change) || li.id !== change.deleteId);
+  if ("add" in change) after.push({ id: "", amount: change.add.amount });
+
+  const math = computeInvoiceMath({
+    consultancyFee: Number(invoice.consultancy_fee ?? 0),
+    adminCharge: Number(invoice.admin_charge ?? 0),
+    discountAmount: Number(invoice.discount_amount ?? 0),
+    taxRate: Number(invoice.tax_rate ?? 0),
+    extras: sumLineItems(after),
+  });
+
+  const plan = planScheduleChange(schedule ?? [], math);
+  if (!plan.ok) return { error: plan.error };
+
+  const { error } = await supabase.rpc("apply_invoice_line_item_change", {
+    p_invoice_id: invoiceId,
+    p_add: "add" in change ? change.add : null,
+    p_delete_id: "deleteId" in change ? change.deleteId : null,
+    p_installments: plan.writes,
+    p_tax_amount: math.taxAmount,
+  });
   if (error) return { error: error.message };
 
+  // Every surface that prints this invoice's total.
   revalidatePath(revalidateTo);
+  revalidatePath(`/students/${invoice.student_id}`);
+  revalidatePath("/finance/consultancy-fee");
+  revalidatePath("/finance/invoice-generator");
+  revalidatePath("/portal/payments");
   return { success: true };
 }
 
-export async function deleteLineItem(lineItemId: string, revalidateTo: string) {
-  const supabase = await createClient();
-  const denied = await requirePermission("finance.invoices.manage", "You don't have permission to edit invoices.");
-  if (denied) return { error: denied.error };
+export async function addLineItem(invoiceId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
+  const product_id = String(formData.get("product_id") ?? "") || null;
+  const name = String(formData.get("name") ?? "").trim();
+  const amount = Number(formData.get("amount") ?? 0);
+  if (!name) return { error: "The item needs a name." };
+  // Refused here as well as by the database: `!amount` let a negative through,
+  // which would have quietly discounted the invoice under the name of a product.
+  if (!Number.isFinite(amount) || amount <= 0) return { error: "The item needs an amount above zero." };
 
-  const { error } = await supabase.from("invoice_line_items").delete().eq("id", lineItemId);
-  if (error) return { error: error.message };
+  return changeLineItems(invoiceId, { add: { product_id, name, amount } }, revalidateTo);
+}
 
-  revalidatePath(revalidateTo);
-  return { success: true };
+export async function deleteLineItem(invoiceId: string, lineItemId: string, revalidateTo: string) {
+  return changeLineItems(invoiceId, { deleteId: lineItemId }, revalidateTo);
 }
 
 // ---- Administrative fee payment tracking -----------------------------------

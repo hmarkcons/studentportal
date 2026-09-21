@@ -8,7 +8,7 @@
 // at all. Tables and inline styles throughout, because that is all email
 // clients can be relied on to render — no flexbox, no stylesheet, no webfont.
 
-import type { InvoiceMath } from "@/lib/invoiceMath";
+import { installmentNote, type InvoiceMath } from "@/lib/invoiceMath";
 
 export type InvoiceEmailData = {
   studentName: string;
@@ -18,7 +18,17 @@ export type InvoiceEmailData = {
   destination: string | null;
   discountReason: string | null;
   math: InvoiceMath;
-  installments: { no: number; amount: number; dueDate: string | null; dueCondition?: string | null; paid: boolean }[];
+  /** Items added after the invoice was raised; each is a line of the breakdown. */
+  lineItems: { name: string; amount: number }[];
+  installments: {
+    no: number;
+    amount: number;
+    dueDate: string | null;
+    dueCondition?: string | null;
+    paid: boolean;
+    /** The part of this instalment that is added items plus their tax. */
+    extrasAmount?: number;
+  }[];
   amountPaid: number;
   balanceDue: number;
   receiptUrl: string;
@@ -125,12 +135,18 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
   if (math.discountAmount > 0) {
     breakdown.push([`Discount${data.discountReason ? ` · ${data.discountReason}` : ""}`, `− ${amount(math.discountAmount)}`]);
   }
+  // Added items sit with the fee they are taxed alongside, each on its own
+  // line, so the student can see what every figure in the total is for.
+  for (const li of data.lineItems) breakdown.push([li.name, amount(li.amount)]);
   if (math.taxAmount > 0) breakdown.push([`SRB tax · ${math.taxRate}%`, amount(math.taxAmount)]);
   if (math.adminCharge > 0) breakdown.push(["Administrative fee", amount(math.adminCharge)]);
 
-  // Installment 1 carries the whole administrative charge — see
-  // buildInstallmentPlan. Unexplained, a bigger first payment reads as an error.
-  const adminNote = (no: number) => (no === 1 && math.adminCharge > 0 ? " · includes the administrative fee" : "");
+  // Installment 1 carries the whole administrative charge, and an added item
+  // lands on whichever instalment was next to be paid — see
+  // buildInstallmentPlan and invoiceSchedule. Unexplained, a bigger payment
+  // reads as an error. The same sentence as the receipt and the Payments page.
+  const noteFor = (i: { no: number; extrasAmount?: number }) =>
+    installmentNote({ installment_no: i.no, extras_amount: i.extrasAmount ?? 0 }, math, (n) => money(data.currency, n));
 
   // ---- plain text (what a text-only client, and most spam filters, see) ----
   const text = [
@@ -151,9 +167,10 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
     `  (all amounts in ${data.currency})`,
     ``,
     data.installments.length > 1 ? `Payment schedule:` : "",
-    ...data.installments.map(
-      (i) => `  ${i.no}. ${money(data.currency, i.amount)} — ${i.paid ? "paid" : dueText(i)}${adminNote(i.no)}`
-    ),
+    ...data.installments.map((i) => {
+      const note = noteFor(i);
+      return `  ${i.no}. ${money(data.currency, i.amount)} — ${i.paid ? "paid" : dueText(i)}${note ? ` · ${note}` : ""}`;
+    }),
     ``,
     `View your receipt: ${data.receiptUrl}`,
     `(Opens in your browser, where you can print or save it.)`,
@@ -202,7 +219,7 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
                 (i) => `<tr>
                   <td style="padding:8px 0;border-bottom:1px solid ${HAIR};font:13px ${FONT};color:${INK}">
                     ${i.no}.&nbsp;<span style="font:13px ${NUM}">${esc(amount(i.amount))}</span>${
-                      i.no === 1 && math.adminCharge > 0 ? `<span style="color:${FAINT}"> · incl. admin fee</span>` : ""
+                      noteFor(i) ? `<span style="color:${FAINT}"> · ${esc(noteFor(i))}</span>` : ""
                     }
                   </td>
                   <td style="padding:8px 0;border-bottom:1px solid ${HAIR};text-align:right;white-space:nowrap;font:13px ${FONT};color:${i.paid ? GREEN : FAINT}">

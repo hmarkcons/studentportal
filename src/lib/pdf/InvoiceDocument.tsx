@@ -111,6 +111,12 @@ export type InvoicePdfData = {
   discountAmount: number;
   discountReason: string | null;
   netConsultancyFee: number;
+  /** Items added after the invoice was raised — a product from the fee
+   *  catalog or a custom charge. Each is its own row in the Service table. */
+  lineItems: { name: string; amount: number }[];
+  extrasAmount: number;
+  /** What the tax was charged on: the net consultancy fee plus the items. */
+  taxableAmount: number;
   taxRate: number;
   taxAmount: number;
   terms: string | null;
@@ -263,6 +269,20 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
           <Text style={[styles.num, { flex: 1, textAlign: "right" }]}>{money(data.currencySymbol, data.consultancyFee)}</Text>
         </View>
 
+        {/* Added items, one row each, in the table with the two fees rather
+            than folded into either. These used to be left off the document
+            entirely while counting towards nothing, so an invoice with a
+            courier charge on it was printed and collected without it. */}
+        {data.lineItems.map((li, i) => (
+          <View key={i} style={styles.itemRow}>
+            <View style={{ flex: 3, paddingRight: 16 }}>
+              <Text style={styles.itemName}>{li.name}</Text>
+            </View>
+            <Text style={[styles.num, { flex: 1, textAlign: "right" }]}>{money(data.currencySymbol, li.amount)}</Text>
+            <Text style={[styles.num, { flex: 1, textAlign: "right" }]}>{money(data.currencySymbol, li.amount)}</Text>
+          </View>
+        ))}
+
         <View style={styles.itemsEnd} />
 
         <View style={styles.totals}>
@@ -270,7 +290,9 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
             <>
               <View style={styles.totalsRow}>
                 <Text style={styles.totalsKey}>Subtotal:</Text>
-                <Text style={styles.totalsNum}>{money(data.currencySymbol, data.consultancyFee + data.adminCharge)}</Text>
+                <Text style={styles.totalsNum}>
+                  {money(data.currencySymbol, data.consultancyFee + data.adminCharge + data.extrasAmount)}
+                </Text>
               </View>
               <View style={styles.totalsRow}>
                 <Text style={styles.totalsKey}>
@@ -285,7 +307,9 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
           )}
           {data.taxAmount > 0 && (
             <View style={styles.totalsRow}>
-              <Text style={styles.totalsKey}>SRB Tax ({data.taxRate}% of {money(data.currencySymbol, data.netConsultancyFee)}):</Text>
+              {/* The base is named so the figure is checkable: the net fee,
+                  plus any added items, which are taxed at the same rate. */}
+              <Text style={styles.totalsKey}>SRB Tax ({data.taxRate}% of {money(data.currencySymbol, data.taxableAmount)}):</Text>
               <Text style={styles.totalsNum}>{money(data.currencySymbol, data.taxAmount)}</Text>
             </View>
           )}

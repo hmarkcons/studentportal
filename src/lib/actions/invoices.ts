@@ -6,7 +6,15 @@ import { createClient } from "@/lib/supabase/server";
 import { formatDateOnly } from "@/lib/formatDate";
 import { requirePermission } from "@/lib/auth/permissions";
 import { installmentDuePlan, missingDueDates } from "@/lib/installmentDueConditions";
-import { computeInvoiceMath, buildInstallmentPlan, SRB_TAX_RATE, conversionNote } from "@/lib/invoiceMath";
+import {
+  computeInvoiceMath,
+  buildInstallmentPlan,
+  extrasLoad,
+  installmentNote,
+  sumLineItems,
+  SRB_TAX_RATE,
+  conversionNote,
+} from "@/lib/invoiceMath";
 import { balanceDueDate, checkPartialSplit } from "@/lib/partialPayment";
 import { buildInvoiceEmail } from "@/lib/invoiceEmail";
 import { sendEmail, accountsFrom } from "@/lib/email";
@@ -201,11 +209,12 @@ export async function updateInvoice(invoiceId: string, studentId: string, revali
   // student's Payments page then had to show them a warning instead of a bill.
   // The schedule is rebuilt to match, or the edit is refused; it is never left
   // inconsistent.
-  const { data: current } = await supabase
-    .from("invoices")
-    .select("discount_amount, tax_rate")
-    .eq("id", invoiceId)
-    .maybeSingle();
+  const [{ data: current }, { data: lineItems }] = await Promise.all([
+    supabase.from("invoices").select("discount_amount, tax_rate").eq("id", invoiceId).maybeSingle(),
+    // Items already on the invoice stay in the total when a fee is edited;
+    // without them the rebuilt schedule would silently drop them.
+    supabase.from("invoice_line_items").select("amount").eq("invoice_id", invoiceId),
+  ]);
 
   const discountAmount = Number(current?.discount_amount ?? 0);
   const taxRate = Number(current?.tax_rate ?? 0);
@@ -218,7 +227,13 @@ export async function updateInvoice(invoiceId: string, studentId: string, revali
     };
   }
 
-  const math = computeInvoiceMath({ consultancyFee: consultancy_fee, adminCharge: admin_charge, discountAmount, taxRate });
+  const math = computeInvoiceMath({
+    consultancyFee: consultancy_fee,
+    adminCharge: admin_charge,
+    discountAmount,
+    taxRate,
+    extras: sumLineItems(lineItems),
+  });
 
   const { data: existing } = await supabase
     .from("invoice_installments")
@@ -265,12 +280,15 @@ export async function updateInvoice(invoiceId: string, studentId: string, revali
 
   if (needsRebuild) {
     // Same number of instalments and the same due dates — only the amounts
-    // move, with the admin charge still riding on the first.
+    // move, with the admin charge and any added items still riding on the
+    // first. extras_amount is rewritten with them so the note on the
+    // instalment keeps saying where the items are.
     const amounts = buildInstallmentPlan(math, schedule.length);
+    const load = extrasLoad(math);
     for (let i = 0; i < schedule.length; i++) {
       const { error: rowError } = await supabase
         .from("invoice_installments")
-        .update({ amount: amounts[i] })
+        .update({ amount: amounts[i], extras_amount: i === 0 ? load : 0 })
         .eq("id", schedule[i].id);
       if (rowError) {
         return {
@@ -453,17 +471,21 @@ export async function buildAndSendInvoiceEmail(
   const { data: student } = await supabase.from("leads").select("full_name, email, country_of_interest").eq("id", studentId).maybeSingle();
   if (!student?.email) return { error: "This student has no email address on record." };
 
-  const { data: installments } = await supabase
-    .from("invoice_installments")
-    .select("installment_no, amount, amount_paid, status, due_date, due_condition")
-    .eq("invoice_id", invoiceId)
-    .order("installment_no", { ascending: true });
+  const [{ data: installments }, { data: lineItems }] = await Promise.all([
+    supabase
+      .from("invoice_installments")
+      .select("installment_no, amount, amount_paid, status, due_date, due_condition, extras_amount")
+      .eq("invoice_id", invoiceId)
+      .order("installment_no", { ascending: true }),
+    supabase.from("invoice_line_items").select("name, amount").eq("invoice_id", invoiceId).order("created_at", { ascending: true }),
+  ]);
 
   const math = computeInvoiceMath({
     consultancyFee: Number(invoice.consultancy_fee ?? 0),
     adminCharge: Number(invoice.admin_charge ?? 0),
     discountAmount: Number(invoice.discount_amount ?? 0),
     taxRate: Number(invoice.tax_rate ?? 0),
+    extras: sumLineItems(lineItems),
   });
   const amountPaid = (installments ?? []).reduce((s, i) => s + Number(i.amount_paid ?? 0), 0);
   const balanceDue = Math.round((math.total - amountPaid) * 100) / 100;
@@ -517,12 +539,14 @@ export async function buildAndSendInvoiceEmail(
     destination: student.country_of_interest,
     discountReason: invoice.discount_reason,
     math,
+    lineItems: (lineItems ?? []).map((li) => ({ name: li.name, amount: Number(li.amount ?? 0) })),
     installments: (installments ?? []).map((i) => ({
       no: i.installment_no,
       amount: Number(i.amount ?? 0),
       dueDate: i.due_date,
       dueCondition: i.due_condition,
       paid: i.status === "paid",
+      extrasAmount: Number(i.extras_amount ?? 0),
     })),
     amountPaid,
     balanceDue,
@@ -606,11 +630,16 @@ export async function buildAndStoreInvoicePdf(
 
   const { data: student } = await supabase.from("leads").select("full_name, contact_number, email").eq("id", studentId).maybeSingle();
 
-  const { data: installments } = await supabase
-    .from("invoice_installments")
-    .select("installment_no, amount, amount_paid, status, due_date, due_condition, paid_date, payment_method")
-    .eq("invoice_id", invoiceId)
-    .order("installment_no", { ascending: true });
+  const [{ data: installments }, { data: lineItems }] = await Promise.all([
+    supabase
+      .from("invoice_installments")
+      .select("installment_no, amount, amount_paid, status, due_date, due_condition, paid_date, payment_method, extras_amount")
+      .eq("invoice_id", invoiceId)
+      .order("installment_no", { ascending: true }),
+    // Added items — a product from the catalog or a custom charge. They print
+    // as their own rows in the Service table and count towards the total.
+    supabase.from("invoice_line_items").select("name, amount").eq("invoice_id", invoiceId).order("created_at", { ascending: true }),
+  ]);
 
   const agreement = one(invoice.agreement as never) as { generated_by?: string | null; template?: unknown } | null;
   const template = agreement?.template ? (one(agreement.template as never) as { signatory_name?: string | null; destination?: unknown } | null) : null;
@@ -628,14 +657,16 @@ export async function buildAndStoreInvoicePdf(
     adminCharge: Number(invoice.admin_charge ?? 0),
     discountAmount: Number(invoice.discount_amount ?? 0),
     taxRate: Number(invoice.tax_rate ?? 0),
+    extras: sumLineItems(lineItems),
   });
   const subtotal = math.total;
-  const amountPaid = (installments ?? []).reduce((sum, i) => sum + i.amount_paid, 0);
+  const amountPaid = (installments ?? []).reduce((sum, i) => sum + Number(i.amount_paid ?? 0), 0);
   const balanceDue = Math.round((subtotal - amountPaid) * 100) / 100;
   const status: "paid" | "partially_paid" | "unpaid" = balanceDue <= 0 ? "paid" : amountPaid > 0 ? "partially_paid" : "unpaid";
 
   const invoiceNumber = invoice.invoice_number ?? `INV-${new Date(invoice.created_at).getFullYear()}-${invoiceId.slice(0, 6).toUpperCase()}`;
   const currencySymbol = CURRENCY_SYMBOLS[invoice.currency] ?? invoice.currency;
+  const pdfMoney = (n: number) => `${currencySymbol}${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const payments = (installments ?? []).map((i) => ({
     date:
@@ -646,14 +677,13 @@ export async function buildAndStoreInvoicePdf(
           // Falls due on an event, not a date: print what the event is.
           : i.due_condition ?? "—",
     method: i.payment_method,
-    amount: i.amount,
+    amount: Number(i.amount ?? 0),
     status: (i.status === "paid" ? "paid" : "unpaid") as "paid" | "unpaid",
-    // The first installment carries the whole administrative charge, so it is
-    // larger than the others by design.
-    note:
-      i.installment_no === 1 && math.adminCharge > 0
-        ? `incl. ${CURRENCY_SYMBOLS[invoice.currency] ?? invoice.currency}${math.adminCharge.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} admin fee`
-        : null,
+    // The first installment carries the whole administrative charge, and an
+    // added item lands on whichever instalment was next to be paid, so either
+    // can be larger than the others by design. Same sentence as the card, the
+    // Payments page and the email.
+    note: installmentNote(i, math, pdfMoney),
   }));
 
   const nextDue = (installments ?? []).find((i) => i.status !== "paid")?.due_date ?? null;
@@ -706,6 +736,9 @@ export async function buildAndStoreInvoicePdf(
       discountAmount: math.discountAmount,
       discountReason: invoice.discount_reason ?? null,
       netConsultancyFee: math.netConsultancyFee,
+      lineItems: (lineItems ?? []).map((li) => ({ name: li.name, amount: Number(li.amount ?? 0) })),
+      extrasAmount: math.extrasAmount,
+      taxableAmount: math.taxableAmount,
       taxRate: math.taxRate,
       taxAmount: math.taxAmount,
       terms: invoice.terms,

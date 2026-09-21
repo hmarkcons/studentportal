@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { getInvoiceBankSettings } from "@/lib/actions/invoiceSettings";
 import { resolveInvoiceDefaults } from "@/lib/invoiceDefaults";
-import { computeInvoiceMath, computePaymentProgress } from "@/lib/invoiceMath";
+import { computeInvoiceMath, computePaymentProgress, sumLineItems } from "@/lib/invoiceMath";
 import { InvoiceGenerator, type StudentOption } from "./InvoiceGenerator";
 import { GeneratedInvoiceList, type GeneratedInvoice } from "./GeneratedInvoiceList";
 
@@ -92,13 +92,16 @@ export default async function InvoiceGeneratorPage() {
     .limit(100);
 
   const invoiceIds = (invoices ?? []).map((i) => i.id);
-  const { data: installments } = invoiceIds.length
-    ? await supabase
-        .from("invoice_installments")
-        .select("id, invoice_id, installment_no, amount, amount_paid, status, due_date, paid_date, payment_method, carried_from_installment_no, carried_part_paid, carried_paid_date")
-        .in("invoice_id", invoiceIds)
-        .order("installment_no", { ascending: true })
-    : { data: [] };
+  const [{ data: installments }, { data: lineItems }] = invoiceIds.length
+    ? await Promise.all([
+        supabase
+          .from("invoice_installments")
+          .select("id, invoice_id, installment_no, amount, amount_paid, status, due_date, paid_date, payment_method, carried_from_installment_no, carried_part_paid, carried_paid_date")
+          .in("invoice_id", invoiceIds)
+          .order("installment_no", { ascending: true }),
+        supabase.from("invoice_line_items").select("id, invoice_id, name, amount").in("invoice_id", invoiceIds),
+      ])
+    : [{ data: [] }, { data: [] }];
 
   type InstallmentRow = {
     id: string; invoice_id: string; installment_no: number; amount: number | string;
@@ -114,11 +117,13 @@ export default async function InvoiceGeneratorPage() {
 
   const rows: GeneratedInvoice[] = (invoices ?? []).map((inv) => {
     const mine = byInvoice.get(inv.id) ?? [];
+    const items = (lineItems ?? []).filter((li) => li.invoice_id === inv.id);
     const math = computeInvoiceMath({
       consultancyFee: Number(inv.consultancy_fee ?? 0),
       adminCharge: Number(inv.admin_charge ?? 0),
       discountAmount: Number(inv.discount_amount ?? 0),
       taxRate: Number(inv.tax_rate ?? 0),
+      extras: sumLineItems(items),
     });
     const progress = computePaymentProgress(mine);
     const student = one(inv.student as never) as { full_name?: string; email?: string | null } | null;
@@ -136,6 +141,7 @@ export default async function InvoiceGeneratorPage() {
       hasPdf: Boolean(inv.pdf_path),
       math,
       discountReason: inv.discount_reason,
+      lineItems: items.map((li) => ({ id: li.id, name: li.name, amount: Number(li.amount ?? 0) })),
       paid: progress.paid,
       outstanding: progress.outstanding,
       nextDueDate: progress.nextDueDate,

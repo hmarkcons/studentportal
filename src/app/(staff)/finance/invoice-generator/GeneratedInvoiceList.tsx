@@ -33,6 +33,8 @@ export type GeneratedInvoice = {
   hasPdf: boolean;
   math: InvoiceMath;
   discountReason: string | null;
+  /** Items added after the invoice was raised; part of math.total. */
+  lineItems: { id: string; name: string; amount: number }[];
   paid: number;
   outstanding: number;
   nextDueDate: string | null;
@@ -229,6 +231,9 @@ function InvoiceRow({ inv, canDelete }: { inv: GeneratedInvoice; canDelete: bool
                 value={`− ${fmt(inv.currency, inv.math.discountAmount)}`}
               />
             )}
+            {inv.lineItems.map((li) => (
+              <Line key={li.id} label={li.name} value={fmt(inv.currency, li.amount)} />
+            ))}
             <Line label={`SRB tax (${inv.math.taxRate}%)`} value={fmt(inv.currency, inv.math.taxAmount)} />
             <Line label="Administrative fee" value={fmt(inv.currency, inv.math.adminCharge)} />
             <Line label="Total" value={fmt(inv.currency, inv.math.total)} strong />

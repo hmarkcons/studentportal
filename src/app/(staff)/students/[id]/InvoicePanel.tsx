@@ -13,7 +13,7 @@ import {
 } from "@/lib/actions/invoices";
 import { addLineItem, deleteLineItem } from "@/lib/actions/consultancyFee";
 import { computeInvoiceStatus, INVOICE_STATUS_LABELS } from "@/lib/invoiceStatus";
-import { computeInvoiceMath, computePaymentProgress } from "@/lib/invoiceMath";
+import { computeInvoiceMath, computePaymentProgress, installmentNote, sumLineItems } from "@/lib/invoiceMath";
 import { formatDateOnly } from "@/lib/formatDate";
 import { balanceDueDate, carriedFromNote } from "@/lib/partialPayment";
 import { Badge } from "@/components/ui/Badge";
@@ -341,7 +341,7 @@ function LineItemsSection({
 
   async function handleDeleteLineItem(lineItemId: string) {
     setDeleteError(null);
-    const result = await deleteLineItem(lineItemId, revalidateTo);
+    const result = await deleteLineItem(invoiceId, lineItemId, revalidateTo);
     if (result?.error) setDeleteError(result.error);
   }
 
@@ -358,10 +358,13 @@ function LineItemsSection({
 
   return (
     <div className="flex flex-col gap-1">
+      {lineItems.length > 0 && (
+        <p className="text-[11px] font-medium uppercase tracking-wide text-muted">Added items</p>
+      )}
       {lineItems.map((li) => (
         <div key={li.id} className="flex items-center justify-between text-xs text-muted">
           <span>
-            {li.name} — {currency} {li.amount.toFixed(2)}
+            {li.name} — {currency} {Number(li.amount).toFixed(2)}
           </span>
           {canManage && (
             <button type="button" onClick={() => handleDeleteLineItem(li.id)} className="text-danger hover:underline">
@@ -413,6 +416,11 @@ function LineItemsSection({
           </p>
         )}
         {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
+        {/* Said up front, because it is what happens: the item is taxed with
+            the fee and the schedule moves to collect it. */}
+        <p className="w-full text-[11px] text-muted">
+          An added item is taxed at the invoice&rsquo;s rate and goes on the next unpaid instalment, which is re-priced to match.
+        </p>
       </form>
       )}
     </div>
@@ -506,6 +514,8 @@ export function InvoiceCard({
     carried_from_installment_no?: number | null;
     carried_part_paid?: number | null;
     carried_paid_date?: string | null;
+    /** The part of this instalment that is added items plus their tax. */
+    extras_amount?: number | string | null;
   }[];
   lineItems?: { id: string; name: string; amount: number }[];
   feeProducts?: { id: string; name: string; default_amount: number | null; default_currency: string }[];
@@ -521,18 +531,21 @@ export function InvoiceCard({
   const [receiptMessage, setReceiptMessage] = useState<{ text: string; ok: boolean } | null>(null);
   const [receiptPending, setReceiptPending] = useState(false);
 
-  const lineItemsTotal = lineItems.reduce((sum, li) => sum + li.amount, 0);
   // Through computeInvoiceMath, the same function the PDF and the email use.
   // Adding the two fees directly ignored the discount and the SRB tax, so this
   // header disagreed with the total on the document the student was sent — and
-  // with the installments printed directly beneath it.
-  const total =
-    computeInvoiceMath({
-      consultancyFee: invoice.consultancy_fee,
-      adminCharge: invoice.admin_charge,
-      discountAmount: invoice.discount_amount ?? 0,
-      taxRate: invoice.tax_rate ?? 0,
-    }).total + lineItemsTotal;
+  // with the installments printed directly beneath it. The added items then
+  // went in here by hand, untaxed, while the PDF, the email and the schedule
+  // never saw them at all; they are part of the one computation now.
+  const math = computeInvoiceMath({
+    consultancyFee: invoice.consultancy_fee,
+    adminCharge: invoice.admin_charge,
+    discountAmount: invoice.discount_amount ?? 0,
+    taxRate: invoice.tax_rate ?? 0,
+    extras: sumLineItems(lineItems),
+  });
+  const total = math.total;
+  const fmt = (n: number) => `${invoice.currency} ${n.toFixed(2)}`;
   const status = computeInvoiceStatus(installments);
   // The same figures the student sees on their own Payments page and the
   // receipt prints, so the three cannot disagree about what has been received.
@@ -629,12 +642,11 @@ export function InvoiceCard({
           ) : (
             <div key={i.id} className="flex items-start justify-between text-xs text-muted">
               <span>
-                Installment {i.installment_no} — {invoice.currency} {i.amount.toFixed(2)}
-                {/* The admin charge is collected with the first installment, so
-                    say so rather than leaving staff to wonder why it is bigger. */}
-                {i.installment_no === 1 && invoice.admin_charge > 0 && (
-                  <span> (includes {invoice.currency} {invoice.admin_charge.toFixed(2)} admin fee)</span>
-                )}
+                Installment {i.installment_no} — {invoice.currency} {Number(i.amount).toFixed(2)}
+                {/* The admin charge is collected with the first installment and
+                    an added item with the next unpaid one, so say so rather
+                    than leaving staff to wonder why one is bigger. */}
+                {installmentNote(i, math, fmt) && <span> ({installmentNote(i, math, fmt)})</span>}
                 {i.due_date && ` · due ${formatDateOnly(i.due_date)}`}
                 {i.status === "partial" && ` · paid ${invoice.currency} ${(i.amount_paid ?? 0).toFixed(2)}`}
                 {/* Where a balance installment came from, so a schedule with
