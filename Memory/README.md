@@ -35,8 +35,8 @@ the cron schedule and the custom domain are all account-level.
 **Confidence check on a new machine:**
 
 ```bash
-npm test                                             # 715 unit tests, ~3s
-VERIFY_AGAINST_PRODUCTION=yes npm run check:invoice   # ~5 min, 80 assertions
+npm test                                             # 745 unit tests, ~3s
+VERIFY_AGAINST_PRODUCTION=yes npm run check:invoice   # ~7 min, 108 assertions
 ```
 
 The second exercises staff login, the staff UI, the student portal, storage and
@@ -114,7 +114,7 @@ affected — which is why one student failed and two loaded.
 
 ### Infrastructure and housekeeping
 
-- Pre-commit gate: typecheck → eslint on staged files → 715 unit tests →
+- Pre-commit gate: typecheck → eslint on staged files → 745 unit tests →
   production build. It once silently skipped eslint and the build for `.ts` and
   `.mjs` files while still reporting success; `npm run check:hook` exists
   because of that.
@@ -156,7 +156,7 @@ Supabase dashboard.
 Six `npm run check:*` scripts, all documented in the README table with what
 each covers and why it is not in the commit gate.
 
-`check:agreement` (92 assertions) and `check:invoice` (80) drive the deployed
+`check:agreement` (92 assertions) and `check:invoice` (108) drive the deployed
 portal with `zztmp *` fixtures and tear them down. They refuse to run without
 `VERIFY_AGAINST_PRODUCTION=yes`.
 

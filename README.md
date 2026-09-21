@@ -36,7 +36,7 @@ Open [http://localhost:3000](http://localhost:3000). Requires `.env.local` with 
 | --- | --- | --- |
 | `npm run typecheck` | whole project — types cross files | 5s |
 | `eslint` | staged files only. The whole tree is `npm run lint`, but at 49s in the hook it costs a minute to learn nothing more about a three-file commit | 8s |
-| `npm test` | 715 unit tests | 6s |
+| `npm test` | 745 unit tests | 6s |
 | `npm run build` | last, and only if the three above passed | 30s |
 
 About 35s for a commit that changes source, 9s for one that cannot affect a build. For a deliberate work-in-progress commit: `git commit --no-verify`.
