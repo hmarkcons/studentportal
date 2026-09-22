@@ -17,6 +17,7 @@ export default async function StudentProfileTab(props: PageProps<"/students/[id]
     { data: qualifications },
     { data: testScores },
     { data: courseInterestOptions },
+    { data: registeredFor },
   ] = await Promise.all([
     supabase
       .from("students")
@@ -33,9 +34,35 @@ export default async function StudentProfileTab(props: PageProps<"/students/[id]
     // with three countries would fetch about a thousand rows to derive a few
     // dozen labels. See 0244.
     supabase.rpc("course_interest_options", { lead: id }),
+    // Only for naming the countries in the message below. The picker itself
+    // never needs them — the RPC has already resolved what they teach.
+    supabase.from("lead_destinations").select("destination:destinations(display_name)").eq("lead_id", id),
   ]);
 
   const revalidateTo = `/students/${id}/profile`;
+
+  // An empty picker has two very different causes now that the list narrows by
+  // level as well as by country (migration 0259), and they need different
+  // people to do different things. Hungary teaches nothing at PhD: that is a
+  // student registered for a country that cannot take them, not a catalogue
+  // with a hole in it, and saying "no programmes on file" would send somebody
+  // off to add programmes that do not exist.
+  //
+  // Deliberately NOT solved by falling back to every level. That would quietly
+  // re-offer exactly the wrong-level subjects 0259 exists to stop, and hide the
+  // mismatch instead of putting it in front of the person who can fix it.
+  const LEVEL_LABELS: Record<string, string> = { bachelors: "bachelors", masters: "masters", phd: "PhD" };
+  const registeredCountries = (registeredFor ?? [])
+    .map((row) => {
+      const d = Array.isArray(row.destination) ? row.destination[0] : row.destination;
+      return (d as { display_name?: string } | null)?.display_name ?? null;
+    })
+    .filter((name): name is string => Boolean(name));
+  const level = student?.level_applying_for ?? null;
+  const courseInterestEmptyReason =
+    (courseInterestOptions ?? []).length === 0 && level && registeredCountries.length > 0
+      ? `No ${LEVEL_LABELS[level] ?? level} programmes are on file for ${registeredCountries.join(", ")}, so there is nothing to choose from. Either “Applying for” is wrong for this student, or that country genuinely does not teach at this level and they need a different one — this is not fixed by adding programmes.`
+      : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -65,6 +92,7 @@ export default async function StudentProfileTab(props: PageProps<"/students/[id]
             lead={student}
             profile={profile}
             courseInterestOptions={courseInterestOptions ?? []}
+            courseInterestEmptyReason={courseInterestEmptyReason}
           />
         )}
       </Card>

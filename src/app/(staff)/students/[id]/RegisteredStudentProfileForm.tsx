@@ -52,6 +52,7 @@ export function RegisteredStudentProfileForm({
   lead,
   profile,
   courseInterestOptions,
+  courseInterestEmptyReason,
 }: {
   studentId: string;
   revalidateTo: string;
@@ -59,6 +60,8 @@ export function RegisteredStudentProfileForm({
   profile: Profile;
   /** Field groups with their specifics, for the countries this student is registered for. */
   courseInterestOptions: FieldGroupOption[];
+  /** Why that list is empty, when the page can tell. See CourseInterestPicker. */
+  courseInterestEmptyReason?: string | null;
 }) {
   const action = updateRegisteredStudentProfile.bind(null, studentId, revalidateTo);
   // Not useActionState: React clears a form once its action finishes, and it
@@ -154,6 +157,7 @@ export function RegisteredStudentProfileForm({
               selectedGroups={lead.interest_field_groups ?? []}
               selectedSpecifics={lead.interest_core_fields ?? []}
               legacyText={lead.course_of_interest}
+              emptyReason={courseInterestEmptyReason}
             />
           </div>
           <label className="flex flex-col gap-1 text-xs text-muted">

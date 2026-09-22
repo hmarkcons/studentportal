@@ -32,10 +32,21 @@ export function CourseInterestPicker({
   selectedGroups,
   selectedSpecifics,
   legacyText,
+  emptyReason,
 }: {
   options: FieldGroupOption[];
   selectedGroups: string[];
   selectedSpecifics: string[];
+  /**
+   * Why there is nothing to choose from, when the caller knows.
+   *
+   * The list narrows by the student's level as well as their countries
+   * (migration 0259), so empty has more than one cause and they need
+   * different actions: Hungary teaches nothing at PhD, which is a mismatch
+   * between the student and the country, not a gap in the catalogue. Left
+   * unset, the generic "no programmes on file" message stands.
+   */
+  emptyReason?: string | null;
   /**
    * Whatever was typed into the old free-text box. Shown so staff can see what
    * they are translating; it stays on the record until a selection replaces it.
@@ -93,8 +104,8 @@ export function CourseInterestPicker({
     return (
       <div className="rounded-md border border-border bg-bg p-3">
         <p className="text-xs text-warning">
-          No fields to choose from yet — this student&rsquo;s countries have no programmes on file. Add programmes under
-          Setup &rsaquo; Universities, or set the student&rsquo;s country first.
+          {emptyReason ??
+            "No fields to choose from yet — this student’s countries have no programmes on file. Add programmes under Setup › Universities, or set the student’s country first."}
         </p>
         {legacyText && <p className="mt-1 text-xs text-muted">Currently recorded: {legacyText}</p>}
       </div>
