@@ -1092,10 +1092,19 @@ try {
           await form.locator('input[name="discount_reason"]').fill("zztmp edited discount");
           await form.getByRole("button", { name: "Save invoice" }).click();
 
+          // Resizing is two writes, not one: resize_invoice_schedule replaces
+          // the rows with a provisional even split, and planScheduleChange
+          // then prices them. Polling for "there are two rows now" is
+          // satisfied between the two and reads 1128.75 twice — the even
+          // split, before the administrative charge has been put back on the
+          // first. So this waits for the row set to stop changing instead.
           let edited = null;
+          let previous = "";
           for (let i = 0; i < 45; i++) {
             const rows = await installmentsOf(multi.id);
-            if (rows.length === 2) { edited = rows; break; }
+            const shape = JSON.stringify(rows.map((r) => [r.installment_no, Number(r.amount)]));
+            if (rows.length === 2 && shape === previous) { edited = rows; break; }
+            previous = rows.length === 2 ? shape : "";
             await page.waitForTimeout(1000);
           }
           ok("the number of instalments can be changed", edited !== null,
