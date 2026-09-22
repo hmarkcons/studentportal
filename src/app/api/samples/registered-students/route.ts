@@ -34,6 +34,11 @@ const COLUMNS = [
   { header: "email", width: 26 },
   { header: "country_of_interest", width: 24 },
   { header: "backup_country", width: 24 },
+  // Next to the intake because the two of them decide the Student ID between
+  // them: the intake names the cycle, the date fixes the place within it.
+  // Left blank it means "the day of the import", which is what the importer
+  // did before this column existed.
+  { header: "registration_date", width: 18 },
   { header: "intake", width: 14 },
   { header: "assigned_counselor", width: 22 },
   { header: "level_applying_for", width: 18 },
@@ -81,6 +86,10 @@ export async function GET() {
     // Matched on the display name because the cached destination list does not
     // carry the plain country column; the suffix is exactly what varies.
     backup_country: destinations.find((d) => d.display_name.startsWith("Germany"))?.display_name ?? "",
+    // Deliberately a back-dated day rather than today: this column exists so a
+    // previous intake can be imported with the dates it actually happened on,
+    // and an example showing today would suggest otherwise.
+    registration_date: "2026-01-12",
     intake: "Fall 2026",
     assigned_counselor: counselors[0]?.full_name ?? "",
     level_applying_for: "bachelors",

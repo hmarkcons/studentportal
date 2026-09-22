@@ -16,6 +16,7 @@
     "check:pay": "node scripts/verify-pay-split.mjs",
     "check:roles": "node scripts/verify-multi-role.mjs",
     "check:speed": "node scripts/check-speed.mjs",
+    "check:studentid": "node scripts/verify-student-id.mjs",
     "check:hook": "sh scripts/verify-hook.sh",
     "check:xlsx": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-xlsx-in-excel.ps1",
     "prepare": "node scripts/install-hooks.mjs"

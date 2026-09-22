@@ -146,8 +146,26 @@ export async function activateStudentPortalAccess(studentId: string) {
   const denied = await requireSuperAdmin(supabase);
   if (denied) return { error: denied };
 
-  const { data: student } = await supabase.from("students").select("auth_user_id").eq("id", studentId).maybeSingle();
+  const { data: student } = await supabase
+    .from("students")
+    .select("auth_user_id, student_code, intake")
+    .eq("id", studentId)
+    .maybeSingle();
   if (!student?.auth_user_id) return { error: "This student has no portal login to activate — create one first." };
+
+  // No Student ID, no portal, and no override — the same rule the (student)
+  // layout enforces, stated here so the button says why instead of appearing
+  // to work and leaving the student bounced back to the landing page.
+  //
+  // The ID names the intake (0260), so a missing one means the intake is
+  // missing. Recording it issues the ID and opens the portal on its own.
+  if (!student.student_code) {
+    return {
+      error: student.intake
+        ? "This student has no Student ID yet — their intake is recorded but no country is, so no ID could be composed. Add their country first."
+        : "This student has no Student ID yet. Record their intake on their profile and the ID is issued — the portal opens with it.",
+    };
+  }
 
   // The same two conditions the DB trigger applies on its own
   // (activate_student_portal_for_agreement, 0253) — enforced here too, since

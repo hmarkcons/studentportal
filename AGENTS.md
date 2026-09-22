@@ -23,15 +23,16 @@ and `supabase/README.md` for the database.
 
 ## Before committing
 
-A pre-commit hook runs typecheck, eslint over the staged files and 745 unit
+A pre-commit hook runs typecheck, eslint over the staged files and 779 unit
 tests — all three, so one attempt reports everything wrong — then a production
 build only if those passed. It is installed by `npm install`, so it is already
 running; `git commit --no-verify` skips it for a deliberate work in progress.
 
-Four checks are **not** in the gate, because each is slow and each covers
+Five checks are **not** in the gate, because each is slow and each covers
 something that fails silently: `npm run check:hook`, `check:xlsx`, `check:roles`,
-`check:pay`. Run the relevant one after touching what it covers — README.md
-says which is which. The last two need `VERIFY_AGAINST_PRODUCTION=yes`.
+`check:pay`, `check:studentid`. Run the relevant one after touching what it
+covers — README.md says which is which. The last three need
+`VERIFY_AGAINST_PRODUCTION=yes`.
 
 ## Things that fail quietly here
 
@@ -48,6 +49,15 @@ reaches `hasRole()` must select `"role, roles"` — `hasRole` falls back to the
 primary when `roles` is absent, so selecting `role` alone compiles, runs, and
 silently ignores every secondary role. Filter with
 `.contains("roles", ["counselor"])`, never `.eq("role", …)`.
+
+**A student with no intake has no Student ID, and no portal.** The code is
+`HMC-<intake>-<country>-<place in that intake>` (0260), so it cannot be composed
+until both the intake and the country are on file. Until then the student holds
+their place by registration date and `student_code` stays null — which the
+(student) layout and the landing page treat as a hard lock that staff cannot
+override. Anything that registers a student and does not set an intake produces
+a record that looks complete in the list and cannot sign in. Numbering is all in
+triggers; `npm run check:studentid` is what proves any of it.
 
 **Pay is not on `staff`.** Salary, allowances, commission and bonus live on
 `staff_compensation`; read them with `COMPENSATION_EMBED` and

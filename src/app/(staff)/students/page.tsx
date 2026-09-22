@@ -10,6 +10,7 @@ import { RowActionsMenu } from "@/components/RowActionsMenu";
 type StudentRow = {
   id: string;
   student_code: string | null;
+  student_seq: number | null;
   full_name: string;
   email: string | null;
   contact_number: string | null;
@@ -52,7 +53,7 @@ export default async function StudentsPage() {
   const { data: students, error } = await supabase
     .from("students")
     .select(
-      "id, student_code, full_name, email, contact_number, country_of_interest, registered_at, registration_status, portal_active, intake, assigned_counselor:staff!assigned_counselor_id(full_name), processing_officer:staff!processing_officer_id(full_name)"
+      "id, student_code, student_seq, full_name, email, contact_number, country_of_interest, registered_at, registration_status, portal_active, intake, assigned_counselor:staff!assigned_counselor_id(full_name), processing_officer:staff!processing_officer_id(full_name)"
     )
     .order("registered_at", { ascending: false })
     .returns<StudentRow[]>();
@@ -103,7 +104,23 @@ export default async function StudentsPage() {
       id: r.id,
       cells: {
         month: monthYearLabel,
-        code: r.student_code ? <span className="font-mono text-xs text-muted">{r.student_code}</span> : "—",
+        // A dash here used to mean "look into it later". It now means the
+        // student cannot get into the portal at all, so it says which of the
+        // two missing pieces is the one to go and fix.
+        code: r.student_code ? (
+          <span className="font-mono text-xs text-muted">{r.student_code}</span>
+        ) : (
+          <span
+            className="text-xs text-warning"
+            title={
+              r.intake
+                ? `Place ${r.student_seq ?? "?"} is held. No country on file, so no ID could be composed — add one and it is issued.`
+                : `Place ${r.student_seq ?? "?"} is held by registration date. No intake recorded, so no ID and no portal — record the intake and the ID is issued.`
+            }
+          >
+            {r.intake ? "no country" : "no intake"}
+          </span>
+        ),
         name: (
           <Link href={`/students/${r.id}`} prefetch={false} className="font-medium text-ink hover:underline">
             {r.full_name}
@@ -146,6 +163,13 @@ export default async function StudentsPage() {
         ),
       },
       csv: {
+        // Was missing entirely, so the Student ID — the thing the office
+        // refers to a student by — was neither searchable nor in the export.
+        code: r.student_code ?? "",
+        // Filterable state rather than the code itself, which would offer one
+        // dropdown option per student. "no intake" is the one worth finding:
+        // those students are locked out of the portal.
+        idStatus: r.student_code ? "issued" : r.intake ? "no country" : "no intake",
         name: r.full_name,
         contact: r.contact_number ?? r.email ?? "",
         country: r.country_of_interest ?? "",
@@ -207,6 +231,20 @@ export default async function StudentsPage() {
             pageSize={25}
             filters={[
               { key: "regStatus", label: "Registration", options: ["registered", "withdrawn", "ghost"] },
+              // Only offered once there is something to find. "no intake" is
+              // a worklist: every one of those students is shut out of the
+              // portal until somebody acts on it.
+              ...(rows.some((r) => r.csv.idStatus !== "issued")
+                ? [
+                    {
+                      key: "idStatus",
+                      label: "Student ID",
+                      options: ["issued", "no intake", "no country"].filter((o) =>
+                        rows.some((r) => r.csv.idStatus === o)
+                      ),
+                    },
+                  ]
+                : []),
               { key: "portal", label: "Portal", options: ["active", "inactive"] },
               { key: "country", label: "Country", options: countryOptions },
               { key: "counselor", label: "Counselor", options: counselorOptions },

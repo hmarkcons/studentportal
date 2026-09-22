@@ -320,14 +320,26 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
     counselorByName.set(key, [...(counselorByName.get(key) ?? []), c.id]);
   }
 
+  const { byRegistrationDate, karachiToday, registrationDateError, registrationTimestamp } = await import(
+    "@/lib/registrationDate"
+  );
+
   type Prepared = {
     lead: Record<string, unknown>;
     primary: string;
     backups: string[];
+    /** The registration day, kept out of `lead` so the batch can be ordered by it. */
+    day: string;
   };
 
   const prepared: Prepared[] = [];
   const badCountry: string[] = [];
+  // A date that could not be read. Fatal to the row, unlike a bad date of
+  // birth, because the registration date fixes the student's place in their
+  // intake and their Student ID is composed from it and never renumbered.
+  const badDate: string[] = [];
+  // Rows that left the column blank and were stamped with today instead.
+  let datedToday = 0;
   // Matched a real destination, but one we have paused — a different problem
   // from a typo, and a different fix, so it is reported separately.
   const pausedCountry: string[] = [];
@@ -338,6 +350,20 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
   for (const r of rows) {
     const full_name = (r.full_name ?? "").trim();
     if (!full_name) continue;
+
+    // Checked before anything else because it is the one field that cannot be
+    // corrected afterwards. The date decides where the student falls in their
+    // intake's running order, the Student ID is built from that place, and
+    // nothing renumbers an issued ID. A row whose date cannot be read is left
+    // out and named, rather than quietly stamped with today.
+    const rawDate = (r.registration_date ?? "").trim();
+    const dateProblem = registrationDateError(rawDate);
+    if (dateProblem) {
+      badDate.push(`${full_name}: "${rawDate}" — ${dateProblem}`);
+      continue;
+    }
+    const day = rawDate || karachiToday();
+    if (!rawDate) datedToday += 1;
 
     // The country is required here, unlike in the lead import. A registered
     // student without a destination gets no student code and cannot have an
@@ -393,6 +419,7 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
     prepared.push({
       primary: primary.id,
       backups,
+      day,
       lead: {
         full_name,
         contact_number: phoneError(r.contact_number) ? null : r.contact_number || null,
@@ -416,7 +443,12 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
         // See registerStudentManually's comment — handle_lead_registration()
         // only stamps this on UPDATE, not INSERT, so it must be set explicitly
         // or these rows would never satisfy the students view's filter.
-        registered_at: new Date().toISOString(),
+        //
+        // The day from the sheet, not the day of the import. This is what lets
+        // a previous intake be imported with the dates it actually happened
+        // on, and what the Month column and the month/year filters on the
+        // registered-students table then read.
+        registered_at: registrationTimestamp(day),
       },
     });
   }
@@ -426,9 +458,11 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
       badCountry.length ? `${badCountry.length} with a country that could not be matched` : "",
       pausedCountry.length ? `${pausedCountry.length} for a country we have paused` : "",
       noCountry.length ? `${noCountry.length} with no country` : "",
+      badDate.length ? `${badDate.length} with a registration date that could not be read` : "",
     ].filter(Boolean).join(", ");
     return {
       error: `No rows could be imported${reasons ? ` — ${reasons}` : ""}. full_name and country_of_interest are both required.`,
+      badDate,
     };
   }
 
@@ -454,9 +488,16 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
     return { error: "Every row's email already matches an existing student — nothing new to import." };
   }
 
+  // Earliest registration first. The place in the agency-wide running order is
+  // taken row by row as the batch inserts (0260's before-insert trigger), so
+  // insertion order IS the order these students are numbered in. A sheet typed
+  // in whatever order the files came to hand would otherwise hand out Student
+  // IDs in that order rather than by registration date.
+  const ordered = byRegistrationDate(toInsert, (p) => p.day);
+
   const { data: inserted, error } = await supabase
     .from("leads")
-    .insert(toInsert.map((p) => p.lead))
+    .insert(ordered.map((p) => p.lead))
     .select("id, full_name, email");
   if (error) return { error: error.message };
 
@@ -468,7 +509,7 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
   // backup country. Ordering within one multi-row insert is not something to
   // rely on, hence two statements.
   const byIndex = inserted ?? [];
-  const primaries = toInsert
+  const primaries = ordered
     .map((p, i) => (byIndex[i] ? { lead_id: byIndex[i].id, destination_id: p.primary, is_backup: false } : null))
     .filter((r): r is { lead_id: string; destination_id: string; is_backup: boolean } => r !== null);
 
@@ -482,7 +523,7 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
   }
 
   if (!destinationWarning) {
-    const backupRows = toInsert.flatMap((p, i) =>
+    const backupRows = ordered.flatMap((p, i) =>
       byIndex[i] ? p.backups.map((destination_id) => ({ lead_id: byIndex[i].id, destination_id, is_backup: true })) : []
     );
     if (backupRows.length > 0) {
@@ -502,12 +543,21 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
     .in("id", byIndex.map((r) => r.id))
     .not("student_code", "is", null);
 
+  // The rest are registered, hold their place in the running order, and are
+  // waiting on an intake before a Student ID can name one. Their portal stays
+  // shut until then, so this is not a detail to leave to somebody noticing a
+  // blank column later.
+  const awaitingIntake = byIndex.length - (coded ?? 0);
+
   revalidatePath("/students");
   return {
     success: true,
     count: toInsert.length,
     skipped: duplicates,
     coded: coded ?? 0,
+    awaitingIntake,
+    datedToday,
+    badDate,
     exampleRows,
     badCountry,
     pausedCountry,

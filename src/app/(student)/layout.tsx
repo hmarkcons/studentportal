@@ -12,11 +12,20 @@ export default async function StudentLayout({ children }: { children: React.Reac
 
   const { data: studentRow } = await supabase
     .from("leads")
-    .select("id, full_name, portal_active")
+    .select("id, full_name, portal_active, student_code")
     .eq("auth_user_id", userId ?? "")
     .maybeSingle();
 
-  if (!studentRow || !studentRow.portal_active) {
+  // No Student ID, no portal — and no way for staff to wave it through, which
+  // is the point. The ID names the intake the student belongs to (0260), so
+  // its absence means nobody has recorded which cycle they are in, and every
+  // page below here is about a cycle: their deadlines, their applications,
+  // their instalments. Recording the intake issues the ID and opens the door
+  // in the same moment.
+  //
+  // "/" is safe to land on: it holds a student with no code on an explanatory
+  // screen rather than sending them back here, so this cannot loop.
+  if (!studentRow || !studentRow.portal_active || !studentRow.student_code) {
     redirect("/");
   }
 

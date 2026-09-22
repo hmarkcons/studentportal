@@ -45,6 +45,14 @@ export function ImportRegisteredStudentsForm() {
         else is optional.
       </p>
       <p className="mt-1 text-xs text-muted">
+        <strong className="text-ink">registration_date</strong> is the day the student actually registered, written as{" "}
+        <code>YYYY-MM-DD</code> (or a real date cell in Excel). It is what puts them in the right place in their
+        intake&rsquo;s running order and fixes the Month they appear under — so a previous intake imports with the dates
+        it happened on. Leave it blank only for students registering today. A date that cannot be read stops that row
+        rather than being guessed, because the <strong className="text-ink">Student ID</strong> built from it is never
+        renumbered afterwards.
+      </p>
+      <p className="mt-1 text-xs text-muted">
         Country names do not need the track suffix — <code>Italy</code> is matched to{" "}
         <strong className="text-ink">Italy (Public)</strong>, <code>UK</code> to{" "}
         <strong className="text-ink">United Kingdom (Private)</strong>, and so on. Each student is registered for their
@@ -62,6 +70,30 @@ export function ImportRegisteredStudentsForm() {
             {state.skipped ? ` Skipped ${state.skipped} whose email already matches an existing student.` : ""}
             {state.exampleRows ? " The template's example row was ignored." : ""}
           </p>
+
+          {/* Not a footnote. These students are registered and hold their place
+              in the running order, but their portal stays shut and no ID can
+              name a cycle until somebody records their intake. */}
+          {(state.awaitingIntake ?? 0) > 0 && (
+            <p className="text-warning">
+              {state.awaitingIntake} of them have no intake recorded, so they have no Student ID yet and their portal
+              stays closed. They keep their place in the running order — set the intake on each student&rsquo;s profile
+              and the ID they were always going to have is issued then.
+            </p>
+          )}
+
+          {(state.datedToday ?? 0) > 0 && (
+            <p className="text-muted">
+              {state.datedToday} row{state.datedToday === 1 ? "" : "s"} left <code>registration_date</code> blank and{" "}
+              {state.datedToday === 1 ? "was" : "were"} registered as of today.
+            </p>
+          )}
+
+          {(state.badDate?.length ?? 0) > 0 && (
+            <p className="text-warning">
+              Not imported — registration date could not be read: {state.badDate!.join("; ")}.
+            </p>
+          )}
 
           {state.destinationWarning && <p className="text-danger">Note: {state.destinationWarning}.</p>}
 

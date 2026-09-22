@@ -30,10 +30,31 @@ export default async function Home() {
 
   const { data: studentRow } = await supabase
     .from("leads")
-    .select("id, portal_active")
+    .select("id, portal_active, student_code")
     .eq("auth_user_id", user.id)
     .maybeSingle();
   if (studentRow) {
+    // Checked before portal_active, and with its own wording. A student whose
+    // intake has not been recorded has no Student ID, and the (student) layout
+    // turns them back here — telling them to wait for their agreement would be
+    // the wrong thing to chase, and this is the screen that stops the two
+    // redirects becoming a loop.
+    if (!studentRow.student_code) {
+      return (
+        <div className="flex flex-1 items-center justify-center bg-bg px-4">
+          <div className="w-full max-w-sm rounded-lg border border-border bg-card p-8 text-center">
+            <h1 className="text-lg font-semibold text-ink">Your intake is being confirmed</h1>
+            <p className="mt-2 text-sm text-muted">
+              Your portal opens as soon as HMARK Consultants confirm which intake you are joining and issue your
+              Student ID. Your place is already reserved. Contact your counselor if you have your intake confirmed
+              already.
+            </p>
+            <SignOutButton className="mt-6 text-sm text-primary hover:underline">Sign out</SignOutButton>
+          </div>
+        </div>
+      );
+    }
+
     if (studentRow.portal_active) redirect("/portal");
 
     return (
