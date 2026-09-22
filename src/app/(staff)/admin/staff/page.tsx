@@ -1,4 +1,5 @@
 import { hasRole } from "@/lib/auth/roles";
+import { documentUrls } from "@/lib/storageUrls";
 import { getStaffSession } from "@/lib/auth/session";
 import { getEffectivePermissions } from "@/lib/auth/permissions";
 import { Card } from "@/components/ui/Card";
@@ -55,15 +56,14 @@ export default async function StaffAdminPage() {
   // `staff.monthly_salary` the way they did when it was a column.
   const staff = withCompensationAll(staffRows) as (StaffRecord & { photo_path: string | null })[];
 
+  // One request for the whole directory's photos, not one per person. This
+  // page shows every active staff member, so it was the worst of these loops.
+  const photoByPath = await documentUrls(supabase, (staff ?? []).map((s) => s.photo_path));
   const photoUrls: Record<string, string> = {};
-  await Promise.all(
-    (staff ?? [])
-      .filter((s) => s.photo_path)
-      .map(async (s) => {
-        const { data } = await supabase.storage.from("documents").createSignedUrl(s.photo_path!, 3600);
-        if (data?.signedUrl) photoUrls[s.id] = data.signedUrl;
-      })
-  );
+  for (const s of staff ?? []) {
+    const url = s.photo_path ? photoByPath.get(s.photo_path) : undefined;
+    if (url) photoUrls[s.id] = url;
+  }
 
   const { data: pendingPartners } = await supabase
     .from("partner_university_accounts")

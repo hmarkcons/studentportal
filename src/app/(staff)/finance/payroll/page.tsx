@@ -1,4 +1,5 @@
 import { hasRole } from "@/lib/auth/roles";
+import { documentUrls } from "@/lib/storageUrls";
 import { COMPENSATION_EMBED, withCompensation, withCompensationAll } from "@/lib/staffCompensation";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
@@ -114,15 +115,12 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
         .lt("registration_date", nextMonthStart)
         .order("registration_date", { ascending: false });
 
+      const proofByPath = await documentUrls(supabase, (rawCommissions ?? []).map((c) => c.payment_proof_path));
       const proofUrls: Record<string, string> = {};
-      await Promise.all(
-        (rawCommissions ?? [])
-          .filter((c) => c.payment_proof_path)
-          .map(async (c) => {
-            const { data } = await supabase.storage.from("documents").createSignedUrl(c.payment_proof_path!, 3600);
-            if (data?.signedUrl) proofUrls[c.id] = data.signedUrl;
-          })
-      );
+      for (const c of rawCommissions ?? []) {
+        const url = c.payment_proof_path ? proofByPath.get(c.payment_proof_path) : undefined;
+        if (url) proofUrls[c.id] = url;
+      }
 
       const commissionRecords: CommissionRecord[] = (rawCommissions ?? []).map((c) => ({
         id: c.id,

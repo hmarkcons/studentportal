@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { loadDocumentHistory } from "@/lib/documentHistory";
+import { documentUrls } from "@/lib/storageUrls";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { DocumentChecklist, type DocRow } from "@/components/DocumentChecklist";
@@ -91,8 +92,10 @@ export default async function StudentDocumentsTab(props: {
 
   const history = await loadDocumentHistory(supabase, docs.map((d) => d.id));
 
-  const docsWithUrls = await Promise.all(
-    docs.map(async (d) => {
+  // One request for every file's link, then a plain synchronous map.
+  const docUrls = await documentUrls(supabase, docs.map((d) => d.file_path));
+
+  const docsWithUrls = docs.map((d) => {
       const templateName = one(d.template as never) as { name?: string } | null;
       const uni = d.application_id ? appLabel.get(d.application_id) : null;
       // Only application-specific extras carry a university suffix; the standard
@@ -105,10 +108,8 @@ export default async function StudentDocumentsTab(props: {
       const name = `${base}${uni?.name ? ` — ${uni.name}` : ""}${carried}`;
       const past = history.get(d.id) ?? [];
       if (!d.file_path) return { ...d, name, history: past };
-      const { data } = await supabase.storage.from("documents").createSignedUrl(d.file_path, 3600);
-      return { ...d, name, history: past, fileUrl: data?.signedUrl ?? null };
-    })
-  );
+      return { ...d, name, history: past, fileUrl: docUrls.get(d.file_path) ?? null };
+  });
 
   return (
     <>

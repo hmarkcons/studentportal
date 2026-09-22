@@ -1,4 +1,5 @@
 import { hasRole } from "@/lib/auth/roles";
+import { documentUrls } from "@/lib/storageUrls";
 import { createClient } from "@/lib/supabase/server";
 import { Badge } from "@/components/ui/Badge";
 import { ProofFileCell } from "@/components/ProofFileCell";
@@ -50,15 +51,12 @@ export default async function PartnerCommissionsPage() {
     };
   });
 
+  const proofByPath = await documentUrls(supabase, rows.map((r) => r.payment_proof_path));
   const proofUrls = new Map<string, string>();
-  await Promise.all(
-    rows
-      .filter((r) => r.payment_proof_path)
-      .map(async (r) => {
-        const { data } = await supabase.storage.from("documents").createSignedUrl(r.payment_proof_path!, 3600);
-        if (data?.signedUrl) proofUrls.set(r.id, data.signedUrl);
-      })
-  );
+  for (const r of rows) {
+    const url = r.payment_proof_path ? proofByPath.get(r.payment_proof_path) : undefined;
+    if (url) proofUrls.set(r.id, url);
+  }
 
   const { data: students } = await supabase.from("students").select("id, full_name").order("full_name");
   const { data: rawApplications } = await supabase

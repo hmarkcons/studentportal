@@ -1,4 +1,5 @@
 import { hasRole } from "@/lib/auth/roles";
+import { documentUrls } from "@/lib/storageUrls";
 import { COMPENSATION_EMBED, withCompensationAll } from "@/lib/staffCompensation";
 import { createClient } from "@/lib/supabase/server";
 import { computeInvoiceStatus } from "@/lib/invoiceStatus";
@@ -54,15 +55,12 @@ export default async function StaffCommissionPage() {
     .select("id, staff_id, amount, currency")
     .eq("status", "available");
 
+  const proofByPath = await documentUrls(supabase, (commissions ?? []).map((c) => c.payment_proof_path));
   const proofUrls: Record<string, string> = {};
-  await Promise.all(
-    (commissions ?? [])
-      .filter((c) => c.payment_proof_path)
-      .map(async (c) => {
-        const { data } = await supabase.storage.from("documents").createSignedUrl(c.payment_proof_path!, 3600);
-        if (data?.signedUrl) proofUrls[c.id] = data.signedUrl;
-      })
-  );
+  for (const c of commissions ?? []) {
+    const url = c.payment_proof_path ? proofByPath.get(c.payment_proof_path) : undefined;
+    if (url) proofUrls[c.id] = url;
+  }
 
   const studentIds = Array.from(new Set((commissions ?? []).map((c) => c.student_id)));
   const { data: invoices } = studentIds.length

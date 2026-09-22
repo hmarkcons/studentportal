@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { documentUrls } from "@/lib/storageUrls";
 import { StatCard } from "@/components/ui/StatCard";
 import { computeInvoiceStatus } from "@/lib/invoiceStatus";
 import { computeInvoiceMath, computePaymentProgress, sumLineItems } from "@/lib/invoiceMath";
@@ -70,15 +71,14 @@ export default async function ConsultancyFeePage() {
 
   const { data: feeProducts } = await supabase.from("fee_products").select("id, name, default_amount, default_currency").order("name");
 
+  // Every invoice PDF in one request. This page lists every invoice on file,
+  // so it was one round trip per invoice before the page could render.
+  const pdfByPath = await documentUrls(supabase, (invoices ?? []).map((i) => i.pdf_path));
   const pdfUrls = new Map<string, string>();
-  await Promise.all(
-    (invoices ?? [])
-      .filter((i) => i.pdf_path)
-      .map(async (i) => {
-        const { data } = await supabase.storage.from("documents").createSignedUrl(i.pdf_path!, 3600);
-        if (data?.signedUrl) pdfUrls.set(i.id, data.signedUrl);
-      })
-  );
+  for (const i of invoices ?? []) {
+    const url = i.pdf_path ? pdfByPath.get(i.pdf_path) : undefined;
+    if (url) pdfUrls.set(i.id, url);
+  }
 
   const rows = (invoices ?? []).map((inv) => {
     const student = one(inv.student as never) as { full_name?: string; registered_at?: string } | null;

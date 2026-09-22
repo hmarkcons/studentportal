@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { documentUrls } from "@/lib/storageUrls";
 import { loadDocumentHistory } from "@/lib/documentHistory";
 import { orderCycles, cycleTabLabel, resolveCycleDocuments, type Cycle } from "@/lib/intakeCycle";
 import { getStudentUser } from "@/lib/auth/session";
@@ -71,8 +72,11 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
 
   const docHistory = await loadDocumentHistory(supabase, rawDocs.map((d) => d.id));
 
-  const docsWithUrls = await Promise.all(
-    rawDocs.map(async (d) => {
+  // Every file's link in one request, then a plain synchronous map. This was
+  // one round trip to Storage per document before the page could render.
+  const docUrls = await documentUrls(supabase, rawDocs.map((d) => d.file_path));
+
+  const docsWithUrls = rawDocs.map((d) => {
       const uni = d.application_id ? appLabel.get(d.application_id) : null;
       const templateName = one(d.template as never) as { name?: string } | null;
       const baseName = d.custom_name ?? templateName?.name ?? d.category ?? "Document";
@@ -85,10 +89,8 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
       const custom_name = `${baseName}${uni?.name ? ` — ${uni.name}` : ""}${carried}`;
       const past = docHistory.get(d.id) ?? [];
       if (!d.file_path) return { ...d, custom_name, history: past };
-      const { data } = await supabase.storage.from("documents").createSignedUrl(d.file_path, 3600);
-      return { ...d, custom_name, history: past, fileUrl: data?.signedUrl ?? null };
-    })
-  );
+      return { ...d, custom_name, history: past, fileUrl: docUrls.get(d.file_path) ?? null };
+  });
 
   // Grouped and numbered the same way staff see them on the Documents tab, so
   // "section 2, item 3" means the same thing to a student on the phone as to

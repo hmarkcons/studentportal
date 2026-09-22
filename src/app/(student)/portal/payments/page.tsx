@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { documentUrls } from "@/lib/storageUrls";
 import { formatDateOnly } from "@/lib/formatDate";
 import { carriedFromNote } from "@/lib/partialPayment";
 import { Card } from "@/components/ui/Card";
@@ -42,15 +43,12 @@ export default async function PortalPaymentsPage() {
     .eq("student_id", student.id)
     .order("created_at", { ascending: false });
 
+  const pdfByPath = await documentUrls(supabase, (invoices ?? []).map((i) => i.pdf_path));
   const pdfUrls = new Map<string, string>();
-  await Promise.all(
-    (invoices ?? [])
-      .filter((i) => i.pdf_path)
-      .map(async (i) => {
-        const { data } = await supabase.storage.from("documents").createSignedUrl(i.pdf_path!, 3600);
-        if (data?.signedUrl) pdfUrls.set(i.id, data.signedUrl);
-      })
-  );
+  for (const i of invoices ?? []) {
+    const url = i.pdf_path ? pdfByPath.get(i.pdf_path) : undefined;
+    if (url) pdfUrls.set(i.id, url);
+  }
 
   const invoiceIds = (invoices ?? []).map((i) => i.id);
   // Ordered explicitly: without it the installments came back in whatever

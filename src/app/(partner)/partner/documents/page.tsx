@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { documentUrls } from "@/lib/storageUrls";
 import { Card } from "@/components/ui/Card";
 import { UploadExchangeForm } from "./UploadExchangeForm";
 import { uploadedLine } from "@/lib/activityStamp";
@@ -18,13 +19,12 @@ export default async function PartnerDocumentsPage() {
     .eq("university_id", account.university_id)
     .order("created_at", { ascending: false });
 
+  const linkByPath = await documentUrls(supabase, (docs ?? []).map((d) => d.file_path));
   const links = new Map<string, string>();
-  await Promise.all(
-    (docs ?? []).map(async (d) => {
-      const { data } = await supabase.storage.from("documents").createSignedUrl(d.file_path, 3600);
-      if (data?.signedUrl) links.set(d.id, data.signedUrl);
-    })
-  );
+  for (const d of docs ?? []) {
+    const url = linkByPath.get(d.file_path);
+    if (url) links.set(d.id, url);
+  }
 
   return (
     <div className="mx-auto max-w-2xl">

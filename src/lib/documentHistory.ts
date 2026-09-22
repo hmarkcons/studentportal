@@ -7,6 +7,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ArchivedUpload } from "@/components/DocumentHistory";
+import { documentUrls } from "@/lib/storageUrls";
 
 export async function loadDocumentHistory(
   supabase: SupabaseClient,
@@ -23,26 +24,29 @@ export async function loadDocumentHistory(
     // asking about it means.
     .order("archived_at", { ascending: false });
 
-  await Promise.all(
-    (data ?? []).map(async (row) => {
-      const { data: signed } = await supabase.storage.from("documents").createSignedUrl(row.file_path, 3600);
-      const entry: ArchivedUpload = {
-        id: row.id,
-        version: row.version,
-        uploadedAt: row.uploaded_at,
-        uploadedByRole: row.uploaded_by_role,
-        previousStatus: row.previous_status,
-        rejectedReason: row.rejected_reason,
-        fileUrl: signed?.signedUrl ?? null,
-      };
-      const list = byDocument.get(row.document_id) ?? [];
-      list.push(entry);
-      byDocument.set(row.document_id, list);
-    })
-  );
+  // One request for every archived version's link. This signed them one at a
+  // time, and it runs for EVERY document on a page — a student with twenty
+  // documents that had each been sent back twice was forty round trips, on
+  // top of the twenty for the current files.
+  const urls = await documentUrls(supabase, (data ?? []).map((row) => row.file_path));
 
-  // Promise.all resolves out of order, so the newest-first ordering above is
-  // restored here rather than assumed.
+  for (const row of data ?? []) {
+    const entry: ArchivedUpload = {
+      id: row.id,
+      version: row.version,
+      uploadedAt: row.uploaded_at,
+      uploadedByRole: row.uploaded_by_role,
+      previousStatus: row.previous_status,
+      rejectedReason: row.rejected_reason,
+      fileUrl: urls.get(row.file_path) ?? null,
+    };
+    const list = byDocument.get(row.document_id) ?? [];
+    list.push(entry);
+    byDocument.set(row.document_id, list);
+  }
+
+  // By version rather than by the archived_at the query ordered on: the two
+  // agree in practice, and this is the order the reader means.
   for (const list of byDocument.values()) {
     list.sort((a, b) => b.version - a.version);
   }
