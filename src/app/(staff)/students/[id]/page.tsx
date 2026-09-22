@@ -405,6 +405,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     { data: assignedCounselorStaff },
     { data: processingOfficers },
     { data: allAdminCharges },
+    restartContext,
   ] = await Promise.all([
     // The template and the signed scan are ordinary links, so they batch. The
     // generated PDF carries a per-agreement download filename, which the batch
@@ -492,6 +493,10 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
           .in("invoice_id", invoiceIds)
           .order("sort_order", { ascending: true })
       : Promise.resolve({ data: [] }),
+    // Takes nothing but the student id, so it belongs in this wave rather than
+    // in one of its own after the trackers. It was the last of five queries
+    // that ran strictly one after another at the foot of this page.
+    loadRestartContext(id),
   ]);
 
   // Header summary for the Invoice section, which also opens collapsed. Counted
@@ -660,10 +665,9 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
 
   const trackerProgress = summariseTracker(trackerSections);
 
-  // Whether this student can be started again, and on what evidence. Read here
-  // rather than in the panel so the visa outcome comes from the same place the
-  // Visa tab reads it from.
-  const restartContext = await loadRestartContext(id);
+  // Whether this student can be started again, and on what evidence, comes
+  // from the level-2 wave above — read there rather than in the panel so the
+  // visa outcome comes from the same place the Visa tab reads it from.
   const canRestart = perms["students.restart_process"] === true;
   // The message to reach them with, when they have stopped. Only looked up
   // for a student the panel will actually show.
