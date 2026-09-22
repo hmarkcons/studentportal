@@ -62,6 +62,24 @@ const fx = fixtures(admin);
 let pass = 0, fail = 0;
 const ok = (l, c, x = "") => { if (c) { pass++; console.log(`PASS  ${l}`); } else { fail++; console.log(`FAIL  ${l}${x ? "  — " + x : ""}`); } };
 
+// How long each button actually took, printed at the end beside the results.
+//
+// This lives here rather than in a probe of its own. A separate script has to
+// find every control again from scratch, and one that did exactly that hung
+// three times on collapsed cards and unhydrated forms while this script was
+// driving the same buttons successfully. Timing what already works costs a
+// stopwatch; maintaining a second copy of the interactions costs far more.
+//
+// Measured from the click to the outcome landing, which is the wait a person
+// actually feels, not just the server's part of it.
+const timings = [];
+const timed = async (label, run) => {
+  const t0 = Date.now();
+  const result = await run();
+  timings.push([label, Date.now() - t0]);
+  return result;
+};
+
 const expand = async (page, title) => {
   const header = page.locator('button[aria-expanded="false"]').filter({ hasText: title }).first();
   if (await header.count()) await header.click();
@@ -151,8 +169,11 @@ const addItemViaCard = async (page, invoiceId, name, amount, expectCount, placem
   await form.locator('input[name="name"]').fill(name);
   await form.locator('input[name="amount"]').fill(String(amount));
   if (placement) await select.selectOption({ label: placement });
-  await button.click();
-  return { offered: true, rows: await waitForLineItems(page, invoiceId, expectCount), opened };
+  const rows = await timed("add an item to an invoice", async () => {
+    await button.click();
+    return waitForLineItems(page, invoiceId, expectCount);
+  });
+  return { offered: true, rows, opened };
 };
 
 // Removes an item by the Remove button on its own row, not the first Remove
@@ -235,9 +256,10 @@ try {
     // comes from the destination, not the form, so a stale or hand-posted
     // form cannot raise a public invoice in the wrong currency.
     await form.locator('select[name="currency"]').selectOption("PKR");
-    await generate.click();
-
-    const invoice = await waitForInvoice(page, studentId, (i) => i.id);
+    const invoice = await timed("generate an invoice", async () => {
+      await generate.click();
+      return waitForInvoice(page, studentId, (i) => i.id);
+    });
     ok("an invoice is created", invoice !== null,
       (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(-300));
 
@@ -375,13 +397,17 @@ try {
               return data?.find((f) => f.name === `${invoice.id}.pdf`)?.updated_at ?? null;
             };
             const before = await stampOf();
-            await rebuild.click();
-            let rebuilt = false;
-            for (let i = 0; i < 60; i++) {
-              const now = await stampOf();
-              if (now && now !== before) { rebuilt = true; break; }
-              await page.waitForTimeout(1000);
-            }
+            // Times the render itself: this button still waits for the PDF,
+            // unlike raising an invoice, which hands it to `after`.
+            const rebuilt = await timed("rebuild a PDF (still waits for it)", async () => {
+              await rebuild.click();
+              for (let i = 0; i < 60; i++) {
+                const now = await stampOf();
+                if (now && now !== before) return true;
+                await page.waitForTimeout(1000);
+              }
+              return false;
+            });
             ok("the PDF is rebuilt with the item on it", rebuilt, `before=${before} after=${await stampOf()}`);
             const { data: file } = await admin.storage.from("documents").download(`${folder}/${invoice.id}.pdf`);
             const bytes = file ? Buffer.from(await file.arrayBuffer()) : null;
@@ -464,13 +490,15 @@ try {
       const markPaid = page.getByRole("button", { name: /^Mark paid$/ }).first();
       ok("the first installment can be marked paid", (await markPaid.count()) > 0);
       if (await markPaid.count()) {
-        await markPaid.click();
-        let settled = null;
-        for (let i = 0; i < 30; i++) {
-          const rows = await installmentsOf(invoice.id);
-          if (rows[0]?.status === "paid") { settled = rows; break; }
-          await page.waitForTimeout(1000);
-        }
+        const settled = await timed("record a payment", async () => {
+          await markPaid.click();
+          for (let i = 0; i < 30; i++) {
+            const rows = await installmentsOf(invoice.id);
+            if (rows[0]?.status === "paid") return rows;
+            await page.waitForTimeout(1000);
+          }
+          return null;
+        });
         ok("...and is recorded as paid", settled !== null,
           (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(-300));
         ok("...for its full amount", Number(settled?.[0]?.amount_paid) === 945,
@@ -1157,6 +1185,15 @@ try {
   // until the lead goes, so deleting it first fails and the catch hides that.
   if (portalUserId) await admin.auth.admin.deleteUser(portalUserId).catch(() => {});
   await browser.close();
+
+  // What each button cost, click to outcome. One sample each — this is a
+  // correctness check that happens to hold a stopwatch, not a benchmark — so
+  // read it for the shape rather than the last hundred milliseconds.
+  if (timings.length > 0) {
+    console.log("\nhow long the buttons took (click to outcome, one sample each):");
+    for (const [label, ms] of timings) console.log(`  ${String(ms + " ms").padStart(9)}   ${label}`);
+  }
+
   console.log(`\n${pass} passed, ${fail} failed  (${n} fixtures removed)`);
   process.exitCode = fail ? 1 : 0;
 }
