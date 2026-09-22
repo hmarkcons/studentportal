@@ -50,6 +50,15 @@ export function StudentTabs({
           <Link
             key={t.href}
             href={t.href}
+            // Every one of these tabs is a full page of its own — Documents,
+            // Applications, Profile, Visa, Scholarship, Communication — and a
+            // <Link> prefetches as soon as it is on screen. So opening one
+            // student fired seven server renders of tabs nobody had clicked,
+            // which was most of the two seconds this page spent working after
+            // it had already finished loading. students/[id]/loading.tsx
+            // paints a skeleton the moment a tab is clicked, so the feedback
+            // prefetching was buying is still there.
+            prefetch={false}
             // Border colour is set inline because globals.css carries an
             // unlayered `* { border-color: var(--border) }`, which outranks
             // Tailwind's layered border-* colour utilities — so

@@ -7,6 +7,7 @@ import { StudentTabs } from "./StudentTabs";
 import { DeleteStudentButton } from "./DeleteStudentButton";
 import { InlineRegistrationStatusCell } from "../InlineRegistrationStatusCell";
 import { countUnreadMessages } from "@/lib/unreadMessages";
+import { documentUrls } from "@/lib/storageUrls";
 import { canSeeVisaSection } from "@/lib/visaAccess";
 
 export default async function StudentLayout({ children, params }: { children: React.ReactNode; params: Promise<{ id: string }> }) {
@@ -14,7 +15,17 @@ export default async function StudentLayout({ children, params }: { children: Re
   const { supabase, staff: staffRow } = await getStaffSession();
   const canDeleteStudent = hasRole(staffRow, "super_admin") || hasRole(staffRow, "processing");
 
-  const [{ data: student, error }, { data: italyApp }, { data: profile }, { data: finalizedApp }] = await Promise.all([
+  // One wave for everything that depends on nothing. The unread count, the
+  // scholarship-body list and the student's own row used to run one after
+  // another below, each waiting on the last for no reason.
+  const [
+    { data: student, error },
+    { data: italyApp },
+    { data: profile },
+    { data: finalizedApp },
+    unreadMessages,
+    { data: scholarshipBodyLinks },
+  ] = await Promise.all([
     supabase
       .from("students")
       .select("id, full_name, email, contact_number, country_of_interest, portal_active, registration_status, student_code")
@@ -31,6 +42,9 @@ export default async function StudentLayout({ children, params }: { children: Re
       .eq("student_id", id)
       .eq("is_finalized", true)
       .maybeSingle(),
+    // Messages this student has sent that no one on the team has opened yet.
+    countUnreadMessages(supabase, id, "staff"),
+    supabase.from("scholarship_body_destinations").select("destination_id"),
   ]);
 
   if (error || !student) notFound();
@@ -50,15 +64,6 @@ export default async function StudentLayout({ children, params }: { children: Re
   // against a country code here.
   const finalizedBadgeLabel = finalizedDest?.finalized_badge_label ?? "Finalized for visa";
 
-  let photoUrl: string | null = null;
-  if (profile?.photo_path) {
-    const { data } = await supabase.storage.from("documents").createSignedUrl(profile.photo_path, 3600);
-    photoUrl = data?.signedUrl ?? null;
-  }
-
-  // Messages this student has sent that no one on the team has opened yet.
-  const unreadMessages = await countUnreadMessages(supabase, id, "staff");
-
   // The tab appears for any country that has a scholarship body on file, not
   // only Italy. It was hardcoded to "IT" while the page itself had already
   // grown to handle every country — so a France student with an Eiffel
@@ -66,21 +71,23 @@ export default async function StudentLayout({ children, params }: { children: Re
   //
   // Whether the tab has anything IN it is a separate question, answered by
   // scholarshipGate: nothing until a university is finalised for pre-enrolment.
-  const { data: scholarshipBodyLinks } = await supabase
-    .from("scholarship_body_destinations")
-    .select("destination_id");
   const destinationsWithBodies = new Set((scholarshipBodyLinks ?? []).map((l) => l.destination_id as string));
 
+  // The second and last wave: both of these need something from the first.
   // A country somebody has answered "No" for on the tracker does not count
   // towards showing the tab. If that is every country the student has, the
   // tab goes away entirely rather than opening onto an explanation — the
   // decision was taken and there is nothing there to manage.
-  const { data: declinedRows } = await supabase
-    .from("application_country_extra")
-    .select("application_id")
-    .eq("field_key", "scholarship_intent")
-    .eq("field_value", "No")
-    .in("application_id", (italyApp ?? []).map((a) => a.id));
+  const [photoMap, { data: declinedRows }] = await Promise.all([
+    documentUrls(supabase, [profile?.photo_path]),
+    supabase
+      .from("application_country_extra")
+      .select("application_id")
+      .eq("field_key", "scholarship_intent")
+      .eq("field_value", "No")
+      .in("application_id", (italyApp ?? []).map((a) => a.id)),
+  ]);
+  const photoUrl = profile?.photo_path ? photoMap.get(profile.photo_path) ?? null : null;
   const declined = new Set((declinedRows ?? []).map((r) => r.application_id));
 
   const showScholarship = (italyApp ?? []).some((a) => {
