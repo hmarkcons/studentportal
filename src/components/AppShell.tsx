@@ -94,6 +94,19 @@ export function AppShell({
             </button>
           </div>
         </div>
+        {/* prefetch={false} on every link in here, deliberately.
+ *
+ * A <Link> prefetches as soon as it enters the viewport, and this sidebar
+ * puts every section a staff member can reach on screen at once. Each
+ * prefetch is a real server render behind the proxy's auth check, so one
+ * page view fired a dozen of them: measured on the staff directory, they
+ * added about two and a half seconds after the page had already finished
+ * and loaded work onto the server nobody had asked for.
+ *
+ * Nothing is lost by turning it off. loading.tsx covers (staff) and the
+ * student pages, so a click paints a skeleton immediately either way —
+ * which is the feedback prefetching was buying, at the cost of rendering
+ * twenty pages the person was never going to open. */}
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           {nav.map((item) =>
             item.children ? (
@@ -116,6 +129,7 @@ export function AppShell({
                     <Link
                       key={child.href}
                       href={child.href}
+                      prefetch={false}
                       className={`rounded-md px-3 py-1.5 text-sm ${
                         isActive(child.href)
                           ? "bg-sidebar-active-bg font-medium text-primary"
@@ -131,6 +145,7 @@ export function AppShell({
               <Link
                 key={item.href}
                 href={item.href!}
+                prefetch={false}
                 className={`mb-1 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
                   isActive(item.href!)
                     ? "bg-sidebar-active-bg text-primary"
