@@ -7,7 +7,7 @@ import { StudentTabs } from "./StudentTabs";
 import { DeleteStudentButton } from "./DeleteStudentButton";
 import { InlineRegistrationStatusCell } from "../InlineRegistrationStatusCell";
 import { countUnreadMessages } from "@/lib/unreadMessages";
-import { documentUrls } from "@/lib/storageUrls";
+import { avatarUrlMap } from "@/lib/storageUrls";
 import { canSeeVisaSection } from "@/lib/visaAccess";
 
 export default async function StudentLayout({ children, params }: { children: React.ReactNode; params: Promise<{ id: string }> }) {
@@ -79,7 +79,7 @@ export default async function StudentLayout({ children, params }: { children: Re
   // tab goes away entirely rather than opening onto an explanation — the
   // decision was taken and there is nothing there to manage.
   const [photoMap, { data: declinedRows }] = await Promise.all([
-    documentUrls(supabase, [profile?.photo_path]),
+    avatarUrlMap([profile?.photo_path]),
     supabase
       .from("application_country_extra")
       .select("application_id")
@@ -106,8 +106,20 @@ export default async function StudentLayout({ children, params }: { children: Re
         <div className="flex min-w-0 flex-wrap items-center gap-4">
           {/* Display only — the upload controls live on the Profile tab. */}
           {photoUrl ? (
+            // Sized and decoded off the critical path: these are uploaded
+            // phone photos shown at 64 pixels, and without the attributes the
+            // browser preloads them at full resolution and holds the page's
+            // load event open until they arrive.
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={photoUrl} alt={student.full_name} className="h-16 w-16 flex-shrink-0 rounded-full border border-border object-cover" />
+            <img
+              src={photoUrl}
+              alt={student.full_name}
+              width={64}
+              height={64}
+              loading="lazy"
+              decoding="async"
+              className="h-16 w-16 flex-shrink-0 rounded-full border border-border object-cover"
+            />
           ) : (
             <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full border border-dashed border-border text-[10px] text-muted">
               No photo

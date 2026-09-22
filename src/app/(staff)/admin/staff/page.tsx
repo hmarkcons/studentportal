@@ -1,5 +1,5 @@
 import { hasRole } from "@/lib/auth/roles";
-import { documentUrls } from "@/lib/storageUrls";
+import { avatarUrlMap } from "@/lib/storageUrls";
 import { getStaffSession } from "@/lib/auth/session";
 import { getEffectivePermissions } from "@/lib/auth/permissions";
 import { Card } from "@/components/ui/Card";
@@ -56,9 +56,10 @@ export default async function StaffAdminPage() {
   // `staff.monthly_salary` the way they did when it was a column.
   const staff = withCompensationAll(staffRows) as (StaffRecord & { photo_path: string | null })[];
 
-  // One request for the whole directory's photos, not one per person. This
-  // page shows every active staff member, so it was the worst of these loops.
-  const photoByPath = await documentUrls(supabase, (staff ?? []).map((s) => s.photo_path));
+  // One request for the whole directory's photos, not one per person, and
+  // through avatarUrls so the URLs are the ones the browser already has. This
+  // page shows every staff member, so it was the worst of both problems.
+  const photoByPath = await avatarUrlMap((staff ?? []).map((s) => s.photo_path));
   const photoUrls: Record<string, string> = {};
   for (const s of staff ?? []) {
     const url = s.photo_path ? photoByPath.get(s.photo_path) : undefined;

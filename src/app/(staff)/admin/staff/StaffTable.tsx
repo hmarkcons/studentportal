@@ -108,7 +108,7 @@ export function StaffTable({
                   <div className="flex items-center gap-2">
                     {photoUrls[s.id] ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={photoUrls[s.id]} alt="" className="h-7 w-7 rounded-full border border-border object-cover" />
+                      <img src={photoUrls[s.id]} alt="" width={28} height={28} loading="lazy" decoding="async" className="h-7 w-7 rounded-full border border-border object-cover" />
                     ) : (
                       <div className="flex h-7 w-7 items-center justify-center rounded-full border border-dashed border-border text-[10px] text-muted">
                         —

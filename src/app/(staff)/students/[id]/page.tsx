@@ -25,7 +25,7 @@ import { GenerateAgreementPdfButton } from "./GenerateAgreementPdfButton";
 import { AgreementActionsMenu } from "./AgreementActionsMenu";
 import { GenerateInvoiceForm, InvoiceCard } from "./InvoicePanel";
 import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
-import { documentUrls } from "@/lib/storageUrls";
+import { documentUrls, avatarUrlMap } from "@/lib/storageUrls";
 import { PortalCredentialsSection } from "./PortalCredentialsSection";
 import { DashboardTaskList, type DashboardTaskRow } from "./DashboardTaskList";
 import { listCredentialTypesAction } from "@/lib/actions/countryTracker";
@@ -518,10 +518,11 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     ? (processingOfficers ?? []).filter((o) => o.id === leadRegistration.processing_officer_id)
     : (processingOfficers ?? []);
 
-  // Every face on the page in one request: the counselor's and the whole
-  // processing team's, which was a round trip each and ran after everything
-  // else rather than alongside it.
-  const photoUrls = await documentUrls(supabase, [
+  // Every face on the page in one request, and through avatarUrls so the URL
+  // is the same one the browser cached last time. These are the same handful
+  // of staff photos on page after page; minting a fresh signature for each of
+  // them on every load meant re-downloading all of them, every time.
+  const photoUrls = await avatarUrlMap([
     assignedCounselorStaff?.photo_path,
     ...(processingOfficers ?? []).map((o) => o.photo_path),
   ]);
@@ -1103,7 +1104,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
               <div className="flex items-start gap-3 text-sm text-ink">
                 {assignedCounselorPhotoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={assignedCounselorPhotoUrl} alt="" className="h-12 w-12 shrink-0 rounded-full border border-border object-cover" />
+                  <img src={assignedCounselorPhotoUrl} alt="" width={48} height={48} loading="lazy" decoding="async" className="h-12 w-12 shrink-0 rounded-full border border-border object-cover" />
                 ) : (
                   <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-dashed border-border text-[10px] text-muted">
                     —
@@ -1136,7 +1137,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                   <div key={officer.id} className="flex items-start gap-3 text-sm text-ink">
                     {processingOfficerPhotoUrls.has(officer.id) ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={processingOfficerPhotoUrls.get(officer.id)} alt="" className="h-12 w-12 shrink-0 rounded-full border border-border object-cover" />
+                      <img src={processingOfficerPhotoUrls.get(officer.id)} alt="" width={48} height={48} loading="lazy" decoding="async" className="h-12 w-12 shrink-0 rounded-full border border-border object-cover" />
                     ) : (
                       <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-dashed border-border text-[10px] text-muted">
                         —
