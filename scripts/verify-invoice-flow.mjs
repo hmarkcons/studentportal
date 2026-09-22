@@ -93,6 +93,30 @@ const installmentsOf = async (invoiceId) => {
   return data ?? [];
 };
 
+/**
+ * Picks a student in the Invoice Generator and waits for the form to appear.
+ *
+ * The picker is a React-controlled <select>: selecting an option only reveals
+ * the form once the page has hydrated and the change handler is listening. A
+ * single selectOption straight after a navigation sets the DOM value, nobody
+ * hears it, and the next line then waits thirty seconds for a field that will
+ * never render — which is exactly what skipped the last three sections of this
+ * script. So the selection is repeated until the form is actually there.
+ */
+const pickStudentInGenerator = async (page, studentId, seconds = 30) => {
+  const picker = page.locator("select").first();
+  for (let waited = 0; waited < seconds; waited += 3) {
+    await picker.selectOption(studentId).catch(() => {});
+    try {
+      await page.locator('input[name="consultancy_fee"]').waitFor({ state: "visible", timeout: 3000 });
+      return true;
+    } catch {
+      // Not hydrated yet. Try again rather than assume the page is broken.
+    }
+  }
+  return false;
+};
+
 const lineItemsOf = async (invoiceId) => {
   const { data } = await admin.from("invoice_line_items").select("*").eq("invoice_id", invoiceId);
   return data ?? [];
@@ -324,7 +348,13 @@ try {
             if (/EUR 2295\.00/.test(card)) break;
             await page.waitForTimeout(1000);
           }
-          ok("the card's total includes the item and its tax", /EUR 2310\.00/.test(card), card.slice(-600));
+          // Anchored to the invoice number, which is what the header prints
+          // the total beside. Matching "EUR 2310.00" anywhere on the page
+          // passed while the header itself was wrong, because the Outstanding
+          // tile happens to show the same figure — an assertion that can pass
+          // on a coincidence is worse than none.
+          ok("the card's total includes the item and its tax",
+            new RegExp(`${invoice.invoice_number}\\s+EUR 2310\\.00`).test(card), card.slice(0, 700));
           ok("...names the item", card.includes(`${ITEM.name} — EUR 100.00`), card.slice(-600));
           ok("...and says the first instalment carries it",
             /includes the EUR 315\.00 admin fee and its tax and EUR 105\.00 for added items/.test(card), card.slice(-600));
@@ -860,10 +890,13 @@ try {
     const picker = page.locator("select").first();
     ok("the generator lists registered students", (await picker.count()) > 0);
 
-    if (await picker.count()) {
-      // By value: the option's value is the student id, and its label carries
-      // their country and intake, so matching on text is needlessly brittle.
-      await picker.selectOption(studentId);
+    // By value: the option's value is the student id, and its label carries
+    // their country and intake, so matching on text is needlessly brittle.
+    const picked = await pickStudentInGenerator(page, studentId);
+    ok("...and opens the form once one is picked", picked,
+      (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(0, 400));
+
+    if (picked) {
       await page.locator('input[name="consultancy_fee"]').fill(String(GEN.fee));
       await page.locator('input[name^="admin_charge"]').first().fill(String(GEN.admin));
       await page.locator('input[name="discount_amount"]').fill(String(GEN.discount));
@@ -952,7 +985,9 @@ try {
       .insert({ lead_id: studentId, destination_id: backupDest.id, is_backup: true });
 
     await page.goto(`${BASE}/finance/invoice-generator`, { waitUntil: "domcontentloaded" });
-    await page.locator("select").first().selectOption(studentId);
+    ok("the generator opens for a student with a backup country",
+      await pickStudentInGenerator(page, studentId),
+      (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(0, 400));
 
     const primaryField = page.locator(`input[name="admin_charge__${italy.id}"]`);
     const backupField = page.locator(`input[name="admin_charge__${backupDest.id}"]`);

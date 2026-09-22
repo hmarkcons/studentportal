@@ -117,7 +117,11 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       supabase
         .from("invoices")
         .select(
-          "id, admin_charge, consultancy_fee, currency, sent_status, agreement_id, pdf_path, invoice_number, intake, terms, installment_plan, discount_amount, tax_rate, admin_fee_status, admin_fee_paid_date, admin_fee_payment_method"
+          // tax_base and issued_on belong here as much as tax_rate does: the
+          // card prices the invoice with computeInvoiceMath, and without the
+          // rule it was raised under it silently falls back to the old one and
+          // shows a total nothing else agrees with.
+          "id, admin_charge, consultancy_fee, currency, sent_status, agreement_id, pdf_path, invoice_number, intake, terms, installment_plan, discount_amount, discount_reason, tax_rate, tax_base, issued_on, admin_fee_status, admin_fee_paid_date, admin_fee_payment_method"
         )
         .eq("student_id", id),
       supabase
