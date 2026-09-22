@@ -14,8 +14,16 @@ This supersedes the earlier "Case Flow" scope, which described a lighter interna
 
 - Next.js (App Router, TypeScript)
 - Tailwind CSS
-- Supabase (Postgres, Auth, Storage)
-- Vercel (hosting)
+- Supabase (Postgres, Auth, Storage) — **ap-southeast-2, Sydney**
+- Vercel (hosting) — functions pinned to **syd1, Sydney**
+
+### Why the functions are pinned to Sydney
+
+`vercel.json` sets `"regions": ["syd1"]`, and it matters more than it looks. The functions used to run in Vercel's default `iad1` (Washington DC) while the database sits in Sydney, so every query crossed the Pacific twice — about 210ms, against about 2ms in-region. A page here makes six or seven round trips one after another before it can render (the proxy's `getUser`, its office-access check, the session lookup, then two waves of page queries), so that was roughly one and a half seconds of pure network on every navigation. Pinning the functions beside the database removed it. Karachi to Sydney is also marginally shorter than Karachi to Virginia, so users lost nothing.
+
+The better end state for a Karachi office is both in `ap-south-1` (Mumbai), about 40ms from the users rather than 180ms. Supabase cannot change a project's region in place, so that means migrating to a new project — a separate, planned job. **Do not move the functions to `bom1` on their own:** the queries would still cross to Sydney and every page would get slower, not faster.
+
+`npm run check:speed` measures this. It signs in and times each page, and prints the median of several loads. Time-to-first-byte is flat at about 80ms everywhere because the App Router flushes a shell and streams the rest, so it ranks pages by full load instead.
 
 ## Getting started
 
