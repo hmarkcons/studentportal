@@ -110,18 +110,25 @@ const waitForLineItems = async (page, invoiceId, n, seconds = 30) => {
   return null;
 };
 
-// Adds a custom item through the card's "+ Add item" form. Returns the line
-// item rows afterwards, or null if the row never appeared.
-const addItemViaCard = async (page, invoiceId, name, amount, expectCount) => {
+// Adds a custom item through the card's "+ Add item" form. `placement` is the
+// visible label of an option in the "on" dropdown — "Instalment 2", "Divide
+// equally" — or null to accept whatever it opens on, which is the next
+// instalment due. Returns the line item rows afterwards, or null if the row
+// never appeared.
+const addItemViaCard = async (page, invoiceId, name, amount, expectCount, placement = null) => {
   await page.reload({ waitUntil: "domcontentloaded" });
   await expand(page, "Invoice");
   const button = page.getByRole("button", { name: "+ Add item" }).first();
-  if ((await button.count()) === 0) return { offered: false, rows: null };
+  if ((await button.count()) === 0) return { offered: false, rows: null, opened: null };
   const form = page.locator("form").filter({ has: button }).first();
+  const select = form.locator('select[name="placement"]');
+  // What it opens on, before anything is chosen — the default staff get.
+  const opened = (await select.count()) ? await select.locator("option:checked").innerText() : null;
   await form.locator('input[name="name"]').fill(name);
   await form.locator('input[name="amount"]').fill(String(amount));
+  if (placement) await select.selectOption({ label: placement });
   await button.click();
-  return { offered: true, rows: await waitForLineItems(page, invoiceId, expectCount) };
+  return { offered: true, rows: await waitForLineItems(page, invoiceId, expectCount), opened };
 };
 
 // Removes an item by the Remove button on its own row, not the first Remove
@@ -189,7 +196,9 @@ try {
 
   if (await generate.count()) {
     const form = page.locator("form").filter({ has: generate }).first();
-    await form.locator('input[name="admin_charge"]').fill(String(ADMIN_CHARGE));
+    // One administrative fee per country now, so the field is named for the
+    // destination. The prefix matches both it and the single legacy field.
+    await form.locator('input[name^="admin_charge"]').first().fill(String(ADMIN_CHARGE));
     await form.locator('input[name="consultancy_fee"]').fill(String(FEE));
     await form.locator('select[name="installment_count"]').selectOption("3");
     await form.locator('input[name="first_due_date"]').fill(FIRST_DUE);
@@ -231,7 +240,14 @@ try {
         `date=${parts[2]?.due_date} condition=${parts[2]?.due_condition}`);
 
       // ------------------------------------------------------------ the PDF
+      // Raising an invoice produces the document, without anyone pressing a
+      // button: "View invoice" used to be absent on a brand new invoice, and
+      // the first student to open a receipt link paid for the render.
       console.log("\n--- the PDF ---");
+      ok("the PDF is built automatically when the invoice is raised",
+        (await waitForInvoice(page, studentId, (i) => i.pdf_path, 90)) !== null,
+        "no pdf_path appeared without pressing Generate PDF");
+
       await page.reload({ waitUntil: "domcontentloaded" });
       await expand(page, "Invoice");
       const pdfButton = page.getByRole("button", { name: /^(Re)?generate PDF$/i }).first();
@@ -267,6 +283,10 @@ try {
         const added = await addItemViaCard(page, invoice.id, ITEM.name, ITEM.amount, 1);
         ok("an item can be added to the invoice", added.offered,
           (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(-300));
+        // Staff are asked where it goes, and the dropdown opens on the next
+        // instalment due rather than making them pick every time.
+        ok("...after being asked which instalment it goes on, defaulting to the next due",
+          /Instalment 1.*next due/i.test(added.opened ?? ""), String(added.opened));
         ok("...and is recorded", added.rows !== null,
           (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(-300));
 
@@ -340,6 +360,23 @@ try {
           ok("...with the tax back to the fee alone",
             (await waitForInvoice(page, studentId, (i) => Number(i.tax_amount) === 90, 5)) !== null);
         }
+
+        // The other answer staff can give: divide it across the plan instead
+        // of loading it onto one payment. 105 over three is 35 each.
+        const spread = await addItemViaCard(page, invoice.id, ITEM.name, ITEM.amount, 1, "Divide equally");
+        ok("an item can be divided equally across the instalments instead", spread.rows !== null,
+          (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(-300));
+        if (spread.rows) {
+          const divided = await installmentsOf(invoice.id);
+          ok("...so every instalment carries the same share of it",
+            JSON.stringify(divided.map((p) => Number(p.amount))) === JSON.stringify([965, 665, 665])
+            && divided.every((p) => Number(p.extras_amount) === 35),
+            JSON.stringify(divided.map((p) => [Number(p.amount), Number(p.extras_amount)])));
+          ok("...and the schedule still sums to what is owed",
+            Math.round(divided.reduce((s, r) => s + Number(r.amount), 0) * 100) / 100 === 2295,
+            String(divided.reduce((s, r) => s + Number(r.amount), 0)));
+          await removeItemViaCard(page, invoice.id, ITEM.name, ITEM.amount, "EUR", 0);
+        }
       }
 
       // ----------------------------------------------------------- sending
@@ -406,17 +443,24 @@ try {
       console.log("\n--- an item added after a payment ---");
       {
         const LATER = { name: "zztmp Translation", amount: 100 };
-        const added = await addItemViaCard(page, invoice.id, LATER.name, LATER.amount, 1);
+        // Explicitly on the third, not the one it would have defaulted to —
+        // the point of asking staff is that the answer is honoured.
+        const added = await addItemViaCard(page, invoice.id, LATER.name, LATER.amount, 1, "Instalment 3");
         ok("an item can still be added once money has come in", added.offered && added.rows !== null,
           (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(-300));
+        ok("...and the paid instalment is not even offered, the next due is",
+          /Instalment 2.*next due/i.test(added.opened ?? ""), String(added.opened));
         if (added.rows) {
           const shifted = await installmentsOf(invoice.id);
           ok("the paid first instalment is left exactly as it was",
             Number(shifted[0]?.amount) === 930 && shifted[0]?.status === "paid" && Number(shifted[0]?.extras_amount) === 0,
             JSON.stringify(shifted[0]));
-          ok("...and the item lands on the next unpaid one, with its tax",
-            Number(shifted[1]?.amount) === 735 && Number(shifted[1]?.extras_amount) === 105,
+          ok("...the instalment staff did not choose is untouched too",
+            Number(shifted[1]?.amount) === 630 && Number(shifted[1]?.extras_amount) === 0,
             JSON.stringify(shifted[1]));
+          ok("...and the item lands on the one they did choose, with its tax",
+            Number(shifted[2]?.amount) === 735 && Number(shifted[2]?.extras_amount) === 105,
+            JSON.stringify(shifted[2]));
           ok("...so the schedule still sums to what is owed",
             Math.round(shifted.reduce((s, r) => s + Number(r.amount), 0) * 100) / 100 === 2295,
             String(shifted.reduce((s, r) => s + Number(r.amount), 0)));
@@ -438,7 +482,7 @@ try {
             && Number((await installmentsOf(invoice.id))[0].amount) === 930);
 
           const removed = await removeItemViaCard(page, invoice.id, LATER.name, LATER.amount, "EUR", 0);
-          ok("removing it comes off the instalment that carried it", removed.rows !== null
+          ok("removing it comes off the instalment that carried it, not another", removed.rows !== null
             && JSON.stringify((await installmentsOf(invoice.id)).map((p) => [Number(p.amount), Number(p.extras_amount)]))
               === JSON.stringify([[930, 0], [630, 0], [630, 0]]),
             JSON.stringify((await installmentsOf(invoice.id)).map((p) => [Number(p.amount), Number(p.extras_amount)])));
@@ -809,7 +853,7 @@ try {
       // their country and intake, so matching on text is needlessly brittle.
       await picker.selectOption(studentId);
       await page.locator('input[name="consultancy_fee"]').fill(String(GEN.fee));
-      await page.locator('input[name="admin_charge"]').fill(String(GEN.admin));
+      await page.locator('input[name^="admin_charge"]').first().fill(String(GEN.admin));
       await page.locator('input[name="discount_amount"]').fill(String(GEN.discount));
       await page.locator('input[name="discount_reason"]').fill(GEN.reason);
       await page.locator('input[name="installment_count"]').fill(String(GEN.count));
@@ -875,6 +919,104 @@ try {
       ok("a discount larger than the fee cannot be submitted", await submit.isDisabled());
       ok("...and says why", /Discount cannot exceed the consultancy fee/.test(
         await page.locator("body").innerText()));
+    }
+
+    // ============================================== a backup country's fee
+    // A student registers for one primary country and up to three backups,
+    // and a backup's agreement is administrative-fee only — so the office
+    // charges one consultancy fee and one administrative fee PER COUNTRY.
+    // The invoice had a single admin_charge column and no idea which country
+    // any of it was for, so a student with a backup was either under-billed
+    // or handed a lump sum their own agreements did not explain.
+    console.log("\n--- a backup country's administrative fee ---");
+    await admin.from("invoices").delete().eq("student_id", studentId);
+
+    const { data: backupDest } = await admin.from("destinations")
+      .select("id, display_name").neq("id", italy.id).not("display_name", "is", null)
+      .order("display_name").limit(1).single();
+    await admin.from("lead_destinations")
+      .insert({ lead_id: studentId, destination_id: backupDest.id, is_backup: true });
+
+    await page.goto(`${BASE}/finance/invoice-generator`, { waitUntil: "domcontentloaded" });
+    await page.locator("select").first().selectOption(studentId);
+
+    const primaryField = page.locator(`input[name="admin_charge__${italy.id}"]`);
+    const backupField = page.locator(`input[name="admin_charge__${backupDest.id}"]`);
+    ok("the generator asks for an administrative fee for the primary country",
+      (await primaryField.count()) === 1,
+      (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(0, 600));
+    ok("...and a separate one for the backup country", (await backupField.count()) === 1);
+
+    const labels = (await page.locator("body").innerText()).replace(/\s+/g, " ");
+    ok("...each named for the country it is for",
+      labels.includes(`Administrative fee — Italy (Public)`)
+      && labels.includes(`Administrative fee — ${backupDest.display_name}`),
+      labels.slice(0, 900));
+
+    if ((await backupField.count()) === 1) {
+      const PRIMARY_ADMIN = 300;
+      const BACKUP_ADMIN = 150;
+      await page.locator('input[name="consultancy_fee"]').fill("1800");
+      await page.locator('input[name="discount_amount"]').fill("0");
+      await page.locator('input[name="installment_count"]').fill("3");
+      await page.locator('input[name="first_due_date"]').fill(FIRST_DUE);
+      await primaryField.fill(String(PRIMARY_ADMIN));
+      await backupField.fill(String(BACKUP_ADMIN));
+
+      const previewText = (await page.locator("div").filter({ hasText: /Invoice preview/ }).last().innerText())
+        .replace(/\s+/g, " ");
+      // 1800 + 90 tax + 300 + 150.
+      ok("the preview totals both countries' administrative fees",
+        /Total payable EUR 2,340\.00/.test(previewText), previewText.slice(0, 700));
+
+      await page.getByRole("button", { name: "Generate invoice" }).click();
+      const multi = await waitForInvoice(page, studentId, (i) => i.id);
+      ok("an invoice is raised for a student with a backup country", multi !== null,
+        (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(-400));
+
+      if (multi) {
+        ok("...charging the sum of both administrative fees",
+          Number(multi.admin_charge) === PRIMARY_ADMIN + BACKUP_ADMIN, String(multi.admin_charge));
+
+        const { data: breakdown } = await admin.from("invoice_admin_charges")
+          .select("*").eq("invoice_id", multi.id).order("sort_order");
+        ok("...recorded as one charge per country", (breakdown ?? []).length === 2,
+          JSON.stringify((breakdown ?? []).map((b) => [b.country_label, b.amount, b.is_backup])));
+        ok("...the primary first, named and priced",
+          breakdown?.[0]?.country_label === "Italy (Public)"
+          && Number(breakdown[0].amount) === PRIMARY_ADMIN && breakdown[0].is_backup === false,
+          JSON.stringify(breakdown?.[0]));
+        ok("...and the backup marked as one",
+          breakdown?.[1]?.country_label === backupDest.display_name
+          && Number(breakdown[1].amount) === BACKUP_ADMIN && breakdown[1].is_backup === true,
+          JSON.stringify(breakdown?.[1]));
+
+        // The whole point of the breakdown: it is a statement about the same
+        // money, so the database refuses one that says otherwise.
+        const asSuperAdmin = await apiAs(url, anonKey, sup.email);
+        const lying = await asSuperAdmin.rpc("generate_invoice", {
+          p_student_id: studentId, p_agreement_id: null, p_admin_charge: 450, p_consultancy_fee: 1000,
+          p_currency: "EUR", p_intake: null, p_terms: null, p_invoice_number: "zztmp-should-not-exist",
+          p_installment_plan: null, p_installments: [], p_discount_amount: 0, p_discount_reason: null,
+          p_tax_rate: 5, p_tax_amount: 50,
+          p_admin_charges: [{ destination_id: italy.id, country_label: "Italy (Public)", amount: 999, is_backup: false }],
+        });
+        ok("a breakdown that does not add up to the charge is refused",
+          Boolean(lying.error) && /add up to/.test(lying.error?.message ?? ""),
+          JSON.stringify(lying.error?.message ?? lying.data));
+        const { count: strays } = await admin.from("invoices")
+          .select("id", { count: "exact", head: true }).eq("invoice_number", "zztmp-should-not-exist");
+        ok("...and leaves no invoice behind when it refuses", strays === 0, `${strays} rows`);
+
+        const withPdf = await waitForInvoice(page, studentId, (i) => i.pdf_path, 90);
+        ok("its PDF is built automatically too", withPdf !== null);
+
+        // 1890 fee side in three is 630 each; both administrative fees ride
+        // on the first, as one charge always has.
+        const parts = (await installmentsOf(multi.id)).map((p) => Number(p.amount));
+        ok("both administrative fees ride on the first instalment",
+          JSON.stringify(parts) === JSON.stringify([1080, 630, 630]), JSON.stringify(parts));
+      }
     }
   }
 

@@ -104,7 +104,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       supabase.from("leads").select("assigned_counselor_id, processing_officer_id, intake, discount_amount, discount_reason").eq("id", id).maybeSingle(),
       supabase
         .from("lead_destinations")
-        .select("destination_id, is_backup, created_at, dashboard_stage_values, destination:destinations(display_name, country_code, dashboard_pipeline_stages, finalize_action_label)")
+        .select("destination_id, is_backup, created_at, dashboard_stage_values, destination:destinations(display_name, country, admin_charge, country_code, dashboard_pipeline_stages, finalize_action_label)")
         .eq("lead_id", id),
       supabase
         .from("agreements")
@@ -299,6 +299,31 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   const legacyExtraDestinationIds = nonBackupDestinations.slice(1).map((d) => d.destination_id);
   const resolvedBackupDestinationIds = [...explicitBackupIds, ...legacyExtraDestinationIds].slice(0, 3);
 
+  // The countries an invoice for this student has to charge an administrative
+  // fee for: the primary, then each backup. A backup's agreement is
+  // administrative-fee only (see generateAgreement), so this is the only fee
+  // it contributes — and the invoice needs one field per country to collect
+  // them. The primary's default honours the signed agreement's override; a
+  // backup has nothing to override it with, so its country's standard fee
+  // stands.
+  const invoiceCountries = [
+    ...(primaryDestinationId ? [{ id: primaryDestinationId, isBackup: false }] : []),
+    ...resolvedBackupDestinationIds.map((id) => ({ id, isBackup: true })),
+  ]
+    .map(({ id: destinationId, isBackup }) => {
+      const row = (selectedDestinations ?? []).find((d) => d.destination_id === destinationId);
+      const dest = row ? (one(row.destination as never) as { display_name?: string; country?: string; admin_charge?: number | string | null } | null) : null;
+      return {
+        destinationId,
+        label: (dest?.display_name || dest?.country || "").trim(),
+        isBackup,
+        defaultAdminCharge: isBackup
+          ? Number(dest?.admin_charge ?? 0)
+          : Number(defaultInvoiceAdminCharge ?? dest?.admin_charge ?? 0),
+      };
+    })
+    .filter((c) => c.label);
+
   // The agreement can only be for a country this student registered for —
   // their primary and their backups. The dropdown used to list every
   // template in the system, so an agreement for the wrong country was one
@@ -378,6 +403,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     trackerDefsByCountry,
     { data: assignedCounselorStaff },
     { data: processingOfficers },
+    { data: allAdminCharges },
   ] = await Promise.all([
     Promise.all(
       (agreements ?? []).map(async (a) => {
@@ -452,6 +478,14 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       .contains("roles", ["processing"])
       .eq("status", "active")
       .order("full_name"),
+    // Which country each slice of an invoice's administrative charge is for.
+    invoiceIds.length
+      ? supabase
+          .from("invoice_admin_charges")
+          .select("id, invoice_id, country_label, amount, is_backup, destination_id")
+          .in("invoice_id", invoiceIds)
+          .order("sort_order", { ascending: true })
+      : Promise.resolve({ data: [] }),
   ]);
 
   // Header summary for the Invoice section, which also opens collapsed. Counted
@@ -1005,6 +1039,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                 defaultAdminCharge={defaultInvoiceAdminCharge}
                 defaultConsultancyFee={defaultInvoiceConsultancyFee}
                 defaultCurrency={defaultInvoiceCurrency}
+                countries={invoiceCountries}
               />
             ) : (
               <p className="rounded-md bg-warning-bg p-3 text-sm text-warning">
@@ -1019,6 +1054,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                 invoice={inv}
                 installments={(installments ?? []).filter((i) => i.invoice_id === inv.id)}
                 lineItems={(allLineItems ?? []).filter((li) => li.invoice_id === inv.id)}
+                adminCharges={(allAdminCharges ?? []).filter((c) => c.invoice_id === inv.id)}
                 feeProducts={feeProducts ?? []}
                 studentId={id}
                 pdfUrl={invoicePdfUrls.get(inv.id)}

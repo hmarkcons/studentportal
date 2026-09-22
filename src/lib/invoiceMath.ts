@@ -45,6 +45,47 @@ function money(n: number): number {
 }
 
 /**
+ * One country's slice of the administrative charge.
+ *
+ * A student registers for one primary country and up to three backups, and a
+ * backup gets an administrative fee but no consultancy fee (see migration
+ * 0108 and generateAgreement). So the administrative charge is per country
+ * while the consultancy fee is not, and the invoice has to say which is which.
+ *
+ * These are for saying WHICH COUNTRY. The arithmetic still runs off the single
+ * `adminCharge`, which is their sum — see migration 0257.
+ */
+export type AdminChargeLine = {
+  /** Snapshot of the country's name as it was when the invoice was raised. */
+  label: string;
+  amount: number;
+  isBackup: boolean;
+};
+
+/** The per-country administrative charges, added up. */
+export function sumAdminCharges(
+  rows: readonly { amount: number | string | null | undefined }[] | null | undefined
+): number {
+  return money((rows ?? []).reduce((s, r) => s + Math.max(0, num(r.amount)), 0));
+}
+
+/**
+ * How a charge is named on the receipt, the email and the student's Payments
+ * page: the fee, then the country it is for.
+ *
+ * "Consultancy Fee — Italy (Public)" and "Administrative Fee — Italy
+ * (Public)", with "(Backup)" after a backup country's name so a student with
+ * three of them can tell at a glance which is which. Written once here
+ * because four surfaces print it and a receipt that names a country
+ * differently from the email about it is a query to the office.
+ */
+export function feeLineLabel(fee: string, country: string | null | undefined, isBackup = false): string {
+  const name = (country ?? "").trim();
+  if (!name) return fee;
+  return `${fee} — ${name}${isBackup ? " (Backup)" : ""}`;
+}
+
+/**
  * The amounts of an invoice's line items, added up — the `extras` input to
  * computeInvoiceMath. Tolerates the string PostgREST returns for a numeric
  * column and ignores anything that is not a number, so a malformed row cannot

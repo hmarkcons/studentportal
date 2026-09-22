@@ -8,7 +8,7 @@
 // at all. Tables and inline styles throughout, because that is all email
 // clients can be relied on to render — no flexbox, no stylesheet, no webfont.
 
-import { installmentNote, type InvoiceMath } from "@/lib/invoiceMath";
+import { feeLineLabel, installmentNote, type AdminChargeLine, type InvoiceMath } from "@/lib/invoiceMath";
 
 export type InvoiceEmailData = {
   studentName: string;
@@ -18,6 +18,8 @@ export type InvoiceEmailData = {
   destination: string | null;
   discountReason: string | null;
   math: InvoiceMath;
+  /** One administrative fee per country the student registered for. */
+  adminCharges: AdminChargeLine[];
   /** Items added after the invoice was raised; each is a line of the breakdown. */
   lineItems: { name: string; amount: number }[];
   installments: {
@@ -131,7 +133,9 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
   // payment is acknowledged and chased in the same breath.
   const showBank = Boolean(data.bank) && !settled;
 
-  const breakdown: [string, string][] = [["Consultancy fee", amount(math.consultancyFee)]];
+  const breakdown: [string, string][] = [
+    [feeLineLabel("Consultancy fee", data.destination), amount(math.consultancyFee)],
+  ];
   if (math.discountAmount > 0) {
     breakdown.push([`Discount${data.discountReason ? ` · ${data.discountReason}` : ""}`, `− ${amount(math.discountAmount)}`]);
   }
@@ -139,7 +143,15 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
   // line, so the student can see what every figure in the total is for.
   for (const li of data.lineItems) breakdown.push([li.name, amount(li.amount)]);
   if (math.taxAmount > 0) breakdown.push([`SRB tax · ${math.taxRate}%`, amount(math.taxAmount)]);
-  if (math.adminCharge > 0) breakdown.push(["Administrative fee", amount(math.adminCharge)]);
+  // One line per country, as on the receipt. A student with backup countries
+  // is paying an administrative fee for each and should be able to see which.
+  if (data.adminCharges.length > 0) {
+    for (const c of data.adminCharges.filter((x) => x.amount > 0)) {
+      breakdown.push([feeLineLabel("Administrative fee", c.label, c.isBackup), amount(c.amount)]);
+    }
+  } else if (math.adminCharge > 0) {
+    breakdown.push([feeLineLabel("Administrative fee", data.destination), amount(math.adminCharge)]);
+  }
 
   // Installment 1 carries the whole administrative charge, and an added item
   // lands on whichever instalment was next to be paid — see

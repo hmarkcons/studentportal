@@ -1,6 +1,7 @@
 import { Document, Page, Text, View, Image, StyleSheet, Font } from "@react-pdf/renderer";
 import { BRAND_LOGO_DATA_URI, BRAND_LOGO_RATIO } from "./brandLogo";
 import { pkrLine, pkrRateNote } from "../receiptPkr";
+import { feeLineLabel, type AdminChargeLine } from "../invoiceMath";
 
 // Never break a word across lines.
 //
@@ -105,6 +106,10 @@ export type InvoicePdfData = {
   intake: string | null;
   installmentPlan: string | null;
   adminCharge: number;
+  /** One administrative fee per country the student registered for. Empty on
+   *  an invoice raised before the breakdown existed, which prints one
+   *  unlabelled row for adminCharge instead. */
+  adminCharges: AdminChargeLine[];
   consultancyFee: number;
   // Discount comes off the consultancy fee, then SRB tax is charged on what
   // remains — see computeInvoiceMath, which is where these are produced.
@@ -244,20 +249,42 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
           <Text style={[styles.th, { flex: 1, textAlign: "right" }]}>Amount</Text>
         </View>
 
-        {data.adminCharge > 0 && (
-          <View style={styles.itemRow}>
-            <View style={{ flex: 3, paddingRight: 16 }}>
-              <Text style={styles.itemName}>Administrative Fee</Text>
-              <Text style={styles.itemDesc}>The administrative fee is non-refundable in any case.</Text>
-            </View>
-            <Text style={[styles.num, { flex: 1, textAlign: "right" }]}>{money(data.currencySymbol, data.adminCharge)}</Text>
-            <Text style={[styles.num, { flex: 1, textAlign: "right" }]}>{money(data.currencySymbol, data.adminCharge)}</Text>
-          </View>
-        )}
+        {/* One row per country: a student registers for one primary and up to
+            three backups, and each carries its own administrative fee (see
+            migration 0257). A backup country's agreement is administrative-fee
+            only, so naming the country is what tells the two apart on a
+            receipt that lists three of them. Older invoices carry no
+            breakdown and print the single charge they were raised with. */}
+        {data.adminCharges.length > 0
+          ? data.adminCharges
+              .filter((c) => c.amount > 0)
+              .map((c, i) => (
+                <View key={i} style={styles.itemRow}>
+                  <View style={{ flex: 3, paddingRight: 16 }}>
+                    <Text style={styles.itemName}>{feeLineLabel("Administrative Fee", c.label, c.isBackup)}</Text>
+                    <Text style={styles.itemDesc}>The administrative fee is non-refundable in any case.</Text>
+                  </View>
+                  <Text style={[styles.num, { flex: 1, textAlign: "right" }]}>{money(data.currencySymbol, c.amount)}</Text>
+                  <Text style={[styles.num, { flex: 1, textAlign: "right" }]}>{money(data.currencySymbol, c.amount)}</Text>
+                </View>
+              ))
+          : data.adminCharge > 0 && (
+              <View style={styles.itemRow}>
+                <View style={{ flex: 3, paddingRight: 16 }}>
+                  <Text style={styles.itemName}>{feeLineLabel("Administrative Fee", data.destination)}</Text>
+                  <Text style={styles.itemDesc}>The administrative fee is non-refundable in any case.</Text>
+                </View>
+                <Text style={[styles.num, { flex: 1, textAlign: "right" }]}>{money(data.currencySymbol, data.adminCharge)}</Text>
+                <Text style={[styles.num, { flex: 1, textAlign: "right" }]}>{money(data.currencySymbol, data.adminCharge)}</Text>
+              </View>
+            )}
 
         <View style={styles.itemRow}>
           <View style={{ flex: 3, paddingRight: 16 }}>
-            <Text style={styles.itemName}>{data.destination ?? "Consultancy Services"}</Text>
+            {/* Named for the country it is for, as the administrative rows
+                above are. The consultancy fee is the primary country's — a
+                backup never carries one. */}
+            <Text style={styles.itemName}>{feeLineLabel("Consultancy Fee", data.destination)}</Text>
             {data.intake && <Text style={styles.itemDesc}>Intake: {data.intake}</Text>}
             {data.installmentPlan && <Text style={styles.itemDesc}>Installment plan: {data.installmentPlan}</Text>}
             {/* The counselor used to be named here. It is a receipt for money,

@@ -7,6 +7,13 @@ import type { InvoiceBankSettings } from "@/lib/actions/invoiceSettings";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 
+export type StudentCountry = {
+  destinationId: string;
+  label: string;
+  isBackup: boolean;
+  defaultAdminCharge: number;
+};
+
 export type StudentOption = {
   id: string;
   name: string;
@@ -21,6 +28,10 @@ export type StudentOption = {
   adminCharge: number;
   discountAmount: number;
   discountReason: string | null;
+  /** The countries they registered for — primary first, then backups. Each
+   *  carries its own administrative fee. Empty for a student whose
+   *  registration predates lead_destinations. */
+  countries: StudentCountry[];
   source: { consultancyFee: string; adminCharge: string; discount: string };
 };
 
@@ -44,6 +55,10 @@ export function InvoiceGenerator({ students, bank }: { students: StudentOption[]
   // standard fees or the agreement.
   const [fee, setFee] = useState("");
   const [admin, setAdmin] = useState("");
+  // One administrative charge per country, keyed by destination id. The
+  // single `admin` field above is still what a student with no registered
+  // destinations uses.
+  const [adminByCountry, setAdminByCountry] = useState<Record<string, string>>({});
   const [discount, setDiscount] = useState("");
   const [discountReason, setDiscountReason] = useState("");
   const [count, setCount] = useState("1");
@@ -55,6 +70,9 @@ export function InvoiceGenerator({ students, bank }: { students: StudentOption[]
     setSeenStudent(student.id);
     setFee(String(student.consultancyFee));
     setAdmin(String(student.adminCharge));
+    setAdminByCountry(
+      Object.fromEntries(student.countries.map((c) => [c.destinationId, String(c.defaultAdminCharge)]))
+    );
     setDiscount(String(student.discountAmount));
     setDiscountReason(student.discountReason ?? "");
     setCount(String(student.installmentCount));
@@ -64,9 +82,18 @@ export function InvoiceGenerator({ students, bank }: { students: StudentOption[]
   const [state, formAction, pending] = useActionState(action, undefined);
 
   const currency = student?.currency ?? "PKR";
+  const countries = student?.countries ?? [];
+  // What the invoice will actually be raised with. generateInvoice adds the
+  // per-country fields up the same way server-side and resolves the country
+  // names from the student's own registration, so a hand-posted form cannot
+  // invent a country.
+  const adminTotal = countries.length
+    ? countries.reduce((s, c) => s + (Number(adminByCountry[c.destinationId]) || 0), 0)
+    : Number(admin) || 0;
+
   const math = computeInvoiceMath({
     consultancyFee: Number(fee) || 0,
-    adminCharge: Number(admin) || 0,
+    adminCharge: adminTotal,
     discountAmount: Number(discount) || 0,
     taxRate: SRB_TAX_RATE,
   });
@@ -109,10 +136,32 @@ export function InvoiceGenerator({ students, bank }: { students: StudentOption[]
               Consultancy fee <span className="text-[10px]">({SOURCE_NOTE[student.source.consultancyFee]})</span>
               <Input name="consultancy_fee" type="number" step="0.01" value={fee} onChange={(e) => setFee(e.target.value)} required />
             </label>
-            <label className="flex flex-col gap-1 text-xs text-muted">
-              Administrative fee <span className="text-[10px]">({SOURCE_NOTE[student.source.adminCharge]})</span>
-              <Input name="admin_charge" type="number" step="0.01" value={admin} onChange={(e) => setAdmin(e.target.value)} required />
-            </label>
+            {/* A student registers for one primary country and up to three
+                backups, and each carries its own administrative fee — a
+                backup's agreement is administrative-fee only. So there is one
+                field per country rather than a single figure staff would have
+                to add up by hand and the invoice could never break down. */}
+            {countries.length === 0 ? (
+              <label className="flex flex-col gap-1 text-xs text-muted">
+                Administrative fee <span className="text-[10px]">({SOURCE_NOTE[student.source.adminCharge]})</span>
+                <Input name="admin_charge" type="number" step="0.01" value={admin} onChange={(e) => setAdmin(e.target.value)} required />
+              </label>
+            ) : (
+              countries.map((c) => (
+                <label key={c.destinationId} className="flex flex-col gap-1 text-xs text-muted">
+                  Administrative fee — {c.label}
+                  <span className="text-[10px]">{c.isBackup ? "backup country" : "primary country"}</span>
+                  <Input
+                    name={`admin_charge__${c.destinationId}`}
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={adminByCountry[c.destinationId] ?? ""}
+                    onChange={(e) => setAdminByCountry((prev) => ({ ...prev, [c.destinationId]: e.target.value }))}
+                  />
+                </label>
+              ))
+            )}
             <label className="flex flex-col gap-1 text-xs text-muted">
               Discount <span className="text-[10px]">({SOURCE_NOTE[student.source.discount]})</span>
               <Input name="discount_amount" type="number" step="0.01" value={discount} onChange={(e) => setDiscount(e.target.value)} />
@@ -144,13 +193,26 @@ export function InvoiceGenerator({ students, bank }: { students: StudentOption[]
           <div className="rounded-md border border-border p-3 text-sm">
             <h4 className="mb-2 text-xs font-medium uppercase text-muted">Invoice preview</h4>
             <dl className="flex flex-col gap-1">
-              <Row label="Consultancy fee" value={fmt(currency, math.consultancyFee)} />
+              <Row
+                label={`Consultancy fee${countries.find((c) => !c.isBackup) ? ` — ${countries.find((c) => !c.isBackup)!.label}` : ""}`}
+                value={fmt(currency, math.consultancyFee)}
+              />
               {math.discountAmount > 0 && (
                 <Row label={`Discount${discountReason ? ` (${discountReason})` : ""}`} value={`− ${fmt(currency, math.discountAmount)}`} />
               )}
               {math.discountAmount > 0 && <Row label="Net consultancy fee" value={fmt(currency, math.netConsultancyFee)} muted />}
               <Row label={`SRB tax (${math.taxRate}% of net fee)`} value={fmt(currency, math.taxAmount)} />
-              <Row label="Administrative fee" value={fmt(currency, math.adminCharge)} />
+              {countries.length === 0 ? (
+                <Row label="Administrative fee" value={fmt(currency, math.adminCharge)} />
+              ) : (
+                countries.map((c) => (
+                  <Row
+                    key={c.destinationId}
+                    label={`Administrative fee — ${c.label}${c.isBackup ? " (Backup)" : ""}`}
+                    value={fmt(currency, Number(adminByCountry[c.destinationId]) || 0)}
+                  />
+                ))
+              )}
               <div className="mt-1 flex items-center justify-between border-t border-border pt-1 text-sm font-semibold text-ink">
                 <dt>Total payable</dt>
                 <dd className="font-mono">{fmt(currency, math.total)}</dd>

@@ -4,7 +4,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isEmailConfigured } from "@/lib/email";
-import { buildAndSendInvoiceEmail } from "@/lib/actions/invoices";
+import { buildAndSendInvoiceEmail, buildAndStoreInvoicePdf } from "@/lib/actions/invoices";
 import { requirePermission } from "@/lib/auth/permissions";
 import { shouldSendOverdueReminder } from "@/lib/overdueReminder";
 import { computeInvoiceMath, sumLineItems } from "@/lib/invoiceMath";
@@ -95,9 +95,18 @@ export async function deleteFeeProduct(productId: string) {
  * by apply_invoice_line_item_change (migration 0256), which refuses to touch
  * an instalment that already has a payment against it.
  */
+type AddedItem = {
+  product_id: string | null;
+  name: string;
+  amount: number;
+  /** The instalment staff chose, or null when they chose to divide it. */
+  placement_installment_id: string | null;
+  placement_spread: boolean;
+};
+
 async function changeLineItems(
   invoiceId: string,
-  change: { add: { product_id: string | null; name: string; amount: number } } | { deleteId: string },
+  change: { add: AddedItem } | { deleteId: string },
   revalidateTo: string
 ) {
   const supabase = await createClient();
@@ -112,7 +121,10 @@ async function changeLineItems(
   if (!invoice) return { error: "Invoice not found." };
 
   const [{ data: items }, { data: schedule }] = await Promise.all([
-    supabase.from("invoice_line_items").select("id, amount").eq("invoice_id", invoiceId),
+    supabase
+      .from("invoice_line_items")
+      .select("id, amount, placement_installment_id, placement_spread")
+      .eq("invoice_id", invoiceId),
     supabase
       .from("invoice_installments")
       .select("id, installment_no, amount, amount_paid, status, extras_amount")
@@ -120,9 +132,17 @@ async function changeLineItems(
       .order("installment_no", { ascending: true }),
   ]);
 
-  // The items as they will be once this change has gone through.
+  // The items as they will be once this change has gone through — placement
+  // and all, because where each one sits is what decides the new amounts.
   const after = (items ?? []).filter((li) => !("deleteId" in change) || li.id !== change.deleteId);
-  if ("add" in change) after.push({ id: "", amount: change.add.amount });
+  if ("add" in change) {
+    after.push({
+      id: "",
+      amount: change.add.amount,
+      placement_installment_id: change.add.placement_installment_id,
+      placement_spread: change.add.placement_spread,
+    });
+  }
 
   const math = computeInvoiceMath({
     consultancyFee: Number(invoice.consultancy_fee ?? 0),
@@ -132,7 +152,7 @@ async function changeLineItems(
     extras: sumLineItems(after),
   });
 
-  const plan = planScheduleChange(schedule ?? [], math);
+  const plan = planScheduleChange(schedule ?? [], after, math);
   if (!plan.ok) return { error: plan.error };
 
   const { error } = await supabase.rpc("apply_invoice_line_item_change", {
@@ -150,6 +170,19 @@ async function changeLineItems(
   revalidatePath("/finance/consultancy-fee");
   revalidatePath("/finance/invoice-generator");
   revalidatePath("/portal/payments");
+
+  // The stored PDF is now out of date by exactly the change just made, and it
+  // is what the receipt link serves. Rebuilt here rather than left for
+  // somebody to press a button — a receipt that contradicts the invoice is
+  // worse than a slow save. Said plainly if it fails, because the change
+  // itself has already gone through and re-adding the item would double it.
+  const rebuilt = await buildAndStoreInvoicePdf(supabase, invoiceId, invoice.student_id);
+  if ("error" in rebuilt && rebuilt.error) {
+    return {
+      error: `The item was saved and the schedule updated, but the receipt PDF could not be rebuilt (${rebuilt.error}). Press Regenerate PDF before sending this invoice.`,
+    };
+  }
+
   return { success: true };
 }
 
@@ -162,7 +195,27 @@ export async function addLineItem(invoiceId: string, revalidateTo: string, _prev
   // which would have quietly discounted the invoice under the name of a product.
   if (!Number.isFinite(amount) || amount <= 0) return { error: "The item needs an amount above zero." };
 
-  return changeLineItems(invoiceId, { add: { product_id, name, amount } }, revalidateTo);
+  // Where it goes is staff's call: one instalment, or divided equally across
+  // the ones still outstanding. "spread" is the sentinel the form posts for
+  // the latter; anything else is an instalment id, which the RPC checks
+  // belongs to this invoice and is not already paid.
+  const placement = String(formData.get("placement") ?? "").trim();
+  if (!placement) return { error: "Choose which instalment this goes on." };
+  const placement_spread = placement === "spread";
+
+  return changeLineItems(
+    invoiceId,
+    {
+      add: {
+        product_id,
+        name,
+        amount,
+        placement_installment_id: placement_spread ? null : placement,
+        placement_spread,
+      },
+    },
+    revalidateTo
+  );
 }
 
 export async function deleteLineItem(invoiceId: string, lineItemId: string, revalidateTo: string) {

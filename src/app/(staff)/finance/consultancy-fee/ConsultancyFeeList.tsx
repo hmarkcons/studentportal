@@ -11,6 +11,7 @@ type Row = {
   invoice: Parameters<typeof InvoiceCard>[0]["invoice"];
   installments: Parameters<typeof InvoiceCard>[0]["installments"];
   lineItems: Parameters<typeof InvoiceCard>[0]["lineItems"];
+  adminCharges: Parameters<typeof InvoiceCard>[0]["adminCharges"];
   studentId: string;
   studentName: string;
   registeredAt: string | null;
@@ -86,6 +87,7 @@ export function ConsultancyFeeList({
               invoice={r.invoice}
               installments={r.installments}
               lineItems={r.lineItems}
+              adminCharges={r.adminCharges}
               feeProducts={feeProducts}
               studentId={r.studentId}
               studentName={r.studentName}

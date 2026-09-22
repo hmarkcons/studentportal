@@ -4,7 +4,9 @@ import {
   computeInvoiceMath,
   buildInstallmentPlan,
   extrasLoad,
+  feeLineLabel,
   installmentNote,
+  sumAdminCharges,
   sumLineItems,
 } from "../src/lib/invoiceMath.ts";
 
@@ -110,4 +112,38 @@ test("installmentNote reads a numeric column however PostgREST sends it", () => 
 test("no admin charge and no items means nothing to explain", () => {
   const m = computeInvoiceMath({ ...BASE, adminCharge: 0 });
   assert.equal(installmentNote({ installment_no: 1, extras_amount: 0 }, m, eur), null);
+});
+
+test("a charge is named for the country it is for", () => {
+  assert.equal(feeLineLabel("Consultancy Fee", "Italy (Public)"), "Consultancy Fee — Italy (Public)");
+  assert.equal(feeLineLabel("Administrative Fee", "Italy (Public)"), "Administrative Fee — Italy (Public)");
+  assert.equal(feeLineLabel("Administrative Fee", "Hungary", true), "Administrative Fee — Hungary (Backup)");
+});
+
+test("a charge with no country on it keeps its plain name rather than trailing a dash", () => {
+  assert.equal(feeLineLabel("Administrative Fee", null), "Administrative Fee");
+  assert.equal(feeLineLabel("Administrative Fee", ""), "Administrative Fee");
+  assert.equal(feeLineLabel("Administrative Fee", "   "), "Administrative Fee");
+  assert.equal(feeLineLabel("Administrative Fee", undefined, true), "Administrative Fee");
+});
+
+test("the per-country charges add up to the figure the arithmetic uses", () => {
+  const charges = [{ amount: 300 }, { amount: "150.50" }, { amount: 75 }];
+  assert.equal(sumAdminCharges(charges), 525.5);
+  assert.equal(sumAdminCharges([]), 0);
+  assert.equal(sumAdminCharges(null), 0);
+  // A negative or unreadable slice cannot pull the total down.
+  assert.equal(sumAdminCharges([{ amount: 300 }, { amount: -50 }, { amount: "junk" }, { amount: null }]), 300);
+});
+
+test("a student with backups is billed one consultancy fee and every admin fee", () => {
+  // Italy primary 300, Hungary backup 150, Romania backup 75 — the invoice's
+  // single adminCharge is their sum, which is what the schedule collects.
+  const charges = [{ amount: 300 }, { amount: 150 }, { amount: 75 }];
+  const m = computeInvoiceMath({ ...BASE, adminCharge: sumAdminCharges(charges) });
+  assert.equal(m.adminCharge, 525);
+  // The administrative charge stays outside the tax base, per country as before.
+  assert.equal(m.taxAmount, 90);
+  assert.equal(m.total, 1800 + 90 + 525);
+  assert.deepEqual(buildInstallmentPlan(m, 3), [1155, 630, 630]);
 });

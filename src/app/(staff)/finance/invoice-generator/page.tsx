@@ -37,13 +37,17 @@ export default async function InvoiceGeneratorPage() {
 
   // Registered students, the country they registered for, and their agreement
   // — everything the picker needs to pre-fill an invoice.
-  const [{ data: students }, { data: destinations }, { data: agreements }] = await Promise.all([
+  const [{ data: students }, { data: destinations }, { data: agreements }, { data: picked }] = await Promise.all([
     supabase
       .from("students")
       .select("id, full_name, email, contact_number, country_of_interest, intake, discount_amount, discount_reason, level_applying_for")
       .order("registered_at", { ascending: false }),
     supabase.from("destinations").select("id, country, display_name, admin_charge, consultancy_fee, consultancy_fee_currency, track"),
     supabase.from("agreements").select("id, student_id, status, admin_charge_override, consultancy_fee_override, discount_amount, installment_count"),
+    // The countries each student actually registered for: one primary and up
+    // to three backups (migration 0108). Each carries its own administrative
+    // fee, which is why the generator asks for one per country.
+    supabase.from("lead_destinations").select("lead_id, destination_id, is_backup"),
   ]);
 
   const destByLabel = new Map<string, NonNullable<typeof destinations>[number]>();
@@ -58,9 +62,35 @@ export default async function InvoiceGeneratorPage() {
     if (!existing || (a.status === "signed" && existing.status !== "signed")) agreementByStudent.set(a.student_id, a);
   }
 
+  const destById = new Map((destinations ?? []).map((d) => [d.id as string, d]));
+  const pickedByStudent = new Map<string, { destination_id: string; is_backup: boolean }[]>();
+  for (const row of picked ?? []) {
+    const list = pickedByStudent.get(row.lead_id as string) ?? [];
+    list.push({ destination_id: row.destination_id as string, is_backup: Boolean(row.is_backup) });
+    pickedByStudent.set(row.lead_id as string, list);
+  }
+
   const options: StudentOption[] = (students ?? []).map((s) => {
     const dest = destByLabel.get(s.country_of_interest ?? "") ?? null;
     const defaults = resolveInvoiceDefaults(s, dest, agreementByStudent.get(s.id) ?? null);
+
+    // Primary first, then backups by name — the order they will print in.
+    // The primary's default comes from resolveInvoiceDefaults so an agreement
+    // override still wins; a backup's comes from its own country's standard
+    // administrative fee, which is all there is to go on.
+    const countries = (pickedByStudent.get(s.id) ?? [])
+      .map((p) => {
+        const d = destById.get(p.destination_id);
+        return {
+          destinationId: p.destination_id,
+          label: (d?.display_name || d?.country || "").trim(),
+          isBackup: p.is_backup,
+          defaultAdminCharge: p.is_backup ? Number(d?.admin_charge ?? 0) : defaults.math.adminCharge,
+        };
+      })
+      .filter((d) => d.label)
+      .sort((a, b) => Number(a.isBackup) - Number(b.isBackup) || a.label.localeCompare(b.label));
+
     return {
       id: s.id,
       name: s.full_name,
@@ -75,6 +105,7 @@ export default async function InvoiceGeneratorPage() {
       adminCharge: defaults.math.adminCharge,
       discountAmount: defaults.math.discountAmount,
       discountReason: defaults.discountReason,
+      countries,
       source: defaults.source,
     };
   });

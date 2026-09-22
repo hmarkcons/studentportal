@@ -9,12 +9,13 @@ import { installmentDuePlan, missingDueDates } from "@/lib/installmentDueConditi
 import {
   computeInvoiceMath,
   buildInstallmentPlan,
-  extrasLoad,
   installmentNote,
   sumLineItems,
   SRB_TAX_RATE,
   conversionNote,
+  type AdminChargeLine,
 } from "@/lib/invoiceMath";
+import { planScheduleChange } from "@/lib/invoiceSchedule";
 import { balanceDueDate, checkPartialSplit } from "@/lib/partialPayment";
 import { buildInvoiceEmail } from "@/lib/invoiceEmail";
 import { sendEmail, accountsFrom } from "@/lib/email";
@@ -72,6 +73,68 @@ async function agreementTrack(
 const DEFAULT_TERMS =
   "Only upon refusal from the university, 100% of the paid consultancy charges only will be refundable. There is no refund on withdrawal or rejection from the embassy or on failing the admission test, or under any other condition. Refunds are processed within 90 working days of the refusal notice.";
 
+export type StudentDestination = { destinationId: string; label: string; isBackup: boolean };
+
+/**
+ * The countries this student is registered for — one primary and up to three
+ * backups (lead_destinations.is_backup, migration 0108) — each of which
+ * carries its own administrative fee.
+ *
+ * Primary first, then backups by name, so the order on the invoice is the
+ * order staff chose them in rather than whatever Postgres returned.
+ */
+export async function studentDestinations(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  studentId: string
+): Promise<StudentDestination[]> {
+  const { data } = await supabase
+    .from("lead_destinations")
+    .select("destination_id, is_backup, destination:destinations(display_name, country)")
+    .eq("lead_id", studentId);
+
+  return (data ?? [])
+    .map((row) => {
+      const d = one(row.destination as never) as { display_name?: string | null; country?: string | null } | null;
+      return {
+        destinationId: row.destination_id as string,
+        label: (d?.display_name || d?.country || "").trim(),
+        isBackup: Boolean(row.is_backup),
+      };
+    })
+    .filter((d) => d.destinationId)
+    .sort((a, b) => Number(a.isBackup) - Number(b.isBackup) || a.label.localeCompare(b.label));
+}
+
+/**
+ * The per-country administrative charges a submitted form is asking for.
+ *
+ * The amounts come from the form, but which countries exist and what they are
+ * called come from the student's own registration — never from the post. A
+ * form can always be resubmitted with extra fields, and an invoice naming a
+ * country the student is not registered for is the invoice equivalent of the
+ * bug templateCountryError exists to stop in agreements.
+ *
+ * Returns null when the student has no destinations on file, which is the
+ * signal to fall back to the single admin_charge field.
+ */
+function adminChargesFromForm(
+  formData: FormData,
+  destinations: StudentDestination[]
+): { destination_id: string; country_label: string; amount: number; is_backup: boolean; sort_order: number }[] | null {
+  if (destinations.length === 0) return null;
+  return destinations.map((d, i) => {
+    const raw = formData.get(`admin_charge__${d.destinationId}`);
+    const amount = Number(raw ?? 0);
+    return {
+      destination_id: d.destinationId,
+      country_label: d.label || "Administrative fee",
+      amount: Number.isFinite(amount) && amount > 0 ? Math.round(amount * 100) / 100 : 0,
+      is_backup: d.isBackup,
+      sort_order: i,
+    };
+  });
+}
+
 export async function generateInvoice(studentId: string, agreementId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
 
@@ -88,7 +151,15 @@ export async function generateInvoice(studentId: string, agreementId: string, _p
   // whole generation fails, so normalise it to null.
   const agreement_id = agreementId?.trim() ? agreementId.trim() : null;
 
-  const admin_charge = Number(formData.get("admin_charge") ?? 0);
+  // One administrative fee per country the student registered for. The single
+  // admin_charge field is still honoured for a student with no destinations on
+  // file, which is how invoices were raised before backup countries existed.
+  const destinations = await studentDestinations(supabase, studentId);
+  const adminCharges = adminChargesFromForm(formData, destinations);
+  const admin_charge = adminCharges
+    ? Math.round(adminCharges.reduce((s, c) => s + c.amount, 0) * 100) / 100
+    : Number(formData.get("admin_charge") ?? 0);
+
   const consultancy_fee = Number(formData.get("consultancy_fee") ?? 0);
   const installmentCount = Number(formData.get("installment_count") ?? 1);
   const intake = String(formData.get("intake") ?? "").trim() || null;
@@ -164,10 +235,11 @@ export async function generateInvoice(studentId: string, agreementId: string, _p
     invoice_number = minted as string;
   }
 
-  // Single security-definer RPC — the invoice and its installments commit or
-  // fail together (see migration 0090), rather than as two separate writes
-  // that could leave a zero-installment invoice behind if the second failed.
-  const { error } = await supabase.rpc("generate_invoice", {
+  // Single security-definer RPC — the invoice, its installments and the
+  // per-country administrative charges commit or fail together (migrations
+  // 0090 and 0257), rather than as separate writes that could leave a
+  // zero-installment invoice, or one whose breakdown is missing, behind.
+  const { data: newInvoiceId, error } = await supabase.rpc("generate_invoice", {
     p_student_id: studentId,
     p_agreement_id: agreement_id,
     p_admin_charge: admin_charge,
@@ -182,12 +254,32 @@ export async function generateInvoice(studentId: string, agreementId: string, _p
     p_discount_reason: discount_reason,
     p_tax_rate: math.taxRate,
     p_tax_amount: math.taxAmount,
+    // Only when there is something to say: a student with one country and a
+    // single charge needs no breakdown to explain it.
+    p_admin_charges: (adminCharges ?? []).filter((c) => c.amount > 0),
   });
   if (error) return { error: error.message };
 
   revalidatePath(`/students/${studentId}`);
   revalidatePath("/finance/invoice-generator");
   revalidatePath("/finance/consultancy-fee");
+
+  // The document is the invoice, so raising one produces it. It used to wait
+  // for somebody to press Generate PDF, which meant "View invoice" was absent
+  // on a brand new invoice and the first student to open a receipt link paid
+  // for the render. A failure here is reported without losing the invoice,
+  // which exists and is correct either way.
+  if (newInvoiceId) {
+    const built = await buildAndStoreInvoicePdf(supabase, newInvoiceId as string, studentId);
+    if ("error" in built && built.error) {
+      return {
+        success: true,
+        warning: `The invoice was created, but its PDF could not be built (${built.error}). Press Generate PDF to try again.`,
+      };
+    }
+    revalidatePath(`/students/${studentId}`);
+  }
+
   return { success: true };
 }
 
@@ -196,7 +288,6 @@ export async function updateInvoice(invoiceId: string, studentId: string, revali
   const denied = await requirePermission("finance.invoices.manage", "Only Finance/Super Admin can edit invoices.");
   if (denied) return { error: denied.error };
 
-  const admin_charge = Number(formData.get("admin_charge") ?? 0);
   const consultancy_fee = Number(formData.get("consultancy_fee") ?? 0);
   const currency = String(formData.get("currency") ?? "EUR");
   const intake = String(formData.get("intake") ?? "").trim() || null;
@@ -209,12 +300,33 @@ export async function updateInvoice(invoiceId: string, studentId: string, revali
   // student's Payments page then had to show them a warning instead of a bill.
   // The schedule is rebuilt to match, or the edit is refused; it is never left
   // inconsistent.
-  const [{ data: current }, { data: lineItems }] = await Promise.all([
+  const [{ data: current }, { data: lineItems }, { data: adminRows }] = await Promise.all([
     supabase.from("invoices").select("discount_amount, tax_rate").eq("id", invoiceId).maybeSingle(),
     // Items already on the invoice stay in the total when a fee is edited;
-    // without them the rebuilt schedule would silently drop them.
-    supabase.from("invoice_line_items").select("amount").eq("invoice_id", invoiceId),
+    // without them the rebuilt schedule would silently drop them — and their
+    // placement decides which instalments carry them afterwards.
+    supabase
+      .from("invoice_line_items")
+      .select("id, amount, placement_installment_id, placement_spread")
+      .eq("invoice_id", invoiceId),
+    supabase
+      .from("invoice_admin_charges")
+      .select("id, destination_id, amount")
+      .eq("invoice_id", invoiceId)
+      .order("sort_order", { ascending: true }),
   ]);
+
+  // An invoice with a per-country breakdown is edited per country; the single
+  // field is what an invoice without one still uses. Either way admin_charge
+  // holds the sum, which is what every figure is computed from.
+  const editedAdminCharges = (adminRows ?? []).map((r) => {
+    const raw = formData.get(`admin_charge__${r.destination_id}`);
+    const parsed = Number(raw ?? r.amount ?? 0);
+    return { id: r.id as string, amount: Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed * 100) / 100 : 0 };
+  });
+  const admin_charge = editedAdminCharges.length
+    ? Math.round(editedAdminCharges.reduce((s, c) => s + c.amount, 0) * 100) / 100
+    : Number(formData.get("admin_charge") ?? 0);
 
   const discountAmount = Number(current?.discount_amount ?? 0);
   const taxRate = Number(current?.tax_rate ?? 0);
@@ -237,7 +349,7 @@ export async function updateInvoice(invoiceId: string, studentId: string, revali
 
   const { data: existing } = await supabase
     .from("invoice_installments")
-    .select("id, installment_no, amount, amount_paid, status")
+    .select("id, installment_no, amount, amount_paid, status, extras_amount")
     .eq("invoice_id", invoiceId)
     .order("installment_no", { ascending: true });
 
@@ -278,21 +390,35 @@ export async function updateInvoice(invoiceId: string, studentId: string, revali
     .eq("id", invoiceId);
   if (error) return { error: error.message };
 
+  // The per-country amounts, written after the sum they have to agree with.
+  for (const c of editedAdminCharges) {
+    const { error: chargeError } = await supabase
+      .from("invoice_admin_charges")
+      .update({ amount: c.amount })
+      .eq("id", c.id);
+    if (chargeError) {
+      return {
+        error: `The invoice was saved but one of its per-country administrative charges could not be updated (${chargeError.message}). Re-save to finish.`,
+      };
+    }
+  }
+
   if (needsRebuild) {
     // Same number of instalments and the same due dates — only the amounts
-    // move, with the admin charge and any added items still riding on the
-    // first. extras_amount is rewritten with them so the note on the
-    // instalment keeps saying where the items are.
-    const amounts = buildInstallmentPlan(math, schedule.length);
-    const load = extrasLoad(math);
-    for (let i = 0; i < schedule.length; i++) {
+    // move, with the administrative charge still on the first and each added
+    // item wherever staff placed it (planScheduleChange, which the Add item
+    // path uses too, so a fee edit cannot quietly relocate an item).
+    const plan = planScheduleChange(schedule, lineItems ?? [], math);
+    if (!plan.ok) return { error: plan.error };
+    for (const write of plan.writes) {
       const { error: rowError } = await supabase
         .from("invoice_installments")
-        .update({ amount: amounts[i], extras_amount: i === 0 ? load : 0 })
-        .eq("id", schedule[i].id);
+        .update({ amount: write.amount, extras_amount: write.extras_amount })
+        .eq("id", write.id);
       if (rowError) {
+        const no = schedule.find((s) => s.id === write.id)?.installment_no ?? "?";
         return {
-          error: `The invoice was saved but instalment ${schedule[i].installment_no} could not be updated (${rowError.message}). Re-save to finish rebuilding the schedule.`,
+          error: `The invoice was saved but instalment ${no} could not be updated (${rowError.message}). Re-save to finish rebuilding the schedule.`,
         };
       }
     }
@@ -301,6 +427,17 @@ export async function updateInvoice(invoiceId: string, studentId: string, revali
   revalidatePath(revalidateTo);
   revalidatePath("/finance/consultancy-fee");
   revalidatePath("/finance/invoice-generator");
+  revalidatePath("/portal/payments");
+
+  // The stored PDF is what the receipt link serves, and it has just been
+  // contradicted by this edit.
+  const rebuilt = await buildAndStoreInvoicePdf(supabase, invoiceId, studentId);
+  if ("error" in rebuilt && rebuilt.error) {
+    return {
+      error: `The invoice was saved, but its PDF could not be rebuilt (${rebuilt.error}). Press Regenerate PDF before sending it.`,
+    };
+  }
+
   return { success: true };
 }
 
@@ -471,13 +608,18 @@ export async function buildAndSendInvoiceEmail(
   const { data: student } = await supabase.from("leads").select("full_name, email, country_of_interest").eq("id", studentId).maybeSingle();
   if (!student?.email) return { error: "This student has no email address on record." };
 
-  const [{ data: installments }, { data: lineItems }] = await Promise.all([
+  const [{ data: installments }, { data: lineItems }, { data: adminRows }] = await Promise.all([
     supabase
       .from("invoice_installments")
       .select("installment_no, amount, amount_paid, status, due_date, due_condition, extras_amount")
       .eq("invoice_id", invoiceId)
       .order("installment_no", { ascending: true }),
     supabase.from("invoice_line_items").select("name, amount").eq("invoice_id", invoiceId).order("created_at", { ascending: true }),
+    supabase
+      .from("invoice_admin_charges")
+      .select("country_label, amount, is_backup")
+      .eq("invoice_id", invoiceId)
+      .order("sort_order", { ascending: true }),
   ]);
 
   const math = computeInvoiceMath({
@@ -539,6 +681,11 @@ export async function buildAndSendInvoiceEmail(
     destination: student.country_of_interest,
     discountReason: invoice.discount_reason,
     math,
+    adminCharges: (adminRows ?? []).map((r) => ({
+      label: r.country_label,
+      amount: Number(r.amount ?? 0),
+      isBackup: Boolean(r.is_backup),
+    })),
     lineItems: (lineItems ?? []).map((li) => ({ name: li.name, amount: Number(li.amount ?? 0) })),
     installments: (installments ?? []).map((i) => ({
       no: i.installment_no,
@@ -630,7 +777,7 @@ export async function buildAndStoreInvoicePdf(
 
   const { data: student } = await supabase.from("leads").select("full_name, contact_number, email").eq("id", studentId).maybeSingle();
 
-  const [{ data: installments }, { data: lineItems }] = await Promise.all([
+  const [{ data: installments }, { data: lineItems }, { data: adminRows }] = await Promise.all([
     supabase
       .from("invoice_installments")
       .select("installment_no, amount, amount_paid, status, due_date, due_condition, paid_date, payment_method, extras_amount")
@@ -639,6 +786,13 @@ export async function buildAndStoreInvoicePdf(
     // Added items — a product from the catalog or a custom charge. They print
     // as their own rows in the Service table and count towards the total.
     supabase.from("invoice_line_items").select("name, amount").eq("invoice_id", invoiceId).order("created_at", { ascending: true }),
+    // Which country each slice of the administrative charge is for. Empty on
+    // an invoice raised before 0257, which prints one unlabelled row as before.
+    supabase
+      .from("invoice_admin_charges")
+      .select("country_label, amount, is_backup")
+      .eq("invoice_id", invoiceId)
+      .order("sort_order", { ascending: true }),
   ]);
 
   const agreement = one(invoice.agreement as never) as { generated_by?: string | null; template?: unknown } | null;
@@ -667,6 +821,16 @@ export async function buildAndStoreInvoicePdf(
   const invoiceNumber = invoice.invoice_number ?? `INV-${new Date(invoice.created_at).getFullYear()}-${invoiceId.slice(0, 6).toUpperCase()}`;
   const currencySymbol = CURRENCY_SYMBOLS[invoice.currency] ?? invoice.currency;
   const pdfMoney = (n: number) => `${currencySymbol}${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const adminBreakdown: AdminChargeLine[] = (adminRows ?? []).map((r) => ({
+    label: r.country_label,
+    amount: Number(r.amount ?? 0),
+    isBackup: Boolean(r.is_backup),
+  }));
+  // The consultancy fee belongs to the primary country. The agreement names
+  // it; failing that, the one charge on the breakdown that is not a backup.
+  const consultancyCountry =
+    destination?.display_name ?? adminBreakdown.find((c) => !c.isBackup)?.label ?? null;
 
   const payments = (installments ?? []).map((i) => ({
     date:
@@ -728,10 +892,11 @@ export async function buildAndStoreInvoicePdf(
       studentName: student?.full_name ?? "—",
       studentPhone: student?.contact_number ?? null,
       studentEmail: student?.email ?? null,
-      destination: destination?.display_name ?? null,
+      destination: consultancyCountry,
       intake: invoice.intake,
       installmentPlan: invoice.installment_plan,
       adminCharge: math.adminCharge,
+      adminCharges: adminBreakdown,
       consultancyFee: math.consultancyFee,
       discountAmount: math.discountAmount,
       discountReason: invoice.discount_reason ?? null,

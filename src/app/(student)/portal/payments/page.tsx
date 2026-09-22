@@ -4,7 +4,14 @@ import { carriedFromNote } from "@/lib/partialPayment";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { computeInvoiceMath, computePaymentProgress, installmentNote, sumLineItems, PAYMENT_STATUS_LABELS } from "@/lib/invoiceMath";
+import {
+  computeInvoiceMath,
+  computePaymentProgress,
+  feeLineLabel,
+  installmentNote,
+  sumLineItems,
+  PAYMENT_STATUS_LABELS,
+} from "@/lib/invoiceMath";
 
 // The figures here go through computeInvoiceMath and computePaymentProgress,
 // the same functions behind the receipt PDF and the invoice email. This page
@@ -72,6 +79,16 @@ export default async function PortalPaymentsPage() {
         .order("created_at", { ascending: true })
     : { data: [] };
 
+  // One administrative fee per country they registered for — the primary and
+  // any backups. Readable by the student since migration 0257.
+  const { data: adminCharges } = invoiceIds.length
+    ? await supabase
+        .from("invoice_admin_charges")
+        .select("id, invoice_id, country_label, amount, is_backup")
+        .in("invoice_id", invoiceIds)
+        .order("sort_order", { ascending: true })
+    : { data: [] };
+
   const today = new Date().toISOString().slice(0, 10);
 
   return (
@@ -87,6 +104,10 @@ export default async function PortalPaymentsPage() {
         {(invoices ?? []).map((inv) => {
           const mine = (installments ?? []).filter((i) => i.invoice_id === inv.id);
           const items = (lineItems ?? []).filter((li) => li.invoice_id === inv.id);
+          const charges = (adminCharges ?? []).filter((c) => c.invoice_id === inv.id && Number(c.amount ?? 0) > 0);
+          // The consultancy fee is the primary country's; a backup country
+          // never carries one.
+          const primaryCountry = charges.find((c) => !c.is_backup)?.country_label ?? null;
           const math = computeInvoiceMath({
             consultancyFee: Number(inv.consultancy_fee ?? 0),
             adminCharge: Number(inv.admin_charge ?? 0),
@@ -139,7 +160,7 @@ export default async function PortalPaymentsPage() {
               </div>
 
               <dl className="flex flex-col gap-0.5 border-t border-border pt-3">
-                <Line label="Consultancy fee" value={money(cur, math.consultancyFee)} />
+                <Line label={feeLineLabel("Consultancy fee", primaryCountry)} value={money(cur, math.consultancyFee)} />
                 {math.discountAmount > 0 && (
                   <Line
                     label={`Discount${inv.discount_reason ? ` · ${inv.discount_reason}` : ""}`}
@@ -152,7 +173,18 @@ export default async function PortalPaymentsPage() {
                   <Line key={li.id} label={li.name} value={money(cur, Number(li.amount ?? 0))} />
                 ))}
                 {math.taxAmount > 0 && <Line label={`SRB tax · ${math.taxRate}%`} value={money(cur, math.taxAmount)} />}
-                {math.adminCharge > 0 && <Line label="Administrative fee" value={money(cur, math.adminCharge)} />}
+                {/* One line per country. A student who registered for a
+                    primary and two backups pays an administrative fee for
+                    each, and should be able to see which is which. */}
+                {charges.length > 0
+                  ? charges.map((c) => (
+                      <Line
+                        key={c.id}
+                        label={feeLineLabel("Administrative fee", c.country_label, c.is_backup)}
+                        value={money(cur, Number(c.amount ?? 0))}
+                      />
+                    ))
+                  : math.adminCharge > 0 && <Line label="Administrative fee" value={money(cur, math.adminCharge)} />}
                 <Line label="Total" value={money(cur, total)} strong />
                 {progress.paid > 0 && <Line label="Paid" value={`- ${money(cur, progress.paid)}`} tone="success" />}
                 <Line label="Balance" value={money(cur, progress.outstanding)} strong tone={settled ? "success" : undefined} />

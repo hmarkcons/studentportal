@@ -60,6 +60,14 @@ export default async function ConsultancyFeePage() {
     ? await supabase.from("invoice_line_items").select("id, invoice_id, name, amount").in("invoice_id", invoiceIds)
     : { data: [] };
 
+  const { data: adminCharges } = invoiceIds.length
+    ? await supabase
+        .from("invoice_admin_charges")
+        .select("id, invoice_id, destination_id, country_label, amount, is_backup")
+        .in("invoice_id", invoiceIds)
+        .order("sort_order", { ascending: true })
+    : { data: [] };
+
   const { data: feeProducts } = await supabase.from("fee_products").select("id, name, default_amount, default_currency").order("name");
 
   const pdfUrls = new Map<string, string>();
@@ -78,6 +86,7 @@ export default async function ConsultancyFeePage() {
       invoice: inv,
       installments: (installments ?? []).filter((i) => i.invoice_id === inv.id),
       lineItems: (lineItems ?? []).filter((li) => li.invoice_id === inv.id),
+      adminCharges: (adminCharges ?? []).filter((c) => c.invoice_id === inv.id),
       studentId: inv.student_id,
       studentName: student?.full_name ?? "Unknown",
       registeredAt: student?.registered_at ?? null,

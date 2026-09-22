@@ -144,6 +144,7 @@ affected — which is why one student failed and two loaded.
 | 0254 | close it when the agreement that justified it is deleted |
 | 0255 | invoice writes: finance and super_admin only |
 | 0256 | added items reach the schedule, the student and the receipt: `extras_amount` on instalments, student read on `invoice_line_items`, `apply_invoice_line_item_change` (2026-09-22) |
+| 0257 | one administrative fee per country (`invoice_admin_charges`), and staff choose which instalment an added item goes on (`placement_*` on `invoice_line_items`) (2026-09-22) |
 
 Applied by hand — there is no CLI setup and no tracking table. See
 `AGENTS.md` for the exact invocation; the database password is only in the

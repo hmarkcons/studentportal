@@ -28,6 +28,13 @@ function today(): string {
 const DEFAULT_TERMS =
   "Only upon refusal from the university, 100% of the paid consultancy charges only will be refundable. There is no refund on withdrawal or rejection from the embassy or on failing the admission test, or under any other condition. Refunds are processed within 90 working days of the refusal notice.";
 
+export type InvoiceCountry = {
+  destinationId: string;
+  label: string;
+  isBackup: boolean;
+  defaultAdminCharge: number;
+};
+
 export function GenerateInvoiceForm({
   studentId,
   agreementId,
@@ -35,6 +42,7 @@ export function GenerateInvoiceForm({
   defaultAdminCharge,
   defaultConsultancyFee,
   defaultCurrency,
+  countries = [],
 }: {
   studentId: string;
   agreementId: string;
@@ -42,6 +50,9 @@ export function GenerateInvoiceForm({
   defaultAdminCharge?: number | null;
   defaultConsultancyFee?: number | null;
   defaultCurrency?: string | null;
+  /** The countries this student registered for — primary first, then backups.
+   *  Each carries its own administrative fee. */
+  countries?: InvoiceCountry[];
 }) {
   const action = generateInvoice.bind(null, studentId, agreementId);
   const [state, formAction, pending] = useActionState(action, undefined);
@@ -51,16 +62,40 @@ export function GenerateInvoiceForm({
       {(defaultAdminCharge != null || defaultConsultancyFee != null) && (
         <p className="text-xs text-muted">Pre-filled from the signed agreement (discount already applied) — adjust if needed.</p>
       )}
+      {/* One administrative fee per country: a backup country's agreement is
+          administrative-fee only, so a student with backups owes one for each.
+          A student whose registration predates lead_destinations still gets
+          the single field. */}
+      {countries.length > 0 && (
+        <div className="flex flex-wrap items-end gap-2 rounded-md border border-border p-2">
+          {countries.map((c) => (
+            <label key={c.destinationId} className="flex flex-col gap-0.5 text-xs text-muted">
+              Admin fee — {c.label}
+              {c.isBackup && <span className="text-[10px]">backup country</span>}
+              <Input
+                name={`admin_charge__${c.destinationId}`}
+                type="number"
+                step="0.01"
+                min="0"
+                defaultValue={c.defaultAdminCharge}
+                className="w-32"
+              />
+            </label>
+          ))}
+        </div>
+      )}
       <div className="flex flex-wrap items-end gap-2">
-        <Input
-          name="admin_charge"
-          type="number"
-          step="0.01"
-          placeholder="Admin charge"
-          defaultValue={defaultAdminCharge ?? undefined}
-          required
-          className="w-32"
-        />
+        {countries.length === 0 && (
+          <Input
+            name="admin_charge"
+            type="number"
+            step="0.01"
+            placeholder="Admin charge"
+            defaultValue={defaultAdminCharge ?? undefined}
+            required
+            className="w-32"
+          />
+        )}
         <Input
           name="consultancy_fee"
           type="number"
@@ -115,6 +150,7 @@ export function GenerateInvoiceForm({
 
 function EditInvoiceForm({
   invoice,
+  adminCharges,
   studentId,
   revalidateTo,
   onDone,
@@ -129,6 +165,8 @@ function EditInvoiceForm({
     terms?: string | null;
     installment_plan?: string | null;
   };
+  /** Per-country administrative charges, when this invoice has a breakdown. */
+  adminCharges: AdminChargeRow[];
   studentId: string;
   revalidateTo: string;
   onDone: () => void;
@@ -142,8 +180,31 @@ function EditInvoiceForm({
         Changing a fee rebuilds the instalment amounts to match, keeping the same number of instalments and due dates. If
         any instalment already has a payment recorded, the change is refused instead.
       </p>
+      {/* Edited per country when the invoice carries a breakdown: the single
+          figure is their sum, so letting staff type over it would leave the
+          two disagreeing about which country was charged what. */}
+      {adminCharges.length > 0 && (
+        <div className="flex flex-wrap items-end gap-2 rounded-md border border-border p-2">
+          {adminCharges.map((c) => (
+            <label key={c.id} className="flex flex-col gap-0.5 text-xs text-muted">
+              Admin fee — {c.country_label}
+              {c.is_backup && <span className="text-[10px]">backup country</span>}
+              <Input
+                name={`admin_charge__${c.destination_id ?? ""}`}
+                type="number"
+                step="0.01"
+                min="0"
+                defaultValue={Number(c.amount)}
+                className="w-32"
+              />
+            </label>
+          ))}
+        </div>
+      )}
       <div className="flex flex-wrap items-end gap-2">
-        <Input name="admin_charge" type="number" step="0.01" defaultValue={invoice.admin_charge} required className="w-32" />
+        {adminCharges.length === 0 && (
+          <Input name="admin_charge" type="number" step="0.01" defaultValue={invoice.admin_charge} required className="w-32" />
+        )}
         <Input name="consultancy_fee" type="number" step="0.01" defaultValue={invoice.consultancy_fee} required className="w-36" />
         <Select name="currency" defaultValue={invoice.currency}>
           <option value="EUR">EUR</option>
@@ -324,6 +385,7 @@ function LineItemsSection({
   lineItems,
   feeProducts,
   currency,
+  installments,
   revalidateTo,
   canManage,
 }: {
@@ -331,6 +393,8 @@ function LineItemsSection({
   lineItems: { id: string; name: string; amount: number }[];
   feeProducts: { id: string; name: string; default_amount: number | null; default_currency: string }[];
   currency: string;
+  /** Unpaid instalments, in order — the ones an item can be put on. */
+  installments: { id: string; installment_no: number; amount: number; status: string; amount_paid?: number | null }[];
   revalidateTo: string;
   canManage: boolean;
 }) {
@@ -338,6 +402,15 @@ function LineItemsSection({
   const [state, formAction, pending] = useActionState(action, undefined);
   const [selectedProduct, setSelectedProduct] = useState("");
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // A settled instalment is a record of money that changed hands, so an item
+  // cannot be put on one. The next instalment still outstanding is the
+  // default, because that is where the money would land anyway.
+  const open = installments
+    .filter((i) => i.status !== "paid" && Number(i.amount_paid ?? 0) === 0)
+    .sort((a, b) => a.installment_no - b.installment_no);
+  const [placement, setPlacement] = useState("");
+  const defaultPlacement = open[0]?.id ?? "";
 
   async function handleDeleteLineItem(lineItemId: string) {
     setDeleteError(null);
@@ -406,9 +479,31 @@ function LineItemsSection({
           required
           className="w-24"
         />
-        <Button type="submit" variant="outline-primary" size="sm" pending={pending}>
+        {/* Where the money goes. An item added to a plan the student is
+            already part way through cannot simply appear on the first
+            instalment, and spreading it thin is not always right either — so
+            staff say which. Only outstanding instalments are offered. */}
+        <label className="flex items-center gap-1 text-xs text-muted">
+          on
+          <Select name="placement" value={placement || defaultPlacement} onChange={(e) => setPlacement(e.target.value)}>
+            {open.map((i) => (
+              <option key={i.id} value={i.id}>
+                Instalment {i.installment_no}
+                {i.id === defaultPlacement ? " (next due)" : ""}
+              </option>
+            ))}
+            {open.length > 1 && <option value="spread">Divide equally</option>}
+          </Select>
+        </label>
+        <Button type="submit" variant="outline-primary" size="sm" pending={pending} disabled={open.length === 0}>
           + Add item
         </Button>
+        {open.length === 0 && (
+          <p className="w-full text-xs text-warning">
+            Every instalment on this invoice has been paid, so there is nothing left to add an item to. Raise a new
+            invoice for it instead.
+          </p>
+        )}
         {currencyMismatch && (
           <p className="w-full text-xs text-warning">
             {selectedFeeProduct?.name} is priced in {selectedFeeProduct?.default_currency}, but this invoice is in {currency} — enter
@@ -419,7 +514,7 @@ function LineItemsSection({
         {/* Said up front, because it is what happens: the item is taxed with
             the fee and the schedule moves to collect it. */}
         <p className="w-full text-[11px] text-muted">
-          An added item is taxed at the invoice&rsquo;s rate and goes on the next unpaid instalment, which is re-priced to match.
+          An added item is taxed at the invoice&rsquo;s rate, and the instalment it goes on is re-priced to collect it.
         </p>
       </form>
       )}
@@ -473,10 +568,19 @@ function SendInvoiceEmailButton({ invoiceId, studentId }: { invoiceId: string; s
 
 const STATUS_TONE = { paid: "success", pending: "warning", overdue: "danger" } as const;
 
+export type AdminChargeRow = {
+  id: string;
+  destination_id?: string | null;
+  country_label: string;
+  amount: number | string;
+  is_backup: boolean;
+};
+
 export function InvoiceCard({
   invoice,
   installments,
   lineItems = [],
+  adminCharges = [],
   feeProducts = [],
   studentId,
   studentName,
@@ -518,6 +622,9 @@ export function InvoiceCard({
     extras_amount?: number | string | null;
   }[];
   lineItems?: { id: string; name: string; amount: number }[];
+  /** Per-country administrative charges. Empty on an invoice raised before
+   *  the breakdown existed, which shows the single figure as before. */
+  adminCharges?: AdminChargeRow[];
   feeProducts?: { id: string; name: string; default_amount: number | null; default_currency: string }[];
   studentId: string;
   studentName?: string;
@@ -594,7 +701,32 @@ export function InvoiceCard({
       </div>
 
       {editingInvoice && canManage && (
-        <EditInvoiceForm invoice={invoice} studentId={studentId} revalidateTo={revalidateTo} onDone={() => setEditingInvoice(false)} />
+        <EditInvoiceForm
+          invoice={invoice}
+          adminCharges={adminCharges}
+          studentId={studentId}
+          revalidateTo={revalidateTo}
+          onDone={() => setEditingInvoice(false)}
+        />
+      )}
+
+      {/* Which country each slice of the administrative charge is for. Only
+          worth the room when there is more than one — a single-country
+          student's charge is already named on the receipt. */}
+      {adminCharges.length > 1 && (
+        <div className="mt-2 flex flex-col gap-0.5 border-t border-border pt-2">
+          {adminCharges.map((c) => (
+            <p key={c.id} className="flex items-center justify-between text-xs text-muted">
+              <span>
+                Administrative fee — {c.country_label}
+                {c.is_backup && <span className="opacity-70"> (Backup)</span>}
+              </span>
+              <span className="tabular-nums">
+                {invoice.currency} {Number(c.amount).toFixed(2)}
+              </span>
+            </p>
+          ))}
+        </div>
       )}
 
       {/* Received and outstanding, side by side and large enough to read at a
@@ -694,6 +826,7 @@ export function InvoiceCard({
           lineItems={lineItems}
           feeProducts={feeProducts}
           currency={invoice.currency}
+          installments={installments}
           revalidateTo={revalidateTo}
           canManage={canManage}
         />
