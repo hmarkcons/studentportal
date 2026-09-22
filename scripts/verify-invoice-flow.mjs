@@ -345,7 +345,7 @@ try {
           let card = "";
           for (let i = 0; i < 30; i++) {
             card = (await page.locator("body").innerText()).replace(/\s+/g, " ");
-            if (/EUR 2295\.00/.test(card)) break;
+            if (/EUR 2310\.00/.test(card)) break;
             await page.waitForTimeout(1000);
           }
           // Anchored to the invoice number, which is what the header prints
@@ -353,8 +353,13 @@ try {
           // passed while the header itself was wrong, because the Outstanding
           // tile happens to show the same figure — an assertion that can pass
           // on a coincidence is worse than none.
+          // \s* rather than \s+: JSX strips the newline between the invoice
+          // number's span and the currency, so innerText runs them together.
           ok("the card's total includes the item and its tax",
-            new RegExp(`${invoice.invoice_number}\\s+EUR 2310\\.00`).test(card), card.slice(0, 700));
+            new RegExp(`${invoice.invoice_number}\\s*EUR 2310\\.00`).test(card),
+            // The card, not the top of the page — the header above it is the
+            // student's own name and code, which says nothing about this.
+            card.slice(card.indexOf(invoice.invoice_number), card.indexOf(invoice.invoice_number) + 300));
           ok("...names the item", card.includes(`${ITEM.name} — EUR 100.00`), card.slice(-600));
           ok("...and says the first instalment carries it",
             /includes the EUR 315\.00 admin fee and its tax and EUR 105\.00 for added items/.test(card), card.slice(-600));
@@ -743,7 +748,7 @@ try {
       // appearing on their page is the policy working, and the totals moving
       // with it is the arithmetic being the same one everywhere else.
       //
-      // The schedule now is: 1 paid 930, 2 paid 200, 3 the 430 balance, 4 the
+      // The schedule now is: 1 paid 945, 2 paid 200, 3 the 430 balance, 4 the
       // 630 that waits on the admission. The item's 105 lands on 3.
       console.log("\n--- the student's payments page ---");
       {
@@ -936,7 +941,7 @@ try {
           Number(made.discount_amount) === GEN.discount && made.discount_reason === GEN.reason,
           `${made.discount_amount} / ${made.discount_reason}`);
         ok("...and the tax the preview showed",
-          Number(made.tax_amount) === 92.5, String(made.tax_amount));
+          Number(made.tax_amount) === 107.5, String(made.tax_amount));
 
         const written = (await installmentsOf(made.id)).map((r) => Number(r.amount));
         ok("...the instalments written are exactly the ones previewed",
