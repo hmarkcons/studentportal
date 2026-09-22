@@ -118,7 +118,7 @@ export type InvoicePdfData = {
   netConsultancyFee: number;
   /** Items added after the invoice was raised — a product from the fee
    *  catalog or a custom charge. Each is its own row in the Service table. */
-  lineItems: { name: string; amount: number }[];
+  lineItems: { name: string; description?: string | null; amount: number }[];
   extrasAmount: number;
   /** What the tax was charged on: the net consultancy fee plus the items. */
   taxableAmount: number;
@@ -304,6 +304,9 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
           <View key={i} style={styles.itemRow}>
             <View style={{ flex: 3, paddingRight: 16 }}>
               <Text style={styles.itemName}>{li.name}</Text>
+              {/* A name is a label; some items need a sentence saying what
+                  the student is actually paying for. */}
+              {li.description && <Text style={styles.itemDesc}>{li.description}</Text>}
             </View>
             <Text style={[styles.num, { flex: 1, textAlign: "right" }]}>{money(data.currencySymbol, li.amount)}</Text>
             <Text style={[styles.num, { flex: 1, textAlign: "right" }]}>{money(data.currencySymbol, li.amount)}</Text>

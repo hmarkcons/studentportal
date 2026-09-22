@@ -182,6 +182,13 @@ export function InvoiceGenerator({ students, bank }: { students: StudentOption[]
               Invoice number <span className="text-[10px]">(optional — generated if blank)</span>
               <Input name="invoice_number" placeholder="e.g. INV-2026-0042" />
             </label>
+            {/* Finance sometimes has to raise an invoice against a date that
+                has already passed. What the document shows; when it was really
+                raised stays on the record underneath. */}
+            <label className="flex flex-col gap-1 text-xs text-muted">
+              Invoice date <span className="text-[10px]">(optional — today if blank)</span>
+              <Input name="issued_on" type="date" />
+            </label>
             <label className="flex flex-col gap-1 text-xs text-muted">
               Installment plan label
               <Input name="installment_plan" placeholder="e.g. 3 monthly installments" />
@@ -201,7 +208,9 @@ export function InvoiceGenerator({ students, bank }: { students: StudentOption[]
                 <Row label={`Discount${discountReason ? ` (${discountReason})` : ""}`} value={`− ${fmt(currency, math.discountAmount)}`} />
               )}
               {math.discountAmount > 0 && <Row label="Net consultancy fee" value={fmt(currency, math.netConsultancyFee)} muted />}
-              <Row label={`SRB tax (${math.taxRate}% of net fee)`} value={fmt(currency, math.taxAmount)} />
+              {/* Names the base rather than saying "of net fee", which stopped
+                  being true when the tax started covering the whole invoice. */}
+              <Row label={`SRB tax (${math.taxRate}% of ${fmt(currency, math.taxableAmount)})`} value={fmt(currency, math.taxAmount)} />
               {countries.length === 0 ? (
                 <Row label="Administrative fee" value={fmt(currency, math.adminCharge)} />
               ) : (

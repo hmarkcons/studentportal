@@ -115,7 +115,7 @@ export default async function InvoiceGeneratorPage() {
     .from("invoices")
     .select(
       `id, student_id, invoice_number, intake, currency, admin_charge, consultancy_fee,
-       discount_amount, discount_reason, tax_rate, tax_amount,
+       discount_amount, discount_reason, tax_rate, tax_amount, tax_base, issued_on,
        admin_fee_status, sent_status, sent_at, pdf_path, created_at,
        student:leads(full_name, email)`
     )
@@ -154,6 +154,7 @@ export default async function InvoiceGeneratorPage() {
       adminCharge: Number(inv.admin_charge ?? 0),
       discountAmount: Number(inv.discount_amount ?? 0),
       taxRate: Number(inv.tax_rate ?? 0),
+      taxBase: (inv.tax_base as "services" | "total" | null) ?? "services",
       extras: sumLineItems(items),
     });
     const progress = computePaymentProgress(mine);

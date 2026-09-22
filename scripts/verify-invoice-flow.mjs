@@ -147,6 +147,10 @@ const removeItemViaCard = async (page, invoiceId, name, amount, currency, expect
 // Italy (Public): a public track, so EUR and a public-university condition.
 const FEE = 1800;
 const ADMIN_CHARGE = 300;
+// 5% of the whole invoice since migration 0258, administrative charge
+// included: 5% of 2100 is 105, so the student owes 2205.
+const TAX = 105;
+const TOTAL = FEE + ADMIN_CHARGE + TAX;
 const FIRST_DUE = "2026-10-05";
 
 const PORTAL_EMAIL = "zztmp-invoice-student@hmark-test.local";
@@ -217,19 +221,24 @@ try {
       ok("...billed in EUR because the destination is public, not in the PKR asked for",
         invoice.currency === "EUR", String(invoice.currency));
       ok("...with an invoice number allocated", Boolean(invoice.invoice_number), String(invoice.invoice_number));
-      ok("...SRB tax charged on the consultancy fee only",
-        Number(invoice.tax_rate) === 5 && Number(invoice.tax_amount) === 90,
+      // 5% of the whole invoice — the fee AND the administrative charge, which
+      // the tax used to skip. 5% of 2100 is 105.
+      ok("...SRB tax charged on the whole invoice, administrative charge included",
+        Number(invoice.tax_rate) === 5 && Number(invoice.tax_amount) === 105,
         `rate=${invoice.tax_rate} amount=${invoice.tax_amount}`);
+      ok("...and stamped with the rule that priced it, so it can be reprinted",
+        invoice.tax_base === "total", String(invoice.tax_base));
 
       const parts = await installmentsOf(invoice.id);
       const amounts = parts.map((p) => Number(p.amount));
       ok("...split into three installments", parts.length === 3, `${parts.length}`);
-      // 1800 + 5% = 1890, in three = 630 each, and the administrative charge
-      // rides on the first because that is how it is collected.
-      ok("...with the administrative charge on the first one",
-        JSON.stringify(amounts) === JSON.stringify([930, 630, 630]), JSON.stringify(amounts));
+      // 1800 plus the 90 of tax that belongs to the fee is 1890, in three =
+      // 630 each. The first also carries the 300 administrative charge and the
+      // 15 of tax that belongs to it, because that is how it is collected.
+      ok("...with the administrative charge and its tax on the first one",
+        JSON.stringify(amounts) === JSON.stringify([945, 630, 630]), JSON.stringify(amounts));
       ok("...summing to the total the student owes",
-        amounts.reduce((a, b) => a + b, 0) === FEE + 90 + ADMIN_CHARGE, String(amounts.reduce((a, b) => a + b, 0)));
+        amounts.reduce((a, b) => a + b, 0) === TOTAL, String(amounts.reduce((a, b) => a + b, 0)));
 
       ok("...the first due on the date given", parts[0]?.due_date === FIRST_DUE, String(parts[0]?.due_date));
       ok("...the second a month later", parts[1]?.due_date === "2026-11-05", String(parts[1]?.due_date));
@@ -295,16 +304,17 @@ try {
             Number(added.rows[0].amount) === ITEM.amount && added.rows[0].name === ITEM.name,
             JSON.stringify(added.rows[0]));
 
-          // 100 plus 5% tax is 105, on the first instalment with the admin charge.
+          // 100 plus 5% tax is 105, on the first instalment alongside the
+          // administrative charge and its own tax.
           const withItem = await installmentsOf(invoice.id);
           const amounts = withItem.map((p) => Number(p.amount));
           ok("the schedule is re-priced to collect it with the first instalment",
-            JSON.stringify(amounts) === JSON.stringify([1035, 630, 630]), JSON.stringify(amounts));
+            JSON.stringify(amounts) === JSON.stringify([1050, 630, 630]), JSON.stringify(amounts));
           ok("...recording how much of that instalment is the item",
             Number(withItem[0]?.extras_amount) === 105 && withItem.slice(1).every((p) => Number(p.extras_amount) === 0),
             JSON.stringify(withItem.map((p) => p.extras_amount)));
           ok("...and the tax on record now includes the tax on the item",
-            (await waitForInvoice(page, studentId, (i) => Number(i.tax_amount) === 95, 5)) !== null,
+            (await waitForInvoice(page, studentId, (i) => Number(i.tax_amount) === 110, 5)) !== null,
             String((await waitForInvoice(page, studentId, () => true, 1))?.tax_amount));
 
           // The card, once the page has caught up with the write.
@@ -314,10 +324,10 @@ try {
             if (/EUR 2295\.00/.test(card)) break;
             await page.waitForTimeout(1000);
           }
-          ok("the card's total includes the item and its tax", /EUR 2295\.00/.test(card), card.slice(-600));
+          ok("the card's total includes the item and its tax", /EUR 2310\.00/.test(card), card.slice(-600));
           ok("...names the item", card.includes(`${ITEM.name} — EUR 100.00`), card.slice(-600));
           ok("...and says the first instalment carries it",
-            /includes the EUR 300\.00 admin fee and EUR 105\.00 for added items/.test(card), card.slice(-600));
+            /includes the EUR 315\.00 admin fee and its tax and EUR 105\.00 for added items/.test(card), card.slice(-600));
 
           // Rebuilt with the item on it, the receipt lists it as its own row.
           // The file is upserted at the same path, so the thing to poll for is
@@ -354,11 +364,11 @@ try {
             (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(-300));
           const restored = (await installmentsOf(invoice.id));
           ok("...and the schedule returns to exactly what it was",
-            JSON.stringify(restored.map((p) => Number(p.amount))) === JSON.stringify([930, 630, 630])
+            JSON.stringify(restored.map((p) => Number(p.amount))) === JSON.stringify([945, 630, 630])
             && restored.every((p) => Number(p.extras_amount) === 0),
             JSON.stringify(restored.map((p) => [Number(p.amount), Number(p.extras_amount)])));
-          ok("...with the tax back to the fee alone",
-            (await waitForInvoice(page, studentId, (i) => Number(i.tax_amount) === 90, 5)) !== null);
+          ok("...with the tax back to the fee and the administrative charge",
+            (await waitForInvoice(page, studentId, (i) => Number(i.tax_amount) === TAX, 5)) !== null);
         }
 
         // The other answer staff can give: divide it across the plan instead
@@ -369,11 +379,11 @@ try {
         if (spread.rows) {
           const divided = await installmentsOf(invoice.id);
           ok("...so every instalment carries the same share of it",
-            JSON.stringify(divided.map((p) => Number(p.amount))) === JSON.stringify([965, 665, 665])
+            JSON.stringify(divided.map((p) => Number(p.amount))) === JSON.stringify([980, 665, 665])
             && divided.every((p) => Number(p.extras_amount) === 35),
             JSON.stringify(divided.map((p) => [Number(p.amount), Number(p.extras_amount)])));
           ok("...and the schedule still sums to what is owed",
-            Math.round(divided.reduce((s, r) => s + Number(r.amount), 0) * 100) / 100 === 2295,
+            Math.round(divided.reduce((s, r) => s + Number(r.amount), 0) * 100) / 100 === 2310,
             String(divided.reduce((s, r) => s + Number(r.amount), 0)));
           await removeItemViaCard(page, invoice.id, ITEM.name, ITEM.amount, "EUR", 0);
         }
@@ -428,7 +438,7 @@ try {
         }
         ok("...and is recorded as paid", settled !== null,
           (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(-300));
-        ok("...for its full amount", Number(settled?.[0]?.amount_paid) === 930,
+        ok("...for its full amount", Number(settled?.[0]?.amount_paid) === 945,
           String(settled?.[0]?.amount_paid));
         ok("...leaving the other two outstanding",
           settled?.slice(1).every((r) => r.status !== "paid"),
@@ -453,7 +463,7 @@ try {
         if (added.rows) {
           const shifted = await installmentsOf(invoice.id);
           ok("the paid first instalment is left exactly as it was",
-            Number(shifted[0]?.amount) === 930 && shifted[0]?.status === "paid" && Number(shifted[0]?.extras_amount) === 0,
+            Number(shifted[0]?.amount) === 945 && shifted[0]?.status === "paid" && Number(shifted[0]?.extras_amount) === 0,
             JSON.stringify(shifted[0]));
           ok("...the instalment staff did not choose is untouched too",
             Number(shifted[1]?.amount) === 630 && Number(shifted[1]?.extras_amount) === 0,
@@ -462,7 +472,7 @@ try {
             Number(shifted[2]?.amount) === 735 && Number(shifted[2]?.extras_amount) === 105,
             JSON.stringify(shifted[2]));
           ok("...so the schedule still sums to what is owed",
-            Math.round(shifted.reduce((s, r) => s + Number(r.amount), 0) * 100) / 100 === 2295,
+            Math.round(shifted.reduce((s, r) => s + Number(r.amount), 0) * 100) / 100 === 2310,
             String(shifted.reduce((s, r) => s + Number(r.amount), 0)));
 
           // The database refuses what the app never asks for: re-pricing an
@@ -479,12 +489,12 @@ try {
             Boolean(repriced.error) && /payment recorded/.test(repriced.error?.message ?? ""),
             JSON.stringify(repriced.error?.message ?? repriced.data));
           ok("...and writes nothing when it refuses", (await lineItemsOf(invoice.id)).length === 1
-            && Number((await installmentsOf(invoice.id))[0].amount) === 930);
+            && Number((await installmentsOf(invoice.id))[0].amount) === 945);
 
           const removed = await removeItemViaCard(page, invoice.id, LATER.name, LATER.amount, "EUR", 0);
           ok("removing it comes off the instalment that carried it, not another", removed.rows !== null
             && JSON.stringify((await installmentsOf(invoice.id)).map((p) => [Number(p.amount), Number(p.extras_amount)]))
-              === JSON.stringify([[930, 0], [630, 0], [630, 0]]),
+              === JSON.stringify([[945, 0], [630, 0], [630, 0]]),
             JSON.stringify((await installmentsOf(invoice.id)).map((p) => [Number(p.amount), Number(p.extras_amount)])));
         }
       }
@@ -627,7 +637,7 @@ try {
           // never creates or destroys any.
           const sum = split.reduce((s, r) => s + Number(r.amount), 0);
           ok("...and the schedule still adds up to what the student owes",
-            sum === FEE + 90 + ADMIN_CHARGE, `${sum} vs ${FEE + 90 + ADMIN_CHARGE}`);
+            sum === TOTAL, `${sum} vs ${TOTAL}`);
 
           // Both refusals are enforced in the RPC as well as the form, so the
           // database is checked directly rather than the message being taken
@@ -712,6 +722,8 @@ try {
         ok("an item added after a part payment lands on the balance instalment",
           added.rows !== null && Number(carried?.amount) === 535 && Number(carried?.extras_amount) === 105,
           JSON.stringify(carried));
+        // 945 settled, then 200 of the 630 second instalment part-paid: the
+        // balance instalment is 430, and the item puts 105 on top of it.
       }
       const { data: openedPortal } = await admin.from("leads").select("portal_active").eq("id", studentId).single();
       ok("a signed agreement has opened their portal", openedPortal.portal_active === true);
@@ -734,26 +746,26 @@ try {
 
         ok("the student can see the invoice", seen.includes(invoice.invoice_number),
           seen.replace(/\s+/g, " ").slice(0, 300));
-        // 2,190 for the fee, its tax and the admin charge, plus the 100 item
-        // and the 5 tax on it.
-        ok("...its total, including the added item and its tax", /Total\s+EUR 2,295\.00/.test(seen),
+        // 2,205 for the fee, the admin charge and the 5% on both, plus the 100
+        // item and the 5 of tax on it.
+        ok("...its total, including the added item and its tax", /Total\s+EUR 2,310\.00/.test(seen),
           seen.replace(/\s+/g, " ").slice(0, 400));
         ok("...the item itself, on a line of its own",
           new RegExp(`${ITEM.name}\\s+EUR 100\\.00`).test(seen), seen.replace(/\s+/g, " ").slice(0, 600));
-        ok("...with the tax charged on the fee and the item together", /SRB tax · 5%\s+EUR 95\.00/.test(seen),
+        ok("...with the tax charged on the whole invoice", /SRB tax · 5%\s+EUR 110\.00/.test(seen),
           seen.replace(/\s+/g, " ").slice(0, 600));
         // Anchored to the labels. A bare amount also appears in the instalment
         // list, so matching the number alone passed while reading the wrong
         // figure entirely.
         //
-        // 930 settled in full plus the 200 that part-paid the second
-        // instalment: 1,130 of 2,295, leaving 1,165.
-        ok("...what they have paid", /Paid\s*-?\s*EUR 1,130\.00/.test(seen),
+        // 945 settled in full plus the 200 that part-paid the second
+        // instalment: 1,145 of 2,310, leaving 1,165.
+        ok("...what they have paid", /Paid\s*-?\s*EUR 1,145\.00/.test(seen),
           seen.replace(/\s+/g, " ").slice(0, 500));
         ok("...and what is left", /Balance\s+EUR 1,165\.00/.test(seen),
           seen.replace(/\s+/g, " ").slice(0, 500));
         ok("...told why the first instalment is the big one",
-          /includes the EUR 300\.00 admin fee/.test(seen), seen.replace(/\s+/g, " ").slice(0, 600));
+          /includes the EUR 315\.00 admin fee and its tax/.test(seen), seen.replace(/\s+/g, " ").slice(0, 600));
         ok("...and why the balance instalment grew",
           /includes EUR 105\.00 for added items/.test(seen), seen.replace(/\s+/g, " ").slice(-800));
         ok("...with no warning that the breakdown and the schedule disagree",
@@ -862,16 +874,16 @@ try {
       const preview = page.locator("div").filter({ hasText: /Invoice preview/ }).last();
       const shown = (await preview.innerText()).replace(/−/g, "-");
 
-      // 2000 less a 150 discount is 1850; 5% of that is 92.50; plus the 300
-      // administrative fee, which is outside the tax base.
+      // 2000 less a 150 discount is 1850; plus the 300 administrative fee is
+      // 2150, and 5% of that is 107.50.
       ok("the preview shows the discount coming off the fee first",
         /Net consultancy fee\s+EUR 1,850\.00/.test(shown), shown.replace(/\s+/g, " ").slice(0, 400));
-      ok("...the tax charged on what is left, not on the whole fee",
-        /SRB tax \(5% of net fee\)\s+EUR 92\.50/.test(shown), shown.replace(/\s+/g, " ").slice(0, 400));
+      ok("...the tax charged on the discounted total, not on the whole fee",
+        /SRB tax \(5% of EUR 2,150\.00\)\s+EUR 107\.50/.test(shown), shown.replace(/\s+/g, " ").slice(0, 400));
       ok("...and the discount reason beside it",
         shown.includes(GEN.reason), shown.replace(/\s+/g, " ").slice(0, 400));
       ok("...totalling the fee, its tax and the administrative charge",
-        /Total payable\s+EUR 2,242\.50/.test(shown), shown.replace(/\s+/g, " ").slice(0, 400));
+        /Total payable\s+EUR 2,257\.50/.test(shown), shown.replace(/\s+/g, " ").slice(0, 400));
 
       // "9 installments of EUR 515.83 + EUR 215.83 + ... + EUR 215.86"
       const previewed = [...shown.matchAll(/EUR ([\d,]+\.\d{2})/g)]
@@ -903,10 +915,12 @@ try {
         // leaving the invoice a few cents short of ever reading as paid.
         const sum = Math.round(written.reduce((a, b) => a + b, 0) * 100) / 100;
         ok("...summing exactly to the total, despite not dividing evenly",
-          sum === 2242.5, `${sum}`);
-        ok("...with the administrative charge on the first",
-          written[0] === Math.round((written[1] + GEN.admin) * 100) / 100,
-          `${written[0]} vs ${written[1]} + ${GEN.admin}`);
+          sum === 2257.5, `${sum}`);
+        // The administrative charge brings its own 5% with it now, so the
+        // first instalment is bigger than the others by 300 plus 15.
+        ok("...with the administrative charge and its tax on the first",
+          written[0] === Math.round((written[1] + GEN.admin * 1.05) * 100) / 100,
+          `${written[0]} vs ${written[1]} + ${GEN.admin} + tax`);
         ok("...and the rounding remainder on the last",
           written[written.length - 1] !== written[1],
           `last ${written[written.length - 1]}, middle ${written[1]}`);
@@ -965,9 +979,9 @@ try {
 
       const previewText = (await page.locator("div").filter({ hasText: /Invoice preview/ }).last().innerText())
         .replace(/\s+/g, " ");
-      // 1800 + 90 tax + 300 + 150.
+      // 1800 fee + 450 of administrative fees = 2250 taxable, 5% is 112.50.
       ok("the preview totals both countries' administrative fees",
-        /Total payable EUR 2,340\.00/.test(previewText), previewText.slice(0, 700));
+        /Total payable EUR 2,362\.50/.test(previewText), previewText.slice(0, 700));
 
       await page.getByRole("button", { name: "Generate invoice" }).click();
       const multi = await waitForInvoice(page, studentId, (i) => i.id);
@@ -1011,11 +1025,70 @@ try {
         const withPdf = await waitForInvoice(page, studentId, (i) => i.pdf_path, 90);
         ok("its PDF is built automatically too", withPdf !== null);
 
-        // 1890 fee side in three is 630 each; both administrative fees ride
-        // on the first, as one charge always has.
+        // 1800 plus its own 90 of tax is 1890, in three = 630 each. The first
+        // also carries both administrative fees, 450, and the 22.50 of tax
+        // that belongs to them.
         const parts = (await installmentsOf(multi.id)).map((p) => Number(p.amount));
-        ok("both administrative fees ride on the first instalment",
-          JSON.stringify(parts) === JSON.stringify([1080, 630, 630]), JSON.stringify(parts));
+        ok("both administrative fees, and their tax, ride on the first instalment",
+          JSON.stringify(parts) === JSON.stringify([1102.5, 630, 630]), JSON.stringify(parts));
+
+        // ================================================ editing an invoice
+        // The office asked for everything on an invoice to be editable, and
+        // the number of instalments is the one edit that has to delete rows
+        // rather than reprice them.
+        console.log("\n--- editing an invoice ---");
+        await page.goto(`${BASE}/students/${studentId}`, { waitUntil: "domcontentloaded" });
+        await expand(page, "Invoice");
+        const edit = page.getByRole("button", { name: "✏️ Edit" }).first();
+        ok("an invoice can be opened for editing", (await edit.count()) > 0,
+          (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(-300));
+
+        if (await edit.count()) {
+          await edit.click();
+          const form = page.locator("form").filter({ has: page.getByRole("button", { name: "Save invoice" }) }).first();
+          await form.locator('input[name="installment_count"]').fill("2");
+          await form.locator('input[name="issued_on"]').fill("2026-08-01");
+          await form.locator('input[name="discount_amount"]').fill("100");
+          await form.locator('input[name="discount_reason"]').fill("zztmp edited discount");
+          await form.getByRole("button", { name: "Save invoice" }).click();
+
+          let edited = null;
+          for (let i = 0; i < 45; i++) {
+            const rows = await installmentsOf(multi.id);
+            if (rows.length === 2) { edited = rows; break; }
+            await page.waitForTimeout(1000);
+          }
+          ok("the number of instalments can be changed", edited !== null,
+            (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(-400));
+
+          if (edited) {
+            // 1800 less the 100 discount is 1700, plus 450 of administrative
+            // fees is 2150 taxable, 5% is 107.50, so the total is 2257.50.
+            // 1700 + 85 of its own tax = 1785 over two = 892.50 each, and the
+            // first also takes 450 + 22.50.
+            const editedAmounts = edited.map((p) => Number(p.amount));
+            ok("...and the schedule is rebuilt around the new count and discount",
+              JSON.stringify(editedAmounts) === JSON.stringify([1365, 892.5]), JSON.stringify(editedAmounts));
+            ok("...still summing to what the student owes",
+              Math.round(editedAmounts.reduce((a, b) => a + b, 0) * 100) / 100 === 2257.5,
+              String(editedAmounts.reduce((a, b) => a + b, 0)));
+            // The office's own rule still decides which one waits on the
+            // admission, rather than the resize inventing a date.
+            ok("...with the last one still falling due on the admission",
+              edited[1]?.due_date === null && /public university/.test(edited[1]?.due_condition ?? ""),
+              JSON.stringify([edited[1]?.due_date, edited[1]?.due_condition]));
+
+            const after = await waitForInvoice(page, studentId, (i) => i.issued_on === "2026-08-01", 30);
+            ok("an invoice can be dated to a day that has passed", after !== null,
+              String((await waitForInvoice(page, studentId, () => true, 1))?.issued_on));
+            ok("...without rewriting when it was actually raised",
+              after !== null && new Date(after.created_at) > new Date("2026-08-02"),
+              `created_at=${after?.created_at}`);
+            ok("...and the discount typed into the edit form is what is stored",
+              Number(after?.discount_amount) === 100 && after?.discount_reason === "zztmp edited discount",
+              `${after?.discount_amount} / ${after?.discount_reason}`);
+          }
+        }
       }
     }
   }

@@ -30,7 +30,7 @@ export default async function RevenueCommissionPage() {
 
   const { data: invoices } = await supabase
     .from("invoices")
-    .select("id, admin_charge, consultancy_fee, discount_amount, tax_rate, currency");
+    .select("id, admin_charge, consultancy_fee, discount_amount, tax_rate, tax_base, currency");
   const { data: installments } = await supabase
     .from("invoice_installments")
     .select("invoice_id, amount, amount_paid, status, due_date");
@@ -82,6 +82,9 @@ export default async function RevenueCommissionPage() {
       adminCharge: Number(i.admin_charge ?? 0),
       discountAmount: Number(i.discount_amount ?? 0),
       taxRate: Number(i.tax_rate ?? 0),
+      // Each invoice's own rule, so the report totals what was actually
+      // billed rather than re-pricing history at today's tax base.
+      taxBase: (i.tax_base as "services" | "total" | null) ?? "services",
       extras: extrasByInvoice.get(i.id) ?? 0,
     }).total;
     // paid, not a raw amount_paid sum: computePaymentProgress counts a settled

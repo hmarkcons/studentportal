@@ -19,7 +19,27 @@ export type InvoiceMathInput = {
    * discount is a concession on the fee, not on a courier charge.
    */
   extras?: number;
+  /**
+   * Which rule prices this invoice's tax. Pass the invoice's stored
+   * `tax_base`, never a constant, so an old invoice keeps the figures it was
+   * raised with. Defaults to the current rule for a new one.
+   */
+  taxBase?: TaxBase;
 };
+
+/**
+ * What the SRB tax is charged on.
+ *
+ * `total` is the rule now: the discounted consultancy fee, plus added items,
+ * plus the administrative fee. `services` is what invoices raised before
+ * migration 0258 used, where the administrative fee was outside the tax base.
+ *
+ * The discount comes off first under both — tax is not owed on money that was
+ * never charged.
+ */
+export type TaxBase = "services" | "total";
+
+export const CURRENT_TAX_BASE: TaxBase = "total";
 
 export type InvoiceMath = {
   consultancyFee: number;
@@ -28,13 +48,19 @@ export type InvoiceMath = {
   netConsultancyFee: number;
   /** Added items, before tax. */
   extrasAmount: number;
-  /** What the tax is charged on: the net consultancy fee plus the added items. */
+  /** Which rule priced the tax — see TaxBase. */
+  taxBase: TaxBase;
+  /** What the tax is actually charged on, under this invoice's rule. */
   taxableAmount: number;
   taxRate: number;
   taxAmount: number;
-  /** The part of taxAmount that is tax on the added items. Rides with them on
-   *  the first instalment (buildInstallmentPlan), so it is kept separate. */
+  /** The part of taxAmount that is tax on the added items. Rides with them
+   *  wherever they are placed, so it is kept separate. */
   extrasTaxAmount: number;
+  /** The part of taxAmount that is tax on the administrative fee — zero under
+   *  the `services` rule. Rides with the administrative fee on the first
+   *  instalment, so it is kept separate too. */
+  adminTaxAmount: number;
   adminCharge: number;
   total: number;
 };
@@ -96,10 +122,16 @@ export function sumLineItems(items: readonly { amount: number | string | null | 
 }
 
 /**
- * Discount comes off the consultancy fee first, then SRB tax is charged on the
- * reduced fee and on any added items, then the administrative charge is added.
- * The admin charge is deliberately outside the tax base — the tax is on the
- * services sold, and the administrative charge is not one.
+ * The discount comes off the consultancy fee first, then SRB tax is charged,
+ * then everything is added up.
+ *
+ * What the tax is charged on depends on the invoice's own `taxBase`. Under the
+ * current rule it is the whole invoice — the discounted fee, the added items
+ * and the administrative fee. Under `services`, which is every invoice raised
+ * before migration 0258, the administrative fee sat outside it. The rule
+ * travels on the invoice rather than being read from a constant here, for the
+ * same reason the rate does: reprinting an old receipt must reproduce the
+ * numbers the student was actually billed.
  *
  * Added items used to be left out here entirely, so the card on the student's
  * page added them to this total by hand while the PDF, the email, the
@@ -114,11 +146,16 @@ export function computeInvoiceMath(input: InvoiceMathInput): InvoiceMath {
   // negative tax and an invoice that owes the student money.
   const discountAmount = money(Math.min(Math.max(0, input.discountAmount), consultancyFee));
   const taxRate = input.taxRate ?? SRB_TAX_RATE;
+  const taxBase = input.taxBase ?? CURRENT_TAX_BASE;
 
   const netConsultancyFee = money(consultancyFee - discountAmount);
-  const taxableAmount = money(netConsultancyFee + extrasAmount);
+  const taxable = taxBase === "total" ? netConsultancyFee + extrasAmount + adminCharge : netConsultancyFee + extrasAmount;
+  const taxableAmount = money(taxable);
   const taxAmount = money(taxableAmount * (taxRate / 100));
+  // The slices that ride with the thing they are charged on, rather than with
+  // the fee that is split across the plan.
   const extrasTaxAmount = money(extrasAmount * (taxRate / 100));
+  const adminTaxAmount = taxBase === "total" ? money(adminCharge * (taxRate / 100)) : 0;
   const total = money(netConsultancyFee + extrasAmount + taxAmount + adminCharge);
 
   return {
@@ -126,10 +163,12 @@ export function computeInvoiceMath(input: InvoiceMathInput): InvoiceMath {
     discountAmount,
     netConsultancyFee,
     extrasAmount,
+    taxBase,
     taxableAmount,
     taxRate,
     taxAmount,
     extrasTaxAmount,
+    adminTaxAmount,
     adminCharge,
     total,
   };
@@ -177,10 +216,26 @@ export function extrasLoad(math: InvoiceMath): number {
  * not what is owed.
  */
 export function buildInstallmentPlan(math: InvoiceMath, count: number): number[] {
-  const consultancySide = money(math.netConsultancyFee + math.taxAmount - math.extrasTaxAmount);
-  const parts = splitIntoInstallments(consultancySide, count);
-  parts[0] = money(parts[0] + math.adminCharge + extrasLoad(math));
+  const parts = splitIntoInstallments(feeSideTotal(math), count);
+  parts[0] = money(parts[0] + adminLoad(math) + extrasLoad(math));
   return parts;
+}
+
+/**
+ * The administrative fee with its own tax, which is what instalment 1 carries.
+ * Under the `services` rule there is no tax on it and this is just the fee.
+ */
+export function adminLoad(math: InvoiceMath): number {
+  return money(math.adminCharge + math.adminTaxAmount);
+}
+
+/**
+ * The part of the invoice that is divided across the plan: the discounted
+ * consultancy fee and the tax on it alone. What the administrative fee and the
+ * added items carry is taken out here and placed deliberately.
+ */
+export function feeSideTotal(math: InvoiceMath): number {
+  return money(math.netConsultancyFee + math.taxAmount - math.extrasTaxAmount - math.adminTaxAmount);
 }
 
 /**
@@ -197,11 +252,18 @@ export function buildInstallmentPlan(math: InvoiceMath, count: number): number[]
  */
 export function installmentNote(
   installment: { installment_no: number; extras_amount?: number | string | null },
-  math: Pick<InvoiceMath, "adminCharge">,
+  math: Pick<InvoiceMath, "adminCharge" | "adminTaxAmount">,
   fmt: (n: number) => string
 ): string | null {
   const parts: string[] = [];
-  if (installment.installment_no === 1 && math.adminCharge > 0) parts.push(`the ${fmt(math.adminCharge)} admin fee`);
+  if (installment.installment_no === 1 && math.adminCharge > 0) {
+    // The figure quoted is what the instalment actually carries. Under the
+    // current rule the administrative fee brings its own tax with it, and a
+    // student reconciling the note against the amount would otherwise be out
+    // by exactly that tax.
+    const admin = money(math.adminCharge + (math.adminTaxAmount ?? 0));
+    parts.push(math.adminTaxAmount > 0 ? `the ${fmt(admin)} admin fee and its tax` : `the ${fmt(admin)} admin fee`);
+  }
   const extras = money(num(installment.extras_amount));
   if (extras > 0) parts.push(`${fmt(extras)} for added items`);
   if (parts.length === 0) return null;

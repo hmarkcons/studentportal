@@ -38,7 +38,7 @@ export default async function PortalPaymentsPage() {
   const { data: invoices } = await supabase
     .from("invoices")
     .select(
-      "id, invoice_number, intake, admin_charge, consultancy_fee, discount_amount, discount_reason, tax_rate, currency, pdf_path, created_at"
+      "id, invoice_number, intake, admin_charge, consultancy_fee, discount_amount, discount_reason, tax_rate, tax_base, currency, pdf_path, created_at"
     )
     .eq("student_id", student.id)
     .order("created_at", { ascending: false });
@@ -111,6 +111,7 @@ export default async function PortalPaymentsPage() {
             adminCharge: Number(inv.admin_charge ?? 0),
             discountAmount: Number(inv.discount_amount ?? 0),
             taxRate: Number(inv.tax_rate ?? 0),
+            taxBase: (inv.tax_base as "services" | "total" | null) ?? "services",
             extras: sumLineItems(items),
           });
           const progress = computePaymentProgress(mine);

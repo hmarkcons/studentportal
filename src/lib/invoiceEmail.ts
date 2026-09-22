@@ -21,7 +21,7 @@ export type InvoiceEmailData = {
   /** One administrative fee per country the student registered for. */
   adminCharges: AdminChargeLine[];
   /** Items added after the invoice was raised; each is a line of the breakdown. */
-  lineItems: { name: string; amount: number }[];
+  lineItems: { name: string; description?: string | null; amount: number }[];
   installments: {
     no: number;
     amount: number;
@@ -141,7 +141,12 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
   }
   // Added items sit with the fee they are taxed alongside, each on its own
   // line, so the student can see what every figure in the total is for.
-  for (const li of data.lineItems) breakdown.push([li.name, amount(li.amount)]);
+  // The description rides on the same line rather than a second one: an email
+  // breakdown is a two-column table and a row without a figure reads as a
+  // charge with no amount.
+  for (const li of data.lineItems) {
+    breakdown.push([li.description ? `${li.name} · ${li.description}` : li.name, amount(li.amount)]);
+  }
   if (math.taxAmount > 0) breakdown.push([`SRB tax · ${math.taxRate}%`, amount(math.taxAmount)]);
   // One line per country, as on the receipt. A student with backup countries
   // is paying an administrative fee for each and should be able to see which.

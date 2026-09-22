@@ -434,7 +434,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       );
     })(),
     invoiceIds.length
-      ? supabase.from("invoice_line_items").select("id, invoice_id, name, amount").in("invoice_id", invoiceIds)
+      ? supabase.from("invoice_line_items").select("id, invoice_id, name, description, amount").in("invoice_id", invoiceIds)
       : Promise.resolve({ data: [] }),
     documentUrls(
       supabase,
@@ -1051,6 +1051,13 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                 defaultAdminCharge={defaultInvoiceAdminCharge}
                 defaultConsultancyFee={defaultInvoiceConsultancyFee}
                 defaultCurrency={defaultInvoiceCurrency}
+                // The agreement is where the number of payments and the
+                // discount were actually agreed with the student, so the
+                // invoice opens on them rather than making staff retype
+                // what they already signed.
+                defaultInstallmentCount={signedAgreement?.installment_count ?? null}
+                defaultDiscount={signedAgreement?.discount_amount ?? leadRegistration?.discount_amount ?? null}
+                defaultDiscountReason={leadRegistration?.discount_reason ?? null}
                 countries={invoiceCountries}
               />
             ) : (

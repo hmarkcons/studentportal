@@ -6,16 +6,47 @@ import { createClient } from "@/lib/supabase/server";
 import { formatDateOnly } from "@/lib/formatDate";
 import { requirePermission } from "@/lib/auth/permissions";
 import { installmentDuePlan, missingDueDates } from "@/lib/installmentDueConditions";
+import { splitIntoInstallments } from "@/lib/invoiceMath";
+import { after } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   computeInvoiceMath,
   buildInstallmentPlan,
   installmentNote,
   sumLineItems,
+  CURRENT_TAX_BASE,
   SRB_TAX_RATE,
   conversionNote,
   type AdminChargeLine,
+  type TaxBase,
 } from "@/lib/invoiceMath";
 import { planScheduleChange } from "@/lib/invoiceSchedule";
+
+/**
+ * Renders and stores the invoice PDF after the response has gone back.
+ *
+ * Building it is the slowest thing an invoice action does, and nothing on
+ * screen needs it: the receipt link and the email both build one on demand if
+ * it is missing. Putting it in `after` means raising an invoice returns as
+ * soon as the rows are written instead of making the person wait for a
+ * document to render.
+ *
+ * Uses the service-role client deliberately. `after` runs once the request is
+ * finished, and a client built from that request's cookies is no longer
+ * something to rely on.
+ */
+function buildPdfAfterResponse(invoiceId: string, studentId: string, revalidate: string[] = []) {
+  after(async () => {
+    const result = await buildAndStoreInvoicePdf(createAdminClient(), invoiceId, studentId);
+    // Nothing is waiting on this, so a failure cannot be reported to anyone.
+    // It is not lost work: whoever opens the receipt link next builds it.
+    if ("error" in result && result.error) {
+      console.error(`[invoice ${invoiceId}] background PDF build failed: ${result.error}`);
+      return;
+    }
+    for (const path of revalidate) revalidatePath(path);
+  });
+}
 import { balanceDueDate, checkPartialSplit } from "@/lib/partialPayment";
 import { buildInvoiceEmail } from "@/lib/invoiceEmail";
 import { sendEmail, accountsFrom } from "@/lib/email";
@@ -189,13 +220,20 @@ export async function generateInvoice(studentId: string, agreementId: string, _p
     return { error: "Discount cannot exceed the consultancy fee." };
   }
 
-  // Discount off the fee, SRB tax on what remains, then the admin charge — the
-  // same computation the generator previews and the PDF prints.
+  // The date the invoice presents itself as. Finance sometimes has to raise
+  // one against a date that has passed — an intake that closed, a payment
+  // already taken. created_at still records when it was really made.
+  const issued_on = String(formData.get("issued_on") ?? "").trim() || null;
+
+  // Discount off the fee, then SRB tax on the whole invoice — the same
+  // computation the generator previews and the PDF prints. New invoices are
+  // stamped with the current rule so reprinting one later reproduces it.
   const math = computeInvoiceMath({
     consultancyFee: consultancy_fee,
     adminCharge: admin_charge,
     discountAmount: discount_amount,
     taxRate: SRB_TAX_RATE,
+    taxBase: CURRENT_TAX_BASE,
   });
 
   // The administrative charge rides on installment 1, because that is how it
@@ -257,6 +295,8 @@ export async function generateInvoice(studentId: string, agreementId: string, _p
     // Only when there is something to say: a student with one country and a
     // single charge needs no breakdown to explain it.
     p_admin_charges: (adminCharges ?? []).filter((c) => c.amount > 0),
+    p_tax_base: math.taxBase,
+    p_issued_on: issued_on,
   });
   if (error) return { error: error.message };
 
@@ -264,20 +304,15 @@ export async function generateInvoice(studentId: string, agreementId: string, _p
   revalidatePath("/finance/invoice-generator");
   revalidatePath("/finance/consultancy-fee");
 
-  // The document is the invoice, so raising one produces it. It used to wait
-  // for somebody to press Generate PDF, which meant "View invoice" was absent
-  // on a brand new invoice and the first student to open a receipt link paid
-  // for the render. A failure here is reported without losing the invoice,
-  // which exists and is correct either way.
+  // The document is the invoice, so raising one produces it — but after the
+  // response, not before it. It used to wait for somebody to press Generate
+  // PDF; then it blocked the click instead, which made raising an invoice feel
+  // slow for a document nobody was looking at yet.
   if (newInvoiceId) {
-    const built = await buildAndStoreInvoicePdf(supabase, newInvoiceId as string, studentId);
-    if ("error" in built && built.error) {
-      return {
-        success: true,
-        warning: `The invoice was created, but its PDF could not be built (${built.error}). Press Generate PDF to try again.`,
-      };
-    }
-    revalidatePath(`/students/${studentId}`);
+    buildPdfAfterResponse(newInvoiceId as string, studentId, [
+      `/students/${studentId}`,
+      "/finance/invoice-generator",
+    ]);
   }
 
   return { success: true };
@@ -301,7 +336,7 @@ export async function updateInvoice(invoiceId: string, studentId: string, revali
   // The schedule is rebuilt to match, or the edit is refused; it is never left
   // inconsistent.
   const [{ data: current }, { data: lineItems }, { data: adminRows }] = await Promise.all([
-    supabase.from("invoices").select("discount_amount, tax_rate").eq("id", invoiceId).maybeSingle(),
+    supabase.from("invoices").select("discount_amount, tax_rate, tax_base, agreement_id").eq("id", invoiceId).maybeSingle(),
     // Items already on the invoice stay in the total when a fee is edited;
     // without them the rebuilt schedule would silently drop them — and their
     // placement decides which instalments carry them afterwards.
@@ -328,14 +363,30 @@ export async function updateInvoice(invoiceId: string, studentId: string, revali
     ? Math.round(editedAdminCharges.reduce((s, c) => s + c.amount, 0) * 100) / 100
     : Number(formData.get("admin_charge") ?? 0);
 
-  const discountAmount = Number(current?.discount_amount ?? 0);
+  // The discount is editable now. Absent from the form — an older edit form,
+  // or one that does not offer it — the invoice keeps the discount it has.
+  const rawDiscount = formData.get("discount_amount");
+  const discountAmount =
+    rawDiscount === null || String(rawDiscount).trim() === ""
+      ? Number(current?.discount_amount ?? 0)
+      : Math.max(0, Number(rawDiscount) || 0);
+  const rawReason = formData.get("discount_reason");
+  const discountReason = rawReason === null ? undefined : String(rawReason).trim() || null;
+
   const taxRate = Number(current?.tax_rate ?? 0);
+  // Never today's rule: this invoice keeps the one it was raised under, so an
+  // edit corrects a figure without silently re-pricing the tax.
+  const taxBase = (current?.tax_base as TaxBase | null) ?? "services";
+
+  // The date shown on the document. Absent from the form, it is left alone.
+  const rawIssued = formData.get("issued_on");
+  const issuedOn = rawIssued === null ? undefined : String(rawIssued).trim() || null;
 
   // computeInvoiceMath would silently clamp this, quietly changing the discount
   // the student was promised. Refuse instead and let staff decide.
   if (discountAmount > consultancy_fee) {
     return {
-      error: `This invoice carries a ${discountAmount.toFixed(2)} discount, which is more than the new consultancy fee. Lower the discount before reducing the fee.`,
+      error: `A discount of ${discountAmount.toFixed(2)} is more than the consultancy fee of ${consultancy_fee.toFixed(2)}. Lower the discount, or raise the fee.`,
     };
   }
 
@@ -344,33 +395,96 @@ export async function updateInvoice(invoiceId: string, studentId: string, revali
     adminCharge: admin_charge,
     discountAmount,
     taxRate,
+    taxBase,
     extras: sumLineItems(lineItems),
   });
 
   const { data: existing } = await supabase
     .from("invoice_installments")
-    .select("id, installment_no, amount, amount_paid, status, extras_amount")
+    .select("id, installment_no, amount, amount_paid, status, extras_amount, due_date, due_condition")
     .eq("invoice_id", invoiceId)
     .order("installment_no", { ascending: true });
 
-  const schedule = existing ?? [];
+  let schedule = existing ?? [];
+  const settled = schedule.filter((i) => i.status === "paid" || Number(i.amount_paid ?? 0) > 0);
+  const settledTotal = Math.round(settled.reduce((s, i) => s + Number(i.amount ?? 0), 0) * 100) / 100;
+
+  // How many instalments the invoice should have. Absent from the form, it
+  // keeps the number it has.
+  const rawCount = formData.get("installment_count");
+  const desiredCount =
+    rawCount === null || String(rawCount).trim() === ""
+      ? schedule.length
+      : Math.max(1, Math.floor(Number(rawCount) || schedule.length));
+  const countChanged = schedule.length > 0 && desiredCount !== schedule.length;
+
+  // Settled instalments are kept exactly as they are and the outstanding
+  // balance is re-spread over what is left, so the number can be changed
+  // without falsifying a record of money that has already come in.
+  if (countChanged) {
+    if (desiredCount < settled.length) {
+      return {
+        error: `${settled.length} instalment${settled.length === 1 ? " has" : "s have"} already been paid, so this invoice cannot drop to ${desiredCount}.`,
+      };
+    }
+    const remaining = Math.round((math.total - settledTotal) * 100) / 100;
+    const tailCount = desiredCount - settled.length;
+    if (tailCount === 0 && Math.abs(remaining) > 0.01) {
+      return {
+        error: `That would leave no unpaid instalments, but ${remaining.toFixed(2)} is still outstanding on this invoice.`,
+      };
+    }
+    if (tailCount > 0 && remaining <= 0) {
+      return { error: "There is nothing left outstanding to spread over more instalments." };
+    }
+
+    // The office's own rule decides which of the new instalments fall on a
+    // date and which wait on the admission — the same rule that shaped the
+    // schedule when the invoice was raised.
+    const track = await agreementTrack(supabase, (current?.agreement_id as string | null) ?? null);
+    const existingDates = schedule.map((i) => i.due_date as string | null);
+    const duePlan = installmentDuePlan(desiredCount, track, existingDates);
+    const stillNeeded = missingDueDates(duePlan.slice(settled.length));
+    if (stillNeeded.length > 0) {
+      return { error: `Instalment ${stillNeeded.join(" and ")} needs a due date before the schedule can be changed.` };
+    }
+
+    const amounts = splitIntoInstallments(remaining, Math.max(1, tailCount)).slice(0, tailCount);
+    const { error: resizeError } = await supabase.rpc("resize_invoice_schedule", {
+      p_invoice_id: invoiceId,
+      p_installments: amounts.map((amount, i) => ({
+        amount,
+        due_date: duePlan[settled.length + i]?.date ?? null,
+        due_condition: duePlan[settled.length + i]?.condition ?? null,
+        extras_amount: 0,
+      })),
+    });
+    if (resizeError) return { error: resizeError.message };
+
+    // Re-read, because the rows the next step prices did not exist a moment ago.
+    const { data: resized } = await supabase
+      .from("invoice_installments")
+      .select("id, installment_no, amount, amount_paid, status, extras_amount, due_date, due_condition")
+      .eq("invoice_id", invoiceId)
+      .order("installment_no", { ascending: true });
+    schedule = resized ?? [];
+  }
+
   const scheduleTotal = Math.round(schedule.reduce((s, i) => s + Number(i.amount ?? 0), 0) * 100) / 100;
   const needsRebuild = schedule.length > 0 && Math.abs(scheduleTotal - math.total) > 0.01;
 
-  // A settled or part-settled instalment is a record of money that actually
-  // changed hands. Rewriting its amount would falsify the ledger, so the edit
-  // stops here rather than deciding for staff which record to sacrifice.
-  if (needsRebuild) {
-    const settled = schedule.filter((i) => i.status === "paid" || Number(i.amount_paid ?? 0) > 0);
-    if (settled.length > 0) {
-      return {
-        error: `This would change the total from ${scheduleTotal.toFixed(2)} to ${math.total.toFixed(2)}, but ${
-          settled.length === 1 ? "instalment" : "instalments"
-        } ${settled.map((i) => i.installment_no).join(", ")} ${
-          settled.length === 1 ? "already has a payment" : "already have payments"
-        } recorded. Adjust the unpaid instalments individually, or delete this invoice and generate a new one.`,
-      };
-    }
+  // Changing a fee while money is already in is the one case that cannot be
+  // resolved automatically: the settled rows are fixed, so the difference
+  // would have to land on the unpaid ones, and staff should decide that rather
+  // than discover it.
+  if (needsRebuild && !countChanged && settled.length > 0) {
+    return {
+      error: `This would change the total from ${scheduleTotal.toFixed(2)} to ${math.total.toFixed(2)}, but ${
+        settled.length === 1 ? "instalment" : "instalments"
+      } ${settled.map((i) => i.installment_no).join(", ")} ${
+        settled.length === 1 ? "already has a payment" : "already have payments"
+      } recorded. Change the number of instalments to re-spread the balance, adjust the unpaid ones individually, or delete this invoice and raise a new one.`,
+    };
   }
 
   const { error } = await supabase
@@ -386,6 +500,11 @@ export async function updateInvoice(invoiceId: string, studentId: string, revali
       invoice_number,
       installment_plan,
       tax_amount: math.taxAmount,
+      discount_amount: math.discountAmount,
+      // Only when the form offered the field, so an edit form without it
+      // cannot blank a reason somebody typed elsewhere.
+      ...(discountReason === undefined ? {} : { discount_reason: discountReason }),
+      ...(issuedOn === undefined ? {} : { issued_on: issuedOn }),
     })
     .eq("id", invoiceId);
   if (error) return { error: error.message };
@@ -403,11 +522,11 @@ export async function updateInvoice(invoiceId: string, studentId: string, revali
     }
   }
 
-  if (needsRebuild) {
-    // Same number of instalments and the same due dates — only the amounts
-    // move, with the administrative charge still on the first and each added
-    // item wherever staff placed it (planScheduleChange, which the Add item
-    // path uses too, so a fee edit cannot quietly relocate an item).
+  if (needsRebuild || countChanged) {
+    // The amounts move, with the administrative charge still on the first and
+    // each added item wherever staff placed it (planScheduleChange, which the
+    // Add item path uses too, so a fee edit cannot quietly relocate an item).
+    // After a resize this is also what prices the new instalments exactly.
     const plan = planScheduleChange(schedule, lineItems ?? [], math);
     if (!plan.ok) return { error: plan.error };
     for (const write of plan.writes) {
@@ -430,16 +549,13 @@ export async function updateInvoice(invoiceId: string, studentId: string, revali
   revalidatePath("/portal/payments");
 
   // The stored PDF is what the receipt link serves, and it has just been
-  // contradicted by this edit.
-  const rebuilt = await buildAndStoreInvoicePdf(supabase, invoiceId, studentId);
-  if ("error" in rebuilt && rebuilt.error) {
-    return {
-      error: `The invoice was saved, but its PDF could not be rebuilt (${rebuilt.error}). Press Regenerate PDF before sending it.`,
-    };
-  }
+  // contradicted by this edit — rebuilt after the response rather than in
+  // front of the person who pressed Save.
+  buildPdfAfterResponse(invoiceId, studentId, [revalidateTo]);
 
   return { success: true };
 }
+
 
 export async function deleteInvoice(invoiceId: string, studentId: string, revalidateTo: string) {
   const supabase = await createClient();
@@ -599,7 +715,7 @@ export async function buildAndSendInvoiceEmail(
     .from("invoices")
     .select(
       `id, invoice_number, intake, currency, admin_charge, consultancy_fee,
-       discount_amount, discount_reason, tax_rate, created_at, pdf_path`
+       discount_amount, discount_reason, tax_rate, tax_base, issued_on, created_at, pdf_path`
     )
     .eq("id", invoiceId)
     .maybeSingle();
@@ -614,7 +730,11 @@ export async function buildAndSendInvoiceEmail(
       .select("installment_no, amount, amount_paid, status, due_date, due_condition, extras_amount")
       .eq("invoice_id", invoiceId)
       .order("installment_no", { ascending: true }),
-    supabase.from("invoice_line_items").select("name, amount").eq("invoice_id", invoiceId).order("created_at", { ascending: true }),
+    supabase
+      .from("invoice_line_items")
+      .select("name, description, amount")
+      .eq("invoice_id", invoiceId)
+      .order("created_at", { ascending: true }),
     supabase
       .from("invoice_admin_charges")
       .select("country_label, amount, is_backup")
@@ -627,6 +747,8 @@ export async function buildAndSendInvoiceEmail(
     adminCharge: Number(invoice.admin_charge ?? 0),
     discountAmount: Number(invoice.discount_amount ?? 0),
     taxRate: Number(invoice.tax_rate ?? 0),
+    // The rule this invoice was raised under, never today's.
+    taxBase: (invoice.tax_base as TaxBase | null) ?? "services",
     extras: sumLineItems(lineItems),
   });
   const amountPaid = (installments ?? []).reduce((s, i) => s + Number(i.amount_paid ?? 0), 0);
@@ -686,7 +808,11 @@ export async function buildAndSendInvoiceEmail(
       amount: Number(r.amount ?? 0),
       isBackup: Boolean(r.is_backup),
     })),
-    lineItems: (lineItems ?? []).map((li) => ({ name: li.name, amount: Number(li.amount ?? 0) })),
+    lineItems: (lineItems ?? []).map((li) => ({
+      name: li.name,
+      description: li.description ?? null,
+      amount: Number(li.amount ?? 0),
+    })),
     installments: (installments ?? []).map((i) => ({
       no: i.installment_no,
       amount: Number(i.amount ?? 0),
@@ -767,7 +893,7 @@ export async function buildAndStoreInvoicePdf(
     .from("invoices")
     .select(
       `id, invoice_number, intake, terms, admin_charge, consultancy_fee, currency, installment_plan, created_at,
-       discount_amount, discount_reason, tax_rate, tax_amount, pkr_per_eur,
+       discount_amount, discount_reason, tax_rate, tax_amount, tax_base, issued_on, pkr_per_eur,
        agreement:agreements(generated_by, template:agreement_templates(signatory_name, destination:destinations(display_name)))`
     )
     .eq("id", invoiceId)
@@ -785,7 +911,11 @@ export async function buildAndStoreInvoicePdf(
       .order("installment_no", { ascending: true }),
     // Added items — a product from the catalog or a custom charge. They print
     // as their own rows in the Service table and count towards the total.
-    supabase.from("invoice_line_items").select("name, amount").eq("invoice_id", invoiceId).order("created_at", { ascending: true }),
+    supabase
+      .from("invoice_line_items")
+      .select("name, description, amount")
+      .eq("invoice_id", invoiceId)
+      .order("created_at", { ascending: true }),
     // Which country each slice of the administrative charge is for. Empty on
     // an invoice raised before 0257, which prints one unlabelled row as before.
     supabase
@@ -811,6 +941,7 @@ export async function buildAndStoreInvoicePdf(
     adminCharge: Number(invoice.admin_charge ?? 0),
     discountAmount: Number(invoice.discount_amount ?? 0),
     taxRate: Number(invoice.tax_rate ?? 0),
+    taxBase: (invoice.tax_base as TaxBase | null) ?? "services",
     extras: sumLineItems(lineItems),
   });
   const subtotal = math.total;
@@ -885,7 +1016,12 @@ export async function buildAndStoreInvoicePdf(
       status,
       // Spelled-out month, matching the invoices HMARK already sends — "3/17/2026"
       // is read differently either side of the Atlantic, "March 17, 2026" is not.
-      issuedDate: new Date(invoice.created_at).toLocaleDateString("en-US", LONG_DATE),
+      //
+      // issued_on when Finance set one, so a back-dated invoice presents the
+      // date it is for. created_at still records when it was really raised.
+      issuedDate: invoice.issued_on
+        ? formatDateOnly(invoice.issued_on as string, LONG_DATE)
+        : new Date(invoice.created_at).toLocaleDateString("en-US", LONG_DATE),
       dueDate: nextDue ? formatDateOnly(nextDue, LONG_DATE) : null,
       currencySymbol,
       currencyCode: invoice.currency,
@@ -901,7 +1037,11 @@ export async function buildAndStoreInvoicePdf(
       discountAmount: math.discountAmount,
       discountReason: invoice.discount_reason ?? null,
       netConsultancyFee: math.netConsultancyFee,
-      lineItems: (lineItems ?? []).map((li) => ({ name: li.name, amount: Number(li.amount ?? 0) })),
+      lineItems: (lineItems ?? []).map((li) => ({
+        name: li.name,
+        description: li.description ?? null,
+        amount: Number(li.amount ?? 0),
+      })),
       extrasAmount: math.extrasAmount,
       taxableAmount: math.taxableAmount,
       taxRate: math.taxRate,

@@ -45,7 +45,7 @@ export default async function ConsultancyFeePage() {
     .from("invoices")
     .select(
       `id, student_id, admin_charge, consultancy_fee, currency, sent_status, pdf_path, invoice_number, intake, terms,
-       discount_amount, discount_reason, tax_rate, tax_amount,
+       discount_amount, discount_reason, tax_rate, tax_amount, tax_base, issued_on,
        admin_fee_status, admin_fee_paid_date, admin_fee_payment_method,
        student:leads(full_name, registered_at)`
     )
@@ -58,7 +58,7 @@ export default async function ConsultancyFeePage() {
     : { data: [] };
 
   const { data: lineItems } = invoiceIds.length
-    ? await supabase.from("invoice_line_items").select("id, invoice_id, name, amount").in("invoice_id", invoiceIds)
+    ? await supabase.from("invoice_line_items").select("id, invoice_id, name, description, amount").in("invoice_id", invoiceIds)
     : { data: [] };
 
   const { data: adminCharges } = invoiceIds.length
@@ -126,6 +126,7 @@ export default async function ConsultancyFeePage() {
           adminCharge,
           discountAmount: Number(inv.discount_amount ?? 0),
           taxRate: Number(inv.tax_rate ?? 0),
+          taxBase: (inv.tax_base as "services" | "total" | null) ?? "services",
           // Added items count towards what the student owes here as
           // everywhere else; the overview used to leave them out.
           extras: sumLineItems(r?.lineItems),

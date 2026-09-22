@@ -6,7 +6,13 @@ import { distributeExtras, placeableInstallments, planScheduleChange } from "../
 // The invoice the production check raises: 1,800 fee, 300 admin, 5% tax, in
 // three. Its plan is [930, 630, 630]. A 100 item carries 5 tax with it, so
 // 105 has to land somewhere and the total becomes 2,295.
-const BASE = { consultancyFee: 1800, adminCharge: 300, discountAmount: 0, taxRate: 5 };
+//
+// Pinned to the `services` tax rule on purpose. These tests are about where
+// money lands in the schedule, not about what the tax is charged on, and
+// pinning it keeps the arithmetic in the expectations small enough to read.
+// The rule itself is covered in invoice-math-test.mjs, and the one test at the
+// foot of this file proves the administrative fee's own tax rides with it.
+const BASE = { consultancyFee: 1800, adminCharge: 300, discountAmount: 0, taxRate: 5, taxBase: "services" };
 const WITHOUT = computeInvoiceMath(BASE);
 const WITH_ITEM = computeInvoiceMath({ ...BASE, extras: 100 });
 
@@ -191,23 +197,39 @@ test("distributeExtras hands back nothing when every instalment is settled", () 
   assert.equal(distributeExtras(rows, [item(100, "i1")], WITH_ITEM).size, 0);
 });
 
+test("under the current rule the administrative fee's own tax rides with it", () => {
+  const math = computeInvoiceMath({ consultancyFee: 1800, adminCharge: 300, discountAmount: 0, taxRate: 5, extras: 100 });
+  const rows = [row(1, 945), row(2, 630), row(3, 630)];
+  const plan = planScheduleChange(rows, [item(100, "i1")], math);
+  // 1890 fee side in three is 630 each; the first also carries 300 admin plus
+  // its 15 of tax, and the 100 item plus its 5.
+  assert.deepEqual(
+    rows.map((r) => plan.writes.find((w) => w.id === r.id)?.amount ?? Number(r.amount)),
+    [1050, 630, 630]
+  );
+  assert.equal(totalAfter(rows, plan.writes), math.total);
+  assert.equal(math.total, 2310);
+});
+
 test("the parts sum to the total across a sweep of shapes", () => {
   for (const extras of [0, 0.01, 7, 33.33, 999.99]) {
     for (const count of [1, 2, 3, 7, 9]) {
       for (const taxRate of [0, 5]) {
-        const math = computeInvoiceMath({ consultancyFee: 1000, adminCharge: 250, discountAmount: 0, taxRate, extras });
-        const base = computeInvoiceMath({ consultancyFee: 1000, adminCharge: 250, discountAmount: 0, taxRate });
+        for (const taxBase of ["services", "total"]) {
+        const math = computeInvoiceMath({ consultancyFee: 1000, adminCharge: 250, discountAmount: 0, taxRate, taxBase, extras });
+        const base = computeInvoiceMath({ consultancyFee: 1000, adminCharge: 250, discountAmount: 0, taxRate, taxBase });
         const per = Math.round((base.total / count) * 100) / 100;
         const rows = Array.from({ length: count }, (_, i) => row(i + 1, per));
         for (const placement of ["spread", "i1", `i${count}`]) {
           const items = extras > 0 ? [item(extras, placement)] : [];
           const plan = planScheduleChange(rows, items, math);
-          assert.equal(plan.ok, true, `${extras}/${count}/${taxRate}/${placement}`);
+          assert.equal(plan.ok, true, `${extras}/${count}/${taxRate}/${taxBase}/${placement}`);
           assert.equal(
             totalAfter(rows, plan.writes),
             math.total,
-            `extras ${extras} over ${count} at ${taxRate}% on ${placement}`
+            `extras ${extras} over ${count} at ${taxRate}% on ${taxBase}, placed ${placement}`
           );
+        }
         }
       }
     }

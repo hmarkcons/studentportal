@@ -13,7 +13,7 @@ import {
 } from "@/lib/actions/invoices";
 import { addLineItem, deleteLineItem } from "@/lib/actions/consultancyFee";
 import { computeInvoiceStatus, INVOICE_STATUS_LABELS } from "@/lib/invoiceStatus";
-import { computeInvoiceMath, computePaymentProgress, installmentNote, sumLineItems } from "@/lib/invoiceMath";
+import { computeInvoiceMath, computePaymentProgress, installmentNote, sumLineItems, type TaxBase } from "@/lib/invoiceMath";
 import { formatDateOnly } from "@/lib/formatDate";
 import { balanceDueDate, carriedFromNote } from "@/lib/partialPayment";
 import { Badge } from "@/components/ui/Badge";
@@ -42,6 +42,9 @@ export function GenerateInvoiceForm({
   defaultAdminCharge,
   defaultConsultancyFee,
   defaultCurrency,
+  defaultInstallmentCount,
+  defaultDiscount,
+  defaultDiscountReason,
   countries = [],
 }: {
   studentId: string;
@@ -50,6 +53,13 @@ export function GenerateInvoiceForm({
   defaultAdminCharge?: number | null;
   defaultConsultancyFee?: number | null;
   defaultCurrency?: string | null;
+  /** From the signed agreement, which is where the number of payments was
+   *  agreed with the student. */
+  defaultInstallmentCount?: number | null;
+  /** Also from the agreement, falling back to what was captured at
+   *  registration. */
+  defaultDiscount?: number | null;
+  defaultDiscountReason?: string | null;
   /** The countries this student registered for — primary first, then backups.
    *  Each carries its own administrative fee. */
   countries?: InvoiceCountry[];
@@ -110,11 +120,36 @@ export function GenerateInvoiceForm({
           <option value="PKR">PKR</option>
           <option value="USD">USD</option>
         </Select>
-        <Select name="installment_count">
+        {/* Taken from the signed agreement, which is where the number of
+            payments was agreed with the student. Still changeable, because
+            the invoice is what is actually being raised. */}
+        <Select name="installment_count" defaultValue={String(defaultInstallmentCount ?? 1)}>
           <option value="1">1 installment</option>
           <option value="2">2 installments</option>
           <option value="3">3 installments</option>
         </Select>
+      </div>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="flex flex-col gap-0.5 text-xs text-muted">
+          Discount
+          <Input
+            name="discount_amount"
+            type="number"
+            step="0.01"
+            min="0"
+            defaultValue={defaultDiscount ?? 0}
+            className="w-28"
+          />
+        </label>
+        <label className="flex flex-col gap-0.5 text-xs text-muted">
+          Discount reason
+          <Input
+            name="discount_reason"
+            defaultValue={defaultDiscountReason ?? ""}
+            placeholder="e.g. Early registration"
+            className="w-48"
+          />
+        </label>
       </div>
       <div className="flex flex-wrap items-end gap-2">
         <Input name="invoice_number" placeholder="Invoice # (optional, auto-generated)" className="w-56" />
@@ -122,6 +157,12 @@ export function GenerateInvoiceForm({
         <label className="flex flex-col gap-0.5 text-xs text-muted">
           First installment due date
           <Input name="first_due_date" type="date" required />
+        </label>
+        {/* Finance sometimes has to raise an invoice against a date that has
+            passed. Blank means today. */}
+        <label className="flex flex-col gap-0.5 text-xs text-muted">
+          Invoice date <span className="text-[10px]">(blank = today)</span>
+          <Input name="issued_on" type="date" />
         </label>
         <label className="flex flex-col gap-0.5 text-xs text-muted">
           Installment plan
@@ -151,6 +192,8 @@ export function GenerateInvoiceForm({
 function EditInvoiceForm({
   invoice,
   adminCharges,
+  installmentCount,
+  paidCount,
   studentId,
   revalidateTo,
   onDone,
@@ -164,9 +207,15 @@ function EditInvoiceForm({
     intake?: string | null;
     terms?: string | null;
     installment_plan?: string | null;
+    discount_amount?: number | null;
+    discount_reason?: string | null;
+    issued_on?: string | null;
   };
   /** Per-country administrative charges, when this invoice has a breakdown. */
   adminCharges: AdminChargeRow[];
+  /** How many instalments the schedule currently has, and how many are settled. */
+  installmentCount: number;
+  paidCount: number;
   studentId: string;
   revalidateTo: string;
   onDone: () => void;
@@ -177,8 +226,9 @@ function EditInvoiceForm({
   return (
     <form action={formAction} className="mt-2 flex flex-col gap-2 rounded-md border border-border p-3">
       <p className="text-xs text-muted">
-        Changing a fee rebuilds the instalment amounts to match, keeping the same number of instalments and due dates. If
-        any instalment already has a payment recorded, the change is refused instead.
+        Changing a fee, a discount or the number of instalments rebuilds the schedule to match. Instalments that already
+        have a payment recorded are never altered — the outstanding balance is re-spread over the rest.
+        {paidCount > 0 && ` ${paidCount} of ${installmentCount} ${paidCount === 1 ? "is" : "are"} already paid.`}
       </p>
       {/* Edited per country when the invoice carries a breakdown: the single
           figure is their sum, so letting staff type over it would leave the
@@ -211,6 +261,24 @@ function EditInvoiceForm({
           <option value="PKR">PKR</option>
           <option value="USD">USD</option>
         </Select>
+      </div>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="flex flex-col gap-0.5 text-xs text-muted">
+          Discount
+          <Input name="discount_amount" type="number" step="0.01" min="0" defaultValue={invoice.discount_amount ?? 0} className="w-28" />
+        </label>
+        <label className="flex flex-col gap-0.5 text-xs text-muted">
+          Discount reason
+          <Input name="discount_reason" defaultValue={invoice.discount_reason ?? ""} placeholder="e.g. Early registration" className="w-48" />
+        </label>
+        <label className="flex flex-col gap-0.5 text-xs text-muted">
+          Instalments
+          <Input name="installment_count" type="number" min={Math.max(1, paidCount)} max="24" defaultValue={installmentCount} className="w-24" />
+        </label>
+        <label className="flex flex-col gap-0.5 text-xs text-muted">
+          Invoice date
+          <Input name="issued_on" type="date" defaultValue={invoice.issued_on ?? ""} />
+        </label>
       </div>
       <div className="flex flex-wrap items-end gap-2">
         <Input name="invoice_number" defaultValue={invoice.invoice_number ?? ""} placeholder="Invoice #" className="w-56" />
@@ -390,7 +458,7 @@ function LineItemsSection({
   canManage,
 }: {
   invoiceId: string;
-  lineItems: { id: string; name: string; amount: number }[];
+  lineItems: { id: string; name: string; description?: string | null; amount: number }[];
   feeProducts: { id: string; name: string; default_amount: number | null; default_currency: string }[];
   currency: string;
   /** Unpaid instalments, in order — the ones an item can be put on. */
@@ -435,9 +503,10 @@ function LineItemsSection({
         <p className="text-[11px] font-medium uppercase tracking-wide text-muted">Added items</p>
       )}
       {lineItems.map((li) => (
-        <div key={li.id} className="flex items-center justify-between text-xs text-muted">
+        <div key={li.id} className="flex items-start justify-between text-xs text-muted">
           <span>
             {li.name} — {currency} {Number(li.amount).toFixed(2)}
+            {li.description && <span className="mt-0.5 block italic opacity-80">{li.description}</span>}
           </span>
           {canManage && (
             <button type="button" onClick={() => handleDeleteLineItem(li.id)} className="text-danger hover:underline">
@@ -479,6 +548,9 @@ function LineItemsSection({
           required
           className="w-24"
         />
+        {/* The name is a label on a line of the receipt; some items need a
+            sentence saying what the student is actually paying for. */}
+        <Input name="description" placeholder="What it is for (optional)" className="w-56" />
         {/* Where the money goes. An item added to a plan the student is
             already part way through cannot simply appear on the first
             instalment, and spreading it thin is not always right either — so
@@ -604,7 +676,11 @@ export function InvoiceCard({
     admin_fee_paid_date?: string | null;
     admin_fee_payment_method?: string | null;
     discount_amount?: number | null;
+    discount_reason?: string | null;
     tax_rate?: number | null;
+    /** Which rule priced this invoice's tax — see TaxBase. */
+    tax_base?: string | null;
+    issued_on?: string | null;
   };
   installments: {
     id: string;
@@ -621,7 +697,7 @@ export function InvoiceCard({
     /** The part of this instalment that is added items plus their tax. */
     extras_amount?: number | string | null;
   }[];
-  lineItems?: { id: string; name: string; amount: number }[];
+  lineItems?: { id: string; name: string; description?: string | null; amount: number }[];
   /** Per-country administrative charges. Empty on an invoice raised before
    *  the breakdown existed, which shows the single figure as before. */
   adminCharges?: AdminChargeRow[];
@@ -649,6 +725,9 @@ export function InvoiceCard({
     adminCharge: invoice.admin_charge,
     discountAmount: invoice.discount_amount ?? 0,
     taxRate: invoice.tax_rate ?? 0,
+    // This invoice's own rule. Defaulting to the current one would restate
+    // every invoice raised before the tax base changed.
+    taxBase: (invoice.tax_base as TaxBase | null) ?? "services",
     extras: sumLineItems(lineItems),
   });
   const total = math.total;
@@ -704,6 +783,8 @@ export function InvoiceCard({
         <EditInvoiceForm
           invoice={invoice}
           adminCharges={adminCharges}
+          installmentCount={installments.length}
+          paidCount={installments.filter((i) => i.status === "paid" || Number(i.amount_paid ?? 0) > 0).length}
           studentId={studentId}
           revalidateTo={revalidateTo}
           onDone={() => setEditingInvoice(false)}

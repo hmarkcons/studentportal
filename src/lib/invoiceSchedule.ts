@@ -26,7 +26,7 @@
 //   a settled instalment is never   It is a record of money that changed
 //   written to                      hands. An item placed on one that has
 //                                   since been paid stays where it is.
-import { splitIntoInstallments, type InvoiceMath } from "./invoiceMath.ts";
+import { adminLoad, feeSideTotal, splitIntoInstallments, type InvoiceMath } from "./invoiceMath.ts";
 
 export type ScheduleRow = {
   id: string;
@@ -146,11 +146,10 @@ export function planScheduleChange(
 
   if (nothingPaid) {
     // Rebuilt as the invoice would have been raised with these items on it:
-    // equal shares of the fee and its tax, the administrative charge on the
-    // first, and each item where staff put it.
-    const feeSide = money(math.netConsultancyFee + math.taxAmount - math.extrasTaxAmount);
-    const base = splitIntoInstallments(feeSide, open.length);
-    base[0] = money(base[0] + math.adminCharge);
+    // equal shares of the fee and its tax, the administrative charge (with its
+    // own tax) on the first, and each item where staff put it.
+    const base = splitIntoInstallments(feeSideTotal(math), open.length);
+    base[0] = money(base[0] + adminLoad(math));
     amounts = open.map((r, i) => money(base[i] + (target.get(r.id) ?? 0)));
   } else {
     // Settled instalments stand. Each outstanding one keeps whatever of it was

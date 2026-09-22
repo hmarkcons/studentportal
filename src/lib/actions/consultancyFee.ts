@@ -7,7 +7,8 @@ import { isEmailConfigured } from "@/lib/email";
 import { buildAndSendInvoiceEmail, buildAndStoreInvoicePdf } from "@/lib/actions/invoices";
 import { requirePermission } from "@/lib/auth/permissions";
 import { shouldSendOverdueReminder } from "@/lib/overdueReminder";
-import { computeInvoiceMath, sumLineItems } from "@/lib/invoiceMath";
+import { after } from "next/server";
+import { computeInvoiceMath, sumLineItems, type TaxBase } from "@/lib/invoiceMath";
 import { planScheduleChange } from "@/lib/invoiceSchedule";
 
 // These used to go through a hand-rolled requireProcessingOrAbove, which was
@@ -98,6 +99,8 @@ export async function deleteFeeProduct(productId: string) {
 type AddedItem = {
   product_id: string | null;
   name: string;
+  /** What the student is paying for, in a sentence. Optional. */
+  description: string | null;
   amount: number;
   /** The instalment staff chose, or null when they chose to divide it. */
   placement_installment_id: string | null;
@@ -115,7 +118,7 @@ async function changeLineItems(
 
   const { data: invoice } = await supabase
     .from("invoices")
-    .select("id, student_id, consultancy_fee, admin_charge, discount_amount, tax_rate")
+    .select("id, student_id, consultancy_fee, admin_charge, discount_amount, tax_rate, tax_base")
     .eq("id", invoiceId)
     .maybeSingle();
   if (!invoice) return { error: "Invoice not found." };
@@ -134,9 +137,9 @@ async function changeLineItems(
 
   // The items as they will be once this change has gone through — placement
   // and all, because where each one sits is what decides the new amounts.
-  const after = (items ?? []).filter((li) => !("deleteId" in change) || li.id !== change.deleteId);
+  const itemsAfter = (items ?? []).filter((li) => !("deleteId" in change) || li.id !== change.deleteId);
   if ("add" in change) {
-    after.push({
+    itemsAfter.push({
       id: "",
       amount: change.add.amount,
       placement_installment_id: change.add.placement_installment_id,
@@ -149,10 +152,12 @@ async function changeLineItems(
     adminCharge: Number(invoice.admin_charge ?? 0),
     discountAmount: Number(invoice.discount_amount ?? 0),
     taxRate: Number(invoice.tax_rate ?? 0),
-    extras: sumLineItems(after),
+    // This invoice's own rule, so adding an item never re-prices its tax.
+    taxBase: (invoice.tax_base as TaxBase | null) ?? "services",
+    extras: sumLineItems(itemsAfter),
   });
 
-  const plan = planScheduleChange(schedule ?? [], after, math);
+  const plan = planScheduleChange(schedule ?? [], itemsAfter, math);
   if (!plan.ok) return { error: plan.error };
 
   const { error } = await supabase.rpc("apply_invoice_line_item_change", {
@@ -172,16 +177,17 @@ async function changeLineItems(
   revalidatePath("/portal/payments");
 
   // The stored PDF is now out of date by exactly the change just made, and it
-  // is what the receipt link serves. Rebuilt here rather than left for
-  // somebody to press a button — a receipt that contradicts the invoice is
-  // worse than a slow save. Said plainly if it fails, because the change
-  // itself has already gone through and re-adding the item would double it.
-  const rebuilt = await buildAndStoreInvoicePdf(supabase, invoiceId, invoice.student_id);
-  if ("error" in rebuilt && rebuilt.error) {
-    return {
-      error: `The item was saved and the schedule updated, but the receipt PDF could not be rebuilt (${rebuilt.error}). Press Regenerate PDF before sending this invoice.`,
-    };
-  }
+  // is what the receipt link serves. Rebuilt after the response rather than in
+  // front of the person who pressed the button: nothing on screen needs it,
+  // and the receipt route builds one on demand if this never finishes.
+  after(async () => {
+    const rebuilt = await buildAndStoreInvoicePdf(createAdminClient(), invoiceId, invoice.student_id);
+    if ("error" in rebuilt && rebuilt.error) {
+      console.error(`[invoice ${invoiceId}] background PDF rebuild failed: ${rebuilt.error}`);
+      return;
+    }
+    revalidatePath(revalidateTo);
+  });
 
   return { success: true };
 }
@@ -189,6 +195,7 @@ async function changeLineItems(
 export async function addLineItem(invoiceId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
   const product_id = String(formData.get("product_id") ?? "") || null;
   const name = String(formData.get("name") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim() || null;
   const amount = Number(formData.get("amount") ?? 0);
   if (!name) return { error: "The item needs a name." };
   // Refused here as well as by the database: `!amount` let a negative through,
@@ -209,6 +216,7 @@ export async function addLineItem(invoiceId: string, revalidateTo: string, _prev
       add: {
         product_id,
         name,
+        description,
         amount,
         placement_installment_id: placement_spread ? null : placement,
         placement_spread,
