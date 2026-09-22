@@ -48,6 +48,27 @@ const expand = async (page, title) => {
   if (await header.count()) await header.click();
 };
 
+// Waits for a page to actually say something, rather than reading it once.
+//
+// A row can be correct in the database before the page that renders it has
+// caught up: revalidation, a streamed response still arriving, or simply the
+// navigation resolving a moment after goto() returns. Reading once turns that
+// gap into a failure, which is what "the student is told we are re-checking"
+// did — it failed on the FIRST of the two times it runs and passed on the
+// second, every time, which is a race and not a broken page.
+//
+// Polls up to `seconds`, then hands back whatever is there so the assertion
+// still fails honestly if the text never arrives.
+const waitForText = async (p, pattern, seconds = 25) => {
+  let text = "";
+  for (let i = 0; i < seconds; i++) {
+    text = await p.locator("body").innerText();
+    if (pattern.test(text)) return text;
+    await p.waitForTimeout(1000);
+  }
+  return text;
+};
+
 // Server actions land after the click resolves; poll the row rather than the
 // page, and give up with the visible text so a failure says something.
 const waitForAgreement = async (page, studentId, done, seconds = 45) => {
@@ -513,11 +534,15 @@ try {
 
           // Nothing is missing, so the student must not be asked to resend.
           await studentPage.goto(`${BASE}/portal/agreement`, { waitUntil: "domcontentloaded" });
-          const undoneText = await studentPage.locator("body").innerText();
+          const undoneText = await waitForText(studentPage, /checking your agreement again/i);
+          const resendButtons = await studentPage.getByRole("button", { name: /Submit/i }).allInnerTexts();
           ok("the student is told we are re-checking, not asked to resend",
-            /checking your agreement again/i.test(undoneText)
-            && (await studentPage.getByRole("button", { name: /Submit/i }).count()) === 0,
-            undoneText.replace(/\s+/g, " ").slice(0, 300));
+            /checking your agreement again/i.test(undoneText) && resendButtons.length === 0,
+            // Says WHICH half of the test failed. The old detail printed the
+            // first 300 characters, which is the navigation bar on every page.
+            `told=${/checking your agreement again/i.test(undoneText)} ` +
+            `submitButtons=${JSON.stringify(resendButtons)} ` +
+            `text=${undoneText.replace(/\s+/g, " ").slice(0, 400)}`);
           await studentPage.goto(`${BASE}/portal/documents`, { waitUntil: "domcontentloaded" });
           ok("...and the portal closes again while it is unapproved",
             new URL(studentPage.url()).pathname === "/portal/agreement", studentPage.url());
@@ -558,7 +583,9 @@ try {
 
           // ----------------------------------- the student replaces one half
           await studentPage.goto(`${BASE}/portal/agreement`, { waitUntil: "domcontentloaded" });
-          const redoText = await studentPage.locator("body").innerText();
+          // Polled for the same reason as the re-checking message above: the
+          // row is already right, the page may be a moment behind.
+          const redoText = await waitForText(studentPage, new RegExp(half.reason.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
           ok("the student is told what was wrong with it",
             redoText.includes(half.reason), redoText.replace(/\s+/g, " ").slice(0, 400));
           ok(`...and is asked for the ${half.noun} only`,
