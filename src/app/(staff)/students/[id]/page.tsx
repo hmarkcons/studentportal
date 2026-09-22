@@ -25,6 +25,7 @@ import { GenerateAgreementPdfButton } from "./GenerateAgreementPdfButton";
 import { AgreementActionsMenu } from "./AgreementActionsMenu";
 import { GenerateInvoiceForm, InvoiceCard } from "./InvoicePanel";
 import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
+import { documentUrls } from "@/lib/storageUrls";
 import { PortalCredentialsSection } from "./PortalCredentialsSection";
 import { DashboardTaskList, type DashboardTaskRow } from "./DashboardTaskList";
 import { listCredentialTypesAction } from "@/lib/actions/countryTracker";
@@ -405,42 +406,48 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     { data: processingOfficers },
     { data: allAdminCharges },
   ] = await Promise.all([
-    Promise.all(
-      (agreements ?? []).map(async (a) => {
-        const links: { templateUrl?: string; signedUrl?: string; pdfUrl?: string } = {};
-        const tmpl = one(a.template as never) as { file_path?: string; destination?: unknown } | null;
-        if (tmpl?.file_path) {
-          const { data } = await supabase.storage.from("documents").createSignedUrl(tmpl.file_path, 3600);
-          if (data?.signedUrl) links.templateUrl = data.signedUrl;
-        }
-        if (a.signed_file_path) {
-          const { data } = await supabase.storage.from("documents").createSignedUrl(a.signed_file_path, 3600);
-          if (data?.signedUrl) links.signedUrl = data.signedUrl;
-        }
-        if (a.pdf_path) {
-          const destination = tmpl?.destination ? (one(tmpl.destination as never) as { country?: string; track?: string } | null) : null;
-          const { data } = await supabase.storage
-            .from("documents")
-            .createSignedUrl(a.pdf_path, 3600, { download: generatedAgreementFilename(student?.full_name, destination) });
-          if (data?.signedUrl) links.pdfUrl = data.signedUrl;
-        }
-        return [a.id, links] as const;
-      })
-    ),
+    // The template and the signed scan are ordinary links, so they batch. The
+    // generated PDF carries a per-agreement download filename, which the batch
+    // call cannot vary, so those keep a call each — there are only ever one or
+    // two agreements on a student.
+    (async () => {
+      const plain = await documentUrls(supabase, [
+        ...(agreements ?? []).map((a) => (one(a.template as never) as { file_path?: string } | null)?.file_path),
+        ...(agreements ?? []).map((a) => a.signed_file_path),
+      ]);
+      return Promise.all(
+        (agreements ?? []).map(async (a) => {
+          const links: { templateUrl?: string; signedUrl?: string; pdfUrl?: string } = {};
+          const tmpl = one(a.template as never) as { file_path?: string; destination?: unknown } | null;
+          if (tmpl?.file_path) links.templateUrl = plain.get(tmpl.file_path);
+          if (a.signed_file_path) links.signedUrl = plain.get(a.signed_file_path);
+          if (a.pdf_path) {
+            const destination = tmpl?.destination ? (one(tmpl.destination as never) as { country?: string; track?: string } | null) : null;
+            const { data } = await supabase.storage
+              .from("documents")
+              .createSignedUrl(a.pdf_path, 3600, { download: generatedAgreementFilename(student?.full_name, destination) });
+            if (data?.signedUrl) links.pdfUrl = data.signedUrl;
+          }
+          return [a.id, links] as const;
+        })
+      );
+    })(),
     invoiceIds.length
       ? supabase.from("invoice_line_items").select("id, invoice_id, name, amount").in("invoice_id", invoiceIds)
       : Promise.resolve({ data: [] }),
-    Promise.all(
-      (invoices ?? [])
-        .filter((i) => i.pdf_path)
-        .map(async (i) => {
-          const { data } = await supabase.storage.from("documents").createSignedUrl(i.pdf_path!, 3600);
-          return [i.id, data?.signedUrl] as const;
-        })
-    ),
+    documentUrls(
+      supabase,
+      (invoices ?? []).map((i) => i.pdf_path)
+    ).then((urls) => (invoices ?? []).map((i) => [i.id, i.pdf_path ? urls.get(i.pdf_path) : undefined] as const)),
     invoiceIds.length ? supabase.from("invoice_installments").select("*").in("invoice_id", invoiceIds) : Promise.resolve({ data: [] }),
-    Promise.all(
-      (rawDocs ?? []).map(async (d) => {
+    // Every document's URL in one request rather than one per file. A student
+    // with thirty documents was thirty round trips to Storage before this page
+    // could render, and they were the single biggest thing on it.
+    documentUrls(
+      supabase,
+      (rawDocs ?? []).map((d) => d.file_path)
+    ).then((urls) =>
+      (rawDocs ?? []).map((d) => {
         const templateName = one(d.template as never) as { name?: string } | null;
         // Which application this requirement belongs to, now named down to the
         // programme and round — "— Aalto University" was the same string for
@@ -449,8 +456,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         const name = `${d.custom_name ?? templateName?.name ?? d.category ?? "Document"}${belongsTo ? ` — ${belongsTo}` : " — Student-level"}`;
         const past = docHistory.get(d.id) ?? [];
         if (!d.file_path) return { ...d, name, history: past };
-        const { data } = await supabase.storage.from("documents").createSignedUrl(d.file_path, 3600);
-        return { ...d, name, history: past, fileUrl: data?.signedUrl ?? null };
+        return { ...d, name, history: past, fileUrl: urls.get(d.file_path) ?? null };
       })
     ),
     appIds.length
@@ -501,26 +507,27 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     return { text: `${paid}/${schedule.length} instalments paid`, tone: "warning" as const };
   })();
 
-  let assignedCounselorPhotoUrl: string | null = null;
-  if (assignedCounselorStaff?.photo_path) {
-    const { data } = await supabase.storage.from("documents").createSignedUrl(assignedCounselorStaff.photo_path, 3600);
-    assignedCounselorPhotoUrl = data?.signedUrl ?? null;
-  }
   // Show just the assigned officer when there is one; otherwise the whole
   // processing team, who collectively cover an unassigned student.
   const shownProcessingOfficers = leadRegistration?.processing_officer_id
     ? (processingOfficers ?? []).filter((o) => o.id === leadRegistration.processing_officer_id)
     : (processingOfficers ?? []);
 
+  // Every face on the page in one request: the counselor's and the whole
+  // processing team's, which was a round trip each and ran after everything
+  // else rather than alongside it.
+  const photoUrls = await documentUrls(supabase, [
+    assignedCounselorStaff?.photo_path,
+    ...(processingOfficers ?? []).map((o) => o.photo_path),
+  ]);
+  const assignedCounselorPhotoUrl = assignedCounselorStaff?.photo_path
+    ? photoUrls.get(assignedCounselorStaff.photo_path) ?? null
+    : null;
   const processingOfficerPhotoUrls = new Map<string, string>();
-  await Promise.all(
-    (processingOfficers ?? [])
-      .filter((o) => o.photo_path)
-      .map(async (o) => {
-        const { data } = await supabase.storage.from("documents").createSignedUrl(o.photo_path!, 3600);
-        if (data?.signedUrl) processingOfficerPhotoUrls.set(o.id, data.signedUrl);
-      })
-  );
+  for (const o of processingOfficers ?? []) {
+    const url = o.photo_path ? photoUrls.get(o.photo_path) : undefined;
+    if (url) processingOfficerPhotoUrls.set(o.id, url);
+  }
 
   const agreementLinks = new Map(agreementLinkEntries);
   const invoicePdfUrls = new Map(invoicePdfEntries.filter((e): e is readonly [string, string] => Boolean(e[1])));

@@ -109,5 +109,16 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  // Everything this runs on costs at least one auth round trip, and a second
+  // for the office-access check. So anything that cannot be gated is excluded
+  // here rather than waved through inside the function, which would still have
+  // paid to start it.
+  //
+  // Beyond the build output and images, that means the files browsers and
+  // crawlers fetch alongside a page — the font files, the source maps a
+  // devtools window asks for, robots/sitemap/manifest — none of which carry a
+  // session or reveal anything.
+  matcher: [
+    "/((?!_next/static|_next/image|favicon\\.ico|robots\\.txt|sitemap\\.xml|manifest\\.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|avif|woff|woff2|ttf|otf|eot|map|txt|xml)$).*)",
+  ],
 };

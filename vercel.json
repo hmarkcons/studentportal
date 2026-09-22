@@ -1,4 +1,28 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+
+  "//": [
+    "regions: run the functions beside the database.",
+    "",
+    "The Supabase project is in ap-southeast-2 (Sydney) — see the pooler host",
+    "in scratch/apply-mig-env.mjs. Functions were running in Vercel's default",
+    "iad1 (Washington DC), so every query crossed the Pacific twice: about",
+    "210ms each, against about 2ms same-region. Pages here make six or seven",
+    "round trips one after another before they can render, so that alone was",
+    "one and a half seconds of nothing but network on every navigation.",
+    "",
+    "syd1 is Sydney. Karachi to Sydney is also slightly shorter than Karachi to",
+    "Virginia, so users pay nothing for this and the database becomes local.",
+    "",
+    "The better end state for a Karachi office is both in ap-south-1 (Mumbai),",
+    "about 40ms from the users. Supabase cannot change a project's region in",
+    "place, so that means migrating to a new project — a separate, planned job.",
+    "Do not move the functions to bom1 before the database goes with them: the",
+    "queries would still cross to Sydney and the pages would get slower, not",
+    "faster."
+  ],
+  "regions": ["syd1"],
+
   "crons": [
     {
       "path": "/api/cron/overdue-invoices",
