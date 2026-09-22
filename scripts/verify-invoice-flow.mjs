@@ -72,6 +72,26 @@ const ok = (l, c, x = "") => { if (c) { pass++; console.log(`PASS  ${l}`); } els
 //
 // Measured from the click to the outcome landing, which is the wait a person
 // actually feels, not just the server's part of it.
+/**
+ * Waits for a page to actually say something, rather than reading it once.
+ *
+ * goto with domcontentloaded returns while the page is still streaming, so a
+ * single innerText can come back as the navigation shell and nothing else —
+ * which is exactly how all ten assertions on the student's Payments page
+ * failed while the same ten had passed an hour earlier against identical
+ * code. Polls, then hands back whatever is there so a page that never fills
+ * in still fails honestly.
+ */
+const waitForText = async (p, pattern, seconds = 25) => {
+  let text = "";
+  for (let i = 0; i < seconds; i++) {
+    text = await p.locator("body").innerText();
+    if (pattern.test(text)) return text;
+    await p.waitForTimeout(1000);
+  }
+  return text;
+};
+
 const timings = [];
 const timed = async (label, run) => {
   const t0 = Date.now();
@@ -169,10 +189,13 @@ const addItemViaCard = async (page, invoiceId, name, amount, expectCount, placem
   await form.locator('input[name="name"]').fill(name);
   await form.locator('input[name="amount"]').fill(String(amount));
   if (placement) await select.selectOption({ label: placement });
-  const rows = await timed("add an item to an invoice", async () => {
-    await button.click();
-    return waitForLineItems(page, invoiceId, expectCount);
-  });
+  const rows = await timed(
+    `add an item to an invoice (${placement ?? "default placement"})`,
+    async () => {
+      await button.click();
+      return waitForLineItems(page, invoiceId, expectCount);
+    }
+  );
   return { offered: true, rows, opened };
 };
 
@@ -805,7 +828,10 @@ try {
         await studentPage.click('button[type="submit"]');
         await studentPage.waitForURL((u) => !u.pathname.includes("/login"), { timeout: 40000 });
         await studentPage.goto(`${BASE}/portal/payments`, { waitUntil: "domcontentloaded" });
-        const seen = await studentPage.locator("body").innerText();
+        // Polled, not read once. This is the first time the student portal is
+        // opened in the run, so it is the coldest page in it, and reading
+        // immediately caught the navigation shell with an empty body.
+        const seen = await waitForText(studentPage, new RegExp(invoice.invoice_number));
 
         ok("the student can see the invoice", seen.includes(invoice.invoice_number),
           seen.replace(/\s+/g, " ").slice(0, 300));
@@ -1192,6 +1218,9 @@ try {
   if (timings.length > 0) {
     console.log("\nhow long the buttons took (click to outcome, one sample each):");
     for (const [label, ms] of timings) console.log(`  ${String(ms + " ms").padStart(9)}   ${label}`);
+    // The outcome is polled once a second, so every figure here carries up to
+    // a second of slack. Differences under that are not differences.
+    console.log("  (polled once a second, so read these to the nearest second)");
   }
 
   console.log(`\n${pass} passed, ${fail} failed  (${n} fixtures removed)`);
