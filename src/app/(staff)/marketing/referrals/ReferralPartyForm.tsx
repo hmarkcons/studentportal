@@ -49,7 +49,7 @@ export function ReferralPartyForm({
 }) {
   const [open, setOpen] = useState(false);
   const action = party ? updateReferralParty.bind(null, party.id) : createReferralParty;
-  const { onSubmit, pending, error } = useSlideOverForm(action, () => setOpen(false));
+  const { onSubmit, pending, error } = useSlideOverForm(action, () => setOpen(false), party ? "Party saved." : "Party added.");
 
   return (
     <>

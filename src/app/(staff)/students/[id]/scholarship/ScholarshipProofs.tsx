@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { FileField } from "@/components/FileField";
 import { ActionStatus } from "@/components/ActionStatus";
+import { toast } from "@/lib/toast";
 import { formatFileSize } from "@/lib/fileSize";
 import { formatDateOnly } from "@/lib/formatDate";
 import { uploadScholarshipProof, deleteScholarshipProof, type ScholarshipProof } from "@/lib/actions/scholarshipProofs";
@@ -41,6 +42,8 @@ export function ScholarshipProofs({
     setRemoveError(null);
     const result = await deleteScholarshipProof(proof.id, studentId);
     if (result?.error) setRemoveError(result.error);
+    // The file's row goes with it, so the removal is confirmed in a toast.
+    else toast("Removed.");
     setRemoving(null);
   }
 

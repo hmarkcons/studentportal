@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/Button";
 import { SectionForm } from "./SectionForm";
 import { deleteVisaSection, moveVisaSection, setVisaSectionHidden } from "@/lib/actions/visaPageBuilder";
 import { audienceLabel, type VisaPageSection } from "@/lib/visaPage";
+import { toast } from "@/lib/toast";
+import type { ActionResultLike } from "@/lib/actionStatus";
 
 export function SectionRow({
   section,
@@ -24,6 +26,9 @@ export function SectionRow({
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // One object per Hide/Show result, for the "Hidden." / "Shown." beside it.
+  // Its errors are said in the line at the end of the row, as before.
+  const [visibility, setVisibility] = useState<ActionResultLike>(undefined);
 
   async function run(what: "up" | "down" | "hide" | "show" | "delete") {
     if (what === "delete" && !confirm(`Delete “${section.title}”? This cannot be undone — hide it instead if you might want it back.`)) {
@@ -38,8 +43,13 @@ export function SectionRow({
           ? await deleteVisaSection(section.id)
           : await setVisaSectionHidden(section.id, what === "hide");
     setBusy(null);
+    if (what === "hide" || what === "show") setVisibility(result?.error ? { error: result.error } : { success: true });
     if (result?.error) setError(result.error);
-    else router.refresh();
+    else {
+      // A deleted section takes its row, and this button, with it.
+      if (what === "delete") toast("Deleted.");
+      router.refresh();
+    }
   }
 
   const hidden = section.status === "hidden";
@@ -85,6 +95,7 @@ export function SectionRow({
             size="sm"
             pending={busy === "hide" || busy === "show"}
             onClick={() => run(hidden ? "show" : "hide")}
+            status={{ state: visibility, label: hidden ? "Hidden." : "Shown." }}
           >
             {hidden ? "Show" : "Hide"}
           </Button>
@@ -92,7 +103,7 @@ export function SectionRow({
             type="button"
             onClick={() => run("delete")}
             disabled={busy === "delete"}
-            className="text-xs text-danger hover:underline disabled:opacity-40"
+            className="w-fit text-xs text-danger hover:underline disabled:opacity-40"
           >
             {busy === "delete" ? "Deleting…" : "Delete"}
           </button>

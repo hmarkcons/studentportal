@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { toast } from "@/lib/toast";
 
 export type FaqRow = {
   id: string;
@@ -45,8 +46,7 @@ function NewFaqForm() {
         Show this to students
       </label>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
-      {state?.success && <p className="text-xs text-success">Added.</p>}
-      <Button type="submit" variant="primary" size="sm" pending={pending} className="self-start">
+      <Button type="submit" variant="primary" size="sm" pending={pending} status={{ state, label: "Added." }}>
         Add entry
       </Button>
     </form>
@@ -60,11 +60,14 @@ function FaqRowEditor({ faq, isFirst, isLast }: { faq: FaqRow; isFirst: boolean;
   const action = updateFaq.bind(null, faq.id);
   const [state, formAction, pending] = useActionState(action, undefined);
 
-  async function run(fn: () => Promise<{ error?: string } | void>) {
+  // `done` is a toast, for a delete that takes this row — and its button —
+  // away. Errors stay in the paragraph under the row.
+  async function run(fn: () => Promise<{ error?: string } | void>, done?: string) {
     setBusy(true);
     setError(null);
     const result = await fn();
     if (result && "error" in result && result.error) setError(result.error);
+    else if (done) toast(done);
     setBusy(false);
   }
 
@@ -78,9 +81,8 @@ function FaqRowEditor({ faq, isFirst, isLast }: { faq: FaqRow; isFirst: boolean;
           Show this to students
         </label>
         {state?.error && <p className="text-xs text-danger">{state.error}</p>}
-        {state?.success && <p className="text-xs text-success">Saved.</p>}
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="submit" variant="primary" size="sm" pending={pending}>
+          <Button type="submit" variant="primary" size="sm" pending={pending} status={{ state, label: "Saved." }}>
             Save
           </Button>
           <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>
@@ -132,7 +134,7 @@ function FaqRowEditor({ faq, isFirst, isLast }: { faq: FaqRow; isFirst: boolean;
             pending={busy}
             onClick={() => {
               if (!confirm(`Delete "${faq.question}"? Students will no longer see it.`)) return;
-              void run(() => deleteFaq(faq.id));
+              void run(() => deleteFaq(faq.id), "Deleted.");
             }}
           >
             🗑️

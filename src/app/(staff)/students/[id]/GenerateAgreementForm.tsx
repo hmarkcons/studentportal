@@ -3,6 +3,8 @@
 import { useActionState, useState } from "react";
 import { generateAgreement, updateAgreement, uploadSignedAgreement, deleteAgreement } from "@/lib/actions/agreements";
 import { Button } from "@/components/ui/Button";
+import { useButtonAction } from "@/components/useButtonAction";
+import { toast } from "@/lib/toast";
 import { FileField } from "@/components/FileField";
 import { Input, Select } from "@/components/ui/Input";
 
@@ -103,7 +105,7 @@ export function GenerateAgreementForm({
           </Select>
         </>
       )}
-      <Button type="submit" variant="primary" pending={pending}>
+      <Button type="submit" variant="primary" pending={pending} status={{ state, label: "Generated." }}>
         Generate agreement
       </Button>
       {isBackup && (
@@ -202,7 +204,7 @@ export function EditAgreementForm({
         </>
       )}
       <div className="flex w-full items-center gap-2">
-        <Button type="submit" variant="primary" size="sm" pending={pending}>
+        <Button type="submit" variant="primary" size="sm" pending={pending} status={{ state, label: "Saved." }}>
           Save
         </Button>
         <Button type="button" variant="ghost" size="sm" onClick={onSuccess}>
@@ -210,7 +212,6 @@ export function EditAgreementForm({
         </Button>
       </div>
       {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
-      {state?.success && <p className="w-full text-xs text-success">Saved.</p>}
       <p className="w-full text-xs text-muted">
         Saving does not regenerate the PDF — use &quot;Regenerate PDF&quot; afterward to apply these changes to the document.
       </p>
@@ -219,21 +220,26 @@ export function EditAgreementForm({
 }
 
 export function DeleteAgreementButton({ agreementId, studentId }: { agreementId: string; studentId: string }) {
-  const [error, setError] = useState<string | null>(null);
+  // The agreement, and this button with it, goes when the delete works — so
+  // it confirms with a toast, and a refusal is said under the button.
+  const del = useButtonAction();
 
   async function handleDelete() {
     if (!confirm("Delete this agreement? This cannot be undone.")) return;
-    setError(null);
-    const result = await deleteAgreement(agreementId, studentId);
-    if (result?.error) setError(result.error);
+    await del.run(() => deleteAgreement(agreementId, studentId), { toast: "Deleted." });
   }
 
   return (
     <div>
-      <button onClick={handleDelete} className="text-xs text-danger hover:underline">
+      <button
+        onClick={handleDelete}
+        disabled={del.pending}
+        aria-busy={del.pending || undefined}
+        className="w-fit text-xs text-danger hover:underline disabled:opacity-50"
+      >
         Delete
       </button>
-      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
+      {del.state?.error && <p className="mt-1 text-xs text-danger">{del.state.error}</p>}
     </div>
   );
 }
@@ -253,7 +259,15 @@ export function UploadSignedAgreementForm({
   studentId: string;
   replace?: boolean;
 }) {
-  const action = uploadSignedAgreement.bind(null, agreementId, studentId);
+  const upload = uploadSignedAgreement.bind(null, agreementId, studentId);
+  // A first upload marks the agreement signed, and the page then shows the
+  // review in place of this form — so that one confirms with a toast. A
+  // replacement stays on screen and says "Uploaded." beside its button.
+  const action = async (prevState: unknown, formData: FormData) => {
+    const result = await upload(prevState, formData);
+    if (!replace && !result?.error) toast("Uploaded.");
+    return result;
+  };
   const [state, formAction, pending] = useActionState(action, undefined);
   const [ready, setReady] = useState(false);
 
@@ -263,7 +277,14 @@ export function UploadSignedAgreementForm({
       {/* File input sits directly next to the button it feeds. */}
       <div className="flex flex-wrap items-start gap-2">
         <FileField required noun="agreement" hint="Scan or photo of the signed copy" onChange={(s) => setReady(Boolean(s.file))} />
-        <Button type="submit" variant="outline-primary" size="sm" pending={pending} disabled={!ready}>
+        <Button
+          type="submit"
+          variant="outline-primary"
+          size="sm"
+          pending={pending}
+          disabled={!ready}
+          status={{ state, label: "Uploaded." }}
+        >
           {replace ? "Replace signed agreement" : "Upload signed agreement"}
         </Button>
       </div>

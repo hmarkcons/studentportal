@@ -1,26 +1,24 @@
 "use client";
 
-import { useState } from "react";
 import { partnerDeleteProgram } from "@/lib/actions/partner";
+import { ActionStatus } from "@/components/ActionStatus";
+import { useButtonAction } from "@/components/useButtonAction";
 
 export function DeleteProgramButton({ id }: { id: string }) {
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
-
-  async function handleDelete() {
-    setPending(true);
-    setError(null);
-    const result = await partnerDeleteProgram(id);
-    if (result?.error) setError(result.error);
-    setPending(false);
-  }
+  // The row this sits in goes when the delete works, so success is a toast;
+  // a failure is said beside the button, which is still there.
+  const del = useButtonAction();
 
   return (
-    <div>
-      <button onClick={handleDelete} disabled={pending} className="text-xs text-danger hover:underline disabled:opacity-50">
-        {pending ? "Deleting…" : "Delete"}
+    <span className="inline-flex flex-wrap items-center gap-2">
+      <button
+        onClick={() => del.run(() => partnerDeleteProgram(id), { toast: "Programme deleted." })}
+        disabled={del.pending}
+        className="w-fit text-xs text-danger hover:underline disabled:opacity-50"
+      >
+        {del.pending ? "Deleting…" : "Delete"}
       </button>
-      {error && <p className="text-xs text-danger">{error}</p>}
-    </div>
+      <ActionStatus state={del.state} pending={del.pending} label="Deleted." showError />
+    </span>
   );
 }

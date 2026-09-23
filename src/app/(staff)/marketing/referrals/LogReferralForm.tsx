@@ -24,7 +24,7 @@ export function LogReferralForm({
 }) {
   const [open, setOpen] = useState(false);
   const [partyId, setPartyId] = useState("");
-  const { onSubmit, pending, error } = useSlideOverForm(createPartyReferral, () => setOpen(false));
+  const { onSubmit, pending, error } = useSlideOverForm(createPartyReferral, () => setOpen(false), "Referral logged.");
 
   return (
     <>

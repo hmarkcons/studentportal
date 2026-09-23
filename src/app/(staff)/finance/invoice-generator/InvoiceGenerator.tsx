@@ -250,10 +250,15 @@ export function InvoiceGenerator({ students, bank }: { students: StudentOption[]
 
           {discountTooBig && <p className="text-xs text-danger">Discount cannot exceed the consultancy fee.</p>}
           {state?.error && <p className="text-xs text-danger">{state.error}</p>}
-          {state?.success && <p className="text-xs text-success">Invoice generated. It appears in the list below.</p>}
 
           <div>
-            <Button type="submit" variant="primary" pending={pending} disabled={discountTooBig}>
+            <Button
+              type="submit"
+              variant="primary"
+              pending={pending}
+              disabled={discountTooBig}
+              status={{ state, label: "Invoice generated. It appears in the list below." }}
+            >
               Generate invoice
             </Button>
           </div>

@@ -7,6 +7,7 @@ import { SlideOver } from "@/components/ui/SlideOver";
 import { Button } from "@/components/ui/Button";
 import { Input, Select, Textarea } from "@/components/ui/Input";
 import { VISA_OFFICE_KINDS, type VisaOffice } from "@/lib/visaOffices";
+import { toast } from "@/lib/toast";
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
@@ -40,7 +41,12 @@ export function VisaOfficeForm({
 }) {
   const [open, setOpen] = useState(false);
   const action = office ? updateVisaOffice.bind(null, office.id) : createVisaOffice.bind(null, destinationId);
-  const { onSubmit, pending, error } = useSlideOverForm(action, () => setOpen(false));
+  // The panel closes on success, taking its button with it, so the
+  // confirmation is a toast.
+  const { onSubmit, pending, error } = useSlideOverForm(action, () => {
+    setOpen(false);
+    toast(office ? "Saved." : "Added.");
+  });
 
   return (
     <>

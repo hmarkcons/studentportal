@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { addStudentScholarships } from "@/lib/actions/scholarships";
+import { toast } from "@/lib/toast";
 
 export type OfferedBody = { id: string; name: string; region: string | null; alreadyAdded: boolean };
 
@@ -67,12 +68,15 @@ export function AddScholarships({
       setError(result.error);
       return;
     }
+    const done = `Added ${result.added} scholarship${result.added === 1 ? "" : "s"}.${
+      result.skipped ? ` ${result.skipped} already recorded.` : ""
+    }`;
+    // Adding every one still available replaces this whole panel with "every
+    // scholarship is already recorded", taking the message beside the button
+    // with it — so that case says it in a toast as well.
+    if (picked.size >= available.length) toast(done);
     setPicked(new Set());
-    setMessage(
-      `Added ${result.added} scholarship${result.added === 1 ? "" : "s"}.${
-        result.skipped ? ` ${result.skipped} already recorded.` : ""
-      }`
-    );
+    setMessage(done);
     router.refresh();
   }
 

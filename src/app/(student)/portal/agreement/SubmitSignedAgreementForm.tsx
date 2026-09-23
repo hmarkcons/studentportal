@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
 import { MAX_UPLOAD_BYTES, fileSizeError, formatFileSize, limitHint, reduceHint, shrunkNote } from "@/lib/fileSize";
 import { shrinkImageToFit } from "@/components/shrinkImage";
+import { toast } from "@/lib/toast";
 import { ConsentVideoRecorder } from "./ConsentVideoRecorder";
 
 function WhyVideoDialog({ onClose }: { onClose: () => void }) {
@@ -57,7 +58,15 @@ export function SubmitSignedAgreementForm({
   needsDocument?: boolean;
   needsVideo?: boolean;
 }) {
-  const action = submitSignedAgreement.bind(null, agreementId, studentId);
+  const submit = submitSignedAgreement.bind(null, agreementId, studentId);
+  // A successful submission replaces this form with "Submitted — waiting for
+  // your counsellor", so the confirmation is a toast: there is no button left
+  // for it to sit beside.
+  const action = async (prev: unknown, formData: FormData) => {
+    const result = await submit(prev, formData);
+    if (!result?.error) toast("Submitted. Your counsellor will check the video and agreement shortly.");
+    return result;
+  };
   const [state, formAction, pending] = useActionState(action, undefined);
   const [video, setVideo] = useState<File | null>(null);
   const [documentName, setDocumentName] = useState<string | null>(null);
@@ -188,7 +197,7 @@ export function SubmitSignedAgreementForm({
         {/* Gated in the button rather than with `required` on the input: a
             visually-hidden required control can't be focused for the native
             validation bubble, and Chrome then blocks submission silently. */}
-        <Button type="submit" variant="primary" size="sm" pending={pending} disabled={!ready}>
+        <Button type="submit" variant="primary" size="sm" pending={pending} disabled={!ready} status={{ state, label: "Submitted." }}>
           {both ? "Submit signed agreement" : needsVideo ? "Submit new video" : "Submit signed agreement"}
         </Button>
       </div>
@@ -216,9 +225,6 @@ export function SubmitSignedAgreementForm({
       )}
 
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
-      {state?.success && (
-        <p className="text-xs text-success">Submitted. Your counsellor will check the video and agreement shortly.</p>
-      )}
 
       {showWhy && <WhyVideoDialog onClose={() => setShowWhy(false)} />}
     </form>

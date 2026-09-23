@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useFormStatus } from "react-dom";
 import Link from "next/link";
 import {
   deleteInvoice,
@@ -16,8 +17,20 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input, Select } from "@/components/ui/Input";
+import { toast } from "@/lib/toast";
+import type { ActionResultLike } from "@/lib/actionStatus";
 
 const REVALIDATE_TO = "/finance/invoice-generator";
+
+/** A submit button that is busy while its form's action runs. */
+function SubmitButton({ children, ...props }: React.ComponentProps<typeof Button>) {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" pending={pending} {...props}>
+      {children}
+    </Button>
+  );
+}
 
 export type GeneratedInvoice = {
   id: string;
@@ -91,12 +104,15 @@ function InvoiceRow({ inv, canDelete }: { inv: GeneratedInvoice; canDelete: bool
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  // What the last button did, said beside that button. One object per
+  // result, so the confirmation belongs to that press and not the next.
+  const [done, setDone] = useState<{ which: string; state: ActionResultLike; label: string } | null>(null);
+  const doneFor = (which: string) => (done?.which === which ? done.state : undefined);
 
   async function run(label: string, fn: () => Promise<{ error?: string } | undefined>) {
     setBusy(label);
     setError(null);
-    setNotice(null);
+    setDone(null);
     const r = await fn();
     if (r?.error) setError(r.error);
     setBusy(null);
@@ -142,8 +158,14 @@ function InvoiceRow({ inv, canDelete }: { inv: GeneratedInvoice; canDelete: bool
             pending={busy === "pdf"}
             onClick={async () => {
               const ok = await run("pdf", () => generateInvoicePdf(inv.id, inv.studentId, REVALIDATE_TO));
-              if (ok) setNotice("PDF regenerated — open it from the student's Payments tab or the link below.");
+              if (ok)
+                setDone({
+                  which: "pdf",
+                  state: { success: true },
+                  label: "PDF regenerated — open it from the student's Payments tab or the link below.",
+                });
             }}
+            status={{ state: doneFor("pdf"), label: done?.label }}
           >
             {inv.hasPdf ? "Rebuild PDF" : "Build PDF"}
           </Button>
@@ -165,12 +187,13 @@ function InvoiceRow({ inv, canDelete }: { inv: GeneratedInvoice; canDelete: bool
                 return;
               setBusy("send");
               setError(null);
-              setNotice(null);
+              setDone(null);
               const r = await sendInvoiceToStudent(inv.id, inv.studentId);
               if (r?.error) setError(r.error);
-              else setNotice(`Emailed to ${r?.sentTo ?? inv.studentEmail}.`);
+              else setDone({ which: "send", state: { success: true }, label: `Emailed to ${r?.sentTo ?? inv.studentEmail}.` });
               setBusy(null);
             }}
+            status={{ state: doneFor("send"), label: done?.label }}
           >
             {inv.sentStatus === "sent" ? "Resend email" : "Send to student"}
           </Button>
@@ -183,7 +206,8 @@ function InvoiceRow({ inv, canDelete }: { inv: GeneratedInvoice; canDelete: bool
               pending={busy === "del"}
               onClick={async () => {
                 if (!confirm(`Delete invoice for ${inv.studentName}? This removes its installments and payment history and cannot be undone.`)) return;
-                await run("del", () => deleteInvoice(inv.id, inv.studentId, REVALIDATE_TO));
+                // The invoice's card goes with it, so success is a toast.
+                if (await run("del", () => deleteInvoice(inv.id, inv.studentId, REVALIDATE_TO))) toast("Invoice deleted.");
               }}
             >
               Delete
@@ -193,7 +217,6 @@ function InvoiceRow({ inv, canDelete }: { inv: GeneratedInvoice; canDelete: bool
       </div>
 
       {error && <p className="mt-2 text-xs text-danger">{error}</p>}
-      {notice && <p className="mt-2 text-xs text-success">{notice}</p>}
 
       {editing && (
         <form
@@ -201,7 +224,11 @@ function InvoiceRow({ inv, canDelete }: { inv: GeneratedInvoice; canDelete: bool
             setError(null);
             const r = await updateInvoice(inv.id, inv.studentId, REVALIDATE_TO, undefined, fd);
             if (r?.error) setError(r.error);
-            else setEditing(false);
+            else {
+              // The form closes on success, taking its button with it.
+              setEditing(false);
+              toast("Invoice updated.");
+            }
           }}
           className="mt-3 grid grid-cols-1 gap-2 border-t border-border pt-3 sm:grid-cols-2"
         >
@@ -214,9 +241,9 @@ function InvoiceRow({ inv, canDelete }: { inv: GeneratedInvoice; canDelete: bool
             <Input name="intake" defaultValue={inv.intake ?? ""} />
           </label>
           <div className="sm:col-span-2">
-            <Button type="submit" variant="primary" size="sm">
+            <SubmitButton variant="primary" size="sm">
               Save changes
-            </Button>
+            </SubmitButton>
           </div>
         </form>
       )}
@@ -269,6 +296,9 @@ function InstallmentRow({ inv, inst }: { inv: GeneratedInvoice; inst: GeneratedI
         setError(null);
         const r = await markInstallmentPaid(inst.id, inv.studentId, undefined, fd);
         if (r?.error) setError(r.error);
+        // A payment that settles the installment replaces this button with
+        // the Paid badge, so the confirmation is a toast either way.
+        else toast("Payment recorded.");
       }}
       className="flex flex-wrap items-end gap-2 rounded-md bg-bg px-2 py-2 text-xs"
     >
@@ -305,9 +335,9 @@ function InstallmentRow({ inv, inst }: { inv: GeneratedInvoice; inst: GeneratedI
               <option value="online">Online</option>
             </Select>
           </label>
-          <Button type="submit" variant="outline-primary" size="sm">
+          <SubmitButton variant="outline-primary" size="sm">
             Record payment
-          </Button>
+          </SubmitButton>
         </>
       )}
       {error && <span className="text-danger">{error}</span>}

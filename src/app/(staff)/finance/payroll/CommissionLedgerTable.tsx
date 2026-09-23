@@ -14,7 +14,8 @@ import {
   uploadStaffCommissionProof,
 } from "@/lib/actions/finance";
 import { suggestCommission, type CommissionStaffOption } from "@/app/(staff)/finance/staff-commission/StaffCommissionTable";
-import { ActionStatus } from "@/components/ActionStatus";
+import { useButtonAction } from "@/components/useButtonAction";
+import { toast } from "@/lib/toast";
 
 export type CommissionRecord = {
   id: string;
@@ -50,7 +51,7 @@ function EditCommissionForm({ record, revalidateTo }: { record: CommissionRecord
         <option value="unpaid">unpaid</option>
         <option value="paid">paid</option>
       </Select>
-      <Button type="submit" variant="primary" size="sm" pending={pending}>
+      <Button type="submit" variant="primary" size="sm" pending={pending} status={{ state, label: "Saved." }}>
         Save
       </Button>
       <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>
@@ -62,41 +63,45 @@ function EditCommissionForm({ record, revalidateTo }: { record: CommissionRecord
 }
 
 function MarkPaidForm({ id, revalidateTo }: { id: string; revalidateTo: string }) {
-  const action = markStaffCommissionPaid.bind(null, id, revalidateTo);
-  const [state, formAction, pending] = useActionState(action, undefined);
+  // Once paid, the row stops offering this button, so the confirmation is a
+  // toast; a refusal stays beside the button, which is still there.
+  const [state, formAction, pending] = useActionState(async (prev: unknown, fd: FormData) => {
+    const result = await markStaffCommissionPaid(id, revalidateTo, prev, fd);
+    if (!result?.error) toast("Commission marked paid.");
+    return result;
+  }, undefined);
 
   return (
     <form action={formAction} className="flex items-center gap-2">
       <Button type="submit" variant="success" size="sm" pending={pending}>
         Mark paid
       </Button>
-      <ActionStatus state={state} pending={pending} label="Saved." />
-      <ActionStatus state={state} pending={pending} label="Saved." />
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
   );
 }
 
 function DeleteCommissionButton({ id, revalidateTo }: { id: string; revalidateTo: string }) {
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const del = useButtonAction();
 
   async function handleDelete() {
     if (!confirm("Delete this commission record?")) return;
-    setPending(true);
-    setError(null);
-    const result = await deleteStaffCommission(id, revalidateTo);
-    if (result?.error) setError(result.error);
-    setPending(false);
+    // The record's row goes with it, so success is a toast; a refusal is said
+    // beside the button, which is still there.
+    await del.run(() => deleteStaffCommission(id, revalidateTo), { toast: "Commission record deleted." });
   }
 
   return (
-    <div>
-      <Button variant="outline" size="sm" onClick={handleDelete} pending={pending}>
-        🗑️
-      </Button>
-      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
-    </div>
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={handleDelete}
+      pending={del.pending}
+      aria-label="Delete commission record"
+      status={{ state: del.state, label: "Deleted.", showError: true }}
+    >
+      🗑️
+    </Button>
   );
 }
 
@@ -174,8 +179,8 @@ function AddCommissionForm({
           <option value="USD">USD</option>
         </Select>
         <Input name="registration_date" type="date" defaultValue={defaultDate} required />
-        <Button type="submit" variant="primary" size="sm" disabled={pending}>
-          {pending ? "Adding…" : "+ Add commission record"}
+        <Button type="submit" variant="primary" size="sm" pending={pending} status={{ state, label: "Commission added." }}>
+          + Add commission record
         </Button>
       </div>
       {suggestion.amount != null && !amountEdited && (
@@ -218,7 +223,6 @@ function AddCommissionForm({
           their own ledger.
         </p>
       )}
-      <ActionStatus state={state} pending={pending} label="Saved." />
       {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
     </form>
   );

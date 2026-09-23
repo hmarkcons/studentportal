@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { FileField } from "@/components/FileField";
 import { uploadedLine } from "@/lib/activityStamp";
-import { ActionStatus } from "@/components/ActionStatus";
+import { useButtonAction } from "@/components/useButtonAction";
 
 export function CommissionRow({
   commission,
@@ -30,16 +30,7 @@ export function CommissionRow({
     audience: "partner",
   })?.replace("Uploaded", "Proof uploaded");
 
-  const [disputeError, setDisputeError] = useState<string | null>(null);
-  const [disputePending, setDisputePending] = useState(false);
-
-  async function handleDispute() {
-    setDisputePending(true);
-    setDisputeError(null);
-    const result = await partnerDisputeCommission(commission.id);
-    if (result?.error) setDisputeError(result.error);
-    setDisputePending(false);
-  }
+  const dispute = useButtonAction();
 
   return (
     <div className="flex items-center justify-between gap-3 py-3 text-sm">
@@ -59,17 +50,21 @@ export function CommissionRow({
         </Badge>
         <form action={formAction} className="flex items-start gap-1">
           <FileField hint="PDF or image" className="w-40" onChange={(s) => setBlocked(Boolean(s.error) || s.busy)} />
-          <Button type="submit" pending={pending} size="sm" disabled={blocked}>
+          <Button type="submit" pending={pending} size="sm" disabled={blocked} status={{ state, label: "Proof uploaded." }}>
             {commission.payment_proof_uploaded_at ? "Replace proof" : "Upload proof"}
           </Button>
         </form>
-        <Button onClick={handleDispute} variant="danger" size="sm" pending={disputePending}>
+        <Button
+          onClick={() => dispute.run(() => partnerDisputeCommission(commission.id))}
+          variant="danger"
+          size="sm"
+          pending={dispute.pending}
+          status={{ state: dispute.state, label: "Disputed.", showError: true }}
+        >
           Dispute
         </Button>
-        <ActionStatus state={state} pending={pending} label="Proof uploaded." />
       </div>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
-      {disputeError && <p className="text-xs text-danger">{disputeError}</p>}
     </div>
   );
 }

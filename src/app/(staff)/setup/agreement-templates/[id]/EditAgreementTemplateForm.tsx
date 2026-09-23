@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { FileField } from "@/components/FileField";
 import { Input, Select } from "@/components/ui/Input";
 import { ActionStatus } from "@/components/ActionStatus";
+import { useButtonAction } from "@/components/useButtonAction";
 
 // Templates saved before the rich-text editor was added stored plain text
 // (paragraphs separated by a blank line) rather than HTML — wrap each
@@ -37,15 +38,14 @@ export function EditAgreementTemplateForm({
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
   const [blocked, setBlocked] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const del = useButtonAction();
 
   async function handleDelete() {
     if (!confirm("Delete this agreement template? This cannot be undone.")) return;
-    setDeleteError(null);
     // deleteAgreementTemplate redirects on success (it throws internally,
-    // it never returns) — this only resolves to a value on the error path.
-    const result = await deleteAgreementTemplate(template.id);
-    if (result?.error) setDeleteError(result.error);
+    // it never returns) — this only resolves to a value on the error path,
+    // said beside the button. Success leaves the page: a toast.
+    await del.run(() => deleteAgreementTemplate(template.id), { toast: "Deleted." });
   }
 
   async function handleFile(file: File | null) {
@@ -117,16 +117,21 @@ export function EditAgreementTemplateForm({
         </ul>
       </details>
       <div className="flex items-center gap-3">
-        <Button type="submit" variant="primary" disabled={pending || blocked}>
-          {pending ? "Saving…" : "Save changes"}
+        <Button type="submit" variant="primary" disabled={blocked} pending={pending} status={{ state, label: "Saved." }}>
+          Save changes
         </Button>
-        <ActionStatus state={state} pending={pending} label="Saved." />
-        <button type="button" className="text-xs text-danger hover:underline" onClick={handleDelete}>
+        <button
+          type="button"
+          className="w-fit text-xs text-danger hover:underline disabled:opacity-50"
+          onClick={handleDelete}
+          disabled={del.pending}
+          aria-busy={del.pending || undefined}
+        >
           Delete template
         </button>
+        <ActionStatus state={del.state} pending={del.pending} label="Deleted." showError />
       </div>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
-      {deleteError && <p className="text-xs text-danger">{deleteError}</p>}
     </form>
   );
 }

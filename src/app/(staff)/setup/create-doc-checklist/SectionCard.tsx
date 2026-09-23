@@ -15,6 +15,7 @@ import {
   updateChecklistItem,
 } from "@/lib/actions/documentChecklistBuilder";
 import { STUDY_LEVELS } from "@/lib/constants";
+import { toast } from "@/lib/toast";
 
 export type BuilderItem = {
   id: string;
@@ -71,11 +72,15 @@ export function SectionCard({
     .filter((i): i is BuilderItem => Boolean(i));
   for (const i of section.items) if (!order.includes(i.id)) items.push(i);
 
-  function run(fn: () => Promise<{ error?: string } | void>) {
+  // Every form here closes as it submits and every remove takes its row with
+  // it, so there is no button left to say "Saved." beside: `done` is a toast.
+  // Errors still go to the checklist's banner through onError.
+  function run(fn: () => Promise<{ error?: string } | void>, done?: string) {
     onError(null);
     startTransition(async () => {
       const result = await fn();
       if (result && "error" in result && result.error) onError(result.error);
+      else if (done) toast(done);
     });
   }
 
@@ -140,7 +145,7 @@ export function SectionCard({
                 const data = new FormData();
                 data.set("label", label);
                 setRenaming(false);
-                run(async () => renameSection(section.key, undefined, data));
+                run(async () => renameSection(section.key, undefined, data), "Renamed.");
               }}
             >
               <Input value={label} onChange={(e) => setLabel(e.target.value)} className="w-56" autoFocus />
@@ -207,7 +212,7 @@ export function SectionCard({
                 ? `Remove "${section.label}" from this checklist? Its ${ownCount} own requirement(s) will be deleted. Anything a student has already uploaded is kept.`
                 : `Remove "${section.label}" from this checklist?`;
               if (!confirm(warning)) return;
-              run(() => removeSectionFromDestination(destinationId, section.key));
+              run(() => removeSectionFromDestination(destinationId, section.key), "Removed.");
             }}
             className="ml-2 text-xs text-danger hover:underline disabled:opacity-50"
           >
@@ -244,7 +249,7 @@ export function SectionCard({
                   e.preventDefault();
                   const data = new FormData(e.currentTarget);
                   setEditing(null);
-                  run(async () => updateChecklistItem(item.id, undefined, data));
+                  run(async () => updateChecklistItem(item.id, undefined, data), "Saved.");
                 }}
               >
                 <label className="flex flex-1 flex-col gap-1 text-xs text-muted">
@@ -326,7 +331,7 @@ export function SectionCard({
                     <button
                       type="button"
                       disabled={busy}
-                      onClick={() => run(() => excludeSharedItem(destinationId, item.id))}
+                      onClick={() => run(() => excludeSharedItem(destinationId, item.id), "Removed from this destination.")}
                       className="ml-1 text-xs text-danger hover:underline disabled:opacity-50"
                       title="Stop asking for this on this destination only"
                     >
@@ -339,7 +344,7 @@ export function SectionCard({
                       onClick={() => {
                         const where = isAllDestinations ? "every destination" : "this destination";
                         if (!confirm(`Delete "${item.name}" from ${where}? Students who have already uploaded it keep their file.`)) return;
-                        run(() => deleteChecklistItem(item.id));
+                        run(() => deleteChecklistItem(item.id), "Deleted.");
                       }}
                       className="ml-1 text-xs text-danger hover:underline disabled:opacity-50"
                     >
@@ -360,7 +365,7 @@ export function SectionCard({
             e.preventDefault();
             const data = new FormData(e.currentTarget);
             setAdding(false);
-            run(async () => addChecklistItem(destinationId, section.key, undefined, data));
+            run(async () => addChecklistItem(destinationId, section.key, undefined, data), "Added.");
           }}
         >
           <label className="flex flex-1 flex-col gap-1 text-xs text-muted">

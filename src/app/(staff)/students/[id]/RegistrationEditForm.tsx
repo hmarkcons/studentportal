@@ -50,7 +50,7 @@ export function RegistrationEditForm({
 
   if (!editing) {
     return (
-      <button onClick={() => setEditing(true)} className="text-xs font-medium text-primary hover:underline">
+      <button data-collapsible-toggle onClick={() => setEditing(true)} className="w-fit text-xs font-medium text-primary hover:underline">
         ✏️ Edit registration
       </button>
     );

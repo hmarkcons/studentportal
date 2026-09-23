@@ -3,6 +3,8 @@
 import { useState, useTransition } from "react";
 import { setStaffPermissionOverride, resetStaffPermissionOverride } from "@/lib/actions/permissions";
 import type { PermissionKey } from "@/lib/permissions";
+import type { ActionResultLike } from "@/lib/actionStatus";
+import { ActionStatus } from "@/components/ActionStatus";
 
 type Def = { key: string; category: string; label: string; description: string; default_roles: string[] };
 
@@ -19,20 +21,27 @@ function Toggle({
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // One object per result, so the "Saved." beside the checkbox is this
+  // change's and not left over from the last.
+  const [done, setDone] = useState<{ state: ActionResultLike; label: string } | null>(null);
 
   function handleToggle(next: boolean) {
     setError(null);
+    setDone(null);
     startTransition(async () => {
       const result = await setStaffPermissionOverride(staffId, permKey, next);
       if (result?.error) setError(result.error);
+      else setDone({ state: { success: true }, label: "Saved." });
     });
   }
 
   function handleReset() {
     setError(null);
+    setDone(null);
     startTransition(async () => {
       const result = await resetStaffPermissionOverride(staffId, permKey);
       if (result?.error) setError(result.error);
+      else setDone({ state: { success: true }, label: "Reset to role." });
     });
   }
 
@@ -43,10 +52,11 @@ function Toggle({
         {source === "personal" ? "personal override" : source === "role" ? "role override" : "default"}
       </span>
       {source === "personal" && (
-        <button type="button" onClick={handleReset} disabled={pending} className="text-[10px] text-muted underline hover:text-ink">
+        <button type="button" onClick={handleReset} disabled={pending} className="w-fit text-[10px] text-muted underline hover:text-ink">
           reset to role
         </button>
       )}
+      <ActionStatus state={done?.state} pending={pending} label={done?.label} />
       {error && <span className="text-[10px] text-danger">{error}</span>}
     </div>
   );

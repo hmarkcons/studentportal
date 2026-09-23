@@ -2,6 +2,7 @@
 
 import { useOptimistic, useState, startTransition } from "react";
 import { setTravelItemDone } from "@/lib/actions/travelGuide";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export type TravelItem = {
   id: string;
@@ -29,6 +30,9 @@ export type TravelSection = {
 export function TravelChecklist({ sections }: { sections: TravelSection[] }) {
   const allItems = sections.flatMap((s) => s.items);
   const [error, setError] = useState<string | null>(null);
+  // The tick that last saved, said beside that item. One object per save, so
+  // ActionStatus can tell this result from the next by identity.
+  const [saved, setSaved] = useState<{ id: string; result: { success: true } } | null>(null);
   const [doneIds, setDoneIds] = useOptimistic(
     new Set(allItems.filter((i) => i.done).map((i) => i.id)),
     (current: Set<string>, change: { id: string; done: boolean }) => {
@@ -44,12 +48,14 @@ export function TravelChecklist({ sections }: { sections: TravelSection[] }) {
 
   function toggle(item: TravelItem, next: boolean) {
     setError(null);
+    setSaved(null);
     startTransition(async () => {
       setDoneIds({ id: item.id, done: next });
       const result = await setTravelItemDone(item.id, next);
       // The optimistic value is discarded when the transition ends, so the
       // server's answer is what remains either way; this only explains it.
       if (result?.error) setError(`“${item.label}” did not save: ${result.error}`);
+      else setSaved({ id: item.id, result: { success: true } });
     });
   }
 
@@ -93,8 +99,11 @@ export function TravelChecklist({ sections }: { sections: TravelSection[] }) {
                         className="mt-0.5 h-4 w-4 shrink-0"
                       />
                       <span className="min-w-0">
-                        <span className={`block text-sm ${checked ? "text-muted line-through" : "text-ink"}`}>
-                          {item.label}
+                        <span className="flex flex-wrap items-center gap-x-2">
+                          <span className={`text-sm ${checked ? "text-muted line-through" : "text-ink"}`}>
+                            {item.label}
+                          </span>
+                          {saved?.id === item.id && <ActionStatus state={saved.result} label="Saved." />}
                         </span>
                         {item.detail && <span className="mt-0.5 block text-xs text-muted">{item.detail}</span>}
                         {/* Counted from the day they land, because that is how

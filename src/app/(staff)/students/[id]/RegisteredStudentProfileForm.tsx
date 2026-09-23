@@ -68,7 +68,7 @@ export function RegisteredStudentProfileForm({
   // does that for uncontrolled fields by restoring their defaults during
   // commit rather than by dispatching the cancelable reset event — so an
   // onReset guard does not stop it. See useFormAction.
-  const { onSubmit, pending, error, success } = useFormAction(action);
+  const { onSubmit, pending, error, result } = useFormAction(action);
   const formRef = useRef<HTMLFormElement>(null);
 
   // React clears a form once its server action finishes — including when the
@@ -283,10 +283,9 @@ export function RegisteredStudentProfileForm({
           </span>
         </p>
       )}
-      {success && (
-        <p className="rounded-md border border-success bg-success-bg px-3 py-2 text-sm font-medium text-success">Saved.</p>
-      )}
-      <Button type="submit" variant="primary" pending={pending} className="justify-self-start">
+      {/* "Saved." sits beside the button rather than as a banner above it. The
+          error keeps its banner, which is scrolled into view on a refusal. */}
+      <Button type="submit" variant="primary" pending={pending} status={{ state: result, label: "Saved." }}>
         Save
       </Button>
     </form>

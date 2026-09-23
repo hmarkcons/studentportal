@@ -46,9 +46,8 @@ export function TicketSubject({
         The subject only. The student&rsquo;s description below stays as they wrote it — correct it in a reply.
       </p>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
-      {state?.success && <p className="text-xs text-success">Saved.</p>}
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="submit" variant="primary" size="sm" pending={pending}>
+        <Button type="submit" variant="primary" size="sm" pending={pending} status={{ state, label: "Saved." }}>
           Save
         </Button>
         <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>

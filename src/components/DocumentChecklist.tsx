@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useState } from "react";
+import { useButtonAction } from "@/components/useButtonAction";
 import { uploadDocument, reviewDocument, addDocumentRequirement, deleteDocumentRequirement } from "@/lib/actions/documents";
 import { formatDateOnly } from "@/lib/formatDate";
 import { Badge } from "@/components/ui/Badge";
@@ -14,7 +15,6 @@ import { uploadedLine, reviewedLine, addedLine, type UploaderRole } from "@/lib/
 import { DocumentHistory, type ArchivedUpload } from "@/components/DocumentHistory";
 import { DocumentSectionShell, ExpandAllToggle } from "@/components/DocumentSectionShell";
 import { FileField } from "@/components/FileField";
-import { ActionStatus } from "@/components/ActionStatus";
 
 export type DocRow = {
   id: string;
@@ -61,27 +61,29 @@ function UploadRow({
   // Upload stays disabled until a file within the limit is chosen, so an
   // oversized one is refused where it was picked rather than after the wait.
   const [ready, setReady] = useState(false);
-  const [reviewPending, startReview] = useTransition();
-  const [reviewError, setReviewError] = useState<string | null>(null);
+  // One per button, so each says what it did — and any refusal — beside
+  // itself. They still block one another while any is running.
+  const accept = useButtonAction();
+  const reject = useButtonAction();
+  const del = useButtonAction();
+  const reviewPending = accept.pending || reject.pending || del.pending;
 
   const isVerified = doc.status === "verified";
   const showUploadForm = !isVerified || showReplace;
 
   function review(status: "verified" | "rejected") {
-    setReviewError(null);
-    startReview(async () => {
+    const button = status === "verified" ? accept : reject;
+    void button.run(async () => {
       const result = await reviewDocument(doc.id, revalidateTo, status, status === "rejected" ? reason : undefined);
-      if (result?.error) setReviewError(result.error);
-      else if (status === "rejected") setReason("");
+      if (!result?.error && status === "rejected") setReason("");
+      return result;
     });
   }
 
   function remove() {
     if (!confirm(`Remove "${doc.name ?? doc.category ?? "this document"}" from the checklist?`)) return;
-    startReview(async () => {
-      const result = await deleteDocumentRequirement(doc.id, revalidateTo);
-      if (result?.error) setReviewError(result.error);
-    });
+    // The row goes with the requirement, so success is a toast.
+    void del.run(() => deleteDocumentRequirement(doc.id, revalidateTo), { toast: "Removed." });
   }
 
   return (
@@ -140,10 +142,16 @@ function UploadRow({
       {showUploadForm ? (
         <form action={formAction} className="flex flex-wrap items-start gap-2">
           <FileField accept={ACCEPTED_DOCUMENT_ACCEPT} hint="PDF, Word or image" onChange={(s) => setReady(Boolean(s.file))} />
-          <Button type="submit" pending={pending} size="sm" disabled={!ready} className="mt-0.5">
+          <Button
+            type="submit"
+            pending={pending}
+            size="sm"
+            disabled={!ready}
+            wrapperClassName="mt-0.5"
+            status={{ state, label: "Uploaded." }}
+          >
             Upload
           </Button>
-          <ActionStatus state={state} pending={pending} label="Uploaded." className="mt-1.5" />
           {isVerified && (
             <button type="button" onClick={() => setShowReplace(false)} className="text-xs text-muted hover:underline">
               Cancel
@@ -157,11 +165,27 @@ function UploadRow({
       )}
 
       <div className="flex flex-wrap items-center gap-1">
-        <Button type="button" variant="success" size="sm" onClick={() => review("verified")} disabled={!doc.file_path || reviewPending}>
+        <Button
+          type="button"
+          variant="success"
+          size="sm"
+          onClick={() => review("verified")}
+          disabled={!doc.file_path || reviewPending}
+          pending={accept.pending}
+          status={{ state: accept.state, label: "Accepted.", showError: true }}
+        >
           Accept
         </Button>
         <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="reason" className="w-24" />
-        <Button type="button" variant="danger" size="sm" onClick={() => review("rejected")} disabled={!doc.file_path || reviewPending}>
+        <Button
+          type="button"
+          variant="danger"
+          size="sm"
+          onClick={() => review("rejected")}
+          disabled={!doc.file_path || reviewPending}
+          pending={reject.pending}
+          status={{ state: reject.state, label: "Rejected.", showError: true }}
+        >
           Reject
         </Button>
         {canManage && (
@@ -171,14 +195,15 @@ function UploadRow({
             size="sm"
             onClick={remove}
             disabled={reviewPending}
+            pending={del.pending}
             title="Remove this requirement from the checklist"
+            status={{ state: del.state, label: "Removed.", showError: true }}
           >
             🗑️
           </Button>
         )}
       </div>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
-      {reviewError && <p className="text-xs text-danger">{reviewError}</p>}
     </div>
   );
 }
@@ -227,10 +252,9 @@ function AddRequirementForm({
         Due (optional)
         <Input name="deadline" type="date" className="w-auto" />
       </label>
-      <Button type="submit" variant="primary" size="sm" pending={pending}>
+      <Button type="submit" variant="primary" size="sm" pending={pending} status={{ state, label: "Added." }}>
         Add
       </Button>
-      <ActionStatus state={state} pending={pending} label="Uploaded." />
       <button type="button" onClick={() => setOpen(false)} className="pb-2 text-xs text-muted hover:underline">
         Cancel
       </button>

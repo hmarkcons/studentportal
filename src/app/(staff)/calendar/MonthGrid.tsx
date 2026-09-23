@@ -72,6 +72,7 @@ export function MonthGrid({
             <button
               key={dayStr}
               type="button"
+              data-full-width
               onClick={() => onSelectDay(dayStr)}
               className={`flex min-h-[92px] flex-col items-stretch gap-1 border-b border-r border-border p-1.5 text-left last:border-r-0 hover:bg-bg ${
                 isSelected ? "bg-[color-mix(in_srgb,var(--primary)_10%,transparent)]" : ""

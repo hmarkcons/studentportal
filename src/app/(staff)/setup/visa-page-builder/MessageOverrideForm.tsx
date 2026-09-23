@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
 import { ActionStatus } from "@/components/ActionStatus";
+import { useButtonAction } from "@/components/useButtonAction";
 import { saveVisaMessageOverride, clearVisaMessageOverride } from "@/lib/actions/visaPageBuilder";
 import type { VisaMessageFields } from "@/lib/visaPage";
 
@@ -64,14 +65,17 @@ export function MessageOverrideForm({
   const action = saveVisaMessageOverride.bind(null, destinationId);
   const [state, formAction, pending] = useActionState(action, undefined);
   const router = useRouter();
-  const [clearing, setClearing] = useState(false);
+  const clearing = useButtonAction();
 
   async function clear() {
     if (!confirm(`Drop ${destinationName}'s own wording and go back to the shared message?`)) return;
-    setClearing(true);
-    await clearVisaMessageOverride(destinationId);
-    setClearing(false);
-    router.refresh();
+    // The button goes once there is no override left to clear, so success is
+    // a toast; a refusal is said beside it — it used to be dropped unread.
+    await clearing.run(async () => {
+      const result = await clearVisaMessageOverride(destinationId);
+      if (!result?.error) router.refresh();
+      return result;
+    }, { toast: "Cleared." });
   }
 
   if (!canEdit) {
@@ -114,9 +118,17 @@ export function MessageOverrideForm({
         </Button>
         <ActionStatus state={state} pending={pending} />
         {hasOverride && (
-          <button type="button" onClick={clear} disabled={clearing} className="text-xs text-danger hover:underline disabled:opacity-40">
-            {clearing ? "Clearing…" : "Use the shared message instead"}
-          </button>
+          <span className="inline-flex items-center gap-2">
+            <button
+              type="button"
+              onClick={clear}
+              disabled={clearing.pending}
+              className="w-fit text-xs text-danger hover:underline disabled:opacity-40"
+            >
+              {clearing.pending ? "Clearing…" : "Use the shared message instead"}
+            </button>
+            <ActionStatus state={clearing.state} pending={clearing.pending} label="Cleared." showError />
+          </span>
         )}
       </div>
     </form>

@@ -134,6 +134,8 @@ export function ApplicationsByStudent({
           return (
             <div key={g.id} className="rounded-lg border border-border bg-card">
               <button
+                data-full-width
+                data-collapsible-toggle
                 onClick={() => toggle(g.id)}
                 className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-bg/60"
               >

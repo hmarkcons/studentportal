@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { deleteAgreement } from "@/lib/actions/agreements";
+import { useButtonAction } from "@/components/useButtonAction";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { EditAgreementForm } from "./GenerateAgreementForm";
 
@@ -53,13 +54,13 @@ export function AgreementActionsMenu({
   const [menuOpen, setMenuOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  // The agreement and this menu go with a successful delete, so it confirms
+  // with a toast; a refusal is still said under the menu's button.
+  const del = useButtonAction();
 
   async function handleDelete() {
     if (!confirm("Delete this agreement? This cannot be undone.")) return;
-    setDeleteError(null);
-    const result = await deleteAgreement(agreement.id, studentId);
-    if (result?.error) setDeleteError(result.error);
+    await del.run(() => deleteAgreement(agreement.id, studentId), { toast: "Deleted." });
     setMenuOpen(false);
   }
 
@@ -71,8 +72,10 @@ export function AgreementActionsMenu({
       {menuOpen && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-          <div className="absolute right-0 z-20 mt-1 w-36 rounded-md border border-border bg-card py-1 shadow-lg">
+          {/* Menu items: full width by design, so exempt from the text-width rule. */}
+          <div data-menu className="absolute right-0 z-20 mt-1 w-36 rounded-md border border-border bg-card py-1 shadow-lg">
             <button
+              data-full-width
               onClick={() => {
                 setViewOpen(true);
                 setMenuOpen(false);
@@ -83,6 +86,7 @@ export function AgreementActionsMenu({
             </button>
             {canEdit && (
               <button
+                data-full-width
                 onClick={() => {
                   setEditOpen(true);
                   setMenuOpen(false);
@@ -93,14 +97,20 @@ export function AgreementActionsMenu({
               </button>
             )}
             {canDelete && (
-              <button onClick={handleDelete} className="block w-full px-3 py-1.5 text-left text-sm text-danger hover:bg-bg">
+              <button
+                data-full-width
+                onClick={handleDelete}
+                disabled={del.pending}
+                aria-busy={del.pending || undefined}
+                className="block w-full px-3 py-1.5 text-left text-sm text-danger hover:bg-bg disabled:opacity-50"
+              >
                 🗑️ Delete
               </button>
             )}
           </div>
         </>
       )}
-      {deleteError && <p className="absolute right-0 mt-1 w-56 text-xs text-danger">{deleteError}</p>}
+      {del.state?.error && <p className="absolute right-0 mt-1 w-56 text-xs text-danger">{del.state.error}</p>}
 
       <SlideOver open={viewOpen} onClose={() => setViewOpen(false)} title="Agreement details">
         <div className="flex flex-col">

@@ -227,11 +227,8 @@ export function StaffForm({
           <RolesField selectedRoles={selectedRoles} primary={staff?.role} canGrantSuperAdmin={canGrantSuperAdmin} />
         </div>
         {state?.error && <p className="mb-3 text-sm text-danger">{state.error}</p>}
-        {state?.success && (
-          <div className="mb-3 rounded-md border border-success bg-success-bg px-3 py-2 text-sm text-success">Saved.</div>
-        )}
         <div className="flex items-center gap-2">
-          <Button type="submit" variant="primary" size="lg" pending={pending}>
+          <Button type="submit" variant="primary" size="lg" pending={pending} status={{ state, label: "Roles saved." }}>
             Save roles
           </Button>
           <Button type="button" variant="outline" size="lg" onClick={onSuccess}>
@@ -500,23 +497,28 @@ export function StaffForm({
       </Section>
 
       {state?.error && <p className="mb-3 text-sm text-danger">{state.error}</p>}
-      {state?.success && (
+      {/* The confirmation itself sits beside the button; the temp password is
+          something to copy down rather than a confirmation, so it keeps a box
+          of its own. */}
+      {state?.success && !isEdit && (
         <div className="mb-3 rounded-md border border-success bg-success-bg px-3 py-2 text-sm text-success">
-          {isEdit ? (
-            <>
-              Saved.
-              {state?.restoredCount ? ` ${state.restoredCount} student(s) reassigned back to them.` : ""}
-            </>
-          ) : (
-            <>
-              Staff account created. Temp password: <code>{state?.password ?? ""}</code>
-            </>
-          )}
+          Temp password: <code>{state?.password ?? ""}</code>
         </div>
       )}
 
       <div className="flex items-center gap-2">
-        <Button type="submit" variant="primary" size="lg" pending={pending}>
+        <Button
+          type="submit"
+          variant="primary"
+          size="lg"
+          pending={pending}
+          status={{
+            state,
+            label: isEdit
+              ? `Saved.${state?.restoredCount ? ` ${state.restoredCount} student(s) reassigned back to them.` : ""}`
+              : "Staff account created.",
+          }}
+        >
           {isEdit ? "Save changes" : "Create staff account"}
         </Button>
         <Button type="button" variant="outline" size="lg" onClick={onSuccess}>

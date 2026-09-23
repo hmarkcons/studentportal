@@ -7,6 +7,7 @@ import {
   deleteStudentScholarship,
 } from "@/lib/actions/scholarships";
 import { Button } from "@/components/ui/Button";
+import { useButtonAction } from "@/components/useButtonAction";
 import { Badge } from "@/components/ui/Badge";
 import { Input, Select } from "@/components/ui/Input";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -72,7 +73,9 @@ function ScholarshipRow({
   currencySymbol: string;
 }) {
   const [editing, setEditing] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  // The row goes when the delete works, so it confirms with a toast; a
+  // refusal is said under the row that is still there.
+  const del = useButtonAction();
   const action = updateStudentScholarship.bind(null, s.id, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
 
@@ -81,9 +84,7 @@ function ScholarshipRow({
   async function handleDelete() {
     const label = s.name ?? body?.name ?? "this scholarship";
     if (!confirm(`Delete the record for ${label}?`)) return;
-    setDeleteError(null);
-    const result = await deleteStudentScholarship(s.id, revalidateTo);
-    if (result?.error) setDeleteError(result.error);
+    await del.run(() => deleteStudentScholarship(s.id, revalidateTo), { toast: "Deleted." });
   }
 
   if (editing) {
@@ -116,7 +117,7 @@ function ScholarshipRow({
             <StatusOptions />
           </Select>
         </label>
-        <Button type="submit" variant="primary" size="sm" pending={pending}>
+        <Button type="submit" variant="primary" size="sm" pending={pending} status={{ state, label: "Saved." }}>
           Save
         </Button>
         <button type="button" onClick={() => setEditing(false)} className="pb-2 text-xs text-muted hover:underline">
@@ -161,14 +162,20 @@ function ScholarshipRow({
               <button onClick={() => setEditing(true)} className="text-xs text-muted hover:text-primary" title="Edit">
                 ✏️
               </button>
-              <button onClick={handleDelete} className="text-xs text-muted hover:text-danger" title="Delete">
+              <button
+                onClick={handleDelete}
+                disabled={del.pending}
+                aria-busy={del.pending || undefined}
+                className="text-xs text-muted hover:text-danger disabled:opacity-50"
+                title="Delete"
+              >
                 🗑️
               </button>
             </>
           )}
         </span>
       </div>
-      {deleteError && <p className="mt-1 text-xs text-danger">{deleteError}</p>}
+      {del.state?.error && <p className="mt-1 text-xs text-danger">{del.state.error}</p>}
     </div>
   );
 }
@@ -269,7 +276,7 @@ export function ScholarshipSection({
                 <StatusOptions />
               </Select>
             </label>
-            <Button type="submit" size="sm" pending={pending}>
+            <Button type="submit" size="sm" pending={pending} status={{ state, label: "Added." }}>
               Add
             </Button>
             <button type="button" onClick={() => setAdding(false)} className="pb-2 text-xs text-muted hover:underline">

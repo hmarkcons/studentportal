@@ -33,7 +33,13 @@ export function ReferralPaymentCell({
 }) {
   const [open, setOpen] = useState(false);
   const action = setReferralPayment.bind(null, id);
-  const { onSubmit, pending, error } = useSlideOverForm(action, () => setOpen(false));
+  const { onSubmit, pending, error } = useSlideOverForm(
+    action,
+    () => setOpen(false),
+    // Either way the button that did it is gone: the panel closes, or the row
+    // swaps "Undo payment" for "Record payment".
+    paid ? "Payment undone." : "Payment recorded."
+  );
 
   if (paid) {
     return (

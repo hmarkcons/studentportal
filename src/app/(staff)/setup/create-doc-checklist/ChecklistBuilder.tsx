@@ -5,6 +5,8 @@ import { Card } from "@/components/ui/Card";
 import { ChecklistHeading } from "./ChecklistHeading";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { useButtonAction } from "@/components/useButtonAction";
+import { toast } from "@/lib/toast";
 import {
   addSectionToDestination,
   createSection,
@@ -43,6 +45,7 @@ export function ChecklistBuilder({
   const [dragging, setDragging] = useState<string | null>(null);
   const [dropActive, setDropActive] = useState(false);
   const [newSection, setNewSection] = useState("");
+  const create = useButtonAction();
 
   const ordered = order
     .map((key) => sections.find((s) => s.key === key))
@@ -50,17 +53,21 @@ export function ChecklistBuilder({
   // A section added or removed on the server since this render.
   for (const s of sections) if (!order.includes(s.key)) ordered.push(s);
 
-  function run(fn: () => Promise<{ error?: string } | void>) {
+  // `done` is a toast, for the buttons that are gone once they work — a
+  // palette entry added to the checklist, a dropped row asked for again.
+  // Errors still land in the banner below the palette.
+  function run(fn: () => Promise<{ error?: string } | void>, done?: string) {
     setError(null);
     startTransition(async () => {
       const result = await fn();
       if (result && "error" in result && result.error) setError(result.error);
+      else if (done) toast(done);
     });
   }
 
   function addSection(key: string) {
     setOrder((prev) => (prev.includes(key) ? prev : [...prev, key]));
-    run(() => addSectionToDestination(destinationId, key));
+    run(() => addSectionToDestination(destinationId, key), "Added.");
   }
 
   function commitOrder(keys: string[]) {
@@ -90,7 +97,7 @@ export function ChecklistBuilder({
         const added = await addSectionToDestination(destinationId, dragging);
         if (added && "error" in added && added.error) return added;
         return reorderDestinationSections(destinationId, next);
-      });
+      }, "Added.");
     } else if (dragging !== targetKey) {
       const next = keys.filter((k) => k !== dragging);
       next.splice(next.indexOf(targetKey) === -1 ? next.length : keys.indexOf(targetKey), 0, dragging);
@@ -158,7 +165,9 @@ export function ChecklistBuilder({
             const data = new FormData();
             data.set("label", label);
             setNewSection("");
-            run(async () => createSection(undefined, data));
+            // The button stays, so it says so beside itself — and a refusal
+            // (a clashing name) is said there too rather than in the banner.
+            create.run(() => createSection(undefined, data));
           }}
         >
           <label className="flex flex-col gap-1 text-xs text-muted">
@@ -170,7 +179,14 @@ export function ChecklistBuilder({
               className="w-56"
             />
           </label>
-          <Button type="submit" variant="outline-primary" size="sm" pending={pending}>
+          <Button
+            type="submit"
+            variant="outline-primary"
+            size="sm"
+            disabled={pending}
+            pending={create.pending}
+            status={{ state: create.state, label: "Created.", showError: true }}
+          >
             Create section
           </Button>
           <p className="pb-1 text-xs text-muted">
@@ -250,7 +266,7 @@ export function ChecklistBuilder({
                 <button
                   type="button"
                   disabled={pending || !destinationId}
-                  onClick={() => destinationId && run(() => includeSharedItem(destinationId, item.id))}
+                  onClick={() => destinationId && run(() => includeSharedItem(destinationId, item.id), "Added back.")}
                   className="text-xs font-medium text-primary hover:underline disabled:opacity-50"
                 >
                   Ask for it again

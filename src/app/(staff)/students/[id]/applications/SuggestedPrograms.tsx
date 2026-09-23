@@ -161,6 +161,7 @@ export function SuggestedPrograms({
         </p>
         <button
           type="button"
+          data-collapsible-toggle
           onClick={() => setMinimisedRemembered(false)}
           aria-expanded={false}
           aria-label="Maximise suggested programmes"

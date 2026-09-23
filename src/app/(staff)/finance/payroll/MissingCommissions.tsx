@@ -6,6 +6,7 @@ import { addMissingCommissionsForMonth } from "@/lib/actions/commissionAuto";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { toast } from "@/lib/toast";
 
 export type MissingCommission = {
   studentId: string;
@@ -44,7 +45,6 @@ export function MissingCommissions({
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [added, setAdded] = useState<number | null>(null);
 
   if (missing.length === 0) return null;
 
@@ -56,7 +56,10 @@ export function MissingCommissions({
     const result = await addMissingCommissionsForMonth(staffId, month, revalidateTo);
     if (result?.error) setError(result.error);
     else {
-      setAdded(result?.added ?? 0);
+      // Once added, the students leave this list — and with every priceable
+      // one gone, so does this button — so the count is said in a toast.
+      const added = result?.added ?? 0;
+      toast(`Added ${added} ${added === 1 ? "commission" : "commissions"}.`);
       // revalidatePath alone only marks the cache stale — this list and the
       // Total Commission beside it would both keep showing the figures from
       // before the click until something else navigated.
@@ -101,11 +104,7 @@ export function MissingCommissions({
         ))}
       </div>
 
-      {added !== null && (
-        <p className="mt-2 text-xs text-success">
-          Added {added} {added === 1 ? "commission" : "commissions"}.
-        </p>
-      )}
+
       {error && <p className="mt-2 text-xs text-danger">{error}</p>}
       {!canManage && <p className="mt-2 text-xs text-muted">Only Finance or Super Admin can add commission records.</p>}
     </Card>

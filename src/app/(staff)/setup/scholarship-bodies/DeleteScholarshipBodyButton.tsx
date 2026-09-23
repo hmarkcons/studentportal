@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { deleteScholarshipBody } from "@/lib/actions/scholarships";
+import { toast } from "@/lib/toast";
 
 export function DeleteScholarshipBodyButton({ id, name }: { id: string; name: string }) {
   const router = useRouter();
@@ -16,7 +17,11 @@ export function DeleteScholarshipBodyButton({ id, name }: { id: string; name: st
     const result = await deleteScholarshipBody(id);
     setPending(false);
     if (result?.error) setError(result.error);
-    else router.refresh();
+    else {
+      // The row goes, and this button with it.
+      toast("Deleted.");
+      router.refresh();
+    }
   }
 
   return (
@@ -26,7 +31,7 @@ export function DeleteScholarshipBodyButton({ id, name }: { id: string; name: st
         onClick={handleDelete}
         disabled={pending}
         title="Delete"
-        className="rounded p-1 text-muted hover:text-danger disabled:opacity-50"
+        className="w-fit rounded p-1 text-muted hover:text-danger disabled:opacity-50"
       >
         🗑️
       </button>

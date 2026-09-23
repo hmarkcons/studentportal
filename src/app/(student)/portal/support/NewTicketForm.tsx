@@ -4,7 +4,6 @@ import { useActionState } from "react";
 import { createTicket } from "@/lib/actions/support";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
-import { ActionStatus } from "@/components/ActionStatus";
 
 export function NewTicketForm({ studentId }: { studentId: string }) {
   const action = createTicket.bind(null, studentId);
@@ -15,10 +14,9 @@ export function NewTicketForm({ studentId }: { studentId: string }) {
       <Input name="subject" placeholder="Subject" required />
       <Textarea name="body" placeholder="How can we help?" required rows={3} />
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
-      <Button type="submit" variant="primary" pending={pending} className="self-start">
+      <Button type="submit" variant="primary" pending={pending} status={{ state, label: "Ticket raised." }}>
         Submit ticket
       </Button>
-      <ActionStatus state={state} pending={pending} label="Ticket raised." />
     </form>
   );
 }

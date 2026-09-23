@@ -73,6 +73,7 @@ export function GlobalSearch() {
                 key={r.id}
                 type="button"
                 onClick={() => go(r.href)}
+                data-full-width
                 className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-sm hover:bg-bg"
               >
                 <span className="text-ink">{r.label}</span>

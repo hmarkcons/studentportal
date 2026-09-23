@@ -1,8 +1,10 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState } from "react";
 import { updateUniversity, deleteUniversity } from "@/lib/actions/universities";
 import { Button } from "@/components/ui/Button";
+import { ActionStatus } from "@/components/ActionStatus";
+import { useButtonAction } from "@/components/useButtonAction";
 import { Input, Select } from "@/components/ui/Input";
 
 type University = {
@@ -17,15 +19,14 @@ type University = {
 export function UniversityEditForm({ university }: { university: University }) {
   const action = updateUniversity.bind(null, university.id);
   const [state, formAction, pending] = useActionState(action, undefined);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const del = useButtonAction();
 
   async function handleDelete() {
     if (!confirm(`Delete ${university.name}? This also deletes all its programs.`)) return;
-    setDeleteError(null);
     // deleteUniversity redirects on success (it throws internally, it never
-    // returns) — this only resolves to a value on the error path.
-    const result = await deleteUniversity(university.id);
-    if (result?.error) setDeleteError(result.error);
+    // returns) — this only resolves to a value on the error path, and that
+    // error is said beside the button. Success leaves the page: a toast.
+    await del.run(() => deleteUniversity(university.id), { toast: "Deleted." });
   }
 
   return (
@@ -59,16 +60,23 @@ export function UniversityEditForm({ university }: { university: University }) {
         </label>
       </div>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
-      {state?.success && <p className="text-xs text-success">Saved.</p>}
       <div className="flex items-center justify-between">
-        <Button type="submit" variant="primary" pending={pending} className="self-start">
+        <Button type="submit" variant="primary" pending={pending} status={{ state, label: "Saved." }}>
           Save changes
         </Button>
-        <button type="button" onClick={handleDelete} className="text-xs text-danger hover:underline">
-          Delete university
-        </button>
+        <span className="inline-flex items-center gap-2">
+          <ActionStatus state={del.state} pending={del.pending} label="Deleted." showError />
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={del.pending}
+            aria-busy={del.pending || undefined}
+            className="w-fit text-xs text-danger hover:underline disabled:opacity-50"
+          >
+            Delete university
+          </button>
+        </span>
       </div>
-      {deleteError && <p className="text-xs text-danger">{deleteError}</p>}
     </form>
   );
 }

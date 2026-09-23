@@ -27,8 +27,14 @@ export function ImportLeadsForm() {
       <summary className="cursor-pointer text-sm font-medium text-ink">Import leads from CSV</summary>
       <form action={formAction} className="mt-3 flex flex-wrap items-end gap-2">
         <FileField accept=".csv" required hint="CSV" inputClassName="text-sm" onChange={(s) => setReady(Boolean(s.file))} />
-        <Button type="submit" variant="primary" disabled={pending || !ready}>
-          {pending ? "Importing…" : "Import"}
+        <Button
+          type="submit"
+          variant="primary"
+          pending={pending}
+          disabled={!ready}
+          status={{ state, label: `Imported ${state && "count" in state ? state.count : 0} leads.` }}
+        >
+          Import
         </Button>
         <SampleCsvButton filename="leads-sample.csv" headers={HEADERS} exampleRow={EXAMPLE} />
       </form>
@@ -38,7 +44,7 @@ export function ImportLeadsForm() {
         (bachelors/masters/phd), <code>course_of_interest</code>, <code>country_of_interest</code>.
       </p>
       {state?.error && <p className="mt-2 text-xs text-danger">{state.error}</p>}
-      {state?.success && <p className="mt-2 text-xs text-success">Imported {state.count} leads.</p>}
+
     </details>
   );
 }

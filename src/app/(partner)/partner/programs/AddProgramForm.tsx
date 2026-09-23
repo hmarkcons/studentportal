@@ -4,7 +4,6 @@ import { useActionState, useState } from "react";
 import { partnerAddProgram } from "@/lib/actions/partner";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
-import { ActionStatus } from "@/components/ActionStatus";
 import { ProgramRoundsFields } from "@/components/ProgramRoundsFields";
 
 const STUDY_LEVELS = ["bachelors", "masters", "phd"];
@@ -38,10 +37,9 @@ export function AddProgramForm() {
       <Input name="tuition_fee" type="number" step="0.01" placeholder="Tuition fee" className="w-32" />
       <Input name="language_requirement" placeholder="Language requirement" />
       <ProgramRoundsFields key={roundsKey} />
-      <Button type="submit" disabled={pending} variant="primary">
-        {pending ? "Adding…" : "Add program"}
+      <Button type="submit" pending={pending} variant="primary" status={{ state, label: "Programme added." }}>
+        Add program
       </Button>
-      <ActionStatus state={state} pending={pending} label="Programme added." />
       {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
     </form>
   );

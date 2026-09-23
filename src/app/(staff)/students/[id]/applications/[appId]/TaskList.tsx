@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ActionStatus } from "@/components/ActionStatus";
+import { useButtonAction } from "@/components/useButtonAction";
 
 export type TaskRow = { id: string; description: string; due_date: string | null; status: string; priority: string; label?: string };
 
@@ -33,10 +34,12 @@ function TaskRowView({ task, revalidateTo }: { task: TaskRow; revalidateTo: stri
     if (result?.error) setRowError(result.error);
   }
 
+  // The row goes with the task, so a delete confirms with a toast.
+  const del = useButtonAction();
+
   async function handleDelete() {
     setRowError(null);
-    const result = await deleteApplicationTask(task.id, revalidateTo);
-    if (result?.error) setRowError(result.error);
+    await del.run(() => deleteApplicationTask(task.id, revalidateTo), { toast: "Deleted." });
   }
 
   if (editing) {
@@ -78,11 +81,16 @@ function TaskRowView({ task, revalidateTo }: { task: TaskRow; revalidateTo: stri
         <button onClick={() => setEditing(true)} className="text-xs text-muted hover:text-primary">
           ✏️
         </button>
-        <button onClick={handleDelete} className="text-xs text-muted hover:text-danger">
+        <button
+          onClick={handleDelete}
+          disabled={del.pending}
+          aria-busy={del.pending || undefined}
+          className="text-xs text-muted hover:text-danger disabled:opacity-50"
+        >
           🗑️
         </button>
       </div>
-      {rowError && <p className="text-xs text-danger">{rowError}</p>}
+      {(rowError ?? del.state?.error) && <p className="text-xs text-danger">{rowError ?? del.state?.error}</p>}
     </div>
   );
 }
@@ -118,7 +126,7 @@ export function TaskList({
         <Button type="submit" size="sm" pending={pending}>
           Add
         </Button>
-        <ActionStatus state={state} pending={pending} label="Saved." />
+        <ActionStatus state={state} pending={pending} label="Added." />
       </form>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </div>

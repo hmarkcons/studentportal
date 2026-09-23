@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useActionState } from "react";
+import { ActionStatus } from "@/components/ActionStatus";
 import { reassignLead } from "@/lib/actions/leads";
 
 function initials(name: string) {
@@ -38,16 +39,22 @@ export function InlineCounselorCell({
   }
 
   if (!open) {
+    // The panel closes on success, taking its Save button with it, so the
+    // confirmation sits beside the control that reopens it — kept to one
+    // short word so the row does not reflow.
     return (
-      <button onClick={() => setOpen(true)} title={currentCounselorName ?? "Unassigned"} className="inline-flex items-center gap-1">
-        {currentCounselorName ? (
-          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-[11px] font-medium text-primary">
-            {initials(currentCounselorName)}
-          </span>
-        ) : (
-          <span className="text-xs text-muted hover:text-ink">Unassigned</span>
-        )}
-      </button>
+      <span className="inline-flex items-center gap-1">
+        <button onClick={() => setOpen(true)} title={currentCounselorName ?? "Unassigned"} className="inline-flex items-center gap-1">
+          {currentCounselorName ? (
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-[11px] font-medium text-primary">
+              {initials(currentCounselorName)}
+            </span>
+          ) : (
+            <span className="text-xs text-muted hover:text-ink">Unassigned</span>
+          )}
+        </button>
+        <ActionStatus state={state} label="Saved." />
+      </span>
     );
   }
 
@@ -62,7 +69,7 @@ export function InlineCounselorCell({
         ))}
       </select>
       <div className="flex gap-1">
-        <button type="submit" disabled={pending} className="rounded bg-primary px-2 py-0.5 text-xs text-primary-ink disabled:opacity-50">
+        <button type="submit" disabled={pending} className="w-fit rounded bg-primary px-2 py-0.5 text-xs text-primary-ink disabled:opacity-50">
           {pending ? "Saving…" : "Save"}
         </button>
         <button type="button" onClick={() => setOpen(false)} className="rounded border border-border px-2 py-0.5 text-xs text-muted">

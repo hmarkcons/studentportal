@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 import { addLeadFollowUpRemark, listLeadFollowUpRemarks } from "@/lib/actions/leads";
 import { formatDateOnly } from "@/lib/formatDate";
 import { Input } from "@/components/ui/Input";
+import { ActionStatus } from "@/components/ActionStatus";
+import type { ActionResultLike } from "@/lib/actionStatus";
 
 type Remark = { id: string; due_date: string; due_time: string | null; note: string | null; resolved: boolean };
 
@@ -13,6 +15,9 @@ export function FollowUpCell({ leadId, remarkCount, revalidateTo }: { leadId: st
   const [note, setNote] = useState("");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // One object per saved remark. There is no form around these fields to
+  // clear it on edit, so picking the next date clears it instead.
+  const [done, setDone] = useState<ActionResultLike>(undefined);
 
   const [viewOpen, setViewOpen] = useState(false);
   const [viewLoading, setViewLoading] = useState(false);
@@ -33,6 +38,7 @@ export function FollowUpCell({ leadId, remarkCount, revalidateTo }: { leadId: st
   function submit() {
     if (!note.trim() || pending) return;
     setError(null);
+    setDone(undefined);
     startTransition(async () => {
       const result = await addLeadFollowUpRemark(leadId, revalidateTo, date, time || null, note);
       if (result?.error) {
@@ -41,6 +47,7 @@ export function FollowUpCell({ leadId, remarkCount, revalidateTo }: { leadId: st
         setDate("");
         setTime("");
         setNote("");
+        setDone({ success: true });
         if (viewOpen) {
           const refreshed = await listLeadFollowUpRemarks(leadId);
           setRemarks(refreshed.remarks as Remark[]);
@@ -55,7 +62,21 @@ export function FollowUpCell({ leadId, remarkCount, revalidateTo }: { leadId: st
         View{remarkCount > 0 ? ` (${remarkCount})` : ""}
       </button>
 
-      <Input type="date" value={date} disabled={pending} onChange={(e) => setDate(e.target.value)} className="w-36 text-xs" />
+      {/* The remark's fields fold away once it is saved, leaving only the
+          date, so the confirmation sits beside that. */}
+      <span className="inline-flex items-center gap-1">
+        <Input
+          type="date"
+          value={date}
+          disabled={pending}
+          onChange={(e) => {
+            setDate(e.target.value);
+            setDone(undefined);
+          }}
+          className="w-36 text-xs"
+        />
+        <ActionStatus state={done} pending={pending} label="Added." />
+      </span>
       {date && (
         <>
           <Input

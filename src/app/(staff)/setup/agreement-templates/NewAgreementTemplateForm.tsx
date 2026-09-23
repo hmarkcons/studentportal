@@ -8,7 +8,6 @@ import { RichTextEditor } from "@/components/RichTextEditor";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { FileField } from "@/components/FileField";
-import { ActionStatus } from "@/components/ActionStatus";
 
 export function NewAgreementTemplateForm({ destinations }: { destinations: { id: string; display_name: string }[] }) {
   const [state, formAction, pending] = useActionState(createAgreementTemplate, undefined);
@@ -82,10 +81,15 @@ export function NewAgreementTemplateForm({ destinations }: { destinations: { id:
         </ul>
       </details>
       <div>
-        <Button type="submit" variant="primary" disabled={pending || blocked}>
-          {pending ? "Saving…" : "Add template"}
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={blocked}
+          pending={pending}
+          status={{ state, label: "Template added." }}
+        >
+          Add template
         </Button>
-        <ActionStatus state={state} pending={pending} label="Template added." />
       </div>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>

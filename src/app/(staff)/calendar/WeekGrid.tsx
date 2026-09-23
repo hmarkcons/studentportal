@@ -45,6 +45,7 @@ export function WeekGrid({
           <button
             key={dayStr}
             type="button"
+            data-full-width
             onClick={() => onSelectDay(dayStr)}
             className={`flex min-h-[220px] flex-col items-stretch gap-1.5 rounded-lg border border-border bg-card p-2 text-left hover:bg-bg ${
               isSelected ? "ring-2 ring-primary" : ""

@@ -5,6 +5,7 @@ import { verifySignedAgreement, rejectAgreementArtifact } from "@/lib/actions/ag
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { toast } from "@/lib/toast";
 
 // Staff sign-off for an e-signed submission. The document and the consent
 // video are reviewed separately: either can be wrong on its own, and sending a
@@ -42,6 +43,9 @@ export function VerifySignedAgreement({
     setError(null);
     const result = await verifySignedAgreement(agreementId, studentId, emailVerified, docOk, videoOk);
     if (result?.error) setError(result.error);
+    // Approving marks the agreement signed, and the page then shows it signed
+    // in place of this review — so the approval is confirmed in a toast.
+    else toast("Approved.");
     setPending(false);
   }
 
@@ -51,6 +55,8 @@ export function VerifySignedAgreement({
     const result = await rejectAgreementArtifact(agreementId, studentId, kind, reason);
     if (result?.error) setError(result.error);
     else {
+      // The send-back panel closes on success, taking its button with it.
+      toast("Sent back.");
       setRejecting(null);
       setReason("");
     }

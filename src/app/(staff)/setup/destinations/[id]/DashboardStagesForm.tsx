@@ -5,7 +5,6 @@ import { updateDashboardPipelineStages } from "@/lib/actions/destinations";
 import { formatDashboardStagesText, type DashboardStageDef } from "@/lib/dashboardPipeline";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Input";
-import { ActionStatus } from "@/components/ActionStatus";
 
 export function DashboardStagesForm({ destinationId, stages }: { destinationId: string; stages: DashboardStageDef[] }) {
   const action = updateDashboardPipelineStages.bind(null, destinationId);
@@ -19,10 +18,9 @@ export function DashboardStagesForm({ destinationId, stages }: { destinationId: 
         date field; 2+ options is a dropdown.
       </p>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
-      <Button type="submit" variant="primary" className="self-start" pending={pending}>
+      <Button type="submit" variant="primary" pending={pending} status={{ state, label: "Saved." }}>
         Save stages
       </Button>
-      <ActionStatus state={state} pending={pending} label="Saved." />
     </form>
   );
 }

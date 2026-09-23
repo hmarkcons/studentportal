@@ -182,9 +182,8 @@ export function TravelVisaHistorySection({
       </div>
 
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
-      {state?.success && <p className="text-xs text-success">Saved.</p>}
       <div>
-        <Button type="submit" variant="primary" size="sm" pending={pending}>
+        <Button type="submit" variant="primary" size="sm" pending={pending} status={{ state, label: "Saved." }}>
           Save travel &amp; visa history
         </Button>
       </div>

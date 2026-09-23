@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { readCredentialAction, storeCredentialAction } from "@/lib/actions/countryTracker";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { toast } from "@/lib/toast";
 
 /** Nothing is revealed for longer than this without being asked for again. */
 const HIDE_AFTER_MS = 60_000;
@@ -36,7 +37,6 @@ export function VisaCredentials({
   const [copied, setCopied] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Clears the countdown if the student navigates away mid-reveal, so a later
@@ -101,10 +101,11 @@ export function VisaCredentials({
       setError(result.error);
       return;
     }
+    // The form closes on success, taking its Save button with it, so the
+    // confirmation is a toast rather than a message beside the button.
     setEditing(false);
-    setSaved(true);
     setValue(null);
-    setTimeout(() => setSaved(false), 4000);
+    toast("Saved — your counsellor will see the new one.");
   }
 
   return (
@@ -157,7 +158,6 @@ export function VisaCredentials({
           <button type="button" onClick={() => setEditing(true)} className="text-xs font-medium text-primary hover:underline">
             I changed this password
           </button>
-          {saved && <span className="text-xs text-success">Saved — your counsellor will see the new one.</span>}
         </div>
       )}
 

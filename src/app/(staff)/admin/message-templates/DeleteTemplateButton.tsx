@@ -1,23 +1,25 @@
 "use client";
 
-import { useState } from "react";
 import { deleteMessageTemplate } from "@/lib/actions/messageTemplates";
+import { ActionStatus } from "@/components/ActionStatus";
+import { useButtonAction } from "@/components/useButtonAction";
 
 export function DeleteTemplateButton({ id }: { id: string }) {
-  const [error, setError] = useState<string | null>(null);
+  const del = useButtonAction();
 
-  async function handleDelete() {
-    setError(null);
-    const result = await deleteMessageTemplate(id);
-    if (result?.error) setError(result.error);
-  }
-
+  // The template's row goes with it, so success is a toast; a refusal stays
+  // beside the button, which is still there.
   return (
-    <div>
-      <button onClick={handleDelete} className="text-xs text-danger hover:underline">
+    <span className="inline-flex flex-wrap items-center gap-2">
+      <button
+        onClick={() => del.run(() => deleteMessageTemplate(id), { toast: "Template deleted." })}
+        disabled={del.pending}
+        aria-busy={del.pending || undefined}
+        className="w-fit text-xs text-danger hover:underline disabled:opacity-50"
+      >
         Delete
       </button>
-      {error && <p className="text-xs text-danger">{error}</p>}
-    </div>
+      <ActionStatus state={del.state} pending={del.pending} label="Deleted." showError />
+    </span>
   );
 }

@@ -4,7 +4,6 @@ import { useActionState, useState } from "react";
 import { storeCredentialAction, readCredentialAction } from "@/lib/actions/countryTracker";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { ActionStatus } from "@/components/ActionStatus";
 
 export function CredentialField({
   label,
@@ -37,13 +36,12 @@ export function CredentialField({
       <form action={formAction} className="flex flex-wrap items-center gap-2">
         <Input name="username" placeholder="Username / ID" className="w-36" />
         <Input name="password" type="password" placeholder="Password" className="w-36" />
-        <Button type="submit" variant="primary" size="sm" pending={pending}>
+        <Button type="submit" variant="primary" size="sm" pending={pending} status={{ state, label: "Saved." }}>
           Save
         </Button>
         <Button type="button" onClick={reveal} size="sm" pending={revealing}>
           Reveal
         </Button>
-        <ActionStatus state={state} pending={pending} label="Saved." />
       </form>
       {revealed && (
         <p className="mt-2 text-xs text-muted">

@@ -5,7 +5,6 @@ import { addProgram } from "@/lib/actions/universities";
 import { STUDY_LEVELS } from "@/lib/constants";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
-import { ActionStatus } from "@/components/ActionStatus";
 import { ProgramRoundsFields } from "@/components/ProgramRoundsFields";
 
 export function AddProgramForm({ universityId }: { universityId: string }) {
@@ -46,10 +45,9 @@ export function AddProgramForm({ universityId }: { universityId: string }) {
           course start and an apply-by date are easy to enter the wrong way
           round. */}
       <ProgramRoundsFields key={roundsKey} />
-      <Button type="submit" variant="primary" pending={pending}>
+      <Button type="submit" variant="primary" pending={pending} status={{ state, label: "Programme added." }}>
         Add program
       </Button>
-      <ActionStatus state={state} pending={pending} label="Programme added." />
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
   );

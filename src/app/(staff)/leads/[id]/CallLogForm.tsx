@@ -5,7 +5,6 @@ import { updateLeadStatus } from "@/lib/actions/leads";
 import { LEAD_STATUSES, LEAD_STATUS_LABELS } from "@/lib/constants";
 import { Button } from "@/components/ui/Button";
 import { Select, Textarea } from "@/components/ui/Input";
-import { ActionStatus } from "@/components/ActionStatus";
 
 export function CallLogForm({ leadId, currentStatus }: { leadId: string; currentStatus: string }) {
   const action = updateLeadStatus.bind(null, leadId);
@@ -28,10 +27,9 @@ export function CallLogForm({ leadId, currentStatus }: { leadId: string; current
         <Textarea name="remark" required rows={2} className="px-3 py-2" />
       </div>
       {state?.error && <p className="text-sm text-danger">{state.error}</p>}
-      <Button type="submit" variant="primary" disabled={pending} className="self-start">
-        {pending ? "Saving…" : "Log call & update status"}
+      <Button type="submit" variant="primary" pending={pending} status={{ state, label: "Call logged." }}>
+        Log call & update status
       </Button>
-      <ActionStatus state={state} pending={pending} label="Call logged." />
     </form>
   );
 }

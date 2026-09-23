@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { isLowStock } from "@/lib/inventory";
-import { ActionStatus } from "@/components/ActionStatus";
+import { useButtonAction } from "@/components/useButtonAction";
 
 type Item = {
   id: string;
@@ -19,15 +19,15 @@ type Item = {
 
 export function ItemRow({ item, canManage }: { item: Item; canManage: boolean }) {
   const [editing, setEditing] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const del = useButtonAction();
   const action = updateInventoryItem.bind(null, item.id);
   const [state, formAction, pending] = useActionState(action, undefined);
 
-  async function handleDelete() {
+  // The row goes when the delete works, so success is a toast; a failure is
+  // said beside the bin, which is still there.
+  function handleDelete() {
     if (!confirm(`Delete ${item.name}?`)) return;
-    setDeleteError(null);
-    const result = await deleteInventoryItem(item.id);
-    if (result?.error) setDeleteError(result.error);
+    void del.run(() => deleteInventoryItem(item.id), { toast: `${item.name} deleted.` });
   }
 
   const low = isLowStock(item.quantity_on_hand, item.low_stock_threshold);
@@ -50,13 +50,12 @@ export function ItemRow({ item, canManage }: { item: Item; canManage: boolean })
               placeholder="Blank = no warning"
               className="w-40"
             />
-            <Button type="submit" variant="primary" size="sm" pending={pending}>
+            <Button type="submit" variant="primary" size="sm" pending={pending} status={{ state, label: "Saved." }}>
               Save
             </Button>
             <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>
               Cancel
             </Button>
-            <ActionStatus state={state} pending={pending} label="Saved." />
             {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
           </form>
         </td>
@@ -78,12 +77,17 @@ export function ItemRow({ item, canManage }: { item: Item; canManage: boolean })
             <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
               ✏️
             </Button>
-            <Button variant="ghost" size="sm" onClick={handleDelete}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDelete}
+              pending={del.pending}
+              status={{ state: del.state, label: "Deleted.", showError: true }}
+            >
               🗑️
             </Button>
           </div>
         )}
-        {deleteError && <p className="mt-1 text-xs text-danger">{deleteError}</p>}
       </td>
     </tr>
   );

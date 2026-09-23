@@ -4,7 +4,6 @@ import { useActionState } from "react";
 import { updateDestinationStages } from "@/lib/actions/destinations";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Input";
-import { ActionStatus } from "@/components/ActionStatus";
 
 export function StagesForm({ destinationId, stages }: { destinationId: string; stages: string[] }) {
   const action = updateDestinationStages.bind(null, destinationId);
@@ -15,10 +14,9 @@ export function StagesForm({ destinationId, stages }: { destinationId: string; s
       <Textarea name="pipeline_stages" rows={3} defaultValue={stages.join(", ")} />
       <p className="text-xs text-muted">Comma-separated, in order. Rejected/Declined/Withdrawn are always available regardless of this list.</p>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
-      <Button type="submit" variant="primary" className="self-start" pending={pending}>
+      <Button type="submit" variant="primary" pending={pending} status={{ state, label: "Saved." }}>
         Save stages
       </Button>
-      <ActionStatus state={state} pending={pending} label="Saved." />
     </form>
   );
 }

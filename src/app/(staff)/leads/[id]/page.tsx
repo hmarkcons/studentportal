@@ -5,11 +5,10 @@ import { createClient } from "@/lib/supabase/server";
 import { formatDateOnly } from "@/lib/formatDate";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LEAD_STATUS_LABELS, LEAD_STATUS_TONE } from "@/lib/constants";
 import { CallLogForm } from "./CallLogForm";
-import { registerLead } from "@/lib/actions/leads";
+import { RegisterLeadButton } from "./RegisterLeadButton";
 import { LeadEditForm } from "@/components/LeadEditForm";
 import { DeleteStudentButton } from "../../students/[id]/DeleteStudentButton";
 
@@ -45,8 +44,6 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
     .eq("lead_id", id)
     .order("created_at", { ascending: false })
     .returns<CallLog[]>();
-
-  const registerAction = registerLead.bind(null, id);
 
   return (
     <div className="w-full">
@@ -85,11 +82,9 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
           <p className="text-sm text-muted">
             Converts this lead into a Registered Student and hands ownership to the Processing Team.
           </p>
-          <form action={registerAction} className="mt-3">
-            <Button type="submit" variant="primary">
-              Register this lead
-            </Button>
-          </form>
+          <div className="mt-3">
+            <RegisterLeadButton leadId={id} />
+          </div>
           <p className="mt-2 text-xs text-muted">Discount can be set anytime after registration from the student&apos;s dashboard.</p>
         </Card>
       )}

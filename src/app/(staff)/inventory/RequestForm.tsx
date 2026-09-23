@@ -4,7 +4,6 @@ import { useActionState } from "react";
 import { requestInventoryItem } from "@/lib/actions/inventory";
 import { Input, Select } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { ActionStatus } from "@/components/ActionStatus";
 
 export function RequestForm({ items }: { items: { id: string; name: string }[] }) {
   const [state, formAction, pending] = useActionState(requestInventoryItem, undefined);
@@ -21,10 +20,9 @@ export function RequestForm({ items }: { items: { id: string; name: string }[] }
       </Select>
       <Input name="quantity" type="number" step="1" min="1" placeholder="Quantity" required className="w-28" />
       <Input name="notes" placeholder="Notes" />
-      <Button type="submit" variant="outline-primary" pending={pending}>
+      <Button type="submit" variant="outline-primary" pending={pending} status={{ state, label: "Request sent." }}>
         Request
       </Button>
-      <ActionStatus state={state} pending={pending} label="Request sent." />
       {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
     </form>
   );

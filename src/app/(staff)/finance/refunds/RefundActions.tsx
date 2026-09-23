@@ -3,6 +3,14 @@
 import { useState } from "react";
 import { updateRefundStatus, deleteRefundRequest } from "@/lib/actions/finance";
 import { Button } from "@/components/ui/Button";
+import { ActionStatus } from "@/components/ActionStatus";
+import { useButtonAction } from "@/components/useButtonAction";
+
+const DONE_LABELS: Record<string, string> = {
+  approved: "Approved.",
+  processed: "Marked processed.",
+  rejected: "Rejected.",
+};
 
 export function RefundActions({
   id,
@@ -17,8 +25,11 @@ export function RefundActions({
   isSuperAdmin: boolean;
   ineligible: boolean;
 }) {
-  const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
+  // Which status the last change set, for the confirmation's wording.
+  const [lastValue, setLastValue] = useState<string | null>(null);
+  const change = useButtonAction();
+  const del = useButtonAction();
 
   const next: Record<string, { label: string; value: string }> = {
     requested: { label: "Approve", value: "approved" },
@@ -30,22 +41,25 @@ export function RefundActions({
 
   async function handleStatusChange(value: string) {
     setPending(value);
-    setError(null);
-    const result = await updateRefundStatus(id, "/finance/refunds", value);
-    if (result?.error) setError(result.error);
+    setLastValue(value);
+    await change.run(() => updateRefundStatus(id, "/finance/refunds", value));
     setPending(null);
   }
 
   async function handleDelete() {
     if (!confirm("Delete this refund record?")) return;
-    setError(null);
-    const result = await deleteRefundRequest(id);
-    if (result?.error) setError(result.error);
+    // The record's row goes with it, so success is a toast.
+    await del.run(() => deleteRefundRequest(id), { toast: "Refund deleted." });
   }
+
+  const error = change.state?.error ?? del.state?.error ?? null;
 
   return (
     <div>
-      <div className="flex gap-1">
+      {/* The button pressed is replaced by the next step (or by nothing, once
+          rejected), so the confirmation sits at the end of the row rather
+          than beside a button that is no longer there. */}
+      <div className="flex flex-wrap items-center gap-1">
         {action && !ineligible && (
           <>
             <Button variant="success" size="sm" onClick={() => handleStatusChange(action.value)} pending={pending === action.value}>
@@ -57,10 +71,11 @@ export function RefundActions({
           </>
         )}
         {isSuperAdmin && (
-          <Button variant="outline" size="sm" onClick={handleDelete}>
+          <Button variant="outline" size="sm" onClick={handleDelete} pending={del.pending} aria-label="Delete refund">
             🗑️
           </Button>
         )}
+        <ActionStatus state={change.state} pending={change.pending} label={DONE_LABELS[lastValue ?? ""] ?? "Saved."} />
       </div>
       {error && <p className="mt-1 text-xs text-danger">{error}</p>}
     </div>

@@ -11,7 +11,6 @@ import {
 import { Button } from "@/components/ui/Button";
 import { FileField } from "@/components/FileField";
 import { Input, Select } from "@/components/ui/Input";
-import { ActionStatus } from "@/components/ActionStatus";
 
 export function NewServiceRequestForm({ students }: { students: { id: string; full_name: string }[] }) {
   const [serviceType, setServiceType] = useState<(typeof ADDITIONAL_SERVICE_TYPES)[number]>(ADDITIONAL_SERVICE_TYPES[0]);
@@ -102,10 +101,15 @@ export function NewServiceRequestForm({ students }: { students: { id: string; fu
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
       {/* The proof is optional, so this gates only on a chosen file being
           unusable — not on there being one. */}
-      <Button type="submit" disabled={pending || blocked} variant="primary" className="self-start">
-        {pending ? "Adding…" : "Add request"}
+      <Button
+        type="submit"
+        disabled={blocked}
+        pending={pending}
+        variant="primary"
+        status={{ state, label: "Request added." }}
+      >
+        Add request
       </Button>
-      <ActionStatus state={state} pending={pending} label="Request added." />
     </form>
   );
 }

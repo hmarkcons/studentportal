@@ -15,6 +15,7 @@ export function ConsentVideoLink({ url, version }: { url: string; version: numbe
     <>
       <button
         type="button"
+        data-collapsible-toggle
         onClick={() => setOpen((v) => !v)}
         className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
       >

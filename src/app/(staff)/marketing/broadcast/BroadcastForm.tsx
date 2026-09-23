@@ -89,7 +89,6 @@ export function BroadcastForm({ students, templates }: { students: Student[]; te
       )}
 
       {state?.error && <p className="text-sm text-danger">{state.error}</p>}
-      {state?.success && <p className="text-sm text-success">Sent to {state.count} student(s).</p>}
       {/* Confirmed before sending: this reaches many people at once from a
           single click, "Select all" is one button away, and there is no
           unsend. */}
@@ -99,7 +98,7 @@ export function BroadcastForm({ students, templates }: { students: Student[]; te
         size="lg"
         disabled={selected.size === 0}
         pending={pending}
-        className="self-start"
+        status={{ state, label: state?.success ? `Sent to ${state.count} student(s).` : "Sent." }}
         onClick={(e) => {
           const names = students
             .filter((s) => selected.has(s.id))

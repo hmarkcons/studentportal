@@ -25,6 +25,7 @@ export function ActionStatus({
   state,
   pending = false,
   label = "Saved.",
+  showError = false,
   className = "",
 }: {
   state: ActionResultLike;
@@ -32,6 +33,8 @@ export function ActionStatus({
   pending?: boolean;
   /** What happened, in the past tense: "Saved.", "Sent.", "Uploaded." */
   label?: string;
+  /** Say the error here too, for a button whose caller shows it nowhere else. */
+  showError?: boolean;
   className?: string;
 }) {
   const anchor = useRef<HTMLSpanElement>(null);
@@ -58,14 +61,22 @@ export function ActionStatus({
   }, [state]);
 
   const message = actionStatusMessage(state, { pending, touchedSinceResult: touched, label });
+  const error = showError && !pending && !touched && state?.error ? state.error : null;
 
   // The anchor stays mounted even with nothing to say, so the listener above
   // is attached before the first result arrives rather than after it.
   return (
     <span ref={anchor} className={className || undefined}>
+      {/* data-action-status marks the message for check:buttons, which
+          asserts it appears beside the button that was pressed. */}
       {message && (
-        <span role="status" className="text-xs font-medium text-success">
+        <span role="status" data-action-status="done" className="text-xs font-medium text-success">
           {message}
+        </span>
+      )}
+      {error && (
+        <span role="alert" data-action-status="error" className="text-xs font-medium text-danger">
+          {error}
         </span>
       )}
     </span>

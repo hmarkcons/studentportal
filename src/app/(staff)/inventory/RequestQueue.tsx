@@ -13,6 +13,7 @@ import {
   type InventoryRequestStatus,
 } from "@/lib/inventory";
 import { formatStamp } from "@/lib/activityStamp";
+import { toast } from "@/lib/toast";
 
 type Request = {
   id: string;
@@ -41,7 +42,12 @@ function RequestRow({ request, canManage }: { request: Request; canManage: boole
     setError(null);
     const result = await updateInventoryRequestStatus(request.id, status, withNote);
     if (result?.error) setError(result.error);
-    else setRejecting(false);
+    else {
+      setRejecting(false);
+      // A decided request moves to the Decided list and loses these buttons,
+      // so there is nothing left to say "Fulfilled." beside.
+      toast(status === "fulfilled" ? "Request fulfilled." : "Request rejected.");
+    }
     setPending(null);
   }
 
@@ -50,6 +56,7 @@ function RequestRow({ request, canManage }: { request: Request; canManage: boole
     setError(null);
     const result = await cancelInventoryRequest(request.id);
     if (result?.error) setError(result.error);
+    else toast("Request withdrawn.");
     setPending(null);
   }
 
@@ -93,14 +100,14 @@ function RequestRow({ request, canManage }: { request: Request; canManage: boole
                   <button
                     onClick={() => decide("fulfilled")}
                     disabled={Boolean(pending)}
-                    className="text-xs text-success hover:underline disabled:opacity-50"
+                    className="w-fit text-xs text-success hover:underline disabled:opacity-50"
                   >
                     Fulfill
                   </button>
                   <button
                     onClick={() => setRejecting((v) => !v)}
                     disabled={Boolean(pending)}
-                    className="text-xs text-danger hover:underline disabled:opacity-50"
+                    className="w-fit text-xs text-danger hover:underline disabled:opacity-50"
                   >
                     Reject
                   </button>
@@ -110,7 +117,7 @@ function RequestRow({ request, canManage }: { request: Request; canManage: boole
                 <button
                   onClick={withdraw}
                   disabled={Boolean(pending)}
-                  className="text-xs text-muted hover:underline disabled:opacity-50"
+                  className="w-fit text-xs text-muted hover:underline disabled:opacity-50"
                   title="Withdraw a request you raised by mistake"
                 >
                   Withdraw

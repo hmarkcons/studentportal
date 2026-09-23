@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Input, Select } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ActionStatus } from "@/components/ActionStatus";
+import { useButtonAction } from "@/components/useButtonAction";
 
 export type DashboardTaskRow = {
   id: string;
@@ -32,10 +33,12 @@ function TaskRow({ task, revalidateTo }: { task: DashboardTaskRow; revalidateTo:
     if (result?.error) setError(result.error);
   }
 
+  // The row goes with the task, so a delete confirms with a toast.
+  const del = useButtonAction();
+
   async function handleDelete() {
     setError(null);
-    const result = await deleteApplicationTask(task.id, revalidateTo);
-    if (result?.error) setError(result.error);
+    await del.run(() => deleteApplicationTask(task.id, revalidateTo), { toast: "Deleted." });
   }
 
   return (
@@ -50,11 +53,16 @@ function TaskRow({ task, revalidateTo }: { task: DashboardTaskRow; revalidateTo:
           {task.priority}
         </span>
         {task.due_date && <span className="text-xs text-muted">due {formatDateOnly(task.due_date)}</span>}
-        <button onClick={handleDelete} className="text-xs text-muted hover:text-danger">
+        <button
+          onClick={handleDelete}
+          disabled={del.pending}
+          aria-busy={del.pending || undefined}
+          className="text-xs text-muted hover:text-danger disabled:opacity-50"
+        >
           🗑️
         </button>
       </div>
-      {error && <p className="text-xs text-danger">{error}</p>}
+      {(error ?? del.state?.error) && <p className="text-xs text-danger">{error ?? del.state?.error}</p>}
     </div>
   );
 }
@@ -101,7 +109,7 @@ export function DashboardTaskList({
           <Button type="submit" variant="outline-primary" size="sm" pending={pending}>
             Add
           </Button>
-          <ActionStatus state={state} pending={pending} label="Saved." />
+          <ActionStatus state={state} pending={pending} label="Added." />
         </form>
       )}
       {state?.error && <p className="mt-1 text-xs text-danger">{state.error}</p>}

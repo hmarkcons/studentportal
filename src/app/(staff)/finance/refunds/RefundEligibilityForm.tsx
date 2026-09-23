@@ -53,11 +53,10 @@ export function RefundEligibilityForm({
           </Select>
         </>
       )}
-      <Button type="submit" variant="outline" size="sm" pending={pending}>
+      <Button type="submit" variant="outline" size="sm" pending={pending} status={{ state, label: "Saved." }}>
         Save
       </Button>
       {state?.error && <span className="text-danger">{state.error}</span>}
-      {state?.success && <span className="text-success">Saved.</span>}
     </form>
   );
 }

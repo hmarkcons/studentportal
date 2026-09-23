@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { clockInOut } from "@/lib/actions/admin";
 import { Button } from "@/components/ui/Button";
 import { punchTime } from "@/lib/attendance";
+import type { ActionResultLike } from "@/lib/actionStatus";
 
 /**
  * Clock in / clock out, showing which of the two you actually are.
@@ -20,18 +21,25 @@ export function ClockButtons({ openSince }: { openSince: string | null }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, setPending] = useState<"in" | "out" | null>(null);
+  // Which button last did what it says, kept as one object per result so the
+  // status beside it can tell this punch from the next.
+  const [done, setDone] = useState<{ action: "in" | "out"; state: ActionResultLike } | null>(null);
 
   async function handle(action: "in" | "out") {
     setPending(action);
     setError(null);
     setNotice(null);
+    setDone(null);
     const result = await clockInOut(action);
     if (result?.error) setError(result.error);
     else {
-      // "in"/"out" is visible in the row that appears; the other outcomes are
-      // the ones worth spelling out, because nothing on screen would change.
+      // "in"/"out" get "Clocked in." / "Clocked out." beside the button; the
+      // other outcomes are the ones worth spelling out, because nothing was
+      // punched and a confirmation would claim otherwise.
       if (result?.outcome && result.outcome !== "in" && result.outcome !== "out") {
         setNotice(result.message ?? null);
+      } else {
+        setDone({ action, state: { success: true } });
       }
       router.refresh();
     }
@@ -49,11 +57,22 @@ export function ClockButtons({ openSince }: { openSince: string | null }) {
           "Not clocked in."
         )}
       </p>
-      <div className="flex gap-2">
-        <Button onClick={() => handle("in")} variant="primary" pending={pending === "in"} disabled={Boolean(openSince)}>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          onClick={() => handle("in")}
+          variant="primary"
+          pending={pending === "in"}
+          disabled={Boolean(openSince)}
+          status={{ state: done?.action === "in" ? done.state : undefined, label: "Clocked in." }}
+        >
           Clock In
         </Button>
-        <Button onClick={() => handle("out")} pending={pending === "out"} disabled={!openSince}>
+        <Button
+          onClick={() => handle("out")}
+          pending={pending === "out"}
+          disabled={!openSince}
+          status={{ state: done?.action === "out" ? done.state : undefined, label: "Clocked out." }}
+        >
           Clock Out
         </Button>
       </div>

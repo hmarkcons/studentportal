@@ -5,7 +5,6 @@ import { createCalendarEvent } from "@/lib/actions/calendarEvents";
 import { Input, Select } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { EventFieldsFieldset } from "./EventFieldsFieldset";
-import { ActionStatus } from "@/components/ActionStatus";
 
 export function AddEventForm({
   day,
@@ -55,10 +54,9 @@ export function AddEventForm({
 
       <EventFieldsFieldset />
 
-      <Button type="submit" variant="primary" size="sm" pending={pending} className="self-start">
+      <Button type="submit" variant="primary" size="sm" pending={pending} status={{ state, label: "Added." }}>
         + Add
       </Button>
-      <ActionStatus state={state} pending={pending} label="Added." />
       {type === "task" && applicationOptions.length === 0 && (
         <p className="text-xs text-muted">No applications yet — add a student application before scheduling a task.</p>
       )}

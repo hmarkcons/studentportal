@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input, Textarea } from "@/components/ui/Input";
 import { fillVisaTemplate, splitParagraphs } from "@/lib/visaOutcome";
-import { ActionStatus } from "@/components/ActionStatus";
 
 export type VisaMessageRow = {
   approved_heading: string;
@@ -99,9 +98,8 @@ export function VisaMessagesForm({ initial, canEdit }: { initial: VisaMessageRow
       ))}
 
       {error && <p className="rounded-md border border-danger bg-danger-bg px-3 py-2 text-sm text-danger">{error}</p>}
-      <ActionStatus state={result} pending={pending} label="Saved." />
       <div className="flex items-center gap-2">
-        <Button type="submit" variant="primary" pending={pending}>
+        <Button type="submit" variant="primary" pending={pending} status={{ state: result, label: "Saved." }}>
           Save messages
         </Button>
         <Button type="button" onClick={() => setV(initial)}>

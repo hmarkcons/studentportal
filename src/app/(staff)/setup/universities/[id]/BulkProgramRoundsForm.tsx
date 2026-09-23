@@ -5,7 +5,6 @@ import { setRoundsForPrograms } from "@/lib/actions/programRoundsBulk";
 import { STUDY_LEVELS } from "@/lib/constants";
 import { Button } from "@/components/ui/Button";
 import { ProgramRoundsFields } from "@/components/ProgramRoundsFields";
-import { ActionStatus } from "@/components/ActionStatus";
 
 type BulkProgram = { id: string; level: string; name: string };
 
@@ -204,25 +203,35 @@ export function BulkProgramRoundsForm({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="submit" variant="primary" size="sm" pending={pending} disabled={selected.size === 0}>
+          {/* What was set, how much was skipped and which applications lost
+              their round — said beside the button, and cleared once the
+              form is touched again, like every other confirmation. */}
+          <Button
+            type="submit"
+            variant="primary"
+            size="sm"
+            pending={pending}
+            disabled={selected.size === 0}
+            status={{
+              state,
+              label: state?.success
+                ? `Set ${state.rounds} round${state.rounds === 1 ? "" : "s"} across ${state.programs} programme${
+                    state.programs === 1 ? "" : "s"
+                  }.${state.skipped ? ` Skipped ${state.skipped} that already had a round with that name.` : ""}${
+                    state.applicationsDetached
+                      ? ` ${state.applicationsDetached} application${state.applicationsDetached === 1 ? "" : "s"} lost the round it was filed against — set it again on the application.`
+                      : ""
+                  }`
+                : "Applied.",
+            }}
+          >
             {selected.size === 0
               ? "Pick some programmes"
               : `Apply to ${selected.size} programme${selected.size === 1 ? "" : "s"}`}
           </Button>
-          <ActionStatus state={state} pending={pending} label="" />
         </div>
 
         {state?.error && <p className="text-xs text-danger">{state.error}</p>}
-        {state?.success && (
-          <p className="text-xs text-success">
-            Set {state.rounds} round{state.rounds === 1 ? "" : "s"} across {state.programs} programme
-            {state.programs === 1 ? "" : "s"}.
-            {state.skipped ? ` Skipped ${state.skipped} that already had a round with that name.` : ""}
-            {state.applicationsDetached
-              ? ` ${state.applicationsDetached} application${state.applicationsDetached === 1 ? "" : "s"} lost the round it was filed against — set it again on the application.`
-              : ""}
-          </p>
-        )}
       </form>
     </details>
   );

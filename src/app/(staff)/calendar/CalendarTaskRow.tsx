@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { EventFieldsFieldset } from "./EventFieldsFieldset";
 import type { CalendarRecurrence } from "./types";
 import { ActionStatus } from "@/components/ActionStatus";
+import { useButtonAction } from "@/components/useButtonAction";
 
 const PRIORITY_TONE: Record<string, "danger" | "warning" | "neutral"> = {
   urgent: "danger",
@@ -60,7 +61,7 @@ export function CalendarTaskRow({
   const [done, setDone] = useState(initialDone);
   const [editing, setEditing] = useState(false);
   const [toggleError, setToggleError] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const del = useButtonAction();
   const action = updateCalendarTask.bind(null, taskId, "/calendar");
   const [state, formAction, pending] = useActionState(action, undefined);
 
@@ -90,10 +91,9 @@ export function CalendarTaskRow({
           recurrenceEndDateDefault={recurrenceEndDate}
         />
         <div className="flex items-center gap-2">
-          <Button type="submit" variant="primary" size="sm" pending={pending}>
+          <Button type="submit" variant="primary" size="sm" pending={pending} status={{ state, label: "Saved." }}>
             Save
           </Button>
-          <ActionStatus state={state} pending={pending} label="Saved." />
           <button type="button" onClick={() => setEditing(false)} className="text-xs text-muted hover:underline">
             Cancel
           </button>
@@ -103,10 +103,10 @@ export function CalendarTaskRow({
     );
   }
 
-  async function handleDelete() {
-    setDeleteError(null);
-    const result = await deleteApplicationTask(taskId, "/calendar");
-    if (result?.error) setDeleteError(result.error);
+  // The row goes when the delete works, so success is a toast; a failure is
+  // said beside the bin, which is still there.
+  function handleDelete() {
+    void del.run(() => deleteApplicationTask(taskId, "/calendar"), { toast: "Task deleted." });
   }
 
   return (
@@ -151,13 +151,13 @@ export function CalendarTaskRow({
           <button onClick={() => setEditing(true)} className="text-xs text-muted hover:text-primary">
             ✏️
           </button>
-          <button onClick={handleDelete} className="text-xs text-muted hover:text-danger">
+          <button onClick={handleDelete} disabled={del.pending} className="w-fit text-xs text-muted hover:text-danger disabled:opacity-50">
             🗑️
           </button>
+          <ActionStatus state={del.state} pending={del.pending} label="Deleted." showError />
         </div>
       </div>
       {toggleError && <p className="text-xs text-danger">{toggleError}</p>}
-      {deleteError && <p className="text-xs text-danger">{deleteError}</p>}
     </div>
   );
 }

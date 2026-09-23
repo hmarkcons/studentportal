@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { ProofFileCell } from "@/components/ProofFileCell";
+import { useButtonAction } from "@/components/useButtonAction";
+import { toast } from "@/lib/toast";
 import { toPKR } from "@/lib/constants";
 import {
   createStaffCommission,
@@ -185,8 +187,8 @@ function AddCommissionForm({
           <option value="USD">USD</option>
         </Select>
         <Input name="registration_date" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required />
-        <Button type="submit" variant="primary" size="sm" disabled={pending}>
-          {pending ? "Adding…" : "+ Add commission"}
+        <Button type="submit" variant="primary" size="sm" pending={pending} status={{ state, label: "Commission added." }}>
+          + Add commission
         </Button>
       </div>
       {suggestion.amount != null && !amountEdited && (
@@ -276,7 +278,7 @@ function EditRow({ row, onDone }: { row: CommissionRow; onDone: () => void }) {
         <option value="Card">Card</option>
         <option value="Other">Other</option>
       </Select>
-      <Button type="submit" variant="primary" size="sm" pending={pending}>
+      <Button type="submit" variant="primary" size="sm" pending={pending} status={{ state, label: "Saved." }}>
         Save
       </Button>
       <Button type="button" variant="ghost" size="sm" onClick={onDone}>
@@ -288,11 +290,17 @@ function EditRow({ row, onDone }: { row: CommissionRow; onDone: () => void }) {
 }
 
 function MarkPaidButton({ id }: { id: string }) {
-  const action = markStaffCommissionPaid.bind(null, id, REVALIDATE_TO);
-  const [, formAction] = useActionState(action, undefined);
+  // Once paid, the row offers carry-forward instead of this button, so the
+  // confirmation is a toast; a refusal is said beside the button, which is
+  // still there.
+  const [state, formAction, pending] = useActionState(async (prev: unknown, fd: FormData) => {
+    const result = await markStaffCommissionPaid(id, REVALIDATE_TO, prev, fd);
+    if (!result?.error) toast("Commission marked paid.");
+    return result;
+  }, undefined);
   return (
     <form action={formAction} className="flex items-center gap-1">
-      <Button type="submit" variant="success" size="sm">
+      <Button type="submit" variant="success" size="sm" pending={pending} status={{ state, label: "Marked paid.", showError: true }}>
         Mark paid
       </Button>
     </form>
@@ -300,55 +308,52 @@ function MarkPaidButton({ id }: { id: string }) {
 }
 
 function CarryForwardButton({ id, studentName }: { id: string; studentName: string }) {
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const carry = useButtonAction();
 
   async function handle() {
     if (!confirm(`Mark this paid commission for ${studentName} as a credit? It'll be available to offset a new commission for the same staff member.`)) return;
-    setPending(true);
-    setError(null);
-    const result = await carryForwardCommissionCredit(id, REVALIDATE_TO);
-    if (result?.error) setError(result.error);
-    setPending(false);
+    // A carried-forward commission stops offering this button, so success is
+    // a toast; a refusal is said beside the button, which is still there.
+    await carry.run(() => carryForwardCommissionCredit(id, REVALIDATE_TO), { toast: "Carried forward as a credit." });
   }
 
   return (
-    <div>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        pending={pending}
-        onClick={handle}
-        title="Student had no admission, or withdrew/went ghost — carry this paid amount forward as a credit"
-      >
-        No admission — carry forward
-      </Button>
-      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
-    </div>
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      pending={carry.pending}
+      onClick={handle}
+      title="Student had no admission, or withdrew/went ghost — carry this paid amount forward as a credit"
+      status={{ state: carry.state, label: "Carried forward.", showError: true }}
+    >
+      No admission — carry forward
+    </Button>
   );
 }
 
 function DeleteCommissionButton({ id, studentName }: { id: string; studentName: string }) {
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const del = useButtonAction();
 
   async function handleDelete() {
     if (!confirm(`Delete this commission record for ${studentName}?`)) return;
-    setPending(true);
-    setError(null);
-    const result = await deleteStaffCommission(id, REVALIDATE_TO);
-    if (result?.error) setError(result.error);
-    setPending(false);
+    // The record's row goes with it, so success is a toast; a refusal is said
+    // beside the button, which is still there.
+    await del.run(() => deleteStaffCommission(id, REVALIDATE_TO), { toast: "Commission record deleted." });
   }
 
   return (
-    <div>
-      <Button type="button" variant="outline" size="sm" onClick={handleDelete} pending={pending}>
-        🗑️
-      </Button>
-      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
-    </div>
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onClick={handleDelete}
+      pending={del.pending}
+      aria-label="Delete commission record"
+      status={{ state: del.state, label: "Deleted.", showError: true }}
+    >
+      🗑️
+    </Button>
   );
 }
 

@@ -7,6 +7,12 @@ import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { approveOffsiteAccess, denyOffsiteAccess, revokeOffsiteAccess } from "@/lib/actions/officeAccess";
 import { DEFAULT_APPROVAL_DAYS } from "@/lib/officeAccess";
+import { toast } from "@/lib/toast";
+
+// Each decision moves the request out of the list it was pressed in, so the
+// button is gone once it has worked: success is a toast, a refusal is said
+// under the lists.
+const DONE = { approve: "Approved.", deny: "Turned down.", revoke: "Ended." } as const;
 
 export type AccessRow = {
   id: string;
@@ -62,7 +68,10 @@ export function AccessRequests({
           : await revokeOffsiteAccess(id);
     setBusy(null);
     if (result?.error) setError(result.error);
-    else router.refresh();
+    else {
+      toast(DONE[what]);
+      router.refresh();
+    }
   }
 
   return (
@@ -139,7 +148,7 @@ export function AccessRequests({
                     type="button"
                     onClick={() => run(r.id, "revoke")}
                     disabled={busy === `${r.id}:revoke`}
-                    className="text-xs text-danger hover:underline disabled:opacity-40"
+                    className="w-fit text-xs text-danger hover:underline disabled:opacity-40"
                   >
                     {busy === `${r.id}:revoke` ? "Ending…" : "End now"}
                   </button>

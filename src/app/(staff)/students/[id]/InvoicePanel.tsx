@@ -18,6 +18,8 @@ import { formatDateOnly } from "@/lib/formatDate";
 import { balanceDueDate, carriedFromNote } from "@/lib/partialPayment";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { useButtonAction } from "@/components/useButtonAction";
+import { toast } from "@/lib/toast";
 import { Input, Select, Textarea } from "@/components/ui/Input";
 
 /** Karachi's day, not the browser's — the office books payments by its own date. */
@@ -181,7 +183,13 @@ export function GenerateInvoiceForm({
         className="w-full"
         placeholder="Refund / consultancy terms shown on the invoice"
       />
-      <Button type="submit" variant="primary" pending={pending} className="self-start">
+      <Button
+        type="submit"
+        variant="primary"
+        pending={pending}
+        wrapperClassName="self-start"
+        status={{ state, label: "Generated." }}
+      >
         Generate invoice
       </Button>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
@@ -287,7 +295,7 @@ function EditInvoiceForm({
       </div>
       <Textarea name="terms" defaultValue={invoice.terms ?? DEFAULT_TERMS} rows={2} className="w-full" />
       <div className="flex items-center gap-2">
-        <Button type="submit" variant="primary" pending={pending}>
+        <Button type="submit" variant="primary" pending={pending} status={{ state, label: "Saved." }}>
           Save invoice
         </Button>
         <Button type="button" variant="ghost" size="sm" onClick={onDone}>
@@ -300,29 +308,42 @@ function EditInvoiceForm({
 }
 
 function DeleteInvoiceButton({ invoiceId, studentId, revalidateTo }: { invoiceId: string; studentId: string; revalidateTo: string }) {
-  const [error, setError] = useState<string | null>(null);
+  // The invoice card goes with the invoice, so a delete confirms with a toast.
+  const del = useButtonAction();
 
   async function handle() {
     if (!confirm("Delete this invoice and all its installments? This cannot be undone.")) return;
-    const result = await deleteInvoice(invoiceId, studentId, revalidateTo);
-    if (result?.error) setError(result.error);
+    await del.run(() => deleteInvoice(invoiceId, studentId, revalidateTo), { toast: "Deleted." });
   }
 
   return (
     <div>
-      <button type="button" onClick={handle} className="rounded-md border border-border px-2 py-0.5 text-xs text-muted hover:text-danger">
+      <button
+        type="button"
+        onClick={handle}
+        disabled={del.pending}
+        aria-busy={del.pending || undefined}
+        className="w-fit rounded-md border border-border px-2 py-0.5 text-xs text-muted hover:text-danger disabled:opacity-50"
+      >
         🗑️ Delete invoice
       </button>
-      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
+      {del.state?.error && <p className="mt-1 text-xs text-danger">{del.state.error}</p>}
     </div>
   );
 }
 
 function MarkPaidForm({ installmentId, studentId }: { installmentId: string; studentId: string }) {
-  const action = markInstallmentPaid.bind(null, installmentId, studentId);
+  const markPaid = markInstallmentPaid.bind(null, installmentId, studentId);
+  // A paid row shows a Paid badge in place of this form, so the success is
+  // confirmed with a toast — there is no button left to sit beside.
+  const action = async (prevState: unknown, formData: FormData) => {
+    const result = await markPaid(prevState, formData);
+    if (!result?.error) toast("Marked as paid.");
+    return result;
+  };
   // The state was discarded here, so a refused or failed payment looked
   // exactly like a successful one: the row stayed unpaid and nothing said why.
-  const [state, formAction] = useActionState(action, undefined);
+  const [state, formAction, pending] = useActionState(action, undefined);
   return (
     <form action={formAction} className="flex flex-wrap items-center gap-1">
       <Select name="payment_method">
@@ -331,7 +352,7 @@ function MarkPaidForm({ installmentId, studentId }: { installmentId: string; stu
         <option value="Card">Card</option>
         <option value="Other">Other</option>
       </Select>
-      <Button type="submit" variant="success" size="sm">
+      <Button type="submit" variant="success" size="sm" pending={pending} status={{ state, label: "Marked as paid." }}>
         Mark paid
       </Button>
       {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
@@ -437,7 +458,7 @@ function EditInstallmentForm({
         </div>
       )}
 
-      <Button type="submit" variant="primary" pending={pending} size="sm">
+      <Button type="submit" variant="primary" pending={pending} size="sm" status={{ state, label: "Saved." }}>
         Save
       </Button>
       <Button type="button" variant="ghost" size="sm" onClick={onDone}>
@@ -469,7 +490,8 @@ function LineItemsSection({
   const action = addLineItem.bind(null, invoiceId, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
   const [selectedProduct, setSelectedProduct] = useState("");
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  // A removed item's row goes with it, so it confirms with a toast.
+  const remove = useButtonAction();
 
   // A settled instalment is a record of money that changed hands, so an item
   // cannot be put on one. The next instalment still outstanding is the
@@ -481,9 +503,7 @@ function LineItemsSection({
   const defaultPlacement = open[0]?.id ?? "";
 
   async function handleDeleteLineItem(lineItemId: string) {
-    setDeleteError(null);
-    const result = await deleteLineItem(invoiceId, lineItemId, revalidateTo);
-    if (result?.error) setDeleteError(result.error);
+    await remove.run(() => deleteLineItem(invoiceId, lineItemId, revalidateTo), { toast: "Removed." });
   }
 
   const selectedFeeProduct = feeProducts.find((p) => p.id === selectedProduct) ?? null;
@@ -509,13 +529,18 @@ function LineItemsSection({
             {li.description && <span className="mt-0.5 block italic opacity-80">{li.description}</span>}
           </span>
           {canManage && (
-            <button type="button" onClick={() => handleDeleteLineItem(li.id)} className="text-danger hover:underline">
+            <button
+              type="button"
+              onClick={() => handleDeleteLineItem(li.id)}
+              disabled={remove.pending}
+              className="w-fit text-danger hover:underline disabled:opacity-50"
+            >
               Remove
             </button>
           )}
         </div>
       ))}
-      {deleteError && <p className="text-xs text-danger">{deleteError}</p>}
+      {remove.state?.error && <p className="text-xs text-danger">{remove.state.error}</p>}
       {canManage && (
       <form action={formAction} className="flex flex-wrap items-center gap-1">
         <Select
@@ -567,7 +592,14 @@ function LineItemsSection({
             {open.length > 1 && <option value="spread">Divide equally</option>}
           </Select>
         </label>
-        <Button type="submit" variant="outline-primary" size="sm" pending={pending} disabled={open.length === 0}>
+        <Button
+          type="submit"
+          variant="outline-primary"
+          size="sm"
+          pending={pending}
+          disabled={open.length === 0}
+          status={{ state, label: "Added." }}
+        >
           + Add item
         </Button>
         {open.length === 0 && (
@@ -595,46 +627,44 @@ function LineItemsSection({
 }
 
 function GeneratePdfButton({ invoiceId, studentId, revalidateTo, hasExisting }: { invoiceId: string; studentId: string; revalidateTo: string; hasExisting: boolean }) {
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handle() {
-    setPending(true);
-    setError(null);
-    const result = await generateInvoicePdf(invoiceId, studentId, revalidateTo);
-    if (result && "error" in result) setError(result.error ?? "Something went wrong.");
-    setPending(false);
-  }
+  const generate = useButtonAction();
 
   return (
-    <div className="flex flex-col items-end">
-      <Button type="button" onClick={handle} pending={pending} size="sm">
-        {hasExisting ? "Regenerate PDF" : "Generate PDF"}
-      </Button>
-      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
-    </div>
+    <Button
+      type="button"
+      onClick={() => generate.run(() => generateInvoicePdf(invoiceId, studentId, revalidateTo))}
+      pending={generate.pending}
+      size="sm"
+      status={{ state: generate.state, label: "Generated.", showError: true }}
+    >
+      {hasExisting ? "Regenerate PDF" : "Generate PDF"}
+    </Button>
   );
 }
 
 function SendInvoiceEmailButton({ invoiceId, studentId }: { invoiceId: string; studentId: string }) {
-  const [pending, setPending] = useState(false);
-  const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
+  const send = useButtonAction();
+  // Who it reached, said beside the button — see handleSendReceipt.
+  const [sentTo, setSentTo] = useState<string | null>(null);
 
   async function handle() {
-    setPending(true);
-    setMessage(null);
-    const result = await sendInvoiceToStudent(invoiceId, studentId);
-    setMessage(result?.error ? { text: result.error, ok: false } : { text: `Sent to ${result?.sentTo ?? "the student"}.`, ok: true });
-    setPending(false);
+    await send.run(async () => {
+      const result = await sendInvoiceToStudent(invoiceId, studentId);
+      if (!result?.error) setSentTo(result?.sentTo ?? null);
+      return result;
+    });
   }
 
   return (
-    <div className="flex flex-col items-end">
-      <Button type="button" onClick={handle} pending={pending} size="sm">
-        📧 Email invoice
-      </Button>
-      {message && <p className={`mt-1 text-xs ${message.ok ? "text-success" : "text-danger"}`}>{message.text}</p>}
-    </div>
+    <Button
+      type="button"
+      onClick={handle}
+      pending={send.pending}
+      size="sm"
+      status={{ state: send.state, label: `Sent to ${sentTo ?? "the student"}.`, showError: true }}
+    >
+      📧 Email invoice
+    </Button>
   );
 }
 
@@ -711,8 +741,8 @@ export function InvoiceCard({
 }) {
   const [editingInvoice, setEditingInvoice] = useState(false);
   const [editingInstallmentId, setEditingInstallmentId] = useState<string | null>(null);
-  const [receiptMessage, setReceiptMessage] = useState<{ text: string; ok: boolean } | null>(null);
-  const [receiptPending, setReceiptPending] = useState(false);
+  const receipt = useButtonAction();
+  const [receiptSentTo, setReceiptSentTo] = useState<string | null>(null);
 
   // Through computeInvoiceMath, the same function the PDF and the email use.
   // Adding the two fees directly ignored the discount and the SRB tax, so this
@@ -739,15 +769,13 @@ export function InvoiceCard({
 
   // Says who it reached, not just that it went: this button used to report
   // success without sending anything at all, and "Sent." alone reads the same
-  // either way.
+  // either way. Said beside the button, as every other action here is.
   async function handleSendReceipt() {
-    setReceiptPending(true);
-    setReceiptMessage(null);
-    const result = await sendReceipt(invoice.id, studentId);
-    setReceiptMessage(
-      result?.error ? { text: result.error, ok: false } : { text: `Sent to ${result?.sentTo ?? "the student"}.`, ok: true }
-    );
-    setReceiptPending(false);
+    await receipt.run(async () => {
+      const result = await sendReceipt(invoice.id, studentId);
+      if (!result?.error) setReceiptSentTo(result?.sentTo ?? null);
+      return result;
+    });
   }
 
   return (
@@ -759,15 +787,18 @@ export function InvoiceCard({
           {invoice.currency} {total.toFixed(2)}
           {invoice.installment_plan && <span className="ml-2 text-xs font-normal text-muted">· {invoice.installment_plan}</span>}
         </p>
-        {receiptMessage && (
-          <p className={`text-xs ${receiptMessage.ok ? "text-success" : "text-danger"}`}>{receiptMessage.text}</p>
-        )}
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone={STATUS_TONE[status]}>{INVOICE_STATUS_LABELS[status]}</Badge>
           <Badge tone={invoice.sent_status === "sent" ? "success" : "neutral"}>{invoice.sent_status}</Badge>
           {canManage && (
             <>
-              <Button type="button" onClick={handleSendReceipt} size="sm" pending={receiptPending}>
+              <Button
+                type="button"
+                onClick={handleSendReceipt}
+                size="sm"
+                pending={receipt.pending}
+                status={{ state: receipt.state, label: `Sent to ${receiptSentTo ?? "the student"}.`, showError: true }}
+              >
                 Send receipt
               </Button>
               <Button type="button" onClick={() => setEditingInvoice((v) => !v)} size="sm">

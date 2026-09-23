@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { downloadScholarshipCall, removeScholarshipCall } from "@/lib/actions/scholarshipCall";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { useButtonAction } from "@/components/useButtonAction";
 
 /**
  * Keeps a copy of the official call against the body.
@@ -32,31 +33,31 @@ export function CallPdfButton({
   hasLink: boolean;
 }) {
   const router = useRouter();
-  const [pending, setPending] = useState<"download" | "remove" | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const dl = useButtonAction();
+  const rm = useButtonAction();
+  // What the download says about the copy it kept, said beside the button.
+  const [note, setNote] = useState<string | null>(null);
 
   async function download() {
-    setPending("download");
-    setError(null);
-    setMessage(null);
-    const result = await downloadScholarshipCall(bodyId);
-    setPending(null);
-    if (result?.error) setError(result.error);
-    else {
-      setMessage(result.note ?? "Saved.");
-      router.refresh();
-    }
+    setNote(null);
+    await dl.run(async () => {
+      const result = await downloadScholarshipCall(bodyId);
+      if (!result?.error) {
+        setNote(result.note ?? null);
+        router.refresh();
+      }
+      return result;
+    });
   }
 
   async function remove() {
     if (!confirm("Remove the stored copy of this call? The link stays.")) return;
-    setPending("remove");
-    setError(null);
-    const result = await removeScholarshipCall(bodyId);
-    setPending(null);
-    if (result?.error) setError(result.error);
-    else router.refresh();
+    // Once the copy is gone so is this button, so success is a toast.
+    await rm.run(async () => {
+      const result = await removeScholarshipCall(bodyId);
+      if (!result?.error) router.refresh();
+      return result;
+    }, { toast: "Removed." });
   }
 
   return (
@@ -78,11 +79,24 @@ export function CallPdfButton({
         {hasStored && language === "en" && <Badge tone="success">English</Badge>}
         {hasStored && language === "unknown" && <Badge tone="neutral">language unknown</Badge>}
 
-        <Button type="button" size="sm" pending={pending === "download"} onClick={download} disabled={!hasLink}>
+        <Button
+          type="button"
+          size="sm"
+          pending={dl.pending}
+          onClick={download}
+          disabled={!hasLink}
+          status={{ state: dl.state, label: note ?? "Saved.", showError: true }}
+        >
           {hasStored ? "Download again" : "Download the call"}
         </Button>
         {hasStored && (
-          <Button type="button" size="sm" pending={pending === "remove"} onClick={remove}>
+          <Button
+            type="button"
+            size="sm"
+            pending={rm.pending}
+            onClick={remove}
+            status={{ state: rm.state, label: "Removed.", showError: true }}
+          >
             Remove copy
           </Button>
         )}
@@ -92,8 +106,6 @@ export function CallPdfButton({
       {hasStored && fetchedAt && (
         <p className="text-[11px] text-muted">Saved {new Date(fetchedAt).toLocaleDateString("en-GB", { timeZone: "Asia/Karachi" })}</p>
       )}
-      {message && <p className="text-[11px] text-success">{message}</p>}
-      {error && <p className="text-[11px] text-danger">{error}</p>}
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useActionState } from "react";
+import { ActionStatus } from "@/components/ActionStatus";
 import { updateLeadStatus } from "@/lib/actions/leads";
 import { LEAD_STATUSES, LEAD_STATUS_LABELS } from "@/lib/constants";
 
@@ -28,14 +29,20 @@ export function InlineStatusCell({
   }
 
   if (!open) {
+    // The panel closes on success, taking its Save button with it, so the
+    // confirmation sits beside the control that reopens it — kept to one
+    // short word so the row does not reflow.
     return (
-      <button
-        onClick={() => setOpen(true)}
-        title={latestRemark ?? undefined}
-        className="rounded-full border border-border px-2 py-0.5 text-xs text-ink hover:border-primary"
-      >
-        {LEAD_STATUS_LABELS[currentStatus as never] ?? currentStatus} · change
-      </button>
+      <span className="inline-flex items-center gap-1">
+        <button
+          onClick={() => setOpen(true)}
+          title={latestRemark ?? undefined}
+          className="rounded-full border border-border px-2 py-0.5 text-xs text-ink hover:border-primary"
+        >
+          {LEAD_STATUS_LABELS[currentStatus as never] ?? currentStatus} · change
+        </button>
+        <ActionStatus state={state} label="Saved." />
+      </span>
     );
   }
 
@@ -50,7 +57,7 @@ export function InlineStatusCell({
       </select>
       <input name="remark" required placeholder="Remark (required)" className="rounded border border-border px-1 py-0.5 text-xs" />
       <div className="flex gap-1">
-        <button type="submit" disabled={pending} className="rounded bg-primary px-2 py-0.5 text-xs text-primary-ink disabled:opacity-50">
+        <button type="submit" disabled={pending} className="w-fit rounded bg-primary px-2 py-0.5 text-xs text-primary-ink disabled:opacity-50">
           {pending ? "Saving…" : "Save"}
         </button>
         <button type="button" onClick={() => setOpen(false)} className="rounded border border-border px-2 py-0.5 text-xs text-muted">

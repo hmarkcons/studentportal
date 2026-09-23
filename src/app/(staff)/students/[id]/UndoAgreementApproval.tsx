@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { formatStamp } from "@/lib/activityStamp";
+import { toast } from "@/lib/toast";
 
 /**
  * Takes back the approval of an e-signed agreement, its consent video, or both.
@@ -47,6 +48,9 @@ export function UndoAgreementApproval({
     const result = await undoAgreementApproval(agreementId, studentId, kind, note);
     if (result?.error) setError(result.error);
     else {
+      // The panel closes on success, taking its button with it, so the undo is
+      // confirmed in a toast.
+      toast("Approval undone.");
       setOpen(false);
       setNote("");
     }
@@ -57,6 +61,7 @@ export function UndoAgreementApproval({
     return (
       <button
         type="button"
+        data-collapsible-toggle
         onClick={() => setOpen(true)}
         className="self-start text-xs font-medium text-muted hover:text-danger hover:underline"
         title="Put this submission back in front of staff for re-checking"

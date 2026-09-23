@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "@/lib/toast";
 
 type ActionResult = { error?: string; success?: boolean } | undefined;
 
@@ -16,10 +17,15 @@ type ActionResult = { error?: string; success?: boolean } | undefined;
  * router.refresh() because everything these forms change is server-rendered:
  * revalidatePath only marks the cache stale, so without it the table behind
  * the panel keeps showing what it showed before the save.
+ *
+ * `doneMessage` is said in a toast once the server accepts: the panel closes
+ * and takes its submit button with it, so there is nothing left to put
+ * "Saved." beside.
  */
 export function useSlideOverForm(
   action: (prevState: unknown, formData: FormData) => Promise<ActionResult>,
-  onDone: () => void
+  onDone: () => void,
+  doneMessage?: string
 ) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -39,6 +45,7 @@ export function useSlideOverForm(
       return;
     }
     onDone();
+    if (doneMessage) toast(doneMessage);
     router.refresh();
   }
 

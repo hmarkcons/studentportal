@@ -9,7 +9,7 @@ import { PrimaryBackupDestinationSelect } from "@/components/PrimaryBackupDestin
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { phoneBounds } from "@/lib/phoneNumber";
-import { ActionStatus } from "@/components/ActionStatus";
+import { toast } from "@/lib/toast";
 
 const labelClass = "text-sm font-medium text-ink";
 
@@ -44,7 +44,21 @@ export function RegisterStudentForm({
   counselors: { id: string; full_name: string }[];
   destinations: DestinationOption[];
 }) {
-  const [state, formAction, pending] = useActionState(registerStudentManually, undefined);
+  // A successful registration redirects to the new student's profile, taking
+  // this button with it — so it is confirmed with a toast, raised only once the
+  // server has answered (the redirect is how it answers success).
+  const register = async (prevState: unknown, formData: FormData) => {
+    try {
+      const result = await registerStudentManually(prevState, formData);
+      if (!result?.error) toast("Student registered.");
+      return result;
+    } catch (error) {
+      const digest = (error as { digest?: unknown })?.digest;
+      if (typeof digest === "string" && digest.startsWith("NEXT_REDIRECT")) toast("Student registered.");
+      throw error;
+    }
+  };
+  const [state, formAction, pending] = useActionState(register, undefined);
   const [primaryId, setPrimaryId] = useState("");
   const intakeConfig = intakeConfigFor(destinations, primaryId);
 
@@ -124,10 +138,15 @@ export function RegisterStudentForm({
 
       {state?.error && <p className="text-sm text-danger">{state.error}</p>}
 
-      <Button type="submit" variant="primary" pending={pending} className="mt-2">
+      <Button
+        type="submit"
+        variant="primary"
+        pending={pending}
+        wrapperClassName="mt-2"
+        status={{ state, label: "Student registered." }}
+      >
         Register student
       </Button>
-      <ActionStatus state={state} pending={pending} label="Student registered." />
     </form>
   );
 }

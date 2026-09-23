@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { deleteStudent } from "@/lib/actions/leads";
+import { useButtonAction } from "@/components/useButtonAction";
+import { ActionStatus } from "@/components/ActionStatus";
 
 export function RowActionsMenu({
   id,
@@ -22,7 +24,8 @@ export function RowActionsMenu({
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
-  const [pending, setPending] = useState(false);
+  const del = useButtonAction();
+  const pending = del.pending;
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -70,18 +73,20 @@ export function RowActionsMenu({
     ) {
       return;
     }
-    setPending(true);
-    const result = await deleteStudent(id);
-    if (result?.error) {
-      alert(result.error);
-      setPending(false);
-    } else {
-      router.refresh();
-    }
+    // The row goes once this lands, so success is a toast; a refusal is said
+    // beside the ⋮ that is still there, where an alert() used to be.
+    await del.run(
+      async () => {
+        const result = await deleteStudent(id);
+        if (!result?.error) router.refresh();
+        return result;
+      },
+      { toast: "Deleted." }
+    );
   }
 
   return (
-    <>
+    <span className="inline-flex items-center gap-2">
       <button
         ref={buttonRef}
         type="button"
@@ -92,6 +97,7 @@ export function RowActionsMenu({
       >
         {pending ? "…" : "⋮"}
       </button>
+      <ActionStatus state={del.state} pending={pending} label="Deleted." showError />
       {open && pos && (
         <div
           ref={menuRef}
@@ -105,6 +111,7 @@ export function RowActionsMenu({
             <button
               type="button"
               onClick={handleDelete}
+              data-full-width
               className="block w-full px-3 py-1.5 text-left text-sm text-danger hover:bg-bg"
             >
               {deleteLabel}
@@ -112,6 +119,6 @@ export function RowActionsMenu({
           )}
         </div>
       )}
-    </>
+    </span>
   );
 }

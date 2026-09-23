@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { deleteStudent } from "@/lib/actions/leads";
+import { useButtonAction } from "@/components/useButtonAction";
 
 export function DeleteStudentButton({
   studentId,
@@ -16,8 +17,11 @@ export function DeleteStudentButton({
   label?: string;
 }) {
   const router = useRouter();
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // The page goes with the student, so a delete confirms with a toast. Held
+  // busy through the navigation that follows, as it always was.
+  const del = useButtonAction();
+  const [leaving, setLeaving] = useState(false);
+  const pending = del.pending || leaving;
 
   async function handleDelete() {
     if (
@@ -27,13 +31,20 @@ export function DeleteStudentButton({
     ) {
       return;
     }
-    setPending(true);
-    setError(null);
-    const result = await deleteStudent(studentId);
-    if (result?.error) {
-      setError(result.error);
-      setPending(false);
-    } else {
+    // Noted inside the action rather than read from run()'s return: run()
+    // also answers undefined for a second click it ignored, and that must not
+    // read as "deleted" and navigate away.
+    let deleted = false;
+    await del.run(
+      async () => {
+        const result = await deleteStudent(studentId);
+        deleted = !result?.error;
+        return result;
+      },
+      { toast: "Student deleted." }
+    );
+    if (deleted) {
+      setLeaving(true);
       router.push(redirectTo);
     }
   }
@@ -43,11 +54,11 @@ export function DeleteStudentButton({
       <button
         onClick={handleDelete}
         disabled={pending}
-        className="text-xs text-danger hover:underline disabled:opacity-50"
+        className="w-fit text-xs text-danger hover:underline disabled:opacity-50"
       >
         {pending ? "Deleting…" : label}
       </button>
-      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
+      {del.state?.error && <p className="mt-1 text-xs text-danger">{del.state.error}</p>}
     </div>
   );
 }

@@ -35,9 +35,12 @@ export function SignOutButton({
     window.location.href = "/login";
   }
 
+  // w-fit so a caller's flex column cannot stretch it the width of the page;
+  // a caller that sets a width of its own keeps it.
+  const width = /(^|\s)(w-|min-w-|flex-1|grow|basis-)/.test(className ?? "") ? "" : "w-fit";
   const styledClassName = variant
-    ? `inline-flex items-center justify-center gap-1.5 rounded-md font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${VARIANT_CLASSES[variant]} ${SIZE_CLASSES[size ?? "md"]} ${className ?? ""}`
-    : className;
+    ? `inline-flex ${width} items-center justify-center gap-1.5 rounded-md font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${VARIANT_CLASSES[variant]} ${SIZE_CLASSES[size ?? "md"]} ${className ?? ""}`
+    : `${width} ${className ?? ""}`.trim();
 
   return (
     <button type="button" onClick={handleSignOut} disabled={pending} className={styledClassName}>

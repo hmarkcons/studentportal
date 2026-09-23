@@ -23,6 +23,7 @@ import {
 } from "@/lib/interviews";
 import { addedLine, changedLine } from "@/lib/activityStamp";
 import { ActionStatus } from "@/components/ActionStatus";
+import { useButtonAction } from "@/components/useButtonAction";
 
 export type InterviewCredentials = {
   login_username: string | null;
@@ -237,10 +238,15 @@ function InterviewForm({
       </fieldset>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="submit" variant="primary" size="sm" pending={pending}>
+        <Button
+          type="submit"
+          variant="primary"
+          size="sm"
+          pending={pending}
+          status={{ state, label: existing ? "Saved." : "Added." }}
+        >
           {existing ? "Save interview" : "Add interview"}
         </Button>
-        <ActionStatus state={state} pending={pending} label="Saved." />
         <button type="button" onClick={onDone} className="text-xs text-muted hover:underline">
           Cancel
         </button>
@@ -260,14 +266,14 @@ function InterviewCard({
   canManage: boolean;
 }) {
   const [editing, setEditing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const del = useButtonAction();
   const applicationId = ""; // not needed when editing
 
   async function remove() {
     if (!confirm(`Delete the ${interview.round_label} interview?`)) return;
-    setError(null);
-    const result = await deleteInterview(interview.id, revalidateTo);
-    if (result?.error) setError(result.error);
+    // The card goes with the interview, so success is a toast; a refusal is
+    // said beside the delete button that is still there.
+    await del.run(() => deleteInterview(interview.id, revalidateTo), { toast: "Deleted." });
   }
 
   if (editing) {
@@ -302,9 +308,16 @@ function InterviewCard({
               <button onClick={() => setEditing(true)} className="text-xs text-muted hover:text-primary" title="Edit">
                 ✏️
               </button>
-              <button onClick={remove} className="text-xs text-muted hover:text-danger" title="Delete">
+              <button
+                onClick={remove}
+                disabled={del.pending}
+                aria-busy={del.pending || undefined}
+                className="w-fit text-xs text-muted hover:text-danger disabled:opacity-50"
+                title="Delete"
+              >
                 🗑️
               </button>
+              <ActionStatus state={del.state} pending={del.pending} label="Deleted." showError />
             </>
           )}
         </span>
@@ -338,7 +351,6 @@ function InterviewCard({
         </p>
       )}
       <ActivityStamps interview={interview} />
-      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
     </div>
   );
 }

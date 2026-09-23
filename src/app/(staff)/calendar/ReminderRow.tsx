@@ -5,6 +5,7 @@ import { toggleReminderResolved, updateReminder, deleteReminder } from "@/lib/ac
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ActionStatus } from "@/components/ActionStatus";
+import { useButtonAction } from "@/components/useButtonAction";
 
 export function ReminderRow({
   reminderId,
@@ -26,15 +27,15 @@ export function ReminderRow({
   const [checked, setChecked] = useState(resolved);
   const [editing, setEditing] = useState(false);
   const [toggleError, setToggleError] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const del = useButtonAction();
   const action = updateReminder.bind(null, reminderId, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
 
-  async function handleDelete() {
+  // The row goes when the delete works, so success is a toast; a failure is
+  // said beside the bin, which is still there.
+  function handleDelete() {
     if (!confirm("Delete this reminder? This can't be undone.")) return;
-    setDeleteError(null);
-    const result = await deleteReminder(reminderId, revalidateTo);
-    if (result?.error) setDeleteError(result.error);
+    void del.run(() => deleteReminder(reminderId, revalidateTo), { toast: "Reminder deleted." });
   }
 
   if (editing) {
@@ -46,10 +47,9 @@ export function ReminderRow({
         </div>
         <Input name="note" defaultValue={note ?? ""} placeholder="Remark" />
         <div className="flex items-center gap-2">
-          <Button type="submit" variant="primary" size="sm" pending={pending}>
+          <Button type="submit" variant="primary" size="sm" pending={pending} status={{ state, label: "Saved." }}>
             Save
           </Button>
-          <ActionStatus state={state} pending={pending} label="Saved." />
           <button type="button" onClick={() => setEditing(false)} className="text-xs text-muted hover:underline">
             Cancel
           </button>
@@ -90,14 +90,14 @@ export function ReminderRow({
           <button onClick={() => setEditing(true)} className="text-xs text-muted hover:text-primary">
             ✏️
           </button>
-          <button onClick={handleDelete} className="text-xs text-muted hover:text-danger">
+          <button onClick={handleDelete} disabled={del.pending} className="w-fit text-xs text-muted hover:text-danger disabled:opacity-50">
             🗑️
           </button>
+          <ActionStatus state={del.state} pending={del.pending} label="Deleted." showError />
         </div>
       </div>
       {note && <p className={`ml-6 text-xs ${checked ? "text-muted line-through" : "text-muted"}`}>{note}</p>}
       {toggleError && <p className="text-xs text-danger">{toggleError}</p>}
-      {deleteError && <p className="text-xs text-danger">{deleteError}</p>}
     </div>
   );
 }

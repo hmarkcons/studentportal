@@ -6,6 +6,7 @@ import { Input, Select } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ActionStatus } from "@/components/ActionStatus";
+import { useButtonAction } from "@/components/useButtonAction";
 
 type Product = { id: string; name: string; default_amount: number | null; default_currency: string };
 
@@ -20,10 +21,9 @@ function NewProductForm() {
         <option value="PKR">PKR</option>
         <option value="USD">USD</option>
       </Select>
-      <Button type="submit" variant="primary" pending={pending}>
+      <Button type="submit" variant="primary" pending={pending} status={{ state, label: "Product added." }}>
         + Add product
       </Button>
-      <ActionStatus state={state} pending={pending} label="Saved." />
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
   );
@@ -31,15 +31,15 @@ function NewProductForm() {
 
 function ProductRow({ product, canManage }: { product: Product; canManage: boolean }) {
   const [editing, setEditing] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const del = useButtonAction();
   const action = updateFeeProduct.bind(null, product.id);
   const [state, formAction, pending] = useActionState(action, undefined);
 
   async function handleDelete() {
     if (!confirm(`Delete "${product.name}" from the fee catalog?`)) return;
-    setDeleteError(null);
-    const result = await deleteFeeProduct(product.id);
-    if (result?.error) setDeleteError(result.error);
+    // The product's row goes with it, so success is a toast; a refusal is
+    // said beside the button, which is still there.
+    await del.run(() => deleteFeeProduct(product.id), { toast: "Product deleted." });
   }
 
   if (editing) {
@@ -52,11 +52,10 @@ function ProductRow({ product, canManage }: { product: Product; canManage: boole
           <option value="PKR">PKR</option>
           <option value="USD">USD</option>
         </Select>
-        <Button type="submit" variant="primary" size="sm" pending={pending}>
+        <Button type="submit" variant="primary" size="sm" pending={pending} status={{ state, label: "Saved." }}>
           Save
         </Button>
-        <ActionStatus state={state} pending={pending} label="Saved." />
-        <button type="button" onClick={() => setEditing(false)} className="text-xs text-muted hover:underline">
+        <button type="button" onClick={() => setEditing(false)} className="w-fit text-xs text-muted hover:underline">
           Cancel
         </button>
         {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
@@ -73,16 +72,22 @@ function ProductRow({ product, canManage }: { product: Product; canManage: boole
         </span>
         {canManage && (
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => setEditing(true)} className="text-xs text-primary hover:underline">
+            <button type="button" onClick={() => setEditing(true)} className="w-fit text-xs text-primary hover:underline">
               Edit
             </button>
-            <button type="button" onClick={handleDelete} className="text-xs text-danger hover:underline">
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={del.pending}
+              aria-busy={del.pending || undefined}
+              className="w-fit text-xs text-danger hover:underline disabled:opacity-50"
+            >
               Delete
             </button>
+            <ActionStatus state={del.state} pending={del.pending} label="Deleted." showError />
           </div>
         )}
       </div>
-      {deleteError && <p className="mt-1 text-xs text-danger">{deleteError}</p>}
     </div>
   );
 }

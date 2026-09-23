@@ -6,6 +6,7 @@ import { STUDY_LEVELS } from "@/lib/constants";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { ActionStatus } from "@/components/ActionStatus";
+import { useButtonAction } from "@/components/useButtonAction";
 import { ProgramDates } from "@/components/ProgramDates";
 import { ProgramRoundsFields } from "@/components/ProgramRoundsFields";
 import type { ProgramRound } from "@/lib/programRounds";
@@ -56,13 +57,12 @@ function CommissionRateEditor({
           <option value="GBP">GBP</option>
         </Select>
       </label>
-      <Button type="submit" variant="outline-primary" size="sm" pending={pending}>
+      <Button type="submit" variant="outline-primary" size="sm" pending={pending} status={{ state, label: "Saved." }}>
         Save
       </Button>
       <Button type="button" variant="ghost" size="sm" onClick={onDone}>
         Close
       </Button>
-      <ActionStatus state={state} pending={pending} label="Saved." />
       {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
     </form>
   );
@@ -86,15 +86,15 @@ export function ProgramRow({
 }) {
   const [editing, setEditing] = useState(false);
   const [editingRate, setEditingRate] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const del = useButtonAction();
   const action = updateProgram.bind(null, program.id, universityId);
   const [state, formAction, pending] = useActionState(action, undefined);
 
   async function handleDelete() {
     if (!confirm(`Delete ${program.name}?`)) return;
-    setDeleteError(null);
-    const result = await deleteProgram(program.id, universityId);
-    if (result?.error) setDeleteError(result.error);
+    // The row goes with the programme, so success is a toast; a refusal is
+    // said beside the icon that is still there.
+    await del.run(() => deleteProgram(program.id, universityId), { toast: "Deleted." });
   }
 
   if (!editing) {
@@ -134,14 +134,24 @@ export function ProgramRow({
                 <button onClick={() => setEditing(true)} title="Edit program" aria-label="Edit program" className="rounded p-1 text-muted hover:bg-bg hover:text-primary">
                   ✏️
                 </button>
-                <button onClick={handleDelete} title="Delete program" aria-label="Delete program" className="rounded p-1 text-muted hover:bg-danger-bg hover:text-danger">
-                  🗑️
-                </button>
+                <span className="inline-flex items-center gap-2">
+                  <button
+                    onClick={handleDelete}
+                    disabled={del.pending}
+                    aria-busy={del.pending || undefined}
+                    title="Delete program"
+                    aria-label="Delete program"
+                    className="w-fit rounded p-1 text-muted hover:bg-danger-bg hover:text-danger disabled:opacity-50"
+                  >
+                    🗑️
+                  </button>
+                  <ActionStatus state={del.state} pending={del.pending} label="Deleted." showError />
+                </span>
               </>
             )}
           </div>
         </div>
-        {deleteError && <p className="mt-1 text-xs text-danger">{deleteError}</p>}
+
         {editingRate && canManageRate && (
           <CommissionRateEditor program={program} universityId={universityId} onDone={() => setEditingRate(false)} />
         )}
@@ -165,13 +175,12 @@ export function ProgramRow({
       <Input name="tuition_fee" type="number" step="0.01" defaultValue={program.tuition_fee ?? ""} placeholder="Fee" className="w-24" />
       <Input name="language_requirement" defaultValue={program.language_requirement ?? ""} placeholder="Language req." />
       <ProgramRoundsFields rounds={program.rounds} />
-      <Button type="submit" variant="outline-primary" size="sm" pending={pending}>
+      <Button type="submit" variant="outline-primary" size="sm" pending={pending} status={{ state, label: "Saved." }}>
         Save
       </Button>
       <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>
         Cancel
       </Button>
-      <ActionStatus state={state} pending={pending} label="Saved." />
       {state?.error && <p className="w-full text-xs text-danger">{state.error}</p>}
     </form>
   );

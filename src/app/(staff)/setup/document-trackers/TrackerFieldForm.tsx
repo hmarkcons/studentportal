@@ -6,6 +6,7 @@ import { TRACKER_FIELD_TYPES, type TrackerFieldDef } from "@/lib/countryTrackers
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { ActionStatus } from "@/components/ActionStatus";
+import { useButtonAction } from "@/components/useButtonAction";
 
 const TYPE_HELP: Record<string, string> = {
   select: "Options: comma-separated list (leave blank to auto-fill from the student's applied universities in this country).",
@@ -94,10 +95,9 @@ export function NewTrackerFieldForm({ countryCode }: { countryCode: string }) {
           each field was the old way, and it left several fields sharing a
           number on the live data. */}
       <div className="col-span-full">
-        <Button type="submit" variant="primary" disabled={pending}>
-          {pending ? "Adding…" : "+ Add field"}
+        <Button type="submit" variant="primary" pending={pending} status={{ state, label: "Added." }}>
+          + Add field
         </Button>
-        <ActionStatus state={state} pending={pending} label="Saved." />
         {state?.error && <p className="mt-2 text-xs text-danger">{state.error}</p>}
       </div>
     </form>
@@ -106,16 +106,16 @@ export function NewTrackerFieldForm({ countryCode }: { countryCode: string }) {
 
 export function TrackerFieldRow({ field }: { field: TrackerFieldDef }) {
   const [editing, setEditing] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const del = useButtonAction();
   const action = updateTrackerField.bind(null, field.id!);
   const [state, formAction, pending] = useActionState(action, undefined);
   const [fieldType, setFieldType] = useState(field.type);
 
   async function handleDelete() {
     if (!confirm(`Delete field "${field.label}"? Any saved values for it will remain in the database but stop showing.`)) return;
-    setDeleteError(null);
-    const result = await deleteTrackerField(field.id!);
-    if (result?.error) setDeleteError(result.error);
+    // The row goes with the field, so success is a toast; a refusal is said
+    // beside the Delete button that is still there.
+    await del.run(() => deleteTrackerField(field.id!), { toast: "Deleted." });
   }
 
   if (!editing) {
@@ -133,12 +133,17 @@ export function TrackerFieldRow({ field }: { field: TrackerFieldDef }) {
             <button onClick={() => setEditing(true)} className="text-xs text-primary hover:underline">
               Edit
             </button>
-            <button onClick={handleDelete} className="text-xs text-danger hover:underline">
+            <button
+              onClick={handleDelete}
+              disabled={del.pending}
+              aria-busy={del.pending || undefined}
+              className="w-fit text-xs text-danger hover:underline disabled:opacity-50"
+            >
               Delete
             </button>
+            <ActionStatus state={del.state} pending={del.pending} label="Deleted." showError />
           </div>
         </div>
-        {deleteError && <p className="mt-1 text-xs text-danger">{deleteError}</p>}
       </div>
     );
   }
@@ -199,13 +204,12 @@ export function TrackerFieldRow({ field }: { field: TrackerFieldDef }) {
         <Input name="show_if_equals" defaultValue={field.showWhen?.equals ?? ""} />
       </label>
       <div className="col-span-full flex items-center gap-2">
-        <Button type="submit" variant="primary" size="sm" disabled={pending}>
-          {pending ? "Saving…" : "Save"}
+        <Button type="submit" variant="primary" size="sm" pending={pending} status={{ state, label: "Saved." }}>
+          Save
         </Button>
         <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>
           Cancel
         </Button>
-        <ActionStatus state={state} pending={pending} label="Saved." />
         {state?.error && <p className="text-xs text-danger">{state.error}</p>}
       </div>
     </form>

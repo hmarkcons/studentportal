@@ -51,6 +51,8 @@ export function DocumentSectionShell({
         onClick={toggle}
         aria-expanded={open}
         aria-controls={panelId}
+        data-full-width
+        data-collapsible-toggle
         className="flex w-full flex-wrap items-center gap-2 border-b border-border bg-bg px-4 py-3 text-left"
       >
         <span aria-hidden className={`shrink-0 text-xs text-muted transition-transform ${open ? "rotate-90" : ""}`}>

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { ActionStatus } from "@/components/ActionStatus";
 import { addOfficeNetwork, removeOfficeNetwork } from "@/lib/actions/officeAccess";
+import { toast } from "@/lib/toast";
 
 export type NetworkRow = { id: string; label: string; network: string; note: string | null };
 
@@ -42,7 +43,11 @@ export function OfficeNetworkPanel({
     const result = await removeOfficeNetwork(id);
     setBusy(null);
     if (result?.error) setError(result.error);
-    else router.refresh();
+    else {
+      // The row goes, and its Remove button with it.
+      toast("Removed.");
+      router.refresh();
+    }
   }
 
   return (
@@ -77,7 +82,7 @@ export function OfficeNetworkPanel({
                   type="button"
                   onClick={() => remove(n.id, n.label)}
                   disabled={busy === n.id}
-                  className="text-xs text-danger hover:underline disabled:opacity-40"
+                  className="w-fit text-xs text-danger hover:underline disabled:opacity-40"
                 >
                   {busy === n.id ? "Removing…" : "Remove"}
                 </button>

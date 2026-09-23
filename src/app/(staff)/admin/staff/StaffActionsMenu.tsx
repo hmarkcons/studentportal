@@ -3,6 +3,7 @@
 import { hasRole, staffRoles } from "@/lib/auth/roles";
 import { useState } from "react";
 import { deleteStaffAccount } from "@/lib/actions/admin";
+import { useButtonAction } from "@/components/useButtonAction";
 import { formatDateOnly } from "@/lib/formatDate";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { STAFF_ROLE_LABELS, CURRENCY_SYMBOLS } from "@/lib/constants";
@@ -54,11 +55,15 @@ export function StaffActionsMenu({
   const [editOpen, setEditOpen] = useState(false);
   const [permissionsOpen, setPermissionsOpen] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const del = useButtonAction();
   const showPermissions = canManagePermissions && !hasRole(staff, "super_admin");
 
   async function handleDelete() {
     if (!confirm(`Delete ${staff.full_name}? This fails if they have historical records — use Inactive status instead if so.`)) return;
-    const result = await deleteStaffAccount(staff.id);
+    setDeleteError(null);
+    // The row goes with the account, so success is a toast; a refusal is
+    // said under the menu, as before.
+    const result = await del.run(() => deleteStaffAccount(staff.id), { toast: "Staff account deleted." });
     if (result?.error) setDeleteError(result.error);
     setMenuOpen(false);
   }
@@ -71,12 +76,13 @@ export function StaffActionsMenu({
       {menuOpen && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-          <div className="absolute right-0 z-20 mt-1 w-36 rounded-md border border-border bg-card py-1 shadow-lg">
+          <div data-menu className="absolute right-0 z-20 mt-1 w-36 rounded-md border border-border bg-card py-1 shadow-lg">
             <button
               onClick={() => {
                 setViewOpen(true);
                 setMenuOpen(false);
               }}
+              data-full-width
               className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
             >
               👁️ View
@@ -86,6 +92,7 @@ export function StaffActionsMenu({
                 setEditOpen(true);
                 setMenuOpen(false);
               }}
+              data-full-width
               className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
             >
               {rolesOnly ? "🔑 Roles" : "✏️ Edit"}
@@ -96,6 +103,7 @@ export function StaffActionsMenu({
                   setPermissionsOpen(true);
                   setMenuOpen(false);
                 }}
+                data-full-width
                 className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
               >
                 🔑 Permissions
@@ -104,7 +112,7 @@ export function StaffActionsMenu({
             {/* Deleting a staff account is not a role change — it belongs
                 with staff.manage, same as the action behind it. */}
             {!rolesOnly && (
-              <button onClick={handleDelete} className="block w-full px-3 py-1.5 text-left text-sm text-danger hover:bg-bg">
+              <button onClick={handleDelete} disabled={del.pending} data-full-width className="block w-full px-3 py-1.5 text-left text-sm text-danger hover:bg-bg">
                 🗑️ Delete
               </button>
             )}

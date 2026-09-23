@@ -18,8 +18,19 @@ export function ImportDestinationsForm() {
       <summary className="cursor-pointer text-sm font-medium text-ink">Import destinations from CSV</summary>
       <form action={formAction} className="mt-3 flex flex-wrap items-end gap-2">
         <FileField accept=".csv" required hint="CSV" inputClassName="text-sm" onChange={(s) => setReady(Boolean(s.file))} />
-        <Button type="submit" variant="primary" disabled={pending || !ready}>
-          {pending ? "Importing…" : "Import"}
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={!ready}
+          pending={pending}
+          status={{
+            state,
+            label: state?.success
+              ? `Imported ${state.count} destinations.${state.skipped ? ` Skipped ${state.skipped} already existing (same country + track).` : ""}`
+              : "Imported.",
+          }}
+        >
+          Import
         </Button>
         <SampleCsvButton filename="destinations-sample.csv" headers={HEADERS} exampleRow={EXAMPLE} />
       </form>
@@ -29,11 +40,6 @@ export function ImportDestinationsForm() {
         <code>consultancy_fee</code>, <code>consultancy_fee_currency</code>.
       </p>
       {state?.error && <p className="mt-2 text-xs text-danger">{state.error}</p>}
-      {state?.success && (
-        <p className="mt-2 text-xs text-success">
-          Imported {state.count} destinations.{state.skipped ? ` Skipped ${state.skipped} already existing (same country + track).` : ""}
-        </p>
-      )}
     </details>
   );
 }

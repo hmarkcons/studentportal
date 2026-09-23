@@ -8,6 +8,7 @@ import { Input, Select, Textarea } from "@/components/ui/Input";
 import { GuideSectionsEditor, type GuideSection } from "./GuideSectionsEditor";
 import { CallPdfButton } from "./CallPdfButton";
 import { SlideOver } from "@/components/ui/SlideOver";
+import { toast } from "@/lib/toast";
 
 export type ScholarshipBody = {
   id: string;
@@ -82,7 +83,12 @@ export function ScholarshipBodyForm({
 }) {
   const [open, setOpen] = useState(false);
   const action = body ? updateScholarshipBody.bind(null, body.id) : createScholarshipBody;
-  const { onSubmit, pending, error } = useSlideOverForm(action, () => setOpen(false));
+  // The panel closes on success, taking its button with it, so the
+  // confirmation is a toast.
+  const { onSubmit, pending, error } = useSlideOverForm(action, () => {
+    setOpen(false);
+    toast(body ? "Saved." : "Added.");
+  });
 
   return (
     <>

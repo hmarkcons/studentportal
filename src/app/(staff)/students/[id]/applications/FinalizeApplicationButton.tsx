@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { finalizeApplication, unfinalizeApplication } from "@/lib/actions/applications";
 import { Button } from "@/components/ui/Button";
+import { useButtonAction } from "@/components/useButtonAction";
 
 export function FinalizeApplicationButton({
   applicationId,
@@ -26,17 +27,18 @@ export function FinalizeApplicationButton({
   // un-finalized before another can take its place.
   blockedByOther?: boolean;
 }) {
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const run = useButtonAction();
+  // What the last press did, fixed at the time of the press: the button's own
+  // label flips to the opposite act as soon as the page catches up.
+  const [done, setDone] = useState("");
 
   async function handle() {
-    setPending(true);
-    setError(null);
-    const result = isFinalized
-      ? await unfinalizeApplication(applicationId, studentId, revalidateTo)
-      : await finalizeApplication(applicationId, studentId, revalidateTo);
-    if (result?.error) setError(result.error);
-    setPending(false);
+    setDone(isFinalized ? "Undone." : `${badgeLabel}.`);
+    await run.run(() =>
+      isFinalized
+        ? unfinalizeApplication(applicationId, studentId, revalidateTo)
+        : finalizeApplication(applicationId, studentId, revalidateTo)
+    );
   }
 
   return (
@@ -44,7 +46,8 @@ export function FinalizeApplicationButton({
       <Button
         type="button"
         onClick={handle}
-        pending={pending}
+        pending={run.pending}
+        status={{ state: run.state, label: done, showError: true }}
         disabled={blockedByOther}
         title={
           blockedByOther
@@ -58,7 +61,6 @@ export function FinalizeApplicationButton({
       >
         {isFinalized ? `Undo ${badgeLabel.toLowerCase()}` : actionLabel}
       </Button>
-      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
     </div>
   );
 }

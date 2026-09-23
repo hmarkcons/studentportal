@@ -263,11 +263,17 @@ export function PayrollForm({
       </fieldset>
 
       {state?.error && <p className="mt-2 text-sm text-danger">{state.error}</p>}
-      {state?.success && <p className="mt-2 text-sm text-success">Payroll updated.</p>}
 
       {canManage && (
-        <Button type="submit" variant="primary" size="lg" disabled={pending} className="mt-4 self-start">
-          {pending ? "Saving…" : "Update payroll"}
+        <Button
+          type="submit"
+          variant="primary"
+          size="lg"
+          pending={pending}
+          wrapperClassName="mt-4"
+          status={{ state, label: "Payroll updated." }}
+        >
+          Update payroll
         </Button>
       )}
     </form>

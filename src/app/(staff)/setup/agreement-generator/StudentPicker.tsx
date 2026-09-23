@@ -57,6 +57,7 @@ export function StudentPicker({ students, countries }: { students: Student[]; co
               <button
                 key={s.id}
                 onClick={() => goToStudent(s.id)}
+                data-full-width
                 className="flex items-center justify-between px-3 py-2 text-left text-sm hover:bg-bg"
               >
                 <span className="text-ink">{s.full_name}</span>

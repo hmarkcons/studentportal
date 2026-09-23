@@ -88,13 +88,13 @@ export function LinksContactForm({
         <Input name="contact_email" type="email" defaultValue={contactEmail ?? ""} placeholder="admissions@university.edu" />
       </label>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
-      {/* Confirmed in place rather than closing the form on success: the only
-          lint-clean way to auto-close would be to reset state after the action,
-          and a stale success flag would then shut the form the next time Modify
-          was clicked. Closing shows the corrected links, revalidated. */}
-      {state?.success && <p className="text-xs text-success">Saved.</p>}
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="submit" variant="primary" size="sm" pending={pending}>
+        {/* Confirmed in place, beside Save, rather than closing the form on
+            success: the only lint-clean way to auto-close would be to reset
+            state after the action, and a stale success flag would then shut the
+            form the next time Modify was clicked. Closing shows the corrected
+            links, revalidated. */}
+        <Button type="submit" variant="primary" size="sm" pending={pending} status={{ state, label: "Saved." }}>
           Save
         </Button>
         <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>

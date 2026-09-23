@@ -7,7 +7,7 @@ import { DestinationMultiSelect } from "@/components/DestinationMultiSelect";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { phoneBounds } from "@/lib/phoneNumber";
-import { ActionStatus } from "@/components/ActionStatus";
+import { toast } from "@/lib/toast";
 
 const labelClass = "text-sm font-medium text-ink";
 
@@ -18,7 +18,18 @@ export function NewLeadForm({
   counselors: { id: string; full_name: string }[];
   destinations: { id: string; display_name: string }[];
 }) {
-  const [state, formAction, pending] = useActionState(createLead, undefined);
+  // A created lead moves straight to its own page, taking this button with
+  // it, so the confirmation is a toast. The redirect arrives as a thrown
+  // NEXT_REDIRECT, which is let through untouched once the toast is raised.
+  const [state, formAction, pending] = useActionState(async (prev: Parameters<typeof createLead>[0], fd: FormData) => {
+    try {
+      return await createLead(prev, fd);
+    } catch (error) {
+      const digest = (error as { digest?: unknown })?.digest;
+      if (typeof digest === "string" && digest.startsWith("NEXT_REDIRECT")) toast("Lead created.");
+      throw error;
+    }
+  }, undefined);
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
@@ -82,7 +93,7 @@ export function NewLeadForm({
       <Button type="submit" variant="primary" pending={pending} className="mt-2">
         Create lead
       </Button>
-      <ActionStatus state={state} pending={pending} label="Lead created." />
+
     </form>
   );
 }

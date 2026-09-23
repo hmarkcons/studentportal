@@ -20,7 +20,8 @@
     "check:catalogue": "node scripts/verify-catalogue-import.mjs",
     "check:hook": "sh scripts/verify-hook.sh",
     "check:xlsx": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-xlsx-in-excel.ps1",
-    "prepare": "node scripts/install-hooks.mjs"
+    "prepare": "node scripts/install-hooks.mjs",
+    "check:buttons": "node scripts/verify-button-widths.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

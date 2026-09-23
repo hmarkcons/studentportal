@@ -10,39 +10,41 @@ import {
 } from "@/lib/actions/portal";
 import { readCredentialAction } from "@/lib/actions/countryTracker";
 import { Button } from "@/components/ui/Button";
+import { useButtonAction } from "@/components/useButtonAction";
 
 type ActionState = { error?: string; success?: boolean; email?: string; password?: string; warning?: string } | undefined;
 
 function ToggleButton({
   action,
   label,
+  done,
   variant,
   confirmMessage,
 }: {
   action: () => Promise<{ error?: string } | undefined>;
   label: string;
+  /** Said in a toast: each of these is replaced by another once it works. */
+  done: string;
   variant: "outline" | "danger";
   confirmMessage?: string;
 }) {
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const run = useButtonAction();
 
   async function handleClick() {
     if (confirmMessage && !confirm(confirmMessage)) return;
-    setPending(true);
-    setError(null);
-    const result = await action();
-    if (result?.error) setError(result.error);
-    setPending(false);
+    await run.run(action, { toast: done });
   }
 
   return (
-    <div className="flex flex-col items-end gap-1">
-      <Button type="button" variant={variant} onClick={handleClick} pending={pending}>
-        {label}
-      </Button>
-      {error && <p className="text-xs text-danger">{error}</p>}
-    </div>
+    <Button
+      type="button"
+      variant={variant}
+      onClick={handleClick}
+      pending={run.pending}
+      status={{ state: run.state, label: done, showError: true }}
+    >
+      {label}
+    </Button>
   );
 }
 
@@ -92,7 +94,8 @@ export function PortalAccessPanel({
             </Button>
           )}
           <form action={formAction}>
-            <Button type="submit" pending={pending}>
+            {/* The credentials themselves are shown below; this only says it worked. */}
+            <Button type="submit" pending={pending} status={{ state, label: enabled ? "Password reset." : "Login created." }}>
               {enabled ? "Reset password" : "Create portal login"}
             </Button>
           </form>
@@ -100,17 +103,19 @@ export function PortalAccessPanel({
             <ToggleButton
               action={() => suspendStudentPortalAccess(studentId)}
               label="Suspend"
+              done="Suspended."
               variant="outline"
               confirmMessage="Suspend this student's portal access? They'll be signed out immediately and can't log back in until reactivated."
             />
           )}
           {isSuperAdmin && enabled && !portalActive && (
-            <ToggleButton action={() => activateStudentPortalAccess(studentId)} label="Activate" variant="outline" />
+            <ToggleButton action={() => activateStudentPortalAccess(studentId)} label="Activate" done="Activated." variant="outline" />
           )}
           {isSuperAdmin && enabled && (
             <ToggleButton
               action={() => deleteStudentPortalAccess(studentId)}
               label="Delete portal access"
+              done="Portal access deleted."
               variant="danger"
               confirmMessage="Delete this student's portal login entirely? Their saved credentials will be removed and they'll need a brand new portal login created from scratch. This can't be undone."
             />

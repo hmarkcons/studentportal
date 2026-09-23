@@ -66,6 +66,8 @@ export function CollapsibleCard({
         onClick={toggle}
         aria-expanded={open}
         aria-controls={panelId}
+        data-full-width
+        data-collapsible-toggle
         className="flex min-w-0 flex-1 items-center gap-2 text-left"
       >
         <span

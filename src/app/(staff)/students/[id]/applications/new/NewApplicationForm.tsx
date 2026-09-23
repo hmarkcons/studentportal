@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { IntakeField } from "@/components/IntakeField";
 import { intakeConfigFor, type DestinationOption } from "@/app/(staff)/students/new/RegisterStudentForm";
-import { ActionStatus } from "@/components/ActionStatus";
+import { toast } from "@/lib/toast";
 import { ProgramDates } from "@/components/ProgramDates";
 import { roundOptionLabel, sortRounds, type ProgramRound } from "@/lib/programRounds";
 
@@ -47,7 +47,21 @@ export function NewApplicationForm({
   /** Karachi's today, so "applications closed" is judged on the business day. */
   today?: string;
 }) {
-  const action = createApplication.bind(null, studentId);
+  const create = createApplication.bind(null, studentId);
+  // A created application redirects to its own page, taking this button with
+  // it — so it is confirmed with a toast, raised only once the server has
+  // answered (the redirect is how it answers success).
+  const action = async (prevState: unknown, formData: FormData) => {
+    try {
+      const result = await create(prevState, formData);
+      if (!result?.error) toast("Application added.");
+      return result;
+    } catch (error) {
+      const digest = (error as { digest?: unknown })?.digest;
+      if (typeof digest === "string" && digest.startsWith("NEXT_REDIRECT")) toast("Application added.");
+      throw error;
+    }
+  };
   const [state, formAction, pending] = useActionState(action, undefined);
   const [destinationId, setDestinationId] = useState("");
   const [universityId, setUniversityId] = useState("");
@@ -413,10 +427,9 @@ export function NewApplicationForm({
         </div>
       </div>
       {state?.error && <p className="text-sm text-danger">{state.error}</p>}
-      <Button type="submit" variant="primary" pending={pending}>
+      <Button type="submit" variant="primary" pending={pending} status={{ state, label: "Application added." }}>
         Create application
       </Button>
-      <ActionStatus state={state} pending={pending} label="Application added." />
     </form>
   );
 }

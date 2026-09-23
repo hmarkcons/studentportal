@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { FileField } from "@/components/FileField";
 import { MAX_PHOTO_BYTES } from "@/lib/fileSize";
 import { ActionStatus } from "@/components/ActionStatus";
+import { useButtonAction } from "@/components/useButtonAction";
 
 type PhotoUploadState = { error?: string; success?: boolean } | undefined;
 
@@ -39,18 +40,16 @@ export function PhotoUpload({
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const [ready, setReady] = useState(false);
-  const [removing, setRemoving] = useState(false);
-  const [removeError, setRemoveError] = useState<string | null>(null);
+  const removal = useButtonAction();
+  const removing = removal.pending;
   const showsReplace = hasPhoto ?? Boolean(photoUrl);
 
   async function remove() {
     if (!onDelete) return;
     if (!confirm(`Remove ${deleteLabel ?? "this photo"}? The picture is deleted, not just hidden.`)) return;
-    setRemoving(true);
-    setRemoveError(null);
-    const result = await onDelete();
-    if (result?.error) setRemoveError(result.error);
-    setRemoving(false);
+    // The Remove control goes once there is no photo, so success is a toast;
+    // a refusal is said beside the button that is still there.
+    await removal.run(onDelete, { toast: "Photo removed." });
   }
 
   // Photo on top, its controls stacked underneath and matched to the same
@@ -80,27 +79,36 @@ export function PhotoUpload({
           onChange={(s) => setReady(Boolean(s.file))}
           inputClassName="w-full min-w-0 rounded-md border border-border px-2 py-1 text-xs file:mr-2 file:rounded file:border-0 file:bg-bg file:px-1.5 file:py-0.5 file:text-xs file:text-ink"
         />
-        <Button type="submit" variant="outline" size="sm" pending={pending} disabled={!ready}>
+        {/* The width of its label, centred under the photo, with what it did
+            beside it rather than stretched across the column. */}
+        <Button
+          type="submit"
+          variant="outline"
+          size="sm"
+          pending={pending}
+          disabled={!ready}
+          wrapperClassName="justify-center"
+          status={{ state, label: "Photo uploaded." }}
+        >
           {showsReplace ? "Replace photo" : "Upload photo"}
         </Button>
-        <ActionStatus state={state} pending={pending} label="Photo uploaded." />
         {state?.error && <p className="text-center text-xs text-danger">{state.error}</p>}
       </form>
 
       {/* Only where there is something to remove. A Remove control beside an
           empty circle is a button that can only ever fail. */}
       {onDelete && showsReplace && (
-        <>
+        <span className="inline-flex max-w-full flex-wrap items-center justify-center gap-x-2 gap-y-1">
           <button
             type="button"
             onClick={remove}
             disabled={removing}
-            className="text-xs text-danger hover:underline disabled:opacity-40"
+            className="w-fit text-xs text-danger hover:underline disabled:opacity-40"
           >
             {removing ? "Removing…" : "Remove photo"}
           </button>
-          {removeError && <p className="text-center text-xs text-danger">{removeError}</p>}
-        </>
+          <ActionStatus state={removal.state} pending={removing} label="Photo removed." showError />
+        </span>
       )}
     </div>
   );

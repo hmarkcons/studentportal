@@ -80,8 +80,9 @@ export function ReengagementDraft({
     return (
       <button
         type="button"
+        data-collapsible-toggle
         onClick={() => setOpen(true)}
-        className="mt-3 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-ink hover:bg-bg"
+        className="mt-3 w-fit rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-ink hover:bg-bg"
       >
         ✉️ Write to them {draft.kind === "ghost" ? "— suggested chase message" : "— suggested win-back message"}
       </button>
@@ -125,7 +126,17 @@ export function ReengagementDraft({
         </label>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="submit" variant="primary" size="sm" pending={sending}>
+          {/* Says where it went, beside the button that sent it. */}
+          <Button
+            type="submit"
+            variant="primary"
+            size="sm"
+            pending={sending}
+            status={{
+              state: sendState,
+              label: `Sent${sendState?.emailed ? " to their portal and email" : " to their portal"}.`,
+            }}
+          >
             Send
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={copyForWhatsapp}>
@@ -144,11 +155,6 @@ export function ReengagementDraft({
         </div>
 
         {sendState?.error && <p className="text-xs text-danger">{sendState.error}</p>}
-        {sendState?.success && (
-          <p className="text-xs text-success">
-            Sent{sendState.emailed ? " to their portal and email" : " to their portal"}.
-          </p>
-        )}
       </form>
 
       {/* Offered only once the text has actually been copied. Logging a

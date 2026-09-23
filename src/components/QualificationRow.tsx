@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { useFormAction } from "@/components/useFormAction";
+import { useButtonAction } from "@/components/useButtonAction";
+import { ActionStatus } from "@/components/ActionStatus";
+import { toast } from "@/lib/toast";
 import { upsertStudentQualification, deleteStudentQualification } from "@/lib/actions/qualifications";
 import { QUALIFICATION_TYPE_LABELS, institutionLabel, type QualificationType } from "@/lib/qualifications";
 import { Button } from "@/components/ui/Button";
@@ -37,18 +40,23 @@ export function QualificationRow({
   onCancel?: () => void;
 }) {
   const [editing, setEditing] = useState(!data);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const remove = useButtonAction();
   const action = upsertStudentQualification.bind(null, studentId, revalidateTo);
   // See useFormAction: React's own form reset empties an uncontrolled field
   // when the action refuses, taking the institution and grade with it.
-  const { onSubmit, pending, error } = useFormAction(action);
+  // A draft opened from "+ Add qualification" (the one with onCancel) closes
+  // back to the picker once it saves, taking its Save button with it, so that
+  // one confirms with a toast as well as beside the button.
+  const { onSubmit, pending, error, result } = useFormAction(action, {
+    onSuccess: !data && onCancel ? () => toast("Added.") : undefined,
+  });
 
   async function handleDelete() {
     if (!confirm(`Remove this ${QUALIFICATION_TYPE_LABELS[type]} entry?`)) return;
     if (!data) return;
-    setDeleteError(null);
-    const result = await deleteStudentQualification(data.id, revalidateTo);
-    if (result?.error) setDeleteError(result.error);
+    // The row goes once this lands, so success is a toast; a refusal is said
+    // beside the Remove button that is still there.
+    await remove.run(() => deleteStudentQualification(data.id, revalidateTo), { toast: "Removed." });
   }
 
   if (editing) {
@@ -85,7 +93,7 @@ export function QualificationRow({
             <Input name="grade_percentage" defaultValue={data?.grade_percentage ?? ""} />
           </label>
           <div className="col-span-full flex items-center gap-2">
-            <Button type="submit" variant="primary" size="sm" pending={pending}>
+            <Button type="submit" variant="primary" size="sm" pending={pending} status={{ state: result, label: "Saved." }}>
               Save
             </Button>
             {(data || onCancel) && (
@@ -132,13 +140,21 @@ export function QualificationRow({
             ✏️ Edit
           </button>
           {deletable && (
-            <button type="button" onClick={handleDelete} className="text-xs text-danger hover:underline">
-              🗑️ Remove
-            </button>
+            <span className="inline-flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={remove.pending}
+                aria-busy={remove.pending || undefined}
+                className="w-fit text-xs text-danger hover:underline disabled:opacity-50"
+              >
+                🗑️ Remove
+              </button>
+              <ActionStatus state={remove.state} pending={remove.pending} label="Removed." showError />
+            </span>
           )}
         </div>
       </div>
-      {deleteError && <p className="mt-1 text-xs text-danger">{deleteError}</p>}
     </Card>
   );
 }

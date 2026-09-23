@@ -13,6 +13,9 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
+import { useButtonAction } from "@/components/useButtonAction";
+import { toast } from "@/lib/toast";
+import type { ActionResultLike } from "@/lib/actionStatus";
 
 export type UpdateRun = {
   id: string;
@@ -90,7 +93,11 @@ function Proposal({
     const result = await applyScholarshipProposal(run.id, [...accepted]);
     setPending(null);
     if (result?.error) setError(result.error);
-    else onDone();
+    else {
+      // The card goes once its proposal is settled, buttons and all.
+      toast("Applied.");
+      onDone();
+    }
   }
 
   async function dismiss() {
@@ -100,7 +107,10 @@ function Proposal({
     const result = await dismissScholarshipProposal(run.id);
     setPending(null);
     if (result?.error) setError(result.error);
-    else onDone();
+    else {
+      toast("Rejected.");
+      onDone();
+    }
   }
 
   return (
@@ -176,10 +186,14 @@ export function UpdateRunsPanel({
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<string[]>([]);
-  const [testing, setTesting] = useState(false);
+  // One object per finished sweep, so the "Finished checking." beside the
+  // button can tell this sweep from the next. Its errors stay in the shared
+  // line under the header, where the sweep's step errors have always gone.
+  const [checkState, setCheckState] = useState<ActionResultLike>(undefined);
+  const test = useButtonAction();
+  const [testModel, setTestModel] = useState<string | null>(null);
 
   const proposed = runs.filter((r) => r.status === "proposed");
   const working = runs.filter((r) => r.status === "queued" || r.status === "running");
@@ -242,7 +256,6 @@ export function UpdateRunsPanel({
 
     setApplyingAll(true);
     setError(null);
-    setMessage(null);
     const result = await applyScholarshipProposals(entries);
     setApplyingAll(false);
 
@@ -262,7 +275,9 @@ export function UpdateRunsPanel({
         .join(", ");
       setError(`${result.failed.length} could not be applied (${names}) — they are still below.`);
     }
-    setMessage(parts.join(" "));
+    // A toast rather than a line beside the button: once every card is
+    // applied the banner holding this button is gone.
+    toast(parts.join(" "));
     router.refresh();
   }
 
@@ -277,13 +292,13 @@ export function UpdateRunsPanel({
   async function checkAll() {
     setPending(true);
     setError(null);
-    setMessage(null);
     setProgress([]);
 
     const queued = await requestScholarshipUpdate(null);
     if (queued?.error) {
       setPending(false);
       setError(queued.error);
+      setCheckState({ error: queued.error });
       return;
     }
     router.refresh();
@@ -303,7 +318,7 @@ export function UpdateRunsPanel({
     }
 
     setPending(false);
-    setMessage("Finished checking. Anything proposed is below, waiting for you.");
+    setCheckState({ success: true });
     router.refresh();
   }
 
@@ -329,20 +344,31 @@ export function UpdateRunsPanel({
           <Button
             type="button"
             size="sm"
-            pending={testing}
-            onClick={async () => {
-              setTesting(true);
-              setError(null);
-              setMessage(null);
-              const result = await testScholarshipResearch();
-              setTesting(false);
-              if (result?.error) setError(result.error);
-              else setMessage(`The key works — research runs on ${result.model}.`);
+            pending={test.pending}
+            onClick={() =>
+              test.run(async () => {
+                const result = await testScholarshipResearch();
+                if (!result?.error) setTestModel(result.model ?? null);
+                return result;
+              })
+            }
+            status={{
+              state: test.state,
+              label: testModel ? `The key works — research runs on ${testModel}.` : "The key works.",
+              showError: true,
             }}
           >
             Test the key
           </Button>
-          <Button type="button" variant="primary" size="sm" pending={pending} onClick={checkAll} disabled={!researchConfigured}>
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            pending={pending}
+            onClick={checkAll}
+            disabled={!researchConfigured}
+            status={{ state: checkState, label: "Finished checking. Anything proposed is below, waiting for you." }}
+          >
             Check for updates
           </Button>
         </div>
@@ -387,7 +413,6 @@ export function UpdateRunsPanel({
       )}
       {pending && progress.length === 0 && <p className="text-xs text-primary">Queuing, then reading the first one…</p>}
 
-      {message && <p className="text-xs text-success">{message}</p>}
       {error && <p className="text-xs text-danger">{error}</p>}
 
       {/* One press for a sweep that got most of it right, above the cards so

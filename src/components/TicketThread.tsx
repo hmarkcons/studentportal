@@ -7,7 +7,6 @@ import { Textarea } from "@/components/ui/Input";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatStamp } from "@/lib/activityStamp";
 import { TICKET_BODY_MAX } from "@/lib/supportTickets";
-import { ActionStatus } from "@/components/ActionStatus";
 
 export type TicketReplyRow = {
   id: string;
@@ -74,10 +73,16 @@ export function TicketThread({
             {body.trim().length.toLocaleString("en-US")} / {TICKET_BODY_MAX.toLocaleString("en-US")} characters
           </p>
         )}
-        <Button type="submit" variant="primary" pending={pending} disabled={over} className="self-start">
+        <Button
+          type="submit"
+          variant="primary"
+          pending={pending}
+          disabled={over}
+          wrapperClassName="self-start"
+          status={{ state, label: "Sent." }}
+        >
           Reply
         </Button>
-        <ActionStatus state={state} pending={pending} label="Sent." />
       </form>
       {state?.error && <p className="mt-1 text-xs text-danger">{state.error}</p>}
     </div>

@@ -7,6 +7,12 @@ import { Button } from "@/components/ui/Button";
 import { VisaOfficeForm } from "./VisaOfficeForm";
 import { archiveVisaOffice, restoreVisaOffice, confirmVisaOffice } from "@/lib/actions/visaOffices";
 import { kindLabel, type VisaOffice } from "@/lib/visaOffices";
+import { toast } from "@/lib/toast";
+
+// Each of these takes its own button away once it works — a checked office
+// loses "Mark as checked", an archived one moves to the archive and back —
+// so success is a toast. A refusal is said beside the buttons.
+const DONE = { confirm: "Marked as checked.", archive: "Archived.", restore: "Restored." } as const;
 
 /**
  * One row in the directory, with the two actions the office actually takes:
@@ -43,7 +49,10 @@ export function OfficeRow({
           : await restoreVisaOffice(office.id);
     setBusy(null);
     if (result?.error) setError(result.error);
-    else router.refresh();
+    else {
+      toast(DONE[kind]);
+      router.refresh();
+    }
   }
 
   return (
@@ -92,7 +101,7 @@ export function OfficeRow({
               type="button"
               onClick={() => run("archive")}
               disabled={busy === "archive"}
-              className="text-xs text-danger hover:underline disabled:opacity-40"
+              className="w-fit text-xs text-danger hover:underline disabled:opacity-40"
             >
               {busy === "archive" ? "Archiving…" : "Archive"}
             </button>

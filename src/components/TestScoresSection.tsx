@@ -144,11 +144,10 @@ export function TestScoresSection({ studentId, revalidateTo, scores }: { student
       </div>
 
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
-      {state?.success && <p className="text-xs text-success">Saved.</p>}
       <div>
         {/* Removals only reach the database on Save, so a row deleted by
             accident is undone by leaving the page. */}
-        <Button type="submit" variant="primary" size="sm" pending={pending}>
+        <Button type="submit" variant="primary" size="sm" pending={pending} status={{ state, label: "Saved." }}>
           Save test scores
         </Button>
       </div>

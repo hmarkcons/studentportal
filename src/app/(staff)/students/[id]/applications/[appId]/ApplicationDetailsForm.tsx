@@ -148,8 +148,7 @@ export function ApplicationDetailsForm({
       </label>
       <div className="col-span-full">
         {state?.error && <p className="mb-1 text-xs text-danger">{state.error}</p>}
-        {state?.success && <p className="mb-1 text-xs text-success">Saved.</p>}
-        <Button type="submit" size="sm" pending={pending}>
+        <Button type="submit" size="sm" pending={pending} status={{ state, label: "Saved." }}>
           Save
         </Button>
       </div>

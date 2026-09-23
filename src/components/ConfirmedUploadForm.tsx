@@ -3,7 +3,6 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { FileField } from "@/components/FileField";
-import { ActionStatus } from "@/components/ActionStatus";
 
 /**
  * An upload that asks before it commits.
@@ -80,8 +79,18 @@ export function ConfirmedUploadForm({
           hint={hint}
           onChange={(s) => setFileName(s.file?.name ?? null)}
         />
+        {/* "Submitted." is said here rather than beside Submit: a sent file
+            clears the confirmation panel, Submit with it, and this button is
+            what takes its place. Choosing the next file clears the message. */}
         {!fileName && (
-          <Button type="button" size={size} disabled title="Choose a file first" className="mt-0.5">
+          <Button
+            type="button"
+            size={size}
+            disabled
+            title="Choose a file first"
+            wrapperClassName="mt-0.5"
+            status={{ state, label: "Submitted." }}
+          >
             {submitLabel}
           </Button>
         )}
@@ -112,7 +121,6 @@ export function ConfirmedUploadForm({
             >
               Choose a different file
             </Button>
-            <ActionStatus state={state} pending={pending} label="Submitted." />
           </div>
         </div>
       )}

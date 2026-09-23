@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { deleteAgreementTemplate } from "@/lib/actions/agreementTemplates";
 import { SlideOver } from "@/components/ui/SlideOver";
+import { useButtonAction } from "@/components/useButtonAction";
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -25,16 +26,16 @@ export type TemplateRecord = {
 export function TemplateActionsMenu({ template, canManage }: { template: TemplateRecord; canManage: boolean }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const del = useButtonAction();
 
   async function handleDelete() {
     if (!confirm(`Delete the "${template.name}" agreement template?`)) return;
-    setDeleteError(null);
-    // deleteAgreementTemplate redirects on success (it throws internally, so
-    // it only ever resolves to a value on the error path).
-    const result = await deleteAgreementTemplate(template.id);
-    if (result?.error) setDeleteError(result.error);
     setMenuOpen(false);
+    // deleteAgreementTemplate redirects on success (it throws internally, so
+    // it only ever resolves to a value on the error path). The menu row that
+    // was pressed is closed by then, so success is a toast and a failure is
+    // said under the ⋮ trigger.
+    await del.run(() => deleteAgreementTemplate(template.id), { toast: "Deleted." });
   }
 
   return (
@@ -45,7 +46,7 @@ export function TemplateActionsMenu({ template, canManage }: { template: Templat
       {menuOpen && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-          <div className="absolute right-0 z-20 mt-1 w-40 rounded-md border border-border bg-card py-1 shadow-lg">
+          <div data-menu className="absolute right-0 z-20 mt-1 w-40 rounded-md border border-border bg-card py-1 shadow-lg">
             <button
               onClick={() => {
                 setViewOpen(true);
@@ -72,7 +73,11 @@ export function TemplateActionsMenu({ template, canManage }: { template: Templat
           </div>
         </>
       )}
-      {deleteError && <p className="absolute right-0 mt-1 w-56 text-xs text-danger">{deleteError}</p>}
+      {del.state?.error && (
+        <p role="alert" className="absolute right-0 mt-1 w-56 text-xs text-danger">
+          {del.state.error}
+        </p>
+      )}
 
       <SlideOver open={viewOpen} onClose={() => setViewOpen(false)} title={template.name}>
         <div className="flex flex-col">
