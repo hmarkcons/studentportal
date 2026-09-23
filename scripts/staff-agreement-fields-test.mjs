@@ -59,7 +59,9 @@ test("pay reads the way a contract states it", () => {
 
 test("hours, days, dates and contacts are written out", () => {
   const vars = staffMergeVars(staff, pay, extra);
-  assert.equal(vars.working_hours, "09:00 – 18:00");
+  assert.equal(vars.working_hours, "9:00 AM – 6:00 PM");
+  assert.equal(vars.entry_time, "9:00 AM");
+  assert.equal(vars.exit_time, "6:00 PM");
   assert.equal(vars.working_days, "Monday – Friday");
   assert.equal(vars.date_of_birth, "3 April 1995");
   assert.equal(vars.emergency_contact, "Imran Khan (Brother) +92 321 7654321");
@@ -94,4 +96,26 @@ test("no pay record means no pay values, never zeros", () => {
 
 test("a student placeholder in a staff template is caught", () => {
   assert.deepEqual(unknownMergeFields("{{staff_name}} {{student_name}} {{fee_table}}"), ["student_name", "fee_table"]);
+});
+
+test("hours they have none of their own come from the office policy, as payroll does", () => {
+  const policy = { work_start_time: "12:00:00", work_end_time: "21:00:00", work_days: [1, 2, 3, 4, 5, 6], grace_minutes: 15 };
+  const vars = staffMergeVars({ ...staff, work_start_time: null, work_end_time: null, work_days: null }, pay, { ...extra, policy });
+  assert.equal(vars.entry_time, "12:00 PM");
+  assert.equal(vars.exit_time, "9:00 PM");
+  assert.equal(vars.working_days, "Monday – Saturday");
+  assert.equal(vars.grace_minutes, "15");
+});
+
+test("their own hours win over the office's", () => {
+  const policy = { work_start_time: "12:00:00", work_end_time: "21:00:00", work_days: [1, 2, 3, 4, 5, 6], grace_minutes: 15 };
+  const vars = staffMergeVars(staff, pay, { ...extra, policy });
+  assert.equal(vars.entry_time, "9:00 AM");
+  assert.equal(vars.working_days, "Monday – Friday");
+});
+
+test("midnight and noon read as a person would say them", () => {
+  const vars = staffMergeVars({ ...staff, work_start_time: "00:30:00", work_end_time: "12:00:00" }, pay, extra);
+  assert.equal(vars.entry_time, "12:30 AM");
+  assert.equal(vars.exit_time, "12:00 PM");
 });

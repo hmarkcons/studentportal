@@ -17,7 +17,10 @@ const INK_SOFT = "#4A544E";
 const RULE = "#B8B6A9";
 
 const styles = StyleSheet.create({
-  page: { paddingTop: 40, paddingBottom: 70, paddingHorizontal: 44, fontSize: 9, color: INK, fontFamily: "Times-Roman" },
+  // paddingBottom clears the fixed footer: it sits 28pt up and its signature
+  // box is ~58pt tall, so it reaches ~86pt from the bottom edge. At 70 the box
+  // was drawn over the last lines of every full page.
+  page: { paddingTop: 40, paddingBottom: 96, paddingHorizontal: 44, fontSize: 9, color: INK, fontFamily: "Times-Roman" },
 
   header: { flexDirection: "row", alignItems: "center", paddingBottom: 8, marginBottom: 10, borderBottomWidth: 2, borderBottomColor: GREEN },
   brand: { flex: 1 },

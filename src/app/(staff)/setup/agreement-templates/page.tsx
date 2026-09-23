@@ -5,6 +5,7 @@ import { NewAgreementTemplateForm } from "./NewAgreementTemplateForm";
 import { TemplateActionsMenu } from "./TemplateActionsMenu";
 import { StaffTemplateForm } from "./StaffTemplateForm";
 import { StaffTemplateActions } from "./StaffTemplateActions";
+import { StaffTemplateGuide } from "./StaffTemplateGuide";
 import { SectionTabs } from "@/components/SectionTabs";
 import { getEffectivePermissions } from "@/lib/auth/permissions";
 
@@ -31,6 +32,7 @@ async function StaffTemplates() {
         The wording of staff employment agreements. Generate one for a staff member from the Agreement Generator&apos;s Staff
         tab, or from their row in Staff Management.
       </p>
+      <StaffTemplateGuide />
       <Card className="mb-6">
         <StaffTemplateForm />
       </Card>

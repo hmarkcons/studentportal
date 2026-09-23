@@ -15,6 +15,7 @@ import {
   missingMergeFields,
   staffMergeVars,
   unknownMergeFields,
+  type OfficePolicy,
   type PayForAgreement,
   type StaffForAgreement,
 } from "@/lib/staffAgreementFields";
@@ -174,6 +175,39 @@ export async function deleteStaffAgreementTemplate(templateId: string): Promise<
   return { success: true };
 }
 
+/**
+ * A copy of a template to edit — the way to start a new one from the sample,
+ * or a variant of an existing one, without retyping or pasting the wording.
+ */
+export async function duplicateStaffAgreementTemplate(templateId: string): Promise<Result & { id?: string }> {
+  const denied = await requirePermission(TEMPLATES, "You don't have access to staff agreement templates.");
+  if (denied) return denied;
+
+  const supabase = await createClient();
+  const { data: source } = await supabase
+    .from("staff_agreement_templates")
+    .select("name, signatory_name, wording")
+    .eq("id", templateId)
+    .maybeSingle();
+  if (!source) return { error: "That template no longer exists." };
+
+  const { staff } = await getStaffSession();
+  const { data: created, error } = await supabase
+    .from("staff_agreement_templates")
+    .insert({
+      name: `Copy of ${source.name}`.slice(0, 200),
+      signatory_name: source.signatory_name,
+      wording: source.wording,
+      created_by: staff?.id ?? null,
+    })
+    .select("id")
+    .single();
+  if (error || !created) return { error: error?.message ?? "Could not copy the template." };
+
+  refresh();
+  return { success: true, id: created.id };
+}
+
 // =============================================================== agreements
 
 type TemplateRow = { id: string; name: string; signatory_name: string; wording: string };
@@ -191,7 +225,7 @@ async function renderStaffAgreementPdf(agreementId: string, staffId: string, tem
   // whoever holds staff_agreements.manage has been trusted to issue contracts
   // that state it — the office's decision when the feature was specified.
   const admin = createAdminClient();
-  const [{ data: staff }, { data: pay }] = await Promise.all([
+  const [{ data: staff }, { data: pay }, { data: policy }] = await Promise.all([
     admin
       .from("staff")
       .select(
@@ -202,6 +236,12 @@ async function renderStaffAgreementPdf(agreementId: string, staffId: string, tem
       .eq("id", staffId)
       .maybeSingle<Omit<StaffForAgreement, "roles"> & { role: string; roles: string[] | null }>(),
     admin.from("staff_compensation").select(COMPENSATION_COLUMNS).eq("staff_id", staffId).maybeSingle<PayForAgreement>(),
+    // The office's hours and grace period — the fallback payroll uses too, so
+    // what the contract says about attendance is what gets deducted by.
+    admin
+      .from("attendance_policy")
+      .select("work_start_time, work_end_time, work_days, grace_minutes")
+      .maybeSingle<OfficePolicy>(),
   ]);
   if (!staff) return { error: "That staff member no longer exists." };
 
@@ -209,7 +249,7 @@ async function renderStaffAgreementPdf(agreementId: string, staffId: string, tem
   const vars = staffMergeVars(
     { ...staff, roles: staffRoles(staff).map((r) => STAFF_ROLE_LABELS[r as StaffRole] ?? r) },
     pay ?? null,
-    { agreementDate: dateText, signatoryName: template.signatory_name }
+    { agreementDate: dateText, signatoryName: template.signatory_name, policy: policy ?? null }
   );
   const missing = missingMergeFields(template.wording, vars);
   if (missing.length > 0) {
