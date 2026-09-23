@@ -6,6 +6,9 @@ import { BRAND_LOGO_DATA_URI, BRAND_LOGO_RATIO } from "./brandLogo";
 // depth — a design choice (there's no pixel-for-pixel need to match the
 // editor's own 24px-per-level CSS), just enough to read clearly as nested.
 const INDENT_UNIT_PT = 14;
+
+/** Room a heading needs below it on the page — about three lines of body text — or it moves on with them. */
+const HEADING_KEEP_WITH_NEXT_PT = 40;
 // Matches Word's convention of alternating bullet glyphs per nesting depth
 // (solid disc, then hollow circle, then square) instead of repeating the
 // same dot at every level.
@@ -275,7 +278,7 @@ function Block({ block, fee }: { block: AgreementBlock; fee: AgreementPdfData["f
     case "clause":
       return (
         <View>
-          <Text style={styles.clauseHead}>
+          <Text minPresenceAhead={HEADING_KEEP_WITH_NEXT_PT} style={styles.clauseHead}>
             {block.number} {block.heading}
           </Text>
           {block.intro &&
@@ -289,7 +292,7 @@ function Block({ block, fee }: { block: AgreementBlock; fee: AgreementPdfData["f
     case "heading":
       return (
         <View>
-          <Text style={styles.clauseHead}>{block.heading}</Text>
+          <Text minPresenceAhead={HEADING_KEEP_WITH_NEXT_PT} style={styles.clauseHead}>{block.heading}</Text>
           {block.intro &&
             block.intro.split("\n").map((line, i) => (
               <Text key={i} style={styles.clauseIntro}>
@@ -299,7 +302,11 @@ function Block({ block, fee }: { block: AgreementBlock; fee: AgreementPdfData["f
         </View>
       );
     case "subheading":
-      return <Text style={styles.subheading}>{block.text}</Text>;
+      return (
+        <Text minPresenceAhead={HEADING_KEEP_WITH_NEXT_PT} style={styles.subheading}>
+          {block.text}
+        </Text>
+      );
     case "paragraph":
       return <Text style={styles.paragraph}>{block.text}</Text>;
     case "bullet":
@@ -314,7 +321,13 @@ function Block({ block, fee }: { block: AgreementBlock; fee: AgreementPdfData["f
     case "richHeading": {
       const style = block.level === 1 ? styles.richHeading1 : block.level === 2 ? styles.richHeading2 : styles.richHeading3;
       return (
-        <Text style={[style, block.indent ? { marginLeft: block.indent * INDENT_UNIT_PT } : {}]}>
+        // minPresenceAhead: a heading needs room for a few lines of what it
+        // heads, or it goes to the next page with them — otherwise a clause
+        // title can end one page and its text begin the next.
+        <Text
+          minPresenceAhead={HEADING_KEEP_WITH_NEXT_PT}
+          style={[style, block.indent ? { marginLeft: block.indent * INDENT_UNIT_PT } : {}]}
+        >
           <RichRuns runs={block.runs} />
         </Text>
       );
