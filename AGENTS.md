@@ -23,15 +23,15 @@ and `supabase/README.md` for the database.
 
 ## Before committing
 
-A pre-commit hook runs typecheck, eslint over the staged files and 779 unit
+A pre-commit hook runs typecheck, eslint over the staged files and 832 unit
 tests — all three, so one attempt reports everything wrong — then a production
 build only if those passed. It is installed by `npm install`, so it is already
 running; `git commit --no-verify` skips it for a deliberate work in progress.
 
-Five checks are **not** in the gate, because each is slow and each covers
+Six checks are **not** in the gate, because each is slow and each covers
 something that fails silently: `npm run check:hook`, `check:xlsx`, `check:roles`,
-`check:pay`, `check:studentid`. Run the relevant one after touching what it
-covers — README.md says which is which. The last three need
+`check:pay`, `check:studentid`, `check:catalogue`. Run the relevant one after
+touching what it covers — README.md says which is which. The last four need
 `VERIFY_AGAINST_PRODUCTION=yes`.
 
 ## Things that fail quietly here
@@ -63,6 +63,17 @@ triggers; `npm run check:studentid` is what proves any of it.
 `staff_compensation`; read them with `COMPENSATION_EMBED` and
 `withCompensation()`. The embed must name its foreign key, because the table has
 two to `staff` and PostgREST otherwise rejects the entire query.
+
+**An import that writes an empty cell wipes a column.** The catalogue
+imports add or update, and a blank cell means "said nothing", never null — see
+`src/lib/importMerge.ts`. A parser that turns an empty yes/no cell into `false`,
+or an insert payload that sends an explicit null instead of omitting the key,
+turns every partial sheet into a silent mass edit that reports total success.
+
+**Only a Super Admin can UPDATE a university or a programme** (0039), and an
+UPDATE that RLS refuses raises nothing — it matches no rows and reads as a
+clean success. Anything that edits these tables on behalf of staff has to check
+the role itself and say so, or it will report work it did not do.
 
 **A paused destination must still be selectable where a student already has
 it.** Pickers use `selectableDestinations(all, keepIds)`; omit `keepIds` on an

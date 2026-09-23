@@ -17,6 +17,7 @@
     "check:roles": "node scripts/verify-multi-role.mjs",
     "check:speed": "node scripts/check-speed.mjs",
     "check:studentid": "node scripts/verify-student-id.mjs",
+    "check:catalogue": "node scripts/verify-catalogue-import.mjs",
     "check:hook": "sh scripts/verify-hook.sh",
     "check:xlsx": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-xlsx-in-excel.ps1",
     "prepare": "node scripts/install-hooks.mjs"

@@ -14,7 +14,7 @@
 
 export type SheetRow = Record<string, string>;
 
-/** The sheet the template writes its data to; falls back to the first one. */
+/** The sheet the registered-student template writes its data to. */
 const PREFERRED_SHEET = "Students";
 
 /**
@@ -52,20 +52,31 @@ function cellText(value: unknown): string {
  * Headers are lower-cased and trimmed so a template somebody has retyped with
  * "Full_Name" still lines up.
  */
-export async function parseXlsx(file: File): Promise<SheetRow[]> {
+export async function parseXlsx(
+  file: File,
+  options: {
+    /** The sheet this workbook's template writes its data to. */
+    sheet?: string;
+    /** Headers that identify a data sheet, for a workbook saved elsewhere. */
+    knownHeaders?: string[];
+  } = {}
+): Promise<SheetRow[]> {
+  const preferredSheet = options.sheet ?? PREFERRED_SHEET;
+  const knownHeaders = options.knownHeaders ?? KNOWN_HEADERS;
+
   const readXlsxFile = (await import("read-excel-file/node")).default;
   // Buffer, not the File: the node build takes a Buffer or a stream.
   const sheets = await readXlsxFile(Buffer.from(await file.arrayBuffer()));
   if (sheets.length === 0) return [];
 
-  // Our own template always names the data sheet. Failing that, take the first
+  // Our own templates always name the data sheet. Failing that, take the first
   // sheet whose header row is recognisable, which is a better guess than the
-  // first sheet outright: the template carries a "Lists" sheet of dropdown
+  // first sheet outright: the templates carry a "Lists" sheet of dropdown
   // values, and a workbook saved from elsewhere may lead with a cover sheet.
-  const named = sheets.find((s) => s.sheet === PREFERRED_SHEET);
+  const named = sheets.find((s) => s.sheet === preferredSheet);
   const recognisable = sheets.find((s) => {
     const headers = (s.data[0] ?? []).map((v) => cellText(v).toLowerCase());
-    return KNOWN_HEADERS.some((h) => headers.includes(h));
+    return knownHeaders.some((h) => headers.includes(h));
   });
   const data = (named ?? recognisable ?? sheets[0]).data;
 

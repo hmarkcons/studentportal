@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { NewUniversityForm } from "./NewUniversityForm";
 import { ImportUniversitiesForm } from "./ImportUniversitiesForm";
+import { ImportCatalogueForm } from "./ImportCatalogueForm";
 import { DeleteUniversityIcon } from "./DeleteUniversityIcon";
 
 function one<T>(v: T | T[] | null) {
@@ -37,6 +38,9 @@ export default async function UniversitiesPage(props: { searchParams: Promise<{ 
       <Card className="mb-6">
         <NewUniversityForm destinations={destinations ?? []} />
         <ImportUniversitiesForm destinations={destinations ?? []} />
+        {/* The combined sheet. Listed after the universities-only one because it
+            is the bigger hammer: it can create and update programmes too. */}
+        <ImportCatalogueForm destinations={destinations ?? []} />
       </Card>
 
       <div className="mb-3 flex flex-wrap gap-2">

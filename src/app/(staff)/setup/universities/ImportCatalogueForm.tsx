@@ -1,0 +1,83 @@
+"use client";
+
+import { useActionState, useState } from "react";
+import { importCatalogue } from "@/lib/actions/universities";
+import { Button } from "@/components/ui/Button";
+import { FileField } from "@/components/FileField";
+import { Select } from "@/components/ui/Input";
+import { ImportReportPanel } from "@/components/ImportReportPanel";
+
+/**
+ * A whole destination's catalogue in one upload.
+ *
+ * The other two importers are still here and still work: universities for a
+ * destination, programmes for one university at a time. This one exists
+ * because rebuilding a country's catalogue through them means opening every
+ * university in turn — thirty uploads for thirty universities — and the
+ * spreadsheets the offices actually keep are already one row per programme
+ * with the university repeated down the side.
+ */
+export function ImportCatalogueForm({ destinations }: { destinations: { id: string; display_name: string }[] }) {
+  const [state, formAction, pending] = useActionState(importCatalogue, undefined);
+  const [ready, setReady] = useState(false);
+
+  return (
+    <details className="mt-3 rounded-md border border-border p-3">
+      <summary className="cursor-pointer text-sm font-medium text-ink">
+        Import a whole destination&rsquo;s catalogue — universities and programmes in one sheet
+      </summary>
+
+      <form action={formAction} className="mt-3 flex flex-wrap items-end gap-2">
+        <Select name="destination_id" required>
+          <option value="">Destination…</option>
+          {destinations.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.display_name}
+            </option>
+          ))}
+        </Select>
+        <FileField
+          accept=".xlsx,.csv"
+          required
+          hint="Excel or CSV"
+          inputClassName="text-sm"
+          onChange={(s) => setReady(Boolean(s.file))}
+        />
+        <Button type="submit" variant="primary" pending={pending} disabled={!ready}>
+          Import
+        </Button>
+        {/* A link rather than the CSV sample button the other two use: this
+            template carries dropdowns for level, type and the yes/no columns,
+            which a CSV cannot hold. */}
+        <a
+          href="/api/samples/catalogue"
+          className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-primary hover:bg-bg"
+        >
+          Download Excel template
+        </a>
+      </form>
+
+      <p className="mt-2 text-xs text-muted">
+        One row per programme. The university columns —{" "}
+        <code>university_name</code>, <code>city</code>, <code>region</code>, <code>type</code>,{" "}
+        <code>levels_offered</code>, <code>fields_offered</code>, <code>contact_email</code> — repeat on every row that
+        belongs to that university, and it is created or updated once. Leave the programme columns blank to import a
+        university on its own.
+      </p>
+      <p className="mt-1 text-xs text-muted">
+        A university is matched by <code>university_name</code> within the destination you pick; a programme by{" "}
+        <code>program_name</code> and <code>level</code> within its university. Anything already on file is{" "}
+        <strong className="text-ink">updated</strong>, anything new is added, and{" "}
+        <strong className="text-ink">an empty cell changes nothing</strong> — the import can never blank a field.
+      </p>
+      <p className="mt-1 text-xs text-muted">
+        A name that is nearly but not exactly one already stored — <code>Sapienza Univ. of Rome</code> against a stored{" "}
+        <code>Sapienza University of Rome</code> — is <strong className="text-ink">held back and listed</strong> rather
+        than guessed at, so it neither overwrites the wrong record nor quietly creates a duplicate. Only a Super Admin
+        may overwrite; anyone else can still add.
+      </p>
+
+      <ImportReportPanel state={state} />
+    </details>
+  );
+}
