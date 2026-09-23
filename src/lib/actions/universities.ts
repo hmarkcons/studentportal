@@ -1,5 +1,6 @@
 "use server";
 
+import { createHash } from "node:crypto";
 import { redirect } from "next/navigation";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
@@ -12,7 +13,7 @@ import { hasRole } from "@/lib/auth/roles";
 import {
   describeChange,
   emptyReport,
-  findNearMiss,
+  findNearMisses,
   finishReport,
   isBlank,
   mergeRow,
@@ -24,15 +25,18 @@ import {
 } from "@/lib/importMerge";
 import {
   programFromRow,
+  resolveDestination,
   roundsFromRow,
   sameRounds,
   programInsertValues,
   universityFromRow,
   universityInsertValues,
   type CatalogueRound,
+  type DestinationRef,
   type ProgramInput,
   type UniversityInput,
 } from "@/lib/catalogueRows";
+import { readAllIn } from "@/lib/catalogueReads";
 
 export async function createUniversity(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
@@ -195,37 +199,52 @@ export async function addProgram(universityId: string, _prevState: unknown, form
 
 // ============================================================== bulk imports
 //
-// Three sheets reach the catalogue: universities for a destination, programmes
-// for one university, and the combined sheet that carries both. All three ADD
-// OR UPDATE rather than skipping whatever already exists.
+// Three sheets reach the catalogue: universities, programmes for one
+// university, and the combined sheet that carries both. All three ADD OR
+// UPDATE rather than skipping whatever already exists, and all three follow
+// the same rules, settled in src/lib/importMerge.ts and src/lib/catalogueRows.ts
+// — read those two before changing anything here:
 //
-// That change turns two quiet questions into decisions, both settled in
-// src/lib/importMerge.ts: an empty cell changes nothing, and a name that is
-// nearly-but-not-quite a match is held back rather than guessed at. The cell
-// parsing lives in src/lib/catalogueRows.ts. Read those two before changing
-// anything here.
+//   - a row identical to what is stored is left alone;
+//   - a filled cell that differs overwrites; a filled cell where nothing was
+//     stored adds; an EMPTY cell changes nothing, so a partial sheet can never
+//     blank a column;
+//   - a name nearly matching exactly one stored record updates that record
+//     (keeping its stored name), and a name near two is held back;
+//   - anything new is created.
 //
-// **Updating is Super Admin's alone, and not by choice.** Migration 0039 gives
-// every active staff member INSERT on universities and programs but restricts
-// UPDATE to super_admin. An UPDATE that RLS refuses does not raise an error —
-// it simply matches no rows and reports success — so an import that merely
-// tried would tell a counsellor it had changed forty programmes while changing
-// nothing at all. The check is therefore made up front, and the rows that
-// would have changed are named rather than silently passed over.
+// **Every import is previewed first.** The action runs twice: once with
+// `intent=preview`, which does all the matching and writes nothing, and again
+// with `intent=apply` once the person has read the preview and confirmed. Both
+// passes run the SAME code with one flag, `dryRun`, deciding whether the
+// writes are sent — so what the preview says is what applying does, rather
+// than a second implementation that could drift from the first. The apply pass
+// must carry the preview's fingerprint, and is refused if the file or the
+// fallback destination is not the one that was previewed.
+//
+// **Only a Super Admin may import at all.** Checked up front, before the file
+// is read. Migration 0039 also restricts UPDATE on these tables to
+// super_admin, and an UPDATE that RLS refuses raises nothing — it matches no
+// rows — so every update here also asks for the row back and reports a
+// failure when none comes, rather than trusting a silent success.
 //
 // Writes are batched where they can be: one insert for all new universities,
 // one for all new programmes, one for all their rounds. Updates stay
-// row-at-a-time because each carries a different patch. A thousand-row
-// catalogue would otherwise be several thousand round trips inside one request.
+// row-at-a-time because each carries a different patch.
+
+type Supabase = Awaited<ReturnType<typeof createClient>>;
+
+/** One import in progress: where it writes, what it has found, and whether it may write. */
+type ImportRun = { supabase: Supabase; report: ImportReport; dryRun: boolean };
+
+const SUPER_ADMIN_ONLY = "Only a Super Admin can import universities and programmes.";
 
 /**
- * Whether this person may change what is already stored.
- *
  * Selects "role, roles" rather than "role": hasRole falls back to the primary
  * role when the array is absent, so asking for the primary alone would ignore
  * a Super Admin role somebody holds as their second.
  */
-async function canUpdateCatalogue(supabase: Awaited<ReturnType<typeof createClient>>) {
+async function isSuperAdmin(supabase: Supabase) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -237,11 +256,11 @@ async function canUpdateCatalogue(supabase: Awaited<ReturnType<typeof createClie
   return hasRole(staffRow, "super_admin");
 }
 
-/** Reads an uploaded sheet, .xlsx or .csv, into header-keyed rows. */
+/** Reads an uploaded sheet, .xlsx or .csv, into header-keyed rows, and fingerprints it. */
 async function readImportRows(
   file: File | null,
   options: { sheet: string; knownHeaders: string[] }
-): Promise<{ rows: Record<string, string>[] } | { error: string }> {
+): Promise<{ rows: Record<string, string>[]; digest: string } | { error: string }> {
   if (file) {
     const tooLarge = fileSizeError(file.size, MAX_UPLOAD_BYTES, "file");
     if (tooLarge) return { error: `${tooLarge} A spreadsheet this large is usually a mistake — split it and import in batches.` };
@@ -251,15 +270,45 @@ async function readImportRows(
   const { isXlsx, parseXlsx } = await import("@/lib/spreadsheet");
   const rows = isXlsx(file) ? await parseXlsx(file, options) : parseCsvWithHeader(await file.text());
   if (rows.length === 0) return { error: "The file has no data rows." };
-  return { rows };
+
+  const digest = createHash("sha256").update(Buffer.from(await file.arrayBuffer())).digest("hex");
+  return { rows, digest };
 }
+
+/**
+ * Preview or apply, and on apply whether it is the preview that was shown.
+ *
+ * The fingerprint covers the file's bytes and everything else in the form
+ * that changes the outcome, so choosing a different fallback destination after
+ * previewing is refused just like a different file.
+ */
+function importIntent(
+  formData: FormData,
+  digest: string,
+  ...context: string[]
+): { dryRun: boolean; fingerprint: string } | { error: string } {
+  const fingerprint = createHash("sha256")
+    .update([digest, ...context].join("|"))
+    .digest("hex")
+    .slice(0, 32);
+  if (formData.get("intent") !== "apply") return { dryRun: true, fingerprint };
+  if (String(formData.get("fingerprint") ?? "") !== fingerprint) {
+    return { error: "This is not the file that was previewed, or the destination has changed since. Preview it again, then apply." };
+  }
+  return { dryRun: false, fingerprint };
+}
+
+/** The pending id a university gets in a preview, where nothing is inserted. */
+const PENDING = "pending:";
+const isPending = (id: string) => id.startsWith(PENDING);
 
 // --------------------------------------------------------------- universities
 
-const UNIVERSITY_COLUMNS = "id, name, city, region, type, levels_offered, fields_offered, contact_email";
+const UNIVERSITY_COLUMNS = "id, destination_id, name, city, region, type, levels_offered, fields_offered, contact_email";
 
 type StoredUniversity = {
   id: string;
+  destination_id: string;
   name: string;
   city: string | null;
   region: string | null;
@@ -268,6 +317,11 @@ type StoredUniversity = {
   fields_offered: string[];
   contact_email: string | null;
 };
+
+type UniversityEntry = { input: UniversityInput; destination: DestinationRef };
+
+/** A university is one name within one destination; the same name elsewhere is another university. */
+const universityKey = (destinationId: string, name: string) => `${destinationId}::${normalizeName(name)}`;
 
 /** The columns an import may change. Name is the key, so it is not among them. */
 function universityPatchFields(input: UniversityInput): Record<string, Cell> {
@@ -281,140 +335,207 @@ function universityPatchFields(input: UniversityInput): Record<string, Cell> {
   };
 }
 
-/**
- * Collapses the repeats a combined sheet necessarily has.
- *
- * One row per programme means the university's own columns are written out
- * again on every one of them. The first mention wins, and a later row that
- * fills in a blank adds to it; a later row that disagrees outright is reported
- * rather than quietly overwriting, because one of the two is a typo and
- * picking a winner would hide it.
- */
-function collapseUniversities(inputs: UniversityInput[], report: ImportReport): UniversityInput[] {
-  const byKey = new Map<string, UniversityInput>();
-  const conflicts = new Set<string>();
+function sameCell(a: Cell, b: Cell) {
+  return Array.isArray(a)
+    ? Array.isArray(b) && a.length === b.length && a.every((v, i) => v === b[i])
+    : a === b;
+}
 
-  for (const input of inputs) {
-    const key = normalizeName(input.name);
-    const first = byKey.get(key);
-    if (!first) {
-      byKey.set(key, { ...input });
+/**
+ * Folds a later mention of a university into the first one.
+ *
+ * A later row that fills in a blank adds to it; one that disagrees outright is
+ * reported rather than quietly overwriting, because one of the two is a typo
+ * and picking a winner would hide it.
+ */
+function absorbUniversity(first: UniversityInput, later: UniversityInput, report: ImportReport) {
+  const established = universityPatchFields(first);
+  for (const [field, value] of Object.entries(universityPatchFields(later))) {
+    if (isBlank(value)) continue;
+    const already = established[field];
+    if (isBlank(already)) {
+      (first as unknown as Record<string, Cell>)[field] = value;
       continue;
     }
-
-    const incoming = universityPatchFields(input);
-    const established = universityPatchFields(first);
-    for (const [field, value] of Object.entries(incoming)) {
-      if (isBlank(value)) continue;
-      const already = established[field];
-      if (isBlank(already)) {
-        (first as unknown as Record<string, Cell>)[field] = value;
-        continue;
-      }
-      const same = Array.isArray(already)
-        ? Array.isArray(value) && already.length === value.length && already.every((v, i) => v === value[i])
-        : already === value;
-      if (same) continue;
-      const note = `"${input.name}" is listed more than once with a different ${field} — kept ${renderCell(already)}`;
-      if (conflicts.has(note)) continue;
-      conflicts.add(note);
-      report.problems.push(note);
-    }
+    if (sameCell(already, value)) continue;
+    report.problems.push(
+      `"${later.name}" is listed more than once with a different ${field} — kept ${renderCell(already)}`
+    );
   }
+}
 
+/**
+ * Collapses the repeats a combined sheet necessarily has — one row per
+ * programme means the university's own columns are written out again on every
+ * one of them. The first mention wins, and is created or updated once.
+ */
+function collapseUniversities(entries: UniversityEntry[], report: ImportReport): UniversityEntry[] {
+  const byKey = new Map<string, UniversityEntry>();
+  for (const entry of entries) {
+    const key = universityKey(entry.destination.id, entry.input.name);
+    const first = byKey.get(key);
+    if (first) absorbUniversity(first.input, entry.input, report);
+    else byKey.set(key, { destination: entry.destination, input: { ...entry.input } });
+  }
   return [...byKey.values()];
 }
 
 /**
- * Adds or updates every university in the list, and answers with the id of
- * each one — whether it was created here or was already on file — so the
- * programmes in a combined sheet can be hung off it.
+ * Adds or updates every university in the list, and answers with the id each
+ * spelling in the sheet resolved to — whether created here, already on file,
+ * or matched by a similar name — so the programmes in a combined sheet can be
+ * hung off it. In a preview the new ones answer with a pending id.
  */
-async function mergeUniversities(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  destinationId: string,
-  defaultType: string,
-  inputs: UniversityInput[],
-  canUpdate: boolean,
-  report: ImportReport
-): Promise<Map<string, string>> {
-  const { data: stored, error: readError } = await supabase
-    .from("universities")
-    .select(UNIVERSITY_COLUMNS)
-    .eq("destination_id", destinationId)
-    .returns<StoredUniversity[]>();
-  if (readError) {
-    report.failures.push(`Could not read the existing universities: ${readError.message}`);
+async function mergeUniversities(run: ImportRun, entries: UniversityEntry[]): Promise<Map<string, string>> {
+  const { supabase, report, dryRun } = run;
+  const destinationIds = [...new Set(entries.map((e) => e.destination.id))];
+
+  let stored: StoredUniversity[];
+  try {
+    stored = await readAllIn(destinationIds, (chunk, from, to) =>
+      supabase
+        .from("universities")
+        .select(UNIVERSITY_COLUMNS)
+        .in("destination_id", chunk)
+        .order("id")
+        .range(from, to)
+        .returns<StoredUniversity[]>()
+    );
+  } catch (error) {
+    report.failures.push(`Could not read the existing universities: ${(error as Error).message}`);
     return new Map();
   }
 
-  const byKey = new Map((stored ?? []).map((u) => [normalizeName(u.name), u]));
-  const storedNames = (stored ?? []).map((u) => u.name);
-  const idByKey = new Map([...byKey].map(([key, u]) => [key, u.id]));
+  const byKey = new Map(stored.map((u) => [universityKey(u.destination_id, u.name), u]));
+  // None today, but the programmes table already holds such pairs, and a
+  // university on file twice would have its sheet row paired with an
+  // arbitrary copy. Refused by name rather than guessed at.
+  const onFileTwice = new Set<string>();
+  {
+    const seen = new Set<string>();
+    for (const u of stored) {
+      const key = universityKey(u.destination_id, u.name);
+      if (seen.has(key)) onFileTwice.add(key);
+      seen.add(key);
+    }
+  }
+  const storedNames = new Map<string, string[]>();
+  for (const u of stored) storedNames.set(u.destination_id, [...(storedNames.get(u.destination_id) ?? []), u.name]);
 
-  const toCreate: UniversityInput[] = [];
+  /** Sheet spelling → the id it resolved to. */
+  const idByKey = new Map<string, string>();
+  /** Sheet spelling → the key of the new university it was folded into. */
+  const aliasToNew = new Map<string, string>();
+  const toCreate = new Map<string, UniversityEntry>();
+  const newNames = new Map<string, string[]>();
 
-  for (const input of inputs) {
-    const key = normalizeName(input.name);
-    const existing = byKey.get(key);
+  for (const entry of entries) {
+    const { input, destination } = entry;
+    const key = universityKey(destination.id, input.name);
+    const where = destination.display_name;
+    let existing = byKey.get(key);
 
     if (!existing) {
-      const near = findNearMiss(input.name, storedNames);
-      if (near) {
-        report.heldBack.push(`"${input.name}" looks like "${near}", already on file — correct the sheet, or rename one of them`);
+      const near = findNearMisses(input.name, storedNames.get(destination.id) ?? []);
+      if (near.length > 1) {
+        report.heldBack.push(
+          `${where} · "${input.name}" is close to ${near.map((n) => `"${n}"`).join(" and ")} — make the name match one of them exactly`
+        );
         continue;
       }
-      if (!input.city) {
-        report.problems.push(`"${input.name}" is new, and a new university needs a city`);
-        continue;
+      if (near.length === 1) {
+        existing = byKey.get(universityKey(destination.id, near[0]))!;
+        report.similarMatches.push(`${where} · "${input.name}" → updates "${existing.name}"`);
       }
-      toCreate.push(input);
-      // Pushed now so a second near-miss inside the same file is caught
-      // against this one too, rather than both being created.
-      storedNames.push(input.name);
+    }
+
+    if (existing && onFileTwice.has(universityKey(destination.id, existing.name))) {
+      report.heldBack.push(
+        `${where} · "${existing.name}" is on file more than once, so there is no telling which to change — delete the duplicate, then import again`
+      );
       continue;
     }
 
-    const { patch, changes } = mergeRow(
-      existing as unknown as Record<string, Cell>,
-      universityPatchFields(input)
-    );
+    if (!existing) {
+      // Not on file — but two spellings of one new university in the same
+      // sheet are still one university, not two.
+      const nearNew = findNearMisses(input.name, newNames.get(destination.id) ?? []);
+      if (nearNew.length > 1) {
+        report.heldBack.push(
+          `${where} · "${input.name}" is close to ${nearNew.map((n) => `"${n}"`).join(" and ")}, both new in this sheet`
+        );
+        continue;
+      }
+      if (nearNew.length === 1) {
+        const target = universityKey(destination.id, nearNew[0]);
+        absorbUniversity(toCreate.get(target)!.input, input, report);
+        aliasToNew.set(key, target);
+        report.similarMatches.push(`${where} · "${input.name}" → the same new university as "${nearNew[0]}"`);
+        continue;
+      }
+      if (!input.city) {
+        report.problems.push(`${where} · "${input.name}" is new, and a new university needs a city`);
+        continue;
+      }
+      toCreate.set(key, entry);
+      newNames.set(destination.id, [...(newNames.get(destination.id) ?? []), input.name]);
+      continue;
+    }
+
+    idByKey.set(key, existing.id);
+    const { patch, changes } = mergeRow(existing as unknown as Record<string, Cell>, universityPatchFields(input));
     if (changes.length === 0) {
       report.universities.unchanged += 1;
       continue;
     }
-    if (!canUpdate) {
-      report.needsSuperAdmin.push(`${existing.name} (${changes.map((c) => c.field).join(", ")})`);
-      continue;
-    }
 
-    const { error } = await supabase.from("universities").update(patch).eq("id", existing.id);
-    if (error) {
-      report.failures.push(`${existing.name}: ${error.message}`);
-      continue;
+    if (!dryRun) {
+      const { data: updated, error } = await supabase
+        .from("universities")
+        .update(patch)
+        .eq("id", existing.id)
+        .select("id");
+      if (error || !updated?.length) {
+        report.failures.push(`${existing.name}: ${error?.message ?? "the database refused the change"}`);
+        continue;
+      }
     }
+    // Applied to the in-memory row in a preview too, so that a second sheet
+    // spelling of the same university is compared against what the first will
+    // have left, exactly as it would be on apply.
     Object.assign(existing, patch);
     report.universities.updated += 1;
     for (const change of changes) report.changes.push(`${existing.name} · ${describeChange(change)}`);
   }
 
-  if (toCreate.length > 0) {
-    const payload = toCreate.map((input) => universityInsertValues(input, destinationId, defaultType));
+  const creating = [...toCreate.entries()];
+  for (const [, { input, destination }] of creating) {
+    report.additions.push(`${destination.display_name} · ${input.name} — new university`);
+  }
+
+  if (creating.length > 0 && dryRun) {
+    for (const [key] of creating) idByKey.set(key, `${PENDING}${key}`);
+    report.universities.added += creating.length;
+  } else if (creating.length > 0) {
     const { data: created, error } = await supabase
       .from("universities")
-      .insert(payload)
-      .select("id, name")
-      .returns<{ id: string; name: string }[]>();
+      .insert(creating.map(([, e]) => universityInsertValues(e.input, e.destination.id, e.destination.track)))
+      .select("id, name, destination_id")
+      .returns<{ id: string; name: string; destination_id: string }[]>();
     if (error) {
       report.failures.push(
-        `Could not create ${toCreate.length} new universit${toCreate.length === 1 ? "y" : "ies"}: ${error.message}`
+        `Could not create ${creating.length} new universit${creating.length === 1 ? "y" : "ies"}: ${error.message}`
       );
     } else {
       report.universities.added += created?.length ?? 0;
-      for (const row of created ?? []) idByKey.set(normalizeName(row.name), row.id);
+      for (const row of created ?? []) idByKey.set(universityKey(row.destination_id, row.name), row.id);
     }
   }
 
+  for (const [alias, target] of aliasToNew) {
+    const id = idByKey.get(target);
+    if (id) idByKey.set(alias, id);
+  }
   return idByKey;
 }
 
@@ -446,7 +567,9 @@ type ProgramEntry = {
   universityLabel: string;
 };
 
-const programKey = (name: string, level: string) => `${normalizeName(name)}__${level}`;
+/** Keyed by university as well as name+level: two universities may both teach "Computer Science" at bachelors. */
+const programKey = (universityId: string, name: string, level: string) =>
+  `${universityId}::${normalizeName(name)}__${level}`;
 
 /** The columns an import may change. Name and level together are the key. */
 function programPatchFields(input: ProgramInput): Record<string, Cell> {
@@ -470,135 +593,188 @@ function programPatchFields(input: ProgramInput): Record<string, Cell> {
 /**
  * Adds or updates programmes across any number of universities in one pass.
  *
- * Everything already stored for those universities is read in two queries
- * rather than two per programme, and the new rows and their rounds go in as
- * one insert each.
+ * Everything already stored for those universities is read up front rather
+ * than per programme, and the new rows and their rounds go in as one insert
+ * each. A university that is itself new (a pending id, in a preview) has
+ * nothing stored, so all of its programmes are additions.
  */
-async function mergePrograms(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  entries: ProgramEntry[],
-  canUpdate: boolean,
-  report: ImportReport
-) {
-  const universityIds = [...new Set(entries.map((e) => e.universityId))];
-  if (universityIds.length === 0) return;
+async function mergePrograms(run: ImportRun, entries: ProgramEntry[]) {
+  const { supabase, report, dryRun } = run;
+  const universityIds = [...new Set(entries.map((e) => e.universityId))].filter((id) => !isPending(id));
 
-  const { data: stored, error: readError } = await supabase
-    .from("programs")
-    .select(PROGRAM_COLUMNS)
-    .in("university_id", universityIds)
-    .returns<StoredProgram[]>();
-  if (readError) {
-    report.failures.push(`Could not read the existing programmes: ${readError.message}`);
+  let stored: StoredProgram[];
+  let storedRounds: StoredRound[];
+  try {
+    stored = await readAllIn(universityIds, (chunk, from, to) =>
+      supabase
+        .from("programs")
+        .select(PROGRAM_COLUMNS)
+        .in("university_id", chunk)
+        .order("id")
+        .range(from, to)
+        .returns<StoredProgram[]>()
+    );
+    storedRounds = await readAllIn(
+      stored.map((p) => p.id),
+      (chunk, from, to) =>
+        supabase
+          .from("program_intake_rounds")
+          .select("id, program_id, label, start_date, application_deadline")
+          .in("program_id", chunk)
+          .order("id")
+          .range(from, to)
+          .returns<StoredRound[]>()
+    );
+  } catch (error) {
+    report.failures.push(`Could not read the existing programmes: ${(error as Error).message}`);
     return;
   }
 
-  const storedIds = (stored ?? []).map((p) => p.id);
-  const { data: storedRounds } = storedIds.length
-    ? await supabase
-        .from("program_intake_rounds")
-        .select("program_id, label, start_date, application_deadline")
-        .in("program_id", storedIds)
-        .returns<StoredRound[]>()
-    : { data: [] as StoredRound[] };
   const roundsByProgram = new Map<string, StoredRound[]>();
-  for (const round of storedRounds ?? []) {
+  for (const round of storedRounds) {
     roundsByProgram.set(round.program_id, [...(roundsByProgram.get(round.program_id) ?? []), round]);
   }
 
-  // Keyed by university as well as by name+level: two universities may
-  // perfectly well both teach "Computer Science" at bachelors.
-  const byKey = new Map<string, StoredProgram>();
-  const namesByScope = new Map<string, string[]>();
-  for (const program of stored ?? []) {
-    byKey.set(`${program.university_id}::${programKey(program.name, program.level)}`, program);
+  // A list per key, not one record: the catalogue does hold the same
+  // programme twice at some universities (43 such pairs in Germany when this
+  // was written), and a map of one would silently pair a sheet row with
+  // whichever copy was read last and overwrite it with the other's values.
+  const byKey = new Map<string, StoredProgram[]>();
+  const storedNames = new Map<string, string[]>();
+  for (const program of stored) {
+    const key = programKey(program.university_id, program.name, program.level);
+    byKey.set(key, [...(byKey.get(key) ?? []), program]);
     const scope = `${program.university_id}::${program.level}`;
-    namesByScope.set(scope, [...(namesByScope.get(scope) ?? []), program.name]);
+    storedNames.set(scope, [...(storedNames.get(scope) ?? []), program.name]);
   }
 
   const toCreate: ProgramEntry[] = [];
-  const seenInFile = new Set<string>();
+  const newNames = new Map<string, string[]>();
+  /** Which sheet row first claimed a record, so a second claim can say which. */
+  const claimedBy = new Map<string, string>();
 
   for (const entry of entries) {
     const { input, rounds, universityId, universityLabel } = entry;
-    const scopedKey = `${universityId}::${programKey(input.name, input.level)}`;
     const label = `${universityLabel} · ${input.name} (${input.level})`;
+    const scope = `${universityId}::${input.level}`;
 
-    if (seenInFile.has(scopedKey)) {
-      report.problems.push(`${label} appears more than once in the file — only the first was used`);
-      continue;
-    }
-    seenInFile.add(scopedKey);
-
-    const existing = byKey.get(scopedKey);
-
-    if (!existing) {
-      const scope = `${universityId}::${input.level}`;
-      const near = findNearMiss(input.name, namesByScope.get(scope) ?? []);
-      if (near) {
-        report.heldBack.push(`${universityLabel} · "${input.name}" (${input.level}) looks like "${near}", already on file`);
+    let candidates = byKey.get(programKey(universityId, input.name, input.level)) ?? [];
+    let similar = false;
+    if (candidates.length === 0) {
+      const near = findNearMisses(input.name, storedNames.get(scope) ?? []);
+      if (near.length > 1) {
+        report.heldBack.push(
+          `${label} is close to ${near.map((n) => `"${n}"`).join(" and ")} — make the name match one of them exactly`
+        );
         continue;
       }
-      toCreate.push(entry);
-      namesByScope.set(scope, [...(namesByScope.get(scope) ?? []), input.name]);
+      if (near.length === 1) {
+        candidates = byKey.get(programKey(universityId, near[0], input.level)) ?? [];
+        similar = true;
+      }
+    }
+
+    // The same programme on file more than once. A row identical to one of
+    // the copies changes nothing and is fine — that is what an untouched
+    // export of it looks like — but a row that would change one cannot say
+    // which, so neither is touched.
+    if (candidates.length > 1) {
+      const same = candidates.find(
+        (c) =>
+          !claimedBy.has(c.id) &&
+          mergeRow(c as unknown as Record<string, Cell>, programPatchFields(input)).changes.length === 0 &&
+          (rounds.length === 0 || sameRounds(roundsByProgram.get(c.id) ?? [], rounds))
+      );
+      if (same) {
+        claimedBy.set(same.id, input.name);
+        report.programs.unchanged += 1;
+      } else {
+        report.heldBack.push(
+          `${label} is on file ${candidates.length} times at this university, so there is no telling which to change — delete the duplicate, then import again`
+        );
+      }
+      continue;
+    }
+    const existing: StoredProgram | undefined = candidates[0];
+
+    // One record, one row of the sheet. A second row landing on the same
+    // programme — repeated, or spelled close enough to match it — would
+    // otherwise overwrite the first with whichever came last.
+    const claimKey = existing ? existing.id : programKey(universityId, input.name, input.level);
+    const firstClaim = claimedBy.get(claimKey);
+    if (firstClaim !== undefined) {
+      report.problems.push(
+        firstClaim === input.name
+          ? `${label} appears more than once in the file — only the first was used`
+          : `${label} is the same programme as "${firstClaim}" earlier in the file — only the first was used`
+      );
       continue;
     }
 
-    const { patch, changes } = mergeRow(
-      existing as unknown as Record<string, Cell>,
-      programPatchFields(input)
-    );
+    if (!existing) {
+      const nearNew = findNearMisses(input.name, newNames.get(scope) ?? []);
+      if (nearNew.length > 0) {
+        report.problems.push(
+          `${label} is the same programme as "${nearNew[0]}" earlier in the file — only the first was used`
+        );
+        continue;
+      }
+      claimedBy.set(claimKey, input.name);
+      toCreate.push(entry);
+      newNames.set(scope, [...(newNames.get(scope) ?? []), input.name]);
+      continue;
+    }
+    claimedBy.set(claimKey, input.name);
+    if (similar) report.similarMatches.push(`${universityLabel} · "${input.name}" (${input.level}) → updates "${existing.name}"`);
+
+    const target = `${universityLabel} · ${existing.name} (${input.level})`;
+    const { patch, changes } = mergeRow(existing as unknown as Record<string, Cell>, programPatchFields(input));
     const roundsDiffer = rounds.length > 0 && !sameRounds(roundsByProgram.get(existing.id) ?? [], rounds);
 
     if (changes.length === 0 && !roundsDiffer) {
       report.programs.unchanged += 1;
       continue;
     }
-    if (!canUpdate) {
-      const what = [...changes.map((c) => c.field), ...(roundsDiffer ? ["intake rounds"] : [])].join(", ");
-      report.needsSuperAdmin.push(`${label} (${what})`);
-      continue;
-    }
 
-    let touched = false;
-    if (changes.length > 0) {
-      const { error } = await supabase.from("programs").update(patch).eq("id", existing.id);
-      if (error) {
-        report.failures.push(`${label}: ${error.message}`);
+    if (changes.length > 0 && !dryRun) {
+      const { data: updated, error } = await supabase
+        .from("programs")
+        .update(patch)
+        .eq("id", existing.id)
+        .select("id");
+      if (error || !updated?.length) {
+        report.failures.push(`${target}: ${error?.message ?? "the database refused the change"}`);
         continue;
       }
-      Object.assign(existing, patch);
-      touched = true;
-      for (const change of changes) report.changes.push(`${label} · ${describeChange(change)}`);
     }
+    Object.assign(existing, patch);
+    for (const change of changes) report.changes.push(`${target} · ${describeChange(change)}`);
+
     if (roundsDiffer) {
-      const roundsError = await saveProgramRounds(supabase, existing.id, rounds);
+      const roundsError = dryRun ? null : await saveProgramRounds(supabase, existing.id, rounds);
       if (roundsError) {
-        report.failures.push(`${label}: intake rounds — ${roundsError}`);
+        report.failures.push(`${target}: intake rounds — ${roundsError}`);
       } else {
-        roundsByProgram.set(
-          existing.id,
-          rounds.map((r) => ({
-            program_id: existing.id,
-            label: r.label,
-            start_date: r.start_date,
-            application_deadline: r.application_deadline,
-          }))
-        );
-        touched = true;
-        report.changes.push(`${label} · intake rounds → ${rounds.map((r) => r.label).join(", ")}`);
+        report.changes.push(`${target} · intake rounds → ${rounds.map((r) => r.label).join(", ")}`);
       }
     }
-    if (touched) report.programs.updated += 1;
+    report.programs.updated += 1;
   }
 
+  for (const { input, universityLabel } of toCreate) {
+    report.additions.push(`${universityLabel} · ${input.name} (${input.level}) — new programme`);
+  }
   if (toCreate.length === 0) return;
+  if (dryRun) {
+    report.programs.added += toCreate.length;
+    return;
+  }
 
+  // In an apply every university id is real: a new university that could not
+  // be created has no id at all, and its programmes never reached this list.
   const { data: created, error } = await supabase
     .from("programs")
-    .insert(
-      toCreate.map(({ input, universityId }) => programInsertValues(input, universityId))
-    )
+    .insert(toCreate.map(({ input, universityId }) => programInsertValues(input, universityId)))
     .select("id, university_id, name, level")
     .returns<{ id: string; university_id: string; name: string; level: string }[]>();
   if (error) {
@@ -607,9 +783,9 @@ async function mergePrograms(
   }
   report.programs.added += created?.length ?? 0;
 
-  const idByKey = new Map((created ?? []).map((p) => [`${p.university_id}::${programKey(p.name, p.level)}`, p.id]));
+  const idByKey = new Map((created ?? []).map((p) => [programKey(p.university_id, p.name, p.level), p.id]));
   const newRounds = toCreate.flatMap(({ input, rounds, universityId }) => {
-    const programId = idByKey.get(`${universityId}::${programKey(input.name, input.level)}`);
+    const programId = idByKey.get(programKey(universityId, input.name, input.level));
     if (!programId) return [];
     return rounds.map((round) => ({
       program_id: programId,
@@ -633,56 +809,135 @@ async function mergePrograms(
 // ------------------------------------------------------------- the three forms
 
 /**
- * Universities for one destination.
+ * The universities sheet and the combined sheet: rows of universities, each
+ * optionally carrying one programme, across any number of destinations.
  *
- * Columns: name (required), city (required only for a university that does not
- * exist yet), region, type (public/private — defaults to the destination's own
- * track), levels_offered, fields_offered, contact_email. The list columns are
- * semicolon-separated within the cell, since commas are the CSV delimiter.
+ * A row's `destination` cell says where it belongs; a blank one falls back to
+ * the destination picked in the form, and a row with neither is reported. So
+ * a single-country sheet needs no destination column at all, and a sheet
+ * covering several countries needs no picker.
  */
-export async function importUniversities(_prevState: unknown, formData: FormData): Promise<CatalogueImportResult> {
+async function importUniversityRows(
+  formData: FormData,
+  options: { sheet: string; knownHeaders: string[]; universityKey: "name" | "university_name"; withProgrammes: boolean }
+): Promise<CatalogueImportResult> {
   const supabase = await createClient();
-  const destinationId = String(formData.get("destination_id") ?? "");
-  if (!destinationId) return { error: "Choose a destination first." };
+  if (!(await isSuperAdmin(supabase))) return { error: SUPER_ADMIN_ONLY };
 
-  const read = await readImportRows(formData.get("file") as File | null, {
-    sheet: "Universities",
-    knownHeaders: ["name", "city", "levels_offered"],
-  });
+  const read = await readImportRows(formData.get("file") as File | null, options);
   if ("error" in read) return { error: read.error };
 
-  const { data: destination } = await supabase
+  const fallbackId = String(formData.get("destination_id") ?? "");
+  const intent = importIntent(formData, read.digest, fallbackId);
+  if ("error" in intent) return { error: intent.error };
+
+  const { data: destinations, error: destinationsError } = await supabase
     .from("destinations")
-    .select("id, track")
-    .eq("id", destinationId)
-    .maybeSingle();
-  if (!destination) return { error: "That destination no longer exists — reload the page." };
+    .select("id, display_name, country, country_code, track")
+    .returns<DestinationRef[]>();
+  if (destinationsError) return { error: `Could not read the destinations: ${destinationsError.message}` };
+  const fallback = fallbackId ? (destinations ?? []).find((d) => d.id === fallbackId) : undefined;
+  if (fallbackId && !fallback) return { error: "That destination no longer exists — reload the page." };
 
   const report = emptyReport();
-  const inputs: UniversityInput[] = [];
+  const universityEntries: UniversityEntry[] = [];
+  const programRows: { key: string; universityName: string; input: ProgramInput; rounds: CatalogueRound[] }[] = [];
+
   for (const row of read.rows) {
     const problems: string[] = [];
-    const input = universityFromRow(row, "name", problems);
-    if (!input) continue;
-    for (const problem of problems) report.problems.push(`${input.name}: ${problem}`);
-    inputs.push(input);
+    const university = universityFromRow(row, options.universityKey, problems);
+    if (!university) {
+      const orphan = options.withProgrammes ? (row.program_name ?? "").trim() : "";
+      if (orphan) report.problems.push(`"${orphan}" has no university_name on its row`);
+      continue;
+    }
+
+    const cell = (row.destination ?? "").trim();
+    const resolved = cell ? resolveDestination(cell, destinations ?? []) : null;
+    const destination = resolved ? resolved.destination : fallback;
+    if (!destination) {
+      report.problems.push(
+        resolved?.error
+          ? `"${university.name}": ${resolved.error}`
+          : `"${university.name}" has no destination — fill in the destination column, or choose one in the form`
+      );
+      continue;
+    }
+
+    universityEntries.push({ input: university, destination });
+    const program = options.withProgrammes ? programFromRow(row, "program_name", problems) : null;
+    const rounds = options.withProgrammes ? roundsFromRow(row, problems) : [];
+    for (const problem of problems) report.problems.push(`${university.name}: ${problem}`);
+    if (program) {
+      programRows.push({
+        key: universityKey(destination.id, university.name),
+        universityName: university.name,
+        input: program,
+        rounds,
+      });
+    }
   }
 
-  if (inputs.length === 0) return { error: "No rows had a 'name' column filled in." };
+  if (universityEntries.length === 0 && report.problems.length === 0) {
+    return { error: `No rows had a '${options.universityKey}' column filled in.` };
+  }
 
-  const canUpdate = await canUpdateCatalogue(supabase);
-  await mergeUniversities(
-    supabase,
-    destinationId,
-    destination.track,
-    collapseUniversities(inputs, report),
-    canUpdate,
-    report
-  );
+  const run: ImportRun = { supabase, report, dryRun: intent.dryRun };
+  const idByKey = await mergeUniversities(run, collapseUniversities(universityEntries, report));
 
-  revalidatePath("/setup/universities");
-  revalidateTag("universities", { expire: 0 });
-  return finishReport(report);
+  if (options.withProgrammes) {
+    const entries: ProgramEntry[] = [];
+    for (const { key, universityName, input, rounds } of programRows) {
+      const universityId = idByKey.get(key);
+      // No id means the university was held back or could not be created. Its
+      // programmes are skipped rather than attached to whatever else is lying
+      // around; the university's own line already says why.
+      if (!universityId) continue;
+      entries.push({ input, rounds, universityId, universityLabel: universityName });
+    }
+    await mergePrograms(run, entries);
+  }
+
+  if (!intent.dryRun) {
+    revalidatePath("/setup/universities");
+    revalidateTag("universities", { expire: 0 });
+  }
+  return finishReport(report, intent.dryRun ? "preview" : "applied", intent.fingerprint);
+}
+
+/**
+ * Universities only. Columns: destination, name (required), city (required
+ * only for a university that does not exist yet), region, type
+ * (public/private — defaults to the destination's own track), levels_offered,
+ * fields_offered, contact_email. The list columns are semicolon-separated
+ * within the cell, since commas are the CSV delimiter.
+ */
+export async function importUniversities(_prevState: unknown, formData: FormData): Promise<CatalogueImportResult> {
+  return importUniversityRows(formData, {
+    sheet: "Universities",
+    knownHeaders: ["name", "city", "levels_offered"],
+    universityKey: "name",
+    withProgrammes: false,
+  });
+}
+
+/**
+ * Universities and their programmes together, one row per programme, across
+ * as many destinations as the sheet names.
+ *
+ * The university columns repeat on every row belonging to that university,
+ * which is how a spreadsheet says "these belong together"; the first mention
+ * establishes it and later disagreements are reported. A row with a
+ * university_name and no programme columns is a university on its own, which
+ * is a legitimate thing to import.
+ */
+export async function importCatalogue(_prevState: unknown, formData: FormData): Promise<CatalogueImportResult> {
+  return importUniversityRows(formData, {
+    sheet: "Catalogue",
+    knownHeaders: ["university_name", "program_name"],
+    universityKey: "university_name",
+    withProgrammes: true,
+  });
 }
 
 /**
@@ -697,12 +952,16 @@ export async function importUniversities(_prevState: unknown, formData: FormData
  */
 export async function importPrograms(universityId: string, _prevState: unknown, formData: FormData): Promise<CatalogueImportResult> {
   const supabase = await createClient();
+  if (!(await isSuperAdmin(supabase))) return { error: SUPER_ADMIN_ONLY };
 
   const read = await readImportRows(formData.get("file") as File | null, {
     sheet: "Programmes",
     knownHeaders: ["level", "core_field", "language_requirement"],
   });
   if ("error" in read) return { error: read.error };
+
+  const intent = importIntent(formData, read.digest, universityId);
+  if ("error" in intent) return { error: intent.error };
 
   const { data: university } = await supabase
     .from("universities")
@@ -722,94 +981,15 @@ export async function importPrograms(universityId: string, _prevState: unknown, 
     entries.push({ input, rounds, universityId, universityLabel: university.name });
   }
 
-  if (entries.length === 0) {
+  if (entries.length === 0 && report.problems.length === 0) {
     return { error: "No rows had a valid 'name' and 'level' (bachelors/masters/phd)." };
   }
 
-  const canUpdate = await canUpdateCatalogue(supabase);
-  await mergePrograms(supabase, entries, canUpdate, report);
+  await mergePrograms({ supabase, report, dryRun: intent.dryRun }, entries);
 
-  revalidatePath(`/setup/universities/${universityId}`);
-  revalidateTag("universities", { expire: 0 });
-  return finishReport(report);
-}
-
-/**
- * A whole destination's catalogue in one sheet — universities and their
- * programmes together, one row per programme.
- *
- * The university columns repeat on every row belonging to that university,
- * which is how a spreadsheet says "these belong together"; the first mention
- * establishes it and later disagreements are reported. A row with a
- * university_name and no programme columns is a university on its own, which
- * is a legitimate thing to import.
- */
-export async function importCatalogue(_prevState: unknown, formData: FormData): Promise<CatalogueImportResult> {
-  const supabase = await createClient();
-  const destinationId = String(formData.get("destination_id") ?? "");
-  if (!destinationId) return { error: "Choose a destination first." };
-
-  const read = await readImportRows(formData.get("file") as File | null, {
-    sheet: "Catalogue",
-    knownHeaders: ["university_name", "program_name"],
-  });
-  if ("error" in read) return { error: read.error };
-
-  const { data: destination } = await supabase
-    .from("destinations")
-    .select("id, track")
-    .eq("id", destinationId)
-    .maybeSingle();
-  if (!destination) return { error: "That destination no longer exists — reload the page." };
-
-  const report = emptyReport();
-  const universityInputs: UniversityInput[] = [];
-  const programRows: { universityName: string; input: ProgramInput; rounds: CatalogueRound[] }[] = [];
-
-  for (const row of read.rows) {
-    const problems: string[] = [];
-    const university = universityFromRow(row, "university_name", problems);
-    if (!university) {
-      if ((row.program_name ?? "").trim()) {
-        report.problems.push(`"${row.program_name}" has no university_name on its row`);
-      }
-      continue;
-    }
-    universityInputs.push(university);
-
-    const program = programFromRow(row, "program_name", problems);
-    const rounds = roundsFromRow(row, problems);
-    for (const problem of problems) report.problems.push(`${university.name}: ${problem}`);
-    if (program) programRows.push({ universityName: university.name, input: program, rounds });
+  if (!intent.dryRun) {
+    revalidatePath(`/setup/universities/${universityId}`);
+    revalidateTag("universities", { expire: 0 });
   }
-
-  if (universityInputs.length === 0) {
-    return { error: "No rows had a 'university_name' column filled in." };
-  }
-
-  const canUpdate = await canUpdateCatalogue(supabase);
-  const idByName = await mergeUniversities(
-    supabase,
-    destinationId,
-    destination.track,
-    collapseUniversities(universityInputs, report),
-    canUpdate,
-    report
-  );
-
-  const entries: ProgramEntry[] = [];
-  for (const { universityName, input, rounds } of programRows) {
-    const universityId = idByName.get(normalizeName(universityName));
-    // No id means the university was held back as a near-miss or could not be
-    // created. Its programmes are skipped rather than attached to whatever
-    // else is lying around; the university's own line already says why.
-    if (!universityId) continue;
-    entries.push({ input, rounds, universityId, universityLabel: universityName });
-  }
-
-  await mergePrograms(supabase, entries, canUpdate, report);
-
-  revalidatePath("/setup/universities");
-  revalidateTag("universities", { expire: 0 });
-  return finishReport(report);
+  return finishReport(report, intent.dryRun ? "preview" : "applied", intent.fingerprint);
 }

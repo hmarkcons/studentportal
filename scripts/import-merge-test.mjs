@@ -2,7 +2,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   describeChange,
+  CHANGE_LIST_LIMIT,
+  emptyReport,
   findNearMiss,
+  findNearMisses,
+  finishReport,
   isBlank,
   isNearMiss,
   mergeRow,
@@ -80,6 +84,19 @@ test("findNearMiss names which stored row it nearly hit", () => {
   const stored = ["University of Padua", "Sapienza University of Rome", "Politecnico di Milano"];
   assert.equal(findNearMiss("Sapienza Univ. of Rome", stored), "Sapienza University of Rome");
   assert.equal(findNearMiss("University of Bologna", stored), null);
+});
+
+test("findNearMisses lists every stored name a spelling sits close to", () => {
+  // The import acts on a near miss only when there is exactly one. A spelling
+  // between two records would overwrite one of them on a coin toss.
+  const stored = ["University of Milan", "University of Milano", "University of Padua"];
+  assert.deepEqual(findNearMisses("Univ. of Milan", stored).sort(), ["University of Milan", "University of Milano"]);
+  assert.deepEqual(findNearMisses("Sapienza", stored), []);
+});
+
+test("findNearMisses counts one record once, however often it is listed", () => {
+  const stored = ["Sapienza University of Rome", "sapienza university of rome"];
+  assert.deepEqual(findNearMisses("Sapienza Univ. of Rome", stored), ["Sapienza University of Rome"]);
 });
 
 test("a name with nothing but boilerplate matches nothing", () => {
@@ -179,4 +196,28 @@ test("an absent value reads as a dash rather than null", () => {
   assert.equal(renderCell(["a", "b"]), "a; b");
   assert.equal(renderCell(false), "no");
   assert.equal(renderCell(0), "0");
+});
+
+test("the report says whether it was a preview, and carries the fingerprint to confirm with", () => {
+  const result = finishReport(emptyReport(), "preview", "abc");
+  assert.equal(result.mode, "preview");
+  assert.equal(result.fingerprint, "abc");
+  assert.equal(finishReport(emptyReport(), "applied", "abc").mode, "applied");
+});
+
+test("long lists are capped for the page, and the overflow is counted rather than lost", () => {
+  const report = emptyReport();
+  for (let i = 0; i < CHANGE_LIST_LIMIT + 5; i++) report.additions.push(`programme ${i}`);
+  const result = finishReport(report, "preview", "x");
+  assert.equal(result.additions.length, CHANGE_LIST_LIMIT);
+  assert.equal(result.overflow.additions, 5);
+  assert.equal(result.overflow.changes, 0);
+});
+
+test("a problem repeated on every row of one university is listed once", () => {
+  // A combined sheet repeats the university on each programme row, so a
+  // missing destination would otherwise print once per programme.
+  const report = emptyReport();
+  report.problems.push("x has no destination", "x has no destination", "y is odd");
+  assert.deepEqual(finishReport(report, "preview", "f").problems, ["x has no destination", "y is odd"]);
 });

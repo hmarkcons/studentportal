@@ -28,7 +28,14 @@ const VALIDATION_HEADROOM = 200;
 
 export function catalogueWorkbook(
   rows: CatalogueRow[],
-  { italic = false }: { italic?: boolean } = {}
+  {
+    italic = false,
+    destinations = [],
+  }: {
+    italic?: boolean;
+    /** Display names for the destination dropdown; none means no dropdown. */
+    destinations?: readonly string[];
+  } = {}
 ) {
   const header = CATALOGUE_COLUMNS.map((c) => ({
     value: c.header,
@@ -52,19 +59,41 @@ export function catalogueWorkbook(
       { value: "Levels", type: String },
       { value: "Types", type: String },
       { value: "YesNo", type: String },
+      { value: "Destinations", type: String },
     ],
   ];
-  const depth = Math.max(CATALOGUE_LEVELS.length, CATALOGUE_TYPES.length, CATALOGUE_YES_NO.length);
+  const depth = Math.max(
+    CATALOGUE_LEVELS.length,
+    CATALOGUE_TYPES.length,
+    CATALOGUE_YES_NO.length,
+    destinations.length
+  );
   for (let i = 0; i < depth; i++) {
     lists.push([
       { value: CATALOGUE_LEVELS[i], type: String },
       { value: CATALOGUE_TYPES[i], type: String },
       { value: CATALOGUE_YES_NO[i], type: String },
+      { value: destinations[i], type: String },
     ]);
   }
 
   const validatedRows = rows.length + VALIDATION_HEADROOM;
+  // Only offered when there are names to offer. The importer also takes a
+  // country or its code, which a CSV can use; a dropdown holding the display
+  // names is simply the spelling that can never be ambiguous.
+  const destinationDropdown: Omit<Dropdown, "fromRow" | "toRow">[] =
+    destinations.length > 0
+      ? [
+          {
+            column: catalogueColumnIndex("destination"),
+            range: listRange(CATALOGUE_LIST_SHEET, "D", destinations.length),
+            errorTitle: "Not a destination",
+            errorMessage: "Pick one from the list — or leave blank to use the destination chosen in the import form.",
+          },
+        ]
+      : [];
   const dropdowns: Dropdown[] = [
+    ...destinationDropdown,
     {
       column: catalogueColumnIndex("level"),
       range: listRange(CATALOGUE_LIST_SHEET, "A", CATALOGUE_LEVELS.length),

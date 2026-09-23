@@ -30,6 +30,9 @@ export const CATALOGUE_YES_NO = ["yes", "no"] as const;
  * group blank imports the university on its own.
  */
 export const CATALOGUE_COLUMNS = [
+  // Which destination the row belongs to. Blank falls back to the one picked
+  // in the form, so a single-country sheet can leave it out entirely.
+  { header: "destination", width: 22, group: "university" },
   { header: "university_name", width: 34, group: "university" },
   { header: "city", width: 16, group: "university" },
   { header: "region", width: 16, group: "university" },
@@ -110,6 +113,8 @@ export function roundsCell(rounds: readonly ExportRound[]): string {
 }
 
 export type ExportUniversity = {
+  /** The destination's display name. Optional so a caller that has none still builds a row. */
+  destination?: string | null;
   name: string;
   city: string | null;
   region: string | null;
@@ -139,6 +144,7 @@ export type ExportProgram = {
 
 function universityCells(university: ExportUniversity): Partial<CatalogueRow> {
   return {
+    destination: university.destination ?? "",
     university_name: university.name,
     city: university.city ?? "",
     region: university.region ?? "",

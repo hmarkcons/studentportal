@@ -10,6 +10,7 @@ import {
 import {
   programFromRow,
   roundsFromRow,
+  resolveDestination,
   universityFromRow,
 } from "../src/lib/catalogueRows.ts";
 
@@ -178,6 +179,24 @@ test("programmes are ordered bachelors, masters, phd, then by name", () => {
 });
 
 test("column indexes are 1-based, as a validation range needs", () => {
-  assert.equal(catalogueColumnIndex("university_name"), 1);
+  assert.equal(catalogueColumnIndex("destination"), 1);
+  assert.equal(catalogueColumnIndex("university_name"), 2);
   assert.equal(catalogueColumnIndex("page_link"), CATALOGUE_COLUMNS.length);
+});
+
+test("an exported row names its destination, and that name resolves back to it", () => {
+  // The all-destinations export only round-trips if the cell it writes is one
+  // the importer maps back to the same destination and no other.
+  const destinations = [
+    { id: "it", display_name: "Italy (Public)", country: "Italy", country_code: "IT", track: "public" },
+    { id: "de", display_name: "Germany (Public)", country: "Germany", country_code: "DE", track: "public" },
+  ];
+  const [row] = catalogueRowsForUniversity({ ...university, destination: "Italy (Public)" }, []);
+  assert.equal(row.destination, "Italy (Public)");
+  assert.equal(resolveDestination(row.destination, destinations).destination?.id, "it");
+});
+
+test("a row built without a destination leaves the cell blank for the form's fallback", () => {
+  const [row] = catalogueRowsForUniversity(university, []);
+  assert.equal(row.destination, "");
 });

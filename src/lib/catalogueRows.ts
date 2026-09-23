@@ -143,6 +143,58 @@ export function sameRounds(
   return left.every((value, index) => value === right[index]);
 }
 
+/** A destination as the `destination` column is matched against it. */
+export type DestinationRef = {
+  id: string;
+  display_name: string;
+  country: string;
+  country_code: string;
+  track: string;
+};
+
+/** Lower-case, punctuation to spaces: "Italy (Public)" and "italy - public" agree. */
+function destinationKey(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/**
+ * Which destination a row's `destination` cell means.
+ *
+ * Three spellings are accepted, tried in this order: the display name the
+ * export writes ("Italy (Public)"), the country ("Italy"), and its two-letter
+ * code ("IT"). The display name comes first because it is the only one that
+ * is unique by construction — destinations are unique per country AND track,
+ * so "Italy" names two destinations the day a private Italian track is added.
+ * When a spelling matches more than one destination the row is refused with
+ * the choices named, rather than filed under whichever came first.
+ */
+export function resolveDestination(
+  cell: string,
+  destinations: readonly DestinationRef[]
+): { destination: DestinationRef; error?: undefined } | { error: string; destination?: undefined } {
+  const key = destinationKey(cell);
+  if (!key) return { error: "no destination" };
+
+  const tiers: ((d: DestinationRef) => boolean)[] = [
+    (d) => destinationKey(d.display_name) === key,
+    (d) => destinationKey(d.country) === key,
+    (d) => d.country_code.toLowerCase() === key,
+  ];
+  for (const matches of tiers) {
+    const found = destinations.filter(matches);
+    if (found.length === 1) return { destination: found[0] };
+    if (found.length > 1) {
+      return {
+        error: `destination "${cell.trim()}" could be ${found.map((d) => `"${d.display_name}"`).join(" or ")} — write the full name`,
+      };
+    }
+  }
+  return { error: `destination "${cell.trim()}" is not one the portal has` };
+}
+
 /** What a sheet says about a university. Nulls mean "said nothing". */
 export type UniversityInput = {
   name: string;

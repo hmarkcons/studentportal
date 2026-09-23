@@ -37,10 +37,17 @@ export default async function UniversitiesPage(props: { searchParams: Promise<{ 
       <h2 className="mb-4 text-lg font-semibold text-ink">Universities</h2>
       <Card className="mb-6">
         <NewUniversityForm destinations={destinations ?? []} />
-        <ImportUniversitiesForm destinations={destinations ?? []} />
-        {/* The combined sheet. Listed after the universities-only one because it
-            is the bigger hammer: it can create and update programmes too. */}
-        <ImportCatalogueForm destinations={destinations ?? []} />
+        {/* Importing is a Super Admin's alone — the actions refuse anyone else
+            too; hiding the forms just saves them finding that out. */}
+        {isSuperAdmin && (
+          <>
+            <ImportUniversitiesForm destinations={destinations ?? []} />
+            {/* The combined sheet. Listed after the universities-only one
+                because it is the bigger hammer: it can create and update
+                programmes too. */}
+            <ImportCatalogueForm destinations={destinations ?? []} />
+          </>
+        )}
       </Card>
 
       <div className="mb-3 flex flex-wrap gap-2">

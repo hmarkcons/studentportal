@@ -6,6 +6,7 @@ import {
   parseMoney,
   parseRoundsCell,
   programFromRow,
+  resolveDestination,
   roundsFromRow,
   sameRounds,
   splitList,
@@ -271,4 +272,42 @@ test("a changed date, a changed label or a different count all count", () => {
   assert.equal(sameRounds(stored, parseRoundsCell("Autumn|2026-09-01|2026-01-15")), false);
   assert.equal(sameRounds(stored, parseRoundsCell("Round 1|2026-09-01|2026-01-15; Round 2|2027-02-01|")), false);
   assert.equal(sameRounds(stored, []), false);
+});
+
+// ------------------------------------------------------------ destinations
+
+const DESTINATIONS = [
+  { id: "it", display_name: "Italy (Public)", country: "Italy", country_code: "IT", track: "public" },
+  { id: "uk", display_name: "United Kingdom (Private)", country: "United Kingdom", country_code: "UK", track: "private" },
+  { id: "de", display_name: "Germany (Public)", country: "Germany", country_code: "DE", track: "public" },
+];
+
+test("a destination is found by its display name, its country or its code", () => {
+  assert.equal(resolveDestination("Italy (Public)", DESTINATIONS).destination?.id, "it");
+  assert.equal(resolveDestination("italy", DESTINATIONS).destination?.id, "it");
+  assert.equal(resolveDestination("IT", DESTINATIONS).destination?.id, "it");
+  assert.equal(resolveDestination("  united   kingdom ", DESTINATIONS).destination?.id, "uk");
+});
+
+test("the display name is forgiving about punctuation", () => {
+  assert.equal(resolveDestination("Italy - Public", DESTINATIONS).destination?.id, "it");
+  assert.equal(resolveDestination("ITALY PUBLIC", DESTINATIONS).destination?.id, "it");
+});
+
+test("a country that names two destinations is refused with both named, not guessed", () => {
+  // Destinations are unique per country AND track. The day Italy gains a
+  // private track, "Italy" means two things, and filing a row under the first
+  // would put a private university on the public track.
+  const both = [...DESTINATIONS, { id: "itp", display_name: "Italy (Private)", country: "Italy", country_code: "IT", track: "private" }];
+  const result = resolveDestination("Italy", both);
+  assert.equal(result.destination, undefined);
+  assert.match(result.error, /"Italy \(Public\)" or "Italy \(Private\)"/);
+  // ...while the full name still resolves.
+  assert.equal(resolveDestination("Italy (Private)", both).destination?.id, "itp");
+});
+
+test("an unknown destination is refused, not silently dropped", () => {
+  const result = resolveDestination("Narnia", DESTINATIONS);
+  assert.equal(result.destination, undefined);
+  assert.match(result.error, /Narnia/);
 });

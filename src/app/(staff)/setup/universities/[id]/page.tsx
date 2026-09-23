@@ -131,7 +131,7 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
           programs={programs.map((p) => ({ id: p.id, level: p.level, name: p.name }))}
           canReplace={isSuperAdmin}
         />
-        <ImportProgramsForm universityId={id} />
+        {isSuperAdmin && <ImportProgramsForm universityId={id} />}
       </Card>
 
       {canSeeExchange && (

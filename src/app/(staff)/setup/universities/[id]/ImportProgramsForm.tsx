@@ -1,11 +1,8 @@
 "use client";
 
-import { useActionState, useState } from "react";
 import { importPrograms } from "@/lib/actions/universities";
 import { SampleCsvButton } from "@/components/ui/SampleCsvButton";
-import { Button } from "@/components/ui/Button";
-import { FileField } from "@/components/FileField";
-import { ImportReportPanel } from "@/components/ImportReportPanel";
+import { PreviewedImport } from "@/components/PreviewedImport";
 
 const HEADERS = [
   "level",
@@ -59,20 +56,15 @@ const EXAMPLE = [
 
 export function ImportProgramsForm({ universityId }: { universityId: string }) {
   const action = importPrograms.bind(null, universityId);
-  const [state, formAction, pending] = useActionState(action, undefined);
-  const [ready, setReady] = useState(false);
 
   return (
     <details className="mt-3 rounded-md border border-border p-3">
       <summary className="cursor-pointer text-sm font-medium text-ink">Import programmes from a spreadsheet</summary>
-      <form action={formAction} className="mt-3 flex flex-wrap items-end gap-2">
-        <FileField accept=".xlsx,.csv" required hint="Excel or CSV" inputClassName="text-sm" onChange={(s) => setReady(Boolean(s.file))} />
-        <Button type="submit" variant="primary" pending={pending} disabled={!ready}>
-          Import
-        </Button>
-        <SampleCsvButton filename="programs-sample.csv" headers={HEADERS} exampleRow={EXAMPLE} />
-      </form>
-      <p className="mt-2 text-xs text-muted">
+      <PreviewedImport
+        action={action}
+        extras={<SampleCsvButton filename="programs-sample.csv" headers={HEADERS} exampleRow={EXAMPLE} />}
+      />
+      <p className="mt-3 text-xs text-muted">
         CSV columns: <code>level</code> (bachelors/masters/phd, required), <code>name</code> (required),{" "}
         <code>core_field</code>, <code>sub_field</code>, <code>page_link</code>, <code>interview_required</code> (yes/no),{" "}
         <code>interview_details</code>, <code>admission_test_required</code> (yes/no), <code>admission_test_type</code>,{" "}
@@ -89,14 +81,14 @@ export function ImportProgramsForm({ universityId }: { universityId: string }) {
         <code>rounds</code> wins if both are filled in.
       </p>
       <p className="mt-1 text-xs text-muted">
+        <strong className="text-ink">Nothing is saved until you apply</strong> the preview.{" "}
         <code>name</code> and <code>level</code> together decide whether a row updates or creates: a programme already
-        on file at that level is <strong className="text-ink">updated</strong>, not skipped.{" "}
+        on file at that level — or with a close spelling of its name — is <strong className="text-ink">updated</strong>,
+        not skipped.{" "}
         <strong className="text-ink">An empty cell changes nothing</strong>, so a sheet of just names, levels and fees
         leaves everything else alone and the import can never blank a field. An empty <code>rounds</code> leaves the
-        stored rounds alone; a filled one replaces them. Only a Super Admin may overwrite; anyone else can still add new
-        programmes.
+        stored rounds alone; a filled one replaces them.
       </p>
-      <ImportReportPanel state={state} />
     </details>
   );
 }

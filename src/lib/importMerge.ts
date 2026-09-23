@@ -13,11 +13,17 @@
 // accepted: the import cannot clear a field. Clearing one is an edit-form job,
 // where you can see what you are removing.
 //
-// **A near-miss is held back rather than guessed at.** "Sapienza Univ. of
-// Rome" against a stored "Sapienza University of Rome" is almost certainly the
-// same institution, but almost is not good enough to overwrite a record with,
-// and treating it as new silently duplicates the university instead. Neither
-// is a decision this code should make, so the row is reported and left alone.
+// **A near-miss with one candidate is the same record.** "Sapienza Univ. of
+// Rome" against a stored "Sapienza University of Rome" updates the stored one
+// and keeps its stored name — the office asked for that over holding such rows
+// back, because the sheets they receive spell names every way there is and a
+// held-back row was a row nobody got round to fixing. What makes it safe is
+// that every import is previewed first: the preview lists each similar-name
+// match on its own, so a wrong pairing is seen before anything is written.
+//
+// The near-miss test itself stays strict (see isNearMiss) — Padua and Pavia
+// are two universities, not a typo — and a name that is near TWO stored names
+// is still held back, because then there is no right answer to pick.
 //
 // Everything here is pure so it can be unit-tested; the write side is in
 // src/lib/actions/universities.ts.
@@ -161,6 +167,23 @@ export function findNearMiss(name: string, existingNames: Iterable<string>): str
 }
 
 /**
+ * Every stored name this incoming one nearly matches, one per distinct name.
+ *
+ * The import acts on a near miss only when this has exactly one entry. Two
+ * means the sheet's spelling sits between two records — "Univ. of Milan"
+ * against both "University of Milan" and "University of Milano" — and picking
+ * either would overwrite a record on a coin toss.
+ */
+export function findNearMisses(name: string, existingNames: Iterable<string>): string[] {
+  const found = new Map<string, string>();
+  for (const candidate of existingNames) {
+    const key = normalizeName(candidate);
+    if (!found.has(key) && isNearMiss(name, candidate)) found.set(key, candidate);
+  }
+  return [...found.values()];
+}
+
+/**
  * True when the sheet said nothing about this field.
  *
  * `undefined` is a column the sheet does not have at all; the rest are a cell
@@ -230,17 +253,31 @@ export function mergeRow<T extends Record<string, Cell>>(
 
 export type Tally = { added: number; updated: number; unchanged: number };
 
-/** Accumulated while the import runs. */
+/**
+ * Accumulated while the import runs — identically for a preview and for the
+ * real thing, which is what makes the preview worth trusting. The two differ
+ * only in whether the writes are sent.
+ */
 export type ImportReport = {
   universities: Tally;
   programs: Tally;
+  /** "Italy (Public) · Sapienza University of Rome — new university". */
+  additions: string[];
   /** "Sapienza · city Rome → Milan". */
   changes: string[];
+  /** "Sapienza Univ. of Rome" → updates "Sapienza University of Rome". */
+  similarMatches: string[];
+  /** Near two stored names at once, so neither was touched. */
   heldBack: string[];
-  needsSuperAdmin: string[];
   problems: string[];
   failures: string[];
 };
+
+export type ImportMode = "preview" | "applied";
+
+/** The lists that can run long, and are capped for the page. */
+const LONG_LISTS = ["additions", "changes", "similarMatches"] as const;
+type LongList = (typeof LONG_LISTS)[number];
 
 /**
  * What an import hands back.
@@ -249,33 +286,53 @@ export type ImportReport = {
  * that a form doing `state?.error` fails to compile against the union, and the
  * obvious fixes — a cast, or an `in` check at every use — either lose the
  * narrowing or spread across a dozen call sites.
+ *
+ * `fingerprint` identifies the file and settings a preview was made from. The
+ * confirm step sends it back, and the server refuses to apply unless the file
+ * it is handed now is that same file — otherwise a sheet swapped after the
+ * preview would be written without ever having been shown.
  */
 export type CatalogueImportResult =
   | { error: string; success?: undefined }
-  | ({ success: true; error?: undefined; changeOverflow: number } & ImportReport);
+  | ({
+      success: true;
+      error?: undefined;
+      mode: ImportMode;
+      fingerprint: string;
+      overflow: Record<LongList, number>;
+    } & ImportReport);
 
 export function emptyReport(): ImportReport {
   return {
     universities: { added: 0, updated: 0, unchanged: 0 },
     programs: { added: 0, updated: 0, unchanged: 0 },
+    additions: [],
     changes: [],
+    similarMatches: [],
     heldBack: [],
-    needsSuperAdmin: [],
     problems: [],
     failures: [],
   };
 }
 
-/** Long reports are a wall nobody reads. The counts above them stay exact. */
-export const CHANGE_LIST_LIMIT = 60;
+/**
+ * How many lines of each long list reach the page. The counts above them stay
+ * exact. Generous, because a preview is read line by line before confirming —
+ * but not unbounded, since the whole report travels back in one response.
+ */
+export const CHANGE_LIST_LIMIT = 300;
 
-export function finishReport(report: ImportReport): CatalogueImportResult {
-  return {
-    success: true,
-    ...report,
-    changes: report.changes.slice(0, CHANGE_LIST_LIMIT),
-    changeOverflow: Math.max(0, report.changes.length - CHANGE_LIST_LIMIT),
-  };
+export function finishReport(report: ImportReport, mode: ImportMode, fingerprint: string): CatalogueImportResult {
+  // A combined sheet repeats a university on every programme row, so one
+  // problem with it — no destination, say — would otherwise be listed once
+  // per row.
+  const capped = { ...report, problems: [...new Set(report.problems)], heldBack: [...new Set(report.heldBack)] };
+  const overflow = {} as Record<LongList, number>;
+  for (const list of LONG_LISTS) {
+    capped[list] = report[list].slice(0, CHANGE_LIST_LIMIT);
+    overflow[list] = Math.max(0, report[list].length - CHANGE_LIST_LIMIT);
+  }
+  return { success: true, mode, fingerprint, overflow, ...capped };
 }
 
 /** Nothing added, nothing changed, nothing held back — say so in one line. */

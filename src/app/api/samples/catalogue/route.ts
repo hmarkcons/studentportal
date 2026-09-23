@@ -1,5 +1,6 @@
 import writeXlsxFile from "write-excel-file/node";
 import { getStaffSession } from "@/lib/auth/session";
+import { createClient } from "@/lib/supabase/server";
 import { catalogueWorkbook } from "@/lib/catalogueWorkbook";
 import type { CatalogueRow } from "@/lib/catalogueSheet";
 
@@ -17,9 +18,9 @@ import type { CatalogueRow } from "@/lib/catalogueSheet";
  * already in it, so the names match exactly and nothing is held back as a
  * near-miss. This one is for starting from nothing.
  *
- * The destination is chosen in the form, not in the sheet, so it is not a
- * column. It decides which universities the names are matched against, and
- * what track a new university inherits.
+ * Each row names its destination, so one sheet can fill several countries;
+ * the dropdown lists the destinations the portal has. A blank destination
+ * falls back to the one chosen in the import form.
  */
 
 /**
@@ -29,6 +30,7 @@ import type { CatalogueRow } from "@/lib/catalogueSheet";
  */
 const EXAMPLE_ROWS: CatalogueRow[] = [
   {
+    destination: "Italy (Public)",
     university_name: "Sapienza University of Rome",
     city: "Rome",
     region: "Lazio",
@@ -56,6 +58,7 @@ const EXAMPLE_ROWS: CatalogueRow[] = [
     page_link: "https://example.edu/cs",
   },
   {
+    destination: "Italy (Public)",
     university_name: "Sapienza University of Rome",
     city: "Rome",
     region: "Lazio",
@@ -92,7 +95,13 @@ export async function GET() {
   const { staff } = await getStaffSession();
   if (!staff) return new Response("Not authorized", { status: 403 });
 
-  const { sheets, options, finish } = catalogueWorkbook(EXAMPLE_ROWS, { italic: true });
+  const supabase = await createClient();
+  const { data: destinations } = await supabase.from("destinations").select("display_name").order("display_name");
+
+  const { sheets, options, finish } = catalogueWorkbook(EXAMPLE_ROWS, {
+    italic: true,
+    destinations: (destinations ?? []).map((d) => d.display_name),
+  });
   const buffer = finish(await writeXlsxFile(sheets, options).toBuffer());
 
   return new Response(buffer as unknown as ArrayBuffer, {
