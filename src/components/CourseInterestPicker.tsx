@@ -42,7 +42,9 @@ export function CourseInterestPicker({
    *
    * The list narrows by the student's level as well as their countries
    * (migration 0259), so empty has more than one cause and they need
-   * different actions: Hungary teaches nothing at PhD, which is a mismatch
+   * different actions. A country well stocked at one level can be nearly bare
+   * at another — Germany has 19 bachelors core fields against 300 at masters —
+   * and a student registered for one that does not teach theirs is a mismatch
    * between the student and the country, not a gap in the catalogue. Left
    * unset, the generic "no programmes on file" message stands.
    */

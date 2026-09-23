@@ -43,10 +43,13 @@ export default async function StudentProfileTab(props: PageProps<"/students/[id]
 
   // An empty picker has two very different causes now that the list narrows by
   // level as well as by country (migration 0259), and they need different
-  // people to do different things. Hungary teaches nothing at PhD: that is a
-  // student registered for a country that cannot take them, not a catalogue
-  // with a hole in it, and saying "no programmes on file" would send somebody
-  // off to add programmes that do not exist.
+  // people to do different things. A country can be well stocked at one level
+  // and nearly bare at another — Germany has 19 bachelors core fields against
+  // 300 at masters, Hungary 32 against 4 at PhD — so a student registered
+  // somewhere that barely teaches their level is a mismatch between the
+  // student and the country, not a catalogue with a hole in it, and saying "no
+  // programmes on file" would send somebody off to add programmes that do not
+  // exist.
   //
   // Deliberately NOT solved by falling back to every level. That would quietly
   // re-offer exactly the wrong-level subjects 0259 exists to stop, and hide the
