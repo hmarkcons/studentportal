@@ -5,8 +5,10 @@ import { catalogueWorkbook } from "@/lib/catalogueWorkbook";
 import { readAllIn } from "@/lib/catalogueReads";
 import {
   catalogueRowsForUniversity,
+  roundRowsForUniversity,
   compareProgrammes,
   type CatalogueRow,
+  type RoundRow,
   type ExportProgram,
   type ExportRound,
   type ExportUniversity,
@@ -116,17 +118,17 @@ export async function GET(request: Request) {
   );
 
   const rows: CatalogueRow[] = [];
+  const roundRows: RoundRow[] = [];
   for (const university of universities) {
+    const destination = destinationName.get(university.destination_id) ?? "";
     const own = (programmesByUniversity.get(university.id) ?? []).sort(compareProgrammes);
-    rows.push(
-      ...catalogueRowsForUniversity(
-        { ...university, destination: destinationName.get(university.destination_id) ?? "" },
-        own.map((programme) => ({ program: programme, rounds: roundsByProgramme.get(programme.id) ?? [] }))
-      )
-    );
+    const withRounds = own.map((programme) => ({ program: programme, rounds: roundsByProgramme.get(programme.id) ?? [] }));
+    rows.push(...catalogueRowsForUniversity({ ...university, destination }, withRounds));
+    roundRows.push(...roundRowsForUniversity(destination, university.name, withRounds));
   }
 
   const { sheets, options, finish } = catalogueWorkbook(rows, {
+    roundRows,
     destinations: (allDestinations ?? []).map((d) => d.display_name),
   });
   const buffer = finish(await writeXlsxFile(sheets, options).toBuffer());

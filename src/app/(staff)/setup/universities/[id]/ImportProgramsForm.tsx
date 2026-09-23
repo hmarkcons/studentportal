@@ -87,7 +87,8 @@ export function ImportProgramsForm({ universityId }: { universityId: string }) {
         not skipped.{" "}
         <strong className="text-ink">An empty cell changes nothing</strong>, so a sheet of just names, levels and fees
         leaves everything else alone and the import can never blank a field. An empty <code>rounds</code> leaves the
-        stored rounds alone; a filled one replaces them.
+        stored rounds alone; a filled one is merged by round name — a round on file has its dates updated, a new
+        name is added, and rounds the sheet does not mention are kept.
       </p>
     </details>
   );

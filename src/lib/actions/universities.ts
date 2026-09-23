@@ -27,16 +27,21 @@ import {
   programFromRow,
   resolveDestination,
   roundsFromRow,
-  sameRounds,
+  mergeRounds,
+  roundSpecFromRow,
   programInsertValues,
   universityFromRow,
   universityInsertValues,
   type CatalogueRound,
   type DestinationRef,
+  type IncomingRound,
+  type RoundLike,
+  type RoundSpec,
   type ProgramInput,
   type UniversityInput,
 } from "@/lib/catalogueRows";
 import { readAllIn } from "@/lib/catalogueReads";
+import { EXAMPLE_UNIVERSITY, ROUNDS_SHEET, isExampleRow } from "@/lib/catalogueSheet";
 
 export async function createUniversity(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
@@ -256,23 +261,51 @@ async function isSuperAdmin(supabase: Supabase) {
   return hasRole(staffRow, "super_admin");
 }
 
-/** Reads an uploaded sheet, .xlsx or .csv, into header-keyed rows, and fingerprints it. */
+/** A Rounds sheet is told apart by its singular `round` column; the catalogue's own was `rounds`. */
+const isRoundsSheet = (name: string, headers: string[]) =>
+  name === ROUNDS_SHEET || (headers.includes("round") && headers.includes("university_name"));
+
+/**
+ * Reads an uploaded sheet, .xlsx or .csv, into header-keyed rows, and
+ * fingerprints it.
+ *
+ * With `withRounds`, the rows of a Rounds sheet come back separately: from the
+ * workbook's own Rounds sheet, or from a CSV that is one. Either may be
+ * missing — a workbook of nothing but rounds is a legitimate upload.
+ */
 async function readImportRows(
   file: File | null,
-  options: { sheet: string; knownHeaders: string[] }
-): Promise<{ rows: Record<string, string>[]; digest: string } | { error: string }> {
+  options: { sheet: string; knownHeaders: string[]; withRounds?: boolean }
+): Promise<{ rows: Record<string, string>[]; roundRows: Record<string, string>[]; digest: string } | { error: string }> {
   if (file) {
     const tooLarge = fileSizeError(file.size, MAX_UPLOAD_BYTES, "file");
     if (tooLarge) return { error: `${tooLarge} A spreadsheet this large is usually a mistake — split it and import in batches.` };
   }
   if (!file || file.size === 0) return { error: "Choose a spreadsheet first — .xlsx or .csv." };
 
-  const { isXlsx, parseXlsx } = await import("@/lib/spreadsheet");
-  const rows = isXlsx(file) ? await parseXlsx(file, options) : parseCsvWithHeader(await file.text());
-  if (rows.length === 0) return { error: "The file has no data rows." };
+  const { isXlsx, parseXlsx, parseXlsxSheets } = await import("@/lib/spreadsheet");
+  let rows: Record<string, string>[] = [];
+  let roundRows: Record<string, string>[] = [];
+
+  if (!options.withRounds) {
+    rows = isXlsx(file) ? await parseXlsx(file, options) : parseCsvWithHeader(await file.text());
+  } else if (isXlsx(file)) {
+    const sheets = await parseXlsxSheets(file);
+    const rounds = sheets.find((sh) => isRoundsSheet(sh.name, sh.headers));
+    const main =
+      sheets.find((sh) => sh.name === options.sheet) ??
+      sheets.find((sh) => sh !== rounds && options.knownHeaders.some((h) => sh.headers.includes(h)));
+    rows = main?.rows ?? [];
+    roundRows = rounds?.rows ?? [];
+  } else {
+    const parsed = parseCsvWithHeader(await file.text());
+    if (parsed.length > 0 && isRoundsSheet("", Object.keys(parsed[0]))) roundRows = parsed;
+    else rows = parsed;
+  }
+  if (rows.length === 0 && roundRows.length === 0) return { error: "The file has no data rows." };
 
   const digest = createHash("sha256").update(Buffer.from(await file.arrayBuffer())).digest("hex");
-  return { rows, digest };
+  return { rows, roundRows, digest };
 }
 
 /**
@@ -318,7 +351,16 @@ type StoredUniversity = {
   contact_email: string | null;
 };
 
-type UniversityEntry = { input: UniversityInput; destination: DestinationRef };
+type UniversityEntry = {
+  input: UniversityInput;
+  destination: DestinationRef;
+  /**
+   * Named only on the Rounds sheet. Such a row is a lookup — which university
+   * do these rounds belong to — never an instruction to create or change one,
+   * so it is neither counted nor able to create a university without a city.
+   */
+  roundsOnly?: boolean;
+};
 
 /** A university is one name within one destination; the same name elsewhere is another university. */
 const universityKey = (destinationId: string, name: string) => `${destinationId}::${normalizeName(name)}`;
@@ -374,8 +416,11 @@ function collapseUniversities(entries: UniversityEntry[], report: ImportReport):
   for (const entry of entries) {
     const key = universityKey(entry.destination.id, entry.input.name);
     const first = byKey.get(key);
-    if (first) absorbUniversity(first.input, entry.input, report);
-    else byKey.set(key, { destination: entry.destination, input: { ...entry.input } });
+    if (!first) byKey.set(key, { ...entry, input: { ...entry.input } });
+    else {
+      absorbUniversity(first.input, entry.input, report);
+      if (!entry.roundsOnly) first.roundsOnly = false;
+    }
   }
   return [...byKey.values()];
 }
@@ -445,8 +490,17 @@ async function mergeUniversities(run: ImportRun, entries: UniversityEntry[]): Pr
       }
       if (near.length === 1) {
         existing = byKey.get(universityKey(destination.id, near[0]))!;
-        report.similarMatches.push(`${where} · "${input.name}" → updates "${existing.name}"`);
+        report.similarMatches.push(
+          entry.roundsOnly
+            ? `Rounds: ${where} · "${input.name}" → "${existing.name}"`
+            : `${where} · "${input.name}" → updates "${existing.name}"`
+        );
       }
+    }
+
+    if (existing && entry.roundsOnly) {
+      idByKey.set(key, existing.id);
+      continue;
     }
 
     if (existing && onFileTwice.has(universityKey(destination.id, existing.name))) {
@@ -468,9 +522,15 @@ async function mergeUniversities(run: ImportRun, entries: UniversityEntry[]): Pr
       }
       if (nearNew.length === 1) {
         const target = universityKey(destination.id, nearNew[0]);
-        absorbUniversity(toCreate.get(target)!.input, input, report);
+        if (!entry.roundsOnly) absorbUniversity(toCreate.get(target)!.input, input, report);
         aliasToNew.set(key, target);
         report.similarMatches.push(`${where} · "${input.name}" → the same new university as "${nearNew[0]}"`);
+        continue;
+      }
+      if (entry.roundsOnly) {
+        report.problems.push(
+          `Rounds: ${where} · "${input.name}" is not a university on file or on the Catalogue sheet — its rounds were not applied`
+        );
         continue;
       }
       if (!input.city) {
@@ -553,19 +613,18 @@ type StoredProgram = {
   level: string;
 };
 
-type StoredRound = {
-  program_id: string;
-  label: string;
-  start_date: string | null;
-  application_deadline: string | null;
-};
+type StoredRound = RoundLike & { id: string; program_id: string };
 
 type ProgramEntry = {
   input: ProgramInput;
+  /** From the old one-cell `rounds` column or the single-intake columns, on the programme's own row. */
   rounds: CatalogueRound[];
   universityId: string;
   universityLabel: string;
 };
+
+/** A Rounds-sheet row, resolved to its university. */
+type RoundEntry = { spec: RoundSpec; universityId: string; universityLabel: string };
 
 /** Keyed by university as well as name+level: two universities may both teach "Computer Science" at bachelors. */
 const programKey = (universityId: string, name: string, level: string) =>
@@ -591,16 +650,44 @@ function programPatchFields(input: ProgramInput): Record<string, Cell> {
 }
 
 /**
- * Adds or updates programmes across any number of universities in one pass.
+ * A programme that ends up with rounds to merge — one already on file, or one
+ * this import creates — and what happened to its own columns on the way.
+ */
+type RoundTarget = {
+  label: string;
+  storedId: string | null;
+  /** Index into toCreate, for a programme that does not exist yet. */
+  newIndex: number | null;
+  incoming: IncomingRound[];
+  fieldsChanged: boolean;
+  /** Listed on the Catalogue sheet, so it belongs in the "already matched" count if nothing changes. */
+  inSheet: boolean;
+};
+
+/** Today in the office's own calendar, which decides whether a round is still open. */
+function officeToday(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Karachi" }).format(new Date());
+}
+
+/**
+ * Adds or updates programmes across any number of universities in one pass,
+ * and merges intake rounds into them — from their own rows and from the
+ * Rounds sheet.
  *
  * Everything already stored for those universities is read up front rather
  * than per programme, and the new rows and their rounds go in as one insert
  * each. A university that is itself new (a pending id, in a preview) has
  * nothing stored, so all of its programmes are additions.
+ *
+ * Rounds are merged by name (catalogueRows.mergeRounds): a named round on file
+ * has its dates updated, a new one is added, and nothing is ever removed. A
+ * stored round keeps its id, so the applications that record it stay linked.
  */
-async function mergePrograms(run: ImportRun, entries: ProgramEntry[]) {
+async function mergePrograms(run: ImportRun, entries: ProgramEntry[], roundEntries: RoundEntry[] = []) {
   const { supabase, report, dryRun } = run;
-  const universityIds = [...new Set(entries.map((e) => e.universityId))].filter((id) => !isPending(id));
+  const universityIds = [
+    ...new Set([...entries.map((e) => e.universityId), ...roundEntries.map((r) => r.universityId)]),
+  ].filter((id) => !isPending(id));
 
   let stored: StoredProgram[];
   let storedRounds: StoredRound[];
@@ -619,7 +706,7 @@ async function mergePrograms(run: ImportRun, entries: ProgramEntry[]) {
       (chunk, from, to) =>
         supabase
           .from("program_intake_rounds")
-          .select("id, program_id, label, start_date, application_deadline")
+          .select("id, program_id, label, start_date, application_deadline, sort_order")
           .in("program_id", chunk)
           .order("id")
           .range(from, to)
@@ -630,10 +717,13 @@ async function mergePrograms(run: ImportRun, entries: ProgramEntry[]) {
     return;
   }
 
+  const today = officeToday();
   const roundsByProgram = new Map<string, StoredRound[]>();
   for (const round of storedRounds) {
     roundsByProgram.set(round.program_id, [...(roundsByProgram.get(round.program_id) ?? []), round]);
   }
+  const roundsWouldChange = (programId: string, incoming: readonly IncomingRound[]) =>
+    incoming.length > 0 && mergeRounds(roundsByProgram.get(programId) ?? [], incoming, today).changes.length > 0;
 
   // A list per key, not one record: the catalogue does hold the same
   // programme twice at some universities (43 such pairs in Germany when this
@@ -652,6 +742,7 @@ async function mergePrograms(run: ImportRun, entries: ProgramEntry[]) {
   const newNames = new Map<string, string[]>();
   /** Which sheet row first claimed a record, so a second claim can say which. */
   const claimedBy = new Map<string, string>();
+  const targets = new Map<string, RoundTarget>();
 
   for (const entry of entries) {
     const { input, rounds, universityId, universityLabel } = entry;
@@ -683,7 +774,7 @@ async function mergePrograms(run: ImportRun, entries: ProgramEntry[]) {
         (c) =>
           !claimedBy.has(c.id) &&
           mergeRow(c as unknown as Record<string, Cell>, programPatchFields(input)).changes.length === 0 &&
-          (rounds.length === 0 || sameRounds(roundsByProgram.get(c.id) ?? [], rounds))
+          !roundsWouldChange(c.id, rounds)
       );
       if (same) {
         claimedBy.set(same.id, input.name);
@@ -720,6 +811,14 @@ async function mergePrograms(run: ImportRun, entries: ProgramEntry[]) {
         continue;
       }
       claimedBy.set(claimKey, input.name);
+      targets.set(`new:${toCreate.length}`, {
+        label,
+        storedId: null,
+        newIndex: toCreate.length,
+        incoming: [...rounds],
+        fieldsChanged: false,
+        inSheet: true,
+      });
       toCreate.push(entry);
       newNames.set(scope, [...(newNames.get(scope) ?? []), input.name]);
       continue;
@@ -729,12 +828,6 @@ async function mergePrograms(run: ImportRun, entries: ProgramEntry[]) {
 
     const target = `${universityLabel} · ${existing.name} (${input.level})`;
     const { patch, changes } = mergeRow(existing as unknown as Record<string, Cell>, programPatchFields(input));
-    const roundsDiffer = rounds.length > 0 && !sameRounds(roundsByProgram.get(existing.id) ?? [], rounds);
-
-    if (changes.length === 0 && !roundsDiffer) {
-      report.programs.unchanged += 1;
-      continue;
-    }
 
     if (changes.length > 0 && !dryRun) {
       const { data: updated, error } = await supabase
@@ -749,21 +842,110 @@ async function mergePrograms(run: ImportRun, entries: ProgramEntry[]) {
     }
     Object.assign(existing, patch);
     for (const change of changes) report.changes.push(`${target} · ${describeChange(change)}`);
+    targets.set(existing.id, {
+      label: target,
+      storedId: existing.id,
+      newIndex: null,
+      incoming: [...rounds],
+      fieldsChanged: changes.length > 0,
+      inSheet: true,
+    });
+  }
 
-    if (roundsDiffer) {
-      const roundsError = dryRun ? null : await saveProgramRounds(supabase, existing.id, rounds);
+  // ------------------------------------------------ the Rounds sheet's rows
+  //
+  // Each reaches every programme in its scope: the one it names, or every
+  // programme the university has at that level, or at all — on file or being
+  // added by this same upload.
+  for (const { spec, universityId, universityLabel } of roundEntries) {
+    const pool = [
+      ...stored
+        .filter((p) => p.university_id === universityId)
+        .map((p) => ({ key: p.id, name: p.name, level: p.level, storedId: p.id as string | null, newIndex: null as number | null })),
+      ...toCreate
+        .map((e, i) => ({ e, i }))
+        .filter(({ e }) => e.universityId === universityId)
+        .map(({ e, i }) => ({ key: `new:${i}`, name: e.input.name, level: e.input.level as string, storedId: null, newIndex: i })),
+    ].filter((p) => !spec.level || p.level === spec.level);
+
+    const where = `${universityLabel}${spec.level ? ` (${spec.level})` : ""}`;
+    const roundName = spec.round.label ? `"${spec.round.label}"` : "an unnamed round";
+    let reached = pool;
+    if (spec.programName) {
+      reached = pool.filter((p) => normalizeName(p.name) === normalizeName(spec.programName!));
+      if (reached.length === 0) {
+        const near = findNearMisses(spec.programName, pool.map((p) => p.name));
+        if (near.length > 1) {
+          report.heldBack.push(
+            `Rounds: ${where} · "${spec.programName}" is close to ${near.map((n) => `"${n}"`).join(" and ")} — ${roundName} not applied`
+          );
+          continue;
+        }
+        if (near.length === 1) {
+          reached = pool.filter((p) => normalizeName(p.name) === normalizeName(near[0]));
+          report.similarMatches.push(`Rounds: ${where} · "${spec.programName}" → "${near[0]}"`);
+        }
+      }
+      if (reached.length === 0) {
+        report.problems.push(`Rounds: ${where} has no programme called "${spec.programName}" — ${roundName} not applied`);
+        continue;
+      }
+      if (!spec.level && new Set(reached.map((p) => p.level)).size > 1) {
+        report.problems.push(
+          `Rounds: ${universityLabel} teaches "${spec.programName}" at more than one level — fill in the level; ${roundName} not applied`
+        );
+        continue;
+      }
+    } else if (reached.length === 0) {
+      report.problems.push(`Rounds: ${where} has no programmes on file or in this sheet — ${roundName} not applied`);
+      continue;
+    }
+
+    for (const p of reached) {
+      const target = targets.get(p.key) ?? {
+        label: `${universityLabel} · ${p.name} (${p.level})`,
+        storedId: p.storedId,
+        newIndex: p.newIndex,
+        incoming: [],
+        fieldsChanged: false,
+        inSheet: false,
+      };
+      target.incoming.push(spec.round);
+      targets.set(p.key, target);
+    }
+  }
+
+  // --------------------------------------------- rounds on file, merged
+  const roundsForNew = new Map<number, RoundLike[]>();
+  for (const target of targets.values()) {
+    const merged = mergeRounds(target.storedId ? (roundsByProgram.get(target.storedId) ?? []) : [], target.incoming, today);
+    for (const conflict of merged.conflicts) report.problems.push(`${target.label}: ${conflict}`);
+
+    if (target.newIndex !== null) {
+      roundsForNew.set(target.newIndex, merged.rounds);
+      continue;
+    }
+
+    let roundsChanged = false;
+    if (merged.changes.length > 0) {
+      const roundsError = dryRun ? null : await saveProgramRounds(supabase, target.storedId!, merged.rounds);
       if (roundsError) {
-        report.failures.push(`${target}: intake rounds — ${roundsError}`);
+        report.failures.push(`${target.label}: intake rounds — ${roundsError}`);
       } else {
-        report.changes.push(`${target} · intake rounds → ${rounds.map((r) => r.label).join(", ")}`);
+        roundsChanged = true;
+        for (const change of merged.changes) report.changes.push(`${target.label} · ${change}`);
       }
     }
-    report.programs.updated += 1;
+    if (target.fieldsChanged || roundsChanged) report.programs.updated += 1;
+    else if (target.inSheet) report.programs.unchanged += 1;
   }
 
-  for (const { input, universityLabel } of toCreate) {
-    report.additions.push(`${universityLabel} · ${input.name} (${input.level}) — new programme`);
-  }
+  // --------------------------------------------------- new programmes
+  toCreate.forEach(({ input, universityLabel }, index) => {
+    const rounds = roundsForNew.get(index) ?? [];
+    const withRounds = rounds.length > 0 ? `, rounds ${rounds.map((r) => `"${r.label}"`).join(", ")}` : "";
+    report.additions.push(`${universityLabel} · ${input.name} (${input.level}) — new programme${withRounds}`);
+  });
   if (toCreate.length === 0) return;
   if (dryRun) {
     report.programs.added += toCreate.length;
@@ -784,10 +966,10 @@ async function mergePrograms(run: ImportRun, entries: ProgramEntry[]) {
   report.programs.added += created?.length ?? 0;
 
   const idByKey = new Map((created ?? []).map((p) => [programKey(p.university_id, p.name, p.level), p.id]));
-  const newRounds = toCreate.flatMap(({ input, rounds, universityId }) => {
+  const newRounds = toCreate.flatMap(({ input, universityId }, index) => {
     const programId = idByKey.get(programKey(universityId, input.name, input.level));
     if (!programId) return [];
-    return rounds.map((round) => ({
+    return (roundsForNew.get(index) ?? []).map((round) => ({
       program_id: programId,
       label: round.label,
       start_date: round.start_date,
@@ -801,7 +983,7 @@ async function mergePrograms(run: ImportRun, entries: ProgramEntry[]) {
     // The programmes are in. Reporting the whole import as failed would be
     // wrong and would invite a re-upload, so this names what is missing.
     if (roundsError) {
-      report.failures.push(`The new programmes were created, but their intake dates were not: ${roundsError.message}`);
+      report.failures.push(`The new programmes were created, but their intake rounds were not: ${roundsError.message}`);
     }
   }
 }
@@ -824,7 +1006,10 @@ async function importUniversityRows(
   const supabase = await createClient();
   if (!(await isSuperAdmin(supabase))) return { error: SUPER_ADMIN_ONLY };
 
-  const read = await readImportRows(formData.get("file") as File | null, options);
+  const read = await readImportRows(formData.get("file") as File | null, {
+    ...options,
+    withRounds: options.withProgrammes,
+  });
   if ("error" in read) return { error: read.error };
 
   const fallbackId = String(formData.get("destination_id") ?? "");
@@ -843,7 +1028,31 @@ async function importUniversityRows(
   const universityEntries: UniversityEntry[] = [];
   const programRows: { key: string; universityName: string; input: ProgramInput; rounds: CatalogueRound[] }[] = [];
 
+  // The template's greyed-out examples, if nobody deleted them. Skipped and
+  // said so, rather than imported as a university called "Example University".
+  const isExample = (row: Record<string, string>) => options.withProgrammes && isExampleRow(row);
+  const examples = [...read.rows, ...read.roundRows].filter(isExample).length;
+  if (examples > 0) {
+    report.problems.push(`Skipped ${examples} example row(s) from the template (${EXAMPLE_UNIVERSITY}) — delete them from the sheet`);
+  }
+
+  /** The row's own destination, else the form's; null with the reason reported. */
+  const destinationOf = (row: Record<string, string>, name: string, prefix = "") => {
+    const cell = (row.destination ?? "").trim();
+    const resolved = cell ? resolveDestination(cell, destinations ?? []) : null;
+    const destination = resolved ? resolved.destination : fallback;
+    if (!destination) {
+      report.problems.push(
+        resolved?.error
+          ? `${prefix}"${name}": ${resolved.error}`
+          : `${prefix}"${name}" has no destination — fill in the destination column, or choose one in the form`
+      );
+    }
+    return destination ?? null;
+  };
+
   for (const row of read.rows) {
+    if (isExample(row)) continue;
     const problems: string[] = [];
     const university = universityFromRow(row, options.universityKey, problems);
     if (!university) {
@@ -852,17 +1061,8 @@ async function importUniversityRows(
       continue;
     }
 
-    const cell = (row.destination ?? "").trim();
-    const resolved = cell ? resolveDestination(cell, destinations ?? []) : null;
-    const destination = resolved ? resolved.destination : fallback;
-    if (!destination) {
-      report.problems.push(
-        resolved?.error
-          ? `"${university.name}": ${resolved.error}`
-          : `"${university.name}" has no destination — fill in the destination column, or choose one in the form`
-      );
-      continue;
-    }
+    const destination = destinationOf(row, university.name);
+    if (!destination) continue;
 
     universityEntries.push({ input: university, destination });
     const program = options.withProgrammes ? programFromRow(row, "program_name", problems) : null;
@@ -876,6 +1076,26 @@ async function importUniversityRows(
         rounds,
       });
     }
+  }
+
+  // The Rounds sheet. Each row's university is looked up exactly as the
+  // Catalogue sheet's are, spelling and all, and only then is it known which
+  // programmes the round reaches.
+  const roundRows: { key: string; universityName: string; spec: RoundSpec }[] = [];
+  for (const row of read.roundRows) {
+    if (isExample(row)) continue;
+    const problems: string[] = [];
+    const spec = roundSpecFromRow(row, problems);
+    const name = (row.university_name ?? "").trim();
+    for (const problem of problems) report.problems.push(`Rounds: ${name}: ${problem}`);
+    if (!spec) {
+      if (!name) report.problems.push("Rounds: a row has no university_name — ignored");
+      continue;
+    }
+    const destination = destinationOf(row, spec.universityName, "Rounds: ");
+    if (!destination) continue;
+    universityEntries.push({ input: universityFromRow(row, "university_name", [])!, destination, roundsOnly: true });
+    roundRows.push({ key: universityKey(destination.id, spec.universityName), universityName: spec.universityName, spec });
   }
 
   if (universityEntries.length === 0 && report.problems.length === 0) {
@@ -895,7 +1115,13 @@ async function importUniversityRows(
       if (!universityId) continue;
       entries.push({ input, rounds, universityId, universityLabel: universityName });
     }
-    await mergePrograms(run, entries);
+    const roundEntries: RoundEntry[] = [];
+    for (const { key, universityName, spec } of roundRows) {
+      const universityId = idByKey.get(key);
+      // No id: the university was not found, and its own line says so.
+      if (universityId) roundEntries.push({ spec, universityId, universityLabel: universityName });
+    }
+    await mergePrograms(run, entries, roundEntries);
   }
 
   if (!intent.dryRun) {

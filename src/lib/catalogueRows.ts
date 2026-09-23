@@ -66,15 +66,59 @@ export function parseMoney(value: string | undefined, problems: RowProblem[], la
   return parsed;
 }
 
-/** YYYY-MM-DD, or null. Anything else is reported rather than sent to Postgres. */
+const MONTH_NAMES = [
+  "january", "february", "march", "april", "may", "june",
+  "july", "august", "september", "october", "november", "december",
+];
+
+/** 1-12 for a month's full name or any abbreviation of three letters or more ("Sept", "Mar"). */
+function monthNumber(word: string): number | null {
+  const w = word.toLowerCase();
+  if (w.length < 3) return null;
+  const at = MONTH_NAMES.findIndex((name) => name.startsWith(w));
+  return at === -1 ? null : at + 1;
+}
+
+/** A real calendar day as YYYY-MM-DD, or null — 2027-02-30 is not one. */
+function isoDay(year: number, month: number, day: number): string | null {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * A date, or null. Anything unreadable is reported rather than sent to Postgres.
+ *
+ * Accepted: 2027-03-15, and the month written as a word — "15 Mar 2027",
+ * "15 March 2027", "March 15, 2027". A date cell in Excel already arrives as
+ * YYYY-MM-DD (see spreadsheet.ts).
+ *
+ * All-number forms with slashes or dots are refused, not guessed at: the
+ * office writes 03/04/2027 for the 3rd of April and an American admissions
+ * page means the 4th of March, and a deadline read the wrong way round is
+ * wrong by a month without looking wrong at all.
+ */
 export function parseDay(value: string | undefined, problems: RowProblem[], label: string): string | null {
   const raw = (value ?? "").trim();
   if (raw === "") return null;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-    problems.push(`${label} "${raw}" is not a YYYY-MM-DD date — ignored`);
+
+  let parsed: string | null = null;
+  const iso = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  const dayFirst = raw.match(/^(\d{1,2})(?:st|nd|rd|th)?[\s-]+([a-z]+)\.?,?[\s-]+(\d{4})$/i);
+  const monthFirst = raw.match(/^([a-z]+)\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$/i);
+  if (iso) {
+    parsed = isoDay(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+  } else if (dayFirst && monthNumber(dayFirst[2])) {
+    parsed = isoDay(Number(dayFirst[3]), monthNumber(dayFirst[2])!, Number(dayFirst[1]));
+  } else if (monthFirst && monthNumber(monthFirst[1])) {
+    parsed = isoDay(Number(monthFirst[3]), monthNumber(monthFirst[1])!, Number(monthFirst[2]));
+  }
+
+  if (!parsed) {
+    problems.push(`${label} "${raw}" is not a date this can read — write 2027-03-15 or 15 Mar 2027; ignored`);
     return null;
   }
-  return raw;
+  return parsed;
 }
 
 /**
@@ -141,6 +185,208 @@ export function sameRounds(
   const left = stored.map(key).sort();
   const right = incoming.map(key).sort();
   return left.every((value, index) => value === right[index]);
+}
+
+// ------------------------------------------------------ the Rounds sheet
+//
+// Universities announce admission rounds for the whole university, or for one
+// level at it, far more often than per programme: Italy's "1st call" and
+// "2nd call" apply to every master's programme at once. Repeating them on
+// every programme row is how they end up inconsistent, so the workbook has a
+// second sheet, one row per round, where the programme may be left out:
+//
+//   university_name  level    program_name   round     start_date  application_deadline
+//   Sapienza                                  1st call              2027-03-15
+//   Sapienza         masters                  2nd call              2027-05-30
+//   Sapienza         masters  Data Science    Late                  2027-07-10
+//
+// A row with no programme reaches every programme the university has on file
+// (narrowed to one level if the level is given), not just the ones in the
+// same upload.
+
+/** One row of the Rounds sheet. */
+export type RoundSpec = {
+  universityName: string;
+  level: ProgramLevel | null;
+  programName: string | null;
+  round: IncomingRound;
+};
+
+/** A round as a sheet gives it. A null label is numbered when it is added. */
+export type IncomingRound = {
+  label: string | null;
+  start_date: string | null;
+  application_deadline: string | null;
+};
+
+/** Null when the row names no university; the reason is in `problems` when it is unusable. */
+export function roundSpecFromRow(row: Record<string, string>, problems: RowProblem[]): RoundSpec | null {
+  const universityName = (row.university_name ?? "").trim();
+  if (!universityName) return null;
+
+  const rawLevel = (row.level ?? "").trim().toLowerCase();
+  let level: ProgramLevel | null = null;
+  if (PROGRAM_LEVELS.includes(rawLevel as ProgramLevel)) level = rawLevel as ProgramLevel;
+  else if (rawLevel !== "") {
+    problems.push(`level "${row.level}" — must be bachelors, masters or phd, or blank for every level; round ignored`);
+    return null;
+  }
+
+  const start_date = parseDay(row.start_date, problems, "start_date");
+  const application_deadline = parseDay(row.application_deadline, problems, "application_deadline");
+  if (!start_date && !application_deadline) {
+    problems.push(`a round with no start_date or application_deadline records nothing; ignored`);
+    return null;
+  }
+
+  return {
+    universityName,
+    level,
+    programName: (row.program_name ?? "").trim() || null,
+    round: { label: (row.round ?? "").trim() || null, start_date, application_deadline },
+  };
+}
+
+/** A round as stored — `id` absent on one that does not exist yet. */
+export type RoundLike = {
+  id?: string;
+  label: string;
+  start_date: string | null;
+  application_deadline: string | null;
+  sort_order: number;
+};
+
+const labelKey = (label: string) => label.trim().toLowerCase().replace(/\s+/g, " ");
+
+/** The date a round is decided by: its deadline, or its start when it has no deadline. */
+const keyDate = (r: { start_date: string | null; application_deadline: string | null }) =>
+  r.application_deadline ?? r.start_date ?? "";
+
+/**
+ * Rounds in the order the rest of the app needs them.
+ *
+ * The FIRST round is mirrored into programs.application_deadline, which the
+ * reminder cron, the staff queue, the calendar and an application with no
+ * deadline of its own all read as "the deadline" (0232, 0262). So the first
+ * must be the next one still open: rounds whose date has not passed come
+ * first, soonest first; closed ones follow, most recent first, kept as the
+ * record of what happened. Label breaks a tie, so the order is stable.
+ */
+export function orderRounds<T extends { label: string; start_date: string | null; application_deadline: string | null }>(
+  rounds: readonly T[],
+  today: string
+): T[] {
+  const open = rounds.filter((r) => keyDate(r) >= today);
+  const closed = rounds.filter((r) => keyDate(r) < today);
+  const byLabel = (a: T, b: T) => a.label.localeCompare(b.label);
+  open.sort((a, b) => keyDate(a).localeCompare(keyDate(b)) || byLabel(a, b));
+  closed.sort((a, b) => keyDate(b).localeCompare(keyDate(a)) || byLabel(a, b));
+  return [...open, ...closed];
+}
+
+const describeRound = (r: { start_date: string | null; application_deadline: string | null }) =>
+  [r.application_deadline && `apply by ${r.application_deadline}`, r.start_date && `starts ${r.start_date}`]
+    .filter(Boolean)
+    .join(", ");
+
+/**
+ * What a programme's rounds become when a sheet's rounds are merged in.
+ *
+ * Matched by name, case and spacing aside:
+ *
+ *   - a round the sheet names that is on file has its dates updated — but only
+ *     the dates the sheet fills in, so a row giving just a deadline leaves the
+ *     stored start alone, exactly as an empty cell does everywhere else;
+ *   - a round the sheet names that is not on file is added;
+ *   - a round on file that the sheet does not mention is KEPT. The import
+ *     never removes a round; that is the edit form's job, where you can see
+ *     what you are removing.
+ *
+ * An unnamed round is the one on file with the same dates if there is one,
+ * and otherwise is added as "Round N", numbered in date order from the first
+ * number no round is using.
+ *
+ * A stored round keeps its id, which is the point of matching rather than
+ * replacing: applications record which round they are for, and a
+ * delete-and-reinsert would quietly unlink every one of them.
+ *
+ * When nothing changes the stored order is returned untouched, so an
+ * untouched re-upload is a no-op even for a programme whose rounds were
+ * ordered by hand. When something does change, the whole list is put in
+ * orderRounds order.
+ */
+export function mergeRounds(
+  stored: readonly RoundLike[],
+  incoming: readonly IncomingRound[],
+  today: string
+): { rounds: RoundLike[]; changes: string[]; conflicts: string[] } {
+  const work: RoundLike[] = [...stored].sort((a, b) => a.sort_order - b.sort_order).map((r) => ({ ...r }));
+  const changes: string[] = [];
+  const conflicts: string[] = [];
+  const given = new Map<string, IncomingRound>();
+  const unnamed: IncomingRound[] = [];
+
+  for (const round of incoming) {
+    if (!round.start_date && !round.application_deadline) continue;
+
+    if (!round.label) {
+      const same = work.some(
+        (r) =>
+          (round.start_date === null || r.start_date === round.start_date) &&
+          (round.application_deadline === null || r.application_deadline === round.application_deadline)
+      );
+      const again = unnamed.some(
+        (r) => r.start_date === round.start_date && r.application_deadline === round.application_deadline
+      );
+      if (!same && !again) unnamed.push(round);
+      continue;
+    }
+
+    const key = labelKey(round.label);
+    const earlier = given.get(key);
+    if (earlier) {
+      if (earlier.start_date !== round.start_date || earlier.application_deadline !== round.application_deadline) {
+        conflicts.push(`round "${round.label}" is given twice with different dates — kept ${describeRound(earlier)}`);
+      }
+      continue;
+    }
+    given.set(key, round);
+
+    const target = work.find((r) => labelKey(r.label) === key);
+    if (!target) {
+      work.push({ label: round.label, start_date: round.start_date, application_deadline: round.application_deadline, sort_order: 0 });
+      changes.push(`added round "${round.label}" (${describeRound(round)})`);
+      continue;
+    }
+    for (const field of ["application_deadline", "start_date"] as const) {
+      const value = round[field];
+      if (value === null || value === target[field]) continue;
+      changes.push(
+        `round "${target.label}" ${field === "start_date" ? "start" : "deadline"} ${target[field] ?? "—"} → ${value}`
+      );
+      target[field] = value;
+    }
+  }
+
+  unnamed.sort((a, b) => keyDate(a).localeCompare(keyDate(b)));
+  const used = new Set(work.map((r) => labelKey(r.label)));
+  let n = 1;
+  for (const round of unnamed) {
+    while (used.has(labelKey(`Round ${n}`))) n += 1;
+    const label = `Round ${n}`;
+    used.add(labelKey(label));
+    work.push({ label, start_date: round.start_date, application_deadline: round.application_deadline, sort_order: 0 });
+    changes.push(`added round "${label}" (${describeRound(round)})`);
+  }
+
+  if (changes.length === 0) {
+    return { rounds: [...stored].sort((a, b) => a.sort_order - b.sort_order).map((r) => ({ ...r })), changes, conflicts };
+  }
+  return {
+    rounds: orderRounds(work, today).map((r, i) => ({ ...r, sort_order: i + 1 })),
+    changes,
+    conflicts,
+  };
 }
 
 /** A destination as the `destination` column is matched against it. */

@@ -7,7 +7,11 @@ import {
   CATALOGUE_TYPES,
   CATALOGUE_YES_NO,
   catalogueColumnIndex,
+  ROUND_COLUMNS,
+  ROUNDS_SHEET,
+  roundColumnIndex,
   type CatalogueRow,
+  type RoundRow,
 } from "@/lib/catalogueSheet";
 
 /**
@@ -31,8 +35,11 @@ export function catalogueWorkbook(
   {
     italic = false,
     destinations = [],
+    roundRows = [],
   }: {
     italic?: boolean;
+    /** The Rounds sheet's rows. */
+    roundRows?: RoundRow[];
     /** Display names for the destination dropdown; none means no dropdown. */
     destinations?: readonly string[];
   } = {}
@@ -120,6 +127,46 @@ export function catalogueWorkbook(
     },
   ].map((d) => ({ ...d, fromRow: 2, toRow: validatedRows + 1 }));
 
+  // Real date cells, so Excel shows them as dates and offers its date
+  // picker; they read back as YYYY-MM-DD (spreadsheet.ts). Written in ISO
+  // format rather than the reader's locale, because 03/04/2027 is two
+  // different days depending on who opens the file.
+  const example = italic ? { fontStyle: "italic" as const, color: "#888888" } : {};
+  const roundsHeader = ROUND_COLUMNS.map((c) => ({
+    value: c.header,
+    type: String,
+    fontWeight: "bold" as const,
+    backgroundColor: "#EFEFEF",
+  }));
+  const roundsBody = roundRows.map((row) =>
+    ROUND_COLUMNS.map((c) => {
+      const value = row[c.header];
+      if ((c.header === "start_date" || c.header === "application_deadline") && value) {
+        return { value: new Date(`${value}T00:00:00Z`), type: Date, format: "yyyy-mm-dd", ...example };
+      }
+      return { value: value || undefined, type: String, ...example };
+    })
+  );
+  const roundsValidatedTo = roundRows.length + VALIDATION_HEADROOM + 1;
+  const roundDropdowns: Dropdown[] = [
+    ...(destinations.length > 0
+      ? [
+          {
+            column: roundColumnIndex("destination"),
+            range: listRange(CATALOGUE_LIST_SHEET, "D", destinations.length),
+            errorTitle: "Not a destination",
+            errorMessage: "Pick one from the list — or leave blank to use the destination chosen in the import form.",
+          },
+        ]
+      : []),
+    {
+      column: roundColumnIndex("level"),
+      range: listRange(CATALOGUE_LIST_SHEET, "A", CATALOGUE_LEVELS.length),
+      errorTitle: "Not a level",
+      errorMessage: "bachelors, masters or phd — or leave blank for a round at every level.",
+    },
+  ].map((d) => ({ ...d, fromRow: 2, toRow: roundsValidatedTo }));
+
   return {
     sheets: [
       {
@@ -128,15 +175,24 @@ export function catalogueWorkbook(
         columns: CATALOGUE_COLUMNS.map((c) => ({ width: c.width })),
         stickyRowsCount: 1,
       },
+      {
+        data: [roundsHeader, ...roundsBody],
+        sheet: ROUNDS_SHEET,
+        columns: ROUND_COLUMNS.map((c) => ({ width: c.width })),
+        stickyRowsCount: 1,
+      },
       { data: lists, sheet: CATALOGUE_LIST_SHEET },
     ],
     options: { fontFamily: "Calibri", fontSize: 11 },
     /** Adds the dropdowns and hides the Lists sheet, which write-excel-file cannot. */
     finish: (written: Buffer) =>
-      addDropdownsAndHideSheets(written, {
-        sheet: CATALOGUE_SHEET,
-        dropdowns,
-        hideSheets: [CATALOGUE_LIST_SHEET],
-      }),
+      addDropdownsAndHideSheets(
+        addDropdownsAndHideSheets(written, {
+          sheet: CATALOGUE_SHEET,
+          dropdowns,
+          hideSheets: [CATALOGUE_LIST_SHEET],
+        }),
+        { sheet: ROUNDS_SHEET, dropdowns: roundDropdowns }
+      ),
   };
 }

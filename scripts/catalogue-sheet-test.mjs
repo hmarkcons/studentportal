@@ -81,13 +81,11 @@ test("a round with no dates at all is not written", () => {
   assert.equal(roundsCell([]), "");
 });
 
-test("the single-intake columns are left empty, since rounds carries them", () => {
-  // Writing both would put the same dates in the sheet twice, and `rounds`
-  // wins on the way back in anyway.
+test("rounds are not on the Catalogue sheet any more — they have a sheet of their own", () => {
   const [row] = catalogueRowsForUniversity(university, [{ program: programme, rounds }]);
-  assert.equal(row.start_date, "");
-  assert.equal(row.application_deadline, "");
-  assert.equal(row.rounds, "Round 1|2026-09-01|2026-01-15; Round 2|2027-02-01|2026-09-15");
+  assert.equal("rounds" in row, false);
+  assert.equal("start_date" in row, false);
+  assert.equal("application_deadline" in row, false);
 });
 
 test("a fee loses the trailing zeros numeric(12,2) adds", () => {
@@ -138,14 +136,9 @@ test("an exported row parses back into exactly what was exported", () => {
   assert.equal(backProgram.admission_test_type, programme.admission_test_type);
   assert.equal(backProgram.page_link, programme.page_link);
 
-  const backRounds = roundsFromRow(row, []);
-  assert.deepEqual(
-    backRounds.map((r) => [r.label, r.start_date, r.application_deadline]),
-    [
-      ["Round 1", "2026-09-01", "2026-01-15"],
-      ["Round 2", "2027-02-01", "2026-09-15"],
-    ]
-  );
+  // The catalogue row says nothing about rounds — the Rounds sheet carries
+  // them — and "nothing" must read back as nothing, never as "no rounds".
+  assert.deepEqual(roundsFromRow(row, []), []);
 });
 
 test("a university with nothing recorded round-trips as all-blank, not as nulls", () => {

@@ -96,6 +96,25 @@ export function ImportCatalogueForm({ destinations }: { destinations: { id: stri
         different, like <code>University of Padua</code> and <code>University of Pavia</code>, are not confused. A name
         close to two records is held back, since there is no telling which was meant.
       </p>
+
+      <p className="mt-3 text-xs font-medium text-ink">Admission rounds — the Rounds sheet</p>
+      <p className="mt-1 text-xs text-muted">
+        One row per round: <code>destination</code>, <code>university_name</code>, <code>level</code>,{" "}
+        <code>program_name</code>, <code>round</code>, <code>start_date</code>, <code>application_deadline</code>. Leave{" "}
+        <code>program_name</code> blank and the round reaches <strong className="text-ink">every programme the university
+        has</strong> — or every one at a level, if <code>level</code> is filled in — which is how calls like Italy&rsquo;s{" "}
+        <code>1st call</code>, <code>2nd call</code> are announced. Fill in <code>program_name</code> for a round of one
+        programme only. A university can appear on the Rounds sheet without being on the Catalogue sheet.
+      </p>
+      <p className="mt-1 text-xs text-muted">
+        Rounds are matched by name: one already on file has its dates updated (an empty date cell leaves that date
+        alone), a new name is added, and <strong className="text-ink">rounds not on the sheet are kept</strong> — to
+        remove one, use the programme&rsquo;s edit form. A blank <code>round</code> is numbered Round 1, Round 2… in date
+        order. Dates can be Excel dates, <code>2027-03-15</code> or <code>15 Mar 2027</code>; <code>15/03/2027</code> is
+        refused, since it reads differently in different countries. When a programme&rsquo;s rounds change, they are put in
+        order automatically — open rounds first, soonest deadline first — so the first is always the next deadline, which
+        is the one reminders and the staff queue use.
+      </p>
     </details>
   );
 }

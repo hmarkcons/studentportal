@@ -2,7 +2,7 @@ import writeXlsxFile from "write-excel-file/node";
 import { getStaffSession } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { catalogueWorkbook } from "@/lib/catalogueWorkbook";
-import type { CatalogueRow } from "@/lib/catalogueSheet";
+import { EXAMPLE_UNIVERSITY, type CatalogueRow, type RoundRow } from "@/lib/catalogueSheet";
 
 /**
  * The combined catalogue template — universities and their programmes on one
@@ -24,20 +24,24 @@ import type { CatalogueRow } from "@/lib/catalogueSheet";
  */
 
 /**
- * Two rows for one university, so the shape is visible rather than described:
- * the university columns repeat, and the second row adds a second programme
- * without creating a second university.
+ * Two programmes of one university, so the shape is visible rather than
+ * described: the university columns repeat, and the second row adds a second
+ * programme without creating a second university.
  */
+const university = {
+  destination: "Italy (Public)",
+  university_name: EXAMPLE_UNIVERSITY,
+  city: "Rome",
+  region: "Lazio",
+  type: "public",
+  levels_offered: "bachelors; masters",
+  fields_offered: "Engineering; IT/CS",
+  contact_email: "admissions@example.edu",
+};
+
 const EXAMPLE_ROWS: CatalogueRow[] = [
   {
-    destination: "Italy (Public)",
-    university_name: "Sapienza University of Rome",
-    city: "Rome",
-    region: "Lazio",
-    type: "public",
-    levels_offered: "bachelors; masters",
-    fields_offered: "Engineering; IT/CS",
-    contact_email: "admissions@example.edu",
+    ...university,
     level: "bachelors",
     program_name: "Computer Science",
     core_field: "IT/CS",
@@ -46,9 +50,6 @@ const EXAMPLE_ROWS: CatalogueRow[] = [
     duration: "3 years",
     language_requirement: "B2 English",
     intake_dates: "Fall; Spring",
-    rounds: "Round 1|2026-09-01|2026-01-15; Round 2|2027-02-01|2026-09-15",
-    start_date: "",
-    application_deadline: "",
     interview_required: "no",
     interview_details: "",
     admission_test_required: "yes",
@@ -58,14 +59,7 @@ const EXAMPLE_ROWS: CatalogueRow[] = [
     page_link: "https://example.edu/cs",
   },
   {
-    destination: "Italy (Public)",
-    university_name: "Sapienza University of Rome",
-    city: "Rome",
-    region: "Lazio",
-    type: "public",
-    levels_offered: "bachelors; masters",
-    fields_offered: "Engineering; IT/CS",
-    contact_email: "admissions@example.edu",
+    ...university,
     level: "masters",
     program_name: "Data Science",
     core_field: "IT/CS",
@@ -74,11 +68,6 @@ const EXAMPLE_ROWS: CatalogueRow[] = [
     duration: "2 years",
     language_requirement: "B2 English",
     intake_dates: "Fall",
-    rounds: "",
-    // The single-intake columns, filled in beside a blank `rounds` so the
-    // precedence between the two is readable from the sheet itself.
-    start_date: "2026-09-01",
-    application_deadline: "2026-01-15",
     interview_required: "no",
     interview_details: "",
     admission_test_required: "no",
@@ -87,6 +76,22 @@ const EXAMPLE_ROWS: CatalogueRow[] = [
     application_portal_link: "https://universitaly.it",
     page_link: "https://example.edu/ds",
   },
+];
+
+/**
+ * The three scopes a round can have, one of each — the way Italian
+ * universities announce them: calls for the whole university, one for a
+ * level, and the odd programme with a date of its own.
+ */
+const ROUND_EXAMPLES: RoundRow[] = [
+  { destination: "Italy (Public)", university_name: EXAMPLE_UNIVERSITY, level: "", program_name: "",
+    round: "1st call", start_date: "", application_deadline: "2027-03-15" },
+  { destination: "Italy (Public)", university_name: EXAMPLE_UNIVERSITY, level: "", program_name: "",
+    round: "2nd call", start_date: "", application_deadline: "2027-05-30" },
+  { destination: "Italy (Public)", university_name: EXAMPLE_UNIVERSITY, level: "masters", program_name: "",
+    round: "3rd call", start_date: "", application_deadline: "2027-07-15" },
+  { destination: "Italy (Public)", university_name: EXAMPLE_UNIVERSITY, level: "masters", program_name: "Data Science",
+    round: "Late", start_date: "2027-10-01", application_deadline: "2027-08-31" },
 ];
 
 export async function GET() {
@@ -100,6 +105,7 @@ export async function GET() {
 
   const { sheets, options, finish } = catalogueWorkbook(EXAMPLE_ROWS, {
     italic: true,
+    roundRows: ROUND_EXAMPLES,
     destinations: (destinations ?? []).map((d) => d.display_name),
   });
   const buffer = finish(await writeXlsxFile(sheets, options).toBuffer());

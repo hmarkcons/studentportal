@@ -32,6 +32,7 @@ import {
   requireConfirmation,
   signIn,
 } from "./verify-portal-lib.mjs";
+import writeXlsxFile from "write-excel-file/node";
 
 requireConfirmation("check:catalogue");
 
@@ -337,6 +338,117 @@ try {
     const own = await programmesOf(heidelberg.id);
     ok("...exactly what it previewed",
       own.length === 2 && Number(own.find((p) => p.name === "zztmp Physics")?.tuition_fee) === 1600, JSON.stringify(own));
+  }
+
+  // ------------------------------------------------ 10. admission rounds
+  //
+  // A real two-sheet workbook, as the template hands out: programmes on the
+  // Catalogue sheet, rounds on the Rounds sheet at three scopes.
+  const sapienzaId = sapienza.id;
+  const dsId = (await programmesOf(sapienzaId)).find((p) => p.name === "zztmp Data Science").id;
+  const csId = (await programmesOf(sapienzaId)).find((p) => p.name === "zztmp Computer Science").id;
+  const { data: mainRound, error: mainError } = await admin
+    .from("program_intake_rounds")
+    .insert({ program_id: dsId, label: "Main", application_deadline: "2027-01-10", sort_order: 1 })
+    .select("id")
+    .single();
+  if (mainError) throw new Error(`could not seed a round: ${mainError.message}`);
+
+  const cell = (value) => ({ value: value || undefined, type: String });
+  const sheetOf = (headers, rows) => [headers.map(cell), ...rows.map((r) => headers.map((h) => cell(r[h])))];
+  const ROUND_HEADERS = ["destination", "university_name", "level", "program_name", "round", "start_date", "application_deadline"];
+  const at = { destination: alpha.display_name, university_name: "zztmp Sapienza University of Rome" };
+  const roundsWorkbook = Buffer.from(
+    await writeXlsxFile(
+      [
+        {
+          sheet: "Catalogue",
+          data: sheetOf(CATALOGUE_HEADERS, [{ ...at, level: "masters", program_name: "zztmp Robotics", tuition_fee: "3900" }]),
+        },
+        {
+          sheet: "Rounds",
+          data: sheetOf(ROUND_HEADERS, [
+            // Every programme at the university — including Robotics, which
+            // only this same upload creates.
+            { ...at, round: "1st call", application_deadline: "2027-03-15" },
+            // Every master's programme.
+            { ...at, level: "masters", round: "2nd call", application_deadline: "30 May 2027" },
+            // One programme: updates a round already on file.
+            { ...at, level: "masters", program_name: "zztmp Data Science", round: "Main", application_deadline: "2027-01-20" },
+            // A misspelt programme and an unnamed round.
+            { ...at, level: "bachelors", program_name: "zztmp Computer Sciense", application_deadline: "2027-07-01" },
+            { destination: alpha.display_name, university_name: "zztmp Nowhere University", round: "1st call", application_deadline: "2027-03-15" },
+            { ...at, round: "Odd", application_deadline: "03/04/2027" },
+            { destination: alpha.display_name, university_name: "Example University (delete these rows)", round: "1st call", application_deadline: "2027-03-15" },
+          ]),
+        },
+      ],
+      {}
+    ).toBuffer()
+  );
+  const roundsFile = {
+    name: "rounds.xlsx",
+    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    buffer: roundsWorkbook,
+  };
+  const roundsOf = async (programId) =>
+    (
+      await admin
+        .from("program_intake_rounds")
+        .select("id, label, application_deadline, sort_order")
+        .eq("program_id", programId)
+        .order("sort_order")
+    ).data ?? [];
+
+  shown = await preview(page, roundsFile);
+  ok("a university-wide round is previewed on each of its programmes",
+    /zztmp Computer Science \(bachelors\) · added round "1st call" \(apply by 2027-03-15\)/.test(shown.text) &&
+      /zztmp Data Science \(masters\) · added round "1st call"/.test(shown.text), shown.text.slice(0, 900));
+  ok("...and reaches a programme this same upload creates",
+    /zztmp Robotics \(masters\) — new programme, rounds "1st call", "2nd call"/.test(shown.text), shown.text.slice(0, 900));
+  ok("a named round on file is previewed as a date change, not a new round",
+    /round "Main" deadline 2027-01-10 → 2027-01-20/.test(shown.text), shown.text.slice(0, 900));
+  ok("a misspelt programme on the Rounds sheet is matched and listed",
+    /Rounds: .*"zztmp Computer Sciense" → "zztmp Computer Science"/.test(shown.text), shown.text.slice(0, 900));
+  ok("a university that is nowhere is reported, not created",
+    /zztmp Nowhere University" is not a university on file/.test(shown.text), shown.text.slice(0, 900));
+  ok("an ambiguous date is refused and named", /"03\/04\/2027" is not a date/.test(shown.text), shown.text.slice(0, 900));
+  ok("the template's example row is skipped and said so", /Skipped 1 example row/.test(shown.text), shown.text.slice(0, 900));
+  ok("...and the preview wrote no rounds",
+    (await roundsOf(csId)).length === 0 && (await roundsOf(dsId)).length === 1);
+
+  done = await apply(shown.panel);
+  ok("the rounds apply", done.mode === "applied", done.text.slice(0, 300));
+
+  const dsRounds = await roundsOf(dsId);
+  ok("a programme gets its university's, its level's and its own rounds, soonest deadline first",
+    JSON.stringify(dsRounds.map((r) => r.label)) === JSON.stringify(["Main", "1st call", "2nd call"]),
+    JSON.stringify(dsRounds));
+  ok("...and the round on file kept its id, so an application linked to it stays linked",
+    dsRounds.find((r) => r.label === "Main")?.id === mainRound.id && dsRounds[0].application_deadline === "2027-01-20",
+    JSON.stringify(dsRounds));
+  const { data: dsMirror } = await admin.from("programs").select("application_deadline").eq("id", dsId).single();
+  ok("the programme's deadline — what reminders read — is the next one open",
+    dsMirror?.application_deadline === "2027-01-20", JSON.stringify(dsMirror));
+  const csRounds = await roundsOf(csId);
+  ok("a level-scoped round stayed at its level, and an unnamed round was numbered",
+    JSON.stringify(csRounds.map((r) => r.label)) === JSON.stringify(["1st call", "Round 1"]), JSON.stringify(csRounds));
+  const robotics = (await programmesOf(sapienzaId)).find((p) => p.name === "zztmp Robotics");
+  ok("the new programme was created with the rounds its scope gave it",
+    JSON.stringify((await roundsOf(robotics?.id)).map((r) => r.label)) === JSON.stringify(["1st call", "2nd call"]));
+
+  shown = await preview(page, roundsFile);
+  ok("the same rounds again change nothing", /Nothing to add or change/.test(shown.text), shown.text.slice(0, 400));
+
+  {
+    const exported = await page.request.get(`${BASE}/api/export/catalogue?destination=${alpha.id}`);
+    shown = await preview(page, {
+      name: "catalogue-export.xlsx",
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      buffer: await exported.body(),
+    });
+    ok("an export carrying rounds re-imports untouched as a no-op",
+      /Nothing to add or change/.test(shown.text) && !/Rounds:/.test(shown.text), shown.text.slice(0, 600));
   }
 
   // --------------------------------------------------- 9. who may import

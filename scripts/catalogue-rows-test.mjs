@@ -72,7 +72,7 @@ test("a real date passes, a wrong one is reported", () => {
   assert.equal(parseDay("", problems, "start_date"), null);
   assert.deepEqual(problems, []);
   assert.equal(parseDay("01/09/2026", problems, "start_date"), null);
-  assert.match(problems[0], /not a YYYY-MM-DD date/);
+  assert.match(problems[0], /not a date this can read/);
 });
 
 // ------------------------------------------------------------------- rounds

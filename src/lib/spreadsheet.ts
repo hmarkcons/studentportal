@@ -46,6 +46,44 @@ function cellText(value: unknown): string {
   return String(value).trim();
 }
 
+/** One sheet of a workbook: its name, its lower-cased headers, and its data rows. */
+export type ParsedSheet = { name: string; headers: string[]; rows: SheetRow[] };
+
+/** Header-keyed rows from raw cells. Excel keeps formatted-but-empty rows; they are not data. */
+function toRows(data: unknown[][]): { headers: string[]; rows: SheetRow[] } {
+  const headers = (data[0] ?? []).map((v) => cellText(v).toLowerCase());
+  if (headers.filter(Boolean).length === 0) return { headers: [], rows: [] };
+
+  const rows: SheetRow[] = [];
+  for (const row of data.slice(1)) {
+    const record: SheetRow = {};
+    let any = false;
+    headers.forEach((header, i) => {
+      if (!header) return;
+      const text = cellText(row[i]);
+      record[header] = text;
+      if (text) any = true;
+    });
+    if (any) rows.push(record);
+  }
+  return { headers, rows };
+}
+
+/**
+ * Every sheet of an .xlsx upload, in workbook order.
+ *
+ * For an importer that reads more than one sheet — the catalogue takes its
+ * universities and programmes from one and its intake rounds from another —
+ * and so has to choose by name and headers itself rather than be handed a
+ * single best guess.
+ */
+export async function parseXlsxSheets(file: File): Promise<ParsedSheet[]> {
+  const readXlsxFile = (await import("read-excel-file/node")).default;
+  // Buffer, not the File: the node build takes a Buffer or a stream.
+  const sheets = await readXlsxFile(Buffer.from(await file.arrayBuffer()));
+  return sheets.map((s) => ({ name: s.sheet, ...toRows(s.data as unknown[][]) }));
+}
+
 /**
  * Rows from an .xlsx upload, keyed by the header row.
  *
@@ -64,40 +102,16 @@ export async function parseXlsx(
   const preferredSheet = options.sheet ?? PREFERRED_SHEET;
   const knownHeaders = options.knownHeaders ?? KNOWN_HEADERS;
 
-  const readXlsxFile = (await import("read-excel-file/node")).default;
-  // Buffer, not the File: the node build takes a Buffer or a stream.
-  const sheets = await readXlsxFile(Buffer.from(await file.arrayBuffer()));
+  const sheets = await parseXlsxSheets(file);
   if (sheets.length === 0) return [];
 
   // Our own templates always name the data sheet. Failing that, take the first
   // sheet whose header row is recognisable, which is a better guess than the
   // first sheet outright: the templates carry a "Lists" sheet of dropdown
   // values, and a workbook saved from elsewhere may lead with a cover sheet.
-  const named = sheets.find((s) => s.sheet === preferredSheet);
-  const recognisable = sheets.find((s) => {
-    const headers = (s.data[0] ?? []).map((v) => cellText(v).toLowerCase());
-    return knownHeaders.some((h) => headers.includes(h));
-  });
-  const data = (named ?? recognisable ?? sheets[0]).data;
-
-  const headers = (data[0] ?? []).map((v) => cellText(v).toLowerCase());
-  if (headers.filter(Boolean).length === 0) return [];
-
-  const rows: SheetRow[] = [];
-  for (const row of data.slice(1)) {
-    const record: SheetRow = {};
-    let any = false;
-    headers.forEach((header, i) => {
-      if (!header) return;
-      const text = cellText(row[i]);
-      record[header] = text;
-      if (text) any = true;
-    });
-    // Excel keeps formatted-but-empty rows; they are not data.
-    if (any) rows.push(record);
-  }
-
-  return rows;
+  const named = sheets.find((s) => s.name === preferredSheet);
+  const recognisable = sheets.find((s) => knownHeaders.some((h) => s.headers.includes(h)));
+  return (named ?? recognisable ?? sheets[0]).rows;
 }
 
 /** True when the upload looks like a spreadsheet rather than a CSV. */
