@@ -258,3 +258,42 @@ test("nothing can be priced without a salary, and it says so rather than chargin
     assert.equal(adj.dailyRate, 0);
   }
 });
+
+// ------------------------------------------------------- leave and holidays
+
+test("approved paid leave is not an absence; unpaid leave is, and says so", async () => {
+  const { summariseMonth } = await import("../src/lib/attendancePayroll.ts");
+  const schedule = { start: "09:00", end: "17:00", days: [1, 2, 3, 4, 5], graceMinutes: 0, configured: true };
+  // October 2026, weekdays. Worked none of the first week.
+  const summary = summariseMonth({
+    month: "2026-10",
+    records: [],
+    schedule,
+    today: "2026-10-10",
+    leave: {
+      paidLeave: new Set(["2026-10-01", "2026-10-02"]),
+      unpaidLeave: new Set(["2026-10-05"]),
+      holidays: new Set(["2026-10-06"]),
+    },
+  });
+  // Weekdays before the 10th: 1, 2, 5, 6, 7, 8, 9 = 7. Paid leave 2, holiday 1 → 4 absent, 1 of them unpaid leave.
+  assert.equal(summary.paidLeaveDays, 2);
+  assert.equal(summary.holidayDays, 1);
+  assert.equal(summary.absentDays, 4);
+  assert.equal(summary.unpaidLeaveDays, 1);
+});
+
+test("without leave given, every missing working day is an absence, as before", async () => {
+  const { summariseMonth } = await import("../src/lib/attendancePayroll.ts");
+  const schedule = { start: "09:00", end: "17:00", days: [1, 2, 3, 4, 5], graceMinutes: 0, configured: true };
+  const summary = summariseMonth({ month: "2026-10", records: [], schedule, today: "2026-10-10" });
+  assert.equal(summary.absentDays, 7);
+  assert.equal(summary.paidLeaveDays, 0);
+});
+
+test("a holiday is not a scheduled working day, so a day's pay is a share of fewer days", async () => {
+  const { scheduledDaysInMonth } = await import("../src/lib/attendancePayroll.ts");
+  const schedule = { start: "09:00", end: "17:00", days: [1, 2, 3, 4, 5], graceMinutes: 0, configured: true };
+  assert.equal(scheduledDaysInMonth("2026-10", schedule), 22);
+  assert.equal(scheduledDaysInMonth("2026-10", schedule, new Set(["2026-10-06", "2026-10-11"])), 21);
+});

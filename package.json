@@ -23,7 +23,8 @@
     "prepare": "node scripts/install-hooks.mjs",
     "check:buttons": "node scripts/verify-button-widths.mjs",
     "check:staffcreds": "node scripts/verify-staff-credentials.mjs",
-    "check:staffagreements": "node scripts/verify-staff-agreements.mjs"
+    "check:staffagreements": "node scripts/verify-staff-agreements.mjs",
+    "check:leave": "node scripts/verify-leave.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

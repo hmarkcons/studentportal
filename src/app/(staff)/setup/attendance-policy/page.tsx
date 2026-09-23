@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { hasPermission } from "@/lib/auth/permissions";
 import { AttendancePolicyForm, type PolicyRow } from "./AttendancePolicyForm";
+import { HolidaysCard } from "./HolidaysCard";
 
 export default async function AttendancePolicyPage() {
   const supabase = await createClient();
@@ -9,7 +10,7 @@ export default async function AttendancePolicyPage() {
 
   const { data: policy } = await supabase
     .from("attendance_policy")
-    .select("work_start_time, work_end_time, work_days, grace_minutes, overtime_multiplier")
+    .select("work_start_time, work_end_time, work_days, grace_minutes, overtime_multiplier, annual_leave_days")
     .eq("id", true)
     .maybeSingle();
 
@@ -19,7 +20,17 @@ export default async function AttendancePolicyPage() {
     work_days: policy?.work_days ?? [1, 2, 3, 4, 5, 6],
     grace_minutes: policy?.grace_minutes ?? 15,
     overtime_multiplier: Number(policy?.overtime_multiplier ?? 1),
+    annual_leave_days: policy?.annual_leave_days ?? 14,
   };
+
+  // From the start of last year on: enough history to check a past payroll
+  // against, without the list growing for ever.
+  const since = `${new Date().getUTCFullYear() - 1}-01-01`;
+  const { data: holidays } = await supabase
+    .from("office_holidays")
+    .select("holiday_date, name")
+    .gte("holiday_date", since)
+    .order("holiday_date");
 
   const configured = Boolean(row.work_start_time && row.work_end_time);
 
@@ -53,6 +64,10 @@ export default async function AttendancePolicyPage() {
             {configured ? `${row.work_start_time?.slice(0, 5)}–${row.work_end_time?.slice(0, 5)}` : "not set yet"}.
           </p>
         )}
+      </Card>
+
+      <Card className="mt-6">
+        <HolidaysCard holidays={holidays ?? []} canEdit={canEdit} />
       </Card>
     </div>
   );

@@ -124,6 +124,27 @@ export type MonthSummary = {
   /** Shifts nobody clocked out of: hours nobody can count. */
   unclosedShifts: number;
   daysPresent: number;
+  /** Working days on approved, paid leave — not absences. */
+  paidLeaveDays: number;
+  /** Working days on approved but unpaid leave — counted in absentDays, and said so. */
+  unpaidLeaveDays: number;
+  /** Office holidays that fell on their working days — never absences. */
+  holidayDays: number;
+};
+
+/**
+ * Approved leave and office holidays for the month (leave.leaveForMonth).
+ *
+ * Without it, payroll counted every day with no attendance record as an
+ * absence — approved leave and public holidays included — though the staff
+ * agreement pays approved leave. The dates are the ones fixed when the leave
+ * was approved, so this month's figures cannot move because someone's hours
+ * or the holiday list changed afterwards.
+ */
+export type MonthLeave = {
+  paidLeave: ReadonlySet<string>;
+  unpaidLeave: ReadonlySet<string>;
+  holidays: ReadonlySet<string>;
 };
 
 export function summariseMonth(input: {
@@ -131,6 +152,7 @@ export function summariseMonth(input: {
   records: (ShiftRow & { work_date: string })[];
   schedule: Schedule;
   today?: string;
+  leave?: MonthLeave;
 }): MonthSummary {
   const today = input.today ?? officeToday();
   const byDate = new Map<string, (ShiftRow & { work_date: string })[]>();
@@ -163,12 +185,29 @@ export function summariseMonth(input: {
   }
 
   let absent = 0;
+  let paidLeaveDays = 0;
+  let unpaidLeaveDays = 0;
+  let holidayDays = 0;
+  const leave = input.leave;
   if (input.schedule.configured) {
     for (const date of datesInMonth(input.month)) {
+      if (!input.schedule.days.includes(weekdayOf(date))) continue;
+      // A holiday is nobody's working day, past or future.
+      if (leave?.holidays.has(date)) {
+        holidayDays++;
+        continue;
+      }
       // Today is not an absence: the day is not over. Nor is any future date.
       if (date >= today) continue;
-      if (!input.schedule.days.includes(weekdayOf(date))) continue;
-      if (!byDate.has(date)) absent++;
+      if (byDate.has(date)) continue;
+      if (leave?.paidLeave.has(date)) {
+        paidLeaveDays++;
+        continue;
+      }
+      // Unpaid leave is still a day not worked and not paid for — deducted
+      // like an absence — but counted apart, so the payslip says why.
+      if (leave?.unpaidLeave.has(date)) unpaidLeaveDays++;
+      absent++;
     }
   }
 
@@ -180,6 +219,9 @@ export function summariseMonth(input: {
     absentDays: absent,
     unclosedShifts: unclosed,
     daysPresent: byDate.size,
+    paidLeaveDays,
+    unpaidLeaveDays,
+    holidayDays,
   };
 }
 
@@ -212,9 +254,14 @@ export function scheduleHoursPerDay(schedule: Schedule): number {
   return (end - start) / 60;
 }
 
-export function scheduledDaysInMonth(month: string, schedule: Schedule): number {
+/**
+ * Working days in the month — what one day's pay is a share of. Office
+ * holidays are not working days, so a month with a holiday in it has one
+ * fewer, as the staff agreement's "scheduled working days" means.
+ */
+export function scheduledDaysInMonth(month: string, schedule: Schedule, holidays: ReadonlySet<string> = new Set()): number {
   if (!schedule.configured) return 0;
-  return datesInMonth(month).filter((d) => schedule.days.includes(weekdayOf(d))).length;
+  return datesInMonth(month).filter((d) => schedule.days.includes(weekdayOf(d)) && !holidays.has(d)).length;
 }
 
 /**

@@ -53,6 +53,7 @@ export type StaffRecord = {
   work_start_time?: string | null;
   work_end_time?: string | null;
   work_days?: number[] | null;
+  joined_on?: string | null;
   currency: string;
   allowance: number | null;
   commission_rate_general: number | null;
@@ -350,6 +351,10 @@ export function StaffForm({
           not only in Setup. Blank means the office default, so this only has
           to be filled in for somebody who differs from it. */}
       <Section title="Working hours">
+        {/* Their leave year runs from each anniversary of it (0272). */}
+        <Field label="Joining date">
+          <Input name="joined_on" type="date" defaultValue={staff?.joined_on ?? ""} />
+        </Field>
         <Field label="Starts">
           <Input name="work_start_time" type="time" defaultValue={(staff?.work_start_time ?? "").slice(0, 5)} />
         </Field>

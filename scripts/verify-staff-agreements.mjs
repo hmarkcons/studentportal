@@ -151,6 +151,8 @@ try {
   // collapsed group hides its links from getByRole.
   ok("they get a My agreement link", (await staffPage.locator('nav a[href="/my-agreement"], aside a[href="/my-agreement"]').count()) > 0);
   await staffPage.goto(`${BASE}/my-agreement`, { waitUntil: "domcontentloaded" });
+  // The layout streams in behind a skeleton; read the page once it is there.
+  await staffPage.getByRole("heading", { name: "My agreement" }).waitFor({ timeout: 60_000 });
   const mine = staffPage.locator(`[data-my-agreement="${agreementId}"]`);
   ok("...where it waits for them", (await mine.count()) === 1 && /Waiting for your signature/.test(await mine.innerText()));
   await mine.locator('input[type="file"]').setInputFiles(signedFile("signed.pdf"));
@@ -166,6 +168,8 @@ try {
   ok("...with the note, and without the rejected copy", afterBack.rejection_note === "zztmp page 2 is unsigned" && afterBack.signed_file_path === null, JSON.stringify(afterBack));
 
   await staffPage.goto(`${BASE}/my-agreement`, { waitUntil: "domcontentloaded" });
+  // The layout streams in behind a skeleton; read the page once it is there.
+  await staffPage.getByRole("heading", { name: "My agreement" }).waitFor({ timeout: 60_000 });
   ok("they see why it came back", (await staffPage.getByText("zztmp page 2 is unsigned").count()) > 0);
   await mine.locator('input[type="file"]').setInputFiles(signedFile("signed-again.pdf"));
   await mine.getByRole("button", { name: "Upload signed copy" }).click();
@@ -175,6 +179,8 @@ try {
   await panel.getByRole("button", { name: "Verify signed copy" }).click();
   ok("verifying signs it", await waitForStatus(agreementId, "signed"));
   await staffPage.goto(`${BASE}/my-agreement`, { waitUntil: "domcontentloaded" });
+  // The layout streams in behind a skeleton; read the page once it is there.
+  await staffPage.getByRole("heading", { name: "My agreement" }).waitFor({ timeout: 60_000 });
   ok("...and they can download both documents",
     (await staffPage.getByRole("link", { name: "Download the agreement" }).count()) === 1 &&
       (await staffPage.getByRole("link", { name: "Download the signed copy" }).count()) === 1);

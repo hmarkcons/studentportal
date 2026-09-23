@@ -21,6 +21,7 @@ export type PolicyRow = {
   work_days: number[];
   grace_minutes: number;
   overtime_multiplier: number;
+  annual_leave_days: number;
 };
 
 /** A "09:00:00" from Postgres is "09:00" to a time input. */
@@ -49,6 +50,10 @@ export function AttendancePolicyForm({ policy }: { policy: PolicyRow }) {
           <label className="flex flex-col gap-1 text-xs text-muted">
             Grace before &ldquo;late&rdquo; (minutes)
             <Input name="grace_minutes" type="number" min="0" max="240" defaultValue={policy.grace_minutes} className="w-28" />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-muted">
+            Paid leave a year (days)
+            <Input name="annual_leave_days" type="number" min="0" max="366" step="1" defaultValue={policy.annual_leave_days} className="w-28" />
           </label>
         </div>
         <div className="flex flex-col gap-1">

@@ -44,6 +44,14 @@ export async function updateAttendancePolicy(_prevState: unknown, formData: Form
   }
   if (work_days.length === 0) return { error: "Choose at least one working day, or nobody is ever due in." };
 
+  // The paid leave each person has in each year of employment (0272). Only
+  // written when the form carries it, so an older form cannot reset it.
+  const rawLeave = formData.get("annual_leave_days");
+  const annual_leave_days = rawLeave === null || String(rawLeave).trim() === "" ? undefined : Number(rawLeave);
+  if (annual_leave_days !== undefined && (!Number.isInteger(annual_leave_days) || annual_leave_days < 0 || annual_leave_days > 366)) {
+    return { error: "Annual leave has to be a whole number of days, from 0 to 366." };
+  }
+
   // Blank means normal time, not "overtime is worth nothing" — readAmount
   // turns an empty field into 0, and 0 stored here would read as a deliberate
   // decision to pay nothing for hours actually worked.
@@ -70,6 +78,7 @@ export async function updateAttendancePolicy(_prevState: unknown, formData: Form
       work_days,
       grace_minutes,
       overtime_multiplier,
+      ...(annual_leave_days !== undefined ? { annual_leave_days } : {}),
       updated_at: new Date().toISOString(),
       updated_by: user?.id ?? null,
     })

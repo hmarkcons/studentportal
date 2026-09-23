@@ -84,16 +84,25 @@ export function buildStaffNav({
   canManageStaff,
   isSuperAdmin,
   hasOwnAgreement = false,
+  canApproveLeave = false,
 }: {
   canManageStaff: boolean;
   isSuperAdmin: boolean;
   /** An agreement has been sent to this staff member — only then is "My agreement" worth a link. */
   hasOwnAgreement?: boolean;
+  /** leave.approve — Management and Super Admin by default. */
+  canApproveLeave?: boolean;
 }): NavItem[] {
   return BASE_STAFF_NAV.map((item) => {
     if (item.label === "HR" && item.children) {
       const base = canManageStaff ? item.children : item.children.filter((c) => c.label !== "Staff Management");
-      const children = hasOwnAgreement ? [...base, { label: "My agreement", href: "/my-agreement" }] : base;
+      // Everyone has leave of their own; approvers also get the list to decide.
+      const children = [
+        ...base,
+        ...(canApproveLeave ? [{ label: "Leave", href: "/admin/leave" }] : []),
+        { label: "My leave", href: "/my-leave" },
+        ...(hasOwnAgreement ? [{ label: "My agreement", href: "/my-agreement" }] : []),
+      ];
       return { ...item, children };
     }
     if (item.label === "Admin" && item.children && isSuperAdmin) {

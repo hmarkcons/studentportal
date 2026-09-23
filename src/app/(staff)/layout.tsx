@@ -37,6 +37,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
     canManageStaff: perms["staff.manage"] === true || perms["staff.assign_roles"] === true,
     isSuperAdmin,
     hasOwnAgreement: (ownAgreements ?? 0) > 0,
+    canApproveLeave: perms["leave.approve"] === true,
   });
 
   return (

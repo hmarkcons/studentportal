@@ -13,6 +13,8 @@ export const PERMISSION_KEYS = [
   // a Super Admin's until granted to a role on the Role Permissions screen.
   "staff_agreements.templates",
   "staff_agreements.manage",
+  // Staff leave (0272): Management and Super Admin by default.
+  "leave.approve",
   "partners.approve",
   "attendance.qr_admin",
   "finance.commissions.manage",

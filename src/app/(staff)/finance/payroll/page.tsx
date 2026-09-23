@@ -21,6 +21,7 @@ import {
 } from "@/lib/attendancePayroll";
 import { formatDuration } from "@/lib/attendance";
 import { AttendanceSummaryCard } from "./AttendanceSummaryCard";
+import { leaveForMonth } from "@/lib/leave";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -207,7 +208,7 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
       // The hours are per person, falling back to the office policy, so a
       // late arrival is measured against the day that person is actually due
       // in rather than a single office-wide shift.
-      const [{ data: policyRow }, { data: attendanceRecords }] = await Promise.all([
+      const [{ data: policyRow }, { data: attendanceRecords }, { data: approvedLeave }, { data: monthHolidays }] = await Promise.all([
         supabase
           .from("attendance_policy")
           .select(
@@ -221,6 +222,17 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
           .eq("staff_id", staffId)
           .gte("work_date", monthStart)
           .lt("work_date", nextMonthStart),
+        // Approved leave overlapping the month, and the month's holidays
+        // (0272): neither is an absence. The leave's dates are the ones fixed
+        // when it was approved.
+        supabase
+          .from("leave_requests")
+          .select("paid_dates, unpaid_dates")
+          .eq("staff_id", staffId)
+          .eq("status", "approved")
+          .lt("start_date", nextMonthStart)
+          .gte("end_date", monthStart),
+        supabase.from("office_holidays").select("holiday_date").gte("holiday_date", monthStart).lt("holiday_date", nextMonthStart),
       ]);
 
       const policy: AttendancePolicy = {
@@ -231,17 +243,23 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
         overtime_multiplier: Number(policyRow?.overtime_multiplier ?? 1),
       };
       const schedule = effectiveSchedule(staff, policy);
+      const monthLeave = leaveForMonth(
+        month,
+        approvedLeave ?? [],
+        (monthHolidays ?? []).map((h) => String(h.holiday_date).slice(0, 10))
+      );
       const attendanceSummary = summariseMonth({
         month,
         records: (attendanceRecords ?? []).map((r) => ({ ...r, work_date: String(r.work_date).slice(0, 10) })),
         schedule,
+        leave: monthLeave,
       });
       // Priced from this person's own salary: a day absent costs a day of
       // their pay, overtime pays their own hourly rate, and lateness is
       // charged by the minute. Their scheduled days in THIS month is the
       // divisor — a six-day week and a five-day week are not the same month's
       // work, and February is not January.
-      const scheduledDays = scheduledDaysInMonth(month, schedule);
+      const scheduledDays = scheduledDaysInMonth(month, schedule, monthLeave.holidays);
       const hoursPerDay = scheduleHoursPerDay(schedule);
       const attendanceMoney = payrollAdjustment(attendanceSummary, policy, {
         monthlySalary: staff.monthly_salary,

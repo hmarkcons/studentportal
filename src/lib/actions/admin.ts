@@ -118,6 +118,9 @@ function staffFieldsFromFormData(formData: FormData) {
     work_start_time: readWorkTime(formData.get("work_start_time")),
     work_end_time: readWorkTime(formData.get("work_end_time")),
     work_days: readWorkDays(formData),
+    // The anniversary their leave year runs from (0272). A date input sends
+    // YYYY-MM-DD or nothing.
+    joined_on: /^\d{4}-\d{2}-\d{2}$/.test(String(formData.get("joined_on") ?? "")) ? String(formData.get("joined_on")) : null,
   };
 }
 

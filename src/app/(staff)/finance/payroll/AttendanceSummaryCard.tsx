@@ -84,6 +84,16 @@ export function AttendanceSummaryCard({
           detail={money.ratesConfigured && money.absentDeduction > 0 ? `− ${amount(money.absentDeduction)}` : undefined}
           tone={summary.absentDays > 0 ? "danger" : undefined}
         />
+        {/* Leave and holidays (0272): paid leave is not an absence, unpaid
+            leave is one of the absent days above and says so, and a holiday
+            is nobody's working day. Shown so the absence figure can be read. */}
+        {summary.paidLeaveDays > 0 && (
+          <Figure label="Paid leave" value={String(summary.paidLeaveDays)} detail="not deducted" tone="success" />
+        )}
+        {summary.unpaidLeaveDays > 0 && (
+          <Figure label="Unpaid leave" value={String(summary.unpaidLeaveDays)} detail="included in absent days" tone="warning" />
+        )}
+        {summary.holidayDays > 0 && <Figure label="Holidays" value={String(summary.holidayDays)} detail="not working days" />}
         {/* A shift nobody closed is hours nobody can count — not zero hours,
             and not a full day either. It is shown so it can be corrected. */}
         {summary.unclosedShifts > 0 && (

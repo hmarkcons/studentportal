@@ -23,7 +23,7 @@ function one<T>(v: T | T[] | null) {
 const BASE_COLUMNS = `id, full_name, role, roles, designation, status, gender, date_of_birth, marital_status, cnic, address,
    mobile_personal, mobile_official, email_personal, email_official,
    emergency_contact_number, emergency_contact_name, emergency_contact_relation,
-   monthly_target, photo_path`;
+   monthly_target, photo_path, joined_on`;
 
 export default async function StaffAdminPage() {
   const { supabase, staff: viewer } = await getStaffSession();
