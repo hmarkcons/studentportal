@@ -65,6 +65,8 @@ export function PersonalTaskRow({
   const [editing, setEditing] = useState(false);
   const [toggleError, setToggleError] = useState<string | null>(null);
   const del = useButtonAction();
+  // The done box saves as it is ticked; this says so beside it.
+  const toggle = useButtonAction();
   const action = updatePersonalTask.bind(null, taskId, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
 
@@ -116,16 +118,18 @@ export function PersonalTaskRow({
     <div>
       {/* Stacked on a phone — see CalendarTaskRow for why. */}
       <div className="flex flex-col gap-1 text-sm lg:flex-row lg:items-center lg:justify-between lg:gap-2">
+        <div className="flex flex-wrap items-center gap-x-2">
         <label className="flex items-start gap-2 lg:items-center">
           <input
             type="checkbox"
             checked={checked}
+            disabled={toggle.pending}
             onChange={async (e) => {
               const next = e.target.checked;
               const previous = checked;
               setChecked(next);
               setToggleError(null);
-              const result = await togglePersonalTask(taskId, revalidateTo, next);
+              const result = await toggle.run(() => togglePersonalTask(taskId, revalidateTo, next));
               if (result?.error) {
                 setToggleError(result.error);
                 setChecked(previous);
@@ -147,6 +151,8 @@ export function PersonalTaskRow({
             </span>
           )}
         </label>
+          <ActionStatus state={toggle.state} pending={toggle.pending} label={checked ? "Marked done." : "Marked not done."} />
+        </div>
         {studentId && (
           <Link
             href={`/students/${studentId}`}

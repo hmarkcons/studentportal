@@ -157,6 +157,33 @@ try {
     const names = await staffPage.getByRole("button").allInnerTexts();
     ok("the student profile has a Save button to press", false, names.join(" | ").slice(0, 400));
   }
+  // ------------------------------------- one auto-saving checkbox, end to end
+  //
+  // No button at all: ticking the box is the save. It confirms beside itself
+  // too, and the confirmation must be backed by the database, not just the
+  // screen — a "Marked done." for a write that never landed is worse than none.
+  const DAY = "2099-01-15";
+  const { data: task, error: taskError } = await admin
+    .from("personal_tasks")
+    .insert({ owner_id: superUser.id, title: "zztmp tick me", due_date: DAY })
+    .select("id")
+    .single();
+  if (taskError) throw new Error(`could not create a personal task: ${taskError.message}`);
+  await staffPage.goto(`${BASE}/calendar?view=day&date=${DAY}`, { waitUntil: "domcontentloaded" });
+  const row = staffPage.locator("div", { has: staffPage.getByText("zztmp tick me", { exact: true }) }).last();
+  const box = row.locator('input[type="checkbox"]').first();
+  const found = await box.waitFor({ timeout: 60_000 }).then(() => true, () => false);
+  ok("the personal task's done box is on the day view", found);
+  if (found) {
+    await box.check();
+    const said = row.locator('[data-action-status="done"]').first();
+    const shown = await said.waitFor({ timeout: 60_000 }).then(() => true, () => false);
+    ok("ticking an auto-saving box says so beside it", shown && (await said.innerText()) === "Marked done.",
+      shown ? await said.innerText() : "nothing appeared");
+    const { data: saved } = await admin.from("personal_tasks").select("status").eq("id", task.id).single();
+    ok("...and the database agrees", saved?.status === "done", String(saved?.status));
+  }
+
   await staffPage.close();
 
   // ----------------------------------------------------------- student

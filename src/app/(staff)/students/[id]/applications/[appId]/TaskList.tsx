@@ -28,9 +28,15 @@ function TaskRowView({ task, revalidateTo }: { task: TaskRow; revalidateTo: stri
   const action = updateApplicationTask.bind(null, task.id, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
 
+  // The done box saves as it is ticked; this says so beside it. Declared
+  // before the early return below, as hooks must be.
+  const toggle = useButtonAction();
+  const [askedDone, setAskedDone] = useState(false);
+
   async function handleToggle(checked: boolean) {
     setRowError(null);
-    const result = await toggleApplicationTask(task.id, revalidateTo, checked);
+    setAskedDone(checked);
+    const result = await toggle.run(() => toggleApplicationTask(task.id, revalidateTo, checked));
     if (result?.error) setRowError(result.error);
   }
 
@@ -69,7 +75,7 @@ function TaskRowView({ task, revalidateTo }: { task: TaskRow; revalidateTo: stri
       {/* Wraps: description + priority + due date + edit/delete exceed a
           320px row, which pushed the delete button off-screen. */}
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <input type="checkbox" checked={task.status === "done"} onChange={(e) => handleToggle(e.target.checked)} />
+        <input type="checkbox" checked={task.status === "done"} disabled={toggle.pending} onChange={(e) => handleToggle(e.target.checked)} />
         <span className={task.status === "done" ? "flex-1 text-muted line-through" : "flex-1 text-ink"}>
           {task.description}
           {task.label && <span className="text-muted"> · {task.label}</span>}
@@ -78,6 +84,7 @@ function TaskRowView({ task, revalidateTo }: { task: TaskRow; revalidateTo: stri
           {task.priority}
         </span>
         {task.due_date && <span className="text-xs text-muted">due {formatDateOnly(task.due_date)}</span>}
+        <ActionStatus state={toggle.state} pending={toggle.pending} label={askedDone ? "Marked done." : "Marked not done."} />
         <button onClick={() => setEditing(true)} className="text-xs text-muted hover:text-primary">
           ✏️
         </button>

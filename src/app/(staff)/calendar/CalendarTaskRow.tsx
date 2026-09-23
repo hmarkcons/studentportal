@@ -62,6 +62,8 @@ export function CalendarTaskRow({
   const [editing, setEditing] = useState(false);
   const [toggleError, setToggleError] = useState<string | null>(null);
   const del = useButtonAction();
+  // The done box saves as it is ticked; this says so beside it.
+  const toggle = useButtonAction();
   const action = updateCalendarTask.bind(null, taskId, "/calendar");
   const [state, formAction, pending] = useActionState(action, undefined);
 
@@ -114,16 +116,18 @@ export function CalendarTaskRow({
       {/* Stacked on a phone: badges and actions holding the right-hand side
           squeezed a long task title into a narrow column of wrapped text. */}
       <div className="flex flex-col gap-1 text-sm lg:flex-row lg:items-center lg:justify-between lg:gap-2">
+        <div className="flex flex-wrap items-center gap-x-2">
         <label className="flex items-start gap-2 lg:items-center">
           <input
             type="checkbox"
             checked={done}
+            disabled={toggle.pending}
             onChange={async (e) => {
               const checked = e.target.checked;
               const previous = done;
               setDone(checked);
               setToggleError(null);
-              const result = await toggleApplicationTask(taskId, "/calendar", checked);
+              const result = await toggle.run(() => toggleApplicationTask(taskId, "/calendar", checked));
               if (result?.error) {
                 setToggleError(result.error);
                 setDone(previous);
@@ -145,6 +149,8 @@ export function CalendarTaskRow({
             </span>
           )}
         </label>
+          <ActionStatus state={toggle.state} pending={toggle.pending} label={done ? "Marked done." : "Marked not done."} />
+        </div>
         <div className="flex shrink-0 items-center gap-2 pl-6 lg:pl-0">
           <Badge tone={PRIORITY_TONE[priority] ?? "neutral"}>{priority}</Badge>
           <Badge tone={tone}>Task</Badge>

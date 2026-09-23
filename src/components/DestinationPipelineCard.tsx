@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
+import { useButtonAction } from "@/components/useButtonAction";
+import { ActionStatus } from "@/components/ActionStatus";
 import { setDashboardStageValue } from "@/lib/actions/dashboardPipeline";
 import {
   currentStageIndex,
@@ -23,33 +25,38 @@ function StageField({
   stage: DashboardStageDef;
   value: string | undefined;
 }) {
-  const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  // Each field saves as it changes; the confirmation or the refusal sits
+  // beside it, and the field is held while the save is in flight.
+  const save = useButtonAction();
+  const pending = save.pending;
 
   function set(next: string | null) {
-    setError(null);
-    startTransition(async () => {
-      const result = await setDashboardStageValue(leadId, destinationId, stage.key, revalidateTo, next);
-      if (result?.error) setError(result.error);
-    });
+    void save.run(() => setDashboardStageValue(leadId, destinationId, stage.key, revalidateTo, next));
   }
+  const status = <ActionStatus state={save.state} pending={pending} label="Saved." showError />;
 
   return (
     <div className="flex flex-col gap-1">
       <label className="text-xs text-muted">{stage.label}</label>
       {stage.type === "checkbox" && (
-        <label className="flex items-center gap-2 text-sm text-ink">
-          <input
-            type="checkbox"
-            checked={Boolean(value)}
-            disabled={pending}
-            onChange={(e) => set(e.target.checked ? stage.options[0] : null)}
-            className="h-4 w-4"
-          />
-          {stage.options[0]}
-        </label>
+        // The status sits outside the label: inside it, clicking the message
+        // would tick the box.
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <input
+              type="checkbox"
+              checked={Boolean(value)}
+              disabled={pending}
+              onChange={(e) => set(e.target.checked ? stage.options[0] : null)}
+              className="h-4 w-4"
+            />
+            {stage.options[0]}
+          </label>
+          {status}
+        </div>
       )}
       {stage.type === "select" && (
+        <div className="flex flex-wrap items-center gap-2">
         <Select value={value ?? ""} disabled={pending} onChange={(e) => set(e.target.value || null)}>
           <option value="">—</option>
           {stage.options.map((o) => (
@@ -58,11 +65,15 @@ function StageField({
             </option>
           ))}
         </Select>
+        {status}
+        </div>
       )}
       {stage.type === "date" && (
-        <Input type="date" defaultValue={value ?? ""} disabled={pending} onChange={(e) => set(e.target.value || null)} />
+        <div className="flex flex-wrap items-center gap-2">
+          <Input type="date" defaultValue={value ?? ""} disabled={pending} onChange={(e) => set(e.target.value || null)} />
+          {status}
+        </div>
       )}
-      {error && <p className="text-xs text-danger">{error}</p>}
     </div>
   );
 }

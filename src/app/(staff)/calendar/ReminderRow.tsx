@@ -28,6 +28,8 @@ export function ReminderRow({
   const [editing, setEditing] = useState(false);
   const [toggleError, setToggleError] = useState<string | null>(null);
   const del = useButtonAction();
+  // The done box saves as it is ticked; this says so beside it.
+  const toggle = useButtonAction();
   const action = updateReminder.bind(null, reminderId, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
 
@@ -64,17 +66,19 @@ export function ReminderRow({
       {/* Stacked on a phone so a long "<student> - Follow-up (<number>)"
           label wraps in full instead of being truncated by the actions. */}
       <div className="flex flex-col gap-1 text-sm lg:flex-row lg:items-center lg:justify-between lg:gap-2">
+        <div className="flex flex-wrap items-center gap-x-2">
         <label className="flex min-w-0 items-start gap-2 lg:items-center">
           <input
             type="checkbox"
             className="mt-0.5 lg:mt-0"
             checked={checked}
+            disabled={toggle.pending}
             onChange={async (e) => {
               const next = e.target.checked;
               const previous = checked;
               setChecked(next);
               setToggleError(null);
-              const result = await toggleReminderResolved(reminderId, revalidateTo, next);
+              const result = await toggle.run(() => toggleReminderResolved(reminderId, revalidateTo, next));
               if (result?.error) {
                 setToggleError(result.error);
                 setChecked(previous);
@@ -86,6 +90,8 @@ export function ReminderRow({
             {label}
           </span>
         </label>
+          <ActionStatus state={toggle.state} pending={toggle.pending} label={checked ? "Resolved." : "Reopened."} />
+        </div>
         <div className="flex shrink-0 items-center gap-2 pl-6 lg:pl-0">
           <button onClick={() => setEditing(true)} className="text-xs text-muted hover:text-primary">
             ✏️

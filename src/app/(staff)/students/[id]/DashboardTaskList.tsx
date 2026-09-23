@@ -27,9 +27,14 @@ const PRIORITY_TONE: Record<string, string> = {
 function TaskRow({ task, revalidateTo }: { task: DashboardTaskRow; revalidateTo: string }) {
   const [error, setError] = useState<string | null>(null);
 
+  // The done box saves as it is ticked; this says so beside it.
+  const toggle = useButtonAction();
+  const [askedDone, setAskedDone] = useState(false);
+
   async function handleToggle(checked: boolean) {
     setError(null);
-    const result = await toggleApplicationTask(task.id, revalidateTo, checked);
+    setAskedDone(checked);
+    const result = await toggle.run(() => toggleApplicationTask(task.id, revalidateTo, checked));
     if (result?.error) setError(result.error);
   }
 
@@ -45,7 +50,7 @@ function TaskRow({ task, revalidateTo }: { task: DashboardTaskRow; revalidateTo:
     <div>
       {/* Wraps for the same reason as the application TaskList row. */}
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <input type="checkbox" checked={task.status === "done"} onChange={(e) => handleToggle(e.target.checked)} />
+        <input type="checkbox" checked={task.status === "done"} disabled={toggle.pending} onChange={(e) => handleToggle(e.target.checked)} />
         <span className={task.status === "done" ? "flex-1 text-muted line-through" : "flex-1 text-ink"}>
           {task.description} <span className="text-muted">· {task.applicationLabel}</span>
         </span>
@@ -53,6 +58,7 @@ function TaskRow({ task, revalidateTo }: { task: DashboardTaskRow; revalidateTo:
           {task.priority}
         </span>
         {task.due_date && <span className="text-xs text-muted">due {formatDateOnly(task.due_date)}</span>}
+        <ActionStatus state={toggle.state} pending={toggle.pending} label={askedDone ? "Marked done." : "Marked not done."} />
         <button
           onClick={handleDelete}
           disabled={del.pending}
