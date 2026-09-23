@@ -20,6 +20,8 @@ import { ImportReportPanel } from "@/components/ImportReportPanel";
 export function ImportCatalogueForm({ destinations }: { destinations: { id: string; display_name: string }[] }) {
   const [state, formAction, pending] = useActionState(importCatalogue, undefined);
   const [ready, setReady] = useState(false);
+  // Controlled only so the export link knows which destination to ask for.
+  const [destinationId, setDestinationId] = useState("");
 
   return (
     <details className="mt-3 rounded-md border border-border p-3">
@@ -28,7 +30,12 @@ export function ImportCatalogueForm({ destinations }: { destinations: { id: stri
       </summary>
 
       <form action={formAction} className="mt-3 flex flex-wrap items-end gap-2">
-        <Select name="destination_id" required>
+        <Select
+          name="destination_id"
+          required
+          value={destinationId}
+          onChange={(e) => setDestinationId(e.target.value)}
+        >
           <option value="">Destination…</option>
           {destinations.map((d) => (
             <option key={d.id} value={d.id}>
@@ -46,18 +53,41 @@ export function ImportCatalogueForm({ destinations }: { destinations: { id: stri
         <Button type="submit" variant="primary" pending={pending} disabled={!ready}>
           Import
         </Button>
-        {/* A link rather than the CSV sample button the other two use: this
-            template carries dropdowns for level, type and the yes/no columns,
-            which a CSV cannot hold. */}
+        {/* The usual starting point for a destination that already has a
+            catalogue: the stored rows come back in the same sheet, so the
+            names match to the character and nothing is held back as a
+            near-miss. Retyping them is what creates near-misses. */}
+        <a
+          href={destinationId ? `/api/export/catalogue?destination=${destinationId}` : undefined}
+          aria-disabled={!destinationId}
+          title={destinationId ? undefined : "Choose a destination first"}
+          className={`rounded-md border px-3 py-1.5 text-sm font-medium ${
+            destinationId
+              ? "border-primary text-primary hover:bg-bg"
+              : "pointer-events-none border-border text-muted opacity-60"
+          }`}
+        >
+          Download current catalogue
+        </a>
+        {/* Links rather than the CSV sample button the other two use: these
+            carry dropdowns for level, type and the yes/no columns, which a CSV
+            cannot hold. */}
         <a
           href="/api/samples/catalogue"
           className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-primary hover:bg-bg"
         >
-          Download Excel template
+          Blank template
         </a>
       </form>
 
       <p className="mt-2 text-xs text-muted">
+        <strong className="text-ink">To edit a catalogue that already exists, start from Download current
+        catalogue.</strong>{" "}
+        It hands back everything stored for that destination in this same sheet, so the names match exactly, your edits
+        update rather than duplicate, and every cell you leave alone stays as it is. Uploading it back untouched does
+        nothing at all. Retyping the names is what produces the held-back rows below.
+      </p>
+      <p className="mt-1 text-xs text-muted">
         One row per programme. The university columns —{" "}
         <code>university_name</code>, <code>city</code>, <code>region</code>, <code>type</code>,{" "}
         <code>levels_offered</code>, <code>fields_offered</code>, <code>contact_email</code> — repeat on every row that

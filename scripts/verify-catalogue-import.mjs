@@ -179,7 +179,43 @@ try {
       changedProgram?.language_requirement === "B2 English",
     JSON.stringify(changedProgram));
 
-  // ------------------------------------------- 4. a near-miss is held back
+  // ------------------------------------------------------ 4. the round trip
+  //
+  // Export what is stored, upload it back untouched, and nothing may happen.
+  // That is the whole premise of editing a catalogue in a spreadsheet: if a
+  // clean round trip reports changes, then every real edit is also carrying
+  // changes nobody asked for, and the "what changed" list stops being
+  // readable. Uses the signed-in page's own cookies to fetch the download.
+  const exported = await page.request.get(
+    `${BASE}/api/export/catalogue?destination=${destination.id}`
+  );
+  ok("the export downloads as a spreadsheet",
+    exported.ok() &&
+      (exported.headers()["content-type"] ?? "").includes("spreadsheetml"),
+    `${exported.status()} ${exported.headers()["content-type"]}`);
+
+  const exportedBody = await exported.body();
+  await page.goto(`${BASE}/setup/universities`, { waitUntil: "domcontentloaded" });
+  {
+    const panel = page.locator("details", { hasText: "Import a whole destination" }).first();
+    await panel.locator("summary").first().click();
+    await panel.locator('select[name="destination_id"]').selectOption(destination.id);
+    await panel.locator('input[type="file"]').setInputFiles({
+      name: "catalogue-export.xlsx",
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      buffer: exportedBody,
+    });
+    await panel.getByRole("button", { name: "Import" }).click();
+    const reportEl = panel.locator("[data-import-report]").first();
+    await reportEl.waitFor({ timeout: 90_000 });
+    const roundTrip = (await reportEl.innerText()).replace(/\s+/g, " ");
+    ok("re-importing an untouched export changes nothing at all",
+      /Nothing to add or change/.test(roundTrip), roundTrip.slice(0, 400));
+    ok("...and holds nothing back, because the names came from the database",
+      !/Held back/.test(roundTrip), roundTrip.slice(0, 400));
+  }
+
+  // ------------------------------------------- 5. a near-miss is held back
   report = await importCatalogue(page, [
     { university_name: "zztmp Sapienza Univ. of Rome", city: "Rome",
       level: "bachelors", program_name: "zztmp Robotics", tuition_fee: "3200" },
@@ -195,7 +231,7 @@ try {
   // The point of holding back, stated as the thing that must NOT have happened.
   ok("...so no duplicate university was created", universityCount === 2, String(universityCount));
 
-  // ------------------------------- 5. a counsellor may add but not overwrite
+  // ------------------------------- 6. a counsellor may add but not overwrite
   await page.close();
   page = await signIn(browser, counselor.email);
 

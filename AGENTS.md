@@ -23,7 +23,7 @@ and `supabase/README.md` for the database.
 
 ## Before committing
 
-A pre-commit hook runs typecheck, eslint over the staged files and 834 unit
+A pre-commit hook runs typecheck, eslint over the staged files and 846 unit
 tests — all three, so one attempt reports everything wrong — then a production
 build only if those passed. It is installed by `npm install`, so it is already
 running; `git commit --no-verify` skips it for a deliberate work in progress.
