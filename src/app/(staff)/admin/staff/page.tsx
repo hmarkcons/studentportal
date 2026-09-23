@@ -10,6 +10,8 @@ import { StaffTable } from "./StaffTable";
 import { PartnerApprovalButton } from "./PartnerApprovalButton";
 import type { StaffRecord } from "./StaffForm";
 import { COMPENSATION_EMBED, withCompensationAll, type Compensation } from "@/lib/staffCompensation";
+import { createAdminClient } from "@/lib/supabase/admin";
+import type { StaffLoginSummary } from "./StaffLoginPanel";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -87,6 +89,30 @@ export default async function StaffAdminPage() {
       ])
     : [{ data: null }, { data: null }, { data: null }];
 
+  // Each staff member's login, for the Super Admin's Login panel: the email
+  // they actually sign in with, whether they ever have, and whether a copy of
+  // their password is kept. Auth accounts and the kept copies are readable
+  // only with the service role, so this is fetched for a Super Admin viewer
+  // and nobody else — for anyone else the panel is not offered at all.
+  let logins: Record<string, StaffLoginSummary> | undefined;
+  if (isSuperAdminViewer) {
+    const admin = createAdminClient();
+    const [users, { data: kept }] = await Promise.all([
+      Promise.all(staff.map((s) => admin.auth.admin.getUserById(s.id))),
+      admin.from("staff_login_credentials").select("staff_id, updated_at"),
+    ]);
+    const keptAt = new Map((kept ?? []).map((k: { staff_id: string; updated_at: string }) => [k.staff_id, k.updated_at]));
+    logins = {};
+    staff.forEach((s, i) => {
+      const user = users[i].data?.user;
+      logins![s.id] = {
+        loginEmail: user?.email ?? null,
+        lastSignInAt: user?.last_sign_in_at ?? null,
+        copyKeptAt: keptAt.get(s.id) ?? null,
+      };
+    });
+  }
+
   const total = staff.length;
   const active = staff.filter((s) => s.status === "active").length;
   const inactive = total - active;
@@ -118,6 +144,7 @@ export default async function StaffAdminPage() {
         roleOverrides={roleOverrides ?? []}
         staffOverrides={staffOverrides ?? []}
         assignedStudentCounts={assignedStudentCounts}
+        logins={logins}
       />
 
       {pendingPartners && pendingPartners.length > 0 && (

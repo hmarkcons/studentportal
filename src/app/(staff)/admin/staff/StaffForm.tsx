@@ -26,8 +26,8 @@ import { staffRoles, ROLES_PRESENT_FIELD } from "@/lib/auth/roles";
 const labelClass = "text-xs font-medium text-muted";
 
 type ActionState =
-  | { error: string; success?: undefined; email?: undefined; password?: undefined; restoredCount?: undefined }
-  | { success: boolean; error?: undefined; email?: string; password?: string; restoredCount?: number }
+  | { error: string; success?: undefined; email?: undefined; password?: undefined; restoredCount?: undefined; emailed?: undefined; warning?: undefined }
+  | { success: boolean; error?: undefined; email?: string; password?: string; restoredCount?: number; emailed?: boolean; warning?: string }
   | undefined;
 
 export type StaffRecord = {
@@ -502,7 +502,16 @@ export function StaffForm({
           of its own. */}
       {state?.success && !isEdit && (
         <div className="mb-3 rounded-md border border-success bg-success-bg px-3 py-2 text-sm text-success">
-          Temp password: <code>{state?.password ?? ""}</code>
+          <p>
+            Sign in with <code>{state?.email ?? ""}</code> and password <code>{state?.password ?? ""}</code>
+          </p>
+          <p className="mt-1 text-xs">
+            {state?.emailed ? `Emailed to ${state.email}. ` : ""}
+            {/* Not claimed when the warning below says the copy failed. */}
+            {!state?.warning?.includes("copy") &&
+              "A copy is kept — a Super Admin can reveal it later from the staff member's Login panel."}
+          </p>
+          {state?.warning && <p className="mt-1 text-xs text-warning">{state.warning}</p>}
         </div>
       )}
 

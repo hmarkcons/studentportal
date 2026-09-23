@@ -9,6 +9,7 @@ import { SlideOver } from "@/components/ui/SlideOver";
 import { STAFF_ROLE_LABELS, CURRENCY_SYMBOLS } from "@/lib/constants";
 import { StaffForm, type StaffRecord } from "./StaffForm";
 import { StaffPermissionsPanel } from "../permissions/StaffPermissionsPanel";
+import { StaffLoginPanel, type StaffLoginSummary } from "./StaffLoginPanel";
 
 type PermissionDef = { key: string; category: string; label: string; description: string; default_roles: string[] };
 type RoleOverrideRow = { role: string; permission_key: string; allowed: boolean };
@@ -35,6 +36,7 @@ export function StaffActionsMenu({
   staffOverrides = [],
   allStaff = [],
   assignedStudentCount = 0,
+  login,
 }: {
   staff: StaffRecord;
   photoUrl?: string | null;
@@ -49,11 +51,14 @@ export function StaffActionsMenu({
   staffOverrides?: StaffOverrideRow[];
   allStaff?: StaffRecord[];
   assignedStudentCount?: number;
+  /** Given only to a Super Admin viewer — its presence is what shows the Login item. */
+  login?: StaffLoginSummary;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [permissionsOpen, setPermissionsOpen] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const del = useButtonAction();
   const showPermissions = canManagePermissions && !hasRole(staff, "super_admin");
@@ -109,6 +114,18 @@ export function StaffActionsMenu({
                 🔑 Permissions
               </button>
             )}
+            {login && (
+              <button
+                onClick={() => {
+                  setLoginOpen(true);
+                  setMenuOpen(false);
+                }}
+                data-full-width
+                className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
+              >
+                🔐 Login
+              </button>
+            )}
             {/* Deleting a staff account is not a role change — it belongs
                 with staff.manage, same as the action behind it. */}
             {!rolesOnly && (
@@ -120,6 +137,18 @@ export function StaffActionsMenu({
         </>
       )}
       {deleteError && <p className="absolute right-0 mt-1 w-56 text-xs text-danger">{deleteError}</p>}
+
+      {login && (
+        <SlideOver open={loginOpen} onClose={() => setLoginOpen(false)} title={`Login — ${staff.full_name}`}>
+          <StaffLoginPanel
+            staffId={staff.id}
+            staffName={staff.full_name}
+            officialEmail={staff.email_official ?? null}
+            status={staff.status ?? "active"}
+            login={login}
+          />
+        </SlideOver>
+      )}
 
       <SlideOver open={viewOpen} onClose={() => setViewOpen(false)} title={staff.full_name}>
         <div className="flex flex-col">

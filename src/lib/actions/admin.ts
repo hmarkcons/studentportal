@@ -7,6 +7,7 @@ import { requirePermission, hasPermission } from "@/lib/auth/permissions";
 import { getStaffSession } from "@/lib/auth/session";
 import {
   canGrantSuperAdmin,
+  hasRole,
   parseRolesFromFormData,
   rolesWereSubmitted,
   staffRoles,
@@ -17,6 +18,15 @@ import { phoneError } from "@/lib/phoneNumber";
 import { MAX_PHOTO_BYTES, fileSizeError, reduceHint } from "@/lib/fileSize";
 import { notifyAssignedStaff } from "@/lib/actions/registrationNotice";
 import { compensationFromFormData } from "@/lib/staffCompensation";
+import { generatePassword } from "@/lib/generatePassword";
+import { sendEmail } from "@/lib/email";
+import { getSiteUrl } from "@/lib/siteUrl";
+import {
+  staffLoginHtml,
+  staffLoginSubject,
+  staffLoginText,
+  type StaffLoginEmailData,
+} from "@/lib/staffLoginEmail";
 
 // "Suspended" just freezes the account (blocked from every staff route by
 // the (staff) layout's `status !== "active"` check, same as deactivated) —
@@ -200,7 +210,9 @@ export async function createStaffAccount(_prevState: unknown, formData: FormData
   if (phoneIssue) return { error: phoneIssue };
 
   const admin = createAdminClient();
-  const tempPassword = Math.random().toString(36).slice(2) + "A1!";
+  // The generator every staff login uses (see issueStaffCredentials). This
+  // used to be Math.random(), which is not a secure source of randomness.
+  const tempPassword = generatePassword();
   const { data: created, error: createError } = await admin.auth.admin.createUser({
     email,
     password: tempPassword,
@@ -220,9 +232,74 @@ export async function createStaffAccount(_prevState: unknown, formData: FormData
   const payError = await savePay(supabase, created.user.id, formData);
   if (payError) return { error: payError };
 
+  // The same copy and mail a reissue makes, so a first login is never the
+  // one-time-only password it used to be. Neither can fail the account, which
+  // exists and works by now; each says so if it did not happen.
+  const { staff: actor } = await getStaffSession();
+  const warnings: string[] = [];
+  const { error: storeError } = await supabase.rpc("store_staff_login", {
+    p_staff_id: created.user.id,
+    p_plaintext: JSON.stringify({ username: email, password: tempPassword }),
+  });
+  if (storeError) warnings.push("A copy couldn't be kept, so Reveal won't show this password later — copy it down now.");
+  const mailError = await mailStaffLogin({
+    staffName: fields.full_name,
+    email,
+    password: tempPassword,
+    issuedBy: actor?.full_name ?? null,
+    reason: "new_account",
+  });
+  if (mailError) warnings.push(`The welcome email didn't go (${mailError}) — pass these on yourself.`);
+
   revalidatePath("/admin/staff");
   revalidateTag("staff-directory", { expire: 0 });
-  return { success: true, email, password: tempPassword };
+  return {
+    success: true,
+    email,
+    password: tempPassword,
+    emailed: !mailError,
+    ...(warnings.length ? { warning: warnings.join(" ") } : {}),
+  };
+}
+
+/**
+ * Keeps a staff member's login email the same as their official email.
+ *
+ * They used to be set once, at creation, and never again — so editing the
+ * official email left the login on the old address, and the staff member
+ * signing in with the address on their profile was refused. One account had
+ * drifted that way when this was written.
+ *
+ * Done before the staff row is saved, so an address another login already
+ * uses is refused before anything changes; the returned `revert` puts the
+ * login back if the save after it fails.
+ */
+async function syncLoginEmail(
+  staffId: string,
+  officialEmail: string | null | undefined
+): Promise<{ error?: string; revert?: () => Promise<void> }> {
+  const next = (officialEmail ?? "").trim();
+  if (!next) return {};
+
+  const admin = createAdminClient();
+  const { data, error } = await admin.auth.admin.getUserById(staffId);
+  if (error || !data.user) return {};
+  const current = data.user.email ?? "";
+  if (current.toLowerCase() === next.toLowerCase()) return {};
+
+  const { error: updateError } = await admin.auth.admin.updateUserById(staffId, { email: next, email_confirm: true });
+  if (updateError) {
+    return {
+      error: /already|registered|exists/i.test(updateError.message)
+        ? `${next} is already used by another login, so it can't be their sign-in email. Nothing was saved.`
+        : `Their sign-in email couldn't be changed to match: ${updateError.message}. Nothing was saved.`,
+    };
+  }
+  return {
+    revert: async () => {
+      await admin.auth.admin.updateUserById(staffId, { email: current, email_confirm: true });
+    },
+  };
 }
 
 export async function updateStaffDetails(staffId: string, _prevState: unknown, formData: FormData) {
@@ -347,8 +424,14 @@ export async function updateStaffDetails(staffId: string, _prevState: unknown, f
     }
   }
 
+  const loginSync = await syncLoginEmail(staffId, fields.email_official);
+  if (loginSync.error) return { error: loginSync.error };
+
   const { error } = await supabase.from("staff").update(fields).eq("id", staffId);
-  if (error) return { error: error.message };
+  if (error) {
+    await loginSync.revert?.();
+    return { error: error.message };
+  }
 
   const payError = await savePay(supabase, staffId, formData);
   if (payError) return { error: payError };
@@ -636,4 +719,147 @@ export async function createServiceRequest(_prevState: unknown, formData: FormDa
 
   revalidatePath("/admin/additional-services");
   return { success: true };
+}
+
+// ======================================================= staff login credentials
+//
+// A Super Admin issues a staff member's login: a generated password, their
+// official email as the username, a copy kept encrypted for the Super Admin to
+// reveal later (0270), and the same details mailed to that official address.
+// Staff cannot change their own password, so what is issued here is what they
+// keep until a Super Admin issues another.
+//
+// Super Admin only, by role — not by the staff.manage permission, which an
+// override can grant to other roles. Handing someone a colleague's password is
+// not the same kind of thing as editing their phone number. The database
+// functions check the same thing again, and theirs is the check that binds.
+
+type StaffLoginResult =
+  | { error: string; success?: undefined }
+  | { success: true; error?: undefined; email: string; password: string; emailed: boolean; warning?: string };
+
+async function superAdminActor() {
+  const { staff } = await getStaffSession();
+  return staff && hasRole(staff, "super_admin") ? staff : null;
+}
+
+/**
+ * Mails a staff member their login. Never fails the action that called it:
+ * the login already works, and the Super Admin has it on screen — a mail that
+ * did not go is a warning to pass it on by hand, not a failure.
+ */
+async function mailStaffLogin(data: Omit<StaffLoginEmailData, "loginUrl">): Promise<string | null> {
+  const payload: StaffLoginEmailData = { ...data, loginUrl: `${getSiteUrl()}/login` };
+  const sent = await sendEmail({
+    to: data.email,
+    subject: staffLoginSubject(payload),
+    text: staffLoginText(payload),
+    html: staffLoginHtml(payload),
+  });
+  return sent && "error" in sent && sent.error ? String(sent.error) : null;
+}
+
+/**
+ * Issues new login credentials for a staff member.
+ *
+ * In this order, because each step is only worth doing once the one before it
+ * has worked: the auth account gets the new password (and their official
+ * email as its login), then their other sessions are ended, then the copy is
+ * stored, then the mail goes. A failure part-way says exactly what happened.
+ */
+export async function issueStaffCredentials(staffId: string): Promise<StaffLoginResult> {
+  const actor = await superAdminActor();
+  if (!actor) return { error: "Only a Super Admin can issue login credentials." };
+
+  const supabase = await createClient();
+  const { data: member } = await supabase
+    .from("staff")
+    .select("id, full_name, email_official, status")
+    .eq("id", staffId)
+    .maybeSingle();
+  if (!member) return { error: "That staff member no longer exists." };
+  if (member.status !== "active") {
+    return { error: "Their account isn't active, so they couldn't sign in with it. Set them to Active first." };
+  }
+  const email = (member.email_official ?? "").trim();
+  if (!email) return { error: "Add their official email first — it's the email they sign in with." };
+
+  const password = generatePassword();
+  const admin = createAdminClient();
+  const { error: authError } = await admin.auth.admin.updateUserById(staffId, {
+    email,
+    password,
+    email_confirm: true,
+  });
+  if (authError) {
+    return {
+      error: /already|registered|exists/i.test(authError.message)
+        ? `${email} is already used by another login (a student or partner account), so it can't be theirs too. Give them a different official email.`
+        : authError.message,
+    };
+  }
+
+  // Everywhere they were signed in — except the Super Admin's own session,
+  // when they are reissuing their own login from the page they are on.
+  let warning: string | undefined;
+  if (staffId !== actor.id) {
+    const { error: revokeError } = await supabase.rpc("revoke_staff_sessions", { p_staff_id: staffId });
+    if (revokeError) warning = `The new password works, but they may still be signed in elsewhere: ${revokeError.message}`;
+  }
+
+  const { error: storeError } = await supabase.rpc("store_staff_login", {
+    p_staff_id: staffId,
+    p_plaintext: JSON.stringify({ username: email, password }),
+  });
+  if (storeError) {
+    warning = [warning, "A copy couldn't be kept, so Reveal won't show this password later — copy it down now."]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  const mailError = await mailStaffLogin({
+    staffName: member.full_name,
+    email,
+    password,
+    issuedBy: actor.full_name,
+    reason: "reissued",
+  });
+
+  revalidatePath("/admin/staff");
+  return {
+    success: true,
+    email,
+    password,
+    emailed: !mailError,
+    ...(warning || mailError
+      ? { warning: [warning, mailError ? `The email didn't go (${mailError}) — pass these on yourself.` : null].filter(Boolean).join(" ") }
+      : {}),
+  };
+}
+
+/** The stored copy of a staff member's login, for a Super Admin. Null when none was kept. */
+export async function revealStaffCredentials(
+  staffId: string
+): Promise<{ error: string } | { success: true; credentials: { email: string; password: string; issuedAt: string; issuedBy: string | null } | null }> {
+  if (!(await superAdminActor())) return { error: "Only a Super Admin can see login credentials." };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("read_staff_login", { p_staff_id: staffId });
+  if (error) return { error: error.message };
+  const row = (data as { plaintext: string; updated_at: string; updated_by_name: string | null }[] | null)?.[0];
+  if (!row) return { success: true, credentials: null };
+
+  const parsed = JSON.parse(row.plaintext) as { username: string; password: string };
+  // The email they sign in with today. The stored copy keeps the one it was
+  // issued with, which an edit to their official email has since moved on.
+  const { data: authUser } = await createAdminClient().auth.admin.getUserById(staffId);
+  return {
+    success: true,
+    credentials: {
+      email: authUser?.user?.email ?? parsed.username,
+      password: parsed.password,
+      issuedAt: row.updated_at,
+      issuedBy: row.updated_by_name,
+    },
+  };
 }

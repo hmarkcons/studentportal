@@ -36,7 +36,13 @@ export function useButtonAction() {
   const running = useRef(false);
 
   const run = useCallback(
-    async (action: () => Promise<Result> | Result, options: { toast?: string } = {}): Promise<Result> => {
+    // Generic, so a caller reads back its own action's result — the password
+    // an issue returns, say — rather than a shape with everything but
+    // success and error erased.
+    async <R extends Result>(
+      action: () => Promise<R> | R,
+      options: { toast?: string } = {}
+    ): Promise<R | { error: string } | undefined> => {
       if (running.current) return undefined;
       running.current = true;
       setPending(true);
@@ -44,7 +50,7 @@ export function useButtonAction() {
       try {
         const result = await action();
         if (result && typeof result === "object" && result.error) {
-          setState({ error: result.error });
+          setState({ error: String(result.error) });
         } else {
           setState({ success: true });
           if (options.toast) toast(options.toast);

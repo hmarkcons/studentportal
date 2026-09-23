@@ -6,6 +6,7 @@ import { Input, Select } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { STAFF_ROLE_LABELS, CURRENCY_SYMBOLS } from "@/lib/constants";
 import { StaffActionsMenu } from "./StaffActionsMenu";
+import type { StaffLoginSummary } from "./StaffLoginPanel";
 import type { StaffRecord } from "./StaffForm";
 import { staffRoles } from "@/lib/auth/roles";
 
@@ -24,6 +25,7 @@ export function StaffTable({
   roleOverrides = [],
   staffOverrides = [],
   assignedStudentCounts = {},
+  logins,
 }: {
   staff: StaffRecord[];
   photoUrls?: Record<string, string>;
@@ -42,6 +44,8 @@ export function StaffTable({
   roleOverrides?: RoleOverrideRow[];
   staffOverrides?: StaffOverrideRow[];
   assignedStudentCounts?: Record<string, number>;
+  /** Super Admin viewers only: each staff member's login, by id. */
+  logins?: Record<string, StaffLoginSummary>;
 }) {
   const [nameInput, setNameInput] = useState("");
   const [statusInput, setStatusInput] = useState("all");
@@ -154,6 +158,7 @@ export function StaffTable({
                     staffOverrides={staffOverrides.filter((o) => o.staff_id === s.id)}
                     allStaff={staff}
                     assignedStudentCount={assignedStudentCounts[s.id] ?? 0}
+                    login={logins?.[s.id]}
                   />
                 </td>
               </tr>
