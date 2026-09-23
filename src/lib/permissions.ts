@@ -9,6 +9,10 @@ export const PERMISSION_KEYS = [
   // salary and commission with it. See 0247.
   "staff.assign_roles",
   "staff.approve_offsite_access",
+  // Staff contracts (0271): wording, and issuing/filing. No default roles —
+  // a Super Admin's until granted to a role on the Role Permissions screen.
+  "staff_agreements.templates",
+  "staff_agreements.manage",
   "partners.approve",
   "attendance.qr_admin",
   "finance.commissions.manage",

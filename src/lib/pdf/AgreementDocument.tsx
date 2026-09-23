@@ -121,13 +121,13 @@ export function money(symbol: string, n: number) {
   return `${symbol}${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function Header() {
+function Header({ title = "Retainer Agreement" }: { title?: string }) {
   return (
     <View style={styles.header} fixed>
       <View style={styles.brand}>
         <Image src={BRAND_LOGO_DATA_URI} style={styles.brandLogo} />
       </View>
-      <Text style={styles.headerTitle}>HMARK Consultants{"\n"}Retainer Agreement</Text>
+      <Text style={styles.headerTitle}>HMARK Consultants{"\n"}{title}</Text>
       <Text style={styles.headerPage} render={({ pageNumber }) => `${pageNumber}`} fixed />
     </View>
   );
@@ -398,6 +398,111 @@ export function AgreementDocument({ data }: { data: AgreementPdfData }) {
               <Text style={styles.signNameText}>{data.signatoryName ?? ""}</Text>
             </View>
             <Text style={styles.signNameCaption}>[Consultant Full Name]</Text>
+          </View>
+        </View>
+
+        <Footer date={data.agreementDate} signatureDataUri={data.signatureDataUri} />
+      </Page>
+    </Document>
+  );
+}
+
+// ------------------------------------------------------------ staff agreements
+//
+// The same letterhead, wording renderer, signature and footer as a student's
+// agreement — kept in this file so the two cannot drift apart in look — with
+// the staff member's details where the student's chart goes, and no fee table:
+// a staff template is converted with wordingToBlocks(..., { feeTable: false }),
+// so none of its blocks ever asks for one.
+
+export type StaffAgreementPdfData = {
+  title: string;
+  officeLine: string;
+  blocks: AgreementBlock[];
+  staff: {
+    fullName: string;
+    designation: string | null;
+    cnic: string | null;
+    dob: string | null;
+    email: string | null;
+    mobile: string | null;
+    address: string | null;
+  };
+  agreementDate: string;
+  signatureDataUri: string | null;
+  signatoryName: string | null;
+};
+
+// Block's signature wants a fee for the feeTable case, which a staff
+// agreement never reaches.
+const NO_FEE: AgreementPdfData["fee"] = {
+  currencySymbol: "",
+  adminCharge: 0,
+  consultancyFee: 0,
+  installmentAmounts: [],
+  discount: null,
+  total: 0,
+  isBackup: false,
+  destinationLabel: "",
+};
+
+function StaffDetailsChart({ staff }: { staff: StaffAgreementPdfData["staff"] }) {
+  return (
+    <View style={styles.table}>
+      <View style={styles.tRow}>
+        <Text style={styles.tCell}><Text style={styles.tLabel}>Name: </Text>{staff.fullName}</Text>
+        <Text style={styles.tCell}><Text style={styles.tLabel}>Designation: </Text>{staff.designation ?? ""}</Text>
+        <Text style={[styles.tCell, styles.tCellLast]}><Text style={styles.tLabel}>CNIC: </Text>{staff.cnic ?? ""}</Text>
+      </View>
+      <View style={styles.tRow}>
+        <Text style={styles.tCell}><Text style={styles.tLabel}>DOB: </Text>{staff.dob ?? ""}</Text>
+        <Text style={styles.tCell}><Text style={styles.tLabel}>Email: </Text>{staff.email ?? ""}</Text>
+        <Text style={[styles.tCell, styles.tCellLast]}><Text style={styles.tLabel}>Mobile: </Text>{staff.mobile ?? ""}</Text>
+      </View>
+      <View style={styles.tRow}>
+        <Text style={styles.tCellFull}><Text style={styles.tLabel}>Address: </Text>{staff.address ?? ""}</Text>
+      </View>
+    </View>
+  );
+}
+
+export function StaffAgreementDocument({ data }: { data: StaffAgreementPdfData }) {
+  return (
+    <Document>
+      <Page size="A4" style={styles.page}>
+        <Header title={data.title} />
+
+        <StaffDetailsChart staff={data.staff} />
+        <Text style={styles.and}>AND</Text>
+
+        <Text style={styles.paragraph}>{data.officeLine}</Text>
+
+        {data.blocks.map((block, i) =>
+          i === data.blocks.length - 1 ? (
+            <View key={i} minPresenceAhead={150}>
+              <Block block={block} fee={NO_FEE} />
+            </View>
+          ) : (
+            <Block key={i} block={block} fee={NO_FEE} />
+          )
+        )}
+
+        <View style={styles.signGrid}>
+          <View style={styles.signCol}>
+            <View style={styles.signLine} />
+            <Text style={styles.signCaption}>(Signature) Employee</Text>
+            <View style={styles.signNameLine}>
+              <Text style={styles.signNameText}>{data.staff.fullName}</Text>
+            </View>
+            <Text style={styles.signNameCaption}>[Employee Name]</Text>
+          </View>
+          <View style={styles.signCol}>
+            <View style={styles.signLine}>{data.signatureDataUri && <Image src={data.signatureDataUri} style={styles.signImg} />}</View>
+            <Text style={styles.signCaption}>(Signature) HMARK Consultants</Text>
+            <View style={styles.signNameLine}>
+              <Text style={styles.signNameText}>{data.signatoryName ?? ""}</Text>
+            </View>
+            <Text style={styles.signNameCaption}>[Authorised Signatory]</Text>
           </View>
         </View>
 

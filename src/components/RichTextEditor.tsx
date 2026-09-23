@@ -109,10 +109,13 @@ export function RichTextEditor({
   name,
   content,
   onChangeHtml,
+  paymentChart = true,
 }: {
   name: string;
   content: string;
   onChangeHtml?: (html: string) => void;
+  /** The "+ Payment Chart" button. Off for a staff agreement, which has no student fee table to place. */
+  paymentChart?: boolean;
 }) {
   const editor = useEditor({
     immediatelyRender: false,
@@ -212,6 +215,7 @@ export function RichTextEditor({
           → Indent
         </ToolbarButton>
         <span className="mx-1 h-4 w-px bg-border" />
+        {paymentChart && (
         <ToolbarButton
           title="Insert the itemized payment chart — auto-filled with this student's actual fee, installments, and discount at generation time. Use this instead of typing your own fee table."
           onClick={() =>
@@ -226,6 +230,7 @@ export function RichTextEditor({
         >
           + Payment Chart
         </ToolbarButton>
+        )}
         <ToolbarButton
           title="Insert table"
           onClick={() => insertAndReveal(() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run())}

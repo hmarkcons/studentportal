@@ -80,10 +80,20 @@ const BASE_STAFF_NAV: NavItem[] = [
   },
 ];
 
-export function buildStaffNav({ canManageStaff, isSuperAdmin }: { canManageStaff: boolean; isSuperAdmin: boolean }): NavItem[] {
+export function buildStaffNav({
+  canManageStaff,
+  isSuperAdmin,
+  hasOwnAgreement = false,
+}: {
+  canManageStaff: boolean;
+  isSuperAdmin: boolean;
+  /** An agreement has been sent to this staff member — only then is "My agreement" worth a link. */
+  hasOwnAgreement?: boolean;
+}): NavItem[] {
   return BASE_STAFF_NAV.map((item) => {
     if (item.label === "HR" && item.children) {
-      const children = canManageStaff ? item.children : item.children.filter((c) => c.label !== "Staff Management");
+      const base = canManageStaff ? item.children : item.children.filter((c) => c.label !== "Staff Management");
+      const children = hasOwnAgreement ? [...base, { label: "My agreement", href: "/my-agreement" }] : base;
       return { ...item, children };
     }
     if (item.label === "Admin" && item.children && isSuperAdmin) {

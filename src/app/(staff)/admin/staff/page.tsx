@@ -145,6 +145,7 @@ export default async function StaffAdminPage() {
         staffOverrides={staffOverrides ?? []}
         assignedStudentCounts={assignedStudentCounts}
         logins={logins}
+        canManageAgreements={perms["staff_agreements.manage"] === true}
       />
 
       {pendingPartners && pendingPartners.length > 0 && (

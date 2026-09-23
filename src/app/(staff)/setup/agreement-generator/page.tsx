@@ -10,13 +10,37 @@ import {
   DeleteAgreementButton,
 } from "@/app/(staff)/students/[id]/GenerateAgreementForm";
 import { GenerateAgreementPdfButton } from "@/app/(staff)/students/[id]/GenerateAgreementPdfButton";
+import { SectionTabs } from "@/components/SectionTabs";
+import { getEffectivePermissions } from "@/lib/auth/permissions";
+import { StaffAgreementGenerator } from "./StaffAgreementGenerator";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
 }
 
-export default async function AgreementGeneratorPage(props: { searchParams: Promise<{ student?: string }> }) {
-  const { student: studentId } = await props.searchParams;
+export default async function AgreementGeneratorPage(props: {
+  searchParams: Promise<{ student?: string; tab?: string; staff?: string }>;
+}) {
+  const { student: studentId, tab, staff: staffId } = await props.searchParams;
+
+  // Staff agreements: a tab shown only to someone holding
+  // staff_agreements.manage. Asked for by anyone else, the Students tab shows.
+  const canStaffAgreements = (await getEffectivePermissions())["staff_agreements.manage"] === true;
+  const active = tab === "staff" && canStaffAgreements ? "staff" : "students";
+  const tabs = [
+    { key: "students", label: "Students", href: "/setup/agreement-generator" },
+    ...(canStaffAgreements ? [{ key: "staff", label: "Staff", href: "/setup/agreement-generator?tab=staff" }] : []),
+  ];
+  if (active === "staff") {
+    return (
+      <div className="w-full">
+        <h2 className="mb-4 text-lg font-semibold text-ink">Agreement Generator</h2>
+        <SectionTabs tabs={tabs} active={active} />
+        <StaffAgreementGenerator selectedId={staffId} />
+      </div>
+    );
+  }
+
   const supabase = await createClient();
 
   const { data: students } = await supabase
@@ -188,6 +212,7 @@ export default async function AgreementGeneratorPage(props: { searchParams: Prom
   return (
     <div className="w-full">
       <h2 className="mb-4 text-lg font-semibold text-ink">Agreement Generator</h2>
+      <SectionTabs tabs={tabs} active={active} />
       <p className="mb-4 text-sm text-muted">
         Find a registered student to generate, view, or manage their agreement — without navigating to their full record.
       </p>

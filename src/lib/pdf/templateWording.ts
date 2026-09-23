@@ -113,7 +113,13 @@ function flattenListItems(listEl: HTMLElement, ordered: boolean, depth: number):
 // itemized fee table renders wherever the wording places a {{fee_table}}
 // placeholder, or as its own fixed section straight after the narrative if
 // the wording never mentions it.
-export function wordingToBlocks(wording: string, vars: Record<string, string>): AgreementBlock[] {
+export function wordingToBlocks(
+  wording: string,
+  vars: Record<string, string>,
+  // Off for a staff agreement, which has no student fee table: then nothing is
+  // appended, and a table that merely mentions a fee stays the table it is.
+  { feeTable = true }: { feeTable?: boolean } = {}
+): AgreementBlock[] {
   const rendered = renderMergeFields(wording, vars);
 
   // Templates saved before the rich-text (HTML) editor was added stored
@@ -128,8 +134,8 @@ export function wordingToBlocks(wording: string, vars: Record<string, string>): 
     const blocks: AgreementBlock[] = paragraphs.map(
       (text): AgreementBlock => (isFeeTablePlaceholder(text) ? { kind: "feeTable" } : { kind: "richParagraph", runs: [{ text }] })
     );
-    if (!blocks.some((b) => b.kind === "feeTable")) blocks.push({ kind: "feeTable" });
-    return blocks;
+    if (feeTable && !blocks.some((b) => b.kind === "feeTable")) blocks.push({ kind: "feeTable" });
+    return feeTable ? blocks : blocks.filter((b) => b.kind !== "feeTable");
   }
 
   const root = parse(rendered);
@@ -184,7 +190,7 @@ export function wordingToBlocks(wording: string, vars: Record<string, string>): 
         const header = cellEls.every((c) => c.tagName?.toLowerCase() === "th");
         rows.push({ cells: cellEls.map((c) => extractRuns(c)), header });
       }
-      if (rows.length) blocks.push(looksLikeFeeTable(rows) ? { kind: "feeTable" } : { kind: "richTable", rows });
+      if (rows.length) blocks.push(feeTable && looksLikeFeeTable(rows) ? { kind: "feeTable" } : { kind: "richTable", rows });
     } else {
       // Any other block-level tag (div, blockquote, etc.) — treat its text
       // content as a plain paragraph rather than silently dropping it.
@@ -196,8 +202,8 @@ export function wordingToBlocks(wording: string, vars: Record<string, string>): 
     }
   }
 
-  if (!blocks.some((b) => b.kind === "feeTable")) blocks.push({ kind: "feeTable" });
-  return blocks;
+  if (feeTable && !blocks.some((b) => b.kind === "feeTable")) blocks.push({ kind: "feeTable" });
+  return feeTable ? blocks : blocks.filter((b) => b.kind !== "feeTable");
 }
 
 export const DEFAULT_OFFICE_LINE =

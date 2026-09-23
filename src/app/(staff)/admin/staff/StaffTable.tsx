@@ -26,6 +26,7 @@ export function StaffTable({
   staffOverrides = [],
   assignedStudentCounts = {},
   logins,
+  canManageAgreements = false,
 }: {
   staff: StaffRecord[];
   photoUrls?: Record<string, string>;
@@ -46,6 +47,7 @@ export function StaffTable({
   assignedStudentCounts?: Record<string, number>;
   /** Super Admin viewers only: each staff member's login, by id. */
   logins?: Record<string, StaffLoginSummary>;
+  canManageAgreements?: boolean;
 }) {
   const [nameInput, setNameInput] = useState("");
   const [statusInput, setStatusInput] = useState("all");
@@ -159,6 +161,7 @@ export function StaffTable({
                     allStaff={staff}
                     assignedStudentCount={assignedStudentCounts[s.id] ?? 0}
                     login={logins?.[s.id]}
+                    canManageAgreements={canManageAgreements}
                   />
                 </td>
               </tr>

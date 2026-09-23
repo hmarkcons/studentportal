@@ -22,7 +22,8 @@
     "check:xlsx": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-xlsx-in-excel.ps1",
     "prepare": "node scripts/install-hooks.mjs",
     "check:buttons": "node scripts/verify-button-widths.mjs",
-    "check:staffcreds": "node scripts/verify-staff-credentials.mjs"
+    "check:staffcreds": "node scripts/verify-staff-credentials.mjs",
+    "check:staffagreements": "node scripts/verify-staff-agreements.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",
