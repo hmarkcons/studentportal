@@ -57,7 +57,11 @@ function Section({
 
 export function ImportReportPanel({ state }: { state: CatalogueImportResult | undefined }) {
   if (!state) return null;
-  if (state.error) return <p className="mt-2 text-xs text-danger">{state.error}</p>;
+  // data-import-report marks the one element that only exists once the action
+  // has answered. check:catalogue waits for it rather than for wording, because
+  // the help text above this panel already contains "updated" and "Added" —
+  // waiting on those matched before the import had even run.
+  if (state.error) return <p data-import-report="error" className="mt-2 text-xs text-danger">{state.error}</p>;
   if (!state.success) return null;
 
   const { universities, programs } = state;
@@ -67,7 +71,7 @@ export function ImportReportPanel({ state }: { state: CatalogueImportResult | un
   const nothingHappened = !added && !updated;
 
   return (
-    <div className="mt-2 flex flex-col gap-1 text-xs">
+    <div data-import-report="done" className="mt-2 flex flex-col gap-1 text-xs">
       <p className={nothingHappened ? "text-muted" : "text-success"}>
         {added && <>Added {added}. </>}
         {updated && <>Updated {updated}. </>}

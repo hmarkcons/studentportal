@@ -98,13 +98,14 @@ try {
       buffer: Buffer.from(csv(rows), "utf8"),
     });
     await panel.getByRole("button", { name: "Import" }).click();
-    // Poll for the report rather than sleeping: the write lands before the
-    // response does, so finding the rows would prove nothing about the page.
-    await panel
-      .locator("p", { hasText: /Added|Updated|Nothing to add|could not|no rows/i })
-      .first()
-      .waitFor({ timeout: 60_000 });
-    return (await panel.innerText()).replace(/\s+/g, " ");
+    // Waits for the element that only exists once the action has answered,
+    // never for wording. The help text inside this same panel already contains
+    // "updated" and "Added", so matching on those returned immediately — before
+    // the import had run — and every assertion then read a database that had
+    // not been written yet. Eight failures that were the check's fault.
+    const report = panel.locator("[data-import-report]").first();
+    await report.waitFor({ timeout: 90_000 });
+    return (await report.innerText()).replace(/\s+/g, " ");
   }
 
   const read = async (name) =>
