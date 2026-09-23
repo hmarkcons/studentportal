@@ -23,7 +23,7 @@ and `supabase/README.md` for the database.
 
 ## Before committing
 
-A pre-commit hook runs typecheck, eslint over the staged files and 832 unit
+A pre-commit hook runs typecheck, eslint over the staged files and 834 unit
 tests — all three, so one attempt reports everything wrong — then a production
 build only if those passed. It is installed by `npm install`, so it is already
 running; `git commit --no-verify` skips it for a deliberate work in progress.
@@ -69,6 +69,14 @@ imports add or update, and a blank cell means "said nothing", never null — see
 `src/lib/importMerge.ts`. A parser that turns an empty yes/no cell into `false`,
 or an insert payload that sends an explicit null instead of omitting the key,
 turns every partial sheet into a silent mass edit that reports total success.
+
+**A multi-row insert must be rectangular.** PostgREST takes the union of the
+keys across the rows and sends NULL for every key a given row is missing, so a
+column default never applies to a batch whose rows differ in shape. Building
+each row by dropping the fields you have nothing for is the natural thing to
+write and is wrong: it put null into a NOT NULL column and failed the whole
+insert, and on a nullable column it would have written the nulls silently. See
+`universityInsertValues` in `src/lib/catalogueRows.ts`.
 
 **Only a Super Admin can UPDATE a university or a programme** (0039), and an
 UPDATE that RLS refuses raises nothing — it matches no rows and reads as a

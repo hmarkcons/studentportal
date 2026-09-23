@@ -10,7 +10,8 @@ import {
   sameRounds,
   splitList,
   universityFromRow,
-  withoutBlanks,
+  programInsertValues,
+  universityInsertValues,
 } from "../src/lib/catalogueRows.ts";
 
 const noProblems = () => [];
@@ -188,14 +189,53 @@ test("a row with neither is simply not a programme, and says nothing", () => {
 
 // ------------------------------------------------------------ insert shapes
 
-test("creating a row drops the fields the sheet said nothing about", () => {
-  // So the column default applies, instead of an explicit null overriding it.
-  const out = withoutBlanks({ name: "X", city: null, region: "", levels_offered: [], type: "public", fee: 0 });
-  assert.deepEqual(out, { name: "X", type: "public", fee: 0 });
+test("a created row carries every column, even the ones the sheet left blank", () => {
+  // PostgREST takes the union of keys across a multi-row insert and sends NULL
+  // for any a row omits, so column defaults never apply to a batch whose rows
+  // differ in shape. A ragged payload put null into levels_offered (NOT NULL)
+  // and failed the whole insert; on a nullable column it would have written
+  // the nulls silently.
+  const sparse = universityFromRow({ name: "Bocconi", city: "Milan" }, "name", []);
+  const rich = universityFromRow(
+    { name: "Sapienza", city: "Rome", region: "Lazio", type: "public", levels_offered: "bachelors;masters" },
+    "name",
+    []
+  );
+  const a = universityInsertValues(sparse, "dest-1", "private");
+  const b = universityInsertValues(rich, "dest-1", "private");
+  assert.deepEqual(Object.keys(a).sort(), Object.keys(b).sort());
 });
 
-test("false survives into a created row", () => {
-  assert.deepEqual(withoutBlanks({ interview_required: false }), { interview_required: false });
+test("a blank list column becomes an empty array, never null", () => {
+  const sparse = universityFromRow({ name: "Bocconi", city: "Milan" }, "name", []);
+  const row = universityInsertValues(sparse, "dest-1", "private");
+  assert.deepEqual(row.levels_offered, []);
+  assert.deepEqual(row.fields_offered, []);
+});
+
+test("a new university with no type takes the destination's track", () => {
+  const sparse = universityFromRow({ name: "Bocconi", city: "Milan" }, "name", []);
+  assert.equal(universityInsertValues(sparse, "dest-1", "private").type, "private");
+  const stated = universityFromRow({ name: "Bocconi", city: "Milan", type: "public" }, "name", []);
+  assert.equal(universityInsertValues(stated, "dest-1", "private").type, "public");
+});
+
+test("a created programme is rectangular too, and its booleans settle to no", () => {
+  const sparse = programFromRow({ name: "Economics", level: "masters" }, "name", []);
+  const rich = programFromRow(
+    { name: "Computer Science", level: "bachelors", interview_required: "yes", tuition_fee: "3000" },
+    "name",
+    []
+  );
+  const a = programInsertValues(sparse, "uni-1");
+  const b = programInsertValues(rich, "uni-1");
+  assert.deepEqual(Object.keys(a).sort(), Object.keys(b).sort());
+  // not null default false — there is no stored value to preserve on a new row.
+  assert.equal(a.interview_required, false);
+  assert.equal(a.admission_test_required, false);
+  assert.equal(b.interview_required, true);
+  assert.deepEqual(a.intake_dates, []);
+  assert.equal(a.tuition_fee, null);
 });
 
 test("splitList trims and drops empties", () => {

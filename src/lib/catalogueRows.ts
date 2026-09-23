@@ -242,19 +242,62 @@ export function programFromRow(
   };
 }
 
-/**
- * The fields to write when CREATING a row, with the "said nothing" nulls taken
- * out so the column defaults apply instead.
- *
- * Not used on an update, where a null means keep — see importMerge.mergeRow.
- */
-export function withoutBlanks<T extends Record<string, unknown>>(input: T): Partial<T> {
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(input)) {
-    if (value === null || value === undefined) continue;
-    if (typeof value === "string" && value.trim() === "") continue;
-    if (Array.isArray(value) && value.length === 0) continue;
-    out[key] = value;
-  }
-  return out as Partial<T>;
+// ----------------------------------------------------- creating a new row
+//
+// These build a COMPLETE row — every column, every time — and that is the
+// whole point of them.
+//
+// The obvious thing is to drop the keys the sheet said nothing about and let
+// the column defaults fill them in. That does not work for a batch. PostgREST
+// takes the union of the keys across a multi-row insert and sends NULL for
+// every key a given row is missing, so a default never applies to a row whose
+// neighbours mentioned a column it did not. One university listing
+// levels_offered and another leaving it blank sent null into a NOT NULL column
+// and failed the entire insert — and for a nullable column it would have
+// written the nulls without a word.
+//
+// So every row carries every column, and "said nothing" resolves here to the
+// column's own default rather than to an omission.
+//
+// Nothing like this applies on an update, where a blank is genuinely absent
+// from the patch and the stored value stays. See importMerge.mergeRow.
+
+export function universityInsertValues(input: UniversityInput, destinationId: string, defaultType: string) {
+  return {
+    destination_id: destinationId,
+    name: input.name,
+    // A new university inherits the destination's own track when the sheet is
+    // silent, rather than a hardcoded "public".
+    type: input.type ?? defaultType,
+    city: input.city,
+    region: input.region,
+    contact_email: input.contact_email,
+    // Both are `not null default '{}'`, and splitList already yields [].
+    levels_offered: input.levels_offered,
+    fields_offered: input.fields_offered,
+  };
+}
+
+export function programInsertValues(input: ProgramInput, universityId: string) {
+  return {
+    university_id: universityId,
+    level: input.level,
+    name: input.name,
+    core_field: input.core_field,
+    sub_field: input.sub_field,
+    page_link: input.page_link,
+    // `not null default false`. On a row that does not exist yet there is no
+    // stored value to preserve, so a blank cell settles as "no" — which is
+    // what the column default would have said anyway.
+    interview_required: input.interview_required ?? false,
+    interview_details: input.interview_details,
+    admission_test_required: input.admission_test_required ?? false,
+    admission_test_type: input.admission_test_type,
+    application_portal_name: input.application_portal_name,
+    application_portal_link: input.application_portal_link,
+    intake_dates: input.intake_dates,
+    tuition_fee: input.tuition_fee,
+    duration: input.duration,
+    language_requirement: input.language_requirement,
+  };
 }

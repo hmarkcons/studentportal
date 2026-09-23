@@ -26,8 +26,9 @@ import {
   programFromRow,
   roundsFromRow,
   sameRounds,
+  programInsertValues,
   universityFromRow,
-  withoutBlanks,
+  universityInsertValues,
   type CatalogueRound,
   type ProgramInput,
   type UniversityInput,
@@ -398,21 +399,7 @@ async function mergeUniversities(
   }
 
   if (toCreate.length > 0) {
-    const payload = toCreate.map((input) => ({
-      destination_id: destinationId,
-      name: input.name,
-      // A new university inherits the destination's own track rather than a
-      // hardcoded "public". Importing into Turkey (Private) used to create
-      // public universities under it, which 0037 then had to go and correct.
-      type: input.type ?? defaultType,
-      ...withoutBlanks({
-        city: input.city,
-        region: input.region,
-        levels_offered: input.levels_offered,
-        fields_offered: input.fields_offered,
-        contact_email: input.contact_email,
-      }),
-    }));
+    const payload = toCreate.map((input) => universityInsertValues(input, destinationId, defaultType));
     const { data: created, error } = await supabase
       .from("universities")
       .insert(payload)
@@ -610,12 +597,7 @@ async function mergePrograms(
   const { data: created, error } = await supabase
     .from("programs")
     .insert(
-      toCreate.map(({ input, universityId }) => ({
-        university_id: universityId,
-        level: input.level,
-        name: input.name,
-        ...withoutBlanks(programPatchFields(input)),
-      }))
+      toCreate.map(({ input, universityId }) => programInsertValues(input, universityId))
     )
     .select("id, university_id, name, level")
     .returns<{ id: string; university_id: string; name: string; level: string }[]>();
