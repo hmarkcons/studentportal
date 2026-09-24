@@ -4,12 +4,15 @@ export function StatCard({
   trend,
   tone = "default",
   icon,
+  hint,
 }: {
   label: string;
   value: string | number;
   trend?: { direction: "up" | "down"; label: string };
   tone?: "default" | "success" | "warning" | "danger";
   icon?: string;
+  /** A line under the figure saying what it is measured against: "target 10", "≈ in PKR". */
+  hint?: string;
 }) {
   const valueColor =
     tone === "success"
@@ -32,6 +35,7 @@ export function StatCard({
           {trend.direction === "up" ? "▲" : "▼"} {trend.label}
         </p>
       )}
+      {hint && <p className="mt-1 text-xs text-muted">{hint}</p>}
     </div>
   );
 }

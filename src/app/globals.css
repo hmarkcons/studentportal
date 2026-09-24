@@ -24,6 +24,13 @@
   --info-bg: #eff6ff;
   --chart-referred: #2563eb;
   --chart-enrolled: #52be96;
+  /* The dashboards' series colours (src/components/charts), in order. */
+  --chart-1: #52be96;
+  --chart-2: #2563eb;
+  --chart-3: #d97706;
+  --chart-4: #7c3aed;
+  --chart-5: #e11d48;
+  --chart-6: #64748b;
 }
 
 :root[data-theme="semi-dark"] {
@@ -57,6 +64,12 @@
   --info-bg: #142335;
   --chart-referred: #3b82f6;
   --chart-enrolled: #2f9d75;
+  --chart-1: #52be96;
+  --chart-2: #60a5fa;
+  --chart-3: #fbbf24;
+  --chart-4: #a78bfa;
+  --chart-5: #fb7185;
+  --chart-6: #94a3b8;
 }
 
 @theme inline {

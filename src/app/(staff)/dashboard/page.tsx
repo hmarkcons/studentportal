@@ -1,97 +1,95 @@
-import { createClient } from "@/lib/supabase/server";
-import { Card } from "@/components/ui/Card";
-import { StatCard } from "@/components/ui/StatCard";
-import { EmptyState } from "@/components/ui/EmptyState";
+import { Suspense } from "react";
+import { getStaffSession } from "@/lib/auth/session";
+import { hasRole } from "@/lib/auth/roles";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { loadStaffQueue } from "@/lib/staffQueue";
 import { StaffQueueCard } from "@/components/StaffQueueCard";
+import { SectionTabs } from "@/components/SectionTabs";
+import { Card } from "@/components/ui/Card";
+import { pickView, viewsFor, VIEW_LABELS, type DashboardView } from "@/lib/dashboards/views";
+import { scopeQueue } from "@/lib/dashboards/queueScope";
+import { SalesView } from "./views/SalesView";
+import { ProcessingView } from "./views/ProcessingView";
+import { FinanceView } from "./views/FinanceView";
+import { LeadGenView, SocialView } from "./views/MarketingViews";
+import { OverviewView } from "./views/OverviewView";
 
-export default async function DashboardPage() {
-  const supabase = await createClient();
+/**
+ * Each job's dashboard: what is waiting on this person first, then the
+ * figures and charts for their role (src/lib/dashboards/views.ts). Someone
+ * with several roles gets a tab for each, opening on their main role's.
+ */
+export default async function DashboardPage(props: { searchParams: Promise<{ view?: string }> }) {
+  const [{ view: requested }, { supabase, staff }] = await Promise.all([props.searchParams, getStaffSession()]);
+  const views = viewsFor(staff);
+  const view = pickView(views, requested);
 
-  // Scoped by RLS to whatever this person can act on, so a counsellor sees
-  // their own students and processing sees everything.
-  const queue = await loadStaffQueue(supabase);
-
-  const { data: counselors } = await supabase
-    .from("staff")
-    .select("id, full_name, monthly_target")
-    .contains("roles", ["counselor"])
-    .eq("status", "active")
-    .order("full_name");
-
-  const now = new Date();
-  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
-  const monthLabel = now.toLocaleString("en-US", { month: "long", year: "numeric" });
-
-  const { data: leads } = await supabase
-    .from("leads")
-    .select("id, assigned_counselor_id")
-    .not("registered_at", "is", null)
-    .gte("registered_at", monthStart);
-
-  const registeredThisMonth = new Map<string, number>();
-  (leads ?? []).forEach((l) => {
-    if (!l.assigned_counselor_id) return;
-    registeredThisMonth.set(l.assigned_counselor_id, (registeredThisMonth.get(l.assigned_counselor_id) ?? 0) + 1);
-  });
-
-  const rows = (counselors ?? [])
-    .map((c) => {
-      const count = registeredThisMonth.get(c.id) ?? 0;
-      const target = c.monthly_target ?? null;
-      const pct = target ? Math.min(100, Math.round((count / target) * 100)) : 0;
-      return { id: c.id, name: c.full_name, count, target, pct, met: target != null && count >= target };
-    })
-    .sort((a, b) => b.pct - a.pct);
-
-  const totalRegistered = rows.reduce((sum, r) => sum + r.count, 0);
-  const withTargets = rows.filter((r) => r.target != null);
-  const teamAvgPct = withTargets.length ? Math.round(withTargets.reduce((sum, r) => sum + r.pct, 0) / withTargets.length) : 0;
-  const onTrackCount = rows.filter((r) => r.met).length;
+  // Scoped by RLS to what this person can see, then to what is their job.
+  const queue = scopeQueue(await loadStaffQueue(supabase), staff);
 
   return (
     <div className="w-full">
       <h2 className="mb-4 text-lg font-semibold text-ink">Dashboard</h2>
-
-      {/* What is waiting on this person comes first. The targets below are
-          worth knowing but are not a to-do list, and this is the landing page
-          for every role — not just counsellors. */}
       <StaffQueueCard queue={queue} />
 
-      <h3 className="mb-1 text-base font-semibold text-ink">Registrations</h3>
-      <p className="mb-4 text-sm text-muted">Team registration performance for {monthLabel}.</p>
+      <SectionTabs tabs={views.map((v) => ({ key: v, label: VIEW_LABELS[v], href: `/dashboard?view=${v}` }))} active={view ?? ""} />
 
-      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatCard label="Registered this month" value={totalRegistered} tone="success" />
-        <StatCard label="Counselors on track" value={`${onTrackCount}/${rows.length}`} />
-        <StatCard label="Team avg. of target" value={`${teamAvgPct}%`} />
-        <StatCard label="Active counselors" value={rows.length} />
+      {view && staff ? (
+        // Streamed: the queue above is there at once, and a dashboard that
+        // reads a year of leads does not hold it up.
+        <Suspense key={view} fallback={<DashboardSkeleton />}>
+          <ViewFor view={view} staff={staff} supabase={supabase} />
+        </Suspense>
+      ) : (
+        <Card>
+          <p className="text-sm text-muted">No dashboard for your role yet.</p>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+type Session = Awaited<ReturnType<typeof getStaffSession>>;
+
+async function ViewFor({ view, staff, supabase }: { view: DashboardView; staff: NonNullable<Session["staff"]>; supabase: Session["supabase"] }) {
+  // Visa decisions and scholarships are readable only by Processing and Super
+  // Admin. Management's team views read those two with the service role —
+  // only here, after viewsFor has given them the view, and only as totals.
+  const restricted = () => (hasRole(staff, "processing", "super_admin") ? supabase : createAdminClient());
+
+  switch (view) {
+    case "overview":
+      return <OverviewView db={supabase} restricted={restricted()} />;
+    case "sales":
+      return <SalesView db={supabase} staffId={staff.id} team={false} />;
+    case "sales_team":
+      return <SalesView db={supabase} staffId={staff.id} team />;
+    case "processing":
+      return <ProcessingView db={supabase} restricted={supabase} staffId={staff.id} team={false} />;
+    case "processing_team":
+      return <ProcessingView db={supabase} restricted={restricted()} staffId={staff.id} team />;
+    case "finance":
+      return <FinanceView db={supabase} />;
+    case "leadgen":
+      return <LeadGenView db={supabase} />;
+    case "social":
+      return <SocialView db={supabase} />;
+  }
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="flex flex-col gap-4" aria-busy="true" aria-label="Loading the dashboard">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="h-24 animate-pulse rounded-lg border border-border bg-card" />
+        ))}
       </div>
-
-      <Card>
-        <h3 className="mb-4 text-sm font-medium text-ink">Monthly registration target by counselor</h3>
-        {rows.length === 0 ? (
-          <EmptyState>No active counselors yet.</EmptyState>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {rows.map((r) => (
-              <div key={r.id} className="flex items-center gap-3">
-                <span className="w-24 shrink-0 truncate text-sm text-ink sm:w-40">{r.name}</span>
-                <div className="h-3 flex-1 overflow-hidden rounded-full bg-bg">
-                  <div
-                    className={`h-full rounded-full ${r.met ? "bg-success" : "bg-warning"}`}
-                    style={{ width: `${r.target ? r.pct : 0}%` }}
-                  />
-                </div>
-                <span className={`w-24 shrink-0 text-right text-xs tabular-nums ${r.met ? "text-success" : "text-warning"}`}>
-                  {r.count}/{r.target ?? "—"}
-                  {r.target ? ` (${r.pct}%)` : ""}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {[0, 1].map((i) => (
+          <div key={i} className="h-56 animate-pulse rounded-lg border border-border bg-card" />
+        ))}
+      </div>
     </div>
   );
 }

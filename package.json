@@ -26,7 +26,8 @@
     "check:staffagreements": "node scripts/verify-staff-agreements.mjs",
     "check:leave": "node scripts/verify-leave.mjs",
     "check:pageaccess": "node scripts/verify-page-access.mjs",
-    "check:uploads": "node scripts/verify-uploads.mjs"
+    "check:uploads": "node scripts/verify-uploads.mjs",
+    "check:dashboards": "node scripts/verify-dashboards.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

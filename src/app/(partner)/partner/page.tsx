@@ -6,6 +6,14 @@ import { MessageThread, type MessageRow } from "@/components/MessageThread";
 import { ReferralTrendChart } from "@/components/ReferralTrendChart";
 import { formatDateOnly } from "@/lib/formatDate";
 import { ROUND_DATE_FORMAT } from "@/lib/programRounds";
+import { StatCard } from "@/components/ui/StatCard";
+import { ChartCard } from "@/components/charts/ChartCard";
+import { FunnelChart } from "@/components/charts/FunnelChart";
+import { DonutChart } from "@/components/charts/DonutChart";
+import { ProgressRing } from "@/components/charts/ProgressRing";
+import { karachiToday } from "@/lib/calendarDates";
+import { summarizePartner } from "@/lib/dashboards/partner";
+import { formatAmount } from "@/lib/marketing";
 
 type PartnerApplicationRow = {
   application_id: string;
@@ -13,6 +21,8 @@ type PartnerApplicationRow = {
   program_name: string | null;
   intake: string | null;
   current_stage: string;
+  /** The destination's stage list, which is what says whether a stage is before or after the decision. */
+  pipeline_stages: string[] | null;
   submitted_at: string;
   /**
    * The effective deadline, as 0235 computes it: the date HMARK typed for this
@@ -101,6 +111,20 @@ export default async function PartnerDashboardPage() {
         .select("id, expected_amount, currency, status, student:leads(full_name), application:applications(intake)")
     : { data: [] };
 
+  const summary = summarizePartner({
+    apps: applications.map((a) => ({ ...a, pipeline_stages: Array.isArray(a.pipeline_stages) ? a.pipeline_stages : [] })),
+    commissions: (commissionsRaw ?? []) as { status: string | null; expected_amount: number | string | null; currency: string | null }[],
+    today: karachiToday(),
+  });
+  const OUTCOME_COLORS: Record<string, string> = {
+    pending: "var(--chart-6)",
+    submitted: "var(--chart-2)",
+    with_offer: "var(--success)",
+    rejected: "var(--danger)",
+    not_eligible: "var(--chart-5)",
+    withdrawn: "var(--chart-3)",
+  };
+
   function one<T>(v: T | T[] | null) {
     return Array.isArray(v) ? v[0] ?? null : v;
   }
@@ -120,23 +144,67 @@ export default async function PartnerDashboardPage() {
     <div className="mx-auto max-w-5xl">
       <h2 className="mb-6 text-lg font-semibold text-ink">Partner Dashboard</h2>
 
-      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Card>
-          <p className="text-xs uppercase tracking-wide text-muted">Total referred (all-time)</p>
-          <p className="mt-1 text-2xl font-semibold text-ink">{applications.length}</p>
-        </Card>
-        <Card>
-          <p className="text-xs uppercase tracking-wide text-muted">Pending review</p>
-          <p className="mt-1 text-2xl font-semibold text-ink">{pending.length}</p>
-        </Card>
-        <Card>
-          <p className="text-xs uppercase tracking-wide text-muted">Enrolled via HMARK</p>
-          <p className="mt-1 text-2xl font-semibold text-success">{enrolled.length}</p>
-        </Card>
-        <Card>
-          <p className="text-xs uppercase tracking-wide text-muted">Acceptance rate</p>
-          <p className="mt-1 text-2xl font-semibold text-ink">{acceptanceRate === null ? "—" : `${acceptanceRate}%`}</p>
-        </Card>
+      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4" data-partner-dashboard>
+        <StatCard label="Referred by HMARK" value={applications.length} hint="all time" />
+        <StatCard
+          label="Awaiting your decision"
+          value={summary.awaitingCount}
+          tone={summary.awaitingCount ? "warning" : "default"}
+          hint={summary.awaitingDecision[0] ? `longest waiting ${summary.awaitingDecision[0].days} days` : undefined}
+        />
+        <StatCard label="Enrolled via HMARK" value={enrolled.length} tone="success" hint={`${summary.offers} offers made`} />
+        <StatCard
+          label="Offer rate"
+          value={summary.offerRate === null ? "—" : `${summary.offerRate}%`}
+          hint={acceptanceRate === null ? "of applications decided" : `${acceptanceRate}% of decided students enrolled`}
+        />
+      </div>
+
+      <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <ChartCard title="From referral to enrolment" subtitle="Every student HMARK has referred to you">
+          <FunnelChart label="Students referred, submitted, offered a place and enrolled" stages={summary.funnel} />
+        </ChartCard>
+        <ChartCard title="Where applications stand" subtitle="By outcome">
+          <DonutChart
+            label="Applications by outcome"
+            centerLabel="applications"
+            slices={summary.outcomes.map((o) => ({ label: o.label, value: o.count, color: OUTCOME_COLORS[o.key] }))}
+          />
+        </ChartCard>
+      </div>
+
+      <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <ChartCard title="Commission" subtitle="Received against expected" href="/partner/commissions" linkLabel="Commissions">
+          <div className="flex justify-center py-2">
+            <ProgressRing
+              value={summary.commissions.received}
+              target={summary.commissions.total || null}
+              label="Received"
+              caption={
+                summary.commissions.byCurrency.length
+                  ? summary.commissions.byCurrency.map((c) => `${formatAmount(c.received, c.currency)} of ${formatAmount(c.expected, c.currency)}`).join(" · ")
+                  : "no commission records yet"
+              }
+              tone={summary.commissions.overdue ? "warning" : undefined}
+            />
+          </div>
+        </ChartCard>
+        <ChartCard title="Waiting on your decision" subtitle="Submitted, longest waiting first" className="lg:col-span-2">
+          {summary.awaitingDecision.length === 0 ? (
+            <p className="py-4 text-center text-sm text-muted">Nothing is waiting on a decision.</p>
+          ) : (
+            <ul className="flex flex-col divide-y divide-border text-sm">
+              {summary.awaitingDecision.map((a) => (
+                <li key={a.id} className="flex items-center justify-between gap-3 py-1.5">
+                  <Link href={`/partner/applications/${a.id}`} className="min-w-0 truncate text-primary hover:underline">
+                    {a.label}
+                  </Link>
+                  <span className={`shrink-0 text-xs tabular-nums ${a.days >= 14 ? "text-danger" : "text-muted"}`}>{a.days} days</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </ChartCard>
       </div>
 
       <Card className="mb-6">
