@@ -5,11 +5,12 @@ import { isShrinkableImage } from "@/lib/fileSize";
 /**
  * Makes an oversized photo fit, in the browser, before it is sent.
  *
- * A phone photo of a passport page is 2-5 MB off the camera, and the limit is
- * 2 MB. Refusing them all would be technically correct and practically a
- * support queue: the office would spend its days telling students how to
- * resize a photo. So a photo is resized here instead, and the student is told
- * it happened rather than it being hidden from them.
+ * A phone photo of a document can be 3-8 MB off the camera, over the 5 MB
+ * limit. Refusing it outright would be technically correct and practically a
+ * support queue, and shrinking it unasked would change someone's file behind
+ * their back. So the person is told its size and offered "Shrink to fit"
+ * (FileField, SubmitSignedAgreementForm), and this runs only when they choose
+ * it.
  *
  * Only photos. A PDF cannot be made smaller without rewriting its contents,
  * and silently re-encoding a legal document is not something to do behind

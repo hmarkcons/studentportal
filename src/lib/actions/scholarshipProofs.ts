@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getStaffSession } from "@/lib/auth/session";
 import { requirePermission } from "@/lib/auth/permissions";
 import { sanitizeFilename, validateDocumentFile } from "@/lib/documentUpload";
+import { uploadedFile } from "@/lib/stagedUpload";
 
 export type ScholarshipProof = {
   id: string;
@@ -73,9 +74,9 @@ export async function uploadScholarshipProof(
   );
   if (denied) return { error: denied.error };
 
-  const file = formData.get("file") as File | null;
+  const file = await uploadedFile(formData, "file");
   if (!file || file.size === 0) return { error: "Choose a file to attach." };
-  // The same 2 MB and the same accepted types as every other upload.
+  // The same 5 MB and the same accepted types as every other upload.
   const invalid = validateDocumentFile(file, "file");
   if (invalid) return { error: invalid };
 

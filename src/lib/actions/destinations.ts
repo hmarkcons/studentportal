@@ -8,6 +8,7 @@ import { DEFAULT_AGREEMENT_WORDING } from "@/lib/pdf/defaultAgreementWording";
 import { parseDashboardStagesText } from "@/lib/dashboardPipeline";
 import { isIntakeMode } from "@/lib/intake";
 import { MAX_UPLOAD_BYTES, fileSizeError } from "@/lib/fileSize";
+import { uploadedFile } from "@/lib/stagedUpload";
 
 // Every destination needs an agreement it can actually generate — without a
 // template, generateAgreementPdf has no legacy hardcoded content for a new
@@ -244,7 +245,7 @@ export async function deleteDestination(destinationId: string) {
 // back to a sane default the same way createDestination does.
 export async function importDestinations(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  const file = formData.get("file") as File | null;
+  const file = await uploadedFile(formData, "file");
   if (file) {
     const tooLarge = fileSizeError(file.size, MAX_UPLOAD_BYTES, "file");
     if (tooLarge) return { error: `${tooLarge} A spreadsheet this large is usually a mistake — split it and import in batches.` };

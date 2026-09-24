@@ -8,6 +8,7 @@ import { profileDerivedRequirements, reconcileDerived, templatesToSeed } from "@
 import { requirePermission } from "@/lib/auth/permissions";
 import { categoryCarriesOver } from "@/lib/intakeCycle";
 import { ensureCurrentCycle } from "@/lib/ensureCycle";
+import { uploadedFile } from "@/lib/stagedUpload";
 
 const MANAGE_DENIED = "Only Super Admin and the Processing team can add or remove document requirements.";
 
@@ -226,7 +227,7 @@ export async function uploadDocument(
   formData: FormData
 ) {
   const supabase = await createClient();
-  const file = formData.get("file") as File | null;
+  const file = await uploadedFile(formData, "file");
 
   if (!file || file.size === 0) {
     return { error: "Choose a file to upload." };

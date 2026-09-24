@@ -13,6 +13,7 @@ import { dateOfBirthError } from "@/lib/dateOfBirth";
 import { phoneError, phoneChangeError } from "@/lib/phoneNumber";
 import { MAX_UPLOAD_BYTES, fileSizeError } from "@/lib/fileSize";
 import { removeStoragePrefix } from "@/lib/storageCleanup";
+import { uploadedFile } from "@/lib/stagedUpload";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -221,7 +222,7 @@ export async function updateLeadDestinations(leadId: string, _prevState: unknown
 // country_of_interest.
 export async function importLeads(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  const file = formData.get("file") as File | null;
+  const file = await uploadedFile(formData, "file");
   if (file) {
     const tooLarge = fileSizeError(file.size, MAX_UPLOAD_BYTES, "file");
     if (tooLarge) return { error: `${tooLarge} A spreadsheet this large is usually a mistake — split it and import in batches.` };
@@ -282,7 +283,7 @@ export async function importLeads(_prevState: unknown, formData: FormData) {
  */
 export async function importRegisteredStudents(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  const file = formData.get("file") as File | null;
+  const file = await uploadedFile(formData, "file");
   if (file) {
     const tooLarge = fileSizeError(file.size, MAX_UPLOAD_BYTES, "file");
     if (tooLarge) return { error: `${tooLarge} A spreadsheet this large is usually a mistake — split it and import in batches.` };

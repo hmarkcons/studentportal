@@ -21,6 +21,7 @@ import { holdsPermission } from "@/lib/permissionResolve";
 import { formatLeaveRange, leaveHtml, leaveSubject, leaveText, type LeaveMail } from "@/lib/leaveEmail";
 import { sendEmail } from "@/lib/email";
 import { getSiteUrl } from "@/lib/siteUrl";
+import { uploadedFile } from "@/lib/stagedUpload";
 
 // Staff leave (0272). A staff member asks; someone holding leave.approve —
 // Management and Super Admin by default — decides, never on their own
@@ -173,7 +174,7 @@ export async function requestMyLeave(_prev: unknown, formData: FormData): Promis
   const preview = await computeSplit({ staffId: me.id, ...read, hasCertificate: false });
   if ("error" in preview) return preview;
 
-  const upload = await uploadCertificate(me.id, formData.get("certificate") as File | null);
+  const upload = await uploadCertificate(me.id, await uploadedFile(formData, "certificate"));
   if ("error" in upload) return upload;
 
   const supabase = await createClient();
@@ -333,7 +334,7 @@ export async function recordLeaveFor(_prev: unknown, formData: FormData): Promis
   const read = readRequest(formData);
   if ("error" in read) return read;
 
-  const upload = await uploadCertificate(staffId, formData.get("certificate") as File | null);
+  const upload = await uploadCertificate(staffId, await uploadedFile(formData, "certificate"));
   if ("error" in upload) return upload;
   const split = await computeSplit({ staffId, ...read, hasCertificate: Boolean(upload.path) });
   if ("error" in split) return split;

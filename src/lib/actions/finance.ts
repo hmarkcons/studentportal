@@ -7,6 +7,7 @@ import { PARTNER_COMMISSION_STATUSES } from "@/lib/constants";
 import { requirePermission } from "@/lib/auth/permissions";
 import { listVisaDecisions } from "@/lib/visaDecisions";
 import { validateDocumentFile } from "@/lib/documentUpload";
+import { uploadedFile } from "@/lib/stagedUpload";
 
 const REFUND_PERCENT: Record<string, number> = {
   no_admission: 100,
@@ -283,7 +284,7 @@ export async function markStaffCommissionPaid(id: string, revalidateTo: string, 
   const supabase = await createClient();
   const denied = await requirePermission("finance.commissions.manage", "Only Finance/Super Admin can mark commissions paid."); if (denied) return { error: denied.error };
 
-  const file = formData.get("file") as File | null;
+  const file = await uploadedFile(formData, "file");
   let payment_proof_path: string | undefined;
 
   if (file && file.size > 0) {
@@ -388,7 +389,7 @@ export async function uploadStaffCommissionProof(id: string, revalidateTo: strin
   const supabase = await createClient();
   const denied = await requirePermission("finance.commissions.manage", "Only Finance/Super Admin can upload proof."); if (denied) return { error: denied.error };
 
-  const file = formData.get("file") as File | null;
+  const file = await uploadedFile(formData, "file");
   if (!file || file.size === 0) return { error: "Choose a file to upload." };
   const tooLarge = validateDocumentFile(file, "file");
   if (tooLarge) return { error: tooLarge };
@@ -452,7 +453,7 @@ export async function uploadPartnerCommissionProof(id: string, revalidateTo: str
   const supabase = await createClient();
   const denied = await requirePermission("finance.commissions.manage", "Only Finance/Super Admin can upload proof."); if (denied) return { error: denied.error };
 
-  const file = formData.get("file") as File | null;
+  const file = await uploadedFile(formData, "file");
   if (!file || file.size === 0) return { error: "Choose a file to upload." };
   const tooLarge = validateDocumentFile(file, "file");
   if (tooLarge) return { error: tooLarge };

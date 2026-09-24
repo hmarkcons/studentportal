@@ -4,8 +4,9 @@ import { useActionState, useRef, useState } from "react";
 import { submitSignedAgreement } from "@/lib/actions/portal-agreement";
 import { Button } from "@/components/ui/Button";
 import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
-import { MAX_UPLOAD_BYTES, fileSizeError, formatFileSize, limitHint, reduceHint, shrunkNote } from "@/lib/fileSize";
+import { MAX_UPLOAD_BYTES, fileSizeError, formatFileSize, isShrinkableImage, limitHint, reduceHint, shrunkNote } from "@/lib/fileSize";
 import { shrinkImageToFit } from "@/components/shrinkImage";
+import { stageFile } from "@/lib/stageFile";
 import { toast } from "@/lib/toast";
 import { ConsentVideoRecorder } from "./ConsentVideoRecorder";
 
@@ -73,72 +74,117 @@ export function SubmitSignedAgreementForm({
   const [showWhy, setShowWhy] = useState(false);
   const [documentError, setDocumentError] = useState<string | null>(null);
   const [documentNote, setDocumentNote] = useState<string | null>(null);
-  const videoInputRef = useRef<HTMLInputElement | null>(null);
-  const documentInputRef = useRef<HTMLInputElement | null>(null);
+  // What the form posts: references to files already in storage (see
+  // stageFile). Posting the files themselves would run into Vercel's 4.5 MB
+  // request limit, which a consent video and a signed agreement together
+  // regularly passed.
+  const [documentRef, setDocumentRef] = useState<string | null>(null);
+  const [videoRef, setVideoRef] = useState<string | null>(null);
+  const [videoNote, setVideoNote] = useState<string | null>(null);
+  const [videoError, setVideoError] = useState<string | null>(null);
+  const [documentShrinkable, setDocumentShrinkable] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(0);
+  const documentPick = useRef(0);
+  const videoPick = useRef(0);
   const both = needsDocument && needsVideo;
-  // Only what is being asked for can block the button.
-  const ready = (!needsVideo || Boolean(video)) && (!needsDocument || Boolean(documentName));
+  // Only what is being asked for can block the button, and only once it is uploaded.
+  const ready = uploading === 0 && (!needsVideo || Boolean(videoRef)) && (!needsDocument || Boolean(documentRef));
 
-  /**
-   * The signed agreement, held to the same 2 MB as every other document.
-   *
-   * This input is visually hidden behind its label, so FileField cannot be
-   * dropped in here — the check and the shrink are done inline and the result
-   * is reported under the picker, in red.
-   *
-   * A photographed signed agreement is the commonest case and routinely over
-   * the limit, so an image is resized rather than refused. A scanned PDF that
-   * is too big is refused: re-encoding a signed legal document is not
-   * something to do behind someone's back.
-   */
-  async function chooseDocument(chosen: File | null) {
-    setDocumentError(null);
-    setDocumentNote(null);
-    if (!chosen) {
-      setDocumentName(null);
+  async function stageDocument(file: File, pick: number, doneNote: string | null) {
+    setUploading((n) => n + 1);
+    setDocumentNote(`Uploading ${formatFileSize(file.size)}…`);
+    const result = await stageFile(file);
+    setUploading((n) => n - 1);
+    if (pick !== documentPick.current) return;
+    if (!result.ok) {
+      setDocumentNote(null);
+      setDocumentError(result.error);
       return;
     }
+    setDocumentRef(result.ref);
+    setDocumentName(file.name);
+    setDocumentNote(doneNote ?? `Uploaded · ${formatFileSize(file.size)}`);
+  }
+
+  /**
+   * The signed agreement, held to the same limit as every other document.
+   *
+   * This input is visually hidden behind its label, so FileField cannot be
+   * dropped in here — the check, the upload and the offer to shrink are done
+   * inline and reported under the picker.
+   *
+   * A photographed signed agreement is the commonest case of being over the
+   * limit, so the student is offered "Shrink to fit" and chooses. A scanned
+   * PDF that is too big is refused with advice: re-encoding a signed legal
+   * document is not something to do behind someone's back.
+   */
+  async function chooseDocument(chosen: File | null) {
+    const pick = ++documentPick.current;
+    setDocumentError(null);
+    setDocumentNote(null);
+    setDocumentRef(null);
+    setDocumentName(null);
+    setDocumentShrinkable(null);
+    if (!chosen) return;
 
     const tooLarge = fileSizeError(chosen.size, MAX_UPLOAD_BYTES, "agreement");
     if (!tooLarge) {
-      setDocumentName(chosen.name);
+      await stageDocument(chosen, pick, null);
       return;
     }
-
-    setDocumentName(null);
-    setDocumentNote(`Reducing ${formatFileSize(chosen.size)}…`);
-    const result = await shrinkImageToFit(chosen, MAX_UPLOAD_BYTES);
-    setDocumentNote(null);
-
-    if (result.ok && documentInputRef.current && typeof DataTransfer !== "undefined") {
-      const dt = new DataTransfer();
-      dt.items.add(result.file);
-      documentInputRef.current.files = dt.files;
-      setDocumentName(result.file.name);
-      setDocumentNote(shrunkNote(result.from, result.to, MAX_UPLOAD_BYTES));
+    if (isShrinkableImage(chosen.type, chosen.name)) {
+      setDocumentShrinkable(chosen);
+      setDocumentError(tooLarge);
       return;
     }
-
-    const advice = result.ok
-      ? null
-      : result.reason === "still_too_large"
-        ? `Even fully compressed it is ${formatFileSize(result.smallest)}. Photograph one page at a time, or crop it.`
-        : reduceHint(chosen.type, chosen.name);
-    setDocumentError([tooLarge, advice].filter(Boolean).join(" "));
+    setDocumentError([tooLarge, reduceHint(chosen.type, chosen.name)].filter(Boolean).join(" "));
   }
 
-  // The recorded Blob only exists in memory, so mirror it into a real file
-  // input the form can post. DataTransfer is the supported way to set one.
-  function attachVideo(file: File | null) {
-    setVideo(file);
-    if (!videoInputRef.current) return;
-    if (!file) {
-      videoInputRef.current.value = "";
+  async function shrinkDocument() {
+    const original = documentShrinkable;
+    if (!original) return;
+    const pick = documentPick.current;
+    setDocumentShrinkable(null);
+    setDocumentError(null);
+    setDocumentNote(`Shrinking ${formatFileSize(original.size)}…`);
+    setUploading((n) => n + 1);
+    const result = await shrinkImageToFit(original, MAX_UPLOAD_BYTES);
+    setUploading((n) => n - 1);
+    if (pick !== documentPick.current) return;
+    if (result.ok) {
+      await stageDocument(result.file, pick, shrunkNote(result.from, result.to, MAX_UPLOAD_BYTES));
       return;
     }
-    const dt = new DataTransfer();
-    dt.items.add(file);
-    videoInputRef.current.files = dt.files;
+    setDocumentNote(null);
+    const advice =
+      result.reason === "still_too_large"
+        ? `Even fully compressed it is ${formatFileSize(result.smallest)}. Photograph one page at a time, or crop it.`
+        : reduceHint(original.type, original.name);
+    setDocumentError([fileSizeError(original.size, MAX_UPLOAD_BYTES, "agreement"), advice].filter(Boolean).join(" "));
+  }
+
+  // The recorded video goes to storage as soon as it exists, into the video
+  // staging bucket (its own, larger limit), so pressing Submit sends only a
+  // reference.
+  async function attachVideo(file: File | null) {
+    const pick = ++videoPick.current;
+    setVideo(file);
+    setVideoRef(null);
+    setVideoError(null);
+    setVideoNote(null);
+    if (!file) return;
+    setUploading((n) => n + 1);
+    setVideoNote(`Uploading the video (${formatFileSize(file.size)})…`);
+    const result = await stageFile(file, { video: true });
+    setUploading((n) => n - 1);
+    if (pick !== videoPick.current) return;
+    if (!result.ok) {
+      setVideoNote(null);
+      setVideoError(result.error);
+      return;
+    }
+    setVideoRef(result.ref);
+    setVideoNote(`Video uploaded · ${formatFileSize(file.size)}`);
   }
 
   return (
@@ -167,8 +213,25 @@ export function SubmitSignedAgreementForm({
 
       {needsVideo && (
         <>
-          <ConsentVideoRecorder onVideo={attachVideo} disabled={pending} />
-          <input ref={videoInputRef} type="file" name="video" accept="video/*" className="sr-only" tabIndex={-1} aria-hidden />
+          <ConsentVideoRecorder onVideo={(f) => void attachVideo(f)} disabled={pending} />
+          <input type="hidden" name="video" value={videoRef ?? ""} />
+          {videoNote && (
+            <p className="text-xs text-muted" aria-live="polite">
+              {videoNote}
+            </p>
+          )}
+          {videoError && video && (
+            <p role="alert" className="flex flex-wrap items-center gap-2 rounded-md border border-danger bg-danger-bg px-2 py-1 text-xs font-medium text-danger">
+              {videoError}
+              <button
+                type="button"
+                onClick={() => void attachVideo(video)}
+                className="rounded-md border border-danger bg-card px-2 py-0.5 font-medium text-danger hover:bg-danger-bg"
+              >
+                Try again
+              </button>
+            </p>
+          )}
         </>
       )}
 
@@ -184,9 +247,7 @@ export function SubmitSignedAgreementForm({
           <label className="cursor-pointer whitespace-nowrap rounded-md border border-border px-2 py-1 text-xs text-ink hover:bg-bg">
             {documentName ? "Change file" : "Choose file"}
             <input
-              ref={documentInputRef}
               type="file"
-              name="agreement"
               accept={ACCEPTED_DOCUMENT_ACCEPT}
               className="sr-only"
               disabled={pending}
@@ -194,6 +255,7 @@ export function SubmitSignedAgreementForm({
             />
           </label>
         )}
+        {needsDocument && <input type="hidden" name="agreement" value={documentRef ?? ""} />}
         {/* Gated in the button rather than with `required` on the input: a
             visually-hidden required control can't be focused for the native
             validation bubble, and Chrome then blocks submission silently. */}
@@ -208,17 +270,31 @@ export function SubmitSignedAgreementForm({
           </p>
           {documentNote && <p className="text-xs text-muted">{documentNote}</p>}
           {documentError && (
-            <p role="alert" className="rounded-md border border-danger bg-danger-bg px-2 py-1 text-xs font-medium text-danger">
-              {documentError}
-            </p>
+            <div role="alert" className="flex flex-col gap-1.5 rounded-md border border-danger bg-danger-bg px-2 py-1.5 text-xs font-medium text-danger">
+              <span>{documentError}</span>
+              {documentShrinkable && (
+                <span className="flex flex-wrap items-center gap-2 font-normal">
+                  <button
+                    type="button"
+                    onClick={() => void shrinkDocument()}
+                    className="w-fit rounded-md border border-danger bg-card px-2 py-0.5 font-medium text-danger hover:bg-danger-bg"
+                  >
+                    Shrink to fit
+                  </button>
+                  <span>makes the photo smaller so it fits, keeping it readable. Or choose a smaller file.</span>
+                </span>
+              )}
+            </div>
           )}
         </>
       )}
       {!ready && (
         <p className="text-xs text-muted">
-          {needsVideo && needsDocument && !video && !documentName
+          {uploading > 0
+            ? "Uploading — submission unlocks as soon as it is done."
+            : needsVideo && needsDocument && !videoRef && !documentRef
             ? "Record the video and attach your signed agreement — submission stays locked until both are here."
-            : needsVideo && !video
+            : needsVideo && !videoRef
               ? "Record or attach the video first — submission stays locked until then."
               : "Attach your signed agreement — submission stays locked until then."}
         </p>

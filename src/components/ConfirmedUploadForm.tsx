@@ -32,7 +32,7 @@ export function ConfirmedUploadForm({
   action: (prevState: unknown, formData: FormData) => Promise<{ error?: string; success?: boolean } | void>;
   accept?: string;
   capture?: "environment" | "user";
-  /** Defaults to the app-wide 2 MB. */
+  /** Defaults to the app-wide 5 MB. */
   limitBytes?: number;
   noun?: string;
   /** What is accepted, in words, shown alongside the limit. */

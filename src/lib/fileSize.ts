@@ -1,18 +1,24 @@
 // One place that decides how big an upload may be, and how that is said.
 //
-// The office set 2 MB per document. Every upload in the app is held to it —
-// documents, signed agreements, payment proofs, imports, templates — with one
-// lower limit for profile photos, which have no reason to be large, and one
-// deliberate exception for the e-signature consent video (see
-// MAX_VIDEO_SIZE_BYTES in documentUpload.ts): sixty seconds of webcam capture
-// cannot be 2 MB, so holding it to that would disable agreement signing.
+// The office set 5 MB per document (raised from 2 MB on 2026-09-24). Every
+// upload in the app is held to it — documents, signed agreements, payment
+// proofs, imports, templates — with one lower limit for profile photos, which
+// have no reason to be large, and one deliberate exception for the
+// e-signature consent video (see MAX_VIDEO_SIZE_BYTES in documentUpload.ts):
+// sixty seconds of webcam capture can pass 5 MB, so holding it to that would
+// disable agreement signing.
+//
+// 5 MB is only possible because files go from the browser straight into a
+// Storage bucket (0275, src/lib/stageFile.ts): a Vercel Function refuses any
+// request over 4.5 MB. That bucket enforces this same number in Storage, and
+// scripts/file-size-test.mjs fails if the two ever differ.
 //
 // Kept free of any browser or server API so both sides use the same numbers
 // and the same wording — a limit enforced in one place and worded differently
 // in another is how a student ends up told two things about the same file.
 
 /** Every document, agreement, proof, import and template. */
-export const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
+export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
 /** A head-and-shoulders photo. Smaller on purpose — nothing needs more. */
 export const MAX_PHOTO_BYTES = 500 * 1024;

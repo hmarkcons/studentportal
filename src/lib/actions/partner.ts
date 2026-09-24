@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { sanitizeFilename, validateDocumentFile } from "@/lib/documentUpload";
 import { parseRoundsFromFormData } from "@/lib/programRounds";
 import { saveProgramRounds } from "@/lib/actions/programRoundsWrite";
+import { uploadedFile } from "@/lib/stagedUpload";
 
 export async function partnerUpdateStage(applicationId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
@@ -20,7 +21,7 @@ export async function partnerUpdateStage(applicationId: string, _prevState: unkn
 
 export async function partnerUploadLetter(applicationId: string, category: "offer_letter" | "rejection_letter", _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  const file = formData.get("file") as File | null;
+  const file = await uploadedFile(formData, "file");
   if (!file || file.size === 0) return { error: "Choose a file." };
   const validationError = validateDocumentFile(file);
   if (validationError) return { error: validationError };
@@ -85,7 +86,7 @@ export async function partnerUploadLetter(applicationId: string, category: "offe
 
 export async function partnerUploadCommissionProof(commissionId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  const file = formData.get("file") as File | null;
+  const file = await uploadedFile(formData, "file");
   if (!file || file.size === 0) return { error: "Choose a file." };
   const proofTooLarge = validateDocumentFile(file, "file");
   if (proofTooLarge) return { error: proofTooLarge };
@@ -114,7 +115,7 @@ export async function partnerDisputeCommission(commissionId: string) {
 
 export async function partnerUploadDocument(universityId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  const file = formData.get("file") as File | null;
+  const file = await uploadedFile(formData, "file");
   const description = String(formData.get("description") ?? "").trim() || null;
   if (!file || file.size === 0) return { error: "Choose a file." };
   const exchangeTooLarge = validateDocumentFile(file, "file");

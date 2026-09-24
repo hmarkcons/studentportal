@@ -42,6 +42,7 @@ import {
 } from "@/lib/catalogueRows";
 import { readAllIn } from "@/lib/catalogueReads";
 import { EXAMPLE_UNIVERSITY, ROUNDS_SHEET, isExampleRow } from "@/lib/catalogueSheet";
+import { uploadedFile } from "@/lib/stagedUpload";
 
 export async function createUniversity(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
@@ -1006,7 +1007,7 @@ async function importUniversityRows(
   const supabase = await createClient();
   if (!(await isSuperAdmin(supabase))) return { error: SUPER_ADMIN_ONLY };
 
-  const read = await readImportRows(formData.get("file") as File | null, {
+  const read = await readImportRows(await uploadedFile(formData, "file"), {
     ...options,
     withRounds: options.withProgrammes,
   });
@@ -1180,7 +1181,7 @@ export async function importPrograms(universityId: string, _prevState: unknown, 
   const supabase = await createClient();
   if (!(await isSuperAdmin(supabase))) return { error: SUPER_ADMIN_ONLY };
 
-  const read = await readImportRows(formData.get("file") as File | null, {
+  const read = await readImportRows(await uploadedFile(formData, "file"), {
     sheet: "Programmes",
     knownHeaders: ["level", "core_field", "language_requirement"],
   });

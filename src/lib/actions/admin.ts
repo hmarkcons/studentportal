@@ -27,6 +27,7 @@ import {
   staffLoginText,
   type StaffLoginEmailData,
 } from "@/lib/staffLoginEmail";
+import { uploadedFile } from "@/lib/stagedUpload";
 
 // "Suspended" just freezes the account (blocked from every staff route by
 // the (staff) layout's `status !== "active"` check, same as deactivated) —
@@ -481,7 +482,7 @@ export async function uploadStaffPhoto(staffId: string, _prevState: unknown, for
   const denied = await requirePermission("staff.manage", "Only Super Admin can set a staff member's photo.");
   if (denied) return { error: denied.error };
 
-  const file = formData.get("file") as File | null;
+  const file = await uploadedFile(formData, "file");
   if (!file || file.size === 0) return { error: "Choose a photo to upload." };
   if (!file.type.startsWith("image/")) return { error: "Choose an image file." };
   // 500 KB for a photo. The browser resizes an oversized one before it gets
@@ -711,7 +712,7 @@ export async function createServiceRequest(_prevState: unknown, formData: FormDa
 
   const id = crypto.randomUUID();
   let proof_of_payment_path: string | null = null;
-  const proofFile = formData.get("proof_of_payment") as File | null;
+  const proofFile = await uploadedFile(formData, "proof_of_payment");
   if (proofFile && proofFile.size > 0) {
     const proofTooLarge = fileSizeError(proofFile.size, undefined, "file");
     if (proofTooLarge) return { error: `${proofTooLarge} ${reduceHint(proofFile.type, proofFile.name) ?? ""}`.trim() };

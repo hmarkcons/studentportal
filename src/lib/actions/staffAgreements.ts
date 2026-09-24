@@ -27,6 +27,7 @@ import {
   staffAgreementText,
   type StaffAgreementMail,
 } from "@/lib/staffAgreementEmail";
+import { uploadedFile } from "@/lib/stagedUpload";
 
 // Staff agreements (0271). Two permissions, both a Super Admin's until granted
 // to a role on the Role Permissions screen:
@@ -106,7 +107,7 @@ export async function createStaffAgreementTemplate(_prev: unknown, formData: For
   if (wordingIssue) return { error: wordingIssue };
 
   const supabase = await createClient();
-  const upload = await uploadTemplateFile(supabase, formData.get("file") as File | null);
+  const upload = await uploadTemplateFile(supabase, await uploadedFile(formData, "file"));
   if ("error" in upload && upload.error) return { error: upload.error };
 
   const { staff } = await getStaffSession();
@@ -136,7 +137,7 @@ export async function updateStaffAgreementTemplate(templateId: string, _prev: un
     .maybeSingle();
   if (!existing) return { error: "That template no longer exists." };
 
-  const upload = await uploadTemplateFile(supabase, formData.get("file") as File | null);
+  const upload = await uploadTemplateFile(supabase, await uploadedFile(formData, "file"));
   if ("error" in upload && upload.error) return { error: upload.error };
 
   const { data: updated, error } = await supabase
@@ -410,7 +411,7 @@ export async function uploadSignedStaffAgreement(
   const denied = await requirePermission(MANAGE, "You don't have access to staff agreements.");
   if (denied) return denied;
 
-  const file = formData.get("file") as File | null;
+  const file = await uploadedFile(formData, "file");
   if (!file || file.size === 0) return { error: "Choose the signed agreement to upload." };
   const invalid = validateDocumentFile(file, "agreement");
   if (invalid) return { error: invalid };
@@ -537,7 +538,7 @@ export async function submitMySignedAgreement(agreementId: string, _prev: unknow
   const { staff: me } = await getStaffSession();
   if (!me) return { error: "Sign in again." };
 
-  const file = formData.get("file") as File | null;
+  const file = await uploadedFile(formData, "file");
   if (!file || file.size === 0) return { error: "Choose your signed copy to upload." };
   const invalid = validateDocumentFile(file, "agreement");
   if (invalid) return { error: invalid };

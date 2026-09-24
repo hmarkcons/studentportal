@@ -1,6 +1,6 @@
 import { MAX_UPLOAD_BYTES, fileSizeError, reduceHint } from "./fileSize.ts";
 
-// The office set 2 MB per document. Held here rather than repeated, so the
+// The office set 5 MB per document. Held here rather than repeated, so the
 // browser hint, the browser check and this backstop can never disagree.
 export const MAX_DOCUMENT_SIZE_BYTES = MAX_UPLOAD_BYTES;
 

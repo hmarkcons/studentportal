@@ -297,7 +297,7 @@ try {
     // The signed scan comes back over the counter and staff upload it.
     await page.reload({ waitUntil: "domcontentloaded" });
     await expand(page, "Agreement");
-    const upload = page.locator('input[name="file"]').first();
+    const upload = page.locator('input[type="file"]').first();
     ok("the signed-copy upload is offered", (await upload.count()) > 0);
     if (await upload.count()) {
       await upload.setInputFiles({
@@ -402,7 +402,7 @@ try {
       await studentPage.locator('input[type="file"][accept*="video"]').first().setInputFiles({
         name: "consent.webm", mimeType: "video/webm", buffer: Buffer.from("zztmp consent recording"),
       });
-      await studentPage.locator('input[type="file"][name="agreement"]').setInputFiles({
+      await studentPage.locator('input[type="file"]:not([accept*="video"])').setInputFiles({
         name: "my-signed-agreement.pdf", mimeType: "application/pdf", buffer: PDF_BYTES,
       });
       await submit.click();
@@ -484,7 +484,7 @@ try {
             otherPathField: "signed_file_path",
             otherStatusField: "document_status",
             studentInput: 'input[type="file"][accept*="video"]',
-            absentInput: 'input[type="file"][name="agreement"]',
+            absentInput: 'input[type="file"]:not([accept*="video"])',
             file: { name: "consent-take-2.webm", mimeType: "video/webm", buffer: Buffer.from("zztmp second take") },
           },
           {
@@ -498,7 +498,7 @@ try {
             statusField: "document_status",
             otherPathField: "video_recording_path",
             otherStatusField: "video_status",
-            studentInput: 'input[type="file"][name="agreement"]',
+            studentInput: 'input[type="file"]:not([accept*="video"])',
             absentInput: 'input[type="file"][accept*="video"]',
             file: { name: "signed-take-2.pdf", mimeType: "application/pdf", buffer: PDF_BYTES },
           },

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { validateDocumentFile, validateVideoFile, sanitizeFilename } from "@/lib/documentUpload";
+import { uploadedFile } from "@/lib/stagedUpload";
 
 // Student-side submission of an e-signed agreement (outside Karachi). Files go
 // up first, then a single RPC records them — the RPC is what enforces "video or
@@ -21,8 +22,8 @@ export async function submitSignedAgreement(
 ) {
   const supabase = await createClient();
 
-  const agreementFile = formData.get("agreement") as File | null;
-  const videoFile = formData.get("video") as File | null;
+  const agreementFile = await uploadedFile(formData, "agreement");
+  const videoFile = await uploadedFile(formData, "video", { allowVideo: true });
   const hasAgreement = Boolean(agreementFile && agreementFile.size > 0);
   const hasVideo = Boolean(videoFile && videoFile.size > 0);
 

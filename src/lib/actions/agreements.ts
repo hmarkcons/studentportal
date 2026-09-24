@@ -11,6 +11,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { ensureCommissionForStudent } from "@/lib/actions/commissionAuto";
 import { validateDocumentFile, sanitizeFilename } from "@/lib/documentUpload";
 import { templateNotForStudentError } from "@/lib/agreementTemplateChoices";
+import { uploadedFile } from "@/lib/stagedUpload";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -398,7 +399,7 @@ export async function uploadSignedAgreement(agreementId: string, studentId: stri
   const denied = await requirePermission("agreements.process", "Only Super Admin/Processing can upload a signed agreement.");
   if (denied) return { error: denied.error };
 
-  const file = formData.get("file") as File | null;
+  const file = await uploadedFile(formData, "file");
   const email_verified = formData.get("email_verified") === "on";
 
   if (!file || file.size === 0) {

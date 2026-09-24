@@ -10,12 +10,24 @@ import {
   isShrinkableImage,
   reduceHint,
 } from "../src/lib/fileSize.ts";
+import { MAX_VIDEO_SIZE_BYTES } from "../src/lib/documentUpload.ts";
+import { readFileSync } from "node:fs";
 
 const MB = 1024 * 1024;
 
 test("the limits are the ones the office set", () => {
-  assert.equal(MAX_UPLOAD_BYTES, 2 * MB);
+  assert.equal(MAX_UPLOAD_BYTES, 5 * MB);
   assert.equal(MAX_PHOTO_BYTES, 500 * 1024);
+});
+
+// Storage enforces the same limits at the staging buckets (0275) that the app
+// checks before and after. If one changed without the other, a file would pass
+// the app's check and be refused by Storage with a message nobody wrote.
+test("the staging buckets hold files to the same limits as the app", () => {
+  const sql = readFileSync(new URL("../supabase/migrations/0275_upload_staging.sql", import.meta.url), "utf8");
+  const limit = (bucket) => Number(new RegExp(`\\('${bucket}', '${bucket}', false, (\\d+)\\)`).exec(sql)?.[1]);
+  assert.equal(limit("upload-staging"), MAX_UPLOAD_BYTES);
+  assert.equal(limit("upload-staging-video"), MAX_VIDEO_SIZE_BYTES);
 });
 
 test("a size is written the way a person would say it", () => {
@@ -27,13 +39,13 @@ test("a size is written the way a person would say it", () => {
 });
 
 test("a size just over the limit is never written as being at it", () => {
-  // 2.04 MB rounding to "2 MB" would read as allowed while being refused.
-  assert.notEqual(formatFileSize(2.04 * MB), "2 MB");
-  assert.equal(formatFileSize(2.04 * MB), "2.0 MB");
+  // 5.04 MB rounding to "5 MB" would read as allowed while being refused.
+  assert.notEqual(formatFileSize(5.04 * MB), "5 MB");
+  assert.equal(formatFileSize(5.04 * MB), "5.0 MB");
   // The message still names the limit, so the two numbers reading alike does
   // not leave the sentence self-contradictory.
-  const msg = fileSizeError(2.04 * MB);
-  assert.match(msg, /This file is 2\.0 MB\. The limit is 2 MB/);
+  const msg = fileSizeError(5.04 * MB);
+  assert.match(msg, /This file is 5\.0 MB\. The limit is 5 MB/);
 });
 
 test("a negative or broken size does not crash the message", () => {
@@ -43,7 +55,7 @@ test("a negative or broken size does not crash the message", () => {
 });
 
 test("the limit is mentioned up front in one wording", () => {
-  assert.equal(limitHint(), "max 2 MB");
+  assert.equal(limitHint(), "max 5 MB");
   assert.equal(limitHint(MAX_PHOTO_BYTES), "max 500 KB");
 });
 
@@ -56,7 +68,7 @@ test("a file at or under the limit is not refused", () => {
 test("a refusal names the file's own size, not just the limit", () => {
   const msg = fileSizeError(6.1 * MB);
   assert.match(msg, /This file is 6\.1 MB/);
-  assert.match(msg, /limit is 2 MB per document/);
+  assert.match(msg, /limit is 5 MB per document/);
   assert.match(msg, /Reduce it and try again/);
 });
 
@@ -67,8 +79,8 @@ test("the noun follows what is being uploaded", () => {
 
 test("a shrunk file says what happened to it", () => {
   assert.equal(
-    shrunkNote(4.2 * MB, 1.6 * MB),
-    "Reduced from 4.2 MB to 1.6 MB to fit the 2 MB limit."
+    shrunkNote(7.2 * MB, 3.1 * MB),
+    "Reduced from 7.2 MB to 3.1 MB to fit the 5 MB limit."
   );
 });
 

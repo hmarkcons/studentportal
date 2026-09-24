@@ -60,8 +60,10 @@ export function PreviewedImport({
   function send(next: "preview" | "apply") {
     const form = formRef.current;
     if (!form || !file) return;
+    // The file itself is already in storage: FileField's hidden field carries
+    // its reference, and posting the bytes again would run into Vercel's
+    // 4.5 MB request limit. Preview and apply read the same staged copy.
     const formData = new FormData(form);
-    formData.set("file", file);
     formData.set("intent", next);
     if (next === "apply" && previewed) formData.set("fingerprint", previewed.fingerprint);
     setIntent(next);

@@ -5,6 +5,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { validateDocumentFile } from "@/lib/documentUpload";
+import { uploadedFile } from "@/lib/stagedUpload";
 
 async function requireSuperAdmin(supabase: Awaited<ReturnType<typeof createClient>>) {
   const {
@@ -22,7 +23,7 @@ export async function createAgreementTemplate(_prevState: unknown, formData: For
   const name = String(formData.get("name") ?? "").trim();
   const signatory_name = String(formData.get("signatory_name") ?? "").trim();
   const wording = String(formData.get("wording") ?? "").trim();
-  const file = formData.get("file") as File | null;
+  const file = await uploadedFile(formData, "file");
 
   if (!destination_id || !name || !signatory_name) {
     return { error: "Destination, name, and signatory name are all required." };
@@ -53,7 +54,7 @@ export async function updateAgreementTemplate(templateId: string, _prevState: un
   const name = String(formData.get("name") ?? "").trim();
   const signatory_name = String(formData.get("signatory_name") ?? "").trim();
   const wording = String(formData.get("wording") ?? "").trim();
-  const file = formData.get("file") as File | null;
+  const file = await uploadedFile(formData, "file");
 
   if (!destination_id || !name || !signatory_name) {
     return { error: "Destination, name, and signatory name are all required." };
