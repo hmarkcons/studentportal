@@ -1,124 +1,90 @@
-"use client";
+import { getCachedLoginFigures } from "@/lib/cachedQueries";
+import { LoginFigureTiles } from "@/components/LoginFigureTiles";
+import { LoginForm } from "./LoginForm";
 
-import { Suspense, useActionState } from "react";
-import { WHATSAPP_LINK, WHATSAPP_DISPLAY } from "@/lib/constants";
-import { useSearchParams } from "next/navigation";
-import { signIn } from "./actions";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
-
-function TravelIllustration() {
-  return (
-    <svg viewBox="0 0 400 400" className="h-full w-full max-w-md" aria-hidden>
-      <circle cx="200" cy="200" r="140" fill="none" stroke="#ffffff" strokeOpacity="0.25" strokeWidth="2" />
-      <circle cx="200" cy="200" r="100" fill="none" stroke="#ffffff" strokeOpacity="0.35" strokeWidth="1.5" />
-      <path
-        d="M70 230 Q 200 120 330 190"
-        fill="none"
-        stroke="#ffffff"
-        strokeOpacity="0.8"
-        strokeWidth="2"
-        strokeDasharray="6 8"
-      />
-      <g transform="translate(310,175) rotate(35)">
-        <path d="M0 0 L18 6 L0 12 L4 6 Z" fill="#ffffff" />
-      </g>
-      <g transform="translate(120,270)">
-        <rect x="0" y="10" width="46" height="34" rx="4" fill="#ffffff" fillOpacity="0.95" />
-        <rect x="14" y="0" width="18" height="14" rx="3" fill="#ffffff" fillOpacity="0.95" />
-      </g>
-      <g transform="translate(220,250)">
-        <rect x="0" y="0" width="40" height="56" rx="4" fill="#ffffff" fillOpacity="0.95" />
-        <rect x="6" y="8" width="28" height="18" rx="2" fill="#52be96" />
-        <path d="M11 30 L18 38 L29 22" fill="none" stroke="#52be96" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-      </g>
-    </svg>
-  );
-}
-
-export default function LoginPage() {
-  return (
-    <Suspense>
-      <LoginFormWithNext />
-    </Suspense>
-  );
-}
-
-function LoginFormWithNext() {
-  const [state, formAction, pending] = useActionState(signIn, undefined);
-  const searchParams = useSearchParams();
-  const next = searchParams.get("next") ?? "";
+/**
+ * The one door into all three portals — staff, students and partner
+ * universities — and, for a student, often the first thing of HMARK's they
+ * see. So it says who HMARK is as well as asking for a password.
+ *
+ * On a computer the story is the green panel beside the form. On a phone,
+ * where most students sign in, the form comes first — signing in should never
+ * mean scrolling past a brochure — and the story follows below it.
+ *
+ * The figures are a Super Admin's to change on Setup → Login screen (0278),
+ * read from the cache (getCachedLoginFigures).
+ */
+export default async function LoginPage() {
+  const figures = await getCachedLoginFigures();
 
   return (
-    <div className="flex min-h-screen">
-      <div className="relative hidden flex-1 flex-col items-center justify-center gap-10 bg-primary p-10 lg:flex">
-        <TravelIllustration />
-        <div className="flex gap-4">
-          <div className="rounded-lg bg-white/95 px-5 py-3 text-center shadow-lg">
-            <p className="text-xl font-semibold text-ink">1,200+</p>
-            <p className="text-xs text-muted">Students Placed</p>
-          </div>
-          <div className="rounded-lg bg-white/95 px-5 py-3 text-center shadow-lg">
-            <p className="text-xl font-semibold text-ink">92%</p>
-            <p className="text-xs text-muted">Visa Success Rate</p>
-          </div>
+    <div className="flex min-h-screen flex-col lg:flex-row">
+      {/* ------------------------------------------------ the story */}
+      <section
+        className="order-2 flex flex-col gap-7 px-6 py-10 text-white sm:px-10 lg:order-1 lg:w-[56%] lg:justify-center lg:px-14 lg:py-12"
+        style={{ background: "linear-gradient(140deg, #173f33 0%, #1f6b52 45%, #2e9a74 100%)" }}
+        aria-label="About HMARK Consultants"
+      >
+        <div className="hidden lg:block">
+          <span className="inline-block rounded-lg bg-white px-3 py-2 shadow-sm">
+            {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset */}
+            <img src="/hmark-logo.png" alt="HMARK Consultants" className="h-9 w-auto" />
+          </span>
         </div>
-      </div>
 
-      <div className="flex flex-1 items-center justify-center bg-bg px-6">
+        <div className="hidden lg:block">
+          <h1 className="max-w-xl text-4xl font-bold leading-tight tracking-tight xl:text-5xl">Your Future Goes Beyond Borders</h1>
+          <p className="mt-3 max-w-xl text-lg text-white/85">Your journey to a world-class education starts with HMARK Consultants.</p>
+        </div>
+
+        <figure className="relative overflow-hidden rounded-2xl shadow-2xl ring-1 ring-white/15">
+          {/* A CC0 stock photo — Caleb Woods on StockSnap
+              (stocksnap.io/photo/people-men-3PQLBTZQPC), free to use, no
+              credit needed — until HMARK has its own. To swap it, replace
+              public/login/happy-graduates.jpg with a photo about 960×278. */}
+          {/* eslint-disable-next-line @next/next/no-img-element -- one 48 KB photo, already sized; no optimiser needed */}
+          <img
+            src="/login/happy-graduates.jpg"
+            alt="Graduates celebrating at their graduation ceremony"
+            width={960}
+            height={278}
+            decoding="async"
+            className="h-auto w-full object-cover"
+          />
+          {/* Over the photo where there is room for both; under it on a phone,
+              where the photo is too short to carry text without hiding the students. */}
+          <figcaption className="bg-black/35 px-4 py-2.5 sm:absolute sm:inset-x-0 sm:bottom-0 sm:bg-transparent sm:bg-gradient-to-t sm:from-black/75 sm:via-black/35 sm:to-transparent sm:px-5 sm:pb-3 sm:pt-12">
+            <span className="block text-lg font-bold tracking-wide sm:text-xl">Explore. Apply. Achieve.</span>
+            <span className="block text-xs text-white/85 sm:text-sm">With HMARK Consultants, your global education journey starts here.</span>
+          </figcaption>
+        </figure>
+
+        <LoginFigureTiles figures={figures} />
+
+        <p className="max-w-2xl text-sm leading-relaxed text-white/85">
+          Explore study opportunities at leading universities and colleges worldwide. Find the right program, prepare a stronger
+          application, and get expert guidance throughout your international education journey.
+        </p>
+      </section>
+
+      {/* ------------------------------------------------- the form */}
+      <section className="order-1 flex flex-1 items-center justify-center bg-bg px-6 py-10 lg:order-2" aria-label="Sign in">
         <div className="w-full max-w-sm">
-          <div className="inline-block rounded-md bg-white px-3 py-2">
-            {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset on a one-off login screen */}
+          {/* On a computer the logo leads the panel beside this; on a phone,
+              where the panel is below, it leads the form — with the headline. */}
+          <div className="inline-block rounded-md bg-white px-3 py-2 lg:hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset */}
             <img src="/hmark-logo.png" alt="HMARK Consultants" className="h-9 w-auto" />
           </div>
-          <p className="mt-3 text-sm text-muted">Sign in to your account.</p>
-
-          <form action={formAction} className="mt-6 flex flex-col gap-4">
-            <input type="hidden" name="next" value={next} />
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="email" className="text-sm font-medium text-ink">
-                Email
-              </label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                required
-                autoComplete="email"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="password" className="text-sm font-medium text-ink">
-                Password
-              </label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                required
-                autoComplete="current-password"
-              />
-            </div>
-
-            {state?.error && <p className="text-sm text-danger">{state.error}</p>}
-
-            <Button type="submit" variant="primary" pending={pending} className="mt-2">
-              Sign In
-            </Button>
-          </form>
-
-          <p className="mt-6 text-center text-xs text-muted">
-            Partner university? <a href="/register/partner" className="text-primary hover:underline">Register here</a>
-          </p>
-          <p className="mt-4 text-center text-xs text-muted">
-            Need help? WhatsApp us at{" "}
-            <a href={WHATSAPP_LINK} className="text-primary hover:underline">
-              {WHATSAPP_DISPLAY}
-            </a>
-          </p>
+          <div className="mt-5 lg:hidden">
+            <h1 className="text-2xl font-bold leading-tight tracking-tight text-ink">Your Future Goes Beyond Borders</h1>
+            <p className="mt-1 text-sm text-muted">Your journey to a world-class education starts with HMARK Consultants.</p>
+          </div>
+          <h2 className="mt-4 text-lg font-semibold text-ink lg:mt-0">Sign in</h2>
+          <p className="text-sm text-muted">For staff, students and partner universities.</p>
+          <LoginForm />
         </div>
-      </div>
+      </section>
     </div>
   );
 }

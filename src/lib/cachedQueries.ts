@@ -1,5 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { DEFAULT_LOGIN_FIGURES, isLoginFigureIcon, type LoginFigure } from "@/lib/loginFigures";
 
 // Reference/lookup data that's identical for every staff member and rarely
 // changes (edited only from the Setup pages), but was being re-queried from
@@ -102,4 +103,24 @@ export const getCachedCounselors = unstable_cache(
   },
   ["counselors-list"],
   { tags: ["staff-directory"], revalidate: 300 }
+);
+
+/**
+ * The figures on the login screen (0278), in order.
+ *
+ * The login page is the busiest page there is and is public, so it reads
+ * these from the cache rather than the database on every visit; Setup →
+ * Login screen clears the "login-figures" tag when they change. Falls back to
+ * the office's figures if the table cannot be read — the login page must
+ * never fail for want of a statistic.
+ */
+export const getCachedLoginFigures = unstable_cache(
+  async (): Promise<LoginFigure[]> => {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase.from("login_figures").select("value, label, icon").order("sort_order");
+    if (error || !data?.length) return DEFAULT_LOGIN_FIGURES;
+    return data.map((r) => ({ value: r.value, label: r.label, icon: isLoginFigureIcon(r.icon) ? r.icon : "star" }));
+  },
+  ["login-figures"],
+  { tags: ["login-figures"], revalidate: 86400 }
 );

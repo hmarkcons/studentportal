@@ -2,7 +2,7 @@
 // pages both read, so what the menu offers and what the page allows cannot
 // disagree.
 //
-// Each key is a "page.*" permission (0273) on the Role Permissions screen,
+// Each key is a "page.*" permission (0273, and 0278 for the login screen) on the Role Permissions screen,
 // with default roles set per job; a Super Admin holds every one. A path is
 // matched by its longest registered prefix, so /students/<id> is governed by
 // /students, and /setup/universities/<id> by /setup/universities.
@@ -44,6 +44,7 @@ export const PAGE_PERMISSIONS: Record<string, string> = {
   "/setup/travel-guide": "page.setup.travel_guide",
   "/setup/support-faqs": "page.setup.support_faqs",
   "/setup/guide-videos": "page.setup.guide_videos",
+  "/setup/login-screen": "page.setup.login_screen",
 
   "/finance/invoice-generator": "page.finance.invoice_generator",
   "/finance/staff-commission": "page.finance.staff_commission",

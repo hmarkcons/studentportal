@@ -1,12 +1,18 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { PAGE_PERMISSIONS, permissionForPath, canOpenPath } from "../src/lib/pageAccess.ts";
 import { buildStaffNav } from "../src/lib/nav.ts";
 
-// The defaults 0273 gives each role, read from the migration itself so the
-// test follows it rather than restating it.
-const MIGRATION = readFileSync(new URL("../supabase/migrations/0273_page_access_permissions.sql", import.meta.url), "utf8");
+// The defaults each role is given, read from the migrations that add "page.*"
+// permissions (0273, then one per page added since), so the test follows them
+// rather than restating them.
+const MIGRATIONS_DIR = new URL("../supabase/migrations/", import.meta.url);
+const MIGRATION = readdirSync(MIGRATIONS_DIR)
+  .filter((f) => f.endsWith(".sql"))
+  .sort()
+  .map((f) => readFileSync(new URL(f, MIGRATIONS_DIR), "utf8"))
+  .join("\n");
 const DEFAULTS = Object.fromEntries(
   [...MIGRATION.matchAll(/\('(page\.[a-z_.]+)', '[^']*', '(?:[^']|'')*', '(?:[^']|'')*', array\[([^\]]*)\]::staff_role\[\]/g)].map(
     ([, key, roles]) => [key, [...roles.matchAll(/'([a-z_]+)'/g)].map((m) => m[1])]
@@ -21,7 +27,7 @@ const navFor = (role, extra = {}) =>
 
 // ------------------------------------------------------- registry vs the rest
 
-test("every page in the registry has a permission in 0273, and 0273 has nothing else", () => {
+test("every page in the registry has a page permission in the migrations, and they have nothing else", () => {
   assert.deepEqual(Object.values(PAGE_PERMISSIONS).sort(), Object.keys(DEFAULTS).sort());
 });
 

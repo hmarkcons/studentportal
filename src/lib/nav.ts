@@ -36,6 +36,7 @@ const BASE_STAFF_NAV: NavItem[] = [
       { label: "Travel & arrival guides", href: "/setup/travel-guide" },
       { label: "Support FAQ", href: "/setup/support-faqs" },
       { label: "Guide tutorials", href: "/setup/guide-videos" },
+      { label: "Login screen", href: "/setup/login-screen" },
     ],
   },
   {
