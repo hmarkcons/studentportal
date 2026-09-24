@@ -129,7 +129,10 @@ export function PersonalTaskRow({
               const previous = checked;
               setChecked(next);
               setToggleError(null);
-              const result = await toggle.run(() => togglePersonalTask(taskId, revalidateTo, next));
+              // The calendar lists pending tasks only, so one ticked done leaves the
+              // list as soon as the page refreshes — and the note beside it goes
+              // too. Said as a toast, as a delete is; un-ticking stays in place.
+              const result = await toggle.run(() => togglePersonalTask(taskId, revalidateTo, next), next ? { toast: "Marked done." } : {});
               if (result?.error) {
                 setToggleError(result.error);
                 setChecked(previous);

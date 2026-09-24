@@ -176,9 +176,11 @@ try {
   ok("the personal task's done box is on the day view", found);
   if (found) {
     await box.check();
-    const said = row.locator('[data-action-status="done"]').first();
+    // The calendar lists pending tasks only, so the ticked task leaves the
+    // list when the page refreshes; the confirmation is a toast for that reason.
+    const said = staffPage.locator('[data-toast]', { hasText: "Marked done." }).first();
     const shown = await said.waitFor({ timeout: 60_000 }).then(() => true, () => false);
-    ok("ticking an auto-saving box says so beside it", shown && (await said.innerText()) === "Marked done.",
+    ok("ticking a calendar task done confirms it", shown && (await said.innerText()).includes("Marked done."),
       shown ? await said.innerText() : "nothing appeared");
     const { data: saved } = await admin.from("personal_tasks").select("status").eq("id", task.id).single();
     ok("...and the database agrees", saved?.status === "done", String(saved?.status));

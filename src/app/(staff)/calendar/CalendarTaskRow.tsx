@@ -127,7 +127,9 @@ export function CalendarTaskRow({
               const previous = done;
               setDone(checked);
               setToggleError(null);
-              const result = await toggle.run(() => toggleApplicationTask(taskId, "/calendar", checked));
+              // Pending tasks only are listed, so a task ticked done leaves the list
+              // on refresh, and its note with it: said as a toast instead.
+              const result = await toggle.run(() => toggleApplicationTask(taskId, "/calendar", checked), checked ? { toast: "Marked done." } : {});
               if (result?.error) {
                 setToggleError(result.error);
                 setDone(previous);
