@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MAX_UPLOAD_BYTES, formatFileSize } from "@/lib/fileSize";
 import { documentUrls } from "@/lib/storageUrls";
 import { loadDocumentHistory } from "@/lib/documentHistory";
 import { orderCycles, cycleTabLabel, resolveCycleDocuments, type Cycle } from "@/lib/intakeCycle";
@@ -121,8 +122,14 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
   return (
     <div className="mx-auto max-w-2xl">
       <h2 className="mb-1 text-lg font-semibold text-ink">Documents</h2>
-      <p className="mb-4 text-sm text-muted">
+      <p className="mb-2 text-sm text-muted">
         Everything we need from you, in the order your counsellor works through it.
+      </p>
+      {/* Said once, up front, as well as under every picker: a student on a
+          phone should know before choosing a file, not after. */}
+      <p className="mb-4 rounded-md border border-info bg-info-bg px-3 py-2 text-xs text-info" data-upload-limit>
+        Each file can be up to <strong className="font-semibold">{formatFileSize(MAX_UPLOAD_BYTES)}</strong> — a PDF, a Word file
+        or a photo. If a photo is larger, you can shrink it with one click when you choose it.
       </p>
 
       {showCycleTabs && (

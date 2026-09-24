@@ -207,7 +207,10 @@ export function FileField({
       />
       <input type="hidden" name={name} value={staged ?? ""} />
       {/* Said before a file is chosen, not only after one is refused. */}
-      <p className="text-[11px] text-muted">{hint ? `${hint} · ${limitHint(limitBytes)}` : limitHint(limitBytes)}</p>
+      <p className="text-[11px] text-muted" data-upload-limit>
+        {hint ? `${hint} · ` : ""}
+        <span className="font-semibold text-ink">{limitHint(limitBytes)}</span>
+      </p>
       {note && (
         <p className="text-[11px] text-muted" aria-live="polite">
           {note}

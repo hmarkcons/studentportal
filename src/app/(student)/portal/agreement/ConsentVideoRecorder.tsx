@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { MAX_VIDEO_SECONDS, ACCEPTED_VIDEO_ACCEPT, validateVideoFile } from "@/lib/documentUpload";
+import { MAX_VIDEO_SECONDS, MAX_VIDEO_SIZE_BYTES, ACCEPTED_VIDEO_ACCEPT, validateVideoFile } from "@/lib/documentUpload";
+import { formatFileSize } from "@/lib/fileSize";
 
 type Mode = "idle" | "recording" | "review";
 
@@ -198,7 +199,9 @@ export function ConsentVideoRecorder({ onVideo, disabled }: { onVideo: (file: Fi
               onChange={(e) => pickFile(e.target.files?.[0])}
             />
           </label>
-          <span className="text-xs text-muted">Up to {MAX_VIDEO_SECONDS} seconds</span>
+          <span className="text-xs text-muted">
+            Up to {MAX_VIDEO_SECONDS} seconds · <span className="font-medium text-ink">max {formatFileSize(MAX_VIDEO_SIZE_BYTES)}</span> for a chosen file
+          </span>
         </div>
       )}
 

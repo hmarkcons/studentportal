@@ -266,7 +266,7 @@ export function SubmitSignedAgreementForm({
       {needsDocument && (
         <>
           <p className="truncate text-xs text-muted">
-            {documentName ?? "No file chosen"} · {limitHint()}
+            {documentName ?? "No file chosen"} · <span className="font-semibold text-ink">{limitHint()}</span>
           </p>
           {documentNote && <p className="text-xs text-muted">{documentNote}</p>}
           {documentError && (
