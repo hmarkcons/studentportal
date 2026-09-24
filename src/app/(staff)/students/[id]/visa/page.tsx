@@ -42,7 +42,7 @@ export default async function StudentVisaTab(props: PageProps<"/students/[id]/vi
   // The tab is hidden for everybody else, but a hidden tab is not a
   // permission — the URL is guessable and this page carries a student's
   // refusal history and their appointment portal login.
-  if (!canSeeVisaSection(staff?.role)) {
+  if (!canSeeVisaSection(staff)) {
     return (
       <Card>
         <EmptyState>

@@ -741,13 +741,24 @@ export async function updateRegistrationDetails(studentId: string, revalidateTo:
   // destination selection, or this student already had real lead_destinations
   // rows (an explicit "clear everything" submit) — never silently wipe the
   // legacy text field just because the widget started empty.
-  const { data: existingDestinations } = await supabase.from("lead_destinations").select("destination_id").eq("lead_id", studentId);
+  const { data: existingDestinations } = await supabase
+    .from("lead_destinations")
+    .select("destination_id, dashboard_stage_values")
+    .eq("lead_id", studentId);
   const hadExistingDestinations = (existingDestinations?.length ?? 0) > 0;
 
   if (hasNewSelection || hadExistingDestinations) {
     const { error: delErr } = await supabase.from("lead_destinations").delete().eq("lead_id", studentId);
     if (delErr) return { error: delErr.message };
-    const destinationRows = destinationSelectionRows(studentId, selection);
+    // The rows are replaced, so a country that is still selected takes its
+    // stage progress with it. Without this, saving this card — to correct an
+    // intake or a discount — wiped every country stage processing had
+    // recorded. Every row carries the key, so the batch stays rectangular.
+    const progress = new Map((existingDestinations ?? []).map((d) => [d.destination_id as string, d.dashboard_stage_values ?? {}]));
+    const destinationRows = destinationSelectionRows(studentId, selection).map((row) => ({
+      ...row,
+      dashboard_stage_values: progress.get(row.destination_id) ?? {},
+    }));
     if (destinationRows.length > 0) {
       const { error: destErr } = await supabase.from("lead_destinations").insert(destinationRows);
       if (destErr) return { error: destErr.message };

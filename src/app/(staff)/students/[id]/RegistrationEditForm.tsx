@@ -87,6 +87,13 @@ export function RegistrationEditForm({
           Assigned counselor
           <Select name="assigned_counselor_id" defaultValue={assignedCounselorId ?? ""}>
             <option value="">Unassigned</option>
+            {/* The person already assigned stays an option even when they are
+                not in the list — inactive, or added since the list was cached.
+                Otherwise the select fell back to "Unassigned", and saving this
+                card for any other reason silently took the student off them. */}
+            {assignedCounselorId && !counselors.some((c) => c.id === assignedCounselorId) && (
+              <option value={assignedCounselorId}>Current counsellor (not in the active list)</option>
+            )}
             {counselors.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.full_name}
@@ -98,6 +105,9 @@ export function RegistrationEditForm({
           Processing officer
           <Select name="processing_officer_id" defaultValue={processingOfficerId ?? ""}>
             <option value="">Whole processing team</option>
+            {processingOfficerId && !processingOfficers.some((o) => o.id === processingOfficerId) && (
+              <option value={processingOfficerId}>Current officer (not in the active list)</option>
+            )}
             {processingOfficers.map((o) => (
               <option key={o.id} value={o.id}>
                 {o.full_name}

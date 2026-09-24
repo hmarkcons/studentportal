@@ -8,6 +8,7 @@ export function StudentTabs({
   showScholarship,
   showVisa = false,
   unreadMessages = 0,
+  stagesOnly = false,
 }: {
   studentId: string;
   showScholarship: boolean;
@@ -15,10 +16,15 @@ export function StudentTabs({
   showVisa?: boolean;
   /** Messages the student has sent that no one on the team has opened yet. */
   unreadMessages?: number;
+  /**
+   * A counsellor with no processing role (seesStagesOnly): the processing
+   * tabs are not theirs, so they are not offered. The pages refuse them too.
+   */
+  stagesOnly?: boolean;
 }) {
   const pathname = usePathname();
 
-  const tabs = [
+  const all = [
     { label: "Dashboard", href: `/students/${studentId}` },
     { label: "Profile", href: `/students/${studentId}/profile` },
     // Documents before Applications: the documents come first in the real
@@ -38,6 +44,8 @@ export function StudentTabs({
     ...(showVisa ? [{ label: "Visa", href: `/students/${studentId}/visa` }] : []),
     { label: "Communication", href: `/students/${studentId}/communication`, badge: unreadMessages },
   ];
+  const PROCESSING_TABS = ["Documents", "Applications", "Scholarship", "Visa"];
+  const tabs = stagesOnly ? all.filter((t) => !PROCESSING_TABS.includes(t.label)) : all;
 
   return (
     // Wraps rather than scrolls: at some widths the strip cut the last tab by

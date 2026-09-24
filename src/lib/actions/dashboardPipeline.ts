@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { getStaffSession } from "@/lib/auth/session";
+import { seesStagesOnly } from "@/lib/auth/studentAccess";
 
 // Staff-only — students see the result read-only on their own portal
 // dashboard, via a plain select query (no write action needed for them).
@@ -12,7 +13,14 @@ export async function setDashboardStageValue(
   revalidateTo: string,
   value: string | null
 ) {
-  const supabase = await createClient();
+  const { supabase, staff } = await getStaffSession();
+
+  // A counsellor follows a registered student's stages; processing records
+  // them. Said here in words — the database refuses it too (0276), in its own.
+  if (seesStagesOnly(staff)) {
+    const { data: lead } = await supabase.from("leads").select("registered_at").eq("id", leadId).maybeSingle();
+    if (lead?.registered_at) return { error: "Only the processing team can change a registered student's country stages." };
+  }
 
   const { data: row } = await supabase
     .from("lead_destinations")

@@ -9,6 +9,7 @@ import { InlineRegistrationStatusCell } from "../InlineRegistrationStatusCell";
 import { countUnreadMessages } from "@/lib/unreadMessages";
 import { avatarUrlMap } from "@/lib/storageUrls";
 import { canSeeVisaSection } from "@/lib/visaAccess";
+import { seesStagesOnly } from "@/lib/auth/studentAccess";
 
 export default async function StudentLayout({ children, params }: { children: React.ReactNode; params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -175,7 +176,13 @@ export default async function StudentLayout({ children, params }: { children: Re
         </div>
       </div>
 
-      <StudentTabs studentId={id} showScholarship={showScholarship} showVisa={canSeeVisaSection(staffRow?.role)} unreadMessages={unreadMessages} />
+      <StudentTabs
+        studentId={id}
+        showScholarship={showScholarship}
+        showVisa={canSeeVisaSection(staffRow)}
+        unreadMessages={unreadMessages}
+        stagesOnly={seesStagesOnly(staffRow)}
+      />
 
       {children}
     </div>

@@ -15,6 +15,8 @@ import { loadTrackerPrefillSource } from "@/lib/trackerPrefillSource";
 import { trackerSuggestions } from "@/lib/trackerPrefill";
 import { listTrackerDefinitions } from "@/lib/actions/countryTracker";
 import { DestinationPipelineCard } from "@/components/DestinationPipelineCard";
+import { seesStagesOnly } from "@/lib/auth/studentAccess";
+import { StagesOnlyView } from "./StagesOnlyView";
 import type { DashboardStageDef } from "@/lib/dashboardPipeline";
 import { PortalAccessPanel } from "./PortalAccessPanel";
 import { GenerateAgreementForm, UploadSignedAgreementForm } from "./GenerateAgreementForm";
@@ -69,6 +71,10 @@ function generatedAgreementFilename(studentName: string | undefined | null, dest
 export default async function StudentDashboardPage(props: PageProps<"/students/[id]">) {
   const { id } = await props.params;
   const { supabase, staff: viewerStaff } = await getStaffSession();
+  // A counsellor with no processing role follows a registered student's
+  // progress and nothing more — before any of the work below, which builds
+  // the checklist, prices the invoice and reads the trackers.
+  if (seesStagesOnly(viewerStaff)) return <StagesOnlyView studentId={id} supabase={supabase} />;
   const isSuperAdminRole = hasRole(viewerStaff, "super_admin");
   const perms = await getEffectivePermissions();
   const isSuperAdmin = perms["agreements.edit_delete"] === true;

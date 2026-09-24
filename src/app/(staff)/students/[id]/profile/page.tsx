@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { getStaffSession } from "@/lib/auth/session";
+import { seesStagesOnly } from "@/lib/auth/studentAccess";
 import { Card } from "@/components/ui/Card";
 import { AcademicsSection } from "@/components/AcademicsSection";
 import { PhotoUpload } from "@/components/PhotoUpload";
@@ -10,6 +12,10 @@ import { RegisteredStudentProfileForm } from "../RegisteredStudentProfileForm";
 export default async function StudentProfileTab(props: PageProps<"/students/[id]/profile">) {
   const { id } = await props.params;
   const supabase = await createClient();
+  // A counsellor with no processing role reads a registered student's profile
+  // and changes nothing on it (src/lib/auth/studentAccess.ts).
+  const { staff } = await getStaffSession();
+  const readOnly = seesStagesOnly(staff);
 
   const [
     { data: student },
@@ -68,7 +74,14 @@ export default async function StudentProfileTab(props: PageProps<"/students/[id]
       : null;
 
   return (
-    <div className="flex flex-col gap-6">
+    // A disabled fieldset turns off every control inside it, the client
+    // components' included, without each form needing to know.
+    <fieldset disabled={readOnly} data-read-only={readOnly ? "" : undefined} className="flex min-w-0 flex-col gap-6">
+      {readOnly && (
+        <p className="rounded-md border border-info bg-info-bg px-3 py-2 text-sm text-info">
+          Read-only. Once a student is registered, the processing team keeps their profile up to date.
+        </p>
+      )}
       <Card>
         <h3 className="mb-3 text-base font-semibold text-ink">Personal details</h3>
 
@@ -105,15 +118,19 @@ export default async function StudentProfileTab(props: PageProps<"/students/[id]
         <TestScoresSection studentId={id} revalidateTo={revalidateTo} scores={testScores ?? []} />
       </Card>
 
-      <Card>
-        <h3 className="mb-3 text-base font-semibold text-ink">Travel &amp; visa history</h3>
-        <TravelVisaHistorySection
-          studentId={id}
-          revalidateTo={revalidateTo}
-          travel={(profile?.travel_history ?? []) as never}
-          refusals={(profile?.visa_refusal_history ?? []) as never}
-        />
-      </Card>
+      {/* Carries the student's visa refusals, which are processing's to hold
+          (see canSeeVisaSection) — so not shown read-only, not shown at all. */}
+      {!readOnly && (
+        <Card>
+          <h3 className="mb-3 text-base font-semibold text-ink">Travel &amp; visa history</h3>
+          <TravelVisaHistorySection
+            studentId={id}
+            revalidateTo={revalidateTo}
+            travel={(profile?.travel_history ?? []) as never}
+            refusals={(profile?.visa_refusal_history ?? []) as never}
+          />
+        </Card>
+      )}
 
       <Card>
         <h3 className="mb-3 text-base font-semibold text-ink">Academics</h3>
@@ -124,6 +141,6 @@ export default async function StudentProfileTab(props: PageProps<"/students/[id]
           qualifications={qualifications ?? []}
         />
       </Card>
-    </div>
+    </fieldset>
   );
 }
