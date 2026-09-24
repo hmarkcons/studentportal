@@ -54,7 +54,9 @@ try {
     .upsert({ staff_id: manager.id, permission_key: "staff.manage", allowed: true });
   if (grantError) throw new Error(`could not grant staff.manage: ${grantError.message}`);
   await admin.from("staff").update({ email_official: target.email }).eq("id", target.id);
-  const lead = await fx.lead({ full_name: "zztmp pa-student", status: "new" }).catch(() => null);
+  // A real record, so the detail-page checks reach a page that exists — a
+  // made-up path is Next's 404, which no guard is ever asked about.
+  const lead = await fx.lead({ full_name: "zztmp pa-student" });
 
   const browser = await openBrowser();
 
@@ -71,7 +73,8 @@ try {
   ok("finance: typing /leads shows no access", !(await opens(fin, "/leads")));
   ok("finance: typing /setup/office-network shows no access", !(await opens(fin, "/setup/office-network")));
   ok("finance: /finance/payroll opens", await opens(fin, "/finance/payroll"));
-  if (lead) ok("finance: a student record opens (Students is theirs)", await opens(fin, `/students/${lead}`));
+  ok("finance: a student record opens (Students is theirs)", await opens(fin, `/students/${lead}`));
+  ok("finance: the same person under Leads is refused (a detail page of a hidden section)", !(await opens(fin, `/leads/${lead}`)));
 
   // ----------------------------------------------------------- counselor
   const cou = await signIn(browser, counselor.email);
@@ -81,7 +84,6 @@ try {
   ok("counselor: no Finance page", !menu.some((h) => h.startsWith("/finance/")), menu.join(" "));
   ok("counselor: the Accounts & Finance and Admin sections are gone", !counselorSections.some((s) => /Finance|Admin/.test(s)), counselorSections.join(" | "));
   ok("counselor: typing /finance/payroll shows no access", !(await opens(cou, "/finance/payroll")));
-  ok("counselor: a detail page under a hidden section is refused too", !(await opens(cou, "/finance/payroll/anything")));
   ok("counselor: /admin/audit-log shows no access", !(await opens(cou, "/admin/audit-log")));
   ok("counselor: /leads opens", await opens(cou, "/leads"));
 
@@ -89,6 +91,8 @@ try {
   const mgr = await signIn(browser, manager.email);
   await mgr.goto(`${BASE}/admin/staff`, { waitUntil: "domcontentloaded" });
   const row = mgr.locator("tr", { hasText: target.name }).first();
+  // The table streams in after the page; clicking before it lands times out.
+  await row.waitFor({ timeout: 60_000 });
   await row.locator('button[aria-label="Actions"]').click();
   await mgr.getByRole("button", { name: /Edit/ }).first().click();
   const form = mgr.locator("form", { has: mgr.locator('input[name="email_official"]') }).last();
