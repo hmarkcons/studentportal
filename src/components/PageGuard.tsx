@@ -22,15 +22,18 @@ export async function PageGuard({ path, children }: { path: string; children: Re
   if (canOpenPath(path, perms, hasRole(staff, "super_admin"))) return <>{children}</>;
 
   return (
-    <Card className="mt-6 max-w-xl" data-no-page-access>
-      <h2 className="text-base font-semibold text-ink">You don&apos;t have access to this page</h2>
-      <p className="mt-1 text-sm text-muted">
-        Your role isn&apos;t allowed to open it. If you need it for your work, ask a Super Admin to allow it for your role on
-        the Role Permissions screen.
-      </p>
-      <Link href="/dashboard" className="mt-3 inline-block w-fit text-sm font-medium text-primary hover:underline">
-        Back to the dashboard
-      </Link>
-    </Card>
+    // The marker is on a wrapper of our own: Card passes on only className.
+    <div data-no-page-access>
+      <Card className="mt-6 max-w-xl">
+        <h2 className="text-base font-semibold text-ink">You don&apos;t have access to this page</h2>
+        <p className="mt-1 text-sm text-muted">
+          Your role isn&apos;t allowed to open it. If you need it for your work, ask a Super Admin to allow it for your role on
+          the Role Permissions screen.
+        </p>
+        <Link href="/dashboard" className="mt-3 inline-block w-fit text-sm font-medium text-primary hover:underline">
+          Back to the dashboard
+        </Link>
+      </Card>
+    </div>
   );
 }
