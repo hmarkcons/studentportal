@@ -154,6 +154,7 @@ export function fixtures(admin) {
         if (m.kind === "lead") {
           await admin.from("leads").delete().eq("id", m.id);
         } else {
+          await removeStagedFiles(admin, m.id);
           await admin.from("staff").delete().eq("id", m.id);
           await admin.auth.admin.deleteUser(m.id).catch(() => {});
         }
@@ -161,6 +162,20 @@ export function fixtures(admin) {
       return made.length;
     },
   };
+}
+
+/**
+ * Removes whatever a fixture login put in the upload staging buckets (0275).
+ *
+ * The app sweeps a person's staged files on their next upload, and a deleted
+ * fixture never uploads again — so without this, every run would leave its
+ * test files behind for good.
+ */
+export async function removeStagedFiles(admin, userId) {
+  for (const bucket of ["upload-staging", "upload-staging-video"]) {
+    const { data } = await admin.storage.from(bucket).list(userId, { limit: 1000 });
+    if (data?.length) await admin.storage.from(bucket).remove(data.map((o) => `${userId}/${o.name}`));
+  }
 }
 
 /**

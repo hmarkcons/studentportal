@@ -20,7 +20,7 @@
 //
 // Also asserts one Save end to end: pressing it shows the confirmation beside
 // the button, which is the other half of the same request.
-import { BASE, FIXTURE_PASSWORD, clients, fixtures, openBrowser, reporter, requireConfirmation, signIn } from "./verify-portal-lib.mjs";
+import { BASE, FIXTURE_PASSWORD, clients, fixtures, openBrowser, removeStagedFiles, reporter, requireConfirmation, signIn } from "./verify-portal-lib.mjs";
 
 requireConfirmation("check:buttons");
 
@@ -213,6 +213,7 @@ try {
   // the next run from creating it.
   const removed = await fx.cleanup();
   if (typeof studentAuthId !== "undefined") {
+    await removeStagedFiles(admin, studentAuthId);
     const { error } = await admin.auth.admin.deleteUser(studentAuthId);
     if (error) console.log(`could not remove the fixture student login: ${error.message}`);
   }

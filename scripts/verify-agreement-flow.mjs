@@ -30,7 +30,7 @@
 // button that renders the PDF answered to the same name as the button that
 // creates the agreement.
 import { createHash } from "node:crypto";
-import { clients, fixtures, openBrowser, signIn, apiAs, requireConfirmation, BASE, FIXTURE_PASSWORD } from "./verify-portal-lib.mjs";
+import { clients, fixtures, openBrowser, signIn, apiAs, requireConfirmation, removeStagedFiles, BASE, FIXTURE_PASSWORD } from "./verify-portal-lib.mjs";
 
 requireConfirmation("check:agreement");
 
@@ -106,8 +106,19 @@ async function makeStudent(label, counselorId) {
     // than handing a student a legal document with blanks in it.
     date_of_birth: "2002-04-17",
     address: "12 Test Street, Karachi",
+    // Without an intake there is no Student ID, and without one the portal
+    // stays locked on "Your intake is being confirmed" — so the student half
+    // of this check never reached the signing form at all.
+    intake: "Fall 2099",
   });
   await admin.from("lead_destinations").insert({ lead_id: id, destination_id: italy.id });
+  // The Student ID is composed by trigger once intake and country are both on file.
+  let coded = false;
+  for (let i = 0; i < 20 && !coded; i++) {
+    coded = Boolean((await admin.from("leads").select("student_code").eq("id", id).single()).data?.student_code);
+    if (!coded) await new Promise((r) => setTimeout(r, 500));
+  }
+  if (!coded) throw new Error(`fixture student ${label} never got a Student ID, so cannot reach the portal`);
   await admin.from("student_profiles").upsert({
     student_id: id,
     emergency_contact_name: "zztmp Next of Kin",
@@ -782,6 +793,7 @@ try {
   const n = await fx.cleanup();
   // After the lead, not before: leads.auth_user_id still references this login
   // until the lead goes, so deleting it first fails and the catch hides that.
+  if (portalUserId) await removeStagedFiles(admin, portalUserId);
   if (portalUserId) await admin.auth.admin.deleteUser(portalUserId).catch(() => {});
   await browser.close();
   console.log(`\n${pass} passed, ${fail} failed  (${n} fixtures removed)`);
