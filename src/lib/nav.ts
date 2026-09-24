@@ -1,11 +1,12 @@
 import type { NavItem } from "@/components/AppShell";
+import { canOpenPath } from "./pageAccess.ts";
 
-// Every item below is visible to every active staff role today — the app's
-// real access control lives in per-page/per-action permission checks (see
-// src/lib/auth/permissions.ts), not the nav. The two exceptions are wired up
-// explicitly in buildStaffNav below: Staff Management (needs staff.manage)
-// and Role Permissions (Super Admin only, hardcoded so it can never be
-// overridden away and lock every admin out of the permissions screen).
+// Everything a staff member might use. buildStaffNav below keeps only what
+// their roles may open: each page's "page.*" permission (src/lib/pageAccess.ts,
+// 0273) decides, and the same rule guards the page itself, so the menu never
+// offers a page that would refuse them. A section with nothing left in it is
+// left out altogether. Staff Management, Leave and Role Permissions keep the
+// rules they always had, wired up explicitly below.
 const BASE_STAFF_NAV: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: "🏠" },
   { label: "Leads", href: "/leads", icon: "📇" },
@@ -85,6 +86,7 @@ export function buildStaffNav({
   isSuperAdmin,
   hasOwnAgreement = false,
   canApproveLeave = false,
+  perms = {},
 }: {
   canManageStaff: boolean;
   isSuperAdmin: boolean;
@@ -92,8 +94,11 @@ export function buildStaffNav({
   hasOwnAgreement?: boolean;
   /** leave.approve — Management and Super Admin by default. */
   canApproveLeave?: boolean;
+  /** The viewer's effective permissions, for the "page.*" keys. */
+  perms?: Readonly<Record<string, boolean>>;
 }): NavItem[] {
-  return BASE_STAFF_NAV.map((item) => {
+  const allowed = (href: string) => canOpenPath(href, perms, isSuperAdmin);
+  const shaped = BASE_STAFF_NAV.map((item) => {
     if (item.label === "HR" && item.children) {
       const base = canManageStaff ? item.children : item.children.filter((c) => c.label !== "Staff Management");
       // Everyone has leave of their own; approvers also get the list to decide.
@@ -110,6 +115,10 @@ export function buildStaffNav({
     }
     return item;
   });
+
+  return shaped
+    .map((item) => (item.children ? { ...item, children: item.children.filter((c) => allowed(c.href)) } : item))
+    .filter((item) => (item.children ? item.children.length > 0 : !item.href || allowed(item.href)));
 }
 
 export const STUDENT_NAV: NavItem[] = [

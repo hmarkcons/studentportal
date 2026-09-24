@@ -38,6 +38,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
     isSuperAdmin,
     hasOwnAgreement: (ownAgreements ?? 0) > 0,
     canApproveLeave: perms["leave.approve"] === true,
+    perms,
   });
 
   return (

@@ -333,8 +333,27 @@ export function StaffForm({
         <Field label="Email (Personal)">
           <Input name="email_personal" type="email" defaultValue={staff?.email_personal ?? ""} />
         </Field>
-        <Field label={isEdit ? "Email (Official)" : "Email (Official) — used to log in"}>
-          <Input name="email_official" type="email" required={!isEdit} defaultValue={staff?.email_official ?? ""} />
+        <Field label={isEdit ? "Email (Official) — their sign-in email" : "Email (Official) — used to log in"}>
+          {/* Changing it moves their login to the new address, so only a
+              Super Admin may; everyone else sees it and cannot edit it.
+              updateStaffDetails and 0274 refuse the change too. */}
+          <Input
+            name="email_official"
+            type="email"
+            required={!isEdit}
+            defaultValue={staff?.email_official ?? ""}
+            readOnly={isEdit && !canGrantSuperAdmin}
+            aria-readonly={isEdit && !canGrantSuperAdmin}
+            className={isEdit && !canGrantSuperAdmin ? "cursor-not-allowed opacity-60" : undefined}
+            data-official-email-locked={isEdit && !canGrantSuperAdmin ? "" : undefined}
+          />
+          {isEdit && (
+            <p className="mt-1 text-xs text-muted">
+              {canGrantSuperAdmin
+                ? "Changing this also changes the email they sign in with."
+                : "Only a Super Admin can change this, because it is the email they sign in with."}
+            </p>
+          )}
         </Field>
         <Field label="Emergency contact number">
           <Input name="emergency_contact_number" defaultValue={staff?.emergency_contact_number ?? ""} {...phoneBounds()} />

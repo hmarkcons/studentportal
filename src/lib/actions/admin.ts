@@ -343,6 +343,23 @@ export async function updateStaffDetails(staffId: string, _prevState: unknown, f
 
   const fields = staffFieldsFromFormData(formData);
   if (!fields.full_name) return { error: "Name is required." };
+
+  // The official email is their sign-in address — changing it moves their
+  // login (syncLoginEmail below) — so only a Super Admin may change it. For
+  // anyone else the field is read-only on the form; a request that changes
+  // it anyway is refused, and one that leaves it as it was simply doesn't
+  // write it. 0274 refuses the same change in the database.
+  const { staff: editor } = await getStaffSession();
+  const editorIsSuperAdmin = !!editor && hasRole(editor, "super_admin");
+  if (!editorIsSuperAdmin) {
+    const { data: stored } = await supabase.from("staff").select("email_official").eq("id", staffId).maybeSingle();
+    if (!stored) return { error: "That staff member no longer exists." };
+    const before = (stored.email_official ?? "").trim().toLowerCase();
+    const after = (fields.email_official ?? "").trim().toLowerCase();
+    if (before !== after) return { error: "Only a Super Admin can change the official email, because it is their sign-in address." };
+    delete (fields as { email_official?: string | null }).email_official;
+  }
+
   const dobError = dateOfBirthError(fields.date_of_birth);
   if (dobError) return { error: dobError };
   const phoneIssue = staffPhoneError(fields);
@@ -427,13 +444,17 @@ export async function updateStaffDetails(staffId: string, _prevState: unknown, f
     }
   }
 
-  const loginSync = await syncLoginEmail(staffId, fields.email_official);
+  const loginSync = editorIsSuperAdmin ? await syncLoginEmail(staffId, fields.email_official) : {};
   if (loginSync.error) return { error: loginSync.error };
 
-  const { error } = await supabase.from("staff").update(fields).eq("id", staffId);
-  if (error) {
+  // Selected back because an UPDATE that RLS refuses raises nothing — it
+  // matches no rows and reads as success. Staff rows are written by a Super
+  // Admin only (staff_write), so a staff.manage grant to anyone else would
+  // otherwise report "Saved" over a change that never happened.
+  const { data: written, error } = await supabase.from("staff").update(fields).eq("id", staffId).select("id");
+  if (error || !written?.length) {
     await loginSync.revert?.();
-    return { error: error.message };
+    return { error: error?.message ?? "These details weren't saved: only a Super Admin can change a staff member's record." };
   }
 
   const payError = await savePay(supabase, staffId, formData);
