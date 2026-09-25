@@ -167,8 +167,9 @@ try {
   const designField = form.locator('input[type="hidden"][name="design"]');
   await form.locator("[data-page-break], .ProseMirror h1").first().waitFor({ timeout: 15000 }).catch(() => {});
   const editorH1 = form.locator(".ProseMirror h1").first();
-  ok("the editor shows the contract's headings as headings", (await editorH1.count()) > 0 && /Scope of Services/.test(await editorH1.innerText()));
-  ok("...drawn in the imported green", (await editorH1.evaluate((el) => getComputedStyle(el).color)) === "rgb(82, 190, 150)");
+  const hasH1 = (await editorH1.count()) > 0;
+  ok("the editor shows the contract's headings as headings", hasH1 && /Scope of Services/.test(await editorH1.innerText()));
+  ok("...drawn in the imported green", hasH1 && (await editorH1.evaluate((el) => getComputedStyle(el).color)) === "rgb(82, 190, 150)");
   let wording = await wordingField.inputValue();
   ok("the wording holds the payment chart, not the sample figures", wording.includes("{{fee_table}}") && !wording.includes("<table"), wording.slice(0, 200));
   ok("...and not the signature lines", !/\(Signature\)|_____/.test(wording));
