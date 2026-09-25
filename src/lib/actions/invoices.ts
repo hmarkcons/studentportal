@@ -21,6 +21,7 @@ import {
   type TaxBase,
 } from "@/lib/invoiceMath";
 import { planScheduleChange } from "@/lib/invoiceSchedule";
+import { serviceOf, SERVICE_FEE_NAME, SERVICE_FEE_TITLE, VISA_INVOICE_TERMS } from "@/lib/serviceType";
 
 /**
  * Renders and stores the invoice PDF after the response has gone back.
@@ -182,19 +183,29 @@ export async function generateInvoice(studentId: string, agreementId: string, _p
   // whole generation fails, so normalise it to null.
   const agreement_id = agreementId?.trim() ? agreementId.trim() : null;
 
+  // What the student is registered for (0279). A visa-only student's invoice
+  // is the visa documentation and application fee alone — carried in
+  // consultancy_fee — with no administrative charge whatever the form posts;
+  // generate_invoice refuses one as well.
+  const { data: lead } = await supabase.from("leads").select("service_type").eq("id", studentId).maybeSingle();
+  const visaOnly = serviceOf(lead?.service_type) === "visa_only";
+
   // One administrative fee per country the student registered for. The single
   // admin_charge field is still honoured for a student with no destinations on
   // file, which is how invoices were raised before backup countries existed.
-  const destinations = await studentDestinations(supabase, studentId);
-  const adminCharges = adminChargesFromForm(formData, destinations);
-  const admin_charge = adminCharges
-    ? Math.round(adminCharges.reduce((s, c) => s + c.amount, 0) * 100) / 100
-    : Number(formData.get("admin_charge") ?? 0);
+  const destinations = visaOnly ? [] : await studentDestinations(supabase, studentId);
+  const adminCharges = visaOnly ? null : adminChargesFromForm(formData, destinations);
+  const admin_charge = visaOnly
+    ? 0
+    : adminCharges
+      ? Math.round(adminCharges.reduce((s, c) => s + c.amount, 0) * 100) / 100
+      : Number(formData.get("admin_charge") ?? 0);
 
   const consultancy_fee = Number(formData.get("consultancy_fee") ?? 0);
+  if (visaOnly && !(consultancy_fee > 0)) return { error: "Enter the visa documentation & application fee." };
   const installmentCount = Number(formData.get("installment_count") ?? 1);
   const intake = String(formData.get("intake") ?? "").trim() || null;
-  const terms = String(formData.get("terms") ?? "").trim() || DEFAULT_TERMS;
+  const terms = String(formData.get("terms") ?? "").trim() || (visaOnly ? VISA_INVOICE_TERMS : DEFAULT_TERMS);
   const typedInvoiceNumber = String(formData.get("invoice_number") ?? "").trim() || null;
 
   // Public-university destinations are billed in EUR — both the consultancy
@@ -217,7 +228,7 @@ export async function generateInvoice(studentId: string, agreementId: string, _p
   const discount_amount = Number(formData.get("discount_amount") ?? 0);
   const discount_reason = String(formData.get("discount_reason") ?? "").trim() || null;
   if (discount_amount > consultancy_fee) {
-    return { error: "Discount cannot exceed the consultancy fee." };
+    return { error: `Discount cannot exceed the ${visaOnly ? "visa service fee" : "consultancy fee"}.` };
   }
 
   // The date the invoice presents itself as. Finance sometimes has to raise
@@ -247,7 +258,8 @@ export async function generateInvoice(studentId: string, agreementId: string, _p
   const duePlan = installmentDuePlan(
     installmentCount,
     track,
-    amounts.map((_, i) => (firstDueDate ? addMonthsClampedUTC(firstDueDate, i) : null))
+    amounts.map((_, i) => (firstDueDate ? addMonthsClampedUTC(firstDueDate, i) : null)),
+    { visaOnly }
   );
   const stillNeeded = missingDueDates(duePlan);
   if (stillNeeded.length > 0) {
@@ -323,20 +335,17 @@ export async function updateInvoice(invoiceId: string, studentId: string, revali
   const denied = await requirePermission("finance.invoices.manage", "Only Finance/Super Admin can edit invoices.");
   if (denied) return { error: denied.error };
 
-  const consultancy_fee = Number(formData.get("consultancy_fee") ?? 0);
-  const currency = String(formData.get("currency") ?? "EUR");
-  const intake = String(formData.get("intake") ?? "").trim() || null;
-  const terms = String(formData.get("terms") ?? "").trim() || DEFAULT_TERMS;
-  const invoice_number = String(formData.get("invoice_number") ?? "").trim() || null;
-  const installment_plan = String(formData.get("installment_plan") ?? "").trim() || null;
-
   // Changing a fee used to leave the instalment rows untouched, so the invoice
   // and its own payment schedule stopped agreeing about the total — and the
   // student's Payments page then had to show them a warning instead of a bill.
   // The schedule is rebuilt to match, or the edit is refused; it is never left
   // inconsistent.
   const [{ data: current }, { data: lineItems }, { data: adminRows }] = await Promise.all([
-    supabase.from("invoices").select("discount_amount, tax_rate, tax_base, agreement_id").eq("id", invoiceId).maybeSingle(),
+    supabase
+      .from("invoices")
+      .select("discount_amount, tax_rate, tax_base, agreement_id, service_type, admin_charge, consultancy_fee, currency, intake, terms, invoice_number, installment_plan")
+      .eq("id", invoiceId)
+      .maybeSingle(),
     // Items already on the invoice stay in the total when a fee is edited;
     // without them the rebuilt schedule would silently drop them — and their
     // placement decides which instalments carry them afterwards.
@@ -351,17 +360,44 @@ export async function updateInvoice(invoiceId: string, studentId: string, revali
       .order("sort_order", { ascending: true }),
   ]);
 
+  if (!current) return { error: "That invoice no longer exists, or you can't edit it." };
+
+  // A field the form does not carry keeps what the invoice already has. The
+  // Invoice Generator's quick edit posts only the number and the intake, and
+  // reading every absent field as blank made that Save zero both fees, reset
+  // the currency to EUR and the terms to the default.
+  const posted = (name: string) => {
+    const v = formData.get(name);
+    return v === null ? null : String(v);
+  };
+  const visaOnly = serviceOf(current.service_type) === "visa_only";
+  const consultancy_fee = posted("consultancy_fee") === null ? Number(current.consultancy_fee ?? 0) : Number(posted("consultancy_fee")) || 0;
+  const currency = posted("currency")?.trim() || String(current.currency ?? "EUR");
+  const keepOr = (name: string, now: string | null | undefined) => {
+    const v = posted(name);
+    return v === null ? (now ?? null) : v.trim() || null;
+  };
+  const intake = keepOr("intake", current.intake as string | null);
+  const invoice_number = keepOr("invoice_number", current.invoice_number as string | null);
+  const installment_plan = keepOr("installment_plan", current.installment_plan as string | null);
+  const terms = keepOr("terms", current.terms as string | null) ?? (visaOnly ? VISA_INVOICE_TERMS : DEFAULT_TERMS);
+
   // An invoice with a per-country breakdown is edited per country; the single
   // field is what an invoice without one still uses. Either way admin_charge
-  // holds the sum, which is what every figure is computed from.
-  const editedAdminCharges = (adminRows ?? []).map((r) => {
+  // holds the sum, which is what every figure is computed from. A visa-only
+  // invoice has no administrative charge to edit (0279).
+  const editedAdminCharges = (visaOnly ? [] : (adminRows ?? [])).map((r) => {
     const raw = formData.get(`admin_charge__${r.destination_id}`);
     const parsed = Number(raw ?? r.amount ?? 0);
     return { id: r.id as string, amount: Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed * 100) / 100 : 0 };
   });
-  const admin_charge = editedAdminCharges.length
-    ? Math.round(editedAdminCharges.reduce((s, c) => s + c.amount, 0) * 100) / 100
-    : Number(formData.get("admin_charge") ?? 0);
+  const admin_charge = visaOnly
+    ? 0
+    : editedAdminCharges.length
+      ? Math.round(editedAdminCharges.reduce((s, c) => s + c.amount, 0) * 100) / 100
+      : posted("admin_charge") === null
+        ? Number(current.admin_charge ?? 0)
+        : Number(posted("admin_charge")) || 0;
 
   // The discount is editable now. Absent from the form — an older edit form,
   // or one that does not offer it — the invoice keeps the discount it has.
@@ -386,7 +422,7 @@ export async function updateInvoice(invoiceId: string, studentId: string, revali
   // the student was promised. Refuse instead and let staff decide.
   if (discountAmount > consultancy_fee) {
     return {
-      error: `A discount of ${discountAmount.toFixed(2)} is more than the consultancy fee of ${consultancy_fee.toFixed(2)}. Lower the discount, or raise the fee.`,
+      error: `A discount of ${discountAmount.toFixed(2)} is more than the ${visaOnly ? "visa service fee" : "consultancy fee"} of ${consultancy_fee.toFixed(2)}. Lower the discount, or raise the fee.`,
     };
   }
 
@@ -443,7 +479,7 @@ export async function updateInvoice(invoiceId: string, studentId: string, revali
     // schedule when the invoice was raised.
     const track = await agreementTrack(supabase, (current?.agreement_id as string | null) ?? null);
     const existingDates = schedule.map((i) => i.due_date as string | null);
-    const duePlan = installmentDuePlan(desiredCount, track, existingDates);
+    const duePlan = installmentDuePlan(desiredCount, track, existingDates, { visaOnly });
     const stillNeeded = missingDueDates(duePlan.slice(settled.length));
     if (stillNeeded.length > 0) {
       return { error: `Instalment ${stillNeeded.join(" and ")} needs a due date before the schedule can be changed.` };
@@ -715,7 +751,7 @@ export async function buildAndSendInvoiceEmail(
     .from("invoices")
     .select(
       `id, invoice_number, intake, currency, admin_charge, consultancy_fee,
-       discount_amount, discount_reason, tax_rate, tax_base, issued_on, created_at, pdf_path`
+       discount_amount, discount_reason, tax_rate, tax_base, issued_on, created_at, pdf_path, service_type`
     )
     .eq("id", invoiceId)
     .maybeSingle();
@@ -801,6 +837,7 @@ export async function buildAndSendInvoiceEmail(
     currency: invoice.currency,
     intake: invoice.intake,
     destination: student.country_of_interest,
+    feeName: SERVICE_FEE_NAME[serviceOf(invoice.service_type)],
     discountReason: invoice.discount_reason,
     math,
     adminCharges: (adminRows ?? []).map((r) => ({
@@ -893,7 +930,7 @@ export async function buildAndStoreInvoicePdf(
     .from("invoices")
     .select(
       `id, invoice_number, intake, terms, admin_charge, consultancy_fee, currency, installment_plan, created_at,
-       discount_amount, discount_reason, tax_rate, tax_amount, tax_base, issued_on, pkr_per_eur,
+       discount_amount, discount_reason, tax_rate, tax_amount, tax_base, issued_on, pkr_per_eur, service_type,
        agreement:agreements(generated_by, template:agreement_templates(signatory_name, destination:destinations(display_name)))`
     )
     .eq("id", invoiceId)
@@ -1033,6 +1070,7 @@ export async function buildAndStoreInvoicePdf(
       installmentPlan: invoice.installment_plan,
       adminCharge: math.adminCharge,
       adminCharges: adminBreakdown,
+      feeName: SERVICE_FEE_TITLE[serviceOf(invoice.service_type)],
       consultancyFee: math.consultancyFee,
       discountAmount: math.discountAmount,
       discountReason: invoice.discount_reason ?? null,

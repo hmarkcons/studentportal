@@ -1,3 +1,4 @@
+import { SERVICE_FEE_NAME, serviceOf } from "@/lib/serviceType";
 import { createClient } from "@/lib/supabase/server";
 import { documentUrls } from "@/lib/storageUrls";
 import { formatDateOnly } from "@/lib/formatDate";
@@ -38,7 +39,7 @@ export default async function PortalPaymentsPage() {
   const { data: invoices } = await supabase
     .from("invoices")
     .select(
-      "id, invoice_number, intake, admin_charge, consultancy_fee, discount_amount, discount_reason, tax_rate, tax_base, currency, pdf_path, created_at"
+      "id, invoice_number, intake, admin_charge, consultancy_fee, discount_amount, discount_reason, tax_rate, tax_base, currency, pdf_path, created_at, service_type"
     )
     .eq("student_id", student.id)
     .order("created_at", { ascending: false });
@@ -159,7 +160,7 @@ export default async function PortalPaymentsPage() {
               </div>
 
               <dl className="flex flex-col gap-0.5 border-t border-border pt-3">
-                <Line label={feeLineLabel("Consultancy fee", primaryCountry)} value={money(cur, math.consultancyFee)} />
+                <Line label={feeLineLabel(SERVICE_FEE_NAME[serviceOf(inv.service_type)], primaryCountry)} value={money(cur, math.consultancyFee)} />
                 {math.discountAmount > 0 && (
                   <Line
                     label={`Discount${inv.discount_reason ? ` · ${inv.discount_reason}` : ""}`}

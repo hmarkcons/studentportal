@@ -28,7 +28,8 @@
     "check:pageaccess": "node scripts/verify-page-access.mjs",
     "check:uploads": "node scripts/verify-uploads.mjs",
     "check:dashboards": "node scripts/verify-dashboards.mjs",
-    "check:login": "node scripts/verify-login-screen.mjs"
+    "check:login": "node scripts/verify-login-screen.mjs",
+    "check:visaonly": "node scripts/verify-visa-only.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

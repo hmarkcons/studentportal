@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { updateRegistrationDetails } from "@/lib/actions/leads";
+import { SERVICE_LABELS, SERVICE_TYPES, type ServiceType } from "@/lib/serviceType";
 import { PrimaryBackupDestinationSelect } from "@/components/PrimaryBackupDestinationSelect";
 import { IntakeField } from "@/components/IntakeField";
 import { DestinationChangeWarning, type DestinationWork } from "./DestinationChangeWarning";
@@ -24,6 +25,8 @@ export function RegistrationEditForm({
   discountReason,
   intake,
   destinationWork,
+  serviceType = "full",
+  canSetService = false,
 }: {
   studentId: string;
   revalidateTo: string;
@@ -39,6 +42,10 @@ export function RegistrationEditForm({
   intake: string | null;
   /** What this student already has against each country. */
   destinationWork: DestinationWork[];
+  /** Which service they are registered for (0279). */
+  serviceType?: ServiceType;
+  /** Super Admin or processing: the only people who may change it. */
+  canSetService?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   // Starts at whatever the student is already registered for, so the intake
@@ -58,6 +65,29 @@ export function RegistrationEditForm({
 
   return (
     <form action={formAction} className="flex flex-col gap-3 rounded-md border border-border p-3">
+      {/* Which service: the full one, or the visa alone for a client who
+          already holds an admission. Only a Super Admin or processing may
+          change it; everyone else sees it and the form does not post it. */}
+      <label className="flex flex-col gap-1 text-xs text-muted">
+        Service
+        {canSetService ? (
+          <Select name="service_type" defaultValue={serviceType} className="w-fit">
+            {SERVICE_TYPES.map((s) => (
+              <option key={s} value={s}>
+                {SERVICE_LABELS[s]}
+              </option>
+            ))}
+          </Select>
+        ) : (
+          <span className="text-sm text-ink">{SERVICE_LABELS[serviceType]}</span>
+        )}
+        {canSetService && (
+          <span className="text-[11px]">
+            Visa only: the admission stages are marked done, admission-only documents are not asked for, and the agreement and
+            invoice are for the visa service. An agreement or invoice already raised is not changed — raise a new one.
+          </span>
+        )}
+      </label>
       <div>
         <label className="mb-1 block text-xs text-muted">Country</label>
         <PrimaryBackupDestinationSelect

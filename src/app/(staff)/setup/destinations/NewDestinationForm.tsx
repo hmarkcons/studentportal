@@ -50,6 +50,10 @@ export function NewDestinationForm() {
           <label className="text-sm font-medium text-ink">Fee currency</label>
           <Input name="consultancy_fee_currency" defaultValue="EUR" />
         </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-ink">Visa service fee</label>
+          <Input name="visa_service_fee" type="number" step="0.01" min="0" placeholder="Visa-only clients" />
+        </div>
       </div>
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-medium text-ink">Installment plan (optional)</label>

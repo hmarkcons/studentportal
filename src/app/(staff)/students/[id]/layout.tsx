@@ -10,6 +10,7 @@ import { countUnreadMessages } from "@/lib/unreadMessages";
 import { avatarUrlMap } from "@/lib/storageUrls";
 import { canSeeVisaSection } from "@/lib/visaAccess";
 import { seesStagesOnly } from "@/lib/auth/studentAccess";
+import { SERVICE_SHORT, serviceOf } from "@/lib/serviceType";
 
 export default async function StudentLayout({ children, params }: { children: React.ReactNode; params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -26,6 +27,7 @@ export default async function StudentLayout({ children, params }: { children: Re
     { data: finalizedApp },
     unreadMessages,
     { data: scholarshipBodyLinks },
+    { data: serviceRow },
   ] = await Promise.all([
     supabase
       .from("students")
@@ -48,7 +50,10 @@ export default async function StudentLayout({ children, params }: { children: Re
     // Messages this student has sent that no one on the team has opened yet.
     countUnreadMessages(supabase, id, "staff"),
     supabase.from("scholarship_body_destinations").select("destination_id"),
+    // Which service (0279) — not on the students view, so read from leads.
+    supabase.from("leads").select("service_type").eq("id", id).maybeSingle(),
   ]);
+  const visaOnly = serviceOf(serviceRow?.service_type) === "visa_only";
 
   if (error || !student) notFound();
 
@@ -169,6 +174,11 @@ export default async function StudentLayout({ children, params }: { children: Re
         </div>
         <div className="flex flex-col items-end gap-2">
           <div className="flex flex-wrap items-center justify-end gap-2">
+            {visaOnly && (
+              <span data-visa-only>
+                <Badge tone="info">{SERVICE_SHORT.visa_only}</Badge>
+              </span>
+            )}
             <Badge tone={student.portal_active ? "success" : "neutral"}>{student.portal_active ? "Portal active" : "Portal inactive"}</Badge>
             <InlineRegistrationStatusCell studentId={id} status={student.registration_status} />
           </div>

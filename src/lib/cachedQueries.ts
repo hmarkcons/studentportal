@@ -1,5 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { readAll } from "@/lib/catalogueReads";
 import { DEFAULT_LOGIN_FIGURES, isLoginFigureIcon, type LoginFigure } from "@/lib/loginFigures";
 
 // Reference/lookup data that's identical for every staff member and rarely
@@ -59,12 +60,11 @@ export function selectableDestinations<T extends { id: string; status?: string |
 export const getCachedActiveUniversities = unstable_cache(
   async () => {
     const supabase = createAdminClient();
-    const { data } = await supabase
-      .from("universities")
-      .select("id, name, status, destination_id")
-      .eq("status", "active")
-      .order("name");
-    return data ?? [];
+    // Paged: a single read stops at 1000 rows without saying so, and the
+    // catalogue is past 300 and growing.
+    return readAll<{ id: string; name: string; status: string; destination_id: string }>((from, to) =>
+      supabase.from("universities").select("id, name, status, destination_id").eq("status", "active").order("name").order("id").range(from, to)
+    );
   },
   ["universities-active-list"],
   { tags: ["universities"], revalidate: 300 }
@@ -83,10 +83,10 @@ export const getCachedFeeProducts = unstable_cache(
 export const getCachedAgreementTemplates = unstable_cache(
   async () => {
     const supabase = createAdminClient();
-    const { data } = await supabase.from("agreement_templates").select("id, name, signatory_name, destination:destinations(id, display_name)");
+    const { data } = await supabase.from("agreement_templates").select("id, name, signatory_name, service_type, destination:destinations(id, display_name)");
     return data ?? [];
   },
-  ["agreement-templates-list"],
+  ["agreement-templates-list-v2"],
   { tags: ["agreement-templates"], revalidate: 300 }
 );
 

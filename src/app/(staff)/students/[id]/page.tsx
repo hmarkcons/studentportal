@@ -16,6 +16,7 @@ import { trackerSuggestions } from "@/lib/trackerPrefill";
 import { listTrackerDefinitions } from "@/lib/actions/countryTracker";
 import { DestinationPipelineCard } from "@/components/DestinationPipelineCard";
 import { seesStagesOnly } from "@/lib/auth/studentAccess";
+import { canSetService, serviceOf, templatesForService } from "@/lib/serviceType";
 import { StagesOnlyView } from "./StagesOnlyView";
 import type { DashboardStageDef } from "@/lib/dashboardPipeline";
 import { PortalAccessPanel } from "./PortalAccessPanel";
@@ -108,15 +109,15 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         .select("auth_user_id, full_name, portal_active")
         .eq("id", id)
         .maybeSingle(),
-      supabase.from("leads").select("assigned_counselor_id, processing_officer_id, intake, discount_amount, discount_reason").eq("id", id).maybeSingle(),
+      supabase.from("leads").select("assigned_counselor_id, processing_officer_id, intake, discount_amount, discount_reason, service_type").eq("id", id).maybeSingle(),
       supabase
         .from("lead_destinations")
-        .select("destination_id, is_backup, created_at, dashboard_stage_values, destination:destinations(display_name, country, admin_charge, country_code, dashboard_pipeline_stages, finalize_action_label)")
+        .select("destination_id, is_backup, created_at, dashboard_stage_values, destination:destinations(display_name, country, admin_charge, country_code, dashboard_pipeline_stages, finalize_action_label, visa_service_fee)")
         .eq("lead_id", id),
       supabase
         .from("agreements")
         .select(
-          "id, status, version, signing_method, signed_file_path, video_recording_path, signed_file_uploaded_at, video_uploaded_at, approval_undone_at, approval_undo_note, undone_by:staff!agreements_approval_undone_by_fkey(full_name), pdf_path, email_verified, document_status, video_status, document_review_note, video_review_note, discount_amount, created_at, template_id, admin_charge_override, consultancy_fee_override, installment_count, template:agreement_templates(file_path, destination_id, destination:destinations(country, track))"
+          "id, status, version, signing_method, signed_file_path, video_recording_path, signed_file_uploaded_at, video_uploaded_at, approval_undone_at, approval_undo_note, undone_by:staff!agreements_approval_undone_by_fkey(full_name), pdf_path, email_verified, document_status, video_status, document_review_note, video_review_note, discount_amount, created_at, template_id, admin_charge_override, consultancy_fee_override, installment_count, service_type, visa_service_fee_override, template:agreement_templates(file_path, destination_id, destination:destinations(country, track))"
         )
         .eq("student_id", id)
         .order("created_at", { ascending: false }),
@@ -127,7 +128,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
           // card prices the invoice with computeInvoiceMath, and without the
           // rule it was raised under it silently falls back to the old one and
           // shows a total nothing else agrees with.
-          "id, admin_charge, consultancy_fee, currency, sent_status, agreement_id, pdf_path, invoice_number, intake, terms, installment_plan, discount_amount, discount_reason, tax_rate, tax_base, issued_on, admin_fee_status, admin_fee_paid_date, admin_fee_payment_method"
+          "id, admin_charge, consultancy_fee, currency, sent_status, agreement_id, pdf_path, invoice_number, intake, terms, installment_plan, discount_amount, discount_reason, tax_rate, tax_base, issued_on, admin_fee_status, admin_fee_paid_date, admin_fee_payment_method, service_type"
         )
         .eq("student_id", id),
       supabase
@@ -349,7 +350,24 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       };
     })
     .filter((r) => r.id);
-  const templateChoices = agreementTemplateChoices(templates ?? [], registeredForTemplates);
+  // A visa-only student (0279) is offered visa-service templates only, and a
+  // full-service student never sees one — so "no template for X" names the
+  // countries missing a template of the kind this student needs.
+  const studentService = serviceOf(leadRegistration?.service_type);
+  const templateChoices = agreementTemplateChoices(templatesForService(templates ?? [], studentService), registeredForTemplates);
+  const visaFees: Record<string, number | null> = Object.fromEntries(
+    (selectedDestinations ?? []).map((row) => {
+      const dest = one(row.destination as never) as { visa_service_fee?: number | null } | null;
+      return [row.destination_id as string, dest?.visa_service_fee ?? null];
+    })
+  );
+  // A visa-only invoice opens on the visa service fee the signed agreement
+  // settled — its own figure, else the country's from Setup. Before any
+  // discount, which the form carries on its own line and takes off once.
+  const signedAgreementDestinationId = signedAgreementTemplate?.destination_id ?? null;
+  const defaultVisaInvoiceFee = signedAgreement
+    ? (signedAgreement.visa_service_fee_override ?? (signedAgreementDestinationId ? visaFees[signedAgreementDestinationId] : null) ?? null)
+    : null;
 
   const destinationPipelineGroups = new Map<
     string,
@@ -761,6 +779,8 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         <div className="mb-4">
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Registration</p>
           <RegistrationEditForm
+            serviceType={serviceOf(leadRegistration?.service_type)}
+            canSetService={canSetService(viewerStaff)}
             destinationWork={destinationWork}
             studentId={id}
             revalidateTo={`/students/${id}`}
@@ -881,6 +901,8 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
             backupDestinationIds={explicitBackupIds}
             missingTemplateFor={templateChoices.missingTemplateFor}
             hasCountry={templateChoices.hasCountry}
+            service={studentService}
+            visaFees={visaFees}
           />
         )}
         {agreements && agreements.length > 0 && (
@@ -941,6 +963,8 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                         studentId={id}
                         templates={templateChoices.available}
                         backupDestinationIds={explicitBackupIds}
+                        service={studentService}
+                        visaFees={visaFees}
                         links={links}
                         canEdit={isSuperAdmin && a.status !== "signed"}
                         canDelete={isSuperAdmin}
@@ -1058,9 +1082,10 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                 studentId={id}
                 agreementId={signedAgreement.id}
                 defaultInstallmentPlan={defaultInstallmentPlan}
-                defaultAdminCharge={defaultInvoiceAdminCharge}
-                defaultConsultancyFee={defaultInvoiceConsultancyFee}
+                defaultAdminCharge={studentService === "visa_only" ? null : defaultInvoiceAdminCharge}
+                defaultConsultancyFee={studentService === "visa_only" ? defaultVisaInvoiceFee : defaultInvoiceConsultancyFee}
                 defaultCurrency={defaultInvoiceCurrency}
+                service={studentService}
                 // The agreement is where the number of payments and the
                 // discount were actually agreed with the student, so the
                 // invoice opens on them rather than making staff retype

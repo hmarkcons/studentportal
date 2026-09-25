@@ -17,7 +17,7 @@ export default async function AgreementTemplateDetailPage(props: PageProps<"/set
   const [{ data: template }, { data: destinations }] = await Promise.all([
     supabase
       .from("agreement_templates")
-      .select("id, name, signatory_name, wording, file_path, destination_id, destination:destinations(display_name)")
+      .select("id, name, signatory_name, wording, file_path, destination_id, service_type, destination:destinations(display_name)")
       .eq("id", id)
       .maybeSingle(),
     supabase.from("destinations").select("id, display_name").order("display_name"),

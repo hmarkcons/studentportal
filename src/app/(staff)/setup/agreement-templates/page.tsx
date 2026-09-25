@@ -75,7 +75,7 @@ export default async function AgreementTemplatesPage(props: { searchParams: Prom
   const { data: destinations } = await supabase.from("destinations").select("id, display_name").order("display_name");
   const { data: templates } = await supabase
     .from("agreement_templates")
-    .select("id, name, signatory_name, wording, destination:destinations(display_name)")
+    .select("id, name, signatory_name, wording, service_type, destination:destinations(display_name)")
     .order("created_at", { ascending: false });
 
   return (
@@ -99,6 +99,7 @@ export default async function AgreementTemplatesPage(props: { searchParams: Prom
             <div key={t.id} className="flex items-center justify-between px-4 py-3 text-sm">
               <span className="text-ink">
                 {t.name} <span className="text-muted">· {destination?.display_name ?? "—"} · {t.signatory_name}</span>
+                {t.service_type === "visa_only" && <span className="ml-2 rounded-full bg-info-bg px-2 py-0.5 text-[11px] font-medium text-info">Visa service only</span>}
               </span>
               <TemplateActionsMenu
                 template={{ id: t.id, name: t.name, signatory_name: t.signatory_name, wording: t.wording, destinationName: destination?.display_name ?? null }}

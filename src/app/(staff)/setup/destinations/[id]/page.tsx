@@ -39,6 +39,7 @@ export default async function DestinationDetailPage(props: PageProps<"/setup/des
             {destination.track} · {destination.currency} · Admin charge: {destination.admin_charge}{" "}
             {destination.consultancy_fee_currency} · Consultancy fee: {destination.consultancy_fee}{" "}
             {destination.consultancy_fee_currency}
+            {destination.visa_service_fee != null && ` · Visa service fee: ${destination.visa_service_fee} ${destination.consultancy_fee_currency}`}
             {destination.visa_type ? ` · Visa: ${destination.visa_type}` : ""}
             {destination.installment_plan ? ` · Installment plan: ${destination.installment_plan}` : ""}
             <br />

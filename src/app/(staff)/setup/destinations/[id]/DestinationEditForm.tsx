@@ -23,6 +23,7 @@ type Destination = {
   admin_charge: number;
   consultancy_fee: number;
   consultancy_fee_currency: string;
+  visa_service_fee?: number | null;
   installment_plan: string | null;
   status: string;
 };
@@ -154,6 +155,13 @@ export function DestinationEditForm({ destination }: { destination: Destination 
         <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
           Fee currency
           <Input name="consultancy_fee_currency" defaultValue={destination.consultancy_fee_currency} />
+        </label>
+        {/* 0279: charged instead of both of the above to a client who wants the
+            visa service only. Pre-fills their invoice; blank = no standard fee. */}
+        <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
+          Visa service fee
+          <Input name="visa_service_fee" type="number" step="0.01" min="0" defaultValue={destination.visa_service_fee ?? ""} placeholder="Visa-only clients" />
+          <span className="text-xs font-normal text-muted">Visa documentation &amp; application only — in the fee currency</span>
         </label>
       </div>
       <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">

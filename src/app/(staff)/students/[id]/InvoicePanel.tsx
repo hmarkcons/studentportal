@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/Button";
 import { useButtonAction } from "@/components/useButtonAction";
 import { toast } from "@/lib/toast";
 import { Input, Select, Textarea } from "@/components/ui/Input";
+import { VISA_INVOICE_TERMS, type ServiceType } from "@/lib/serviceType";
 
 /** Karachi's day, not the browser's — the office books payments by its own date. */
 function today(): string {
@@ -48,6 +49,7 @@ export function GenerateInvoiceForm({
   defaultDiscount,
   defaultDiscountReason,
   countries = [],
+  service = "full",
 }: {
   studentId: string;
   agreementId: string;
@@ -65,20 +67,32 @@ export function GenerateInvoiceForm({
   /** The countries this student registered for — primary first, then backups.
    *  Each carries its own administrative fee. */
   countries?: InvoiceCountry[];
+  /** Which service they are registered for (0279). A visa-only invoice is the
+   *  visa documentation and application fee alone. */
+  service?: ServiceType;
 }) {
   const action = generateInvoice.bind(null, studentId, agreementId);
   const [state, formAction, pending] = useActionState(action, undefined);
+  const isVisaOnly = service === "visa_only";
 
   return (
-    <form action={formAction} className="flex flex-col gap-2">
-      {(defaultAdminCharge != null || defaultConsultancyFee != null) && (
-        <p className="text-xs text-muted">Pre-filled from the signed agreement (discount already applied) — adjust if needed.</p>
+    <form action={formAction} className="flex flex-col gap-2" data-invoice-service={service}>
+      {isVisaOnly ? (
+        <p className="rounded-md bg-info-bg px-3 py-2 text-xs text-info">
+          Visa documentation &amp; application only — this invoice carries the visa service fee alone, with no
+          administrative charge and no consultancy fee.
+          {defaultConsultancyFee == null && " No visa service fee is on the agreement or the country, so enter it here."}
+        </p>
+      ) : (
+        (defaultAdminCharge != null || defaultConsultancyFee != null) && (
+          <p className="text-xs text-muted">Pre-filled from the signed agreement (discount already applied) — adjust if needed.</p>
+        )
       )}
       {/* One administrative fee per country: a backup country's agreement is
           administrative-fee only, so a student with backups owes one for each.
           A student whose registration predates lead_destinations still gets
           the single field. */}
-      {countries.length > 0 && (
+      {!isVisaOnly && countries.length > 0 && (
         <div className="flex flex-wrap items-end gap-2 rounded-md border border-border p-2">
           {countries.map((c) => (
             <label key={c.destinationId} className="flex flex-col gap-0.5 text-xs text-muted">
@@ -97,7 +111,7 @@ export function GenerateInvoiceForm({
         </div>
       )}
       <div className="flex flex-wrap items-end gap-2">
-        {countries.length === 0 && (
+        {!isVisaOnly && countries.length === 0 && (
           <Input
             name="admin_charge"
             type="number"
@@ -108,15 +122,31 @@ export function GenerateInvoiceForm({
             className="w-32"
           />
         )}
-        <Input
-          name="consultancy_fee"
-          type="number"
-          step="0.01"
-          placeholder="Consultancy fee"
-          defaultValue={defaultConsultancyFee ?? undefined}
-          required
-          className="w-36"
-        />
+        {isVisaOnly ? (
+          <label className="flex flex-col gap-0.5 text-xs text-muted">
+            Visa documentation &amp; application fee
+            <Input
+              name="consultancy_fee"
+              type="number"
+              step="0.01"
+              min="0.01"
+              defaultValue={defaultConsultancyFee ?? undefined}
+              required
+              className="w-44"
+              data-visa-fee-input
+            />
+          </label>
+        ) : (
+          <Input
+            name="consultancy_fee"
+            type="number"
+            step="0.01"
+            placeholder="Consultancy fee"
+            defaultValue={defaultConsultancyFee ?? undefined}
+            required
+            className="w-36"
+          />
+        )}
         <Select name="currency" defaultValue={defaultCurrency ?? "EUR"}>
           <option value="EUR">EUR</option>
           <option value="PKR">PKR</option>
@@ -178,7 +208,7 @@ export function GenerateInvoiceForm({
       </div>
       <Textarea
         name="terms"
-        defaultValue={DEFAULT_TERMS}
+        defaultValue={isVisaOnly ? VISA_INVOICE_TERMS : DEFAULT_TERMS}
         rows={2}
         className="w-full"
         placeholder="Refund / consultancy terms shown on the invoice"
@@ -218,6 +248,7 @@ function EditInvoiceForm({
     discount_amount?: number | null;
     discount_reason?: string | null;
     issued_on?: string | null;
+    service_type?: string | null;
   };
   /** Per-country administrative charges, when this invoice has a breakdown. */
   adminCharges: AdminChargeRow[];
@@ -230,6 +261,8 @@ function EditInvoiceForm({
 }) {
   const action = updateInvoice.bind(null, invoice.id, studentId, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
+  // A visa-only invoice (0279) has the visa service fee and nothing else.
+  const isVisaOnly = invoice.service_type === "visa_only";
 
   return (
     <form action={formAction} className="mt-2 flex flex-col gap-2 rounded-md border border-border p-3">
@@ -241,7 +274,7 @@ function EditInvoiceForm({
       {/* Edited per country when the invoice carries a breakdown: the single
           figure is their sum, so letting staff type over it would leave the
           two disagreeing about which country was charged what. */}
-      {adminCharges.length > 0 && (
+      {!isVisaOnly && adminCharges.length > 0 && (
         <div className="flex flex-wrap items-end gap-2 rounded-md border border-border p-2">
           {adminCharges.map((c) => (
             <label key={c.id} className="flex flex-col gap-0.5 text-xs text-muted">
@@ -260,10 +293,17 @@ function EditInvoiceForm({
         </div>
       )}
       <div className="flex flex-wrap items-end gap-2">
-        {adminCharges.length === 0 && (
+        {!isVisaOnly && adminCharges.length === 0 && (
           <Input name="admin_charge" type="number" step="0.01" defaultValue={invoice.admin_charge} required className="w-32" />
         )}
-        <Input name="consultancy_fee" type="number" step="0.01" defaultValue={invoice.consultancy_fee} required className="w-36" />
+        {isVisaOnly ? (
+          <label className="flex flex-col gap-0.5 text-xs text-muted">
+            Visa documentation &amp; application fee
+            <Input name="consultancy_fee" type="number" step="0.01" min="0.01" defaultValue={invoice.consultancy_fee} required className="w-44" />
+          </label>
+        ) : (
+          <Input name="consultancy_fee" type="number" step="0.01" defaultValue={invoice.consultancy_fee} required className="w-36" />
+        )}
         <Select name="currency" defaultValue={invoice.currency}>
           <option value="EUR">EUR</option>
           <option value="PKR">PKR</option>
@@ -293,7 +333,7 @@ function EditInvoiceForm({
         <Input name="intake" defaultValue={invoice.intake ?? ""} placeholder="Intake" className="w-44" />
         <Input name="installment_plan" defaultValue={invoice.installment_plan ?? ""} placeholder="Installment plan" className="w-44" />
       </div>
-      <Textarea name="terms" defaultValue={invoice.terms ?? DEFAULT_TERMS} rows={2} className="w-full" />
+      <Textarea name="terms" defaultValue={invoice.terms ?? (isVisaOnly ? VISA_INVOICE_TERMS : DEFAULT_TERMS)} rows={2} className="w-full" />
       <div className="flex items-center gap-2">
         <Button type="submit" variant="primary" pending={pending} status={{ state, label: "Saved." }}>
           Save invoice
@@ -711,6 +751,8 @@ export function InvoiceCard({
     /** Which rule priced this invoice's tax — see TaxBase. */
     tax_base?: string | null;
     issued_on?: string | null;
+    /** Which service it was raised for (0279). */
+    service_type?: string | null;
   };
   installments: {
     id: string;
@@ -788,6 +830,11 @@ export function InvoiceCard({
           {invoice.installment_plan && <span className="ml-2 text-xs font-normal text-muted">· {invoice.installment_plan}</span>}
         </p>
         <div className="flex flex-wrap items-center gap-2">
+          {invoice.service_type === "visa_only" && (
+            <span data-invoice-visa-only>
+              <Badge tone="info">Visa service only</Badge>
+            </span>
+          )}
           <Badge tone={STATUS_TONE[status]}>{INVOICE_STATUS_LABELS[status]}</Badge>
           <Badge tone={invoice.sent_status === "sent" ? "success" : "neutral"}>{invoice.sent_status}</Badge>
           {canManage && (

@@ -1,5 +1,6 @@
 "use client";
 
+import { SERVICE_FEE_NAME, type ServiceType } from "@/lib/serviceType";
 import { useState } from "react";
 import { useFormStatus } from "react-dom";
 import Link from "next/link";
@@ -34,6 +35,8 @@ function SubmitButton({ children, ...props }: React.ComponentProps<typeof Button
 
 export type GeneratedInvoice = {
   id: string;
+  /** Which service it was raised for (0279); a visa-only one has no administrative fee. */
+  serviceType?: ServiceType;
   studentId: string;
   studentName: string;
   studentEmail: string | null;
@@ -92,8 +95,11 @@ export function GeneratedInvoiceList({ invoices, canDelete }: { invoices: Genera
   if (invoices.length === 0) return <EmptyState>No invoices issued yet.</EmptyState>;
   return (
     <div className="flex flex-col gap-3">
+      {/* Card passes on only its className, so the row is marked here. */}
       {invoices.map((inv) => (
-        <InvoiceRow key={inv.id} inv={inv} canDelete={canDelete} />
+        <div key={inv.id} data-invoice-row={inv.id}>
+          <InvoiceRow inv={inv} canDelete={canDelete} />
+        </div>
       ))}
     </div>
   );
@@ -251,7 +257,7 @@ function InvoiceRow({ inv, canDelete }: { inv: GeneratedInvoice; canDelete: bool
       {open && (
         <div className="mt-3 border-t border-border pt-3">
           <dl className="mb-3 flex flex-col gap-0.5 text-xs">
-            <Line label="Consultancy fee" value={fmt(inv.currency, inv.math.consultancyFee)} />
+            <Line label={SERVICE_FEE_NAME[inv.serviceType ?? "full"]} value={fmt(inv.currency, inv.math.consultancyFee)} />
             {inv.math.discountAmount > 0 && (
               <Line
                 label={`Discount${inv.discountReason ? ` (${inv.discountReason})` : ""}`}
@@ -262,7 +268,7 @@ function InvoiceRow({ inv, canDelete }: { inv: GeneratedInvoice; canDelete: bool
               <Line key={li.id} label={li.name} value={fmt(inv.currency, li.amount)} />
             ))}
             <Line label={`SRB tax (${inv.math.taxRate}%)`} value={fmt(inv.currency, inv.math.taxAmount)} />
-            <Line label="Administrative fee" value={fmt(inv.currency, inv.math.adminCharge)} />
+            {inv.serviceType !== "visa_only" && <Line label="Administrative fee" value={fmt(inv.currency, inv.math.adminCharge)} />}
             <Line label="Total" value={fmt(inv.currency, inv.math.total)} strong />
           </dl>
 

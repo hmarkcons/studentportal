@@ -14,6 +14,7 @@ import { SuggestedPrograms, type Suggested } from "./SuggestedPrograms";
 import { applicationDeadline, deadlineSource, daysUntil } from "@/lib/applicationDeadline";
 import { ROUND_DATE_FORMAT } from "@/lib/programRounds";
 import { karachiToday } from "@/lib/calendarDates";
+import { canSetService, serviceOf } from "@/lib/serviceType";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -27,6 +28,10 @@ export default async function StudentApplicationsTab(props: {
   const { country: countryParam, cycle: cycleParam } = await props.searchParams;
   const { supabase, staff: staffRow } = await getStaffSession();
   const canDelete = hasRole(staffRow, "super_admin") || hasRole(staffRow, "management");
+  // A visa-only client (0279) already holds their admission: the way in is to
+  // record it, not to apply for one.
+  const { data: serviceRow } = await supabase.from("leads").select("service_type").eq("id", id).maybeSingle();
+  const visaOnly = serviceOf(serviceRow?.service_type) === "visa_only";
 
   const [
     { data: applications },
@@ -176,6 +181,27 @@ export default async function StudentApplicationsTab(props: {
 
   return (
     <div>
+      {visaOnly && (
+        <div data-record-admission>
+        <Card className="mb-4 border-info">
+          <p className="text-sm font-medium text-ink">Visa documentation &amp; application only</p>
+          <p className="mt-1 text-sm text-muted">
+            This client already holds an admission. Record it — the university, the programme and the admission letter — and the
+            visa work can start; there is nothing to apply for.
+          </p>
+          {canSetService(staffRow) ? (
+            <Link
+              href={`/students/${id}/applications/record-admission`}
+              className="mt-3 inline-block w-fit rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink hover:opacity-90"
+            >
+              Record their admission
+            </Link>
+          ) : (
+            <p className="mt-2 text-xs text-muted">The processing team records it.</p>
+          )}
+        </Card>
+        </div>
+      )}
       {/* One tab per intake, the upcoming one first and the previous year
           second, as the office asked. Only when there is more than one. */}
       {showCycleTabs && (

@@ -6,6 +6,9 @@ import { revalidatePath } from "next/cache";
 import { assignProcessingOfficers } from "@/lib/actions/processingHandoffWrite";
 import { ensureCommissionForStudent } from "@/lib/actions/commissionAuto";
 import { notifyAssignedStaff } from "@/lib/actions/registrationNotice";
+import { canSetService, serviceOf, type ServiceType } from "@/lib/serviceType";
+import { applyVisaOnlyStages } from "@/lib/actions/visaOnly";
+import { getStaffSession } from "@/lib/auth/session";
 import { syncStudentFollowUpTask } from "@/lib/actions/studentFollowUp";
 import { createClient } from "@/lib/supabase/server";
 import { LEAD_STATUSES } from "@/lib/constants";
@@ -585,6 +588,17 @@ export async function registerStudentManually(_prevState: unknown, formData: For
   const assigned_counselor_id = String(formData.get("assigned_counselor_id") ?? "") || null;
   const intake = String(formData.get("intake") ?? "").trim() || null;
 
+  // Which service (0279). Only a Super Admin or processing may register a
+  // student for the visa service alone; the database refuses anyone else, so
+  // this says it in words before the insert rather than after it fails.
+  const service_type = serviceOf(formData.get("service_type"));
+  if (service_type !== "full") {
+    const { staff } = await getStaffSession();
+    if (!canSetService(staff)) {
+      return { error: "Only a Super Admin or the processing team can register a student for the visa service only." };
+    }
+  }
+
   // A registered student needs a country, for the same reason the import now
   // requires one: the student code is stamped from the primary destination, and
   // the new-application form only offers countries the student is registered
@@ -622,6 +636,9 @@ export async function registerStudentManually(_prevState: unknown, formData: For
     country_of_interest: selection.primaryDestinationName,
     assigned_counselor_id,
     intake,
+    // Only when it is not the default, so a form without the field — and a
+    // role the trigger would refuse it from — writes exactly what it did.
+    ...(service_type === "full" ? {} : { service_type }),
     status: "registered",
     // handle_lead_registration() only stamps this on UPDATE (status
     // transitioning into 'registered'), not on INSERT — without it here,
@@ -636,6 +653,9 @@ export async function registerStudentManually(_prevState: unknown, formData: For
   if (destinationRows.length > 0) {
     await supabase.from("lead_destinations").insert(destinationRows);
   }
+
+  // A visa-only client already has their admission: its stages are done.
+  if (service_type === "visa_only") await applyVisaOnlyStages(id);
 
   // The counselor keeps the relationship; the Processing Team takes the work.
   // Before the notice, so the mail names the officer it has just assigned.
@@ -735,6 +755,20 @@ export async function updateRegistrationDetails(studentId: string, revalidateTo:
   const discount_reason = String(formData.get("discount_reason") ?? "").trim() || null;
   const hasNewSelection = Boolean(selection.primaryDestinationId) || selection.backupDestinationIds.length > 0;
 
+  // Which service they are registered for (0279) — posted only by the form a
+  // Super Admin or processing sees. Checked here as well as by the database,
+  // so a refusal is a sentence rather than a Postgres error.
+  let serviceChange: ServiceType | null = null;
+  if (formData.has("service_type")) {
+    const next = serviceOf(formData.get("service_type"));
+    const { data: current } = await supabase.from("leads").select("service_type").eq("id", studentId).maybeSingle();
+    if (serviceOf(current?.service_type) !== next) {
+      const { staff } = await getStaffSession();
+      if (!canSetService(staff)) return { error: "Only a Super Admin or the processing team can change which service a student is registered for." };
+      serviceChange = next;
+    }
+  }
+
   // Older records may predate lead_destinations and only carry the legacy
   // country_of_interest text — the picker then starts with nothing selected.
   // Only touch destinations/country_of_interest when the form actually has a
@@ -766,6 +800,7 @@ export async function updateRegistrationDetails(studentId: string, revalidateTo:
   }
 
   const patch: Record<string, unknown> = { assigned_counselor_id, processing_officer_id, intake, discount_amount, discount_reason };
+  if (serviceChange) patch.service_type = serviceChange;
   if (hasNewSelection || hadExistingDestinations) {
     // The primary only, matching registerStudentManually and the import. The
     // guard above still decides WHETHER to touch this field at all, so a
@@ -775,6 +810,14 @@ export async function updateRegistrationDetails(studentId: string, revalidateTo:
 
   const { error } = await supabase.from("leads").update(patch).eq("id", studentId);
   if (error) return { error: error.message };
+
+  // Made visa-only: they already have their admission, so its stages are
+  // recorded as done. The checklist drops the admission-only items the next
+  // time it is built (ensureStudentDocumentRequirements).
+  if (serviceChange === "visa_only") {
+    const stages = await applyVisaOnlyStages(studentId);
+    if (stages.error) return { error: `Saved, but the admission stages couldn't be marked done: ${stages.error}` };
+  }
 
   // The counselor or the processing officer may have changed in that patch.
   await notifyAssignedStaff(studentId);

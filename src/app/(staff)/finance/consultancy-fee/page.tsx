@@ -46,7 +46,7 @@ export default async function ConsultancyFeePage() {
     .select(
       `id, student_id, admin_charge, consultancy_fee, currency, sent_status, pdf_path, invoice_number, intake, terms,
        discount_amount, discount_reason, tax_rate, tax_amount, tax_base, issued_on,
-       admin_fee_status, admin_fee_paid_date, admin_fee_payment_method,
+       admin_fee_status, admin_fee_paid_date, admin_fee_payment_method, service_type,
        student:leads(full_name, registered_at)`
     )
     .order("created_at", { ascending: false });

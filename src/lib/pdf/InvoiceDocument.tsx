@@ -110,6 +110,9 @@ export type InvoicePdfData = {
    *  an invoice raised before the breakdown existed, which prints one
    *  unlabelled row for adminCharge instead. */
   adminCharges: AdminChargeLine[];
+  /** What the fee row is called: "Consultancy Fee", or the visa service's
+   *  name on a visa-only invoice (0279). */
+  feeName?: string;
   consultancyFee: number;
   // Discount comes off the consultancy fee, then SRB tax is charged on what
   // remains — see computeInvoiceMath, which is where these are produced.
@@ -284,7 +287,7 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
             {/* Named for the country it is for, as the administrative rows
                 above are. The consultancy fee is the primary country's — a
                 backup never carries one. */}
-            <Text style={styles.itemName}>{feeLineLabel("Consultancy Fee", data.destination)}</Text>
+            <Text style={styles.itemName}>{feeLineLabel(data.feeName ?? "Consultancy Fee", data.destination)}</Text>
             {data.intake && <Text style={styles.itemDesc}>Intake: {data.intake}</Text>}
             {data.installmentPlan && <Text style={styles.itemDesc}>Installment plan: {data.installmentPlan}</Text>}
             {/* The counselor used to be named here. It is a receipt for money,

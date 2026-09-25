@@ -26,6 +26,8 @@ export type BuilderItem = {
   isShared: boolean;
   /** Asked for again when a student starts a new intake. */
   renewEachIntake: boolean;
+  /** Not asked of a visa-only client (0280). */
+  skipForVisaOnly: boolean;
 };
 
 type Section = { key: string; label: string; items: BuilderItem[] };
@@ -280,6 +282,13 @@ export function SectionCard({
                   <input type="checkbox" name="renew_each_intake" defaultChecked={item.renewEachIntake} /> Renew each
                   intake
                 </label>
+                <label
+                  className="flex items-center gap-1 pb-2 text-xs text-muted"
+                  title="A client registered for the visa service only already has their admission, so this is not asked of them."
+                >
+                  <input type="checkbox" name="skip_for_visa_only" defaultChecked={item.skipForVisaOnly} /> Not needed for visa-only
+                  clients
+                </label>
                 <Button type="submit" variant="primary" size="sm" pending={busy}>
                   Save
                 </Button>
@@ -295,6 +304,7 @@ export function SectionCard({
                     {!item.required && <span className="ml-2 text-xs text-muted">optional</span>}
                     {item.level !== "all" && <span className="ml-2 text-xs text-muted">{item.level} only</span>}
                     {item.renewEachIntake && <span className="ml-2 text-xs text-warning">renew each intake</span>}
+                    {item.skipForVisaOnly && <span className="ml-2 text-xs text-muted">not for visa-only clients</span>}
                     {item.isShared && <span className="ml-2 text-xs text-muted">shared</span>}
                   </p>
                   {item.description && <p className="text-xs text-muted">{item.description}</p>}
@@ -391,6 +401,12 @@ export function SectionCard({
             title="Ask for this again when a student starts a new intake, instead of carrying the approved copy over."
           >
             <input type="checkbox" name="renew_each_intake" /> Renew each intake
+          </label>
+          <label
+            className="flex items-center gap-1 pb-2 text-xs text-muted"
+            title="A client registered for the visa service only already has their admission, so this is not asked of them."
+          >
+            <input type="checkbox" name="skip_for_visa_only" /> Not needed for visa-only clients
           </label>
           <Button type="submit" variant="primary" size="sm" pending={busy}>
             Add

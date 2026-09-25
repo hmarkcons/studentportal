@@ -24,6 +24,8 @@ export type DestinationFeeInputs = {
   consultancy_fee_currency?: string | null;
   /** "public" | "private". Public-university destinations are billed in EUR. */
   track?: string | null;
+  /** The country's visa documentation and application fee (0279). */
+  visa_service_fee?: number | string | null;
 } | null;
 
 export type AgreementFeeInputs = {
@@ -32,6 +34,7 @@ export type AgreementFeeInputs = {
   consultancy_fee_override?: number | string | null;
   discount_amount?: number | string | null;
   installment_count?: number | string | null;
+  visa_service_fee_override?: number | string | null;
 } | null;
 
 export type InvoiceDefaults = {
@@ -60,12 +63,16 @@ function num(v: number | string | null | undefined): number | null {
 export function resolveInvoiceDefaults(
   student: StudentFeeInputs,
   destination: DestinationFeeInputs,
-  agreement: AgreementFeeInputs
+  agreement: AgreementFeeInputs,
+  // A visa-only student (0279) is invoiced the visa service fee in place of
+  // the consultancy fee, and no administrative charge at all.
+  service: "full" | "visa_only" = "full"
 ): InvoiceDefaults {
-  const agreementFee = num(agreement?.consultancy_fee_override);
-  const countryFee = num(destination?.consultancy_fee);
-  const agreementAdmin = num(agreement?.admin_charge_override);
-  const countryAdmin = num(destination?.admin_charge);
+  const visaOnly = service === "visa_only";
+  const agreementFee = num(visaOnly ? agreement?.visa_service_fee_override : agreement?.consultancy_fee_override);
+  const countryFee = num(visaOnly ? destination?.visa_service_fee : destination?.consultancy_fee);
+  const agreementAdmin = visaOnly ? null : num(agreement?.admin_charge_override);
+  const countryAdmin = visaOnly ? null : num(destination?.admin_charge);
   const agreementDiscount = num(agreement?.discount_amount);
   const registrationDiscount = num(student.discount_amount);
 

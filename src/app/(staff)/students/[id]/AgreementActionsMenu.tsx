@@ -5,6 +5,7 @@ import { deleteAgreement } from "@/lib/actions/agreements";
 import { useButtonAction } from "@/components/useButtonAction";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { EditAgreementForm } from "./GenerateAgreementForm";
+import type { ServiceType } from "@/lib/serviceType";
 
 type AgreementTemplateOption = {
   id: string;
@@ -23,6 +24,8 @@ type AgreementRecord = {
   discount_amount: number | null;
   installment_count: number | null;
   created_at: string;
+  service_type?: string | null;
+  visa_service_fee_override?: number | null;
 };
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
@@ -39,6 +42,8 @@ export function AgreementActionsMenu({
   studentId,
   templates,
   backupDestinationIds = [],
+  service = "full",
+  visaFees = {},
   links,
   canEdit,
   canDelete,
@@ -47,6 +52,8 @@ export function AgreementActionsMenu({
   studentId: string;
   templates: AgreementTemplateOption[];
   backupDestinationIds?: string[];
+  service?: ServiceType;
+  visaFees?: Record<string, number | null>;
   links?: { templateUrl?: string; signedUrl?: string; pdfUrl?: string };
   canEdit: boolean;
   canDelete: boolean;
@@ -117,8 +124,17 @@ export function AgreementActionsMenu({
           <Row label="Status" value={agreement.status} />
           <Row label="Signing method" value={agreement.signing_method} />
           <Row label="Created" value={new Date(agreement.created_at).toLocaleDateString("en-US")} />
-          <Row label="Admin charge override" value={agreement.admin_charge_override} />
-          <Row label="Consultancy fee override" value={agreement.consultancy_fee_override} />
+          {agreement.service_type === "visa_only" ? (
+            <>
+              <Row label="Service" value="Visa documentation & application only" />
+              <Row label="Visa service fee" value={agreement.visa_service_fee_override ?? "Country default"} />
+            </>
+          ) : (
+            <>
+              <Row label="Admin charge override" value={agreement.admin_charge_override} />
+              <Row label="Consultancy fee override" value={agreement.consultancy_fee_override} />
+            </>
+          )}
           <Row label="Discount" value={agreement.discount_amount} />
           <Row label="Installments" value={agreement.installment_count} />
 
@@ -150,6 +166,8 @@ export function AgreementActionsMenu({
             studentId={studentId}
             templates={templates}
             backupDestinationIds={backupDestinationIds}
+            service={service}
+            visaFees={visaFees}
             onSuccess={() => setEditOpen(false)}
           />
         </SlideOver>

@@ -1,5 +1,6 @@
 "use server";
 
+import { serviceOf } from "@/lib/serviceType";
 import { hasRole } from "@/lib/auth/roles";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
@@ -38,7 +39,8 @@ export async function createAgreementTemplate(_prevState: unknown, formData: For
     if (uploadError) return { error: uploadError.message };
   }
 
-  const { error } = await supabase.from("agreement_templates").insert({ destination_id, name, signatory_name, wording, file_path });
+  const service_type = serviceOf(formData.get("service_type"));
+  const { error } = await supabase.from("agreement_templates").insert({ destination_id, name, signatory_name, wording, file_path, service_type });
   if (error) return { error: error.message };
 
   revalidatePath("/setup/agreement-templates");
@@ -60,7 +62,7 @@ export async function updateAgreementTemplate(templateId: string, _prevState: un
     return { error: "Destination, name, and signatory name are all required." };
   }
 
-  const update: Record<string, unknown> = { destination_id, name, signatory_name, wording };
+  const update: Record<string, unknown> = { destination_id, name, signatory_name, wording, service_type: serviceOf(formData.get("service_type")) };
 
   // What the template points at now, read before anything replaces it, so the
   // old object can be cleaned up afterwards.

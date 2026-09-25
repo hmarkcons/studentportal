@@ -38,6 +38,21 @@ function slugifyStages(raw: string) {
     .filter(Boolean);
 }
 
+
+/**
+ * The visa service fee a destination form posted (0279), or undefined when the
+ * form does not carry the field — so the import, which has no such column,
+ * never blanks a fee someone set by hand. An empty box is "no standard fee".
+ */
+function visaServiceFeeFrom(formData: FormData): { value?: number | null; error?: string } {
+  if (!formData.has("visa_service_fee")) return {};
+  const raw = String(formData.get("visa_service_fee") ?? "").trim();
+  if (raw === "") return { value: null };
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return { error: "The visa service fee can't be negative." };
+  return { value: Math.round(n * 100) / 100 };
+}
+
 export async function createDestination(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
 
@@ -59,6 +74,8 @@ export async function createDestination(_prevState: unknown, formData: FormData)
   if (admin_charge < 0 || consultancy_fee < 0) {
     return { error: "Admin charge and consultancy fee can't be negative." };
   }
+  const visaFee = visaServiceFeeFrom(formData);
+  if (visaFee.error) return { error: visaFee.error };
 
   const pipeline_stages = stagesRaw ? slugifyStages(stagesRaw) : undefined;
   const dashboard_pipeline_stages = dashboardStagesRaw ? parseDashboardStagesText(dashboardStagesRaw) : undefined;
@@ -74,6 +91,7 @@ export async function createDestination(_prevState: unknown, formData: FormData)
       admin_charge,
       consultancy_fee,
       consultancy_fee_currency,
+      ...(visaFee.value !== undefined ? { visa_service_fee: visaFee.value } : {}),
       installment_plan,
       ...(pipeline_stages ? { pipeline_stages } : {}),
       ...(dashboard_pipeline_stages ? { dashboard_pipeline_stages } : {}),
@@ -178,6 +196,8 @@ export async function updateDestination(destinationId: string, _prevState: unkno
   if (admin_charge < 0 || consultancy_fee < 0) {
     return { error: "Admin charge and consultancy fee can't be negative." };
   }
+  const visaFee = visaServiceFeeFrom(formData);
+  if (visaFee.error) return { error: visaFee.error };
   if (!["universal", "selective"].includes(scholarship_access)) {
     return { error: "Choose whether this destination's scholarships are for every student or awarded on merit." };
   }
@@ -212,6 +232,7 @@ export async function updateDestination(destinationId: string, _prevState: unkno
       admin_charge,
       consultancy_fee,
       consultancy_fee_currency,
+      ...(visaFee.value !== undefined ? { visa_service_fee: visaFee.value } : {}),
       installment_plan,
       status,
       finalize_action_label,

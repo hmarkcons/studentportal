@@ -7,6 +7,7 @@ import { useButtonAction } from "@/components/useButtonAction";
 import { toast } from "@/lib/toast";
 import { FileField } from "@/components/FileField";
 import { Input, Select } from "@/components/ui/Input";
+import type { ServiceType } from "@/lib/serviceType";
 
 type AgreementTemplateOption = {
   id: string;
@@ -17,6 +18,65 @@ type AgreementTemplateOption = {
 
 function templateDest(d: AgreementTemplateOption["destination"]) {
   return Array.isArray(d) ? d[0] : d;
+}
+
+/**
+ * The fee inputs of a visa documentation and application agreement (0279):
+ * the visa service fee alone — no administrative charge, no consultancy fee.
+ * It defaults to the country's fee in Setup → Destinations, and says so when
+ * the country has none, because the PDF cannot be generated without one.
+ */
+function VisaFeeFields({
+  countryFee,
+  countryName,
+  defaultFee,
+  defaultDiscount,
+  defaultInstallments,
+  wide = false,
+}: {
+  countryFee: number | null | undefined;
+  countryName: string | null;
+  defaultFee?: number | null;
+  defaultDiscount?: number | null;
+  defaultInstallments?: number | null;
+  wide?: boolean;
+}) {
+  return (
+    <>
+      <Input
+        name="visa_service_fee_override"
+        type="number"
+        step="0.01"
+        min="0"
+        placeholder={countryFee != null ? `Visa service fee (default ${countryFee.toLocaleString("en-US")})` : "Visa service fee"}
+        defaultValue={defaultFee ?? ""}
+        className={wide ? "w-full" : "w-56"}
+        data-visa-fee-input
+      />
+      <Input
+        name="discount_amount"
+        type="number"
+        step="0.01"
+        placeholder="Discount amount"
+        defaultValue={defaultDiscount ?? ""}
+        className={wide ? "w-full" : "w-36"}
+      />
+      <Select name="installment_count" defaultValue={String(defaultInstallments ?? 1)} className={wide ? "w-full" : undefined}>
+        <option value="1">1 visa service fee installment</option>
+        <option value="2">2 visa service fee installments</option>
+        <option value="3">3 visa service fee installments</option>
+      </Select>
+      <p className="w-full text-xs text-muted">
+        Visa documentation &amp; application only — no administrative charge and no consultancy fee.
+        {countryName && countryFee == null && (
+          <span className="text-warning">
+            {" "}
+            No visa service fee is set for {countryName} in Setup › Destinations, so enter one here.
+          </span>
+        )}
+      </p>
+    </>
+  );
 }
 
 // A backup-country destination (per this student's lead_destinations —
@@ -32,9 +92,11 @@ export function GenerateAgreementForm({
   backupDestinationIds = [],
   missingTemplateFor = [],
   hasCountry = true,
+  service = "full",
+  visaFees = {},
 }: {
   studentId: string;
-  /** Already narrowed to this student's own countries — see agreementTemplateChoices. */
+  /** Already narrowed to this student's own countries and service — see agreementTemplateChoices and templatesForService. */
   templates: AgreementTemplateOption[];
   discountAmount?: number | null;
   backupDestinationIds?: string[];
@@ -42,13 +104,19 @@ export function GenerateAgreementForm({
   missingTemplateFor?: string[];
   /** False when their registration has no country at all. */
   hasCountry?: boolean;
+  /** Which service they are registered for (0279). */
+  service?: ServiceType;
+  /** Each country's visa service fee from Setup, by destination id. */
+  visaFees?: Record<string, number | null>;
 }) {
   const action = generateAgreement.bind(null, studentId);
   const [state, formAction, pending] = useActionState(action, undefined);
   const [templateId, setTemplateId] = useState("");
-  const isBackup = backupDestinationIds.includes(
-    templateDest(templates.find((t) => t.id === templateId)?.destination ?? null)?.id ?? ""
-  );
+  const chosenDest = templateDest(templates.find((t) => t.id === templateId)?.destination ?? null);
+  const isVisaOnly = service === "visa_only";
+  // A backup country's administrative-fee-only agreement has no meaning for
+  // a visa-only client, who pays no administrative fee at all.
+  const isBackup = !isVisaOnly && backupDestinationIds.includes(chosenDest?.id ?? "");
 
   // An empty dropdown with no explanation is the worst version of this. The
   // two reasons it can be empty need different people to do different things,
@@ -58,6 +126,16 @@ export function GenerateAgreementForm({
       <p className="rounded-md border border-warning bg-warning-bg px-3 py-2 text-xs text-warning">
         This student has no country on their registration yet, so there is no agreement to generate. Set their country
         in the <strong className="font-medium">Registration &amp; Portal Access</strong> card above.
+      </p>
+    );
+  }
+  if (templates.length === 0 && isVisaOnly) {
+    return (
+      <p className="rounded-md border border-warning bg-warning-bg px-3 py-2 text-xs text-warning" data-no-visa-template>
+        This student is registered for the visa service only, and no visa-service agreement template has been written for{" "}
+        <strong className="font-medium">{missingTemplateFor.join(", ") || "their country"}</strong> yet. Add one in Setup ›
+        Agreement templates with its service set to &ldquo;Visa documentation &amp; application only&rdquo; and it will
+        appear here.
       </p>
     );
   }
@@ -72,13 +150,13 @@ export function GenerateAgreementForm({
   }
 
   return (
-    <form action={formAction} className="flex flex-wrap items-end gap-2">
+    <form action={formAction} className="flex flex-wrap items-end gap-2" data-agreement-service={service}>
       <Select name="template_id" required value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
         <option value="">Template…</option>
         {templates.map((t) => (
           <option key={t.id} value={t.id}>
             {templateDest(t.destination)?.display_name} — {t.name}
-            {backupDestinationIds.includes(templateDest(t.destination)?.id ?? "") ? " (Backup)" : ""}
+            {!isVisaOnly && backupDestinationIds.includes(templateDest(t.destination)?.id ?? "") ? " (Backup)" : ""}
           </option>
         ))}
       </Select>
@@ -86,8 +164,17 @@ export function GenerateAgreementForm({
         <option value="paper">Paper (Karachi)</option>
         <option value="e_signature">E-signature (outside Karachi)</option>
       </Select>
-      <Input name="admin_charge_override" type="number" step="0.01" placeholder="Admin charge override" className="w-40" />
-      {!isBackup && (
+      {isVisaOnly && (
+        <VisaFeeFields
+          countryFee={chosenDest ? visaFees[chosenDest.id] : undefined}
+          countryName={chosenDest?.display_name ?? null}
+          defaultDiscount={discountAmount}
+        />
+      )}
+      {!isVisaOnly && (
+        <Input name="admin_charge_override" type="number" step="0.01" placeholder="Admin charge override" className="w-40" />
+      )}
+      {!isVisaOnly && !isBackup && (
         <>
           <Input name="consultancy_fee_override" type="number" step="0.01" placeholder="Consultancy fee override" className="w-44" />
           <Input
@@ -129,6 +216,8 @@ export function EditAgreementForm({
   studentId,
   templates,
   backupDestinationIds = [],
+  service = "full",
+  visaFees = {},
   onSuccess,
 }: {
   agreement: {
@@ -139,18 +228,21 @@ export function EditAgreementForm({
     consultancy_fee_override: number | null;
     discount_amount: number | null;
     installment_count: number | null;
+    visa_service_fee_override?: number | null;
   };
   studentId: string;
   templates: AgreementTemplateOption[];
   backupDestinationIds?: string[];
+  service?: ServiceType;
+  visaFees?: Record<string, number | null>;
   onSuccess: () => void;
 }) {
   const action = updateAgreement.bind(null, agreement.id, studentId);
   const [state, formAction, pending] = useActionState(action, undefined);
   const [templateId, setTemplateId] = useState(agreement.template_id ?? "");
-  const isBackup = backupDestinationIds.includes(
-    templateDest(templates.find((t) => t.id === templateId)?.destination ?? null)?.id ?? ""
-  );
+  const chosenDest = templateDest(templates.find((t) => t.id === templateId)?.destination ?? null);
+  const isVisaOnly = service === "visa_only";
+  const isBackup = !isVisaOnly && backupDestinationIds.includes(chosenDest?.id ?? "");
 
   return (
     <form action={formAction} className="flex w-full flex-col flex-wrap items-end gap-2">
@@ -159,7 +251,7 @@ export function EditAgreementForm({
         {templates.map((t) => (
           <option key={t.id} value={t.id}>
             {templateDest(t.destination)?.display_name} — {t.name}
-            {backupDestinationIds.includes(templateDest(t.destination)?.id ?? "") ? " (Backup)" : ""}
+            {!isVisaOnly && backupDestinationIds.includes(templateDest(t.destination)?.id ?? "") ? " (Backup)" : ""}
           </option>
         ))}
       </Select>
@@ -167,18 +259,30 @@ export function EditAgreementForm({
         <option value="paper">Paper (Karachi)</option>
         <option value="e_signature">E-signature (outside Karachi)</option>
       </Select>
-      <Input
-        name="admin_charge_override"
-        type="number"
-        step="0.01"
-        placeholder="Admin charge override"
-        defaultValue={agreement.admin_charge_override ?? ""}
-        className="w-full"
-      />
+      {isVisaOnly && (
+        <VisaFeeFields
+          countryFee={chosenDest ? visaFees[chosenDest.id] : undefined}
+          countryName={chosenDest?.display_name ?? null}
+          defaultFee={agreement.visa_service_fee_override}
+          defaultDiscount={agreement.discount_amount}
+          defaultInstallments={agreement.installment_count}
+          wide
+        />
+      )}
+      {!isVisaOnly && (
+        <Input
+          name="admin_charge_override"
+          type="number"
+          step="0.01"
+          placeholder="Admin charge override"
+          defaultValue={agreement.admin_charge_override ?? ""}
+          className="w-full"
+        />
+      )}
       {isBackup && (
         <p className="w-full text-xs text-muted">Backup country — this agreement will show the administrative fee only, no consultancy fee.</p>
       )}
-      {!isBackup && (
+      {!isVisaOnly && !isBackup && (
         <>
           <Input
             name="consultancy_fee_override"

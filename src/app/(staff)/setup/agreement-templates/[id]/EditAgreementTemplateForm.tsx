@@ -29,7 +29,7 @@ export function EditAgreementTemplateForm({
   template,
   destinations,
 }: {
-  template: { id: string; name: string; signatory_name: string; wording: string; destination_id: string; file_path: string | null };
+  template: { id: string; name: string; signatory_name: string; wording: string; destination_id: string; file_path: string | null; service_type?: string | null };
   destinations: { id: string; display_name: string }[];
 }) {
   const action = updateAgreementTemplate.bind(null, template.id);
@@ -80,6 +80,12 @@ export function EditAgreementTemplateForm({
           required
           className="min-w-[220px] flex-1"
         />
+        {/* 0279: which service this template is for. A visa-only client is
+            offered visa-service templates only. */}
+        <Select name="service_type" defaultValue={template.service_type ?? "full"} className="w-auto">
+          <option value="full">Full service (admission and visa)</option>
+          <option value="visa_only">Visa documentation &amp; application only</option>
+        </Select>
       </div>
       <div className="flex flex-col gap-1">
         <label className="text-xs text-muted">

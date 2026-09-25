@@ -21,6 +21,7 @@ export const MERGE_FIELDS: { key: string; label: string }[] = [
   { key: "destination", label: "Destination display name (e.g. \"Germany (Public)\")" },
   { key: "admin_charge", label: "Administrative charge, formatted with currency (e.g. \"€450.00\")" },
   { key: "consultancy_fee", label: "Consultancy fee, formatted with currency" },
+  { key: "visa_service_fee", label: "Visa documentation & application fee, formatted with currency (visa-service templates)" },
   { key: "discount", label: "Discount amount, formatted with currency (blank if none)" },
   { key: "total_fee", label: "Total professional fee (admin charge + consultancy fee - discount), formatted with currency" },
   { key: "currency", label: "Currency code (e.g. \"EUR\")" },

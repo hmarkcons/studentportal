@@ -5,6 +5,9 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { getInvoiceBankSettings } from "@/lib/actions/invoiceSettings";
 import { resolveInvoiceDefaults } from "@/lib/invoiceDefaults";
 import { computeInvoiceMath, computePaymentProgress, sumLineItems } from "@/lib/invoiceMath";
+import { hasRole } from "@/lib/auth/roles";
+import { readAll } from "@/lib/catalogueReads";
+import { serviceOf } from "@/lib/serviceType";
 import { InvoiceGenerator, type StudentOption } from "./InvoiceGenerator";
 import { GeneratedInvoiceList, type GeneratedInvoice } from "./GeneratedInvoiceList";
 
@@ -18,8 +21,11 @@ export default async function InvoiceGeneratorPage() {
     data: { user },
   } = await supabase.auth.getUser();
   const { data: staffRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
-  const role = staffRow?.role ?? null;
-  const canManage = role === "super_admin" || role === "finance";
+  // Every role they hold, not the primary one: a counsellor who also holds
+  // Finance was turned away here, and a Super Admin whose primary role is
+  // another was not offered Delete.
+  const canManage = hasRole(staffRow, "super_admin", "finance");
+  const canDelete = hasRole(staffRow, "super_admin");
 
   if (!canManage) {
     return (
@@ -37,42 +43,60 @@ export default async function InvoiceGeneratorPage() {
 
   // Registered students, the country they registered for, and their agreement
   // — everything the picker needs to pre-fill an invoice.
-  const [{ data: students }, { data: destinations }, { data: agreements }, { data: picked }] = await Promise.all([
-    supabase
-      .from("students")
-      .select("id, full_name, email, contact_number, country_of_interest, intake, discount_amount, discount_reason, level_applying_for")
-      .order("registered_at", { ascending: false }),
-    supabase.from("destinations").select("id, country, display_name, admin_charge, consultancy_fee, consultancy_fee_currency, track"),
-    supabase.from("agreements").select("id, student_id, status, admin_charge_override, consultancy_fee_override, discount_amount, installment_count"),
+  // Paged: each of these can pass the 1000 rows PostgREST returns at once,
+  // and a truncated list silently left students out of the picker.
+  const [students, { data: destinations }, agreements, picked, visaOnlyLeads] = await Promise.all([
+    readAll((from, to) =>
+      supabase
+        .from("students")
+        .select("id, full_name, email, contact_number, country_of_interest, intake, discount_amount, discount_reason, level_applying_for")
+        .order("registered_at", { ascending: false })
+        .order("id")
+        .range(from, to)
+    ),
+    supabase.from("destinations").select("id, country, display_name, admin_charge, consultancy_fee, consultancy_fee_currency, track, visa_service_fee"),
+    readAll((from, to) =>
+      supabase
+        .from("agreements")
+        .select("id, student_id, status, admin_charge_override, consultancy_fee_override, discount_amount, installment_count, service_type, visa_service_fee_override")
+        .order("id")
+        .range(from, to)
+    ),
     // The countries each student actually registered for: one primary and up
     // to three backups (migration 0108). Each carries its own administrative
     // fee, which is why the generator asks for one per country.
-    supabase.from("lead_destinations").select("lead_id, destination_id, is_backup"),
+    readAll((from, to) => supabase.from("lead_destinations").select("lead_id, destination_id, is_backup").order("lead_id").order("destination_id").range(from, to)),
+    // Who is registered for the visa service only (0279): their invoice is the
+    // visa fee alone.
+    readAll((from, to) => supabase.from("leads").select("id, service_type").eq("service_type", "visa_only").order("id").range(from, to)),
   ]);
+  const visaOnlyIds = new Set(visaOnlyLeads.filter((l) => serviceOf(l.service_type) === "visa_only").map((l) => l.id as string));
 
   const destByLabel = new Map<string, NonNullable<typeof destinations>[number]>();
+  type AgreementRow = (typeof agreements)[number];
   for (const d of destinations ?? []) {
     if (d.display_name) destByLabel.set(d.display_name, d);
     if (d.country) destByLabel.set(d.country, d);
   }
   // Prefer a signed agreement when a student somehow has more than one.
-  const agreementByStudent = new Map<string, NonNullable<typeof agreements>[number]>();
-  for (const a of agreements ?? []) {
+  const agreementByStudent = new Map<string, AgreementRow>();
+  for (const a of agreements) {
     const existing = agreementByStudent.get(a.student_id);
     if (!existing || (a.status === "signed" && existing.status !== "signed")) agreementByStudent.set(a.student_id, a);
   }
 
   const destById = new Map((destinations ?? []).map((d) => [d.id as string, d]));
   const pickedByStudent = new Map<string, { destination_id: string; is_backup: boolean }[]>();
-  for (const row of picked ?? []) {
+  for (const row of picked) {
     const list = pickedByStudent.get(row.lead_id as string) ?? [];
     list.push({ destination_id: row.destination_id as string, is_backup: Boolean(row.is_backup) });
     pickedByStudent.set(row.lead_id as string, list);
   }
 
-  const options: StudentOption[] = (students ?? []).map((s) => {
+  const options: StudentOption[] = students.map((s) => {
     const dest = destByLabel.get(s.country_of_interest ?? "") ?? null;
-    const defaults = resolveInvoiceDefaults(s, dest, agreementByStudent.get(s.id) ?? null);
+    const service = visaOnlyIds.has(s.id) ? "visa_only" : "full";
+    const defaults = resolveInvoiceDefaults(s, dest, agreementByStudent.get(s.id) ?? null, service);
 
     // Primary first, then backups by name — the order they will print in.
     // The primary's default comes from resolveInvoiceDefaults so an agreement
@@ -89,7 +113,9 @@ export default async function InvoiceGeneratorPage() {
         };
       })
       .filter((d) => d.label)
-      .sort((a, b) => Number(a.isBackup) - Number(b.isBackup) || a.label.localeCompare(b.label));
+      .sort((a, b) => Number(a.isBackup) - Number(b.isBackup) || a.label.localeCompare(b.label))
+      // A visa-only invoice has no administrative charge, so no country rows.
+      .filter(() => service === "full");
 
     return {
       id: s.id,
@@ -106,6 +132,7 @@ export default async function InvoiceGeneratorPage() {
       discountAmount: defaults.math.discountAmount,
       discountReason: defaults.discountReason,
       countries,
+      service,
       source: defaults.source,
     };
   });
@@ -116,7 +143,7 @@ export default async function InvoiceGeneratorPage() {
     .select(
       `id, student_id, invoice_number, intake, currency, admin_charge, consultancy_fee,
        discount_amount, discount_reason, tax_rate, tax_amount, tax_base, issued_on,
-       admin_fee_status, sent_status, sent_at, pdf_path, created_at,
+       admin_fee_status, sent_status, sent_at, pdf_path, created_at, service_type,
        student:leads(full_name, email)`
     )
     .order("created_at", { ascending: false })
@@ -161,6 +188,7 @@ export default async function InvoiceGeneratorPage() {
     const student = one(inv.student as never) as { full_name?: string; email?: string | null } | null;
     return {
       id: inv.id,
+      serviceType: serviceOf(inv.service_type),
       studentId: inv.student_id,
       studentName: student?.full_name ?? "—",
       studentEmail: student?.email ?? null,
@@ -220,7 +248,7 @@ export default async function InvoiceGeneratorPage() {
       </Card>
 
       <h3 className="mb-3 text-sm font-medium text-ink">Issued invoices</h3>
-      <GeneratedInvoiceList invoices={rows} canDelete={role === "super_admin"} />
+      <GeneratedInvoiceList invoices={rows} canDelete={canDelete} />
     </div>
   );
 }

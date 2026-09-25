@@ -285,6 +285,8 @@ export async function addChecklistItem(
     // do not, and wrongly asking a student to re-do an attestation costs them
     // money.
     renew_each_intake: formData.get("renew_each_intake") === "on",
+    // Admission-only paperwork a visa-only client (0279) is not asked for.
+    skip_for_visa_only: formData.get("skip_for_visa_only") === "on",
     sort_order: (last?.sort_order ?? 0) + 1,
   });
   if (insertError) return { error: insertError.message };
@@ -309,6 +311,7 @@ export async function updateChecklistItem(templateId: string, _prevState: unknow
       required: formData.get("required") !== "off",
       level: String(formData.get("level") ?? "all"),
       renew_each_intake: formData.get("renew_each_intake") === "on",
+      skip_for_visa_only: formData.get("skip_for_visa_only") === "on",
     })
     .eq("id", templateId);
   if (updateError) return { error: updateError.message };

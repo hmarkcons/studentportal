@@ -6,6 +6,7 @@ import { computeInvoiceMath, buildInstallmentPlan, SRB_TAX_RATE } from "@/lib/in
 import type { InvoiceBankSettings } from "@/lib/actions/invoiceSettings";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
+import { SERVICE_FEE_NAME, type ServiceType } from "@/lib/serviceType";
 
 export type StudentCountry = {
   destinationId: string;
@@ -32,6 +33,9 @@ export type StudentOption = {
    *  carries its own administrative fee. Empty for a student whose
    *  registration predates lead_destinations. */
   countries: StudentCountry[];
+  /** Which service they are registered for (0279). A visa-only student is
+   *  invoiced the visa service fee alone — no administrative charge. */
+  service: ServiceType;
   source: { consultancyFee: string; adminCharge: string; discount: string };
 };
 
@@ -83,13 +87,17 @@ export function InvoiceGenerator({ students, bank }: { students: StudentOption[]
 
   const currency = student?.currency ?? "PKR";
   const countries = student?.countries ?? [];
+  const isVisaOnly = student?.service === "visa_only";
+  const feeName = SERVICE_FEE_NAME[student?.service ?? "full"];
   // What the invoice will actually be raised with. generateInvoice adds the
   // per-country fields up the same way server-side and resolves the country
   // names from the student's own registration, so a hand-posted form cannot
   // invent a country.
-  const adminTotal = countries.length
-    ? countries.reduce((s, c) => s + (Number(adminByCountry[c.destinationId]) || 0), 0)
-    : Number(admin) || 0;
+  const adminTotal = isVisaOnly
+    ? 0
+    : countries.length
+      ? countries.reduce((s, c) => s + (Number(adminByCountry[c.destinationId]) || 0), 0)
+      : Number(admin) || 0;
 
   const math = computeInvoiceMath({
     consultancyFee: Number(fee) || 0,
@@ -113,6 +121,7 @@ export function InvoiceGenerator({ students, bank }: { students: StudentOption[]
               {s.name}
               {s.country ? ` — ${s.country}` : ""}
               {s.intake ? ` · ${s.intake}` : ""}
+              {s.service === "visa_only" ? " · visa service only" : ""}
             </option>
           ))}
         </Select>
@@ -125,6 +134,12 @@ export function InvoiceGenerator({ students, bank }: { students: StudentOption[]
           <input type="hidden" name="currency" value={currency} />
           <input type="hidden" name="intake" value={student.intake ?? ""} />
 
+          {isVisaOnly && (
+            <p className="rounded-md bg-info-bg px-3 py-2 text-xs text-info" data-generator-visa-only>
+              Registered for visa documentation &amp; application only — this invoice carries the visa service fee alone,
+              with no administrative charge and no consultancy fee.
+            </p>
+          )}
           {!student.agreementId && (
             <p className="rounded-md bg-warning-bg px-3 py-2 text-xs text-warning">
               This student has no agreement on record. The invoice will be issued without being linked to one.
@@ -133,15 +148,16 @@ export function InvoiceGenerator({ students, bank }: { students: StudentOption[]
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1 text-xs text-muted">
-              Consultancy fee <span className="text-[10px]">({SOURCE_NOTE[student.source.consultancyFee]})</span>
-              <Input name="consultancy_fee" type="number" step="0.01" value={fee} onChange={(e) => setFee(e.target.value)} required />
+              {isVisaOnly ? "Visa documentation & application fee" : "Consultancy fee"}{" "}
+              <span className="text-[10px]">({SOURCE_NOTE[student.source.consultancyFee]})</span>
+              <Input name="consultancy_fee" type="number" step="0.01" min={isVisaOnly ? "0.01" : undefined} value={fee} onChange={(e) => setFee(e.target.value)} required />
             </label>
             {/* A student registers for one primary country and up to three
                 backups, and each carries its own administrative fee — a
                 backup's agreement is administrative-fee only. So there is one
                 field per country rather than a single figure staff would have
                 to add up by hand and the invoice could never break down. */}
-            {countries.length === 0 ? (
+            {isVisaOnly ? null : countries.length === 0 ? (
               <label className="flex flex-col gap-1 text-xs text-muted">
                 Administrative fee <span className="text-[10px]">({SOURCE_NOTE[student.source.adminCharge]})</span>
                 <Input name="admin_charge" type="number" step="0.01" value={admin} onChange={(e) => setAdmin(e.target.value)} required />
@@ -201,17 +217,19 @@ export function InvoiceGenerator({ students, bank }: { students: StudentOption[]
             <h4 className="mb-2 text-xs font-medium uppercase text-muted">Invoice preview</h4>
             <dl className="flex flex-col gap-1">
               <Row
-                label={`Consultancy fee${countries.find((c) => !c.isBackup) ? ` — ${countries.find((c) => !c.isBackup)!.label}` : ""}`}
+                label={`${feeName}${countries.find((c) => !c.isBackup) ? ` — ${countries.find((c) => !c.isBackup)!.label}` : ""}`}
                 value={fmt(currency, math.consultancyFee)}
               />
               {math.discountAmount > 0 && (
                 <Row label={`Discount${discountReason ? ` (${discountReason})` : ""}`} value={`− ${fmt(currency, math.discountAmount)}`} />
               )}
-              {math.discountAmount > 0 && <Row label="Net consultancy fee" value={fmt(currency, math.netConsultancyFee)} muted />}
+              {math.discountAmount > 0 && (
+                <Row label={isVisaOnly ? "Net visa service fee" : "Net consultancy fee"} value={fmt(currency, math.netConsultancyFee)} muted />
+              )}
               {/* Names the base rather than saying "of net fee", which stopped
                   being true when the tax started covering the whole invoice. */}
               <Row label={`SRB tax (${math.taxRate}% of ${fmt(currency, math.taxableAmount)})`} value={fmt(currency, math.taxAmount)} />
-              {countries.length === 0 ? (
+              {isVisaOnly ? null : countries.length === 0 ? (
                 <Row label="Administrative fee" value={fmt(currency, math.adminCharge)} />
               ) : (
                 countries.map((c) => (
@@ -248,7 +266,9 @@ export function InvoiceGenerator({ students, bank }: { students: StudentOption[]
             )}
           </div>
 
-          {discountTooBig && <p className="text-xs text-danger">Discount cannot exceed the consultancy fee.</p>}
+          {discountTooBig && (
+            <p className="text-xs text-danger">Discount cannot exceed the {isVisaOnly ? "visa service fee" : "consultancy fee"}.</p>
+          )}
           {state?.error && <p className="text-xs text-danger">{state.error}</p>}
 
           <div>

@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { registerStudentManually } from "@/lib/actions/leads";
 import { IntakeField, type IntakeConfig } from "@/components/IntakeField";
+import { SERVICE_LABELS, SERVICE_TYPES } from "@/lib/serviceType";
 import { isIntakeMode } from "@/lib/intake";
 import { STUDY_LEVELS, QUALIFICATION_LEVELS } from "@/lib/constants";
 import { PrimaryBackupDestinationSelect } from "@/components/PrimaryBackupDestinationSelect";
@@ -40,9 +41,12 @@ export function intakeConfigFor(destinations: DestinationOption[], primaryId: st
 export function RegisterStudentForm({
   counselors,
   destinations,
+  canSetService = false,
 }: {
   counselors: { id: string; full_name: string }[];
   destinations: DestinationOption[];
+  /** Super Admin or processing: may register a student for the visa service only (0279). */
+  canSetService?: boolean;
 }) {
   // A successful registration redirects to the new student's profile, taking
   // this button with it — so it is confirmed with a toast, raised only once the
@@ -135,6 +139,27 @@ export function RegisterStudentForm({
           <IntakeField config={intakeConfig} label="" />
         </div>
       </div>
+
+      {/* For a client who already holds an admission letter and wants the
+          visa documentation and application alone. Offered only to those who
+          may set it; for anyone else the form does not post it. */}
+      {canSetService && (
+        <div className="flex flex-col gap-1.5">
+          <label className={labelClass}>Service</label>
+          <Select name="service_type" defaultValue="full" className="w-fit">
+            {SERVICE_TYPES.map((s) => (
+              <option key={s} value={s}>
+                {SERVICE_LABELS[s]}
+              </option>
+            ))}
+          </Select>
+          <p className="text-xs text-muted">
+            Visa only: the admission stages are marked done, admission-only documents are not asked for, and the
+            agreement and invoice are for the visa service. Record the admission they already hold from their
+            Applications tab.
+          </p>
+        </div>
+      )}
 
       {state?.error && <p className="text-sm text-danger">{state.error}</p>}
 

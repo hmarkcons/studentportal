@@ -47,10 +47,17 @@ export type InstallmentDue = {
 export function installmentDuePlan(
   count: number,
   track: DestinationTrack,
-  dates: (string | null | undefined)[] = []
+  dates: (string | null | undefined)[] = [],
+  opts: { visaOnly?: boolean } = {}
 ): InstallmentDue[] {
   const condition = admissionCondition(track);
   const at = (i: number) => (dates[i] ?? null) || null;
+
+  // A visa-only client (0279) already holds their admission, so there is no
+  // admission to wait on: every installment falls due on a date.
+  if (opts.visaOnly) {
+    return Array.from({ length: Math.max(1, count) }, (_, i) => ({ no: i + 1, date: at(i), condition: null, dateRequired: true }));
+  }
 
   // A single payment is due when it is due; there is no milestone to wait for.
   if (count <= 1) {

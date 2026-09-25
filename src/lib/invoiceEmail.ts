@@ -16,6 +16,8 @@ export type InvoiceEmailData = {
   currency: string;
   intake: string | null;
   destination: string | null;
+  /** What the fee line is called — the visa service's name on a visa-only invoice (0279). */
+  feeName?: string;
   discountReason: string | null;
   math: InvoiceMath;
   /** One administrative fee per country the student registered for. */
@@ -134,7 +136,7 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
   const showBank = Boolean(data.bank) && !settled;
 
   const breakdown: [string, string][] = [
-    [feeLineLabel("Consultancy fee", data.destination), amount(math.consultancyFee)],
+    [feeLineLabel(data.feeName ?? "Consultancy fee", data.destination), amount(math.consultancyFee)],
   ];
   if (math.discountAmount > 0) {
     breakdown.push([`Discount${data.discountReason ? ` · ${data.discountReason}` : ""}`, `− ${amount(math.discountAmount)}`]);

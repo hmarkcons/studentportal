@@ -12,6 +12,7 @@ import { ensureCommissionForStudent } from "@/lib/actions/commissionAuto";
 import { validateDocumentFile, sanitizeFilename } from "@/lib/documentUpload";
 import { templateNotForStudentError } from "@/lib/agreementTemplateChoices";
 import { uploadedFile } from "@/lib/stagedUpload";
+import { serviceOf, templateServiceError, type ServiceType } from "@/lib/serviceType";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -37,7 +38,43 @@ function parseAgreementFields(formData: FormData) {
   const discount_amount = formData.get("discount_amount") ? Number(formData.get("discount_amount")) : null;
   const installmentCountRaw = Number(formData.get("installment_count") ?? 1);
   const installment_count = [1, 2, 3].includes(installmentCountRaw) ? installmentCountRaw : 1;
-  return { template_id, signing_method, admin_charge_override, consultancy_fee_override, discount_amount, installment_count };
+  const visa_service_fee_override = formData.get("visa_service_fee_override")
+    ? Number(formData.get("visa_service_fee_override"))
+    : null;
+  return { template_id, signing_method, admin_charge_override, consultancy_fee_override, discount_amount, installment_count, visa_service_fee_override };
+}
+
+/**
+ * The service this agreement is for (0279), checked against the template: a
+ * visa-only student gets a visa-service agreement, anyone else a full one.
+ * A visa-service agreement carries no administrative charge and no
+ * consultancy fee — only the visa service fee — so those overrides are
+ * dropped rather than stored.
+ */
+async function applyService(
+  supabase: SupabaseServerClient,
+  studentId: string,
+  fields: ReturnType<typeof parseAgreementFields>
+): Promise<{ service_type: ServiceType } | { error: string }> {
+  const [{ data: lead }, { data: template }] = await Promise.all([
+    supabase.from("leads").select("service_type").eq("id", studentId).maybeSingle(),
+    fields.template_id
+      ? supabase.from("agreement_templates").select("service_type").eq("id", fields.template_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  const service = serviceOf(lead?.service_type);
+  const mismatch = templateServiceError(template?.service_type, service);
+  if (mismatch) return { error: mismatch };
+  if (service === "visa_only") {
+    fields.admin_charge_override = null;
+    fields.consultancy_fee_override = null;
+  } else {
+    fields.visa_service_fee_override = null;
+  }
+  if (fields.visa_service_fee_override !== null && !(fields.visa_service_fee_override >= 0)) {
+    return { error: "The visa service fee can't be negative." };
+  }
+  return { service_type: service };
 }
 
 // A destination is a "backup" for this student when its lead_destinations
@@ -99,7 +136,12 @@ export async function generateAgreement(studentId: string, _prevState: unknown, 
   const countryIssue = await templateCountryError(supabase, studentId, fields.template_id);
   if (countryIssue) return { error: countryIssue };
 
-  const is_backup = await resolveIsBackup(supabase, studentId, fields.template_id);
+  const service = await applyService(supabase, studentId, fields);
+  if ("error" in service) return { error: service.error };
+
+  // A backup country's agreement is administrative-fee only — which does not
+  // apply to a visa-only agreement, which has no administrative fee at all.
+  const is_backup = service.service_type === "full" && (await resolveIsBackup(supabase, studentId, fields.template_id));
   if (is_backup) {
     fields.consultancy_fee_override = null;
     fields.discount_amount = null;
@@ -113,6 +155,7 @@ export async function generateAgreement(studentId: string, _prevState: unknown, 
   const { error } = await supabase.from("agreements").insert({
     student_id: studentId,
     ...fields,
+    service_type: service.service_type,
     is_backup,
     generated_by: user?.id,
     status: "pending_signature",
@@ -150,16 +193,19 @@ export async function updateAgreement(agreementId: string, studentId: string, _p
   const countryIssue = await templateCountryError(supabase, studentId, fields.template_id);
   if (countryIssue) return { error: countryIssue };
 
+  const service = await applyService(supabase, studentId, fields);
+  if ("error" in service) return { error: service.error };
+
   // Re-resolve is_backup here too — staff may have switched the template to
   // a different destination since the agreement was first generated.
-  const is_backup = await resolveIsBackup(supabase, studentId, fields.template_id);
+  const is_backup = service.service_type === "full" && (await resolveIsBackup(supabase, studentId, fields.template_id));
   if (is_backup) {
     fields.consultancy_fee_override = null;
     fields.discount_amount = null;
     fields.installment_count = 1;
   }
 
-  const { error } = await supabase.from("agreements").update({ ...fields, is_backup }).eq("id", agreementId);
+  const { error } = await supabase.from("agreements").update({ ...fields, service_type: service.service_type, is_backup }).eq("id", agreementId);
   if (error) return { error: error.message };
 
   revalidatePath(`/students/${studentId}`);
@@ -178,7 +224,7 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
 
   const { data: agreement, error: agreementError } = await supabase
     .from("agreements")
-    .select("id, template_id, admin_charge_override, consultancy_fee_override, discount_amount, installment_count, is_backup, created_at")
+    .select("id, template_id, admin_charge_override, consultancy_fee_override, discount_amount, installment_count, is_backup, created_at, service_type, visa_service_fee_override")
     .eq("id", agreementId)
     .single();
   if (agreementError || !agreement) return { error: agreementError?.message ?? "Agreement not found." };
@@ -187,7 +233,7 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
   const { data: template } = await supabase
     .from("agreement_templates")
     .select(
-      "signatory_name, wording, destination:destinations(country_code, track, display_name, admin_charge, consultancy_fee, consultancy_fee_currency)"
+      "signatory_name, wording, destination:destinations(country_code, track, display_name, admin_charge, consultancy_fee, consultancy_fee_currency, visa_service_fee)"
     )
     .eq("id", agreement.template_id)
     .maybeSingle();
@@ -199,6 +245,7 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
         admin_charge?: number;
         consultancy_fee?: number;
         consultancy_fee_currency?: string;
+        visa_service_fee?: number | null;
       } | null)
     : null;
   if (!destination?.country_code || !destination.track) return { error: "This agreement's destination could not be resolved." };
@@ -244,9 +291,19 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
   // regardless of what's stored, even though generateAgreement/updateAgreement
   // already null them out at write time (this is the belt to that suspenders,
   // for any agreement row written before that enforcement existed).
-  const isBackup = agreement.is_backup ?? false;
-  const adminCharge = agreement.admin_charge_override ?? destination.admin_charge ?? 0;
-  const consultancyFee = isBackup ? 0 : (agreement.consultancy_fee_override ?? destination.consultancy_fee ?? 0);
+  // A visa documentation and application agreement (0279) charges the visa
+  // service fee alone — no administrative charge, no consultancy fee. The fee
+  // travels through the same installment and discount arithmetic below.
+  const isVisaOnly = serviceOf(agreement.service_type) === "visa_only";
+  const visaFee = agreement.visa_service_fee_override ?? destination.visa_service_fee ?? null;
+  if (isVisaOnly && visaFee === null) {
+    return {
+      error: `No visa service fee is set for ${destination.display_name ?? "this country"}. Set it in Setup → Destinations, or enter one on the agreement.`,
+    };
+  }
+  const isBackup = !isVisaOnly && (agreement.is_backup ?? false);
+  const adminCharge = isVisaOnly ? 0 : (agreement.admin_charge_override ?? destination.admin_charge ?? 0);
+  const consultancyFee = isVisaOnly ? Number(visaFee) : isBackup ? 0 : (agreement.consultancy_fee_override ?? destination.consultancy_fee ?? 0);
   const discountAmount = isBackup ? 0 : (agreement.discount_amount ?? 0);
   const currencySymbol = CURRENCY_SYMBOLS[destination.consultancy_fee_currency ?? "EUR"] ?? destination.consultancy_fee_currency ?? "€";
   const totalFee = adminCharge + consultancyFee - discountAmount;
@@ -279,7 +336,8 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
           student_name: student.full_name ?? "",
           destination: destination.display_name ?? "",
           admin_charge: money(currencySymbol, adminCharge),
-          consultancy_fee: money(currencySymbol, consultancyFee),
+          consultancy_fee: money(currencySymbol, isVisaOnly ? 0 : consultancyFee),
+          visa_service_fee: isVisaOnly ? money(currencySymbol, consultancyFee) : "",
           discount: agreement.discount_amount ? money(currencySymbol, agreement.discount_amount) : "",
           total_fee: money(currencySymbol, totalFee),
           currency: destination.consultancy_fee_currency ?? "EUR",
@@ -318,6 +376,7 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
         total: totalFee,
         isBackup,
         destinationLabel: destination.display_name ?? "",
+        isVisaOnly,
       },
       agreementDate: agreementDateStr,
       signatureDataUri,

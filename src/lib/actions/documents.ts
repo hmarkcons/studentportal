@@ -54,9 +54,9 @@ export async function ensureStudentDocumentRequirements(studentId: string) {
     { data: testScores },
     { data: profile },
   ] = await Promise.all([
-    supabase.from("leads").select("level_applying_for").eq("id", studentId).maybeSingle(),
+    supabase.from("leads").select("level_applying_for, service_type").eq("id", studentId).maybeSingle(),
     supabase.from("lead_destinations").select("destination_id").eq("lead_id", studentId),
-    supabase.from("document_templates").select("id, category, level, destination_id, name, sort_order, renew_each_intake"),
+    supabase.from("document_templates").select("id, category, level, destination_id, name, sort_order, renew_each_intake, skip_for_visa_only"),
     supabase
       .from("student_documents")
       .select("id, template_id, derived_key, file_path, category, custom_name, cycle_id, status, template:document_templates(name)")
@@ -123,8 +123,14 @@ export async function ensureStudentDocumentRequirements(studentId: string) {
     destinationIds.size > 0 &&
     [...destinationIds].every((d) => excludedByDestination.get(d as string)?.has(templateId));
 
+  // A visa-only client (0279) already has their admission, so the items that
+  // exist only to win one are not asked of them (0280).
+  const visaOnly = student?.service_type === "visa_only";
+  const skippedForVisaOnly = new Set((templates ?? []).filter((t) => t.skip_for_visa_only).map((t) => t.id as string));
+
   const applicable = (templates ?? []).filter((t) => {
     if (existingTemplateIds.has(t.id)) return false;
+    if (visaOnly && skippedForVisaOnly.has(t.id as string)) return false;
     const levelMatches = t.level === "all" || t.level === level;
     const destMatches = t.destination_id === null || destinationIds.has(t.destination_id);
     if (!levelMatches || !destMatches) return false;
@@ -208,6 +214,19 @@ export async function ensureStudentDocumentRequirements(studentId: string) {
   for (const row of toRename) {
     const { error } = await supabase.from("student_documents").update({ custom_name: row.name }).eq("id", row.id);
     if (error) throw error;
+  }
+
+  // A student made visa-only after their checklist was built: the admission
+  // items still waiting to be sent are no longer wanted. Only empty ones — a
+  // document that has been sent in stays, whatever it is.
+  if (visaOnly) {
+    const unwanted = existingRows
+      .filter((r) => r.template_id && skippedForVisaOnly.has(r.template_id as string) && !r.file_path && r.status === "missing")
+      .map((r) => r.id as string);
+    if (unwanted.length > 0) {
+      const { error } = await supabase.from("student_documents").delete().in("id", unwanted);
+      if (error) throw error;
+    }
   }
 
   // Only ever empty rows: reconcileDerived keeps anything with a file, so a

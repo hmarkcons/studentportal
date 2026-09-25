@@ -117,6 +117,12 @@ export type AgreementPdfData = {
     // country name instead of the generic heading a primary agreement uses.
     isBackup: boolean;
     destinationLabel: string;
+    /**
+     * A visa documentation and application agreement (0279): no
+     * administrative charge and no consultancy fee — the visa service fee,
+     * carried in consultancyFee and installmentAmounts, is the whole of it.
+     */
+    isVisaOnly?: boolean;
   };
   agreementDate: string;
   signatureDataUri: string | null;
@@ -208,6 +214,7 @@ const INSTALLMENT_SCHEDULE: { label: string; note: string }[] = [
 // double-counting it — the discount is called out as a note on the total
 // instead, which keeps every row adding up correctly.
 function FeeTable({ fee }: { fee: AgreementPdfData["fee"] }) {
+  if (fee.isVisaOnly) return <VisaServiceFeeTable fee={fee} />;
   const rows: { label: string; note?: string; value: number }[] = [
     {
       label: fee.isBackup ? `Administrative Fee (${fee.destinationLabel})` : "Administrative Charges (Non-Refundable)",
@@ -448,6 +455,38 @@ export type StaffAgreementPdfData = {
   signatureDataUri: string | null;
   signatoryName: string | null;
 };
+
+// The visa documentation and application service alone: the fee, in the
+// instalments agreed, and the total — nothing to charge for admission.
+function VisaServiceFeeTable({ fee }: { fee: AgreementPdfData["fee"] }) {
+  const rows: { label: string; note?: string; value: number }[] = [];
+  if (fee.installmentAmounts.length <= 1) {
+    rows.push({ label: "Visa Documentation & Application Fee", note: "Pay at the time of signing the agreement", value: fee.installmentAmounts[0] ?? fee.consultancyFee });
+  } else {
+    fee.installmentAmounts.forEach((amount, i) => {
+      const schedule = INSTALLMENT_SCHEDULE[i] ?? { label: `Installment ${i + 1}`, note: undefined };
+      rows.push({ label: `Visa Service — ${schedule.label}`, note: schedule.note, value: amount });
+    });
+  }
+  rows.push({
+    label: "Total Professional Fee",
+    note: fee.discount && fee.discount > 0 ? `Includes a discount of ${money(fee.currencySymbol, fee.discount)}, already applied above` : undefined,
+    value: fee.total,
+  });
+  return (
+    <View style={styles.feeTable}>
+      {rows.map((row, i) => (
+        <View key={row.label} style={[styles.feeRow, i === rows.length - 1 ? styles.feeRowLast : {}]}>
+          <Text style={styles.feeLabel}>
+            {row.label}
+            {row.note && <Text style={styles.feeLabelNote}>{"\n"}{row.note}</Text>}
+          </Text>
+          <Text style={styles.feeValue}>{money(fee.currencySymbol, row.value)}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
 
 // Block's signature wants a fee for the feeTable case, which a staff
 // agreement never reaches.

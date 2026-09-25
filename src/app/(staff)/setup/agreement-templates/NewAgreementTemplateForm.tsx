@@ -43,6 +43,12 @@ export function NewAgreementTemplateForm({ destinations }: { destinations: { id:
         </Select>
         <Input name="name" placeholder="Template name (e.g. Standard, Scholarship variant)" required className="min-w-[220px] flex-1" />
         <Input name="signatory_name" placeholder="Authorized signatory name" required className="min-w-[220px] flex-1" />
+        {/* 0279: which service this template is for. A visa-only client is
+            offered visa-service templates only. */}
+        <Select name="service_type" defaultValue={"full"} className="w-auto">
+          <option value="full">Full service (admission and visa)</option>
+          <option value="visa_only">Visa documentation &amp; application only</option>
+        </Select>
       </div>
       <div className="flex flex-col gap-1">
         <label className="text-xs text-muted">
