@@ -91,9 +91,16 @@ try {
     date_of_birth: "2002-04-17",
     address: "12 Test Street, Karachi",
     intake: "Fall 2099",
-    level_applying_for: "Master's",
+    level_applying_for: "masters",
   });
   await admin.from("lead_destinations").insert({ lead_id: studentId, destination_id: italy.id });
+  // The agreement PDF refuses a student without an emergency contact.
+  await admin.from("student_profiles").upsert({
+    student_id: studentId,
+    emergency_contact_name: "zztmp Next of Kin",
+    emergency_contact_relation: "Father",
+    emergency_contact_number: "0300-1111111",
+  }, { onConflict: "student_id" });
 
   const supPage = await signIn(browser, sup.email);
 
@@ -185,8 +192,9 @@ try {
   const uniValue = await raForm.locator('select[name="university_id"] option').nth(1).getAttribute("value");
   await raForm.locator('select[name="university_id"]').selectOption(uniValue);
   await raForm.locator('input[type="file"]').setInputFiles({ name: "admission-letter.pdf", mimeType: "application/pdf", buffer: PDF_BYTES });
-  await raForm.locator('input[type="file"][data-staged]').waitFor({ timeout: 120000 });
-  await raForm.getByRole("button", { name: "Record admission" }).click();
+  const staged = await raForm.locator('input[type="file"][data-staged]').waitFor({ timeout: 120000 }).then(() => true, () => false);
+  ok("the admission letter uploads", staged, (await raForm.innerText()).replace(/\s+/g, " "));
+  if (staged) await raForm.getByRole("button", { name: "Record admission" }).click();
   const app = await poll(async () =>
     (await admin.from("applications").select("id, university_id, current_stage, is_finalized").eq("student_id", studentId).maybeSingle()).data);
   ok("an application is created at the admitted university", app?.university_id === uniValue, JSON.stringify(app));
@@ -240,10 +248,13 @@ try {
     await supPage.reload({ waitUntil: "domcontentloaded" });
     await expand(supPage, "Agreement");
     const pdfButton = supPage.getByRole("button", { name: /^(Re)?generate PDF$/i }).first();
-    if (await pdfButton.count()) await pdfButton.click();
+    const found = (await pdfButton.count()) > 0;
+    if (found) await pdfButton.click();
     const withPdf = await poll(async () =>
       (await admin.from("agreements").select("pdf_path").eq("id", agreement.id).single()).data?.pdf_path, 90);
-    ok("its PDF renders", Boolean(withPdf), await bodyTail(supPage));
+    // The button renders its own error beside itself.
+    const said = found ? (await pdfButton.locator("xpath=following-sibling::p").allInnerTexts().catch(() => [])).join(" ").trim() : "";
+    ok("its PDF renders", Boolean(withPdf), found ? said || await bodyTail(supPage) : "no Generate PDF button");
 
     // Signing is the precondition of an invoice, not the thing under test.
     await admin.from("agreements").update({ status: "signed", signed_file_path: `${studentId}/agreements/zztmp-signed.pdf` }).eq("id", agreement.id);
