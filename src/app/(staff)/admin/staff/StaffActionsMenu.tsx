@@ -4,6 +4,7 @@ import { hasRole, staffRoles } from "@/lib/auth/roles";
 import { useState } from "react";
 import { deleteStaffAccount } from "@/lib/actions/admin";
 import { useButtonAction } from "@/components/useButtonAction";
+import { useAnchoredMenu } from "@/components/useAnchoredMenu";
 import { formatDateOnly } from "@/lib/formatDate";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { STAFF_ROLE_LABELS, CURRENCY_SYMBOLS } from "@/lib/constants";
@@ -67,6 +68,9 @@ export function StaffActionsMenu({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const del = useButtonAction();
   const showPermissions = canManagePermissions && !hasRole(staff, "super_admin");
+  // On the screen rather than in the row: the staff table scrolls in its own
+  // window, which cut a menu opened near its bottom edge short.
+  const { anchor, menu, style: menuStyle } = useAnchoredMenu(menuOpen, () => setMenuOpen(false));
 
   async function handleDelete() {
     if (!confirm(`Delete ${staff.full_name}? This fails if they have historical records — use Inactive status instead if so.`)) return;
@@ -80,13 +84,13 @@ export function StaffActionsMenu({
 
   return (
     <div className="relative inline-block text-left">
-      <button onClick={() => setMenuOpen((v) => !v)} className="rounded-md px-2 py-1 text-lg text-muted hover:bg-bg hover:text-ink" aria-label="Actions">
+      <button ref={anchor} onClick={() => setMenuOpen((v) => !v)} className="rounded-md px-2 py-1 text-lg text-muted hover:bg-bg hover:text-ink" aria-label="Actions">
         ⋮
       </button>
       {menuOpen && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-          <div data-menu className="absolute right-0 z-20 mt-1 w-36 rounded-md border border-border bg-card py-1 shadow-lg">
+          <div ref={menu} style={menuStyle} data-menu className="z-20 w-36 rounded-md border border-border bg-card py-1 shadow-lg">
             <button
               onClick={() => {
                 setViewOpen(true);

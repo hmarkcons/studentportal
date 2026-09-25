@@ -390,6 +390,129 @@ body {
   overflow-x: auto;
 }
 
+/* ---------------------------------------------------------- table frames
+   Every table scrolls like a spreadsheet (components/ui/TableFrame.tsx): in a
+   window that ends at the bottom of the screen, so both scrollbars are always
+   on screen, with the heading row frozen at the top and the row's name frozen
+   at the left.
+
+   The window's height comes from --frame-top, where on the screen it starts,
+   kept up to date by TableFrame as the page scrolls — so it always ends at
+   the bottom of the screen and grows to fill it. A table shorter than the
+   window is not boxed; one starting near the bottom gets at least 18rem.
+
+   Frozen cells must be opaque for the rows to slide under them, so they take
+   --frame-bg, the colour behind the rest of the table: the grey page, or the
+   white card the table sits on. Borders are drawn as inset shadows on them,
+   because a collapsed table border stays where it was when its cell sticks. */
+.table-frame {
+  --frame-bg: var(--bg);
+  --frame-track: color-mix(in srgb, var(--border) 55%, var(--frame-bg));
+  position: relative;
+  overflow: auto;
+  max-height: max(18rem, calc(100dvh - var(--frame-top, 14rem) - 1rem));
+  background-color: var(--frame-bg);
+  /* A sideways swipe at the edge scrolls the table, not the browser back a page. */
+  overscroll-behavior-x: contain;
+  /* Chromium ignores the ::-webkit-scrollbar styling below once either of
+     these is set to anything else — and that styling is what keeps the bars
+     visible on machines whose scrollbars otherwise fade out when idle. */
+  scrollbar-width: auto;
+  scrollbar-color: auto;
+}
+.table-frame[data-surface="card"] {
+  --frame-bg: var(--card);
+}
+.table-frame:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.table-frame::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+.table-frame::-webkit-scrollbar-track {
+  background: var(--frame-track);
+}
+.table-frame::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 9999px;
+  background-color: color-mix(in srgb, var(--muted) 75%, transparent);
+  background-clip: padding-box;
+}
+.table-frame::-webkit-scrollbar-thumb:hover,
+.table-frame::-webkit-scrollbar-thumb:active {
+  background-color: var(--muted);
+}
+.table-frame::-webkit-scrollbar-corner {
+  background: var(--frame-track);
+}
+@supports not selector(::-webkit-scrollbar) {
+  .table-frame {
+    scrollbar-color: var(--muted) var(--frame-track);
+  }
+}
+
+/* The heading row, frozen at the top. */
+.table-frame > table > thead > tr > th,
+.table-frame > table > thead > tr > td {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background-color: var(--frame-bg);
+  box-shadow: inset 0 -1px 0 var(--border);
+}
+.table-frame[data-scrolled-y] > table > thead > tr > * {
+  box-shadow:
+    inset 0 -1px 0 var(--border),
+    0 3px 4px -3px rgb(0 0 0 / 0.18);
+}
+
+/* The row's name, frozen at the left: the first column, or the cells a table
+   marks data-frozen. A sticky cell further along the row stays where it is
+   until the columns before it have scrolled away, then holds the left edge. */
+.table-frame[data-freeze-first] > table > * > tr > :first-child,
+.table-frame > table > * > tr > [data-frozen] {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background-color: var(--frame-bg);
+}
+.table-frame[data-freeze-first] > table > thead > tr > :first-child,
+.table-frame > table > thead > tr > [data-frozen] {
+  z-index: 3;
+}
+.table-frame[data-scrolled-x][data-freeze-first] > table > tbody > tr > :first-child,
+.table-frame[data-scrolled-x][data-freeze-first] > table > tfoot > tr > :first-child,
+.table-frame[data-scrolled-x] > table > tbody > tr > [data-frozen],
+.table-frame[data-scrolled-x] > table > tfoot > tr > [data-frozen] {
+  box-shadow:
+    inset -1px 0 0 var(--border),
+    4px 0 5px -4px rgb(0 0 0 / 0.2);
+}
+.table-frame[data-scrolled-x][data-freeze-first] > table > thead > tr > :first-child,
+.table-frame[data-scrolled-x] > table > thead > tr > [data-frozen] {
+  box-shadow:
+    inset 0 -1px 0 var(--border),
+    inset -1px 0 0 var(--border),
+    4px 0 5px -4px rgb(0 0 0 / 0.2);
+}
+/* A row shaded grey on purpose (a section heading) keeps its shade where it is frozen. */
+.table-frame > table > tbody > tr.bg-bg > * {
+  background-color: var(--bg);
+}
+
+@media print {
+  .table-frame {
+    max-height: none;
+    overflow: visible;
+  }
+  .table-frame > table > * > tr > * {
+    position: static !important;
+    box-shadow: none !important;
+  }
+}
+
 /* ---------------------------------------------------------- hidden sidebar
    The menu is 16rem of every page, and the wide tables — leads, registered
    students, referrals, the scholarship directory — all scroll sideways

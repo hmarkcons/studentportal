@@ -5,6 +5,7 @@ import { NewItemForm } from "./NewItemForm";
 import { ItemRow } from "./ItemRow";
 import { RequestForm } from "./RequestForm";
 import { RequestQueue } from "./RequestQueue";
+import { TableFrame } from "@/components/ui/TableFrame";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -83,7 +84,7 @@ export default async function InventoryPage() {
 
       <Card className="mb-6">
         <h3 className="mb-3 text-sm font-medium text-ink">Stock</h3>
-        <div className="overflow-x-auto rounded-lg border border-border">
+        <TableFrame label="Inventory" surface="card" className="rounded-lg border border-border">
           <table className="w-full min-w-[560px] text-sm">
             <thead>
               <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-muted">
@@ -107,7 +108,7 @@ export default async function InventoryPage() {
               )}
             </tbody>
           </table>
-        </div>
+        </TableFrame>
       </Card>
 
       <Card>

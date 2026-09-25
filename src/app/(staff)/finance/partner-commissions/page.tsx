@@ -9,6 +9,7 @@ import { DeletePartnerCommissionButton } from "./DeletePartnerCommissionButton";
 import { EditPartnerCommissionForm } from "./EditPartnerCommissionForm";
 import { AddPartnerCommissionForm } from "./AddPartnerCommissionForm";
 import { PARTNER_COMMISSION_STATUS_LABELS, type PartnerCommissionStatus } from "@/lib/constants";
+import { TableFrame } from "@/components/ui/TableFrame";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -83,7 +84,7 @@ export default async function PartnerCommissionsPage() {
     <div className="w-full">
       <h2 className="mb-4 text-lg font-semibold text-ink">University Commissions</h2>
       {canManage && <AddPartnerCommissionForm students={students ?? []} applications={applications} />}
-      <div className="overflow-x-auto rounded-lg border border-border">
+      <TableFrame label="Partner commissions" className="rounded-lg border border-border">
         <table className="w-full min-w-[720px] text-sm">
           <thead>
             <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-muted">
@@ -156,7 +157,7 @@ export default async function PartnerCommissionsPage() {
             )}
           </tbody>
         </table>
-      </div>
+      </TableFrame>
     </div>
   );
 }

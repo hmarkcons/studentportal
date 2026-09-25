@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { StickyScrollArea } from "@/components/ui/StickyScrollArea";
+import { TableFrame } from "@/components/ui/TableFrame";
 
 // Server Component pages build `cells`/`csv` for every row up front (calling
 // their own render logic server-side) instead of passing render/csv
@@ -54,6 +54,8 @@ export function DataTable({
   // three lines. Off by default so the report tables are untouched.
   oneLine = false,
   pageSize,
+  freezeColumn,
+  label,
 }: {
   columns: Column[];
   rows: Row[];
@@ -76,6 +78,14 @@ export function DataTable({
   // of server-side data fetching, so a long unpaginated list turns into that
   // many prefetch round trips the moment the page paints.
   pageSize?: number;
+  /**
+   * The column that says whose row it is, frozen at the left while the table
+   * scrolls sideways (see TableFrame). Defaults to the first column; the
+   * leads and students lists freeze the name, which comes after the month.
+   */
+  freezeColumn?: string;
+  /** What the table is, for a screen reader. Defaults to the export name. */
+  label?: string;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
@@ -152,12 +162,13 @@ export function DataTable({
   }
 
   const showToolbar = exportFilename || searchable || filters.length > 0;
+  const frozenKey = freezeColumn ?? columns[0]?.key;
 
   return (
-    // The card is the frame; the scrolling and the pinned sideways bar are
-    // StickyScrollArea's. The toolbar and the pager stay inside the scroller
-    // so they keep their alignment with the columns above them.
-    <StickyScrollArea className="rounded-lg border border-border">
+    // The rounded border is the card; the table scrolls in a window inside it
+    // (TableFrame), with the search, filters and pager outside the window so
+    // they stay where they are while the rows move.
+    <div className="overflow-hidden rounded-lg border border-border">
       {showToolbar && (
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-bg px-3 py-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -197,67 +208,71 @@ export function DataTable({
           )}
         </div>
       )}
-      <table className={`w-full ${minTableWidthClassName} text-sm`}>
-        <thead>
-          <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-muted">
-            {selectable && (
-              <th className="px-4 py-3">
-                <input
-                  type="checkbox"
-                  checked={selected.size === visibleRows.length && visibleRows.length > 0}
-                  onChange={toggleAll}
-                />
-              </th>
-            )}
-            {columns.map((c) => (
-              <th
-                key={c.key}
-                className={`px-4 py-3 font-medium ${oneLine && !c.wrap ? "whitespace-nowrap" : ""} ${
-                  c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : ""
-                }`}
-              >
-                {c.header}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {pagedRows.map((row) => (
-            <tr key={row.id} className="border-b border-border last:border-0 hover:bg-bg/60">
+      <TableFrame label={label ?? exportFilename?.replace(/[-_]/g, " ") ?? "Table"} freezeFirstColumn={false}>
+        <table className={`w-full ${minTableWidthClassName} text-sm`}>
+          <thead>
+            <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-muted">
               {selectable && (
-                <td className="px-4 py-3">
-                  <input type="checkbox" checked={selected.has(row.id)} onChange={() => toggle(row.id)} />
-                </td>
+                <th className="px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={selected.size === visibleRows.length && visibleRows.length > 0}
+                    onChange={toggleAll}
+                  />
+                </th>
               )}
               {columns.map((c) => (
-                <td
+                <th
                   key={c.key}
-                  className={`px-4 py-3 ${oneLine && !c.wrap ? "whitespace-nowrap" : ""} ${
-                    c.align === "right" ? "text-right tabular-nums" : c.align === "center" ? "text-center" : ""
+                  data-frozen={c.key === frozenKey || undefined}
+                  className={`px-4 py-3 font-medium ${oneLine && !c.wrap ? "whitespace-nowrap" : ""} ${
+                    c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : ""
                   }`}
                 >
-                  {/* The cap goes on an inner block, not the cell. A max-width
-                      on a <td> is ignored under automatic table layout, so
-                      putting it there looked right and left a paragraph free
-                      to stretch the table to ten thousand pixels. */}
-                  {c.widthClassName ? (
-                    <div className={`${c.widthClassName} whitespace-normal break-words`}>{row.cells[c.key]}</div>
-                  ) : (
-                    row.cells[c.key]
-                  )}
-                </td>
+                  {c.header}
+                </th>
               ))}
             </tr>
-          ))}
-          {visibleRows.length === 0 && (
-            <tr>
-              <td colSpan={columns.length + (selectable ? 1 : 0)} className="px-4 py-10 text-center text-muted">
-                No records.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {pagedRows.map((row) => (
+              <tr key={row.id} className="border-b border-border last:border-0 hover:bg-bg/60">
+                {selectable && (
+                  <td className="px-4 py-3">
+                    <input type="checkbox" checked={selected.has(row.id)} onChange={() => toggle(row.id)} />
+                  </td>
+                )}
+                {columns.map((c) => (
+                  <td
+                    key={c.key}
+                    data-frozen={c.key === frozenKey || undefined}
+                    className={`px-4 py-3 ${oneLine && !c.wrap ? "whitespace-nowrap" : ""} ${
+                      c.align === "right" ? "text-right tabular-nums" : c.align === "center" ? "text-center" : ""
+                    }`}
+                  >
+                    {/* The cap goes on an inner block, not the cell. A max-width
+                        on a <td> is ignored under automatic table layout, so
+                        putting it there looked right and left a paragraph free
+                        to stretch the table to ten thousand pixels. */}
+                    {c.widthClassName ? (
+                      <div className={`${c.widthClassName} whitespace-normal break-words`}>{row.cells[c.key]}</div>
+                    ) : (
+                      row.cells[c.key]
+                    )}
+                  </td>
+                ))}
+              </tr>
+            ))}
+            {visibleRows.length === 0 && (
+              <tr>
+                <td colSpan={columns.length + (selectable ? 1 : 0)} className="px-4 py-10 text-center text-muted">
+                  No records.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </TableFrame>
       {pageSize && pageCount > 1 && (
         <div className="flex items-center justify-between border-t border-border bg-bg px-3 py-2 text-xs text-muted">
           <span>
@@ -284,6 +299,6 @@ export function DataTable({
           </div>
         </div>
       )}
-    </StickyScrollArea>
+    </div>
   );
 }

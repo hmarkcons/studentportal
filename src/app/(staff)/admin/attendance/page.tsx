@@ -20,6 +20,7 @@ import {
   clockOutLabel,
   totalMinutes,
 } from "@/lib/attendance";
+import { TableFrame } from "@/components/ui/TableFrame";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -182,7 +183,7 @@ export default async function AttendancePage(props: { searchParams: Promise<{ mo
         </p>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-border">
+      <TableFrame label="Attendance" className="rounded-lg border border-border">
         <table className="w-full min-w-[680px] text-sm">
           <thead>
             <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-muted">
@@ -222,7 +223,7 @@ export default async function AttendancePage(props: { searchParams: Promise<{ mo
             )}
           </tbody>
         </table>
-      </div>
+      </TableFrame>
     </div>
   );
 }

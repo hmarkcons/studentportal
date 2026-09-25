@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/Badge";
 import { StatCard } from "@/components/ui/StatCard";
 import { Select } from "@/components/ui/Input";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { TableFrame } from "@/components/ui/TableFrame";
 
 export type FeeStatus = "paid_in_full" | "partially_paid" | "payment_pending" | "withdrawn";
 
@@ -173,7 +174,7 @@ export function ConsultancyFeeOverview({ rows, canManage }: { rows: FeeRow[]; ca
       {filtered.length === 0 ? (
         <EmptyState>No registered students match these filters.</EmptyState>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border">
+        <TableFrame label="Consultancy fees" className="rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase text-muted">
@@ -257,7 +258,7 @@ export function ConsultancyFeeOverview({ rows, canManage }: { rows: FeeRow[]; ca
               ))}
             </tbody>
           </table>
-        </div>
+        </TableFrame>
       )}
 
       {!canManage && (

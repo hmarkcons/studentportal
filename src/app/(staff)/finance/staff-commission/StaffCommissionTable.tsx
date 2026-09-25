@@ -19,6 +19,7 @@ import {
   carryForwardCommissionCredit,
 } from "@/lib/actions/finance";
 import { type InvoiceStatus } from "@/lib/invoiceStatus";
+import { TableFrame } from "@/components/ui/TableFrame";
 
 const REVALIDATE_TO = "/finance/staff-commission";
 const PAGE_SIZE = 10;
@@ -548,7 +549,7 @@ export function StaffCommissionTable({
         <Button onClick={clear}>Clear</Button>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-border">
+      <TableFrame label="Staff commission" className="rounded-lg border border-border">
         <table className="w-full min-w-[1700px] text-sm">
           <thead>
             <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-muted">
@@ -624,7 +625,7 @@ export function StaffCommissionTable({
             )}
           </tbody>
         </table>
-      </div>
+      </TableFrame>
 
       {filtered.length > 0 && (
         <div className="mt-3 flex items-center justify-between text-xs text-muted">

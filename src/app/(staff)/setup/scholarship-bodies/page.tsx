@@ -211,6 +211,8 @@ export default async function ScholarshipBodiesPage() {
           searchable
           searchPlaceholder="Search body, country, region or university…"
           exportFilename="scholarship-bodies"
+          label="Scholarship bodies"
+          freezeColumn="body"
           minTableWidthClassName="min-w-[980px]"
           filters={[
             {

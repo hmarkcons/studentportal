@@ -30,7 +30,8 @@
     "check:dashboards": "node scripts/verify-dashboards.mjs",
     "check:login": "node scripts/verify-login-screen.mjs",
     "check:visaonly": "node scripts/verify-visa-only.mjs",
-    "check:builder": "node scripts/verify-agreement-builder.mjs"
+    "check:builder": "node scripts/verify-agreement-builder.mjs",
+    "check:tables": "node scripts/verify-table-frames.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

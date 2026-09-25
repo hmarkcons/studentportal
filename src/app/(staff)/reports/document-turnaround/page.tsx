@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireReportAccess } from "@/lib/auth/reportAccess";
+import { TableFrame } from "@/components/ui/TableFrame";
 
 export default async function DocumentTurnaroundPage() {
   const { supabase } = await requireReportAccess("/reports/document-turnaround");
@@ -40,7 +41,7 @@ export default async function DocumentTurnaroundPage() {
         &larr; Back to reports
       </Link>
       <h2 className="mt-2 mb-4 text-lg font-semibold text-ink">Document Turnaround Time</h2>
-      <div className="overflow-x-auto rounded-lg border border-border">
+      <TableFrame label="Document turnaround" className="rounded-lg border border-border">
         <table className="w-full min-w-[420px] text-sm">
           <thead>
             <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-muted">
@@ -66,7 +67,7 @@ export default async function DocumentTurnaroundPage() {
             )}
           </tbody>
         </table>
-      </div>
+      </TableFrame>
     </div>
   );
 }

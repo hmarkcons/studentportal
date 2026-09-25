@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireReportAccess } from "@/lib/auth/reportAccess";
 import { Badge } from "@/components/ui/Badge";
 import { listVisaDecisions } from "@/lib/visaDecisions";
+import { TableFrame } from "@/components/ui/TableFrame";
 
 // Counts come from the tracker's visa outcome field, the same value the
 // student's Visa tab reads. This used to read visa_records, which holds no
@@ -40,7 +41,7 @@ export default async function VisaApprovalPage() {
         Recorded outcomes per destination. The rate counts decided applications only — pending ones are shown but not
         included, so one early refusal in a new country doesn&rsquo;t read as a 0% approval rate.
       </p>
-      <div className="overflow-x-auto rounded-lg border border-border">
+      <TableFrame label="Visa approval" className="rounded-lg border border-border">
         <table className="w-full min-w-[560px] text-sm">
           <thead>
             <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-muted">
@@ -88,7 +89,7 @@ export default async function VisaApprovalPage() {
             )}
           </tbody>
         </table>
-      </div>
+      </TableFrame>
     </div>
   );
 }

@@ -152,6 +152,8 @@ export default async function LeadsPage() {
         <div className="mt-4">
           <DataTable
             exportFilename="leads"
+            label="Leads"
+            freezeColumn="name"
             rows={rows}
             columns={columns}
             searchable

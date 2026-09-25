@@ -6,6 +6,7 @@ import { LEAVE_KIND_LABEL } from "@/lib/leave";
 import { formatLeaveRange } from "@/lib/leaveEmail";
 import { DecideButtons } from "./DecideButtons";
 import { RecordLeaveForm } from "./RecordLeaveForm";
+import { TableFrame } from "@/components/ui/TableFrame";
 
 /**
  * Leave, for whoever holds leave.approve — Management and Super Admin until
@@ -81,7 +82,7 @@ export default async function LeaveAdminPage() {
 
       <Card className="mb-6">
         <h3 className="mb-2 text-sm font-medium text-ink">Balances this leave year</h3>
-        <div className="overflow-x-auto">
+        <TableFrame label="Leave balances" surface="card">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs text-muted">
@@ -107,7 +108,7 @@ export default async function LeaveAdminPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableFrame>
       </Card>
 
       <Card>

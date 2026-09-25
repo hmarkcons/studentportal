@@ -222,6 +222,8 @@ export default async function StudentsPage() {
         <div className="mt-4">
           <DataTable
             exportFilename="students"
+            label="Registered students"
+            freezeColumn="name"
             rows={rows}
             columns={columns}
             searchable

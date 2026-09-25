@@ -8,6 +8,7 @@ import type { PermissionKey } from "@/lib/permissions";
 import { PermissionToggle } from "./PermissionToggle";
 import { StaffPermissionsPanel } from "./StaffPermissionsPanel";
 import { StaffPicker } from "./StaffPicker";
+import { TableFrame } from "@/components/ui/TableFrame";
 
 type PermissionDefRow = {
   key: string;
@@ -58,53 +59,55 @@ export default async function RolePermissionsPage(props: { searchParams: Promise
         blocks it at the data layer.
       </p>
 
-      <Card className="overflow-x-auto">
-        <table className="w-full min-w-[900px] text-sm">
-          <thead>
-            <tr className="sticky top-0 z-10 border-b border-border bg-card text-left text-xs uppercase tracking-wide text-muted">
-              <th className="py-2 pr-4">Functionality</th>
-              {EDITABLE_ROLES.map((role) => (
-                <th key={role} className="px-2 py-2 text-center font-medium">
-                  {STAFF_ROLE_LABELS[role]}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {Array.from(categories.entries()).map(([category, rows]) => (
-              <Fragment key={category}>
-                <tr className="bg-bg">
-                  <td colSpan={EDITABLE_ROLES.length + 1} className="px-1 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
-                    {category}
-                  </td>
-                </tr>
-                {rows.map((d) => (
-                  <tr key={d.key} className="border-b border-border last:border-0">
-                    <td className="py-3 pr-4 align-top">
-                      <p className="font-medium text-ink">{d.label}</p>
-                      <p className="mt-0.5 text-xs text-muted">{d.description}</p>
-                    </td>
-                    {EDITABLE_ROLES.map((role) => {
-                      const overrideKey = `${role}:${d.key}`;
-                      const hasOverride = overrideMap.has(overrideKey);
-                      const checked = hasOverride ? overrideMap.get(overrideKey)! : d.default_roles.includes(role);
-                      return (
-                        <td key={role} className="px-2 py-3 text-center align-top">
-                          <PermissionToggle
-                            role={role}
-                            permKey={d.key as PermissionKey}
-                            checked={checked}
-                            isOverride={hasOverride}
-                          />
-                        </td>
-                      );
-                    })}
-                  </tr>
+      <Card>
+        <TableFrame label="Role permissions" surface="card">
+          <table className="w-full min-w-[900px] text-sm">
+            <thead>
+              <tr className="border-b border-border bg-card text-left text-xs uppercase tracking-wide text-muted">
+                <th className="py-2 pr-4">Functionality</th>
+                {EDITABLE_ROLES.map((role) => (
+                  <th key={role} className="px-2 py-2 text-center font-medium">
+                    {STAFF_ROLE_LABELS[role]}
+                  </th>
                 ))}
-              </Fragment>
-            ))}
-          </tbody>
-        </table>
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from(categories.entries()).map(([category, rows]) => (
+                <Fragment key={category}>
+                  <tr className="bg-bg">
+                    <td colSpan={EDITABLE_ROLES.length + 1} className="px-1 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
+                      {category}
+                    </td>
+                  </tr>
+                  {rows.map((d) => (
+                    <tr key={d.key} className="border-b border-border last:border-0">
+                      <td className="py-3 pr-4 align-top">
+                        <p className="font-medium text-ink">{d.label}</p>
+                        <p className="mt-0.5 text-xs text-muted">{d.description}</p>
+                      </td>
+                      {EDITABLE_ROLES.map((role) => {
+                        const overrideKey = `${role}:${d.key}`;
+                        const hasOverride = overrideMap.has(overrideKey);
+                        const checked = hasOverride ? overrideMap.get(overrideKey)! : d.default_roles.includes(role);
+                        return (
+                          <td key={role} className="px-2 py-3 text-center align-top">
+                            <PermissionToggle
+                              role={role}
+                              permKey={d.key as PermissionKey}
+                              checked={checked}
+                              isOverride={hasOverride}
+                            />
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
+        </TableFrame>
       </Card>
 
       <h2 className="mt-8 mb-1 text-lg font-semibold text-ink">Per-Staff Overrides</h2>

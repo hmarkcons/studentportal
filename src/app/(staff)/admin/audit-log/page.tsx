@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { TableFrame } from "@/components/ui/TableFrame";
 
 export default async function AuditLogPage() {
   const supabase = await createClient();
@@ -29,7 +30,7 @@ export default async function AuditLogPage() {
   return (
     <div className="w-full">
       <h2 className="mb-4 text-lg font-semibold text-ink">Audit Log</h2>
-      <div className="overflow-x-auto rounded-lg border border-border">
+      <TableFrame label="Audit log" className="rounded-lg border border-border">
         <table className="w-full min-w-[640px] text-sm">
           <thead>
             <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-muted">
@@ -57,7 +58,7 @@ export default async function AuditLogPage() {
             )}
           </tbody>
         </table>
-      </div>
+      </TableFrame>
     </div>
   );
 }

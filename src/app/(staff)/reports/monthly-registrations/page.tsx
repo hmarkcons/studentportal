@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireReportAccess } from "@/lib/auth/reportAccess";
 import { buildLeadOwners, ownerKey, karachiMonthKey, recentMonths } from "@/lib/leadOwners";
 import { STAFF_ROLE_LABELS } from "@/lib/constants";
+import { TableFrame } from "@/components/ui/TableFrame";
 
 export default async function MonthlyRegistrationsPage() {
   const { supabase } = await requireReportAccess("/reports/monthly-registrations");
@@ -48,7 +49,7 @@ export default async function MonthlyRegistrationsPage() {
         Months run to Karachi time, and every row that holds a registration is shown &mdash; including staff who are not
         counselors by role, and anyone who has since left, so past months keep the totals they had.
       </p>
-      <div className="overflow-x-auto rounded-lg border border-border">
+      <TableFrame label="Monthly registrations" className="rounded-lg border border-border">
         <table className="w-full min-w-[640px] text-sm">
           <thead>
             <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-muted">
@@ -98,7 +99,7 @@ export default async function MonthlyRegistrationsPage() {
             </tfoot>
           )}
         </table>
-      </div>
+      </TableFrame>
     </div>
   );
 }

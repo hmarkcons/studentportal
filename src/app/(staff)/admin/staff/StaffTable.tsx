@@ -9,6 +9,7 @@ import { StaffActionsMenu } from "./StaffActionsMenu";
 import type { StaffLoginSummary } from "./StaffLoginPanel";
 import type { StaffRecord } from "./StaffForm";
 import { staffRoles } from "@/lib/auth/roles";
+import { TableFrame } from "@/components/ui/TableFrame";
 
 type PermissionDef = { key: string; category: string; label: string; description: string; default_roles: string[] };
 type RoleOverrideRow = { role: string; permission_key: string; allowed: boolean };
@@ -95,7 +96,7 @@ export function StaffTable({
         </Button>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-border">
+      <TableFrame label="Staff" className="rounded-lg border border-border">
         <table className="w-full min-w-[720px] text-sm">
           <thead>
             <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-muted">
@@ -175,7 +176,7 @@ export function StaffTable({
             )}
           </tbody>
         </table>
-      </div>
+      </TableFrame>
     </div>
   );
 }

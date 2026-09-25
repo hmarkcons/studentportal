@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/Card";
 import { formatAmount, spendState } from "@/lib/marketing";
 import { NewAdCampaignForm } from "./NewAdCampaignForm";
 import { ActualSpendInput } from "./ActualSpendInput";
+import { TableFrame } from "@/components/ui/TableFrame";
 
 export default async function AdCampaignsPage() {
   const supabase = await createClient();
@@ -34,7 +35,7 @@ export default async function AdCampaignsPage() {
       <Card className="mb-6">
         <NewAdCampaignForm universities={universities ?? []} />
       </Card>
-      <div className="overflow-x-auto rounded-lg border border-border">
+      <TableFrame label="Ad campaigns" className="rounded-lg border border-border">
         <table className="w-full min-w-[720px] text-sm">
           <thead>
             <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-muted">
@@ -94,7 +95,7 @@ export default async function AdCampaignsPage() {
             )}
           </tbody>
         </table>
-      </div>
+      </TableFrame>
     </div>
   );
 }
