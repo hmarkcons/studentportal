@@ -15,15 +15,59 @@
 // in their source docs at all, so they use kind: "heading" instead (same
 // rendering, no number prefix).
 
-export type TextRun = { text: string; bold?: boolean; italic?: boolean; underline?: boolean };
+import type { BulletShape, NumberFormat } from "./agreementTheme.ts";
+
+// A stretch of text with one formatting. Everything past `underline` comes
+// from the builder's font, size, colour and highlight tools (or a Word import
+// that kept them); a run without them takes its paragraph's look.
+export type TextRun = {
+  text: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strike?: boolean;
+  /** #rrggbb */
+  color?: string;
+  /** #rrggbb, drawn behind the text */
+  highlight?: string;
+  /** A family from FONT_CHOICES (agreementTheme.ts). */
+  font?: string;
+  /** Points. */
+  size?: number;
+};
+
+// Paragraph-level formatting from the builder: alignment, line spacing,
+// spacing above and below (points), a rule drawn underneath and a background
+// shade (#rrggbb). Absent means the look's own default.
+export type BlockFormat = {
+  align?: "left" | "center" | "right" | "justify";
+  lineHeight?: number;
+  spaceBefore?: number;
+  spaceAfter?: number;
+  rule?: string;
+  shade?: string;
+};
 
 // One list item, flattened out of however deeply it was nested (a Tab
 // press in the builder sinks an item into a sub-list — see RichTextEditor's
 // indent/sinkListItem handling). `indent` is the nesting depth (0 = top
 // level); `number` is only meaningful when `ordered` is true and is computed
 // once, up front, per sub-list (so it stays correct even if the block gets
-// split around a {{fee_table}} placeholder later).
-export type RichListItem = { runs: TextRun[]; indent: number; ordered: boolean; number?: number };
+// split around a {{fee_table}} placeholder later). `bullet`, `numbering` and
+// `markerColor` are the list's own choices in the builder, if it made any.
+export type RichListItem = {
+  runs: TextRun[];
+  indent: number;
+  ordered: boolean;
+  number?: number;
+  bullet?: BulletShape;
+  numbering?: NumberFormat;
+  markerColor?: string;
+  format?: BlockFormat;
+};
+
+/** One table cell: its text, alignment, background, and how many columns it spans. */
+export type RichCell = { runs: TextRun[]; align?: BlockFormat["align"]; fill?: string; colspan?: number };
 
 export type AgreementBlock =
   | { kind: "clause"; number: string; heading: string; intro?: string }
@@ -38,10 +82,14 @@ export type AgreementBlock =
   // text like the legacy `paragraph` kind above. `indent` (richHeading /
   // richParagraph) is the builder's Increase/Decrease Indent level, 0 if
   // never indented.
-  | { kind: "richHeading"; level: 1 | 2 | 3; runs: TextRun[]; indent?: number }
-  | { kind: "richParagraph"; runs: TextRun[]; indent?: number }
+  | { kind: "richHeading"; level: 1 | 2 | 3; runs: TextRun[]; indent?: number; format?: BlockFormat }
+  | { kind: "richParagraph"; runs: TextRun[]; indent?: number; format?: BlockFormat }
   | { kind: "richList"; items: RichListItem[] }
-  | { kind: "richTable"; rows: { cells: TextRun[][]; header: boolean }[] };
+  // `widths` are the columns' shares of the table's width, when the builder
+  // set them; `border` is the table's line colour.
+  | { kind: "richTable"; rows: { cells: RichCell[]; header: boolean }[]; widths?: number[]; border?: string }
+  | { kind: "pageBreak" }
+  | { kind: "rule"; color?: string };
 
 export type AgreementContent = {
   officeLine: string;

@@ -1,12 +1,8 @@
 "use server";
 
-import { createElement } from "react";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { CURRENCY_SYMBOLS } from "@/lib/constants";
-import { formatDateOnly } from "@/lib/formatDate";
-import { getAgreementContent } from "@/lib/pdf/agreementContent";
-import { wordingToBlocks, DEFAULT_OFFICE_LINE } from "@/lib/pdf/templateWording";
+import { renderStudentAgreementPdf, type AgreementDestination } from "@/lib/pdf/studentAgreementPdf";
 import { requirePermission } from "@/lib/auth/permissions";
 import { ensureCommissionForStudent } from "@/lib/actions/commissionAuto";
 import { validateDocumentFile, sanitizeFilename } from "@/lib/documentUpload";
@@ -18,12 +14,6 @@ type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
-}
-
-function formatAgreementDate(d: Date) {
-  const day = String(d.getDate()).padStart(2, "0");
-  const month = d.toLocaleString("en-US", { month: "long" });
-  return `${day}-${month}-${d.getFullYear()}`;
 }
 
 function parseAgreementFields(formData: FormData) {
@@ -233,21 +223,11 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
   const { data: template } = await supabase
     .from("agreement_templates")
     .select(
-      "signatory_name, wording, destination:destinations(country_code, track, display_name, admin_charge, consultancy_fee, consultancy_fee_currency, visa_service_fee)"
+      "signatory_name, wording, design, destination:destinations(country_code, track, display_name, admin_charge, consultancy_fee, consultancy_fee_currency, visa_service_fee)"
     )
     .eq("id", agreement.template_id)
     .maybeSingle();
-  const destination = template?.destination
-    ? (one(template.destination as never) as {
-        country_code?: string;
-        track?: string;
-        display_name?: string;
-        admin_charge?: number;
-        consultancy_fee?: number;
-        consultancy_fee_currency?: string;
-        visa_service_fee?: number | null;
-      } | null)
-    : null;
+  const destination = template?.destination ? (one(template.destination as never) as AgreementDestination | null) : null;
   if (!destination?.country_code || !destination.track) return { error: "This agreement's destination could not be resolved." };
 
   const { data: student } = await supabase
@@ -264,8 +244,8 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
     .maybeSingle();
 
   // The agreement PDF prints these fields directly (see StudentDetailsChart
-  // below) — generating it with any of them blank would hand the student a
-  // legal document with empty fields instead of failing loudly here.
+  // in AgreementDocument) — generating it with any of them blank would hand
+  // the student a legal document with empty fields instead of failing loudly here.
   const missingProfileFields = [
     !student.date_of_birth && "date of birth",
     !student.address?.trim() && "address",
@@ -277,117 +257,19 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
     return { error: `Complete the student's profile before generating the agreement — missing: ${missingProfileFields.join(", ")}.` };
   }
 
-  // The doc's rule: the agreement's signatory is always the one fixed
-  // authorized person on the template, never the staff member who
-  // generated it (that's tracked separately via agreements.generated_by).
-  const signatoryName = template?.signatory_name ?? null;
-
   const { data: sigFile } = await supabase.storage.from("documents").download("branding/hmark-signature.png");
   const signatureDataUri = sigFile ? `data:image/png;base64,${Buffer.from(await sigFile.arrayBuffer()).toString("base64")}` : null;
 
-  // A backup-country agreement (see resolveIsBackup/PrimaryBackupDestinationSelect)
-  // never carries a consultancy fee or discount — it exists purely to charge
-  // this destination's administrative fee — so both are forced to zero here
-  // regardless of what's stored, even though generateAgreement/updateAgreement
-  // already null them out at write time (this is the belt to that suspenders,
-  // for any agreement row written before that enforcement existed).
-  // A visa documentation and application agreement (0279) charges the visa
-  // service fee alone — no administrative charge, no consultancy fee. The fee
-  // travels through the same installment and discount arithmetic below.
-  const isVisaOnly = serviceOf(agreement.service_type) === "visa_only";
-  const visaFee = agreement.visa_service_fee_override ?? destination.visa_service_fee ?? null;
-  if (isVisaOnly && visaFee === null) {
-    return {
-      error: `No visa service fee is set for ${destination.display_name ?? "this country"}. Set it in Setup → Destinations, or enter one on the agreement.`,
-    };
-  }
-  const isBackup = !isVisaOnly && (agreement.is_backup ?? false);
-  const adminCharge = isVisaOnly ? 0 : (agreement.admin_charge_override ?? destination.admin_charge ?? 0);
-  const consultancyFee = isVisaOnly ? Number(visaFee) : isBackup ? 0 : (agreement.consultancy_fee_override ?? destination.consultancy_fee ?? 0);
-  const discountAmount = isBackup ? 0 : (agreement.discount_amount ?? 0);
-  const currencySymbol = CURRENCY_SYMBOLS[destination.consultancy_fee_currency ?? "EUR"] ?? destination.consultancy_fee_currency ?? "€";
-  const totalFee = adminCharge + consultancyFee - discountAmount;
-  const agreementDateStr = formatAgreementDate(new Date(agreement.created_at));
-
-  // Split the discounted consultancy fee (the discount only ever applies to
-  // the consultancy fee, never the non-refundable admin charge) into equal
-  // installments per the staff's choice at generation time (installment_count),
-  // with any rounding remainder folded into the last installment so the parts
-  // always sum to the whole. Splitting the discount across every installment
-  // this way means what the client actually owes at each payment point is
-  // already net of the discount, instead of only reconciling in the total row.
-  const discountedConsultancyFee = consultancyFee - discountAmount;
-  const installmentCount = isBackup ? 1 : (agreement.installment_count ?? 1);
-  const perInstallment = Math.round((discountedConsultancyFee / installmentCount) * 100) / 100;
-  const installmentAmounts = Array.from({ length: installmentCount }, (_, i) =>
-    i === installmentCount - 1 ? discountedConsultancyFee - perInstallment * (installmentCount - 1) : perInstallment
-  );
-
-  const { renderToBuffer } = await import("@react-pdf/renderer");
-  const { AgreementDocument, money } = await import("@/lib/pdf/AgreementDocument");
-
-  // Super-admin-authored wording (the agreement builder) takes priority over
-  // the legacy hardcoded per-country content — falls back to the latter only
-  // for templates that haven't had their wording filled in yet.
-  const content = template?.wording?.trim()
-    ? {
-        officeLine: DEFAULT_OFFICE_LINE,
-        blocks: wordingToBlocks(template.wording, {
-          student_name: student.full_name ?? "",
-          destination: destination.display_name ?? "",
-          admin_charge: money(currencySymbol, adminCharge),
-          consultancy_fee: money(currencySymbol, isVisaOnly ? 0 : consultancyFee),
-          visa_service_fee: isVisaOnly ? money(currencySymbol, consultancyFee) : "",
-          discount: agreement.discount_amount ? money(currencySymbol, agreement.discount_amount) : "",
-          total_fee: money(currencySymbol, totalFee),
-          currency: destination.consultancy_fee_currency ?? "EUR",
-          agreement_date: agreementDateStr,
-          signatory_name: signatoryName ?? "",
-        }),
-      }
-    : getAgreementContent(destination.country_code, destination.track);
-  if (!content) {
-    return { error: `No agreement wording is configured yet for ${destination.display_name ?? destination.country_code} — ask a developer to add it.` };
-  }
-
-  const element = createElement(AgreementDocument, {
-    data: {
-      destinationLabel: destination.display_name ?? "",
-      officeLine: content.officeLine,
-      blocks: content.blocks,
-      student: {
-        fullName: student.full_name,
-        dob: student.date_of_birth ? formatDateOnly(student.date_of_birth) : null,
-        email: student.email,
-        address: student.address,
-        mobile: student.contact_number,
-        currentEducation: student.current_qualification,
-        courseOfInterest: student.course_of_interest,
-        emergencyContactName: profile?.emergency_contact_name ?? null,
-        emergencyContactRelation: profile?.emergency_contact_relation ?? null,
-        emergencyContactNumber: profile?.emergency_contact_number ?? null,
-      },
-      fee: {
-        currencySymbol,
-        adminCharge,
-        consultancyFee,
-        installmentAmounts,
-        discount: discountAmount,
-        total: totalFee,
-        isBackup,
-        destinationLabel: destination.display_name ?? "",
-        isVisaOnly,
-      },
-      agreementDate: agreementDateStr,
-      signatureDataUri,
-      signatoryName,
-    },
+  const rendered = await renderStudentAgreementPdf({
+    template: { wording: template?.wording ?? null, signatory_name: template?.signatory_name ?? null, design: template?.design ?? null },
+    destination,
+    agreement,
+    student,
+    profile: profile ?? null,
+    signatureDataUri,
   });
-
-  // AgreementDocument's root element is a <Document>, but react-pdf's
-  // renderToBuffer type can't see through the wrapper component to verify
-  // that structurally — safe to assert since we control the component.
-  const buffer = await renderToBuffer(element as Parameters<typeof renderToBuffer>[0]);
+  if ("error" in rendered) return { error: rendered.error };
+  const buffer = rendered.buffer;
 
   const path = `${studentId}/agreements/${agreementId}-generated.pdf`;
   const { error: uploadError } = await supabase.storage.from("documents").upload(path, buffer, { contentType: "application/pdf", upsert: true });

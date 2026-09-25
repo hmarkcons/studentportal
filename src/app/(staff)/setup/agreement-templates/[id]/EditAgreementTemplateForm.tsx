@@ -2,11 +2,10 @@
 
 import { useActionState, useState } from "react";
 import { updateAgreementTemplate, deleteAgreementTemplate } from "@/lib/actions/agreementTemplates";
-import { extractDocxHtml } from "@/lib/extractDocxText";
 import { MERGE_FIELDS } from "@/lib/pdf/templateWording";
-import { RichTextEditor } from "@/components/RichTextEditor";
+import { normalizeTheme } from "@/lib/pdf/agreementTheme";
+import { TemplateBuilder } from "@/components/agreement-builder/TemplateBuilder";
 import { Button } from "@/components/ui/Button";
-import { FileField } from "@/components/FileField";
 import { Input, Select } from "@/components/ui/Input";
 import { ActionStatus } from "@/components/ActionStatus";
 import { useButtonAction } from "@/components/useButtonAction";
@@ -29,14 +28,20 @@ export function EditAgreementTemplateForm({
   template,
   destinations,
 }: {
-  template: { id: string; name: string; signatory_name: string; wording: string; destination_id: string; file_path: string | null; service_type?: string | null };
+  template: {
+    id: string;
+    name: string;
+    signatory_name: string;
+    wording: string;
+    destination_id: string;
+    file_path: string | null;
+    service_type?: string | null;
+    design?: unknown;
+  };
   destinations: { id: string; display_name: string }[];
 }) {
   const action = updateAgreementTemplate.bind(null, template.id);
   const [state, formAction, pending] = useActionState(action, undefined);
-  const [wording, setWording] = useState(() => plainTextToHtml(template.wording));
-  const [extracting, setExtracting] = useState(false);
-  const [extractError, setExtractError] = useState<string | null>(null);
   const [blocked, setBlocked] = useState(false);
   const del = useButtonAction();
 
@@ -46,20 +51,6 @@ export function EditAgreementTemplateForm({
     // it never returns) — this only resolves to a value on the error path,
     // said beside the button. Success leaves the page: a toast.
     await del.run(() => deleteAgreementTemplate(template.id), { toast: "Deleted." });
-  }
-
-  async function handleFile(file: File | null) {
-    if (!file || !file.name.toLowerCase().endsWith(".docx")) return;
-    setExtracting(true);
-    setExtractError(null);
-    try {
-      const html = await extractDocxHtml(file);
-      setWording(html);
-    } catch {
-      setExtractError("Couldn't read that .docx file — you can still type/paste the wording below.");
-    } finally {
-      setExtracting(false);
-    }
   }
 
   return (
@@ -87,41 +78,14 @@ export function EditAgreementTemplateForm({
           <option value="visa_only">Visa documentation &amp; application only</option>
         </Select>
       </div>
-      <div className="flex flex-col gap-1">
-        <label className="text-xs text-muted">
-          Replace with a new .docx to re-fill the wording below with its formatting preserved (optional), or edit directly.
-        </label>
-        {/* Only a file within the limit is read — extracting the wording from
-            an oversized .docx would work and then be refused on submit, which
-            reads as the upload having succeeded. */}
-        <FileField
-          accept=".docx"
-          noun="template"
-          hint="Word .docx"
-          inputClassName="text-sm"
-          onChange={(s) => {
-            setBlocked(Boolean(s.error) || s.busy);
-            void handleFile(s.file);
-          }}
-        />
-        {extracting && <p className="text-xs text-muted">Reading document…</p>}
-        {extractError && <p className="text-xs text-danger">{extractError}</p>}
-      </div>
-      <p className="text-xs text-muted">
-        Wherever the fee, installments, and discount should appear, click <strong>+ Payment Chart</strong> in the toolbar below —
-        don&apos;t type your own table with sample numbers, since only the chart button fills in each student&apos;s actual figures.
-      </p>
-      <RichTextEditor name="wording" content={wording} onChangeHtml={setWording} />
-      <details className="text-xs text-muted">
-        <summary className="cursor-pointer">Available merge fields</summary>
-        <ul className="mt-1 list-disc pl-5">
-          {MERGE_FIELDS.map((f) => (
-            <li key={f.key}>
-              <code>{`{{${f.key}}}`}</code> — {f.label}
-            </li>
-          ))}
-        </ul>
-      </details>
+      <TemplateBuilder
+        kind="student"
+        initialWording={plainTextToHtml(template.wording)}
+        initialDesign={normalizeTheme(template.design ?? null)}
+        mergeFields={MERGE_FIELDS}
+        onBlockedChange={setBlocked}
+        importHint="Replace the wording with a Word document (.docx): it comes across with its fonts, colours, headings, bullets and tables, and Page & theme is set to match it. Or edit directly below."
+      />
       <div className="flex items-center gap-3">
         <Button type="submit" variant="primary" disabled={blocked} pending={pending} status={{ state, label: "Saved." }}>
           Save changes

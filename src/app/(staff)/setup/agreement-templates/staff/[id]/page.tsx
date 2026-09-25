@@ -12,7 +12,7 @@ export default async function EditStaffAgreementTemplatePage(props: { params: Pr
   const { supabase } = await getStaffSession();
   const { data: template } = await supabase
     .from("staff_agreement_templates")
-    .select("id, name, signatory_name, wording")
+    .select("id, name, signatory_name, wording, design")
     .eq("id", id)
     .maybeSingle();
   if (!template) notFound();

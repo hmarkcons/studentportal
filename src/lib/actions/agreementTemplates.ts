@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { validateDocumentFile } from "@/lib/documentUpload";
 import { uploadedFile } from "@/lib/stagedUpload";
+import { normalizeTheme } from "@/lib/pdf/agreementTheme";
 
 async function requireSuperAdmin(supabase: Awaited<ReturnType<typeof createClient>>) {
   const {
@@ -40,7 +41,10 @@ export async function createAgreementTemplate(_prevState: unknown, formData: For
   }
 
   const service_type = serviceOf(formData.get("service_type"));
-  const { error } = await supabase.from("agreement_templates").insert({ destination_id, name, signatory_name, wording, file_path, service_type });
+  // The builder's Page & theme panel; checked value by value, and null — the
+  // Classic look — for anything that is not a design.
+  const design = normalizeTheme(formData.get("design"));
+  const { error } = await supabase.from("agreement_templates").insert({ destination_id, name, signatory_name, wording, file_path, service_type, design });
   if (error) return { error: error.message };
 
   revalidatePath("/setup/agreement-templates");
@@ -63,6 +67,9 @@ export async function updateAgreementTemplate(templateId: string, _prevState: un
   }
 
   const update: Record<string, unknown> = { destination_id, name, signatory_name, wording, service_type: serviceOf(formData.get("service_type")) };
+  // Only a form that has the Page & theme panel says anything about the design;
+  // one without it must not reset a template to Classic.
+  if (formData.has("design")) update.design = normalizeTheme(formData.get("design"));
 
   // What the template points at now, read before anything replaces it, so the
   // old object can be cleaned up afterwards.

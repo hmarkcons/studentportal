@@ -28,6 +28,7 @@ import {
   type StaffAgreementMail,
 } from "@/lib/staffAgreementEmail";
 import { uploadedFile } from "@/lib/stagedUpload";
+import { normalizeTheme } from "@/lib/pdf/agreementTheme";
 
 // Staff agreements (0271). Two permissions, both a Super Admin's until granted
 // to a role on the Role Permissions screen:
@@ -71,6 +72,8 @@ function templateFields(formData: FormData) {
     name: String(formData.get("name") ?? "").trim(),
     signatory_name: String(formData.get("signatory_name") ?? "").trim(),
     wording: String(formData.get("wording") ?? "").trim(),
+    // The builder's Page & theme panel, checked value by value; null is the Classic look.
+    ...(formData.has("design") ? { design: normalizeTheme(formData.get("design")) } : {}),
   };
 }
 
@@ -187,7 +190,7 @@ export async function duplicateStaffAgreementTemplate(templateId: string): Promi
   const supabase = await createClient();
   const { data: source } = await supabase
     .from("staff_agreement_templates")
-    .select("name, signatory_name, wording")
+    .select("name, signatory_name, wording, design")
     .eq("id", templateId)
     .maybeSingle();
   if (!source) return { error: "That template no longer exists." };
@@ -199,6 +202,7 @@ export async function duplicateStaffAgreementTemplate(templateId: string): Promi
       name: `Copy of ${source.name}`.slice(0, 200),
       signatory_name: source.signatory_name,
       wording: source.wording,
+      design: source.design ?? null,
       created_by: staff?.id ?? null,
     })
     .select("id")
@@ -211,7 +215,7 @@ export async function duplicateStaffAgreementTemplate(templateId: string): Promi
 
 // =============================================================== agreements
 
-type TemplateRow = { id: string; name: string; signatory_name: string; wording: string };
+type TemplateRow = { id: string; name: string; signatory_name: string; wording: string; design?: unknown };
 
 /**
  * Renders a staff agreement's PDF from its template and the staff member's
@@ -284,6 +288,7 @@ async function renderStaffAgreementPdf(agreementId: string, staffId: string, tem
       agreementDate: dateText,
       signatureDataUri,
       signatoryName: template.signatory_name,
+      theme: normalizeTheme(template.design ?? null),
     },
   });
   const buffer = await renderToBuffer(element as Parameters<typeof renderToBuffer>[0]);
@@ -307,7 +312,7 @@ export async function generateStaffAgreement(staffId: string, _prev: unknown, fo
   const supabase = await createClient();
   const { data: template } = await supabase
     .from("staff_agreement_templates")
-    .select("id, name, signatory_name, wording")
+    .select("id, name, signatory_name, wording, design")
     .eq("id", templateId)
     .maybeSingle<TemplateRow>();
   if (!template) return { error: "That template no longer exists." };
@@ -340,7 +345,7 @@ export async function regenerateStaffAgreementPdf(agreementId: string): Promise<
   const supabase = await createClient();
   const { data: agreement } = await supabase
     .from("staff_agreements")
-    .select("id, staff_id, status, created_at, template:staff_agreement_templates(id, name, signatory_name, wording)")
+    .select("id, staff_id, status, created_at, template:staff_agreement_templates(id, name, signatory_name, wording, design)")
     .eq("id", agreementId)
     .maybeSingle();
   if (!agreement) return { error: "That agreement no longer exists." };

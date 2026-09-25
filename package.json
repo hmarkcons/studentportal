@@ -29,7 +29,8 @@
     "check:uploads": "node scripts/verify-uploads.mjs",
     "check:dashboards": "node scripts/verify-dashboards.mjs",
     "check:login": "node scripts/verify-login-screen.mjs",
-    "check:visaonly": "node scripts/verify-visa-only.mjs"
+    "check:visaonly": "node scripts/verify-visa-only.mjs",
+    "check:builder": "node scripts/verify-agreement-builder.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",
@@ -38,10 +39,13 @@
     "@supabase/supabase-js": "^2.112.3",
     "@tanstack/react-query": "^5.102.8",
     "@tiptap/extension-table": "^3.30.5",
+    "@tiptap/extension-text-align": "^3.30.5",
+    "@tiptap/extension-text-style": "^3.30.5",
     "@tiptap/pm": "^3.30.5",
     "@tiptap/react": "^3.30.5",
     "@tiptap/starter-kit": "^3.30.5",
     "fflate": "^0.8.3",
+    "jszip": "^3.10.2",
     "mammoth": "^1.12.2",
     "next": "16.3.5",
     "node-html-parser": "^9.0.2",
@@ -59,6 +63,7 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@xmldom/xmldom": "^0.8.15",
     "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.3.5",

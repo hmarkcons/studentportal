@@ -17,7 +17,7 @@ export default async function AgreementTemplateDetailPage(props: PageProps<"/set
   const [{ data: template }, { data: destinations }] = await Promise.all([
     supabase
       .from("agreement_templates")
-      .select("id, name, signatory_name, wording, file_path, destination_id, service_type, destination:destinations(display_name)")
+      .select("id, name, signatory_name, wording, design, file_path, destination_id, service_type, destination:destinations(display_name)")
       .eq("id", id)
       .maybeSingle(),
     supabase.from("destinations").select("id, display_name").order("display_name"),
@@ -27,7 +27,8 @@ export default async function AgreementTemplateDetailPage(props: PageProps<"/set
   const destination = one(template.destination as never) as { display_name?: string } | null;
 
   return (
-    <div className="w-full max-w-3xl">
+    // Wide enough for the builder's page, which is drawn at the paper's own width.
+    <div className={isSuperAdmin ? "w-full max-w-6xl" : "w-full max-w-3xl"}>
       <Link href="/setup/agreement-templates" className="text-sm text-muted hover:text-ink">
         &larr; Back to agreement templates
       </Link>

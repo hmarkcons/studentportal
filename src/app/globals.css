@@ -113,54 +113,281 @@ body {
   }
 }
 
-/* Agreement builder rich-text editor content (TipTap output) */
-.prose-agreement h1 {
-  font-size: 1.25rem;
+/* ---------------------------------------------------------- agreement builder
+   The template builder's page (RichTextEditor), drawn in the template's look.
+   The values come from CSS variables set on .agreement-paper by paperLook()
+   (components/agreement-builder/editorTheme.ts), from the same Theme the PDF
+   is drawn from; the paper stays white in dark mode because it is a page.
+
+   The fonts are the ones the PDF embeds (public/fonts/agreement), so the page
+   shows the face that will print. A face downloads only when something on the
+   page uses it. */
+@font-face { font-family: "Carlito"; src: url("/fonts/agreement/carlito-400-normal.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Carlito"; src: url("/fonts/agreement/carlito-400-italic.ttf") format("truetype"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Carlito"; src: url("/fonts/agreement/carlito-700-normal.ttf") format("truetype"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Carlito"; src: url("/fonts/agreement/carlito-700-italic.ttf") format("truetype"); font-weight: 700; font-style: italic; font-display: swap; }
+@font-face { font-family: "Arimo"; src: url("/fonts/agreement/arimo-400-normal.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Arimo"; src: url("/fonts/agreement/arimo-400-italic.ttf") format("truetype"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Arimo"; src: url("/fonts/agreement/arimo-700-normal.ttf") format("truetype"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Arimo"; src: url("/fonts/agreement/arimo-700-italic.ttf") format("truetype"); font-weight: 700; font-style: italic; font-display: swap; }
+@font-face { font-family: "Tinos"; src: url("/fonts/agreement/tinos-400-normal.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Tinos"; src: url("/fonts/agreement/tinos-400-italic.ttf") format("truetype"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Tinos"; src: url("/fonts/agreement/tinos-700-normal.ttf") format("truetype"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Tinos"; src: url("/fonts/agreement/tinos-700-italic.ttf") format("truetype"); font-weight: 700; font-style: italic; font-display: swap; }
+@font-face { font-family: "Gelasio"; src: url("/fonts/agreement/gelasio-400-normal.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Gelasio"; src: url("/fonts/agreement/gelasio-400-italic.ttf") format("truetype"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Gelasio"; src: url("/fonts/agreement/gelasio-700-normal.ttf") format("truetype"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Gelasio"; src: url("/fonts/agreement/gelasio-700-italic.ttf") format("truetype"); font-weight: 700; font-style: italic; font-display: swap; }
+@font-face { font-family: "Caladea"; src: url("/fonts/agreement/caladea-400-normal.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Caladea"; src: url("/fonts/agreement/caladea-400-italic.ttf") format("truetype"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Caladea"; src: url("/fonts/agreement/caladea-700-normal.ttf") format("truetype"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Caladea"; src: url("/fonts/agreement/caladea-700-italic.ttf") format("truetype"); font-weight: 700; font-style: italic; font-display: swap; }
+@font-face { font-family: "Open Sans"; src: url("/fonts/agreement/open-sans-400-normal.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Open Sans"; src: url("/fonts/agreement/open-sans-400-italic.ttf") format("truetype"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Open Sans"; src: url("/fonts/agreement/open-sans-700-normal.ttf") format("truetype"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Open Sans"; src: url("/fonts/agreement/open-sans-700-italic.ttf") format("truetype"); font-weight: 700; font-style: italic; font-display: swap; }
+@font-face { font-family: "Lato"; src: url("/fonts/agreement/lato-400-normal.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Lato"; src: url("/fonts/agreement/lato-400-italic.ttf") format("truetype"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Lato"; src: url("/fonts/agreement/lato-700-normal.ttf") format("truetype"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Lato"; src: url("/fonts/agreement/lato-700-italic.ttf") format("truetype"); font-weight: 700; font-style: italic; font-display: swap; }
+@font-face { font-family: "Roboto"; src: url("/fonts/agreement/roboto-400-normal.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Roboto"; src: url("/fonts/agreement/roboto-400-italic.ttf") format("truetype"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Roboto"; src: url("/fonts/agreement/roboto-700-normal.ttf") format("truetype"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Roboto"; src: url("/fonts/agreement/roboto-700-italic.ttf") format("truetype"); font-weight: 700; font-style: italic; font-display: swap; }
+@font-face { font-family: "Montserrat"; src: url("/fonts/agreement/montserrat-400-normal.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Montserrat"; src: url("/fonts/agreement/montserrat-400-italic.ttf") format("truetype"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Montserrat"; src: url("/fonts/agreement/montserrat-700-normal.ttf") format("truetype"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Montserrat"; src: url("/fonts/agreement/montserrat-700-italic.ttf") format("truetype"); font-weight: 700; font-style: italic; font-display: swap; }
+@font-face { font-family: "Merriweather"; src: url("/fonts/agreement/merriweather-400-normal.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Merriweather"; src: url("/fonts/agreement/merriweather-400-italic.ttf") format("truetype"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Merriweather"; src: url("/fonts/agreement/merriweather-700-normal.ttf") format("truetype"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Merriweather"; src: url("/fonts/agreement/merriweather-700-italic.ttf") format("truetype"); font-weight: 700; font-style: italic; font-display: swap; }
+@font-face { font-family: "Playfair Display"; src: url("/fonts/agreement/playfair-display-400-normal.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Playfair Display"; src: url("/fonts/agreement/playfair-display-400-italic.ttf") format("truetype"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Playfair Display"; src: url("/fonts/agreement/playfair-display-700-normal.ttf") format("truetype"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Playfair Display"; src: url("/fonts/agreement/playfair-display-700-italic.ttf") format("truetype"); font-weight: 700; font-style: italic; font-display: swap; }
+
+.agreement-desk {
+  background: color-mix(in srgb, var(--muted) 18%, var(--bg));
+}
+.agreement-paper {
+  background: #ffffff;
+  color: var(--ag-color);
+  font-family: var(--ag-font);
+  font-size: var(--ag-size);
+  line-height: var(--ag-lh);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.18);
+  max-width: 100%;
+  box-sizing: border-box;
+  /* The PDF draws no ligatures (they break copying text out of it). */
+  font-variant-ligatures: none;
+}
+.agreement-letterhead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+  border-bottom: 2px solid #146856;
+  font-family: var(--ag-font);
+  line-height: 1.22;
+}
+.agreement-letterhead img {
+  height: 30px;
+  margin-right: auto;
+}
+.agreement-letterhead-title {
+  text-align: right;
+  color: #1b2420;
+  font-size: 9pt;
+}
+.agreement-letterhead-page {
+  border-left: 1px solid #b8b6a9;
+  padding-left: 8px;
+  min-width: 1.4em;
+  text-align: center;
+  color: #146856;
+  font-size: 11pt;
+}
+.agreement-fixed-note {
+  margin: 4px 0 8px;
+  padding: 4px 8px;
+  border: 1px dashed #c9c6cc;
+  border-radius: 4px;
+  color: #726f73;
+  font-family: system-ui, sans-serif;
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: center;
+}
+.agreement-paper .prose-agreement {
+  text-align: var(--ag-align);
+}
+.agreement-paper .prose-agreement p {
+  margin: 0 0 var(--ag-space);
+}
+.agreement-paper .prose-agreement h1,
+.agreement-paper .prose-agreement h2,
+.agreement-paper .prose-agreement h3 {
+  line-height: 1.22;
+  text-align: left;
+}
+.agreement-paper .prose-agreement h1 {
+  font-family: var(--ag-h1-font);
+  font-size: var(--ag-h1-size);
+  color: var(--ag-h1-color);
+  font-weight: var(--ag-h1-weight);
+  font-style: var(--ag-h1-style);
+  margin: var(--ag-h1-before) 0 var(--ag-h1-after);
+  border-bottom: var(--ag-h1-rule);
+  padding-bottom: var(--ag-h1-pad);
+}
+.agreement-paper .prose-agreement h2 {
+  font-family: var(--ag-h2-font);
+  font-size: var(--ag-h2-size);
+  color: var(--ag-h2-color);
+  font-weight: var(--ag-h2-weight);
+  font-style: var(--ag-h2-style);
+  margin: var(--ag-h2-before) 0 var(--ag-h2-after);
+  border-bottom: var(--ag-h2-rule);
+  padding-bottom: var(--ag-h2-pad);
+}
+.agreement-paper .prose-agreement h3 {
+  font-family: var(--ag-h3-font);
+  font-size: var(--ag-h3-size);
+  color: var(--ag-h3-color);
+  font-weight: var(--ag-h3-weight);
+  font-style: var(--ag-h3-style);
+  margin: var(--ag-h3-before) 0 var(--ag-h3-after);
+  border-bottom: var(--ag-h3-rule);
+  padding-bottom: var(--ag-h3-pad);
+}
+.agreement-paper .prose-agreement strong {
   font-weight: 700;
-  margin: 0.75rem 0 0.5rem;
 }
-.prose-agreement h2 {
-  font-size: 1.1rem;
-  font-weight: 700;
-  margin: 0.75rem 0 0.5rem;
-}
-.prose-agreement h3 {
-  font-size: 1rem;
-  font-weight: 600;
-  margin: 0.5rem 0 0.35rem;
-}
-.prose-agreement p {
-  margin: 0.35rem 0;
-}
-.prose-agreement strong {
-  font-weight: 700;
-}
-.prose-agreement em {
+.agreement-paper .prose-agreement em {
   font-style: italic;
 }
-.prose-agreement u {
+.agreement-paper .prose-agreement u {
   text-decoration: underline;
 }
-.prose-agreement ul,
-.prose-agreement ol {
-  padding-left: 1.25rem;
-  margin: 0.35rem 0;
+.agreement-paper .prose-agreement s {
+  text-decoration: line-through;
 }
-.prose-agreement table {
+.agreement-paper .prose-agreement ul,
+.agreement-paper .prose-agreement ol {
+  margin: 0 0 var(--ag-space);
+  padding-left: 18pt;
+}
+.agreement-paper .prose-agreement li {
+  margin-bottom: var(--ag-list-space);
+}
+.agreement-paper .prose-agreement li > p {
+  margin: 0;
+}
+/* A list that chose no colour of its own does not inherit its parent list's. */
+.agreement-paper .prose-agreement ul:not([data-marker-color]),
+.agreement-paper .prose-agreement ol:not([data-marker-color]) {
+  --ag-marker: initial;
+}
+.agreement-paper .prose-agreement li::marker {
+  color: var(--ag-marker, var(--ag-bullet-color));
+}
+/* Bullets: the list's own shape, else the template's. Classic keeps the
+   browser's disc, circle and square by depth, as its PDF does. */
+.agreement-paper[data-bullet="square"] ul:not([data-bullet]) > li::marker,
+.agreement-paper ul[data-bullet="square"] > li::marker { content: "▪  "; }
+.agreement-paper[data-bullet="disc"] ul:not([data-bullet]) > li::marker,
+.agreement-paper ul[data-bullet="disc"] > li::marker { content: "•  "; }
+.agreement-paper[data-bullet="circle"] ul:not([data-bullet]) > li::marker,
+.agreement-paper ul[data-bullet="circle"] > li::marker { content: "◦  "; }
+.agreement-paper[data-bullet="dash"] ul:not([data-bullet]) > li::marker,
+.agreement-paper ul[data-bullet="dash"] > li::marker { content: "–  "; }
+.agreement-paper[data-bullet="arrow"] ul:not([data-bullet]) > li::marker,
+.agreement-paper ul[data-bullet="arrow"] > li::marker { content: "➤  "; }
+.agreement-paper[data-bullet="check"] ul:not([data-bullet]) > li::marker,
+.agreement-paper ul[data-bullet="check"] > li::marker { content: "✓  "; }
+.agreement-paper[data-bullet="diamond"] ul:not([data-bullet]) > li::marker,
+.agreement-paper ul[data-bullet="diamond"] > li::marker { content: "◆  "; }
+.agreement-paper[data-numbering="lower-alpha"] ol:not([data-numbering]) { list-style-type: lower-alpha; }
+.agreement-paper[data-numbering="upper-alpha"] ol:not([data-numbering]) { list-style-type: upper-alpha; }
+.agreement-paper[data-numbering="lower-roman"] ol:not([data-numbering]) { list-style-type: lower-roman; }
+.agreement-paper[data-numbering="upper-roman"] ol:not([data-numbering]) { list-style-type: upper-roman; }
+.agreement-paper .prose-agreement table {
   border-collapse: collapse;
   width: 100%;
-  margin: 0.5rem 0;
+  margin: 4pt 0 10pt;
+  table-layout: fixed;
+  font-size: var(--ag-table-size);
+  line-height: 1.22;
 }
-.prose-agreement th,
-.prose-agreement td {
-  border: 1px solid var(--border);
-  padding: 0.35rem 0.5rem;
+.agreement-paper .prose-agreement th,
+.agreement-paper .prose-agreement td {
+  border: 0.5pt solid var(--ag-table-border);
+  padding: 2.5pt 5pt;
   text-align: left;
   vertical-align: top;
+  position: relative;
 }
-.prose-agreement th {
-  background: var(--bg);
-  font-weight: 600;
+.agreement-paper .prose-agreement table[data-border] th,
+.agreement-paper .prose-agreement table[data-border] td {
+  border-color: var(--ag-table-border);
+}
+.agreement-paper .prose-agreement th {
+  background: var(--ag-th-fill);
+  color: var(--ag-th-color);
+  font-family: var(--ag-th-font);
+  font-weight: 700;
+}
+.agreement-paper .prose-agreement td > p,
+.agreement-paper .prose-agreement th > p {
+  margin: 0;
+}
+.agreement-paper .prose-agreement hr {
+  border: 0;
+  border-top: 0.75pt solid var(--ag-h1-color);
+  margin: 6pt 0;
+}
+.agreement-paper .prose-agreement .ag-page-break {
+  margin: 12px 0;
+  border-top: 2px dashed #9aa0a6;
+  height: 0;
+  text-align: center;
+}
+.agreement-paper .prose-agreement .ag-page-break::after {
+  content: "Page break";
+  position: relative;
+  top: -0.75em;
+  padding: 0 8px;
+  background: #ffffff;
+  color: #726f73;
+  font-family: system-ui, sans-serif;
+  font-size: 11px;
+}
+.agreement-paper .prose-agreement .ag-page-break.ProseMirror-selectednode {
+  border-top-color: var(--primary);
+}
+.agreement-paper .prose-agreement .selectedCell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgb(82 190 150 / 0.18);
+  pointer-events: none;
+}
+.agreement-paper .prose-agreement .column-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: 0;
+  width: 4px;
+  background: var(--primary);
+  pointer-events: none;
+}
+.agreement-paper .prose-agreement.resize-cursor {
+  cursor: col-resize;
+}
+.agreement-paper .prose-agreement .tableWrapper {
+  overflow-x: auto;
 }
 
 /* ---------------------------------------------------------- hidden sidebar
