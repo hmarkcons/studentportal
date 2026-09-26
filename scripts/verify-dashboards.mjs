@@ -204,6 +204,20 @@ try {
   await open(mgr, "/dashboard?view=processing_team", '[data-dashboard-view="processing_team"]');
   ok("management: so does the processing team, with its visa figures", /visa approval rate/i.test(await mgr.locator("main").innerText()));
 
+  // -------------------------------------- 6. deleting a registered student
+  // Last, since everything above reads this student. Deleting a student
+  // removes their countries by cascade once the student row is gone, and
+  // 0276's guard, finding no student to check, refused even a Super Admin —
+  // "Only the processing team can remove a country that has stage progress
+  // recorded" (0282).
+  const { data: progress } = await admin.from("lead_destinations").select("dashboard_stage_values").eq("lead_id", student).single();
+  const asSuper = await apiAs(url, anonKey, superUser.email);
+  const removal = await asSuper.from("leads").delete().eq("id", student).select("id");
+  const { data: left } = await admin.from("leads").select("id").eq("id", student).maybeSingle();
+  ok("super admin: a registered student with country stages recorded can be deleted",
+    Object.keys(progress?.dashboard_stage_values ?? {}).length > 0 && !removal.error && !left,
+    JSON.stringify({ progress: progress?.dashboard_stage_values, error: removal.error?.message, stillThere: Boolean(left) }));
+
   await browser.close();
 } finally {
   const removed = await fx.cleanup(); // leads, their documents and destinations, then the staff and their payroll
