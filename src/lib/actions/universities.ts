@@ -26,6 +26,7 @@ import {
 import {
   programFromRow,
   resolveDestination,
+  resolveDsuBody,
   roundsFromRow,
   mergeRounds,
   roundSpecFromRow,
@@ -34,6 +35,7 @@ import {
   universityInsertValues,
   type CatalogueRound,
   type DestinationRef,
+  type DsuBodyRef,
   type IncomingRound,
   type RoundLike,
   type RoundSpec,
@@ -43,6 +45,25 @@ import {
 import { readAllIn } from "@/lib/catalogueReads";
 import { EXAMPLE_UNIVERSITY, ROUNDS_SHEET, isExampleRow } from "@/lib/catalogueSheet";
 import { uploadedFile } from "@/lib/stagedUpload";
+import { FEE_CURRENCIES } from "@/lib/applicationFee";
+
+/**
+ * An application fee and its currency from an edit form. A blank amount
+ * clears the fee; a currency is kept only beside an amount, and one left on
+ * "the destination's" is filled in by the database (0287).
+ */
+function feeFromForm(formData: FormData): { application_fee: number | null; application_fee_currency: string | null } | { error: string } {
+  const raw = String(formData.get("application_fee") ?? "").trim();
+  if (raw === "") return { application_fee: null, application_fee_currency: null };
+  const amount = Number(raw);
+  if (!Number.isFinite(amount) || amount < 0) return { error: "The application fee must be a number, zero or more." };
+  const currency = String(formData.get("application_fee_currency") ?? "").trim().toUpperCase() || null;
+  if (currency && !(FEE_CURRENCIES as readonly string[]).includes(currency)) return { error: `${currency} is not a currency the portal knows.` };
+  return { application_fee: Math.round(amount * 100) / 100, application_fee_currency: currency };
+}
+
+/** The same rule the database holds programs.coordinator_email to (0287). */
+const EMAIL = /^[^@\s]+@[^@\s]+$/;
 
 export async function createUniversity(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
@@ -72,13 +93,38 @@ export async function updateUniversity(universityId: string, _prevState: unknown
   const region = String(formData.get("region") ?? "").trim() || null;
   const type = String(formData.get("type") ?? "");
   const status = String(formData.get("status") ?? "active");
+  const contact_email = String(formData.get("contact_email") ?? "").trim() || null;
+  const dsu_body_id = String(formData.get("dsu_body_id") ?? "").trim() || null;
 
   if (!name || !["public", "private"].includes(type)) {
     return { error: "Name and type are required." };
   }
+  if (contact_email && !EMAIL.test(contact_email)) return { error: "The university email doesn't look like an email address." };
+  const fee = feeFromForm(formData);
+  if ("error" in fee) return { error: fee.error };
 
-  const { error } = await supabase.from("universities").update({ name, city, region, type, status }).eq("id", universityId);
+  // The picker offers only the bodies that serve this university's country;
+  // checked here too, so a stale page cannot file a German scheme on Pavia.
+  if (dsu_body_id) {
+    const { data: university } = await supabase.from("universities").select("destination_id").eq("id", universityId).maybeSingle();
+    const { data: serves } = await supabase
+      .from("scholarship_body_destinations")
+      .select("scholarship_body_id")
+      .eq("scholarship_body_id", dsu_body_id)
+      .eq("destination_id", university?.destination_id ?? "")
+      .maybeSingle();
+    if (!serves) return { error: "That DSU body doesn't serve this university's country — reload the page and pick again." };
+  }
+
+  // Selected back: an update the database refuses (only a Super Admin may,
+  // 0039) matches no rows and raises nothing.
+  const { data: updated, error } = await supabase
+    .from("universities")
+    .update({ name, city, region, type, status, contact_email, dsu_body_id, ...fee })
+    .eq("id", universityId)
+    .select("id");
   if (error) return { error: error.message };
+  if (!updated?.length) return { error: "The university wasn't saved — only a Super Admin can edit universities." };
 
   revalidatePath(`/setup/universities/${universityId}`);
   revalidatePath("/setup/universities");
@@ -104,19 +150,25 @@ export async function updateProgram(programId: string, universityId: string, _pr
   const tuition_fee = formData.get("tuition_fee") ? Number(formData.get("tuition_fee")) : null;
   const duration = String(formData.get("duration") ?? "").trim() || null;
   const language_requirement = String(formData.get("language_requirement") ?? "").trim() || null;
+  const coordinator_email = String(formData.get("coordinator_email") ?? "").trim() || null;
 
   if (!level || !name) return { error: "Level and name are required." };
+  if (coordinator_email && !EMAIL.test(coordinator_email)) return { error: "The coordinator email doesn't look like an email address." };
+  const fee = feeFromForm(formData);
+  if ("error" in fee) return { error: fee.error };
 
   // No check that a round's deadline falls before its start date. It usually
   // does, but rolling admission runs the other way round and a programme is
   // allowed to be odd — rejecting it here would be guessing at the data rather
   // than validating it. The inputs are labelled instead, which is what actually
   // prevents them being typed the wrong way round.
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("programs")
-    .update({ level, name, core_field, sub_field, tuition_fee, duration, language_requirement })
-    .eq("id", programId);
+    .update({ level, name, core_field, sub_field, tuition_fee, duration, language_requirement, coordinator_email, ...fee })
+    .eq("id", programId)
+    .select("id");
   if (error) return { error: error.message };
+  if (!updated?.length) return { error: "The programme wasn't saved — only a Super Admin can edit programmes." };
 
   // The dates live in program_intake_rounds now; programs.start_date and
   // programs.application_deadline are a trigger-maintained mirror of the first
@@ -179,14 +231,18 @@ export async function addProgram(universityId: string, _prevState: unknown, form
   const core_field = String(formData.get("core_field") ?? "").trim() || null;
   const sub_field = String(formData.get("sub_field") ?? "").trim() || null;
   const tuition_fee = formData.get("tuition_fee") ? Number(formData.get("tuition_fee")) : null;
+  const coordinator_email = String(formData.get("coordinator_email") ?? "").trim() || null;
 
   if (!level || !name) return { error: "Level and name are required." };
+  if (coordinator_email && !EMAIL.test(coordinator_email)) return { error: "The coordinator email doesn't look like an email address." };
+  const fee = feeFromForm(formData);
+  if ("error" in fee) return { error: fee.error };
 
   // The id comes back so the intake rounds can be attached — they are a child
   // table now, not two columns on this row.
   const { data: created, error } = await supabase
     .from("programs")
-    .insert({ university_id: universityId, level, name, core_field, sub_field, tuition_fee })
+    .insert({ university_id: universityId, level, name, core_field, sub_field, tuition_fee, coordinator_email, ...fee })
     .select("id")
     .single();
   if (error) return { error: error.message };
@@ -240,8 +296,29 @@ export async function addProgram(universityId: string, _prevState: unknown, form
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
-/** One import in progress: where it writes, what it has found, and whether it may write. */
-type ImportRun = { supabase: Supabase; report: ImportReport; dryRun: boolean };
+/**
+ * One import in progress: where it writes, what it has found, and whether it
+ * may write. `dsuBodies` is the scholarship directory, for the universities
+ * sheets' dsu_body column; the programmes sheet has none and leaves it empty.
+ */
+type ImportRun = { supabase: Supabase; report: ImportReport; dryRun: boolean; dsuBodies?: DsuBodyRef[] };
+
+/** The id of the body a university's dsu_body names, among its destination's. */
+function dsuBodyId(run: ImportRun, destinationId: string, name: string | null): string | null {
+  if (!name) return null;
+  const resolved = resolveDsuBody(name, destinationId, run.dsuBodies ?? []);
+  return resolved.body?.id ?? null;
+}
+
+/** Every body, with the destinations it serves, for resolveDsuBody. */
+async function readDsuBodies(supabase: Supabase): Promise<DsuBodyRef[] | { error: string }> {
+  const { data, error } = await supabase
+    .from("scholarship_bodies")
+    .select("id, name, destinations:scholarship_body_destinations(destination_id)")
+    .returns<{ id: string; name: string; destinations: { destination_id: string }[] | null }[]>();
+  if (error) return { error: `Could not read the scholarship bodies: ${error.message}` };
+  return (data ?? []).map((b) => ({ id: b.id, name: b.name, destinationIds: (b.destinations ?? []).map((d) => d.destination_id) }));
+}
 
 const SUPER_ADMIN_ONLY = "Only a Super Admin can import universities and programmes.";
 
@@ -338,7 +415,9 @@ const isPending = (id: string) => id.startsWith(PENDING);
 
 // --------------------------------------------------------------- universities
 
-const UNIVERSITY_COLUMNS = "id, destination_id, name, city, region, type, levels_offered, fields_offered, contact_email";
+const UNIVERSITY_COLUMNS =
+  "id, destination_id, name, city, region, type, levels_offered, fields_offered, contact_email, " +
+  "application_fee, application_fee_currency, dsu_body_id";
 
 type StoredUniversity = {
   id: string;
@@ -350,6 +429,9 @@ type StoredUniversity = {
   levels_offered: string[];
   fields_offered: string[];
   contact_email: string | null;
+  application_fee: number | string | null;
+  application_fee_currency: string | null;
+  dsu_body_id: string | null;
 };
 
 type UniversityEntry = {
@@ -375,6 +457,11 @@ function universityPatchFields(input: UniversityInput): Record<string, Cell> {
     levels_offered: input.levels_offered,
     fields_offered: input.fields_offered,
     contact_email: input.contact_email,
+    application_fee: input.application_fee,
+    application_fee_currency: input.application_fee_currency,
+    // By name, so the report reads "dsu_body ER.GO → DSU Toscana"; turned into
+    // the id only when the patch is written.
+    dsu_body: input.dsu_body,
   };
 }
 
@@ -453,6 +540,7 @@ async function mergeUniversities(run: ImportRun, entries: UniversityEntry[]): Pr
   }
 
   const byKey = new Map(stored.map((u) => [universityKey(u.destination_id, u.name), u]));
+  const bodyNameById = new Map((run.dsuBodies ?? []).map((b) => [b.id, b.name]));
   // None today, but the programmes table already holds such pairs, and a
   // university on file twice would have its sheet row paired with an
   // arbitrary copy. Refused by name rather than guessed at.
@@ -544,11 +632,15 @@ async function mergeUniversities(run: ImportRun, entries: UniversityEntry[]): Pr
     }
 
     idByKey.set(key, existing.id);
-    const { patch, changes } = mergeRow(existing as unknown as Record<string, Cell>, universityPatchFields(input));
+    // The stored body as a name, to compare with the sheet's.
+    const current = { ...existing, dsu_body: existing.dsu_body_id ? (bodyNameById.get(existing.dsu_body_id) ?? null) : null };
+    const { patch: named, changes } = mergeRow(current as unknown as Record<string, Cell>, universityPatchFields(input));
     if (changes.length === 0) {
       report.universities.unchanged += 1;
       continue;
     }
+    const { dsu_body: bodyName, ...patch } = named;
+    if (bodyName !== undefined) patch.dsu_body_id = dsuBodyId(run, destination.id, bodyName as string);
 
     if (!dryRun) {
       const { data: updated, error } = await supabase
@@ -580,7 +672,11 @@ async function mergeUniversities(run: ImportRun, entries: UniversityEntry[]): Pr
   } else if (creating.length > 0) {
     const { data: created, error } = await supabase
       .from("universities")
-      .insert(creating.map(([, e]) => universityInsertValues(e.input, e.destination.id, e.destination.track)))
+      .insert(
+        creating.map(([, e]) =>
+          universityInsertValues(e.input, e.destination.id, e.destination.track, dsuBodyId(run, e.destination.id, e.input.dsu_body))
+        )
+      )
       .select("id, name, destination_id")
       .returns<{ id: string; name: string; destination_id: string }[]>();
     if (error) {
@@ -605,7 +701,7 @@ async function mergeUniversities(run: ImportRun, entries: UniversityEntry[]): Pr
 const PROGRAM_COLUMNS =
   "id, university_id, name, level, core_field, sub_field, page_link, interview_required, interview_details, " +
   "admission_test_required, admission_test_type, application_portal_name, application_portal_link, intake_dates, " +
-  "tuition_fee, duration, language_requirement";
+  "tuition_fee, duration, language_requirement, application_fee, application_fee_currency, coordinator_email";
 
 type StoredProgram = {
   id: string;
@@ -647,6 +743,9 @@ function programPatchFields(input: ProgramInput): Record<string, Cell> {
     tuition_fee: input.tuition_fee,
     duration: input.duration,
     language_requirement: input.language_requirement,
+    application_fee: input.application_fee,
+    application_fee_currency: input.application_fee_currency,
+    coordinator_email: input.coordinator_email,
   };
 }
 
@@ -1025,6 +1124,9 @@ async function importUniversityRows(
   const fallback = fallbackId ? (destinations ?? []).find((d) => d.id === fallbackId) : undefined;
   if (fallbackId && !fallback) return { error: "That destination no longer exists — reload the page." };
 
+  const dsuBodies = await readDsuBodies(supabase);
+  if ("error" in dsuBodies) return { error: dsuBodies.error };
+
   const report = emptyReport();
   const universityEntries: UniversityEntry[] = [];
   const programRows: { key: string; universityName: string; input: ProgramInput; rounds: CatalogueRound[] }[] = [];
@@ -1065,6 +1167,15 @@ async function importUniversityRows(
     const destination = destinationOf(row, university.name);
     if (!destination) continue;
 
+    // Settled to the directory's own spelling here, so the preview says which
+    // body a cell was taken to mean — and one that cannot be is reported and
+    // left alone rather than clearing the stored body.
+    if (university.dsu_body) {
+      const resolved = resolveDsuBody(university.dsu_body, destination.id, dsuBodies);
+      if (resolved.error !== undefined) problems.push(resolved.error);
+      university.dsu_body = resolved.body?.name ?? null;
+    }
+
     universityEntries.push({ input: university, destination });
     const program = options.withProgrammes ? programFromRow(row, "program_name", problems) : null;
     const rounds = options.withProgrammes ? roundsFromRow(row, problems) : [];
@@ -1103,7 +1214,7 @@ async function importUniversityRows(
     return { error: `No rows had a '${options.universityKey}' column filled in.` };
   }
 
-  const run: ImportRun = { supabase, report, dryRun: intent.dryRun };
+  const run: ImportRun = { supabase, report, dryRun: intent.dryRun, dsuBodies };
   const idByKey = await mergeUniversities(run, collapseUniversities(universityEntries, report));
 
   if (options.withProgrammes) {

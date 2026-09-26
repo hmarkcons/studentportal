@@ -45,11 +45,20 @@ export const CATALOGUE_COLUMNS = [
   { header: "levels_offered", width: 22, group: "university" },
   { header: "fields_offered", width: 24, group: "university" },
   { header: "contact_email", width: 26, group: "university" },
+  // The fee every programme charges unless its own row says otherwise. The
+  // currency may be left blank: it then follows the destination (0287).
+  { header: "university_application_fee", width: 16, group: "university" },
+  { header: "university_application_fee_currency", width: 16, group: "university" },
+  // A body from Setup → Scholarship bodies, by name.
+  { header: "dsu_body", width: 22, group: "university" },
   { header: "level", width: 12, group: "programme" },
   { header: "program_name", width: 30, group: "programme" },
   { header: "core_field", width: 20, group: "programme" },
   { header: "sub_field", width: 20, group: "programme" },
   { header: "tuition_fee", width: 12, group: "programme" },
+  // Only where this programme's fee differs from the university's.
+  { header: "program_application_fee", width: 16, group: "programme" },
+  { header: "program_application_fee_currency", width: 16, group: "programme" },
   { header: "duration", width: 12, group: "programme" },
   { header: "language_requirement", width: 20, group: "programme" },
   { header: "intake_dates", width: 18, group: "programme" },
@@ -59,6 +68,7 @@ export const CATALOGUE_COLUMNS = [
   { header: "admission_test_type", width: 20, group: "programme" },
   { header: "application_portal_name", width: 22, group: "programme" },
   { header: "application_portal_link", width: 28, group: "programme" },
+  { header: "coordinator_email", width: 26, group: "programme" },
   { header: "page_link", width: 28, group: "programme" },
 ] as const;
 
@@ -124,6 +134,10 @@ export type ExportUniversity = {
   levels_offered: string[] | null;
   fields_offered: string[] | null;
   contact_email: string | null;
+  application_fee?: number | string | null;
+  application_fee_currency?: string | null;
+  /** The body's name, not its id — the sheet is read by people. */
+  dsu_body?: string | null;
 };
 
 export type ExportProgram = {
@@ -142,6 +156,9 @@ export type ExportProgram = {
   application_portal_name: string | null;
   application_portal_link: string | null;
   page_link: string | null;
+  application_fee?: number | string | null;
+  application_fee_currency?: string | null;
+  coordinator_email?: string | null;
 };
 
 function universityCells(university: ExportUniversity): Partial<CatalogueRow> {
@@ -154,7 +171,19 @@ function universityCells(university: ExportUniversity): Partial<CatalogueRow> {
     levels_offered: listCell(university.levels_offered),
     fields_offered: listCell(university.fields_offered),
     contact_email: university.contact_email ?? "",
+    university_application_fee: moneyCell(university.application_fee),
+    university_application_fee_currency: feeCurrencyCell(university.application_fee, university.application_fee_currency),
+    dsu_body: university.dsu_body ?? "",
   };
+}
+
+/**
+ * The currency only beside a fee. The database keeps one after a fee is
+ * cleared, and a sheet full of currencies for fees nobody charges would read
+ * as though they did; blank reads back as "said nothing", so this round-trips.
+ */
+function feeCurrencyCell(fee: number | string | null | undefined, currency: string | null | undefined): string {
+  return moneyCell(fee) === "" ? "" : (currency ?? "");
 }
 
 /** One university's rows: one per programme, or a single row with the programme columns blank when it has none. */
@@ -173,6 +202,8 @@ export function catalogueRowsForUniversity(
     core_field: program.core_field ?? "",
     sub_field: program.sub_field ?? "",
     tuition_fee: moneyCell(program.tuition_fee),
+    program_application_fee: moneyCell(program.application_fee),
+    program_application_fee_currency: feeCurrencyCell(program.application_fee, program.application_fee_currency),
     duration: program.duration ?? "",
     language_requirement: program.language_requirement ?? "",
     intake_dates: listCell(program.intake_dates),
@@ -182,6 +213,7 @@ export function catalogueRowsForUniversity(
     admission_test_type: program.admission_test_type ?? "",
     application_portal_name: program.application_portal_name ?? "",
     application_portal_link: program.application_portal_link ?? "",
+    coordinator_email: program.coordinator_email ?? "",
     page_link: program.page_link ?? "",
   }));
 }

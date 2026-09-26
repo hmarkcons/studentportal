@@ -6,12 +6,17 @@ import { Button } from "@/components/ui/Button";
 import { Input, Select, Textarea } from "@/components/ui/Input";
 import { IntakeField, type IntakeConfig } from "@/components/IntakeField";
 import { roundOptionLabel, sortRounds, type ProgramRound } from "@/lib/programRounds";
+import { FeeInput } from "@/components/FeeInput";
+import { effectiveFee, formatFee, type FeeRow } from "@/lib/applicationFee";
 
 export function ApplicationDetailsForm({
   applicationId,
   studentId,
   deadline,
   application_fee,
+  application_fee_currency = null,
+  universityFee = null,
+  destinationCurrency = "EUR",
   special_requirements,
   intake,
   intakeConfig,
@@ -27,6 +32,10 @@ export function ApplicationDetailsForm({
   studentId: string;
   deadline: string | null;
   application_fee: number | null;
+  application_fee_currency?: string | null;
+  /** What the catalogue says the university charges, for the hint under the fee. */
+  universityFee?: FeeRow | null;
+  destinationCurrency?: string;
   special_requirements: string | null;
   intake: string | null;
   /** This application's own destination decides the shape of the field. */
@@ -35,7 +44,7 @@ export function ApplicationDetailsForm({
   /** Which of the programme's intake rounds this application is for. */
   roundId: string | null;
   /** Every programme at this application's university, with its intake rounds. */
-  programs: { id: string; name: string; rounds?: ProgramRound[] }[];
+  programs: { id: string; name: string; rounds?: ProgramRound[]; application_fee?: number | null; application_fee_currency?: string | null }[];
   /**
    * Rounds this student's OTHER applications already occupy, by programme.
    * One application per programme per round (0234), so offering one of these
@@ -56,6 +65,15 @@ export function ApplicationDetailsForm({
   // a round belongs to one programme, and the server refuses a pair that does
   // not match.
   const [selectedProgramId, setSelectedProgramId] = useState(programId ?? "");
+  // The catalogue's fee for whichever programme is chosen right now, so a
+  // changed programme shows its own fee before anything is saved. The
+  // application keeps whatever is typed here — this is a reference, not a rule.
+  const selectedProgram = programs.find((p) => p.id === selectedProgramId);
+  const catalogueFee = effectiveFee(
+    selectedProgram ? { application_fee: selectedProgram.application_fee ?? null, application_fee_currency: selectedProgram.application_fee_currency ?? null } : null,
+    universityFee,
+    destinationCurrency
+  );
   const [selectedRoundId, setSelectedRoundId] = useState(roundId ?? "");
   // The round currently saved on this application stays offered even if it
   // appears in the taken list — otherwise the field would silently drop the
@@ -140,7 +158,12 @@ export function ApplicationDetailsForm({
       </label>
       <label className="flex flex-col gap-1 text-xs text-muted">
         Application fee
-        <Input name="application_fee" type="number" step="0.01" min="0" defaultValue={application_fee ?? ""} />
+        <FeeInput amount={application_fee} currency={application_fee_currency ?? catalogueFee?.currency ?? destinationCurrency} />
+        <span className="text-[11px]" data-catalogue-fee>
+          {catalogueFee
+            ? `The catalogue says ${formatFee(catalogueFee.amount, catalogueFee.currency)}${catalogueFee.from === "university" ? " (the university's fee)" : ""}.`
+            : "The catalogue has no fee for this programme."}
+        </span>
       </label>
       <label className="col-span-full flex flex-col gap-1 text-xs text-muted">
         Special requirements

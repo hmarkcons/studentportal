@@ -5,7 +5,19 @@ import { SampleCsvButton } from "@/components/ui/SampleCsvButton";
 import { Select } from "@/components/ui/Input";
 import { PreviewedImport } from "@/components/PreviewedImport";
 
-const HEADERS = ["destination", "name", "city", "region", "type", "levels_offered", "fields_offered", "contact_email"];
+const HEADERS = [
+  "destination",
+  "name",
+  "city",
+  "region",
+  "type",
+  "levels_offered",
+  "fields_offered",
+  "contact_email",
+  "application_fee",
+  "application_fee_currency",
+  "dsu_body",
+];
 const EXAMPLE = [
   "Italy (Public)",
   "Sapienza University of Rome",
@@ -15,6 +27,9 @@ const EXAMPLE = [
   "bachelors;masters",
   "Engineering;IT/CS",
   "admissions@example.edu",
+  "30",
+  "EUR",
+  "DiSCo Lazio",
 ];
 
 export function ImportUniversitiesForm({ destinations }: { destinations: { id: string; display_name: string }[] }) {
@@ -41,8 +56,10 @@ export function ImportUniversitiesForm({ destinations }: { destinations: { id: s
         Columns: <code>destination</code> (blank uses the one chosen above), <code>name</code> (required),{" "}
         <code>city</code>, <code>region</code>, <code>type</code> (public/private — a new university defaults to the
         destination&rsquo;s own track), <code>levels_offered</code>, <code>fields_offered</code>,{" "}
-        <code>contact_email</code>. The list columns are semicolon-separated within one cell. A university that is new
-        needs a <code>city</code>.
+        <code>contact_email</code>, <code>application_fee</code> (what applying costs, for every programme without a fee
+        of its own), <code>application_fee_currency</code> (blank follows the destination), <code>dsu_body</code> (a
+        body from Setup → Scholarship bodies that serves the destination, by name). The list columns are
+        semicolon-separated within one cell. A university that is new needs a <code>city</code>.
       </p>
       <p className="mt-1 text-xs text-muted">
         <strong className="text-ink">Nothing is saved until you apply</strong> the preview. A name already on file — or

@@ -23,6 +23,9 @@ const HEADERS = [
   "tuition_fee",
   "duration",
   "language_requirement",
+  "application_fee",
+  "application_fee_currency",
+  "coordinator_email",
 ];
 
 // One value per header, in the same order. It was one short — nothing sat
@@ -52,6 +55,10 @@ const EXAMPLE = [
   "3000",
   "3 years",
   "B2 English",
+  // Blank: the programme charges the university's fee.
+  "",
+  "",
+  "cs.coordinator@example.edu",
 ];
 
 export function ImportProgramsForm({ universityId }: { universityId: string }) {
@@ -71,7 +78,10 @@ export function ImportProgramsForm({ universityId }: { universityId: string }) {
         <code>application_portal_name</code>, <code>application_portal_link</code>,{" "}
         <code>intake_dates</code> (semicolon-separated), <code>rounds</code>, <code>start_date</code> (YYYY-MM-DD,
         when the course begins), <code>application_deadline</code> (YYYY-MM-DD, when applications close),{" "}
-        <code>tuition_fee</code>, <code>duration</code>, <code>language_requirement</code>.
+        <code>tuition_fee</code>, <code>duration</code>, <code>language_requirement</code>,{" "}
+        <code>application_fee</code> (only where it differs from the university&rsquo;s — blank charges the
+        university&rsquo;s), <code>application_fee_currency</code> (blank follows the university, then the destination),{" "}
+        <code>coordinator_email</code>.
       </p>
       <p className="mt-1 text-xs text-muted">
         A programme can run several intake rounds. Put them in <code>rounds</code> as{" "}

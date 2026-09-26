@@ -7,6 +7,7 @@ import {
   parseRoundsCell,
   programFromRow,
   resolveDestination,
+  resolveDsuBody,
   roundsFromRow,
   sameRounds,
   splitList,
@@ -310,4 +311,80 @@ test("an unknown destination is refused, not silently dropped", () => {
   const result = resolveDestination("Narnia", DESTINATIONS);
   assert.equal(result.destination, undefined);
   assert.match(result.error, /Narnia/);
+});
+
+// ------------------------------- application fee, coordinator, DSU body (0287)
+
+test("the combined sheet says whose fee it is; the single sheets need not", () => {
+  // One row of the combined sheet carries both a university fee and a
+  // programme fee, so there the columns are prefixed. The universities and
+  // programmes sheets have one fee each and call it application_fee.
+  const row = {
+    university_name: "Pavia", university_application_fee: "30", university_application_fee_currency: "EUR",
+    level: "masters", program_name: "Data Science", program_application_fee: "£45", coordinator_email: "ds@unipv.it",
+    application_fee: "999",
+  };
+  const u = universityFromRow(row, "university_name", []);
+  const p = programFromRow(row, "program_name", []);
+  assert.equal(u.application_fee, 30);
+  assert.equal(u.application_fee_currency, "EUR");
+  assert.equal(p.application_fee, 45);
+  assert.equal(p.application_fee_currency, "GBP", "the £ in the fee cell answers the blank currency");
+  assert.equal(p.coordinator_email, "ds@unipv.it");
+
+  assert.equal(universityFromRow({ name: "Pavia", application_fee: "25" }, "name", []).application_fee, 25);
+  assert.equal(programFromRow({ name: "Law", level: "bachelors", application_fee: "15" }, "name", []).application_fee, 15);
+});
+
+test("blank fee, currency, coordinator and DSU body say nothing", () => {
+  const u = universityFromRow({ name: "Pavia", university_application_fee: "", dsu_body: "  " }, "name", []);
+  assert.equal(u.application_fee, null);
+  assert.equal(u.application_fee_currency, null);
+  assert.equal(u.dsu_body, null);
+  const p = programFromRow({ name: "Law", level: "bachelors", coordinator_email: "" }, "name", []);
+  assert.equal(p.application_fee, null);
+  assert.equal(p.coordinator_email, null);
+});
+
+test("a bad coordinator email is reported and left unchanged", () => {
+  const problems = [];
+  const p = programFromRow({ name: "Law", level: "bachelors", coordinator_email: "Prof. Bianchi" }, "name", problems);
+  assert.equal(p.coordinator_email, null);
+  assert.match(problems.join(), /coordinator_email "Prof. Bianchi" is not an email/);
+});
+
+const BODIES = [
+  { id: "ergo", name: "ER.GO", destinationIds: ["it"] },
+  { id: "toscana", name: "DSU Toscana", destinationIds: ["it"] },
+  { id: "daad", name: "DAAD Development-Related Postgraduate Courses (EPOS)", destinationIds: ["de"] },
+];
+
+test("a DSU body is found by name, punctuation and case aside", () => {
+  assert.equal(resolveDsuBody("ER.GO", "it", BODIES).body?.id, "ergo");
+  assert.equal(resolveDsuBody("ergo", "it", BODIES).body?.id, "ergo");
+  assert.equal(resolveDsuBody(" dsu toscana ", "it", BODIES).body?.id, "toscana");
+});
+
+test("a body that does not serve the university's destination is refused", () => {
+  const r = resolveDsuBody("DAAD Development-Related Postgraduate Courses (EPOS)", "it", BODIES);
+  assert.equal(r.body, undefined);
+  assert.match(r.error, /does not serve this destination/);
+});
+
+test("a body not in the directory is reported, not invented", () => {
+  const r = resolveDsuBody("ESU Nowhere", "it", BODIES);
+  assert.equal(r.body, undefined);
+  assert.match(r.error, /not in Setup → Scholarship bodies/);
+});
+
+test("a created university and programme carry the new columns even when blank", () => {
+  const sparse = universityFromRow({ name: "Bocconi", city: "Milan" }, "name", []);
+  const row = universityInsertValues(sparse, "dest-1", "private");
+  assert.equal(row.application_fee, null);
+  assert.equal(row.application_fee_currency, null);
+  assert.equal(row.dsu_body_id, null);
+  assert.equal(universityInsertValues(sparse, "dest-1", "private", "ergo").dsu_body_id, "ergo");
+
+  const programme = programInsertValues(programFromRow({ name: "Economics", level: "masters" }, "name", []), "uni-1");
+  assert.ok("application_fee" in programme && "application_fee_currency" in programme && "coordinator_email" in programme);
 });

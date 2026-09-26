@@ -190,6 +190,10 @@ export async function updateApplicationDetails(applicationId: string, studentId:
   const supabase = await createClient();
   const deadline = String(formData.get("deadline") ?? "") || null;
   const application_fee = formData.get("application_fee") ? Number(formData.get("application_fee")) : null;
+  // Kept only beside a fee. Blank beside one is filled in by the database
+  // from the programme, university or country (0287).
+  const application_fee_currency =
+    application_fee === null ? null : String(formData.get("application_fee_currency") ?? "").trim().toUpperCase() || null;
   const special_requirements = String(formData.get("special_requirements") ?? "").trim() || null;
   const intake = String(formData.get("intake") ?? "").trim() || null;
   // Absent means the field was not offered (a finalised application), which is
@@ -203,6 +207,9 @@ export async function updateApplicationDetails(applicationId: string, studentId:
 
   if (application_fee !== null && (!Number.isFinite(application_fee) || application_fee < 0)) {
     return { error: "An application fee cannot be negative." };
+  }
+  if (application_fee_currency && !/^[A-Z]{3}$/.test(application_fee_currency)) {
+    return { error: `${application_fee_currency} is not a currency code.` };
   }
 
   const { data: existing } = await supabase
@@ -274,6 +281,7 @@ export async function updateApplicationDetails(applicationId: string, studentId:
     .update({
       deadline,
       application_fee,
+      application_fee_currency,
       special_requirements,
       intake,
       round_id: nextRoundId,
@@ -452,6 +460,7 @@ export async function updateApplicationLinks(
   const requirements_link = clean("requirements_link");
   const application_portal_link = clean("application_portal_link");
   const contact_email = clean("contact_email");
+  const coordinator_email = clean("coordinator_email");
 
   // Typing "university.edu/course" and getting a link that resolves against our
   // own domain is worse than no link at all, so require a real scheme.
@@ -463,6 +472,9 @@ export async function updateApplicationLinks(
     if (value && !/^https?:\/\//i.test(value)) return { error: `${label} link must start with http:// or https://` };
   }
   if (contact_email && !contact_email.includes("@")) return { error: "University email doesn't look like an email address." };
+  if (coordinator_email && !/^[^@\s]+@[^@\s]+$/.test(coordinator_email)) {
+    return { error: "Programme coordinator email doesn't look like an email address." };
+  }
 
   // .select() on each update so a row blocked by RLS comes back as zero rows
   // rather than as a silent success — otherwise a role without catalogue write
@@ -470,7 +482,7 @@ export async function updateApplicationLinks(
   if (programId) {
     const { data, error } = await supabase
       .from("programs")
-      .update({ page_link, requirements_link, application_portal_link })
+      .update({ page_link, requirements_link, application_portal_link, coordinator_email })
       .eq("id", programId)
       .select("id");
     if (error) return { error: error.message };

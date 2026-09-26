@@ -37,6 +37,11 @@ const university = {
   levels_offered: "bachelors; masters",
   fields_offered: "Engineering; IT/CS",
   contact_email: "admissions@example.edu",
+  // One fee for every programme here; the second row shows a programme with
+  // its own. The currency could be left blank — it follows the destination.
+  university_application_fee: "30",
+  university_application_fee_currency: "EUR",
+  dsu_body: "DiSCo Lazio",
 };
 
 const EXAMPLE_ROWS: CatalogueRow[] = [
@@ -47,6 +52,9 @@ const EXAMPLE_ROWS: CatalogueRow[] = [
     core_field: "IT/CS",
     sub_field: "Software Engineering",
     tuition_fee: "3000",
+    // Blank: this programme charges the university's fee.
+    program_application_fee: "",
+    program_application_fee_currency: "",
     duration: "3 years",
     language_requirement: "B2 English",
     intake_dates: "Fall; Spring",
@@ -56,6 +64,7 @@ const EXAMPLE_ROWS: CatalogueRow[] = [
     admission_test_type: "TOLC",
     application_portal_name: "Universitaly",
     application_portal_link: "https://universitaly.it",
+    coordinator_email: "cs.coordinator@example.edu",
     page_link: "https://example.edu/cs",
   },
   {
@@ -65,6 +74,8 @@ const EXAMPLE_ROWS: CatalogueRow[] = [
     core_field: "IT/CS",
     sub_field: "",
     tuition_fee: "4000",
+    program_application_fee: "50",
+    program_application_fee_currency: "EUR",
     duration: "2 years",
     language_requirement: "B2 English",
     intake_dates: "Fall",
@@ -74,6 +85,7 @@ const EXAMPLE_ROWS: CatalogueRow[] = [
     admission_test_type: "",
     application_portal_name: "Universitaly",
     application_portal_link: "https://universitaly.it",
+    coordinator_email: "ds.coordinator@example.edu",
     page_link: "https://example.edu/ds",
   },
 ];
@@ -101,12 +113,16 @@ export async function GET() {
   if (!staff) return new Response("Not authorized", { status: 403 });
 
   const supabase = await createClient();
-  const { data: destinations } = await supabase.from("destinations").select("display_name").order("display_name");
+  const [{ data: destinations }, { data: bodies }] = await Promise.all([
+    supabase.from("destinations").select("display_name").order("display_name"),
+    supabase.from("scholarship_bodies").select("name").order("name"),
+  ]);
 
   const { sheets, options, finish } = catalogueWorkbook(EXAMPLE_ROWS, {
     italic: true,
     roundRows: ROUND_EXAMPLES,
     destinations: (destinations ?? []).map((d) => d.display_name),
+    dsuBodies: (bodies ?? []).map((b) => b.name),
   });
   const buffer = finish(await writeXlsxFile(sheets, options).toBuffer());
 

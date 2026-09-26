@@ -57,17 +57,25 @@ export async function GET(request: Request) {
   // Germany alone is past 1000 programmes, and a silently truncated export
   // would look complete, and then re-importing it would look like a clean
   // no-op while half the catalogue was never in the file.
-  const universities = await readAllIn(
+  const universitiesRead = await readAllIn(
     destinations.map((d) => d.id),
     (chunk, from, to) =>
       supabase
         .from("universities")
-        .select("id, destination_id, name, city, region, type, levels_offered, fields_offered, contact_email")
+        .select(
+          "id, destination_id, name, city, region, type, levels_offered, fields_offered, contact_email, " +
+            "application_fee, application_fee_currency, dsu_body_id"
+        )
         .in("destination_id", chunk)
         .order("id")
         .range(from, to)
-        .returns<(ExportUniversity & { id: string; destination_id: string })[]>()
+        .returns<(Omit<ExportUniversity, "dsu_body"> & { id: string; destination_id: string; dsu_body_id: string | null })[]>()
   );
+  // By name, which is what the importer matches — an id in a spreadsheet is
+  // a cell nobody can check.
+  const { data: bodies } = await supabase.from("scholarship_bodies").select("id, name").order("name");
+  const bodyName = new Map((bodies ?? []).map((b) => [b.id as string, b.name as string]));
+  const universities = universitiesRead.map((u) => ({ ...u, dsu_body: u.dsu_body_id ? (bodyName.get(u.dsu_body_id) ?? null) : null }));
 
   const programmes = await readAllIn(
     universities.map((u) => u.id),
@@ -77,7 +85,8 @@ export async function GET(request: Request) {
         .select(
           "id, university_id, level, name, core_field, sub_field, tuition_fee, duration, language_requirement, " +
             "intake_dates, interview_required, interview_details, admission_test_required, admission_test_type, " +
-            "application_portal_name, application_portal_link, page_link"
+            "application_portal_name, application_portal_link, page_link, application_fee, application_fee_currency, " +
+            "coordinator_email"
         )
         .in("university_id", chunk)
         .order("id")
@@ -130,6 +139,7 @@ export async function GET(request: Request) {
   const { sheets, options, finish } = catalogueWorkbook(rows, {
     roundRows,
     destinations: (allDestinations ?? []).map((d) => d.display_name),
+    dsuBodies: (bodies ?? []).map((b) => b.name as string),
   });
   const buffer = finish(await writeXlsxFile(sheets, options).toBuffer());
 

@@ -12,6 +12,7 @@ import { UniversityEditForm } from "./UniversityEditForm";
 import { ProgramRow } from "./ProgramRow";
 import { uploadedLine } from "@/lib/activityStamp";
 import { karachiToday } from "@/lib/calendarDates";
+import { formatFee } from "@/lib/applicationFee";
 
 export default async function UniversityDetailPage(props: PageProps<"/setup/universities/[id]">) {
   const { id } = await props.params;
@@ -27,7 +28,9 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
 
   const { data: university, error } = await supabase
     .from("universities")
-    .select("id, name, city, region, type, status, destination:destinations(display_name)")
+    .select(
+      "id, name, city, region, type, status, contact_email, application_fee, application_fee_currency, dsu_body_id, destination_id, destination:destinations(display_name, currency), dsu_body:scholarship_bodies(name)"
+    )
     .eq("id", id)
     .maybeSingle();
 
@@ -36,7 +39,7 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
   const { data: programsRaw } = await supabase
     .from("programs")
     .select(
-      "id, level, name, core_field, sub_field, tuition_fee, duration, language_requirement, rounds:program_intake_rounds(id, label, start_date, application_deadline, sort_order), commission_rate:program_commission_rates(rate_percent, fixed_amount, currency)"
+      "id, level, name, core_field, sub_field, tuition_fee, duration, language_requirement, application_fee, application_fee_currency, coordinator_email, rounds:program_intake_rounds(id, label, start_date, application_deadline, sort_order), commission_rate:program_commission_rates(rate_percent, fixed_amount, currency)"
     )
     .eq("university_id", id)
     .order("level");
@@ -50,6 +53,24 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
     commission_rate: one(p.commission_rate),
     rounds: p.rounds ?? [],
   }));
+
+  const destination = one(university.destination as never) as { display_name?: string; currency?: string } | null;
+  const destinationCurrency = destination?.currency ?? "EUR";
+  const universityFee = { application_fee: university.application_fee, application_fee_currency: university.application_fee_currency };
+  const dsuBodyName = (one(university.dsu_body as never) as { name?: string } | null)?.name ?? null;
+
+  // The bodies that serve this university's country — the only ones its DSU
+  // body can be. Read for the Super Admin's picker alone.
+  const { data: bodyLinks } = isSuperAdmin
+    ? await supabase
+        .from("scholarship_body_destinations")
+        .select("body:scholarship_bodies(id, name)")
+        .eq("destination_id", university.destination_id)
+    : { data: null };
+  const dsuBodies = (bodyLinks ?? [])
+    .map((l) => one(l.body as never) as { id: string; name: string } | null)
+    .filter((b): b is { id: string; name: string } => Boolean(b))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   // Read on the server and handed down, so a closed deadline is judged against
   // Karachi's day rather than the viewer's clock — and so no component reads
@@ -86,19 +107,30 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
         &larr; Back to universities
       </Link>
       <h2 className="mt-2 mb-1 text-xl font-semibold text-ink">{university.name}</h2>
-      <p className="mb-6 text-sm text-muted">{one(university.destination)?.display_name}</p>
+      <p className="mb-6 text-sm text-muted">{destination?.display_name}</p>
 
       <Card className="mb-6">
         <h3 className="mb-3 text-sm font-medium text-ink">Details</h3>
         {isSuperAdmin ? (
-          <UniversityEditForm university={university} />
+          <UniversityEditForm university={university} dsuBodies={dsuBodies} destinationCurrency={destinationCurrency} />
         ) : (
-          <p className="text-sm text-muted">
-            {university.type} · {university.city ?? "—"}
-            {university.region ? `, ${university.region}` : ""} · {university.status}
-            <br />
-            Only Super Admin can edit or delete universities.
-          </p>
+          <div className="flex flex-col gap-1 text-sm text-muted">
+            <p>
+              {university.type} · {university.city ?? "—"}
+              {university.region ? `, ${university.region}` : ""} · {university.status}
+            </p>
+            <p>
+              Application fee:{" "}
+              <span className="text-ink">
+                {university.application_fee != null
+                  ? formatFee(university.application_fee, university.application_fee_currency ?? destinationCurrency)
+                  : "—"}
+              </span>
+              {" · "}DSU body: <span className="text-ink">{dsuBodyName ?? "—"}</span>
+              {" · "}University email: <span className="text-ink">{university.contact_email ?? "—"}</span>
+            </p>
+            <p>Only Super Admin can edit or delete universities.</p>
+          </div>
         )}
       </Card>
 
@@ -114,6 +146,8 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
               canViewRate={canViewRates}
               canManageRate={canManageRates}
               today={today}
+              universityFee={universityFee}
+              destinationCurrency={destinationCurrency}
             />
           ))}
           {programs.length === 0 && (
@@ -122,7 +156,7 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
             </div>
           )}
         </div>
-        <AddProgramForm universityId={id} />
+        <AddProgramForm universityId={id} defaultCurrency={university.application_fee_currency ?? destinationCurrency} />
         {/* Bachelor's and master's programmes at one university usually share
             their closing dates, and typing the same pair into thirty-odd
             programmes one at a time is how they end up inconsistent. */}

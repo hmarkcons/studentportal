@@ -10,6 +10,8 @@ import { useButtonAction } from "@/components/useButtonAction";
 import { ProgramDates } from "@/components/ProgramDates";
 import { ProgramRoundsFields } from "@/components/ProgramRoundsFields";
 import type { ProgramRound } from "@/lib/programRounds";
+import { FeeInput } from "@/components/FeeInput";
+import { effectiveFee, formatFee, type FeeRow } from "@/lib/applicationFee";
 
 export type ProgramCommissionRate = { rate_percent: number | null; fixed_amount: number | null; currency: string } | null;
 
@@ -22,6 +24,9 @@ export type ProgramRowData = {
   tuition_fee: number | null;
   duration: string | null;
   language_requirement: string | null;
+  application_fee: number | null;
+  application_fee_currency: string | null;
+  coordinator_email: string | null;
   rounds: ProgramRound[];
   commission_rate: ProgramCommissionRate;
 };
@@ -75,6 +80,8 @@ export function ProgramRow({
   canViewRate = false,
   canManageRate = false,
   today,
+  universityFee = null,
+  destinationCurrency = "EUR",
 }: {
   program: ProgramRowData;
   universityId: string;
@@ -83,7 +90,11 @@ export function ProgramRow({
   canManageRate?: boolean;
   /** Karachi's today, from the server — see ProgramDates. */
   today?: string;
+  /** The university's fee, which this programme charges unless it has its own. */
+  universityFee?: FeeRow | null;
+  destinationCurrency?: string;
 }) {
+  const fee = effectiveFee(program, universityFee, destinationCurrency);
   const [editing, setEditing] = useState(false);
   const [editingRate, setEditingRate] = useState(false);
   const del = useButtonAction();
@@ -109,6 +120,25 @@ export function ProgramRow({
                 looking for the one whose deadline has not gone yet — which is
                 also why this leads with the open round rather than the first. */}
             <ProgramDates rounds={program.rounds} today={today} inline />
+            {(fee || program.coordinator_email) && (
+              <span className="block text-xs text-muted">
+                {fee && (
+                  <span data-application-fee>
+                    Application fee {formatFee(fee.amount, fee.currency)}
+                    {fee.from === "university" && " (the university's)"}
+                  </span>
+                )}
+                {fee && program.coordinator_email && " · "}
+                {program.coordinator_email && (
+                  <>
+                    Coordinator{" "}
+                    <a href={`mailto:${program.coordinator_email}`} className="text-primary hover:underline">
+                      {program.coordinator_email}
+                    </a>
+                  </>
+                )}
+              </span>
+            )}
           </span>
           <div className="flex items-center gap-3">
             {program.tuition_fee != null && <span className="text-muted">{program.tuition_fee}</span>}
@@ -172,8 +202,21 @@ export function ProgramRow({
       <Input name="core_field" defaultValue={program.core_field ?? ""} placeholder="Core field" />
       <Input name="sub_field" defaultValue={program.sub_field ?? ""} placeholder="Sub-field" />
       <Input name="duration" defaultValue={program.duration ?? ""} placeholder="Duration" className="w-24" />
-      <Input name="tuition_fee" type="number" step="0.01" defaultValue={program.tuition_fee ?? ""} placeholder="Fee" className="w-24" />
+      <Input name="tuition_fee" type="number" step="0.01" defaultValue={program.tuition_fee ?? ""} placeholder="Tuition fee" aria-label="Tuition fee" className="w-28" />
       <Input name="language_requirement" defaultValue={program.language_requirement ?? ""} placeholder="Language req." />
+      {/* Blank: the programme charges the university's fee. */}
+      <FeeInput
+        compact
+        amount={program.application_fee}
+        currency={program.application_fee_currency ?? universityFee?.application_fee_currency ?? destinationCurrency}
+      />
+      <Input
+        name="coordinator_email"
+        type="email"
+        defaultValue={program.coordinator_email ?? ""}
+        placeholder="Coordinator email"
+        aria-label="Coordinator email"
+      />
       <ProgramRoundsFields rounds={program.rounds} />
       <Button type="submit" variant="outline-primary" size="sm" pending={pending} status={{ state, label: "Saved." }}>
         Save

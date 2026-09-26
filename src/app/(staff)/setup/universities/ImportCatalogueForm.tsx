@@ -74,9 +74,18 @@ export function ImportCatalogueForm({ destinations }: { destinations: { id: stri
       <p className="mt-1 text-xs text-muted">
         One row per programme. The university columns — <code>destination</code>, <code>university_name</code>,{" "}
         <code>city</code>, <code>region</code>, <code>type</code>, <code>levels_offered</code>,{" "}
-        <code>fields_offered</code>, <code>contact_email</code> — repeat on every row of that university, which is
-        created or updated once. Leave the programme columns blank to import a university on its own. Put as many
-        universities and destinations in one sheet as you like.
+        <code>fields_offered</code>, <code>contact_email</code>, <code>university_application_fee</code>,{" "}
+        <code>university_application_fee_currency</code>, <code>dsu_body</code> — repeat on every row of that
+        university, which is created or updated once. Leave the programme columns blank to import a university on its
+        own. Put as many universities and destinations in one sheet as you like.
+      </p>
+      <p className="mt-1 text-xs text-muted">
+        <strong className="text-ink">Application fee:</strong> <code>university_application_fee</code> is what every
+        programme there costs to apply to; <code>program_application_fee</code> only where a programme charges
+        something else. A currency left blank follows the destination (<code>€50</code> in the fee cell also says EUR).{" "}
+        <code>dsu_body</code> is a body from Setup → Scholarship bodies, by name — one that serves that destination;
+        any other name is reported and left unchanged. <code>coordinator_email</code> is the programme&rsquo;s
+        coordinator.
       </p>
       <p className="mt-1 text-xs text-muted">
         <code>destination</code> takes the name as the export writes it (<code>Italy (Public)</code>), the country (

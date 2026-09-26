@@ -6,8 +6,9 @@ import { STUDY_LEVELS } from "@/lib/constants";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { ProgramRoundsFields } from "@/components/ProgramRoundsFields";
+import { FeeInput } from "@/components/FeeInput";
 
-export function AddProgramForm({ universityId }: { universityId: string }) {
+export function AddProgramForm({ universityId, defaultCurrency = "EUR" }: { universityId: string; defaultCurrency?: string }) {
   const action = addProgram.bind(null, universityId);
   const [state, formAction, pending] = useActionState(action, undefined);
 
@@ -41,6 +42,9 @@ export function AddProgramForm({ universityId }: { universityId: string }) {
       <Input name="core_field" placeholder="Core field" />
       <Input name="sub_field" placeholder="Sub-field" />
       <Input name="tuition_fee" type="number" step="0.01" placeholder="Tuition fee" className="w-32" />
+      {/* Left blank, the programme charges the university's fee. */}
+      <FeeInput compact amount={null} currency={defaultCurrency} />
+      <Input name="coordinator_email" type="email" placeholder="Coordinator email" aria-label="Coordinator email" />
       {/* Labelled, because bare date boxes side by side are guesswork — and a
           course start and an apply-by date are easy to enter the wrong way
           round. */}

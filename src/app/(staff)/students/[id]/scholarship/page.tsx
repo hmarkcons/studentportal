@@ -36,7 +36,7 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
   const { data: applications } = await supabase
     .from("applications")
     .select(
-      "id, is_finalized, preenrollment_finalized, university:universities(name, destination:destinations(id, country, display_name, scholarship_access, currency))"
+      "id, is_finalized, preenrollment_finalized, university:universities(name, dsu_body_id, destination:destinations(id, country, display_name, scholarship_access, currency))"
     )
     .eq("student_id", id);
 
@@ -52,7 +52,7 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
   //     record a scholarship, and until then the country is offered as
   //     something they may open rather than promised to the student.
   const withDestination = (applications ?? []).map((a) => {
-    const uni = one(a.university as never) as { name?: string; destination?: unknown } | null;
+    const uni = one(a.university as never) as { name?: string; dsu_body_id?: string | null; destination?: unknown } | null;
     const dest = uni?.destination
       ? (one(uni.destination as never) as {
           id?: string;
@@ -65,6 +65,9 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
     return {
       app: a,
       universityName: uni?.name ?? "University",
+      // Set in Setup → Universities (0287). When it is, it is the answer; the
+      // name-matching below is only for a university nobody has set it on.
+      dsuBodyId: uni?.dsu_body_id ?? null,
       destinationId: dest?.id ?? null,
       country: dest?.country ?? null,
       access: dest?.scholarship_access ?? "selective",
@@ -168,7 +171,12 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
         // how the wrong one gets picked; DSU Toscana is the only answer.
         // Only narrowed once the university is settled — before that the whole
         // list is still the honest answer.
-        const designated = w.app.is_finalized ? bodiesForUniversity(w.universityName, countryBodies) : [];
+        const chosen = w.dsuBodyId ? (bodies ?? []).filter((b) => b.id === w.dsuBodyId) : [];
+        const designated = w.app.is_finalized
+          ? chosen.length > 0
+            ? chosen
+            : bodiesForUniversity(w.universityName, countryBodies)
+          : [];
         const offeredBodies = designated.length > 0 ? designated : countryBodies;
 
         return (

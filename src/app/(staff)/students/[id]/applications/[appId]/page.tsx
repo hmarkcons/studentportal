@@ -32,9 +32,9 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
   const { data: app, error } = await supabase
     .from("applications")
     .select(
-      `id, current_stage, intake, deadline, application_fee, special_requirements, program_id, round_id, is_finalized, cycle_id,
-       university:universities(id, name, city, contact_email, destination:destinations(pipeline_stages, country_code, display_name, intake_mode, intake_seasons)),
-       program:programs(id, name, page_link, requirements_link, application_portal_link),
+      `id, current_stage, intake, deadline, application_fee, application_fee_currency, special_requirements, program_id, round_id, is_finalized, cycle_id,
+       university:universities(id, name, city, contact_email, application_fee, application_fee_currency, destination:destinations(pipeline_stages, country_code, display_name, intake_mode, intake_seasons, currency)),
+       program:programs(id, name, page_link, requirements_link, application_portal_link, coordinator_email),
        round:program_intake_rounds(id, label, start_date, application_deadline, sort_order)`
     )
     .eq("id", appId)
@@ -60,10 +60,12 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
           .from("programs")
           // The rounds come along so the Details form can offer them without a
           // second round-trip when the programme is changed.
-          .select("id, name, rounds:program_intake_rounds(id, label, start_date, application_deadline, sort_order)")
+          .select("id, name, application_fee, application_fee_currency, rounds:program_intake_rounds(id, label, start_date, application_deadline, sort_order)")
           .eq("university_id", university.id)
           .order("name")
-      : Promise.resolve({ data: [] as { id: string; name: string; rounds: ProgramRound[] }[] }),
+      : Promise.resolve({
+          data: [] as { id: string; name: string; application_fee: number | null; application_fee_currency: string | null; rounds: ProgramRound[] }[],
+        }),
     university?.id
       ? supabase
           .from("applications")
@@ -254,6 +256,11 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
           studentId={id}
           deadline={app.deadline}
           application_fee={app.application_fee}
+          application_fee_currency={app.application_fee_currency}
+          universityFee={
+            university ? { application_fee: university.application_fee, application_fee_currency: university.application_fee_currency } : null
+          }
+          destinationCurrency={(destination as { currency?: string } | null)?.currency ?? "EUR"}
           special_requirements={app.special_requirements}
           intake={app.intake}
           intakeConfig={
@@ -339,6 +346,7 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
           requirementsLink={program?.requirements_link ?? null}
           applicationPortalLink={program?.application_portal_link ?? null}
           contactEmail={university?.contact_email ?? null}
+          coordinatorEmail={program?.coordinator_email ?? null}
         />
         <div className="mt-3">
           <CredentialField label="University portal" ownerType="application" ownerId={appId} credentialType="university_portal" revalidateTo={revalidateTo} />

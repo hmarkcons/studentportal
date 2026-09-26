@@ -1,4 +1,5 @@
 import { addDropdownsAndHideSheets, listRange, type Dropdown } from "@/lib/xlsxDropdowns";
+import { FEE_CURRENCIES } from "@/lib/applicationFee";
 import {
   CATALOGUE_COLUMNS,
   CATALOGUE_LEVELS,
@@ -36,12 +37,15 @@ export function catalogueWorkbook(
     italic = false,
     destinations = [],
     roundRows = [],
+    dsuBodies = [],
   }: {
     italic?: boolean;
     /** The Rounds sheet's rows. */
     roundRows?: RoundRow[];
     /** Display names for the destination dropdown; none means no dropdown. */
     destinations?: readonly string[];
+    /** Scholarship bodies by name, for the dsu_body dropdown; none means no dropdown. */
+    dsuBodies?: readonly string[];
   } = {}
 ) {
   const header = CATALOGUE_COLUMNS.map((c) => ({
@@ -67,13 +71,17 @@ export function catalogueWorkbook(
       { value: "Types", type: String },
       { value: "YesNo", type: String },
       { value: "Destinations", type: String },
+      { value: "Currencies", type: String },
+      { value: "DSUBodies", type: String },
     ],
   ];
   const depth = Math.max(
     CATALOGUE_LEVELS.length,
     CATALOGUE_TYPES.length,
     CATALOGUE_YES_NO.length,
-    destinations.length
+    destinations.length,
+    FEE_CURRENCIES.length,
+    dsuBodies.length
   );
   for (let i = 0; i < depth; i++) {
     lists.push([
@@ -81,6 +89,8 @@ export function catalogueWorkbook(
       { value: CATALOGUE_TYPES[i], type: String },
       { value: CATALOGUE_YES_NO[i], type: String },
       { value: destinations[i], type: String },
+      { value: FEE_CURRENCIES[i], type: String },
+      { value: dsuBodies[i], type: String },
     ]);
   }
 
@@ -99,8 +109,28 @@ export function catalogueWorkbook(
           },
         ]
       : [];
+  const currencyDropdown = (header: "university_application_fee_currency" | "program_application_fee_currency") => ({
+    column: catalogueColumnIndex(header),
+    range: listRange(CATALOGUE_LIST_SHEET, "E", FEE_CURRENCIES.length),
+    errorTitle: "Not a currency",
+    errorMessage: "Pick one from the list — or leave blank and a new fee takes the destination's currency.",
+  });
+  const dsuDropdown: Omit<Dropdown, "fromRow" | "toRow">[] =
+    dsuBodies.length > 0
+      ? [
+          {
+            column: catalogueColumnIndex("dsu_body"),
+            range: listRange(CATALOGUE_LIST_SHEET, "F", dsuBodies.length),
+            errorTitle: "Not a scholarship body",
+            errorMessage: "Pick one from Setup → Scholarship bodies. A body that is not there yet has to be added there first.",
+          },
+        ]
+      : [];
   const dropdowns: Dropdown[] = [
     ...destinationDropdown,
+    ...dsuDropdown,
+    currencyDropdown("university_application_fee_currency"),
+    currencyDropdown("program_application_fee_currency"),
     {
       column: catalogueColumnIndex("level"),
       range: listRange(CATALOGUE_LIST_SHEET, "A", CATALOGUE_LEVELS.length),

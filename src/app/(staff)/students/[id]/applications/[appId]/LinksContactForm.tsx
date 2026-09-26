@@ -15,6 +15,8 @@ type Props = {
   requirementsLink: string | null;
   applicationPortalLink: string | null;
   contactEmail: string | null;
+  /** The programme's coordinator, beside the university's general address (0287). */
+  coordinatorEmail: string | null;
 };
 
 // Read-only by default with a Modify button, rather than a permanently open
@@ -29,6 +31,7 @@ export function LinksContactForm({
   requirementsLink,
   applicationPortalLink,
   contactEmail,
+  coordinatorEmail,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const action = updateApplicationLinks.bind(null, applicationId, studentId, programId, universityId);
@@ -41,6 +44,16 @@ export function LinksContactForm({
         <LinkRow label="Requirements" href={requirementsLink} cta="View requirements" />
         <LinkRow label="Application portal" href={applicationPortalLink} cta="View application portal" />
         <p>University email: {contactEmail ?? <span className="text-muted">—</span>}</p>
+        <p data-coordinator-email>
+          Programme coordinator:{" "}
+          {coordinatorEmail ? (
+            <a href={`mailto:${coordinatorEmail}`} className="text-primary hover:underline">
+              {coordinatorEmail}
+            </a>
+          ) : (
+            <span className="text-muted">—</span>
+          )}
+        </p>
         <div>
           <Button type="button" variant="outline" size="sm" onClick={() => setEditing(true)}>
             Modify
@@ -65,6 +78,10 @@ export function LinksContactForm({
           <label className="flex flex-col gap-1 text-xs text-muted">
             Requirements link
             <Input name="requirements_link" type="url" inputMode="url" defaultValue={requirementsLink ?? ""} placeholder="https://…" />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-muted">
+            Programme coordinator email
+            <Input name="coordinator_email" type="email" defaultValue={coordinatorEmail ?? ""} placeholder="coordinator@university.edu" />
           </label>
           <label className="col-span-full flex flex-col gap-1 text-xs text-muted">
             Application portal link

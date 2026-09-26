@@ -14,6 +14,8 @@
 // empty interview_required into `false` would turn every such import into a
 // silent mass edit.
 
+import { parseEmail, parseFeeCurrency } from "./applicationFee.ts";
+
 /** An intake round as a sheet describes it, before it reaches the database. */
 export type CatalogueRound = {
   label: string;
@@ -450,6 +452,10 @@ export type UniversityInput = {
   levels_offered: string[];
   fields_offered: string[];
   contact_email: string | null;
+  application_fee: number | null;
+  application_fee_currency: string | null;
+  /** The body's name as the sheet gives it; resolveDsuBody turns it into one on file. */
+  dsu_body: string | null;
 };
 
 export function universityFromRow(
@@ -465,6 +471,11 @@ export function universityFromRow(
   if (rawType === "public" || rawType === "private") type = rawType;
   else if (rawType !== "") problems.push(`type "${row.type}" is neither public nor private — ignored`);
 
+  // The combined sheet carries a university fee and a programme fee on one
+  // row, so there the columns say whose; the universities sheet has only one.
+  const feeKey = nameKey === "university_name" ? "university_application_fee" : "application_fee";
+  const currencyKey = `${feeKey}_currency`;
+
   return {
     name,
     city: (row.city ?? "").trim() || null,
@@ -472,8 +483,46 @@ export function universityFromRow(
     type,
     levels_offered: splitList(row.levels_offered),
     fields_offered: splitList(row.fields_offered),
-    contact_email: (row.contact_email ?? "").trim() || null,
+    contact_email: parseEmail(row.contact_email, problems, "contact_email"),
+    application_fee: parseMoney(row[feeKey], problems, feeKey),
+    application_fee_currency: parseFeeCurrency(row[currencyKey], row[feeKey], problems, currencyKey),
+    dsu_body: (row.dsu_body ?? "").trim() || null,
   };
+}
+
+/** A scholarship body as the dsu_body column is matched against it. */
+export type DsuBodyRef = { id: string; name: string; destinationIds: string[] };
+
+/** Letters and digits only: "ER.GO", "ERGO" and "er go" are one body. */
+const bodyKey = (name: string) =>
+  name
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+
+/**
+ * Which body a dsu_body cell names, among those that serve the university's
+ * destination (Setup → Scholarship bodies).
+ *
+ * Only that destination's bodies are candidates: an Italian university paid
+ * by a German scheme is a mistake in the sheet, and saying so beats filing it.
+ * A name that is not in the directory at all is reported rather than created —
+ * a body needs its deadlines and thresholds, which a sheet cell cannot carry.
+ */
+export function resolveDsuBody(
+  cell: string,
+  destinationId: string,
+  bodies: readonly DsuBodyRef[]
+): { body: DsuBodyRef; error?: undefined } | { error: string; body?: undefined } {
+  const key = bodyKey(cell);
+  if (!key) return { error: "no DSU body named" };
+  const named = bodies.filter((b) => bodyKey(b.name) === key);
+  const here = named.filter((b) => b.destinationIds.includes(destinationId));
+  if (here.length === 1) return { body: here[0] };
+  if (here.length > 1) return { error: `DSU body "${cell.trim()}" matches more than one body — rename one in Scholarship bodies` };
+  if (named.length > 0) return { error: `DSU body "${cell.trim()}" does not serve this destination — left unchanged` };
+  return { error: `DSU body "${cell.trim()}" is not in Setup → Scholarship bodies — left unchanged` };
 }
 
 export const PROGRAM_LEVELS = ["bachelors", "masters", "phd"] as const;
@@ -496,6 +545,9 @@ export type ProgramInput = {
   tuition_fee: number | null;
   duration: string | null;
   language_requirement: string | null;
+  application_fee: number | null;
+  application_fee_currency: string | null;
+  coordinator_email: string | null;
 };
 
 /**
@@ -521,6 +573,10 @@ export function programFromRow(
     return null;
   }
 
+  // As for the university: the combined sheet says whose fee it is.
+  const feeKey = nameKey === "program_name" ? "program_application_fee" : "application_fee";
+  const currencyKey = `${feeKey}_currency`;
+
   return {
     level: level as ProgramLevel,
     name,
@@ -537,6 +593,9 @@ export function programFromRow(
     tuition_fee: parseMoney(row.tuition_fee, problems, "tuition_fee"),
     duration: (row.duration ?? "").trim() || null,
     language_requirement: (row.language_requirement ?? "").trim() || null,
+    application_fee: parseMoney(row[feeKey], problems, feeKey),
+    application_fee_currency: parseFeeCurrency(row[currencyKey], row[feeKey], problems, currencyKey),
+    coordinator_email: parseEmail(row.coordinator_email, problems, "coordinator_email"),
   };
 }
 
@@ -560,7 +619,12 @@ export function programFromRow(
 // Nothing like this applies on an update, where a blank is genuinely absent
 // from the patch and the stored value stays. See importMerge.mergeRow.
 
-export function universityInsertValues(input: UniversityInput, destinationId: string, defaultType: string) {
+export function universityInsertValues(
+  input: UniversityInput,
+  destinationId: string,
+  defaultType: string,
+  dsuBodyId: string | null = null
+) {
   return {
     destination_id: destinationId,
     name: input.name,
@@ -573,6 +637,10 @@ export function universityInsertValues(input: UniversityInput, destinationId: st
     // Both are `not null default '{}'`, and splitList already yields [].
     levels_offered: input.levels_offered,
     fields_offered: input.fields_offered,
+    // Null currency beside a fee is filled from the destination by a trigger (0287).
+    application_fee: input.application_fee,
+    application_fee_currency: input.application_fee_currency,
+    dsu_body_id: dsuBodyId,
   };
 }
 
@@ -597,5 +665,8 @@ export function programInsertValues(input: ProgramInput, universityId: string) {
     tuition_fee: input.tuition_fee,
     duration: input.duration,
     language_requirement: input.language_requirement,
+    application_fee: input.application_fee,
+    application_fee_currency: input.application_fee_currency,
+    coordinator_email: input.coordinator_email,
   };
 }

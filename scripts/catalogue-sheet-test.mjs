@@ -193,3 +193,52 @@ test("a row built without a destination leaves the cell blank for the form's fal
   const [row] = catalogueRowsForUniversity(university, []);
   assert.equal(row.destination, "");
 });
+
+// ------------------------------- application fee, coordinator, DSU body (0287)
+
+test("the new columns round-trip: an untouched export changes nothing", () => {
+  const withFees = { ...university, application_fee: "30.00", application_fee_currency: "EUR", dsu_body: "EDiSU Pavia" };
+  const own = { ...programme, application_fee: "45.50", application_fee_currency: "GBP", coordinator_email: "ce@unipv.it" };
+  const [row] = catalogueRowsForUniversity(withFees, [{ program: own, rounds: [] }]);
+  assert.equal(row.university_application_fee, "30");
+  assert.equal(row.university_application_fee_currency, "EUR");
+  assert.equal(row.dsu_body, "EDiSU Pavia");
+  assert.equal(row.program_application_fee, "45.5");
+  assert.equal(row.program_application_fee_currency, "GBP");
+  assert.equal(row.coordinator_email, "ce@unipv.it");
+
+  const u = universityFromRow(row, "university_name", []);
+  assert.equal(u.application_fee, 30);
+  assert.equal(u.application_fee_currency, "EUR");
+  assert.equal(u.dsu_body, "EDiSU Pavia");
+  const p = programFromRow(row, "program_name", []);
+  assert.equal(p.application_fee, 45.5);
+  assert.equal(p.application_fee_currency, "GBP");
+  assert.equal(p.coordinator_email, "ce@unipv.it");
+});
+
+test("a currency is written only beside a fee", () => {
+  // The database keeps a currency after its fee is cleared. Written out, it
+  // would read as a fee somebody charges; blank reads back as "said nothing".
+  const cleared = { ...university, application_fee: null, application_fee_currency: "EUR" };
+  const inherits = { ...programme, application_fee: null, application_fee_currency: "GBP" };
+  const [row] = catalogueRowsForUniversity(cleared, [{ program: inherits, rounds: [] }]);
+  assert.equal(row.university_application_fee, "");
+  assert.equal(row.university_application_fee_currency, "");
+  assert.equal(row.program_application_fee, "");
+  assert.equal(row.program_application_fee_currency, "");
+  assert.equal(universityFromRow(row, "university_name", []).application_fee_currency, null);
+});
+
+test("a free application exports as 0, not as blank", () => {
+  const [row] = catalogueRowsForUniversity({ ...university, application_fee: 0, application_fee_currency: "EUR" }, []);
+  assert.equal(row.university_application_fee, "0");
+  assert.equal(row.university_application_fee_currency, "EUR");
+});
+
+test("each fee column sits in its own group, and page_link is still last", () => {
+  const group = (h) => CATALOGUE_COLUMNS.find((c) => c.header === h)?.group;
+  for (const h of ["university_application_fee", "university_application_fee_currency", "dsu_body"]) assert.equal(group(h), "university");
+  for (const h of ["program_application_fee", "program_application_fee_currency", "coordinator_email"]) assert.equal(group(h), "programme");
+  assert.equal(CATALOGUE_COLUMNS.at(-1).header, "page_link");
+});
