@@ -12,9 +12,9 @@ const useBrowserLayoutEffect = typeof window === "undefined" ? useEffect : useLa
  * scroll in a window of their own (TableFrame), a menu opened near the
  * window's bottom edge was cut off by it — "View" showing and the rest of the
  * menu hidden below. Fixed to the screen it cannot be clipped; it opens
- * upwards when there is no room below, keeps within the screen sideways, and
- * closes when anything scrolls, since it would otherwise stay put while its
- * row moved away.
+ * upwards when there is no room below, keeps within the screen sideways,
+ * follows its button when anything scrolls, and closes once the button has
+ * scrolled out of sight.
  */
 export function useAnchoredMenu<A extends HTMLElement = HTMLButtonElement>(open: boolean, onClose: () => void) {
   const anchor = useRef<A>(null);
@@ -31,30 +31,40 @@ export function useAnchoredMenu<A extends HTMLElement = HTMLButtonElement>(open:
       setStyle({ position: "fixed", visibility: "hidden" });
       return;
     }
-    const a = anchor.current?.getBoundingClientRect();
-    const m = menu.current;
-    if (!a || !m) return;
-    const gap = 4;
-    const margin = 8;
-    const below = window.innerHeight - a.bottom;
-    const up = below < m.offsetHeight + gap + margin && a.top > below;
-    const top = up ? Math.max(margin, a.top - m.offsetHeight - gap) : a.bottom + gap;
-    const left = Math.max(margin, Math.min(a.right - m.offsetWidth, window.innerWidth - m.offsetWidth - margin));
-    setStyle({ position: "fixed", top, left });
-
-    // Only once the button has really moved: a scroll that finished just
-    // before the click still delivers its event a frame later, and closing
-    // on that shut the menu the moment it opened.
-    const dismiss = () => {
-      const now = anchor.current?.getBoundingClientRect();
-      if (!now || Math.abs(now.top - a.top) > 2 || Math.abs(now.left - a.left) > 2) close.current();
+    const place = () => {
+      const button = anchor.current;
+      const m = menu.current;
+      if (!button || !m) return;
+      const a = button.getBoundingClientRect();
+      // Its button scrolled out of sight — past the screen's edge, or past the
+      // edge of the table window it sits in: the menu has nothing to hang from.
+      const box = button.closest("[data-table-frame]")?.getBoundingClientRect();
+      const offScreen = a.bottom < 0 || a.top > window.innerHeight;
+      const outOfBox = box ? a.bottom < box.top || a.top > box.bottom || a.right < box.left || a.left > box.right : false;
+      if (offScreen || outOfBox) {
+        close.current();
+        return;
+      }
+      const gap = 4;
+      const margin = 8;
+      const below = window.innerHeight - a.bottom;
+      const up = below < m.offsetHeight + gap + margin && a.top > below;
+      const top = up ? Math.max(margin, a.top - m.offsetHeight - gap) : a.bottom + gap;
+      const left = Math.max(margin, Math.min(a.right - m.offsetWidth, window.innerWidth - m.offsetWidth - margin));
+      setStyle({ position: "fixed", top, left });
     };
-    window.addEventListener("resize", dismiss);
+    place();
+
+    // It follows its button when something scrolls or resizes, rather than
+    // closing: a table window grows as the page scrolls, which moves its rows
+    // a frame after the scroll that caused it, and closing on that shut a
+    // menu the moment it opened.
+    window.addEventListener("resize", place);
     // Capture, so a scroll inside a table's window counts as well as the page's.
-    window.addEventListener("scroll", dismiss, true);
+    window.addEventListener("scroll", place, true);
     return () => {
-      window.removeEventListener("resize", dismiss);
-      window.removeEventListener("scroll", dismiss, true);
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
     };
   }, [open]);
 
