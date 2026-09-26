@@ -30,13 +30,24 @@ export default async function UniversitiesPage(props: { searchParams: Promise<{ 
   if (destinationFilter) query = query.eq("destination_id", destinationFilter);
   const { data: universities } = await query;
 
-  const { data: destinations } = await supabase.from("destinations").select("id, display_name").order("display_name");
+  const [{ data: destinations }, { data: bodyRows }] = await Promise.all([
+    supabase.from("destinations").select("id, display_name, currency, track").order("display_name"),
+    // For the new-university form's DSU picker, which offers only the bodies
+    // that serve the chosen country.
+    supabase.from("scholarship_bodies").select("id, name, region, destinations:scholarship_body_destinations(destination_id)"),
+  ]);
+  const bodies = (bodyRows ?? []).map((b) => ({
+    id: b.id as string,
+    name: b.name as string,
+    region: (b.region as string | null) ?? null,
+    destinationIds: ((b.destinations ?? []) as { destination_id: string }[]).map((d) => d.destination_id),
+  }));
 
   return (
     <div className="w-full">
       <h2 className="mb-4 text-lg font-semibold text-ink">Universities</h2>
       <Card className="mb-6">
-        <NewUniversityForm destinations={destinations ?? []} />
+        <NewUniversityForm destinations={destinations ?? []} bodies={bodies} />
         {/* Importing is a Super Admin's alone — the actions refuse anyone else
             too; hiding the forms just saves them finding that out. */}
         {isSuperAdmin && (

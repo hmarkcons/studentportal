@@ -334,3 +334,59 @@ export const EXAMPLE_UNIVERSITY = "Example University (delete these rows)";
 export function isExampleRow(row: Record<string, string>): boolean {
   return (row.university_name ?? "").trim().toLowerCase().startsWith("example university");
 }
+
+// ------------------------------------------------------------ column names
+
+/**
+ * A header as the importers read it: lower case, with spaces and hyphens as
+ * underscores — so "DSU Body", "dsu-body" and "dsu_body" are one column.
+ *
+ * People rename and add columns in their own copies. Headers were matched
+ * exactly (an .xlsx only lower-cased, a CSV not even that), so a column
+ * headed "DSU Body" was read as nothing at all, and the upload reported a
+ * clean success over a whole column it had ignored.
+ */
+export function normalizeHeader(header: string): string {
+  return header.trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+/** The universities-only sheet's columns, in the order its sample writes them. */
+export const UNIVERSITY_SHEET_HEADERS = [
+  "destination", "name", "city", "region", "type", "levels_offered", "fields_offered", "contact_email",
+  "application_fee", "application_fee_currency", "dsu_body",
+] as const;
+
+/** One university's programmes sheet, in the order its sample writes them. */
+export const PROGRAMME_SHEET_HEADERS = [
+  "level", "name", "core_field", "sub_field", "page_link", "interview_required", "interview_details",
+  "admission_test_required", "admission_test_type", "application_portal_name", "application_portal_link",
+  "intake_dates", "rounds", "start_date", "application_deadline", "tuition_fee", "duration", "language_requirement",
+  "application_fee", "application_fee_currency", "coordinator_email",
+] as const;
+
+/** Every column the combined catalogue upload reads: its own, and the older single-intake ones it still accepts. */
+export const CATALOGUE_SHEET_READS: readonly string[] = [
+  ...CATALOGUE_COLUMNS.map((c) => c.header),
+  "rounds",
+  "start_date",
+  "application_deadline",
+];
+
+/**
+ * The columns of a sheet that its upload does not read, each with a line
+ * saying so — reported in the preview so that no column is dropped without a
+ * word. Blank headers (a stray empty column) are not worth a line.
+ */
+export function unreadColumns(headers: readonly string[], reads: readonly string[], sheet = ""): string[] {
+  const known = new Set(reads);
+  const where = sheet ? `${sheet}: ` : "";
+  return headers
+    .filter((h) => h.trim() && !known.has(normalizeHeader(h)))
+    .map((h) => {
+      const hint =
+        normalizeHeader(h) === "application_fee" && known.has("university_application_fee")
+          ? " — on this sheet, use university_application_fee (every programme at the university) or program_application_fee (one programme)"
+          : "";
+      return `${where}column "${h.trim()}" is not one this upload reads, so its values were ignored${hint}`;
+    });
+}

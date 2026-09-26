@@ -188,6 +188,59 @@ try {
   ok("a body that does not serve the destination is reported", /does not serve this destination/.test(shown.text), shown.text.slice(0, 400));
   ok("...and with the fee cells blank, nothing changes", /Nothing to add or change/.test(shown.text), shown.text.slice(0, 300));
 
+  // Headers the way people retype them. A filled sheet came back headed
+  // "DSU Body" and "Region", and the upload read neither without a word.
+  const renamed = {
+    name: "renamed.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(
+      "destination,University Name,City,Region,DSU Body,Notes\n" +
+        `${dest.display_name},zztmp Renamed University,zztmp Town,zztmp Region,zztmp DSU Feeland,anything\n`,
+      "utf8"
+    ),
+  };
+  shown = await preview(renamed);
+  ok("a column the upload does not read is named in the preview", /column "notes" is not one this upload reads/i.test(shown.text), shown.text.slice(0, 400));
+  const renamedApplied = await apply(shown.panel);
+  ok("...and the sheet still applies", /Added 1 universit/.test(renamedApplied), renamedApplied.slice(0, 300));
+  const { data: renamedUni } = await admin.from("universities").select("region, dsu_body_id").eq("destination_id", destinationId).eq("name", "zztmp Renamed University").maybeSingle();
+  ok("headers typed as \"Region\" and \"DSU Body\" reach their columns",
+    renamedUni?.region === "zztmp Region" && renamedUni?.dsu_body_id === feelandBody, JSON.stringify(renamedUni));
+
+  // ------------------------------------------------------ adding one by hand
+  console.log("\n--- the Add university form ---");
+  await page.goto(`${BASE}/setup/universities`, { waitUntil: "domcontentloaded" });
+  const addButton = page.getByRole("button", { name: "Add university" });
+  await addButton.waitFor({ timeout: 40000 });
+  const addForm = page.locator("form").filter({ has: addButton });
+  await hydrated(page, 'select[name="dsu_body_id"]');
+  const dsuBefore = await addForm.locator('select[name="dsu_body_id"] option').allInnerTexts();
+  ok("the DSU picker waits for a destination", dsuBefore.length === 1 && /Choose the destination first/.test(dsuBefore[0]), dsuBefore.join(" | "));
+  await addForm.locator('select[name="destination_id"]').selectOption(destinationId);
+  ok("choosing the destination sets the fee's currency to the country's", (await addForm.locator('select[name="application_fee_currency"]').inputValue()) === "GBP");
+  const dsuAfter = await addForm.locator('select[name="dsu_body_id"] option').allInnerTexts();
+  ok("...and offers only that country's DSU bodies, with their region",
+    dsuAfter.includes("zztmp DSU Feeland — zztmp") && !dsuAfter.some((o) => o.startsWith("zztmp Elsewhere Body")), dsuAfter.join(" | "));
+  await addForm.locator('input[name="name"]').fill("zztmp Form University");
+  await addForm.locator('input[name="city"]').fill("zztmp Formtown");
+  await addForm.locator('input[name="region"]').fill("zztmp Formregion");
+  await addForm.locator('input[name="contact_email"]').fill("admissions@zztmp.example");
+  await addForm.locator('input[name="application_fee"]').fill("25");
+  await addForm.locator('select[name="dsu_body_id"]').selectOption(feelandBody);
+  await addButton.click();
+  const formUni = await poll(async () => {
+    const { data } = await admin
+      .from("universities")
+      .select("id, region, contact_email, application_fee, application_fee_currency, dsu_body_id")
+      .eq("destination_id", destinationId)
+      .eq("name", "zztmp Form University")
+      .maybeSingle();
+    return data;
+  });
+  ok("the form adds the university with its fee in the country's currency",
+    Number(formUni?.application_fee) === 25 && formUni?.application_fee_currency === "GBP", JSON.stringify(formUni));
+  ok("...its DSU body, region and email", formUni?.dsu_body_id === feelandBody && formUni?.region === "zztmp Formregion" && formUni?.contact_email === "admissions@zztmp.example");
+
   // ---------------------------------------------------------- applications
   console.log("\n--- a new application takes the catalogue's fee ---");
   const studentId = await fx.lead({

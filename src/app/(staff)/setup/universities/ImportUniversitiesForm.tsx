@@ -4,20 +4,10 @@ import { importUniversities } from "@/lib/actions/universities";
 import { SampleCsvButton } from "@/components/ui/SampleCsvButton";
 import { Select } from "@/components/ui/Input";
 import { PreviewedImport } from "@/components/PreviewedImport";
+import { UNIVERSITY_SHEET_HEADERS } from "@/lib/catalogueSheet";
 
-const HEADERS = [
-  "destination",
-  "name",
-  "city",
-  "region",
-  "type",
-  "levels_offered",
-  "fields_offered",
-  "contact_email",
-  "application_fee",
-  "application_fee_currency",
-  "dsu_body",
-];
+// The upload's own list, so the sample and what the upload reads cannot drift.
+const HEADERS = [...UNIVERSITY_SHEET_HEADERS];
 const EXAMPLE = [
   "Italy (Public)",
   "Sapienza University of Rome",

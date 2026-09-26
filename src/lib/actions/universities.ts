@@ -43,7 +43,17 @@ import {
   type UniversityInput,
 } from "@/lib/catalogueRows";
 import { readAllIn } from "@/lib/catalogueReads";
-import { EXAMPLE_UNIVERSITY, ROUNDS_SHEET, isExampleRow } from "@/lib/catalogueSheet";
+import {
+  CATALOGUE_SHEET_READS,
+  EXAMPLE_UNIVERSITY,
+  PROGRAMME_SHEET_HEADERS,
+  ROUND_COLUMNS,
+  ROUNDS_SHEET,
+  UNIVERSITY_SHEET_HEADERS,
+  isExampleRow,
+  normalizeHeader,
+  unreadColumns,
+} from "@/lib/catalogueSheet";
 import { uploadedFile } from "@/lib/stagedUpload";
 import { FEE_CURRENCIES } from "@/lib/applicationFee";
 
@@ -73,12 +83,30 @@ export async function createUniversity(_prevState: unknown, formData: FormData) 
   const city = String(formData.get("city") ?? "").trim();
   const region = String(formData.get("region") ?? "").trim() || null;
   const type = String(formData.get("type") ?? "");
+  const contact_email = String(formData.get("contact_email") ?? "").trim() || null;
+  const dsu_body_id = String(formData.get("dsu_body_id") ?? "").trim() || null;
 
   if (!destination_id || !name || !city || !["public", "private"].includes(type)) {
     return { error: "Fill in all required fields — city is mandatory." };
   }
+  if (contact_email && !EMAIL.test(contact_email)) return { error: "The university email doesn't look like an email address." };
+  const fee = feeFromForm(formData);
+  if ("error" in fee) return { error: fee.error };
+  if (dsu_body_id) {
+    const { data: serves } = await supabase
+      .from("scholarship_body_destinations")
+      .select("scholarship_body_id")
+      .eq("scholarship_body_id", dsu_body_id)
+      .eq("destination_id", destination_id)
+      .maybeSingle();
+    if (!serves) return { error: "That DSU body doesn't serve the chosen destination — pick again." };
+  }
 
-  const { data, error } = await supabase.from("universities").insert({ destination_id, name, city, region, type }).select("id").single();
+  const { data, error } = await supabase
+    .from("universities")
+    .insert({ destination_id, name, city, region, type, contact_email, dsu_body_id, ...fee })
+    .select("id")
+    .single();
   if (error) return { error: error.message };
 
   revalidateTag("universities", { expire: 0 });
@@ -353,8 +381,10 @@ const isRoundsSheet = (name: string, headers: string[]) =>
  */
 async function readImportRows(
   file: File | null,
-  options: { sheet: string; knownHeaders: string[]; withRounds?: boolean }
-): Promise<{ rows: Record<string, string>[]; roundRows: Record<string, string>[]; digest: string } | { error: string }> {
+  options: { sheet: string; knownHeaders: string[]; withRounds?: boolean; reads: readonly string[] }
+): Promise<
+  { rows: Record<string, string>[]; roundRows: Record<string, string>[]; digest: string; unread: string[] } | { error: string }
+> {
   if (file) {
     const tooLarge = fileSizeError(file.size, MAX_UPLOAD_BYTES, "file");
     if (tooLarge) return { error: `${tooLarge} A spreadsheet this large is usually a mistake — split it and import in batches.` };
@@ -376,14 +406,36 @@ async function readImportRows(
     rows = main?.rows ?? [];
     roundRows = rounds?.rows ?? [];
   } else {
+    // Keys kept as typed until the unread columns are listed, so the preview
+    // names a column the way the sheet spells it.
     const parsed = parseCsvWithHeader(await file.text());
-    if (parsed.length > 0 && isRoundsSheet("", Object.keys(parsed[0]))) roundRows = parsed;
+    if (parsed.length > 0 && isRoundsSheet("", Object.keys(parsed[0]).map(normalizeHeader))) roundRows = parsed;
     else rows = parsed;
   }
   if (rows.length === 0 && roundRows.length === 0) return { error: "The file has no data rows." };
 
+  // Every header the way the parsers ask for it ("DSU Body" is dsu_body), and
+  // every one they will not read said out loud in the preview, rather than a
+  // column somebody filled in being dropped without a word.
+  const unread = [
+    ...unreadColumns(Object.keys(rows[0] ?? {}), options.reads),
+    ...(options.withRounds ? unreadColumns(Object.keys(roundRows[0] ?? {}), ROUND_COLUMNS.map((c) => c.header), ROUNDS_SHEET) : []),
+  ];
+  rows = rows.map(normalizeKeys);
+  roundRows = roundRows.map(normalizeKeys);
+
   const digest = createHash("sha256").update(Buffer.from(await file.arrayBuffer())).digest("hex");
-  return { rows, roundRows, digest };
+  return { rows, roundRows, digest, unread };
+}
+
+function normalizeKeys(row: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(row)) {
+    const k = normalizeHeader(key);
+    // Two spellings of one column ("Region" beside "region"): the filled cell wins.
+    if (!(k in out) || (!out[k] && value)) out[k] = value;
+  }
+  return out;
 }
 
 /**
@@ -1101,7 +1153,13 @@ async function mergePrograms(run: ImportRun, entries: ProgramEntry[], roundEntri
  */
 async function importUniversityRows(
   formData: FormData,
-  options: { sheet: string; knownHeaders: string[]; universityKey: "name" | "university_name"; withProgrammes: boolean }
+  options: {
+    sheet: string;
+    knownHeaders: string[];
+    universityKey: "name" | "university_name";
+    withProgrammes: boolean;
+    reads: readonly string[];
+  }
 ): Promise<CatalogueImportResult> {
   const supabase = await createClient();
   if (!(await isSuperAdmin(supabase))) return { error: SUPER_ADMIN_ONLY };
@@ -1128,6 +1186,7 @@ async function importUniversityRows(
   if ("error" in dsuBodies) return { error: dsuBodies.error };
 
   const report = emptyReport();
+  report.problems.push(...read.unread);
   const universityEntries: UniversityEntry[] = [];
   const programRows: { key: string; universityName: string; input: ProgramInput; rounds: CatalogueRound[] }[] = [];
 
@@ -1256,6 +1315,7 @@ export async function importUniversities(_prevState: unknown, formData: FormData
     knownHeaders: ["name", "city", "levels_offered"],
     universityKey: "name",
     withProgrammes: false,
+    reads: UNIVERSITY_SHEET_HEADERS,
   });
 }
 
@@ -1275,6 +1335,7 @@ export async function importCatalogue(_prevState: unknown, formData: FormData): 
     knownHeaders: ["university_name", "program_name"],
     universityKey: "university_name",
     withProgrammes: true,
+    reads: CATALOGUE_SHEET_READS,
   });
 }
 
@@ -1286,7 +1347,8 @@ export async function importCatalogue(_prevState: unknown, formData: FormData): 
  * interview_required (yes/no), interview_details, admission_test_required
  * (yes/no), admission_test_type, application_portal_name,
  * application_portal_link, intake_dates, rounds, start_date,
- * application_deadline, tuition_fee, duration, language_requirement.
+ * application_deadline, tuition_fee, duration, language_requirement,
+ * application_fee, application_fee_currency, coordinator_email.
  */
 export async function importPrograms(universityId: string, _prevState: unknown, formData: FormData): Promise<CatalogueImportResult> {
   const supabase = await createClient();
@@ -1295,6 +1357,7 @@ export async function importPrograms(universityId: string, _prevState: unknown, 
   const read = await readImportRows(await uploadedFile(formData, "file"), {
     sheet: "Programmes",
     knownHeaders: ["level", "core_field", "language_requirement"],
+    reads: PROGRAMME_SHEET_HEADERS,
   });
   if ("error" in read) return { error: read.error };
 
@@ -1309,6 +1372,7 @@ export async function importPrograms(universityId: string, _prevState: unknown, 
   if (!university) return { error: "That university no longer exists — reload the page." };
 
   const report = emptyReport();
+  report.problems.push(...read.unread);
   const entries: ProgramEntry[] = [];
   for (const row of read.rows) {
     const problems: string[] = [];

@@ -6,6 +6,10 @@ import {
   catalogueRowsForUniversity,
   compareProgrammes,
   roundsCell,
+  normalizeHeader,
+  unreadColumns,
+  CATALOGUE_SHEET_READS,
+  UNIVERSITY_SHEET_HEADERS,
 } from "../src/lib/catalogueSheet.ts";
 import {
   programFromRow,
@@ -241,4 +245,32 @@ test("each fee column sits in its own group, and page_link is still last", () =>
   for (const h of ["university_application_fee", "university_application_fee_currency", "dsu_body"]) assert.equal(group(h), "university");
   for (const h of ["program_application_fee", "program_application_fee_currency", "coordinator_email"]) assert.equal(group(h), "programme");
   assert.equal(CATALOGUE_COLUMNS.at(-1).header, "page_link");
+});
+
+// ---------------------------------------------------------- column names
+
+test("a renamed header still reaches its column", () => {
+  // A filled Italy sheet came back with "DSU Body" and "Region": the upload
+  // read neither, and said nothing.
+  assert.equal(normalizeHeader("DSU Body"), "dsu_body");
+  assert.equal(normalizeHeader(" Region "), "region");
+  assert.equal(normalizeHeader("university-application-fee"), "university_application_fee");
+  assert.equal(normalizeHeader("Program  Name"), "program_name");
+});
+
+test("a column the upload does not read is named, not dropped in silence", () => {
+  const unread = unreadColumns(["university_name", "DSU Body", "Region", "Notes", "  "], CATALOGUE_SHEET_READS);
+  assert.equal(unread.length, 1, unread.join(" / "));
+  assert.match(unread[0], /column "Notes" is not one this upload reads/);
+});
+
+test("a bare application_fee on the combined sheet says which fee columns it has", () => {
+  const [line] = unreadColumns(["application_fee"], CATALOGUE_SHEET_READS);
+  assert.match(line, /university_application_fee .* or program_application_fee/);
+  // On the universities sheet it is the column itself.
+  assert.deepEqual(unreadColumns(["Application Fee"], UNIVERSITY_SHEET_HEADERS), []);
+});
+
+test("every column the template writes is one the upload reads", () => {
+  assert.deepEqual(unreadColumns(CATALOGUE_COLUMNS.map((c) => c.header), CATALOGUE_SHEET_READS), []);
 });

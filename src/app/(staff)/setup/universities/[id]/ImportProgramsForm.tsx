@@ -3,30 +3,10 @@
 import { importPrograms } from "@/lib/actions/universities";
 import { SampleCsvButton } from "@/components/ui/SampleCsvButton";
 import { PreviewedImport } from "@/components/PreviewedImport";
+import { PROGRAMME_SHEET_HEADERS } from "@/lib/catalogueSheet";
 
-const HEADERS = [
-  "level",
-  "name",
-  "core_field",
-  "sub_field",
-  "page_link",
-  "interview_required",
-  "interview_details",
-  "admission_test_required",
-  "admission_test_type",
-  "application_portal_name",
-  "application_portal_link",
-  "intake_dates",
-  "rounds",
-  "start_date",
-  "application_deadline",
-  "tuition_fee",
-  "duration",
-  "language_requirement",
-  "application_fee",
-  "application_fee_currency",
-  "coordinator_email",
-];
+// The upload's own list, so the sample and what the upload reads cannot drift.
+const HEADERS = [...PROGRAMME_SHEET_HEADERS];
 
 // One value per header, in the same order. It was one short — nothing sat
 // under application_deadline, so every value from there on was shifted up a
