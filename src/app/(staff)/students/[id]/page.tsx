@@ -468,7 +468,12 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       supabase,
       (invoices ?? []).map((i) => i.pdf_path)
     ).then((urls) => (invoices ?? []).map((i) => [i.id, i.pdf_path ? urls.get(i.pdf_path) : undefined] as const)),
-    invoiceIds.length ? supabase.from("invoice_installments").select("*").in("invoice_id", invoiceIds) : Promise.resolve({ data: [] }),
+    // Ordered, as the student's Payments page is: unordered, Postgres hands
+    // back an instalment it has just updated wherever it now lies, and the
+    // schedule read "Installment 2, 1, 3" after the first one was paid.
+    invoiceIds.length
+      ? supabase.from("invoice_installments").select("*").in("invoice_id", invoiceIds).order("installment_no", { ascending: true })
+      : Promise.resolve({ data: [] }),
     // Every document's URL in one request rather than one per file. A student
     // with thirty documents was thirty round trips to Storage before this page
     // could render, and they were the single biggest thing on it.

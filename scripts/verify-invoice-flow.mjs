@@ -247,6 +247,11 @@ try {
     registered_at: new Date().toISOString(),
     date_of_inquiry: new Date().toISOString().slice(0, 10),
     country_of_interest: "Italy (Public)",
+    // Without an intake there is no Student ID and so no portal (0260): the
+    // student's Payments page, checked below, would be the "Your intake is
+    // being confirmed" lock instead. An invented intake keeps the fixture out
+    // of every real intake's numbering.
+    intake: "Fall 2099",
   });
   await admin.from("lead_destinations").insert({ lead_id: studentId, destination_id: italy.id });
 
@@ -659,12 +664,27 @@ try {
       const second = before[1];
       await page.reload({ waitUntil: "domcontentloaded" });
       await expand(page, "Invoice");
-      // The pencil on each instalment row opens its editor.
-      const pencils = page.getByRole("button", { name: "✏️", exact: true });
-      ok("an instalment can be edited", (await pencils.count()) >= 2, `${await pencils.count()} found`);
+      // The pencil on each instalment row opens its editor. Found by its row,
+      // not by counting pencils down the page: another card's ✏️ ahead of the
+      // schedule once made "the second pencil" instalment 1's, and the split
+      // under test happened to the wrong instalment.
+      // The last match is the row itself: the list around it matches too when
+      // this instalment happens to be first, and ancestors come first.
+      const rows = page.locator("div").filter({ hasText: new RegExp(`^\\s*Installment ${second.installment_no} —`) });
+      const pencil = rows.last().getByRole("button", { name: "✏️", exact: true });
+      const matches = await rows.evaluateAll((els) => els.map((e) => `${e.className} :: ${e.textContent?.slice(0, 60)}`));
+      ok("an instalment can be edited", (await pencil.count()) === 1, `${await pencil.count()} found in ${JSON.stringify(matches)}`);
 
-      if ((await pencils.count()) >= 2) {
-        await pencils.nth(1).click();
+      // The schedule is in instalment order. It was read unordered, and once
+      // instalment 1 was paid the page showed 2 above it.
+      const order = await page.evaluate(() =>
+        [...document.querySelectorAll("div > span:first-child")]
+          .map((s) => Number((/^\s*Installment (\d+) —/.exec(s.textContent ?? "") || [])[1]))
+          .filter(Boolean));
+      ok("...and the schedule is listed in instalment order", order.length >= 2 && order.every((n, i) => i === 0 || n > order[i - 1]), JSON.stringify(order));
+
+      if ((await pencil.count()) === 1) {
+        await pencil.click();
         const editor = page.locator("form").filter({ has: page.locator('select[name="status"]') }).first();
         await editor.locator('select[name="status"]').selectOption("partial");
         await editor.locator('input[name="amount_paid"]').fill(String(PART));

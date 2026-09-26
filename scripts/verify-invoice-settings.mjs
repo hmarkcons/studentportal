@@ -78,6 +78,20 @@ async function blobBytes(page, src) {
   return Buffer.from(b64, "base64");
 }
 
+// Waits until React has taken over the form. The Save button is in the
+// server's HTML, so finding it proves nothing: text typed before hydration
+// survives in an <input> but not in a <textarea>, which React resets to its
+// default — on the live portal that sent the old address and small print to
+// be saved while every one-line field went through.
+async function hydrated(page, selector) {
+  return page
+    .waitForFunction((sel) => {
+      const el = document.querySelector(sel);
+      return Boolean(el && Object.keys(el).some((k) => k.startsWith("__reactFiber")));
+    }, selector, { timeout: 30000 })
+    .then(() => true, () => false);
+}
+
 const bodyTail = async (page) => (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(-300);
 
 async function preview(page, button) {
@@ -157,6 +171,7 @@ try {
   ok("Finance gets a Save button", found, await bodyTail(page));
   if (!found) throw new Error("no form to drive");
   const form = page.locator("form").filter({ has: save });
+  ok("the form hydrates", await hydrated(page, 'textarea[name="company_address"]'));
   ok("...and the fields are editable", await form.locator('input[name="company_name"]').isEnabled());
   for (const name of Object.keys(CUSTOM)) {
     ok(`there is a field for ${name}`, (await form.locator(`[name="${name}"]`).count()) === 1);
@@ -268,6 +283,7 @@ try {
   ok("the panel counts the PDFs on file", (await panel.innerText()).includes(`${onFile} invoice`), `${onFile} vs ${await panel.innerText()}`);
 
   // Regenerating before saving would print the old details again.
+  await hydrated(page, 'input[name="company_website"]');
   await page.locator('input[name="company_website"]').fill("zztmp unsaved");
   ok("an unsaved change holds the button back", await regen.isDisabled());
   await page.reload({ waitUntil: "domcontentloaded" });
