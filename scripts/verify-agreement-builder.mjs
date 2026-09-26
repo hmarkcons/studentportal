@@ -304,6 +304,15 @@ try {
     const editForm = page.locator("form").filter({ has: save }).first();
     const tab = editForm.getByRole("tab", { name: /Page & theme/ });
     ok("the edit page opens with the saved design", !/Classic/.test(await tab.innerText()), await tab.innerText());
+    // The tab is in the server's HTML, so it can be clicked before React has
+    // hydrated it — the click then does nothing and the Classic button never
+    // appears. It did exactly that on the live portal, once in two runs.
+    await page
+      .waitForFunction(() => {
+        const t = [...document.querySelectorAll('[role="tab"]')].find((el) => /Page & theme/.test(el.textContent ?? ""));
+        return Boolean(t && Object.keys(t).some((k) => k.startsWith("__reactFiber")));
+      }, null, { timeout: 30000 })
+      .catch(() => {});
     await tab.click();
     await editForm.getByRole("button", { name: /^Classic/ }).click();
     await save.click();
@@ -332,6 +341,10 @@ try {
     ok("...and its preview is a PDF in the chosen look", staffPreview.bytes && hasFont(pdfFacts(staffPreview.bytes), "Carlito"),
       staffPreview.error ?? (staffPreview.bytes ? pdfFacts(staffPreview.bytes).fonts.join(", ") : ""));
   }
+} catch (e) {
+  // Counted, so a run that stopped part-way cannot end on "0 failed" — it
+  // used to print the tally in the finally and only then throw.
+  ok(`the check itself stopped: ${e?.stack ?? e}`, false);
 } finally {
   const { data: made } = await admin.from("agreement_templates").select("id, file_path").eq("name", TEMPLATE_NAME);
   if (studentId) {
