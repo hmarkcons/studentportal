@@ -3,7 +3,7 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ThemeToggle } from "./ThemeToggle";
 import { SignOutButton } from "./SignOutButton";
 import { SidebarToggle } from "./SidebarToggle";
@@ -42,8 +42,8 @@ export function AppShell({
   const activePath = usePathname();
   const [navOpen, setNavOpen] = useState(false);
   // The sidebar is a fixed off-canvas drawer only below the md breakpoint
-  // (md:static below overrides all of this back to the original always-
-  // visible layout) — closing it whenever the route changes means a nav
+  // (md:sticky below overrides all of this back to the always-visible
+  // layout) — closing it whenever the route changes means a nav
   // click never leaves it stuck open over the new page. Adjusted during
   // render (React's documented pattern for "reset state when a prop/value
   // changes") rather than in a useEffect, which would cascade an extra render.
@@ -57,6 +57,20 @@ export function AppShell({
     return activePath === href || activePath.startsWith(href + "/");
   }
 
+  // The menu scrolls on its own, so the page you are on can be below its fold
+  // — Setup's pages are the last dozen links. Brought into view in the menu
+  // alone, never by scrolling the page.
+  const navRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const nav = navRef.current;
+    const current = nav?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!nav || !current) return;
+    const box = nav.getBoundingClientRect();
+    const item = current.getBoundingClientRect();
+    if (item.top < box.top) nav.scrollTop -= box.top - item.top + 12;
+    else if (item.bottom > box.bottom) nav.scrollTop += item.bottom - box.bottom + 12;
+  }, [activePath]);
+
   return (
     <div className="flex min-h-screen">
       {navOpen && (
@@ -68,7 +82,11 @@ export function AppShell({
       )}
       <aside
         data-app-sidebar
-        className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-shrink-0 flex-col border-r border-sidebar-border bg-sidebar-bg transition-transform duration-200 ease-in-out md:static md:z-auto md:translate-x-0 ${
+        // md:sticky + h-dvh: the sidebar holds its place at the height of the
+        // screen while the page scrolls, and its menu scrolls on its own
+        // scrollbar. It used to be as tall as the page, so reaching the lower
+        // links meant scrolling the whole page down.
+        className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-shrink-0 flex-col border-r border-sidebar-border bg-sidebar-bg transition-transform duration-200 ease-in-out md:sticky md:top-0 md:z-auto md:h-dvh md:translate-x-0 ${
           navOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -107,7 +125,7 @@ export function AppShell({
  * student pages, so a click paints a skeleton immediately either way —
  * which is the feedback prefetching was buying, at the cost of rendering
  * twenty pages the person was never going to open. */}
-        <nav className="flex-1 overflow-y-auto px-3 py-4">
+        <nav ref={navRef} data-sidebar-nav className="sidebar-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4">
           {nav.map((item) =>
             item.children ? (
               <details
@@ -130,6 +148,7 @@ export function AppShell({
                       key={child.href}
                       href={child.href}
                       prefetch={false}
+                      aria-current={isActive(child.href) ? "page" : undefined}
                       className={`rounded-md px-3 py-1.5 text-sm ${
                         isActive(child.href)
                           ? "bg-sidebar-active-bg font-medium text-primary"
@@ -146,6 +165,7 @@ export function AppShell({
                 key={item.href}
                 href={item.href!}
                 prefetch={false}
+                aria-current={isActive(item.href!) ? "page" : undefined}
                 className={`mb-1 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
                   isActive(item.href!)
                     ? "bg-sidebar-active-bg text-primary"

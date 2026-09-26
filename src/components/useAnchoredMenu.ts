@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 const useBrowserLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
@@ -14,7 +15,15 @@ const useBrowserLayoutEffect = typeof window === "undefined" ? useEffect : useLa
  * menu hidden below. Fixed to the screen it cannot be clipped; it opens
  * upwards when there is no room below, keeps within the screen sideways,
  * follows its button when anything scrolls, and closes once the button has
- * scrolled out of sight.
+ * scrolled out of sight — or on Escape, handing the focus back to the button.
+ *
+ * The same went for every ⋮ menu: the leads and students lists' opened below
+ * its button whatever was there, so the last row's menu opened off the bottom
+ * of the screen, and closed the moment anything scrolled to reach it.
+ *
+ * `portal` renders the menu (and whatever catches clicks outside it) at the
+ * top of the page, so no box it happens to sit in — a scrolling table, a
+ * transformed panel — can clip it or change what "fixed" is fixed to.
  */
 export function useAnchoredMenu<A extends HTMLElement = HTMLButtonElement>(open: boolean, onClose: () => void) {
   const anchor = useRef<A>(null);
@@ -62,11 +71,20 @@ export function useAnchoredMenu<A extends HTMLElement = HTMLButtonElement>(open:
     window.addEventListener("resize", place);
     // Capture, so a scroll inside a table's window counts as well as the page's.
     window.addEventListener("scroll", place, true);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      close.current();
+      anchor.current?.focus();
+    };
+    document.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
+      document.removeEventListener("keydown", onKey);
     };
   }, [open]);
 
-  return { anchor, menu, style };
+  const portal = (node: React.ReactNode) => (typeof document === "undefined" ? null : createPortal(node, document.body));
+
+  return { anchor, menu, style, portal };
 }

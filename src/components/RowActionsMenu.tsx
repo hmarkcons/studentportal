@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { deleteStudent } from "@/lib/actions/leads";
 import { useButtonAction } from "@/components/useButtonAction";
 import { ActionStatus } from "@/components/ActionStatus";
+import { useAnchoredMenu } from "@/components/useAnchoredMenu";
 
 export function RowActionsMenu({
   id,
@@ -23,12 +24,14 @@ export function RowActionsMenu({
   deleteConfirm?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
   const del = useButtonAction();
   const pending = del.pending;
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  // Beside its button on the screen, opening upwards when there is no room
+  // below. It used to open below whatever was there, so the last row's menu
+  // opened off the bottom of the screen — and closed the moment anything
+  // scrolled to reach it. Escape and scrolling are the hook's.
+  const { anchor: buttonRef, menu: menuRef, style: menuStyle, portal } = useAnchoredMenu(open, () => setOpen(false));
 
   useEffect(() => {
     if (!open) return;
@@ -37,29 +40,11 @@ export function RowActionsMenu({
       if (menuRef.current?.contains(target) || buttonRef.current?.contains(target)) return;
       setOpen(false);
     }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    function onScrollOrResize() {
-      setOpen(false);
-    }
     document.addEventListener("mousedown", onDocClick);
-    document.addEventListener("keydown", onKey);
-    window.addEventListener("scroll", onScrollOrResize, true);
-    window.addEventListener("resize", onScrollOrResize);
-    return () => {
-      document.removeEventListener("mousedown", onDocClick);
-      document.removeEventListener("keydown", onKey);
-      window.removeEventListener("scroll", onScrollOrResize, true);
-      window.removeEventListener("resize", onScrollOrResize);
-    };
-  }, [open]);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open, menuRef, buttonRef]);
 
   function toggle() {
-    if (!open && buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      setPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
-    }
     setOpen((v) => !v);
   }
 
@@ -98,27 +83,24 @@ export function RowActionsMenu({
         {pending ? "…" : "⋮"}
       </button>
       <ActionStatus state={del.state} pending={pending} label="Deleted." showError />
-      {open && pos && (
-        <div
-          ref={menuRef}
-          style={{ position: "fixed", top: pos.top, right: pos.right }}
-          className="z-50 w-36 rounded-md border border-border bg-card py-1 shadow-md"
-        >
-          <Link href={editHref} onClick={() => setOpen(false)} className="block px-3 py-1.5 text-sm text-ink hover:bg-bg">
-            Modify
-          </Link>
-          {canDelete && (
-            <button
-              type="button"
-              onClick={handleDelete}
-              data-full-width
-              className="block w-full px-3 py-1.5 text-left text-sm text-danger hover:bg-bg"
-            >
-              {deleteLabel}
-            </button>
-          )}
-        </div>
-      )}
+      {open &&
+        portal(
+          <div ref={menuRef} style={menuStyle} data-menu className="z-50 w-36 rounded-md border border-border bg-card py-1 shadow-md">
+            <Link href={editHref} onClick={() => setOpen(false)} className="block px-3 py-1.5 text-sm text-ink hover:bg-bg">
+              Modify
+            </Link>
+            {canDelete && (
+              <button
+                type="button"
+                onClick={handleDelete}
+                data-full-width
+                className="block w-full px-3 py-1.5 text-left text-sm text-danger hover:bg-bg"
+              >
+                {deleteLabel}
+              </button>
+            )}
+          </div>
+        )}
     </span>
   );
 }

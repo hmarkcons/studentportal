@@ -48,6 +48,20 @@ const browser = await openBrowser();
 const fx = fixtures(admin);
 const { ok, finish } = reporter();
 
+/**
+ * The page's text once it contains `text`, or null after 30 seconds.
+ * Polled: read the moment the page loaded, the list had not always rendered
+ * yet, and the rate looked missing on two runs in three.
+ */
+async function pageShows(page, text) {
+  for (let i = 0; i < 30; i++) {
+    const body = await page.locator("body").innerText();
+    if (body.includes(text)) return body;
+    await page.waitForTimeout(1000);
+  }
+  return null;
+}
+
 try {
   const victim = await fx.staff("paysubject", ["counselor"], {
     pay: {
@@ -68,8 +82,7 @@ try {
   // ------------------------------- the app still shows pay to who needs it
   let page = await signIn(browser, superUser.email);
   await page.goto(`${BASE}/admin/staff`, { waitUntil: "domcontentloaded" });
-  ok("a Super Admin still sees the commission rate on the staff list",
-    (await page.locator("body").innerText()).includes(`${COMMISSION}%`));
+  ok("a Super Admin still sees the commission rate on the staff list", Boolean(await pageShows(page, `${COMMISSION}%`)));
 
   const row = page.locator("tr", { hasText: "zztmp paysubject" }).first();
   await row.locator('button[aria-label="Actions"]').click();
@@ -100,7 +113,7 @@ try {
   // Finance needs every rate to run payroll; losing that would break it quietly.
   page = await signIn(browser, finance.email);
   await page.goto(`${BASE}/finance/payroll?staff=${victim.id}`, { waitUntil: "domcontentloaded" });
-  const payroll = await page.locator("body").innerText();
+  const payroll = (await pageShows(page, `${COMMISSION}%`)) ?? (await page.locator("body").innerText());
   ok("Finance still sees the commission rate on Payroll", payroll.includes(`${COMMISSION}%`),
     payroll.slice(0, 200));
   ok("...and the basic salary is prefilled from the new table",

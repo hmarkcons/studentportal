@@ -70,7 +70,7 @@ export function StaffActionsMenu({
   const showPermissions = canManagePermissions && !hasRole(staff, "super_admin");
   // On the screen rather than in the row: the staff table scrolls in its own
   // window, which cut a menu opened near its bottom edge short.
-  const { anchor, menu, style: menuStyle } = useAnchoredMenu(menuOpen, () => setMenuOpen(false));
+  const { anchor, menu, style: menuStyle, portal } = useAnchoredMenu(menuOpen, () => setMenuOpen(false));
 
   async function handleDelete() {
     if (!confirm(`Delete ${staff.full_name}? This fails if they have historical records — use Inactive status instead if so.`)) return;
@@ -87,76 +87,77 @@ export function StaffActionsMenu({
       <button ref={anchor} onClick={() => setMenuOpen((v) => !v)} className="rounded-md px-2 py-1 text-lg text-muted hover:bg-bg hover:text-ink" aria-label="Actions">
         ⋮
       </button>
-      {menuOpen && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-          <div ref={menu} style={menuStyle} data-menu className="z-20 w-36 rounded-md border border-border bg-card py-1 shadow-lg">
-            <button
-              onClick={() => {
-                setViewOpen(true);
-                setMenuOpen(false);
-              }}
-              data-full-width
-              className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
-            >
-              👁️ View
-            </button>
-            <button
-              onClick={() => {
-                setEditOpen(true);
-                setMenuOpen(false);
-              }}
-              data-full-width
-              className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
-            >
-              {rolesOnly ? "🔑 Roles" : "✏️ Edit"}
-            </button>
-            {showPermissions && (
+      {menuOpen &&
+        portal(
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+            <div ref={menu} style={menuStyle} data-menu className="z-20 w-36 rounded-md border border-border bg-card py-1 shadow-lg">
               <button
                 onClick={() => {
-                  setPermissionsOpen(true);
+                  setViewOpen(true);
                   setMenuOpen(false);
                 }}
                 data-full-width
                 className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
               >
-                🔑 Permissions
+                👁️ View
               </button>
-            )}
-            {canManageAgreements && (
               <button
                 onClick={() => {
-                  setAgreementsOpen(true);
+                  setEditOpen(true);
                   setMenuOpen(false);
                 }}
                 data-full-width
                 className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
               >
-                📄 Agreements
+                {rolesOnly ? "🔑 Roles" : "✏️ Edit"}
               </button>
-            )}
-            {login && (
-              <button
-                onClick={() => {
-                  setLoginOpen(true);
-                  setMenuOpen(false);
-                }}
-                data-full-width
-                className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
-              >
-                🔐 Login
-              </button>
-            )}
-            {/* Deleting a staff account is not a role change — it belongs
-                with staff.manage, same as the action behind it. */}
-            {!rolesOnly && (
-              <button onClick={handleDelete} disabled={del.pending} data-full-width className="block w-full px-3 py-1.5 text-left text-sm text-danger hover:bg-bg">
-                🗑️ Delete
-              </button>
-            )}
-          </div>
-        </>
-      )}
+              {showPermissions && (
+                <button
+                  onClick={() => {
+                    setPermissionsOpen(true);
+                    setMenuOpen(false);
+                  }}
+                  data-full-width
+                  className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
+                >
+                  🔑 Permissions
+                </button>
+              )}
+              {canManageAgreements && (
+                <button
+                  onClick={() => {
+                    setAgreementsOpen(true);
+                    setMenuOpen(false);
+                  }}
+                  data-full-width
+                  className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
+                >
+                  📄 Agreements
+                </button>
+              )}
+              {login && (
+                <button
+                  onClick={() => {
+                    setLoginOpen(true);
+                    setMenuOpen(false);
+                  }}
+                  data-full-width
+                  className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
+                >
+                  🔐 Login
+                </button>
+              )}
+              {/* Deleting a staff account is not a role change — it belongs
+                  with staff.manage, same as the action behind it. */}
+              {!rolesOnly && (
+                <button onClick={handleDelete} disabled={del.pending} data-full-width className="block w-full px-3 py-1.5 text-left text-sm text-danger hover:bg-bg">
+                  🗑️ Delete
+                </button>
+              )}
+            </div>
+          </>
+        )}
       {deleteError && <p className="absolute right-0 mt-1 w-56 text-xs text-danger">{deleteError}</p>}
 
       {canManageAgreements && (

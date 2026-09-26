@@ -5,6 +5,7 @@ import Link from "next/link";
 import { deleteAgreementTemplate } from "@/lib/actions/agreementTemplates";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { useButtonAction } from "@/components/useButtonAction";
+import { useAnchoredMenu } from "@/components/useAnchoredMenu";
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -26,6 +27,9 @@ export type TemplateRecord = {
 export function TemplateActionsMenu({ template, canManage }: { template: TemplateRecord; canManage: boolean }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
+  // On the screen beside its button, opening upwards when there is no room
+  // below — hung from the button, the last row's menu ran off the page.
+  const { anchor, menu, style: menuStyle, portal } = useAnchoredMenu(menuOpen, () => setMenuOpen(false));
   const del = useButtonAction();
 
   async function handleDelete() {
@@ -40,39 +44,40 @@ export function TemplateActionsMenu({ template, canManage }: { template: Templat
 
   return (
     <div className="relative inline-block text-left">
-      <button onClick={() => setMenuOpen((v) => !v)} className="rounded-md px-2 py-1 text-lg text-muted hover:bg-bg hover:text-ink" aria-label="Actions">
+      <button ref={anchor} onClick={() => setMenuOpen((v) => !v)} className="rounded-md px-2 py-1 text-lg text-muted hover:bg-bg hover:text-ink" aria-label="Actions">
         ⋮
       </button>
-      {menuOpen && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-          <div data-menu className="absolute right-0 z-20 mt-1 w-40 rounded-md border border-border bg-card py-1 shadow-lg">
-            <button
-              onClick={() => {
-                setViewOpen(true);
-                setMenuOpen(false);
-              }}
-              className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
-            >
-              👁️ View
-            </button>
-            {canManage && (
-              <Link
-                href={`/setup/agreement-templates/${template.id}`}
-                onClick={() => setMenuOpen(false)}
+      {menuOpen &&
+        portal(
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+            <div ref={menu} style={menuStyle} data-menu className="z-20 w-40 rounded-md border border-border bg-card py-1 shadow-lg">
+              <button
+                onClick={() => {
+                  setViewOpen(true);
+                  setMenuOpen(false);
+                }}
                 className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
               >
-                ✏️ Edit
-              </Link>
-            )}
-            {canManage && (
-              <button onClick={handleDelete} className="block w-full px-3 py-1.5 text-left text-sm text-danger hover:bg-bg">
-                🗑️ Delete
+                👁️ View
               </button>
-            )}
-          </div>
-        </>
-      )}
+              {canManage && (
+                <Link
+                  href={`/setup/agreement-templates/${template.id}`}
+                  onClick={() => setMenuOpen(false)}
+                  className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
+                >
+                  ✏️ Edit
+                </Link>
+              )}
+              {canManage && (
+                <button onClick={handleDelete} className="block w-full px-3 py-1.5 text-left text-sm text-danger hover:bg-bg">
+                  🗑️ Delete
+                </button>
+              )}
+            </div>
+          </>
+        )}
       {del.state?.error && (
         <p role="alert" className="absolute right-0 mt-1 w-56 text-xs text-danger">
           {del.state.error}

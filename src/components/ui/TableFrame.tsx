@@ -46,24 +46,42 @@ export function TableFrame({
   freezeFirstColumn?: boolean;
 }) {
   const frame = useRef<HTMLDivElement>(null);
+  const reserve = useRef<HTMLDivElement>(null);
 
   // Where on the screen the window starts, so it can end at the bottom of
   // the screen. Measured again as the page scrolls: the window's top moves up,
   // and it grows with it until it fills the screen. A table that starts
   // further down than that is given a minimum height (globals.css) and comes
   // up to the bottom edge as the page scrolls to it.
+  //
+  // The page has to have room to scroll for that to happen, and a window that
+  // stops at the bottom of the screen leaves it none — the page ends there
+  // too. So the table reserves, around its window, the height the window will
+  // grow to: a screen, or less if the table is shorter. The part not yet
+  // filled lies below the bottom of the screen, and the window fills it as
+  // the page scrolls.
   useBrowserLayoutEffect(() => {
     const el = frame.current;
-    if (!el) return;
+    const room = reserve.current;
+    if (!el || !room) return;
     let raf = 0;
-    let last = -1;
+    let lastTop = -1;
+    let lastReserve = -1;
     const apply = () => {
       // Hidden (a closed tab or section) has no position to measure.
       if (!el.offsetParent) return;
       const top = Math.round(Math.max(0, el.getBoundingClientRect().top));
-      if (top === last) return;
-      last = top;
-      el.style.setProperty("--frame-top", `${top}px`);
+      if (top !== lastTop) {
+        lastTop = top;
+        el.style.setProperty("--frame-top", `${top}px`);
+      }
+      // The whole table's height, bars and border included, up to a screen.
+      const whole = el.scrollHeight + (el.offsetHeight - el.clientHeight);
+      const fill = Math.round(Math.min(whole, window.innerHeight - 16));
+      if (fill !== lastReserve) {
+        lastReserve = fill;
+        room.style.setProperty("--frame-reserve", `${fill}px`);
+      }
     };
     const measure = () => {
       cancelAnimationFrame(raf);
@@ -79,6 +97,9 @@ export function TableFrame({
     const observer = new ResizeObserver(measure);
     observer.observe(document.body);
     observer.observe(el);
+    // Rows filtered, paged or added change the table's height inside a window
+    // whose own size does not.
+    if (el.firstElementChild) observer.observe(el.firstElementChild);
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", measure);
@@ -102,17 +123,19 @@ export function TableFrame({
   }, []);
 
   return (
-    <div
-      ref={frame}
-      role="region"
-      aria-label={`${label} (scrolls within its window)`}
-      tabIndex={0}
-      data-table-frame
-      data-surface={surface}
-      data-freeze-first={freezeFirstColumn || undefined}
-      className={`table-frame ${className}`}
-    >
-      {children}
+    <div ref={reserve} className="table-frame-reserve">
+      <div
+        ref={frame}
+        role="region"
+        aria-label={`${label} (scrolls within its window)`}
+        tabIndex={0}
+        data-table-frame
+        data-surface={surface}
+        data-freeze-first={freezeFirstColumn || undefined}
+        className={`table-frame ${className}`}
+      >
+        {children}
+      </div>
     </div>
   );
 }

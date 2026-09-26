@@ -420,6 +420,16 @@ body {
   scrollbar-width: auto;
   scrollbar-color: auto;
 }
+/* The height the window will grow to as the page scrolls, held in the page
+   so there is room to scroll into (TableFrame sets it). */
+.table-frame-reserve {
+  min-height: var(--frame-reserve, 0px);
+}
+@media print {
+  .table-frame-reserve {
+    min-height: 0;
+  }
+}
 .table-frame[data-surface="card"] {
   --frame-bg: var(--card);
 }
@@ -510,6 +520,40 @@ body {
   .table-frame > table > * > tr > * {
     position: static !important;
     box-shadow: none !important;
+  }
+}
+
+/* ---------------------------------------------------------- sidebar menu
+   The sidebar holds its place while the page scrolls (AppShell), and its menu
+   scrolls on a scrollbar of its own, drawn in the sidebar's colours and always
+   visible — as the table windows' are, and for the same reason: some machines
+   fade an idle scrollbar out, and a bar nobody can see does not tell anyone
+   the menu goes further. */
+.sidebar-scroll {
+  scrollbar-width: auto;
+  scrollbar-color: auto;
+  scrollbar-gutter: stable;
+}
+.sidebar-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 9999px;
+  background-color: color-mix(in srgb, var(--sidebar-muted) 55%, transparent);
+  background-clip: padding-box;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb:hover,
+.sidebar-scroll::-webkit-scrollbar-thumb:active {
+  background-color: var(--sidebar-muted);
+}
+@supports not selector(::-webkit-scrollbar) {
+  .sidebar-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--sidebar-muted) transparent;
   }
 }
 

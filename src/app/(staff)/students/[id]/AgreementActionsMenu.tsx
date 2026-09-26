@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { deleteAgreement } from "@/lib/actions/agreements";
 import { useButtonAction } from "@/components/useButtonAction";
+import { useAnchoredMenu } from "@/components/useAnchoredMenu";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { EditAgreementForm } from "./GenerateAgreementForm";
 import type { ServiceType } from "@/lib/serviceType";
@@ -60,6 +61,9 @@ export function AgreementActionsMenu({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
+  // On the screen beside its button, opening upwards when there is no room
+  // below — hung from the button, the last row's menu ran off the page.
+  const { anchor, menu, style: menuStyle, portal } = useAnchoredMenu(menuOpen, () => setMenuOpen(false));
   const [editOpen, setEditOpen] = useState(false);
   // The agreement and this menu go with a successful delete, so it confirms
   // with a toast; a refusal is still said under the menu's button.
@@ -73,50 +77,51 @@ export function AgreementActionsMenu({
 
   return (
     <div className="relative inline-block text-left">
-      <button onClick={() => setMenuOpen((v) => !v)} className="rounded-md px-2 py-1 text-lg text-muted hover:bg-bg hover:text-ink" aria-label="Actions">
+      <button ref={anchor} onClick={() => setMenuOpen((v) => !v)} className="rounded-md px-2 py-1 text-lg text-muted hover:bg-bg hover:text-ink" aria-label="Actions">
         ⋮
       </button>
-      {menuOpen && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-          {/* Menu items: full width by design, so exempt from the text-width rule. */}
-          <div data-menu className="absolute right-0 z-20 mt-1 w-36 rounded-md border border-border bg-card py-1 shadow-lg">
-            <button
-              data-full-width
-              onClick={() => {
-                setViewOpen(true);
-                setMenuOpen(false);
-              }}
-              className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
-            >
-              👁️ View
-            </button>
-            {canEdit && (
+      {menuOpen &&
+        portal(
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+            {/* Menu items: full width by design, so exempt from the text-width rule. */}
+            <div ref={menu} style={menuStyle} data-menu className="z-20 w-36 rounded-md border border-border bg-card py-1 shadow-lg">
               <button
                 data-full-width
                 onClick={() => {
-                  setEditOpen(true);
+                  setViewOpen(true);
                   setMenuOpen(false);
                 }}
                 className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
               >
-                ✏️ Edit
+                👁️ View
               </button>
-            )}
-            {canDelete && (
-              <button
-                data-full-width
-                onClick={handleDelete}
-                disabled={del.pending}
-                aria-busy={del.pending || undefined}
-                className="block w-full px-3 py-1.5 text-left text-sm text-danger hover:bg-bg disabled:opacity-50"
-              >
-                🗑️ Delete
-              </button>
-            )}
-          </div>
-        </>
-      )}
+              {canEdit && (
+                <button
+                  data-full-width
+                  onClick={() => {
+                    setEditOpen(true);
+                    setMenuOpen(false);
+                  }}
+                  className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
+                >
+                  ✏️ Edit
+                </button>
+              )}
+              {canDelete && (
+                <button
+                  data-full-width
+                  onClick={handleDelete}
+                  disabled={del.pending}
+                  aria-busy={del.pending || undefined}
+                  className="block w-full px-3 py-1.5 text-left text-sm text-danger hover:bg-bg disabled:opacity-50"
+                >
+                  🗑️ Delete
+                </button>
+              )}
+            </div>
+          </>
+        )}
       {del.state?.error && <p className="absolute right-0 mt-1 w-56 text-xs text-danger">{del.state.error}</p>}
 
       <SlideOver open={viewOpen} onClose={() => setViewOpen(false)} title="Agreement details">

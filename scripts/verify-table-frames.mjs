@@ -163,6 +163,85 @@ try {
       await frame.evaluate((el) => (el.scrollLeft = 0));
     }
   }
+
+  // ============================================== a row's ⋮ menu, last row
+  // Each list's ⋮ menu used to open below its button whatever was there, so
+  // the last row's opened off the bottom of the screen — and the leads and
+  // students one closed as soon as anything scrolled to reach it.
+  const MENUS = [
+    ["/leads", "Leads", 'button[aria-label="Row actions"]', "Modify"],
+    ["/students", "Registered students", 'button[aria-label="Row actions"]', "Modify"],
+    ["/admin/staff", "Staff", 'button[aria-label="Actions"]', "Edit"],
+  ];
+  for (const [path, name, trigger, item] of MENUS) {
+    console.log(`\n--- the ⋮ menu on the last row: ${name} ---`);
+    await page.goto(`${BASE}${path}`, { waitUntil: "domcontentloaded" });
+    const frame = page.locator("[data-table-frame]").first();
+    if (!(await frame.waitFor({ timeout: 30000 }).then(() => true, () => false))) {
+      console.log("      (no rows here yet)");
+      continue;
+    }
+    await page.waitForTimeout(800);
+    // To the very bottom: the page, then the table's window, so the last row
+    // sits on the screen's bottom edge.
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await frame.evaluate((el) => (el.scrollTop = el.scrollHeight));
+    await page.waitForTimeout(400);
+    const buttons = frame.locator(`tbody ${trigger}`);
+    const count = await buttons.count();
+    if (!count) {
+      console.log("      (no row menus here)");
+      continue;
+    }
+    const last = buttons.nth(count - 1);
+    await last.click();
+    const menu = page.locator("[data-menu]").first();
+    const shown = await menu.waitFor({ timeout: 5000 }).then(() => true, () => false);
+    const r = shown ? await menu.evaluate((m) => ({ ...m.getBoundingClientRect().toJSON(), vh: window.innerHeight, vw: window.innerWidth })) : null;
+    ok("it opens wholly on the screen", r !== null && r.top >= 0 && r.bottom <= r.vh && r.left >= 0 && r.right <= r.vw, JSON.stringify(r));
+    ok(`...with "${item}" there to click`, shown && (await menu.getByText(item, { exact: false }).first().isVisible()));
+    await page.keyboard.press("Escape");
+    const closed = await menu.waitFor({ state: "detached", timeout: 3000 }).then(() => true, () => false);
+    ok("Escape closes it, handing the focus back to its button", closed && (await last.evaluate((b) => b === document.activeElement)));
+  }
+
+  // ============================================== the sidebar
+  // It used to be as tall as the page, so reaching its lower links meant
+  // scrolling the whole page. Now it holds its place and scrolls on its own.
+  console.log("\n--- the sidebar ---");
+  await page.goto(`${BASE}/setup/login-screen`, { waitUntil: "domcontentloaded" });
+  const nav = page.locator("[data-sidebar-nav]");
+  await nav.waitFor({ timeout: 30000 });
+  await page.waitForTimeout(800);
+  const side = await nav.evaluate((el) => {
+    const aside = el.closest("aside").getBoundingClientRect();
+    const box = el.getBoundingClientRect();
+    const current = el.querySelector('[aria-current="page"]')?.getBoundingClientRect();
+    return {
+      asideTop: aside.top, asideBottom: aside.bottom, vh: window.innerHeight,
+      scrollable: el.scrollHeight > el.clientHeight + 1,
+      current: current ? { top: current.top, bottom: current.bottom } : null,
+      box: { top: box.top, bottom: box.bottom },
+    };
+  });
+  ok("the sidebar is the height of the screen", Math.abs(side.asideTop) <= 1 && Math.abs(side.asideBottom - side.vh) <= 1, JSON.stringify(side));
+  ok("...and its menu, longer than that, scrolls within it", side.scrollable);
+  ok("the page you are on is in view in the menu (Setup → Login screen, near its end)",
+    side.current !== null && side.current.top >= side.box.top - 1 && side.current.bottom <= side.box.bottom + 1, JSON.stringify(side));
+
+  await page.evaluate(() => window.scrollTo(0, 600));
+  await page.waitForTimeout(300);
+  const held = await nav.evaluate((el) => ({ asideTop: el.closest("aside").getBoundingClientRect().top, pageY: window.scrollY }));
+  ok("scrolling the page, the sidebar holds its place", held.pageY === 0 || Math.abs(held.asideTop) <= 1, JSON.stringify(held));
+
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const before = await page.evaluate(() => window.scrollY);
+  await nav.hover();
+  await page.mouse.wheel(0, 2000);
+  await page.waitForTimeout(500);
+  const after = await nav.evaluate((el) => ({ menu: el.scrollTop, pageY: window.scrollY, max: el.scrollHeight - el.clientHeight }));
+  ok("scrolling over the menu moves the menu", after.menu > 0, JSON.stringify(after));
+  ok("...and not the page, even past its end", after.pageY === before, JSON.stringify({ before, ...after }));
 } finally {
   const n = await fx.cleanup();
   await browser.close();
