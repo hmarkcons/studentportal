@@ -92,14 +92,13 @@ export type AgreementBlock =
   | { kind: "rule"; color?: string };
 
 export type AgreementContent = {
-  officeLine: string;
+  // The office line is not here: every agreement prints the one in
+  // Company details (agreementCompany.ts, 0288).
   blocks: AgreementBlock[];
 };
 
 export const AGREEMENT_CONTENT: Record<string, AgreementContent> = {
   DE_public: {
-    officeLine:
-      "HMARK Consultants - Office Address: Suite 101, Dashtiyar Chambers, Opp. Urdu Federal University, Gulshan-e-Iqbal, Block 13-C, University Road, Karachi, Pakistan. Landline #: 021 34 999 777",
     blocks: [
       { kind: "clause", number: "2.", heading: "Category: Student Visa" },
       {
@@ -311,8 +310,6 @@ export const AGREEMENT_CONTENT: Record<string, AgreementContent> = {
   // since it hasn't been verified for these countries' visa rules either.
   // Draft wording — needs review before use with a real student.
   AT_public: {
-    officeLine:
-      "HMARK Consultants - Office Address: Suite 101, Dashtiyar Chambers, Opp. Urdu Federal University, Gulshan-e-Iqbal, Block 13-C, University Road, Karachi, Pakistan. Landline #: 021 34 999 777",
     blocks: [
       { kind: "clause", number: "2.", heading: "Category: Student Visa" },
       {
@@ -506,8 +503,6 @@ export const AGREEMENT_CONTENT: Record<string, AgreementContent> = {
   },
 
   FR_public: {
-    officeLine:
-      "HMARK Consultants - Office Address: Suite 101, Dashtiyar Chambers, Opp. Urdu Federal University, Gulshan-e-Iqbal, Block 13-C, University Road, Karachi, Pakistan. Landline #: 021 34 999 777",
     blocks: [
       { kind: "clause", number: "2.", heading: "Category: Student Visa" },
       {
@@ -701,8 +696,6 @@ export const AGREEMENT_CONTENT: Record<string, AgreementContent> = {
   },
 
   FI_public: {
-    officeLine:
-      "HMARK Consultants - Office Address: Suite 101, Dashtiyar Chambers, Opp. Urdu Federal University, Gulshan-e-Iqbal, Block 13-C, University Road, Karachi, Pakistan. Landline #: 021 34 999 777",
     blocks: [
       { kind: "clause", number: "2.", heading: "Category: Student Visa" },
       {
@@ -896,8 +889,6 @@ export const AGREEMENT_CONTENT: Record<string, AgreementContent> = {
   },
 
   LU_public: {
-    officeLine:
-      "HMARK Consultants - Office Address: Suite 101, Dashtiyar Chambers, Opp. Urdu Federal University, Gulshan-e-Iqbal, Block 13-C, University Road, Karachi, Pakistan. Landline #: 021 34 999 777",
     blocks: [
       { kind: "clause", number: "2.", heading: "Category: Student Visa" },
       {
@@ -1091,8 +1082,6 @@ export const AGREEMENT_CONTENT: Record<string, AgreementContent> = {
   },
 
   IT_public: {
-    officeLine:
-      "HMARK Consultants Office Address: Suite 101, Dashtiyar Chambers, Opp. Urdu Federal University, Gulshan-e-Iqbal, Block 13-C, University Road, Karachi, Pakistan. Landline #: 021 34 999 778",
     blocks: [
       { kind: "clause", number: "2.", heading: "Category: Student Visa" },
       {
@@ -1327,8 +1316,6 @@ export const AGREEMENT_CONTENT: Record<string, AgreementContent> = {
   },
 
   AU_private: {
-    officeLine:
-      "HMARK Consultants - Office Address: Suite 101, Dashtiyar Chambers, Opp. Urdu Federal University, Gulshan-e-Iqbal, Block 13-C, University Road, Karachi, Pakistan. Landline #: 021 34 999 777",
     blocks: [
       { kind: "heading", heading: "Category: Student Visa" },
       {
@@ -1485,8 +1472,6 @@ export const AGREEMENT_CONTENT: Record<string, AgreementContent> = {
   },
 
   CA_private: {
-    officeLine:
-      "HMARK Consultants - Office Address: Suite 101, Dashtiyar Chambers, Opp. Urdu Federal University, Gulshan-e-Iqbal, Block 13-C, University Road, Karachi, Pakistan. Landline #: 021 34 999 777",
     blocks: [
       { kind: "heading", heading: "Category: Student Visa" },
       {
@@ -1643,8 +1628,6 @@ export const AGREEMENT_CONTENT: Record<string, AgreementContent> = {
   },
 
   NC_private: {
-    officeLine:
-      "HMARK Consultants - Office Address: Suite 101, Dashtiyar Chambers, Opp. Urdu Federal University, Gulshan-e-Iqbal, Block 13-C, University Road, Karachi, Pakistan. Landline #: 021 34 999 777",
     blocks: [
       { kind: "heading", heading: "Category: Student Visa" },
       {
@@ -1812,8 +1795,6 @@ export const AGREEMENT_CONTENT: Record<string, AgreementContent> = {
   // named institutions that hasn't been verified for Turkey's partner list.
   // Draft wording — needs review before use with a real student.
   TR_private: {
-    officeLine:
-      "HMARK Consultants - Office Address: Suite 101, Dashtiyar Chambers, Opp. Urdu Federal University, Gulshan-e-Iqbal, Block 13-C, University Road, Karachi, Pakistan. Landline #: 021 34 999 777",
     blocks: [
       { kind: "heading", heading: "Category: Student Visa" },
       {
@@ -1970,8 +1951,6 @@ export const AGREEMENT_CONTENT: Record<string, AgreementContent> = {
   },
 
   UK_private: {
-    officeLine:
-      "HMARK Consultants - Office Address: Suite 101, Dashtiyar Chambers, Opp. Urdu Federal University, Gulshan-e-Iqbal, Block 13-C, University Road, Karachi, Pakistan. Landline #: 021 34 999 777",
     blocks: [
       { kind: "heading", heading: "Category: Student Visa" },
       {
@@ -2135,8 +2114,6 @@ export const AGREEMENT_CONTENT: Record<string, AgreementContent> = {
   // it's a specific UK immigration-rule claim that hasn't been verified for
   // Ireland's Stamp 2 student visa — review/replace if that detail matters.
   IE_private: {
-    officeLine:
-      "HMARK Consultants - Office Address: Suite 101, Dashtiyar Chambers, Opp. Urdu Federal University, Gulshan-e-Iqbal, Block 13-C, University Road, Karachi, Pakistan. Landline #: 021 34 999 777",
     blocks: [
       { kind: "heading", heading: "Category: Student Visa" },
       {
@@ -2293,8 +2270,6 @@ export const AGREEMENT_CONTENT: Record<string, AgreementContent> = {
   },
 
   US_private: {
-    officeLine:
-      "HMARK Consultants - Office Address: Suite 101, Dashtiyar Chambers, Opp. Urdu Federal University, Gulshan-e-Iqbal, Block 13-C, University Road, Karachi, Pakistan. Landline #: 021 34 999 777",
     blocks: [
       { kind: "heading", heading: "Category: Student Visa" },
       {

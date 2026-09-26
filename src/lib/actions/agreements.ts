@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { renderStudentAgreementPdf, type AgreementDestination } from "@/lib/pdf/studentAgreementPdf";
+import { readAgreementCompany } from "@/lib/agreementCompanyRead";
 import { requirePermission } from "@/lib/auth/permissions";
 import { ensureCommissionForStudent } from "@/lib/actions/commissionAuto";
 import { validateDocumentFile, sanitizeFilename } from "@/lib/documentUpload";
@@ -267,6 +268,7 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
     student,
     profile: profile ?? null,
     signatureDataUri,
+    company: await readAgreementCompany(supabase),
   });
   if ("error" in rendered) return { error: rendered.error };
   const buffer = rendered.buffer;

@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { createStaffAgreementTemplate, updateStaffAgreementTemplate } from "@/lib/actions/staffAgreements";
-import { STAFF_MERGE_FIELDS } from "@/lib/staffAgreementFields";
+import { STAFF_TEMPLATE_FIELDS } from "@/lib/staffAgreementFields";
 import { normalizeTheme } from "@/lib/pdf/agreementTheme";
 import { TemplateBuilder } from "@/components/agreement-builder/TemplateBuilder";
 import { Button } from "@/components/ui/Button";
@@ -47,7 +47,7 @@ export function StaffTemplateForm({
         kind="staff"
         initialWording={template?.wording ?? ""}
         initialDesign={normalizeTheme(template?.design ?? null)}
-        mergeFields={STAFF_MERGE_FIELDS}
+        mergeFields={STAFF_TEMPLATE_FIELDS}
       />
       <details className="text-xs text-muted" open={!template}>
         <summary className="cursor-pointer">Available merge fields</summary>
@@ -57,7 +57,7 @@ export function StaffTemplateForm({
           contract never goes out with a gap.
         </p>
         <ul className="mt-1 grid list-disc gap-x-6 pl-5 sm:grid-cols-2">
-          {STAFF_MERGE_FIELDS.map((f) => (
+          {STAFF_TEMPLATE_FIELDS.map((f) => (
             <li key={f.key}>
               <code>{`{{${f.key}}}`}</code> — {f.label}
             </li>

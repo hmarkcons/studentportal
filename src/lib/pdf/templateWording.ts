@@ -1,6 +1,7 @@
 import { parse, type Node, HTMLElement, NodeType } from "node-html-parser";
 import type { AgreementBlock, BlockFormat, RichCell, RichListItem, TextRun } from "./agreementContent";
 import { BULLET_SHAPES, NUMBER_FORMATS, fontChoice, normalizeColor, type BulletShape, type NumberFormat } from "./agreementTheme.ts";
+import { COMPANY_MERGE_FIELDS } from "../agreementCompany.ts";
 
 // Matches the px-per-level the builder's Increase/Decrease Indent buttons
 // write via the `indent` node attribute's renderHTML (see the Indent
@@ -28,6 +29,7 @@ export const MERGE_FIELDS: { key: string; label: string }[] = [
   { key: "currency", label: "Currency code (e.g. \"EUR\")" },
   { key: "agreement_date", label: "The date the agreement was generated" },
   { key: "signatory_name", label: "The template's fixed authorized signatory" },
+  ...COMPANY_MERGE_FIELDS,
   { key: "fee_table", label: "The itemized fee table — put this on its own paragraph where you want it to appear (otherwise it's added automatically after the last clause)" },
 ];
 
@@ -384,5 +386,3 @@ export function wordingToBlocks(
   return feeTable ? blocks : blocks.filter((b) => b.kind !== "feeTable");
 }
 
-export const DEFAULT_OFFICE_LINE =
-  "HMARK Consultants - Office Address: Suite 101, Dashtiyar Chambers, Opp. Urdu Federal University, Gulshan-e-Iqbal, Block 13-C, University Road, Karachi, Pakistan. Landline #: 021 34 999 777";

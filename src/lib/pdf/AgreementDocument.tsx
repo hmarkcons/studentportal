@@ -136,6 +136,8 @@ const styles = StyleSheet.create({
 export type AgreementPdfData = {
   destinationLabel: string;
   officeLine: string;
+  /** Header and signature caption; Company details (0288). */
+  companyName?: string;
   blocks: AgreementBlock[];
   student: {
     fullName: string;
@@ -257,14 +259,26 @@ function Framed({
 
 // ------------------------------------------------------------ letterhead and footer
 
-function Header({ title = "Retainer Agreement", theme }: { title?: string; theme?: Theme | null }) {
+// The company's name comes from Setup → Agreement templates → Company details
+// (0288); the default is what every agreement said before that existed.
+const COMPANY_NAME = "HMARK Consultants";
+
+function Header({
+  title = "Retainer Agreement",
+  theme,
+  companyName = COMPANY_NAME,
+}: {
+  title?: string;
+  theme?: Theme | null;
+  companyName?: string;
+}) {
   if (!theme) {
     return (
       <View style={styles.header} fixed>
         <View style={styles.brand}>
           <Image src={BRAND_LOGO_DATA_URI} style={styles.brandLogo} />
         </View>
-        <Text style={styles.headerTitle}>HMARK Consultants{"\n"}{title}</Text>
+        <Text style={styles.headerTitle}>{companyName}{"\n"}{title}</Text>
         <Text style={styles.headerPage} render={({ pageNumber }) => `${pageNumber}`} fixed />
       </View>
     );
@@ -285,7 +299,8 @@ function Header({ title = "Retainer Agreement", theme }: { title?: string; theme
         <Image src={BRAND_LOGO_DATA_URI} style={{ height: 30, width: 30 * BRAND_LOGO_RATIO }} />
       </View>
       <Text style={{ textAlign: "right", fontFamily: theme.body.font, fontSize: h.titleSize, color: h.titleColor, marginRight: 10, lineHeight: 1.22 }}>
-        HMARK Consultants{"\n"}
+        {companyName}
+        {"\n"}
         {title}
       </Text>
       <Text
@@ -983,6 +998,7 @@ function SignatureBlock({
   signatureDataUri,
   signatoryName,
   theme,
+  companyName = COMPANY_NAME,
 }: {
   leftCaption: string;
   leftName: string;
@@ -991,6 +1007,7 @@ function SignatureBlock({
   signatureDataUri: string | null;
   signatoryName: string | null;
   theme?: Theme | null;
+  companyName?: string;
 }) {
   const ink = theme ? { borderColor: theme.body.color } : {};
   const caption = theme ? { fontFamily: theme.body.font, fontWeight: BOLD, fontSize: 8.5, color: theme.body.color } : {};
@@ -1008,7 +1025,7 @@ function SignatureBlock({
       </View>
       <View style={styles.signCol}>
         <View style={[styles.signLine, ink]}>{signatureDataUri && <Image src={signatureDataUri} style={styles.signImg} />}</View>
-        <Text style={[styles.signCaption, caption]}>(Signature) HMARK Consultants</Text>
+        <Text style={[styles.signCaption, caption]}>(Signature) {companyName}</Text>
         <View style={[styles.signNameLine, ink]}>
           <Text style={[styles.signNameText, name]}>{signatoryName ?? ""}</Text>
         </View>
@@ -1054,7 +1071,7 @@ export function AgreementDocument({ data }: { data: AgreementPdfData }) {
   return (
     <Document>
       <Page size={theme?.page.size ?? "A4"} style={pageStyle(theme)}>
-        <Header theme={theme} title={theme?.header.title || undefined} />
+        <Header theme={theme} title={theme?.header.title || undefined} companyName={data.companyName} />
 
         <StudentDetailsChart student={data.student} destinationLabel={data.destinationLabel} theme={theme} />
         <AndLine theme={theme} />
@@ -1064,6 +1081,7 @@ export function AgreementDocument({ data }: { data: AgreementPdfData }) {
         <Blocks blocks={data.blocks} fee={data.fee} theme={theme} />
 
         <SignatureBlock
+          companyName={data.companyName}
           leftCaption="(Signature) Client"
           leftName={data.student.fullName}
           leftNameCaption="[Client Name]"
@@ -1090,6 +1108,8 @@ export function AgreementDocument({ data }: { data: AgreementPdfData }) {
 export type StaffAgreementPdfData = {
   title: string;
   officeLine: string;
+  /** Header and signature caption; Company details (0288). */
+  companyName?: string;
   blocks: AgreementBlock[];
   staff: {
     fullName: string;
@@ -1179,7 +1199,7 @@ export function StaffAgreementDocument({ data }: { data: StaffAgreementPdfData }
     <Document>
       <Page size={theme?.page.size ?? "A4"} style={pageStyle(theme)}>
         {/* A staff template's letterhead names the template unless its design names something else. */}
-        <Header title={theme?.header.title || data.title} theme={theme} />
+        <Header title={theme?.header.title || data.title} theme={theme} companyName={data.companyName} />
 
         <StaffDetailsChart staff={data.staff} theme={theme} />
         <AndLine theme={theme} />
@@ -1189,6 +1209,7 @@ export function StaffAgreementDocument({ data }: { data: StaffAgreementPdfData }
         <Blocks blocks={data.blocks} fee={NO_FEE} theme={theme} />
 
         <SignatureBlock
+          companyName={data.companyName}
           leftCaption="(Signature) Employee"
           leftName={data.staff.fullName}
           leftNameCaption="[Employee Name]"

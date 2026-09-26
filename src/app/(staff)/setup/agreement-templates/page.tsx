@@ -8,6 +8,8 @@ import { StaffTemplateActions } from "./StaffTemplateActions";
 import { StaffTemplateGuide } from "./StaffTemplateGuide";
 import { SectionTabs } from "@/components/SectionTabs";
 import { getEffectivePermissions } from "@/lib/auth/permissions";
+import { getAgreementCompanySettings } from "@/lib/actions/agreementSettings";
+import { CompanyDetailsForm } from "./CompanyDetailsForm";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -56,11 +58,30 @@ export default async function AgreementTemplatesPage(props: { searchParams: Prom
   const { supabase, staff } = await getStaffSession();
   const isSuperAdmin = hasRole(staff, "super_admin");
   const canStaffTemplates = (await getEffectivePermissions())["staff_agreements.templates"] === true;
-  const active = tab === "staff" && canStaffTemplates ? "staff" : "students";
+  const active = tab === "staff" && canStaffTemplates ? "staff" : tab === "company" ? "company" : "students";
   const tabs = [
     { key: "students", label: "Students", href: "/setup/agreement-templates" },
     ...(canStaffTemplates ? [{ key: "staff", label: "Staff", href: "/setup/agreement-templates?tab=staff" }] : []),
+    { key: "company", label: "Company details", href: "/setup/agreement-templates?tab=company" },
   ];
+
+  // The company's name, address and contacts on every agreement (0288). Shown
+  // to anyone who can open this page; only a Super Admin may change them.
+  if (active === "company") {
+    return (
+      <div className="w-full">
+        <h2 className="mb-4 text-lg font-semibold text-ink">Agreement Templates</h2>
+        <SectionTabs tabs={tabs} active={active} />
+        <p className="mb-4 text-sm text-muted">
+          The company&rsquo;s name, office address and contact details that open every agreement, head each page and sit
+          under the consultant&rsquo;s signature — for every template, student and staff.
+        </p>
+        <Card>
+          <CompanyDetailsForm saved={await getAgreementCompanySettings()} canEdit={isSuperAdmin} />
+        </Card>
+      </div>
+    );
+  }
 
   if (active === "staff") {
     return (

@@ -2,7 +2,8 @@ import { createElement } from "react";
 import { CURRENCY_SYMBOLS } from "@/lib/constants";
 import { formatDateOnly } from "@/lib/formatDate";
 import { getAgreementContent } from "@/lib/pdf/agreementContent";
-import { wordingToBlocks, DEFAULT_OFFICE_LINE } from "@/lib/pdf/templateWording";
+import { wordingToBlocks } from "@/lib/pdf/templateWording";
+import { companyMergeVars, missingCompanyFields, officeLine, DEFAULT_AGREEMENT_COMPANY, type AgreementCompany } from "@/lib/agreementCompany";
 import { formatAmount, normalizeTheme } from "@/lib/pdf/agreementTheme";
 import { serviceOf } from "@/lib/serviceType";
 
@@ -45,6 +46,12 @@ export type StudentAgreementInput = {
   };
   profile: { emergency_contact_name: string | null; emergency_contact_relation: string | null; emergency_contact_number: string | null } | null;
   signatureDataUri: string | null;
+  /**
+   * The company as Setup → Agreement templates → Company details has it (0288):
+   * the office line, the header, the signature caption and the {{company_…}}
+   * placeholders. Absent, the agreement prints what it always did.
+   */
+  company?: AgreementCompany;
 };
 
 function formatAgreementDate(d: Date) {
@@ -55,6 +62,7 @@ function formatAgreementDate(d: Date) {
 
 export async function renderStudentAgreementPdf(input: StudentAgreementInput): Promise<{ buffer: Buffer } | { error: string }> {
   const { template, destination, agreement, student, profile } = input;
+  const company = input.company ?? DEFAULT_AGREEMENT_COMPANY;
   if (!destination?.country_code || !destination.track) return { error: "This agreement's destination could not be resolved." };
 
   // The doc's rule: the agreement's signatory is always the one fixed
@@ -107,13 +115,20 @@ export async function renderStudentAgreementPdf(input: StudentAgreementInput): P
   // template's own format under a theme, Classic's otherwise.
   const amount = (n: number) => (theme ? formatAmount(currencySymbol, n, theme.fee.amount) : money(currencySymbol, n));
 
+  const missingCompany = missingCompanyFields(template.wording, company);
+  if (missingCompany.length > 0) {
+    return {
+      error: `The template uses the company's ${missingCompany.join(", ")}, which is blank — fill it in under Setup → Agreement templates → Company details.`,
+    };
+  }
+
   // Super-admin-authored wording (the agreement builder) takes priority over
   // the legacy hardcoded per-country content — falls back to the latter only
   // for templates that haven't had their wording filled in yet.
   const content = template.wording?.trim()
     ? {
-        officeLine: DEFAULT_OFFICE_LINE,
         blocks: wordingToBlocks(template.wording, {
+          ...companyMergeVars(company),
           student_name: student.full_name ?? "",
           destination: destination.display_name ?? "",
           admin_charge: amount(adminCharge),
@@ -134,7 +149,10 @@ export async function renderStudentAgreementPdf(input: StudentAgreementInput): P
   const element = createElement(AgreementDocument, {
     data: {
       destinationLabel: destination.display_name ?? "",
-      officeLine: content.officeLine,
+      // The same line for every template, built-in or built in the builder —
+      // the built-in ones each carried their own copy, and Italy's had drifted.
+      officeLine: officeLine(company),
+      companyName: company.companyName,
       blocks: content.blocks,
       student: {
         fullName: student.full_name,

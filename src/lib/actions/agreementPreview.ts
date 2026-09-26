@@ -5,7 +5,10 @@ import { createClient } from "@/lib/supabase/server";
 import { hasRole } from "@/lib/auth/roles";
 import { requirePermission } from "@/lib/auth/permissions";
 import { normalizeTheme } from "@/lib/pdf/agreementTheme";
-import { wordingToBlocks, DEFAULT_OFFICE_LINE } from "@/lib/pdf/templateWording";
+import { wordingToBlocks } from "@/lib/pdf/templateWording";
+import { readAgreementCompany } from "@/lib/agreementCompanyRead";
+import { companyFromForm, companyFromSettings, companyMergeVars, missingCompanyFields, officeLine } from "@/lib/agreementCompany";
+import { getAgreementContent } from "@/lib/pdf/agreementContent";
 import { renderStudentAgreementPdf, type AgreementDestination } from "@/lib/pdf/studentAgreementPdf";
 import { staffMergeVars } from "@/lib/staffAgreementFields";
 import { serviceOf } from "@/lib/serviceType";
@@ -85,6 +88,7 @@ export async function previewAgreementTemplate(input: {
     student: SAMPLE_STUDENT,
     profile: SAMPLE_PROFILE,
     signatureDataUri: await signature(supabase),
+    company: await readAgreementCompany(supabase),
   });
   if ("error" in rendered) return { error: rendered.error };
   return { pdf: rendered.buffer.toString("base64") };
@@ -99,7 +103,12 @@ export async function previewStaffAgreementTemplate(input: { wording: string; de
   const supabase = await createClient();
   const date = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Karachi" });
   const signatoryName = input.signatoryName || "Authorised Signatory";
-  const vars = staffMergeVars(
+  const company = await readAgreementCompany(supabase);
+  const missingCompany = missingCompanyFields(input.wording, company);
+  if (missingCompany.length > 0) {
+    return { error: `The wording uses the company's ${missingCompany.join(", ")}, which is blank — fill it in under Company details.` };
+  }
+  const staffVars = staffMergeVars(
     {
       full_name: "Sana Iqbal (sample)",
       designation: "Senior Counsellor",
@@ -134,13 +143,15 @@ export async function previewStaffAgreementTemplate(input: { wording: string; de
     },
     { agreementDate: date, signatoryName, policy: { work_start_time: "12:00", work_end_time: "21:00", work_days: [1, 2, 3, 4, 5, 6], grace_minutes: 15 } }
   );
+  const vars = { ...staffVars, ...companyMergeVars(company) };
 
   const { renderToBuffer } = await import("@react-pdf/renderer");
   const { StaffAgreementDocument } = await import("@/lib/pdf/AgreementDocument");
   const element = createElement(StaffAgreementDocument, {
     data: {
       title: input.name || "Staff Agreement",
-      officeLine: DEFAULT_OFFICE_LINE,
+      officeLine: officeLine(company),
+      companyName: company.companyName,
       blocks: wordingToBlocks(input.wording, vars, { feeTable: false }),
       staff: {
         fullName: vars.staff_name,
@@ -159,4 +170,51 @@ export async function previewStaffAgreementTemplate(input: { wording: string; de
   });
   const buffer = await renderToBuffer(element as Parameters<typeof renderToBuffer>[0]);
   return { pdf: buffer.toString("base64") };
+}
+
+/**
+ * The Company details tab's "Preview on an agreement": the details as they
+ * stand in the form, saved or not, on a built-in Standard agreement for a
+ * sample student — Italy's where there is one, being the one most issued.
+ * Nothing is stored.
+ */
+export async function previewAgreementCompany(formData: FormData): Promise<PreviewResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: me } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
+  if (!hasRole(me, "super_admin")) return { error: "Only a Super Admin can preview the company details." };
+
+  const read = companyFromForm((key) => formData.get(key));
+  if (read.error !== undefined) return { error: read.error };
+
+  const { data: destinations } = await supabase
+    .from("destinations")
+    .select("country_code, track, display_name, admin_charge, consultancy_fee, consultancy_fee_currency, visa_service_fee")
+    .returns<AgreementDestination[]>();
+  const withContent = (destinations ?? []).filter((d) => d.country_code && d.track && getAgreementContent(d.country_code, d.track));
+  const destination = withContent.find((d) => d.country_code === "IT") ?? withContent[0];
+  if (!destination) return { error: "There is no built-in agreement to preview the details on." };
+
+  const rendered = await renderStudentAgreementPdf({
+    template: { wording: null, signatory_name: "Authorised Signatory", design: null },
+    destination,
+    agreement: {
+      admin_charge_override: null,
+      consultancy_fee_override: null,
+      discount_amount: null,
+      installment_count: 2,
+      is_backup: false,
+      created_at: new Date().toISOString(),
+      service_type: "full",
+      visa_service_fee_override: null,
+    },
+    student: SAMPLE_STUDENT,
+    profile: SAMPLE_PROFILE,
+    signatureDataUri: await signature(supabase),
+    company: companyFromSettings(read.row),
+  });
+  if ("error" in rendered) return { error: rendered.error };
+  return { pdf: rendered.buffer.toString("base64") };
 }

@@ -54,6 +54,8 @@ export type OfficePolicy = {
   grace_minutes: number | null;
 };
 
+import { COMPANY_MERGE_FIELDS } from "./agreementCompany.ts";
+
 export const STAFF_MERGE_FIELDS: { key: string; label: string }[] = [
   { key: "staff_name", label: "Staff member's full name" },
   { key: "designation", label: "Their designation (job title)" },
@@ -193,8 +195,16 @@ export function missingMergeFields(wording: string, vars: Record<string, string>
   return STAFF_MERGE_FIELDS.filter((f) => used.has(f.key) && !(vars[f.key] ?? "").trim()).map((f) => f.label);
 }
 
+/**
+ * Everything a staff template may use: the staff member's fields, and the
+ * company's (Setup → Agreement templates → Company details). The company's
+ * are kept out of missingMergeFields, whose message sends people to the staff
+ * record; a blank one is caught by missingCompanyFields instead.
+ */
+export const STAFF_TEMPLATE_FIELDS: { key: string; label: string }[] = [...STAFF_MERGE_FIELDS, ...COMPANY_MERGE_FIELDS];
+
 /** Placeholders the wording uses that are not staff fields at all — a typo, or one copied from a student template. */
 export function unknownMergeFields(wording: string): string[] {
-  const known = new Set(STAFF_MERGE_FIELDS.map((f) => f.key));
+  const known = new Set(STAFF_TEMPLATE_FIELDS.map((f) => f.key));
   return [...new Set([...wording.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]))].filter((k) => !known.has(k));
 }

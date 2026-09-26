@@ -10,7 +10,9 @@ import { staffRoles } from "@/lib/auth/roles";
 import { STAFF_ROLE_LABELS, type StaffRole } from "@/lib/constants";
 import { COMPENSATION_COLUMNS } from "@/lib/staffCompensation";
 import { validateDocumentFile, sanitizeFilename } from "@/lib/documentUpload";
-import { wordingToBlocks, DEFAULT_OFFICE_LINE } from "@/lib/pdf/templateWording";
+import { wordingToBlocks } from "@/lib/pdf/templateWording";
+import { readAgreementCompany } from "@/lib/agreementCompanyRead";
+import { companyMergeVars, missingCompanyFields, officeLine } from "@/lib/agreementCompany";
 import {
   missingMergeFields,
   staffMergeVars,
@@ -251,12 +253,20 @@ async function renderStaffAgreementPdf(agreementId: string, staffId: string, tem
   if (!staff) return { error: "That staff member no longer exists." };
 
   const dateText = agreementDate(createdAt);
-  const vars = staffMergeVars(
+  const company = await readAgreementCompany(admin);
+  const missingCompany = missingCompanyFields(template.wording, company);
+  if (missingCompany.length > 0) {
+    return {
+      error: `The template uses the company's ${missingCompany.join(", ")}, which is blank — fill it in under Setup → Agreement templates → Company details.`,
+    };
+  }
+  const staffVars = staffMergeVars(
     { ...staff, roles: staffRoles(staff).map((r) => STAFF_ROLE_LABELS[r as StaffRole] ?? r) },
     pay ?? null,
     { agreementDate: dateText, signatoryName: template.signatory_name, policy: policy ?? null }
   );
-  const missing = missingMergeFields(template.wording, vars);
+  const missing = missingMergeFields(template.wording, staffVars);
+  const vars = { ...staffVars, ...companyMergeVars(company) };
   if (missing.length > 0) {
     return { error: `Fill these in on ${staff.full_name}'s staff record first — the agreement uses them: ${missing.join("; ")}.` };
   }
@@ -274,7 +284,8 @@ async function renderStaffAgreementPdf(agreementId: string, staffId: string, tem
   const element = createElement(StaffAgreementDocument, {
     data: {
       title: template.name,
-      officeLine: DEFAULT_OFFICE_LINE,
+      officeLine: officeLine(company),
+      companyName: company.companyName,
       blocks: wordingToBlocks(template.wording, vars, { feeTable: false }),
       staff: {
         fullName: staff.full_name,
