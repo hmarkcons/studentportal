@@ -23,7 +23,7 @@ const permsFor = (role) => Object.fromEntries(Object.entries(DEFAULTS).map(([key
 const hrefs = (nav) => nav.flatMap((item) => (item.children ? item.children.map((c) => c.href) : [item.href]));
 const sections = (nav) => nav.map((item) => item.label);
 const navFor = (role, extra = {}) =>
-  buildStaffNav({ canManageStaff: false, isSuperAdmin: false, perms: permsFor(role), ...extra });
+  buildStaffNav({ isSuperAdmin: false, perms: permsFor(role), ...extra });
 
 // ------------------------------------------------------- registry vs the rest
 
@@ -42,7 +42,7 @@ test("every gated folder has a layout that guards it with its own path", () => {
 test("every menu item is either gated or deliberately open", () => {
   const OPEN = new Set(["/dashboard", "/admin/staff", "/admin/leave", "/my-leave", "/my-agreement", "/admin/permissions"]);
   const all = hrefs(
-    buildStaffNav({ canManageStaff: true, isSuperAdmin: true, hasOwnAgreement: true, canApproveLeave: true, perms: {} })
+    buildStaffNav({ isSuperAdmin: true, hasOwnAgreement: true, canApproveLeave: true, perms: {} })
   );
   for (const href of all) assert.ok(OPEN.has(href) || permissionForPath(href), `${href} has no page permission`);
 });
@@ -108,18 +108,19 @@ test("Office network and the audit log are Super Admin only", () => {
     assert.ok(!menu.includes("/setup/office-network"), role);
     assert.ok(!menu.includes("/admin/audit-log"), role);
   }
-  const sa = hrefs(buildStaffNav({ canManageStaff: true, isSuperAdmin: true, perms: {} }));
+  const sa = hrefs(buildStaffNav({ isSuperAdmin: true, perms: {} }));
   for (const h of ["/setup/office-network", "/admin/audit-log", "/admin/permissions", "/finance/payroll"]) assert.ok(sa.includes(h), h);
 });
 
 test("a permission granted on Role Permissions puts the page back in the menu", () => {
   const perms = { ...permsFor("counselor"), "page.finance.payroll": true };
-  const nav = buildStaffNav({ canManageStaff: false, isSuperAdmin: false, perms });
+  const nav = buildStaffNav({ isSuperAdmin: false, perms });
   const finance = nav.find((i) => i.label === "Accounts & Finance");
   assert.deepEqual(finance?.children?.map((c) => c.href), ["/finance/payroll"]);
 });
 
-test("Staff Management still follows staff.manage, not a page permission", () => {
-  assert.ok(!hrefs(navFor("management")).includes("/admin/staff"));
-  assert.ok(hrefs(navFor("management", { canManageStaff: true })).includes("/admin/staff"));
+test("Staff Management is in everyone's menu: the Super Admin manages it, anyone else sees their own record", () => {
+  for (const role of ["counselor", "processing", "finance", "management", "digital_marketing"]) {
+    assert.ok(hrefs(navFor(role)).includes("/admin/staff"), role);
+  }
 });

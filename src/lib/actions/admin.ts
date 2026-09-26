@@ -54,17 +54,14 @@ function primaryRole(next: StaffRole[], previous: StaffRole | null): StaffRole {
 }
 
 /**
- * How much of a staff record the signed-in person may change.
- *
- * `staff.manage` is the whole thing — salary, commission, status, hours. It is
- * the Super Admin's. `staff.assign_roles` is the roles alone, and it is what
- * Management holds: deciding who does which job is their call, while what
- * anyone is paid is not theirs to see or set.
+ * Whether the signed-in person may change a staff record — details, pay,
+ * status, hours and roles alike. `staff.manage` is the Super Admin's and
+ * cannot be given to anyone else (0284); roles were once a separate grant
+ * (staff.assign_roles) and are now the Super Admin's alone too (0283), so
+ * nobody changes their own roles or anyone else's.
  */
-async function staffEditScope(): Promise<"all" | "roles" | "none"> {
-  if (await hasPermission("staff.manage")) return "all";
-  if (await hasPermission("staff.assign_roles")) return "roles";
-  return "none";
+async function canEditStaff(): Promise<boolean> {
+  return hasPermission("staff.manage");
 }
 
 /**
@@ -308,8 +305,7 @@ async function syncLoginEmail(
 
 export async function updateStaffDetails(staffId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
-  const scope = await staffEditScope();
-  if (scope === "none") return { error: "Only Super Admin can edit staff." };
+  if (!(await canEditStaff())) return { error: "Only Super Admin can edit staff." };
 
   // The roles the form posted, if it posted any. A form with no roles field at
   // all leaves the existing set alone rather than clearing it.
@@ -324,22 +320,6 @@ export async function updateStaffDetails(staffId: string, _prevState: unknown, f
     // itself — that is the one that binds.
     const roleIssue = await roleChangeError(roles, staffRoles(current));
     if (roleIssue) return { error: roleIssue };
-  }
-
-  // Management holds staff.assign_roles and nothing else on this form: roles
-  // are theirs to set, and salary, commission, status and hours are neither
-  // theirs to see nor to change. Everything else the request carried is
-  // dropped unread rather than trusted.
-  if (scope === "roles") {
-    if (!roles) return { error: "No role change was submitted." };
-    const { error } = await supabase.rpc("set_staff_roles", { p_staff: staffId, p_roles: roles });
-    if (error) return { error: error.message };
-
-    revalidatePath("/admin/staff");
-    revalidatePath("/students");
-    revalidatePath("/leads");
-    revalidateTag("staff-directory", { expire: 0 });
-    return { success: true };
   }
 
   const fields = staffFieldsFromFormData(formData);
@@ -461,10 +441,9 @@ export async function updateStaffDetails(staffId: string, _prevState: unknown, f
   const payError = await savePay(supabase, staffId, formData);
   if (payError) return { error: payError };
 
-  // Roles go through the same function Management uses, rather than being
-  // folded into the update above — so the "at least one role" and "Super Admin
-  // grants Super Admin" rules are applied by one piece of code on every path,
-  // including a staff.manage granted to some other role by an override.
+  // Roles go through set_staff_roles() rather than being folded into the
+  // update above, so the "Super Admin only" and "at least one role" rules are
+  // applied by the one piece of code the database enforces them in.
   if (roles) {
     const { error: roleError } = await supabase.rpc("set_staff_roles", { p_staff: staffId, p_roles: roles });
     if (roleError) return { error: roleError.message };

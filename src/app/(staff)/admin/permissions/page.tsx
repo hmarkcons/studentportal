@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { getStaffSession } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { STAFF_ROLES, STAFF_ROLE_LABELS, type StaffRole } from "@/lib/constants";
-import type { PermissionKey } from "@/lib/permissions";
+import { SUPER_ADMIN_ONLY_PERMISSIONS, type PermissionKey } from "@/lib/permissions";
 import { PermissionToggle } from "./PermissionToggle";
 import { StaffPermissionsPanel } from "./StaffPermissionsPanel";
 import { StaffPicker } from "./StaffPicker";
@@ -26,11 +26,14 @@ export default async function RolePermissionsPage(props: { searchParams: Promise
   const { supabase, staff } = await getStaffSession();
   if (!staff || !hasRole(staff, "super_admin")) redirect("/dashboard");
 
-  const [{ data: defs }, { data: overrides }, { data: allStaff }] = await Promise.all([
+  const [{ data: allDefs }, { data: overrides }, { data: allStaff }] = await Promise.all([
     supabase.from("permission_definitions").select("key, category, label, description, default_roles, sort_order").order("sort_order"),
     supabase.from("role_permission_overrides").select("role, permission_key, allowed"),
     supabase.from("staff").select("id, full_name, role").not("roles", "cs", "{super_admin}").order("full_name"),
   ]);
+  // Managing staff is the Super Admin's and no one else's to be given (0284),
+  // so it is not offered as a switch at all.
+  const defs = (allDefs ?? []).filter((d) => !SUPER_ADMIN_ONLY_PERMISSIONS.includes(d.key));
 
   const overrideMap = new Map((overrides ?? []).map((o) => [`${o.role}:${o.permission_key}`, o.allowed]));
 

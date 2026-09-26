@@ -83,13 +83,11 @@ const BASE_STAFF_NAV: NavItem[] = [
 ];
 
 export function buildStaffNav({
-  canManageStaff,
   isSuperAdmin,
   hasOwnAgreement = false,
   canApproveLeave = false,
   perms = {},
 }: {
-  canManageStaff: boolean;
   isSuperAdmin: boolean;
   /** An agreement has been sent to this staff member — only then is "My agreement" worth a link. */
   hasOwnAgreement?: boolean;
@@ -101,10 +99,11 @@ export function buildStaffNav({
   const allowed = (href: string) => canOpenPath(href, perms, isSuperAdmin);
   const shaped = BASE_STAFF_NAV.map((item) => {
     if (item.label === "HR" && item.children) {
-      const base = canManageStaff ? item.children : item.children.filter((c) => c.label !== "Staff Management");
+      // Staff Management is everyone's: the Super Admin manages every record
+      // there, and anyone else sees their own details, read-only.
       // Everyone has leave of their own; approvers also get the list to decide.
       const children = [
-        ...base,
+        ...item.children,
         ...(canApproveLeave ? [{ label: "Leave", href: "/admin/leave" }] : []),
         { label: "My leave", href: "/my-leave" },
         ...(hasOwnAgreement ? [{ label: "My agreement", href: "/my-agreement" }] : []),

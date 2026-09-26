@@ -11,12 +11,14 @@
 //      and a section with nothing left in it is not shown.
 //   2. Typing a hidden page's address shows "no access"; an allowed one opens.
 //   3. A detail page is guarded by its section.
-//   4. A non-Super-Admin who may edit staff sees the official email locked,
-//      the save action refuses a changed one, and so does the database (0274)
-//      — and the login email stays where it was. (That a Super Admin's change
-//      moves the login is check:staffcreds.)
+//   4. Nobody but a Super Admin edits staff: the database refuses to grant
+//      staff.manage to anyone else (0284); a manager opening Staff Management
+//      sees their own record and no one else's, with nothing to edit; and the
+//      database will not take a change to a colleague's official email from
+//      them directly (staff_write, 0274). (That a Super Admin's change moves
+//      the login is check:staffcreds.)
 //
-// Needs 0273 and 0274 applied.
+// Needs 0273, 0274 and 0284 applied.
 import { BASE, apiAs, clients, fixtures, openBrowser, reporter, requireConfirmation, signIn } from "./verify-portal-lib.mjs";
 
 requireConfirmation("check:pageaccess");
@@ -48,11 +50,6 @@ try {
   const counselor = await fx.staff("pa-counselor", ["counselor"]);
   const manager = await fx.staff("pa-manager", ["management"]);
   const target = await fx.staff("pa-target", ["counselor"]);
-  // A manager who may edit staff but is not a Super Admin — the case the lock is for.
-  const { error: grantError } = await admin
-    .from("staff_permission_overrides")
-    .upsert({ staff_id: manager.id, permission_key: "staff.manage", allowed: true });
-  if (grantError) throw new Error(`could not grant staff.manage: ${grantError.message}`);
   await admin.from("staff").update({ email_official: target.email }).eq("id", target.id);
   // A real record, so the detail-page checks reach a page that exists — a
   // made-up path is Next's 404, which no guard is ever asked about.
@@ -87,37 +84,24 @@ try {
   ok("counselor: /admin/audit-log shows no access", !(await opens(cou, "/admin/audit-log")));
   ok("counselor: /leads opens", await opens(cou, "/leads"));
 
-  // ----------------------------------------- the official email is locked
+  // ------------------------------------------- staff are the Super Admin's
+  // Managing staff used to be a permission the Role Permissions screen could
+  // hand to anyone. It is the Super Admin's alone now, and the database says so.
+  const grant = await admin.from("staff_permission_overrides").upsert({ staff_id: manager.id, permission_key: "staff.manage", allowed: true });
+  const roleGrant = await admin.from("role_permission_overrides").upsert({ role: "management", permission_key: "staff.manage", allowed: true });
+  ok("staff.manage cannot be granted to a person, nor to a role", Boolean(grant.error) && Boolean(roleGrant.error),
+    JSON.stringify({ person: grant.error?.message ?? "granted", role: roleGrant.error?.message ?? "granted" }));
+
   const mgr = await signIn(browser, manager.email);
   await mgr.goto(`${BASE}/admin/staff`, { waitUntil: "domcontentloaded" });
-  const row = mgr.locator("tr", { hasText: target.name }).first();
-  // The table streams in after the page; clicking before it lands times out.
-  await row.waitFor({ timeout: 60_000 });
-  await row.locator('button[aria-label="Actions"]').click();
-  await mgr.getByRole("button", { name: /Edit/ }).first().click();
-  const form = mgr.locator("form", { has: mgr.locator('input[name="email_official"]') }).last();
-  const emailInput = form.locator('input[name="email_official"]');
-  await emailInput.waitFor({ timeout: 30_000 });
-  ok("manager: the official email field is read-only", await emailInput.evaluate((el) => el.readOnly));
-  ok("manager: ...and still shows the address", (await emailInput.inputValue()) === target.email);
+  const own = mgr.locator("[data-own-staff-record]");
+  await own.waitFor({ timeout: 60_000 }).catch(() => {});
+  const ownText = (await own.count()) ? await own.innerText() : "";
+  ok("manager: Staff Management shows their own record", ownText.includes(manager.name), ownText.slice(0, 120));
+  ok("manager: ...and nobody else's", !(await mgr.locator("body").innerText()).includes(target.name));
+  ok("manager: ...with nothing to edit", (await mgr.locator('button[aria-label="Actions"], input[name="email_official"]').count()) === 0);
 
-  // Past the form: lift the read-only and submit a new address anyway.
   const forged = `zztmp-pa-forged-${Date.now()}@hmark-test.local`;
-  await emailInput.evaluate((el) => (el.readOnly = false));
-  await emailInput.fill(forged);
-  await form.getByRole("button", { name: /Save changes/ }).click();
-  let said = "";
-  for (let i = 0; i < 40; i++) {
-    said = await form.innerText();
-    if (/Only a Super Admin can change the official email|Saved\./.test(said)) break;
-    await mgr.waitForTimeout(1000);
-  }
-  ok("manager: the save is refused, and says why", /Only a Super Admin can change the official email/.test(said), said.slice(-200));
-  const { data: authUser } = await admin.auth.admin.getUserById(target.id);
-  ok("manager: their login email did not move", authUser?.user?.email === target.email, String(authUser?.user?.email));
-  const { data: stored } = await admin.from("staff").select("email_official").eq("id", target.id).single();
-  ok("manager: nor did the official email", stored?.email_official === target.email, String(stored?.email_official));
-
   // Past the app: straight to the database with the manager's own session.
   const asManager = await apiAs(url, anonKey, manager.email);
   // staff_write refuses the row, and 0274 would refuse the column if it did not.

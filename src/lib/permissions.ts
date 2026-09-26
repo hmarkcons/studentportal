@@ -4,10 +4,10 @@
 // source of truth for the admin UI + staff_has_permission()); this file
 // only fixes the key strings at compile time so call sites can't typo them.
 export const PERMISSION_KEYS = [
+  // Adding, editing and removing staff, their roles included: the Super
+  // Admin's alone, and not grantable to anyone else (0283, 0284) — see
+  // SUPER_ADMIN_ONLY_PERMISSIONS below.
   "staff.manage",
-  // Roles alone — deliberately separate from staff.manage, which carries
-  // salary and commission with it. See 0247.
-  "staff.assign_roles",
   "staff.approve_offsite_access",
   // Staff contracts (0271): wording, and issuing/filing. No default roles —
   // a Super Admin's until granted to a role on the Role Permissions screen.
@@ -43,5 +43,13 @@ export const PERMISSION_KEYS = [
   "settings.reengagement_messages",
   "inventory.manage",
 ] as const;
+
+/**
+ * Permissions a Super Admin holds and nobody else can be given: they are left
+ * off the Role Permissions screen and the per-person panel, and the database
+ * refuses an override for them (0284). Who manages staff — and so who decides
+ * anyone's roles — is not a switch.
+ */
+export const SUPER_ADMIN_ONLY_PERMISSIONS: readonly string[] = ["staff.manage"];
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];

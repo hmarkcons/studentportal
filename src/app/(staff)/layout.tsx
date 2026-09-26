@@ -30,11 +30,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
     getEffectivePermissions(),
     supabase.from("staff_agreements").select("id", { count: "exact", head: true }).eq("staff_id", staffRow.id),
   ]);
-  // Staff Management is also where roles are assigned, so someone who holds
-  // staff.assign_roles but not staff.manage still needs the link — the page
-  // itself shows them the roles and withholds the rest.
   const nav = buildStaffNav({
-    canManageStaff: perms["staff.manage"] === true || perms["staff.assign_roles"] === true,
     isSuperAdmin,
     hasOwnAgreement: (ownAgreements ?? 0) > 0,
     canApproveLeave: perms["leave.approve"] === true,

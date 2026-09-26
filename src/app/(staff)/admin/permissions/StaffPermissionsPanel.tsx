@@ -5,6 +5,7 @@ import { setStaffPermissionOverride, resetStaffPermissionOverride } from "@/lib/
 import type { PermissionKey } from "@/lib/permissions";
 import type { ActionResultLike } from "@/lib/actionStatus";
 import { ActionStatus } from "@/components/ActionStatus";
+import { SUPER_ADMIN_ONLY_PERMISSIONS } from "@/lib/permissions";
 
 type Def = { key: string; category: string; label: string; description: string; default_roles: string[] };
 
@@ -80,6 +81,8 @@ export function StaffPermissionsPanel({
 }) {
   const categories = new Map<string, Def[]>();
   for (const d of definitions) {
+    // Not something anyone but a Super Admin can hold (0284).
+    if (SUPER_ADMIN_ONLY_PERMISSIONS.includes(d.key)) continue;
     if (!categories.has(d.category)) categories.set(d.category, []);
     categories.get(d.category)!.push(d);
   }

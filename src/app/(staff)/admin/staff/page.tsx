@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { StatCard } from "@/components/ui/StatCard";
 import { AddStaffButton } from "./AddStaffButton";
 import { StaffTable } from "./StaffTable";
+import { StaffDetails } from "./StaffDetails";
 import { PartnerApprovalButton } from "./PartnerApprovalButton";
 import type { StaffRecord } from "./StaffForm";
 import { COMPENSATION_EMBED, withCompensationAll, type Compensation } from "@/lib/staffCompensation";
@@ -20,43 +21,85 @@ function one<T>(v: T | T[] | null) {
 // monthly_target is here rather than with pay on purpose: it is a
 // registrations target, shown to Management and counselors on the dashboard
 // and in two reports, not compensation. See 0249.
-const BASE_COLUMNS = `id, full_name, role, roles, designation, status, gender, date_of_birth, marital_status, cnic, address,
-   mobile_personal, mobile_official, email_personal, email_official,
-   emergency_contact_number, emergency_contact_name, emergency_contact_relation,
-   monthly_target, photo_path, joined_on`;
+//
+// The personal details — CNIC, date of birth, address, personal contacts,
+// emergency contact — are not columns a signed-in user may select (0285).
+// They come from staff_personal_details(), which returns the viewer's own, or
+// everyone's for a Super Admin, and are merged in by id.
+const WORK_COLUMNS = `id, full_name, role, roles, designation, status, mobile_official, email_official, monthly_target, photo_path, joined_on`;
+
+type PersonalDetails = {
+  id: string;
+  gender: string | null;
+  date_of_birth: string | null;
+  marital_status: string | null;
+  cnic: string | null;
+  address: string | null;
+  mobile_personal: string | null;
+  email_personal: string | null;
+  emergency_contact_number: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_relation: string | null;
+};
+
+type StaffRow = Omit<StaffRecord, keyof Compensation> & { photo_path: string | null; compensation?: Compensation | null };
+
+function withPersonal<T extends { id: string }>(rows: T[] | null, personal: PersonalDetails[] | null): T[] {
+  const byId = new Map((personal ?? []).map((p) => [p.id, p]));
+  return (rows ?? []).map((r) => ({ ...r, ...(byId.get(r.id) ?? {}) }));
+}
 
 export default async function StaffAdminPage() {
   const { supabase, staff: viewer } = await getStaffSession();
   const isSuperAdminViewer = hasRole(viewer, "super_admin");
 
   const perms = await getEffectivePermissions();
+  // The Super Admin's alone, and not grantable to anyone else (0284).
   const canManageStaff = perms["staff.manage"] === true;
-  const canAssignRoles = perms["staff.assign_roles"] === true;
 
-  // The nav hides this page from anyone holding neither permission, but the
-  // URL is still typeable, and RLS would hand a counselor their own row — a
-  // one-person "Staff Management" screen that looks like a bug.
-  if (!canManageStaff && !canAssignRoles) {
+  // Everyone else sees one record here — their own — and changes nothing.
+  // Their details and roles are the Super Admin's to keep up to date. What the
+  // database lets them read says the same: every colleague's personal details
+  // are withheld from them (0285), and their own come from
+  // staff_personal_details().
+  if (!canManageStaff) {
+    const myId = viewer?.id ?? "";
+    const [{ data: meRow }, { data: myPersonal }] = await Promise.all([
+      supabase.from("staff").select(`${WORK_COLUMNS}, ${COMPENSATION_EMBED}`).eq("id", myId).returns<StaffRow[]>(),
+      supabase.rpc("staff_personal_details", { p_staff: myId }),
+    ]);
+    const me = (withCompensationAll(withPersonal(meRow, myPersonal as PersonalDetails[] | null)) as (StaffRecord & { photo_path: string | null })[])[0];
+    const myPhoto = me?.photo_path ? (await avatarUrlMap([me.photo_path])).get(me.photo_path) : undefined;
     return (
-      <Card className="mt-6">
-        <p className="text-sm text-muted">You don&apos;t have permission to view staff management.</p>
-      </Card>
+      <div className="w-full max-w-3xl">
+        <h2 className="mb-1 text-lg font-semibold text-ink">Staff Management</h2>
+        <p className="mb-4 text-sm text-muted">
+          Your own record. Only the Super Admin can change staff details or give anyone a role — ask them if anything here needs
+          correcting.
+        </p>
+        <Card>
+          {me ? (
+            <div data-own-staff-record>
+              <p className="mb-3 text-base font-semibold text-ink">{me.full_name}</p>
+              <StaffDetails staff={me} photoUrl={myPhoto ?? null} />
+            </div>
+          ) : (
+            <p className="text-sm text-muted">Your staff record could not be found. Ask the Super Admin to check it.</p>
+          )}
+        </Card>
+      </div>
     );
   }
 
-  // A roles-only viewer never receives anyone's pay, and since 0250 that is
-  // enforced by the database as well: staff_compensation's own policy is
-  // Super Admin, Finance, or your own row, so the embed comes back null for
-  // Management even if this page asked for it.
-  const { data: staffRows } = await supabase
-    .from("staff")
-    .select(canManageStaff ? `${BASE_COLUMNS}, ${COMPENSATION_EMBED}` : BASE_COLUMNS)
-    .order("full_name")
-    .returns<(Omit<StaffRecord, keyof Compensation> & { photo_path: string | null; compensation?: Compensation | null })[]>();
+  const [{ data: staffRows }, { data: personal }] = await Promise.all([
+    supabase.from("staff").select(`${WORK_COLUMNS}, ${COMPENSATION_EMBED}`).order("full_name").returns<StaffRow[]>(),
+    supabase.rpc("staff_personal_details"),
+  ]);
 
   // Flattened, so the form, the table and the View panel keep reading
-  // `staff.monthly_salary` the way they did when it was a column.
-  const staff = withCompensationAll(staffRows) as (StaffRecord & { photo_path: string | null })[];
+  // `staff.monthly_salary` and `staff.cnic` the way they did when both were
+  // columns on this table.
+  const staff = withCompensationAll(withPersonal(staffRows, personal as PersonalDetails[] | null)) as (StaffRecord & { photo_path: string | null })[];
 
   // One request for the whole directory's photos, not one per person, and
   // through avatarUrls so the URLs are the ones the browser already has. This
@@ -121,11 +164,9 @@ export default async function StaffAdminPage() {
     <div className="w-full">
       <div className="mb-1 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-ink">Staff Management</h2>
-        {canManageStaff && <AddStaffButton />}
+        <AddStaffButton />
       </div>
-      <p className="mb-4 text-sm text-muted">{canManageStaff
-          ? "Manage all staff members — add, edit, and track their details and commission rates."
-          : "Assign each staff member the roles their job needs. Pay and personal details stay with the Super Admin."}</p>
+      <p className="mb-4 text-sm text-muted">Manage all staff members — add, edit, and track their details, roles and commission rates.</p>
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard label="Total Staff" value={total} icon="👥" />
@@ -139,7 +180,6 @@ export default async function StaffAdminPage() {
         canManagePermissions={isSuperAdminViewer}
         canManagePhoto={isSuperAdminViewer}
         canGrantSuperAdmin={isSuperAdminViewer}
-        canSeePay={canManageStaff}
         permissionDefs={permissionDefs ?? []}
         roleOverrides={roleOverrides ?? []}
         staffOverrides={staffOverrides ?? []}

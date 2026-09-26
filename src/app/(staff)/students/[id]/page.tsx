@@ -499,7 +499,9 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     leadRegistration?.assigned_counselor_id
       ? supabase
           .from("staff")
-          .select("full_name, designation, mobile_official, mobile_personal, email_official, photo_path")
+          // Official contact only: a colleague's personal mobile is theirs and
+          // the Super Admin's to read (0285).
+          .select("full_name, designation, mobile_official, email_official, photo_path")
           .eq("id", leadRegistration.assigned_counselor_id)
           .maybeSingle()
       : Promise.resolve({ data: null }),
@@ -509,7 +511,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     // registers, per the doc's handoff rule.
     supabase
       .from("staff")
-      .select("id, full_name, designation, mobile_official, mobile_personal, email_official, photo_path")
+      .select("id, full_name, designation, mobile_official, email_official, photo_path")
       .contains("roles", ["processing"])
       .eq("status", "active")
       .order("full_name"),
@@ -1155,8 +1157,8 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                 <div>
                   <p className="font-medium">{assignedCounselorStaff.full_name}</p>
                   {assignedCounselorStaff.designation && <p className="text-muted">{assignedCounselorStaff.designation}</p>}
-                  {(assignedCounselorStaff.mobile_official ?? assignedCounselorStaff.mobile_personal) && (
-                    <p className="text-muted">{assignedCounselorStaff.mobile_official ?? assignedCounselorStaff.mobile_personal}</p>
+                  {assignedCounselorStaff.mobile_official && (
+                    <p className="text-muted">{assignedCounselorStaff.mobile_official}</p>
                   )}
                   {assignedCounselorStaff.email_official && <p className="text-muted">{assignedCounselorStaff.email_official}</p>}
                 </div>
@@ -1188,8 +1190,8 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                     <div>
                       <p className="font-medium">{officer.full_name}</p>
                       {officer.designation && <p className="text-muted">{officer.designation}</p>}
-                      {(officer.mobile_official ?? officer.mobile_personal) && (
-                        <p className="text-muted">{officer.mobile_official ?? officer.mobile_personal}</p>
+                      {officer.mobile_official && (
+                        <p className="text-muted">{officer.mobile_official}</p>
                       )}
                       {officer.email_official && <p className="text-muted">{officer.email_official}</p>}
                     </div>

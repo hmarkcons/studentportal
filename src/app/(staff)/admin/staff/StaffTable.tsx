@@ -21,7 +21,6 @@ export function StaffTable({
   canManagePermissions = false,
   canManagePhoto = false,
   canGrantSuperAdmin = false,
-  canSeePay = true,
   permissionDefs = [],
   roleOverrides = [],
   staffOverrides = [],
@@ -36,12 +35,6 @@ export function StaffTable({
   canManagePhoto?: boolean;
   /** Only a Super Admin may grant or remove the Super Admin role. */
   canGrantSuperAdmin?: boolean;
-  /**
-   * False for a viewer who holds staff.assign_roles alone: roles are theirs to
-   * set, pay is not theirs to see. The page does not fetch the pay columns for
-   * them either, so the column would be empty regardless.
-   */
-  canSeePay?: boolean;
   permissionDefs?: PermissionDef[];
   roleOverrides?: RoleOverrideRow[];
   staffOverrides?: StaffOverrideRow[];
@@ -103,7 +96,7 @@ export function StaffTable({
               <th className="px-4 py-3">Staff Name</th>
               <th className="px-4 py-3">Designation</th>
               <th className="px-4 py-3">Mobile (Official)</th>
-              {canSeePay && <th className="px-4 py-3">Commission Rate</th>}
+              <th className="px-4 py-3">Commission Rate</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Actions</th>
             </tr>
@@ -134,7 +127,6 @@ export function StaffTable({
                 </td>
                 <td className="px-4 py-3 text-ink">{s.designation ?? "—"}</td>
                 <td className="px-4 py-3 text-ink">{s.mobile_official ?? "—"}</td>
-                {canSeePay && (
                 <td className="px-4 py-3 text-ink">
                   {s.commission_rate_general != null
                     ? s.commission_type_general === "flat"
@@ -142,7 +134,6 @@ export function StaffTable({
                       : `${s.commission_rate_general}%`
                     : "—"}
                 </td>
-                )}
                 <td className="px-4 py-3">
                   <Badge tone={s.status === "active" ? "success" : s.status === "suspended" ? "warning" : "neutral"}>
                     {s.status === "active" ? "Active" : s.status === "suspended" ? "Suspended" : "Inactive"}
@@ -155,7 +146,6 @@ export function StaffTable({
                     canManagePermissions={canManagePermissions}
                     canManagePhoto={canManagePhoto}
                     canGrantSuperAdmin={canGrantSuperAdmin}
-                    rolesOnly={!canSeePay}
                     permissionDefs={permissionDefs}
                     roleOverrides={roleOverrides.filter((o) => staffRoles(s).includes(o.role as never))}
                     staffOverrides={staffOverrides.filter((o) => o.staff_id === s.id)}
@@ -169,7 +159,7 @@ export function StaffTable({
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={canSeePay ? 6 : 5} className="px-4 py-10 text-center text-muted">
+                <td colSpan={6} className="px-4 py-10 text-center text-muted">
                   No staff match this search.
                 </td>
               </tr>

@@ -172,7 +172,6 @@ export function StaffForm({
   onSuccess,
   allStaff = [],
   canGrantSuperAdmin = false,
-  rolesOnly = false,
   assignedStudentCount = 0,
   canManagePhoto = false,
 }: {
@@ -183,12 +182,6 @@ export function StaffForm({
   assignedStudentCount?: number;
   /** Only a Super Admin may grant or remove the Super Admin role itself. */
   canGrantSuperAdmin?: boolean;
-  /**
-   * Render the roles alone. For a viewer who holds staff.assign_roles without
-   * staff.manage: Management decides who does which job, and pay stays with
-   * the Super Admin.
-   */
-  rolesOnly?: boolean;
   /**
    * A staff member's photo is the Super Admin's to set and to remove. Anyone
    * else editing this form sees the picture and no controls — the actions are
@@ -213,32 +206,6 @@ export function StaffForm({
 
   const needsReplacement = isEdit && statusValue === "inactive" && assignedStudentCount > 0;
   const replacementOptions = allStaff.filter((s) => s.id !== staff?.id && s.status === "active");
-
-  // Somebody holding staff.assign_roles alone gets the roles and nothing else.
-  // Showing them the full form would mean rows of blank pay and personal
-  // fields — the page never fetched those values for them — which reads as
-  // data loss and would post empties back if the action didn't ignore them.
-  if (rolesOnly) {
-    return (
-      <form action={formAction} onReset={(e) => e.preventDefault()} className="flex flex-col">
-        <p className="mb-4 text-sm text-ink">
-          Roles for <span className="font-medium">{staff?.full_name}</span>
-        </p>
-        <div className="mb-6">
-          <RolesField selectedRoles={selectedRoles} primary={staff?.role} canGrantSuperAdmin={canGrantSuperAdmin} />
-        </div>
-        {state?.error && <p className="mb-3 text-sm text-danger">{state.error}</p>}
-        <div className="flex items-center gap-2">
-          <Button type="submit" variant="primary" size="lg" pending={pending} status={{ state, label: "Roles saved." }}>
-            Save roles
-          </Button>
-          <Button type="button" variant="outline" size="lg" onClick={onSuccess}>
-            {state?.success ? "Close" : "Cancel"}
-          </Button>
-        </div>
-      </form>
-    );
-  }
 
   return (
     <div className="flex flex-col">

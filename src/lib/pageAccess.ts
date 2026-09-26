@@ -12,7 +12,8 @@
 //                    lock someone out of the portal altogether;
 //   /my-leave        everyone's own leave;
 //   /my-agreement    their own agreement, offered only when they have one;
-//   /admin/staff     governed by staff.manage / staff.assign_roles;
+//   /admin/staff     everyone's: the Super Admin manages every record there,
+//                    anyone else sees only their own, read-only;
 //   /admin/leave     governed by leave.approve;
 //   /admin/permissions  Super Admin only, hard-coded so it can never be
 //                    switched off and lock every admin out of this screen.

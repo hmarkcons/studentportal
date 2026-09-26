@@ -3,16 +3,18 @@
 //   VERIFY_AGAINST_PRODUCTION=yes npm run check:roles
 //
 // One employee can hold several roles (migration 0247), access is the union of
-// them, and Management can assign roles without being able to see or set pay.
-// None of that can be checked from unit tests: it is the app, RLS and the
-// set_staff_roles function (0248) agreeing with each other, and the interesting
-// cases are the refusals.
+// them, and only a Super Admin gives anyone a role (0283). None of that can be
+// checked from unit tests: it is the app, RLS and the set_staff_roles function
+// agreeing with each other, and the interesting cases are the refusals.
 //
-// Three rules this exists to keep honest:
+// The rules this exists to keep honest:
 //   - access is the union, so adding a role never takes access away
-//   - only a Super Admin can grant or remove Super Admin, enforced in the
-//     database and not merely hidden in the form
+//   - only a Super Admin changes anyone's roles — their own included —
+//     enforced in the database and not merely hidden in the form
 //   - everybody keeps at least one role
+//   - anyone but a Super Admin sees only their own record on Staff
+//     Management, and cannot read a colleague's personal details through
+//     the API either (0284, 0285)
 //
 // Creates and removes zztmp fixture accounts. See verify-portal-lib.mjs.
 import {
@@ -102,78 +104,76 @@ try {
 
   page = await signIn(browser, plain.email);
   ok("a counselor alone does not", !(await hasFinanceControls(page, plain.id)));
+  await page.close();
+
+  // ---------------------------- everyone else: their own record, read-only
   // Collapsed nav sections keep their children out of innerText, so the markup
   // is what says whether a link is there.
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded" });
-  ok("...and has no Staff Management link", !/Staff Management/.test(await page.content()));
-  await page.goto(`${BASE}/admin/staff`, { waitUntil: "domcontentloaded" });
-  ok("...and typing /admin/staff is refused rather than showing a one-row list",
-    /don.t have permission/i.test(await page.locator("body").innerText()));
-  await page.close();
-
-  // ------------------------------------------- Management: roles, never pay
-  page = await signIn(browser, manager.email);
-  ok("Management sees the Staff Management link", /Staff Management/.test(await page.content()));
-
-  await page.goto(`${BASE}/admin/staff`, { waitUntil: "domcontentloaded" });
-  const listText = await page.locator("body").innerText();
-  ok("Management is told what the page is for them", /Assign each staff member the roles/i.test(listText));
-  ok("...with no Commission Rate column", !/Commission Rate/i.test(listText));
-  ok("...and no Add-staff button", (await page.getByRole("button", { name: /Add Staff/i }).count()) === 0);
-  ok("both of the subject's roles are listed",
-    listText.includes("Counselor / Advisor, Finance / Accounts"), listText.slice(0, 160));
-
-  await openStaffForm(page, "zztmp rolesubject");
-  const managerForm = await page.locator("form", { hasText: "Roles (system access)" }).innerText();
-  ok("Management gets the roles alone",
-    /Roles \(system access\)/i.test(managerForm) && !/Monthly salary|Commission/i.test(managerForm),
-    managerForm.slice(0, 160));
-  ok("...with a button that says so",
-    (await page.getByRole("button", { name: /Save roles/ }).count()) === 1);
-  ok("...and Super Admin locked",
-    await page.locator('input[name="roles"][value="super_admin"]').isDisabled());
-
-  await page.locator('input[name="roles"][value="processing"]').check();
-  const managerSave = await saveAndSettle(page, /Save roles/);
-  ok("Management's save reports success", /Saved\./i.test(managerSave), managerSave.slice(-140));
-  after = await rolesOf(subject.id);
-  ok("Management can add a role", (after.roles ?? []).includes("processing"), JSON.stringify(after.roles));
-  ok("...without disturbing the roles already held",
-    (after.roles ?? []).includes("counselor") && (after.roles ?? []).includes("finance"),
-    JSON.stringify(after.roles));
-  await page.close();
+  for (const [who, person] of [["a counselor", plain], ["Management", manager]]) {
+    page = await signIn(browser, person.email);
+    ok(`${who} has the Staff Management link`, /Staff Management/.test(await page.content()));
+    await page.goto(`${BASE}/admin/staff`, { waitUntil: "domcontentloaded" });
+    const own = page.locator("[data-own-staff-record]");
+    await own.waitFor({ timeout: 60_000 }).catch(() => {});
+    const body = await page.locator("body").innerText();
+    ok(`...where ${who} sees their own record`, (await own.count()) === 1 && (await own.innerText()).includes(person.name), body.slice(0, 200));
+    ok(`...and nobody else's`, !body.includes("zztmp rolesubject") && !body.includes("zztmp rolesuper"));
+    ok(`...with no way to change anything`,
+      (await page.locator('main button[aria-label="Actions"], main input[name="roles"], main form').count()) === 0 &&
+        (await page.locator("main").getByRole("button", { name: /Add Staff|Save/i }).count()) === 0);
+    await page.close();
+  }
 
   // ------------------------------- the refusals that must bind server-side
-  // Hiding the tick box is not a restriction. These go straight at the RPC,
-  // the way a hand-crafted request would.
+  // Hiding the form is not a restriction. These go straight at the RPC, the
+  // way a hand-crafted request would.
   const managerApi = await apiAs(url, anonKey, manager.email);
-  const granted = await managerApi.rpc("set_staff_roles", {
-    p_staff: subject.id,
-    p_roles: ["counselor", "super_admin"],
-  });
-  ok("a forged Management request for Super Admin is refused by the database",
-    Boolean(granted.error) && /Only a Super Admin/i.test(granted.error.message),
-    granted.error ? granted.error.message : "no error at all");
-  after = await rolesOf(subject.id);
-  ok("...and Super Admin was not granted", !(after.roles ?? []).includes("super_admin"),
-    JSON.stringify(after.roles));
-
-  const removal = await managerApi.rpc("set_staff_roles", { p_staff: superUser.id, p_roles: ["management"] });
-  ok("Management cannot strip Super Admin from someone either",
-    Boolean(removal.error) && /Only a Super Admin/i.test(removal.error.message),
-    removal.error ? removal.error.message : "no error at all");
-
   const plainApi = await apiAs(url, anonKey, plain.email);
-  const byCounselor = await plainApi.rpc("set_staff_roles", { p_staff: subject.id, p_roles: ["counselor"] });
-  ok("a counselor calling set_staff_roles directly is refused",
-    Boolean(byCounselor.error) && /permission to change staff roles/i.test(byCounselor.error.message),
-    byCounselor.error ? byCounselor.error.message : "no error at all");
+  const attempts = [
+    ["Management giving a colleague a role", managerApi, subject.id, ["counselor", "processing"]],
+    ["Management giving themselves Finance", managerApi, manager.id, ["management", "finance"]],
+    ["Management granting Super Admin", managerApi, subject.id, ["counselor", "super_admin"]],
+    ["Management removing Super Admin from someone", managerApi, superUser.id, ["management"]],
+    ["a counselor giving themselves Finance", plainApi, plain.id, ["counselor", "finance"]],
+    ["a counselor changing a colleague's roles", plainApi, subject.id, ["counselor"]],
+  ];
+  for (const [label, api, target, roles] of attempts) {
+    const beforeTry = await rolesOf(target);
+    const res = await api.rpc("set_staff_roles", { p_staff: target, p_roles: roles });
+    const afterTry = await rolesOf(target);
+    ok(`${label} is refused by the database`,
+      Boolean(res.error) && /Only a Super Admin can change staff roles/i.test(res.error.message) &&
+        JSON.stringify(afterTry.roles) === JSON.stringify(beforeTry.roles),
+      res.error ? res.error.message : `no error — roles now ${JSON.stringify(afterTry.roles)}`);
+  }
+  const directly = await plainApi.from("staff").update({ roles: ["finance"] }).eq("id", plain.id).select("id");
+  ok("...nor may anyone write their roles straight onto their row", Boolean(directly.error) || (directly.data ?? []).length === 0,
+    JSON.stringify(directly.error ?? directly.data));
 
-  const emptyViaApi = await (await apiAs(url, anonKey, superUser.email))
-    .rpc("set_staff_roles", { p_staff: subject.id, p_roles: [] });
+  const superApi = await apiAs(url, anonKey, superUser.email);
+  const emptyViaApi = await superApi.rpc("set_staff_roles", { p_staff: subject.id, p_roles: [] });
   ok("even a Super Admin cannot leave somebody with no roles",
     Boolean(emptyViaApi.error) && /Pick at least one role/i.test(emptyViaApi.error.message),
     emptyViaApi.error ? emptyViaApi.error.message : "no error at all");
+
+  // ------------------------------------------------- personal details (0285)
+  // A colleague's CNIC and the like cannot be read through the API by anyone
+  // but that person and the Super Admin — whatever the pages show.
+  await admin.from("staff").update({ cnic: "42101-0000000-1", address: "zztmp 1 Private Street" }).eq("id", subject.id);
+  for (const [who, api] of [["a counselor", plainApi], ["Management", managerApi]]) {
+    const read = await api.from("staff").select("id, cnic, address").eq("id", subject.id);
+    ok(`${who} cannot read a colleague's CNIC or address`, Boolean(read.error) && !JSON.stringify(read.data ?? "").includes("42101"),
+      JSON.stringify(read.error?.message ?? read.data));
+    const viaFn = await api.rpc("staff_personal_details", { p_staff: subject.id });
+    ok(`...nor get them from staff_personal_details`, !viaFn.error && (viaFn.data ?? []).length === 0, JSON.stringify(viaFn.error ?? viaFn.data));
+    const names = await api.from("staff").select("id, full_name, designation, mobile_official, email_official").eq("id", subject.id);
+    ok(`...while a colleague's name and official contact are still there for ${who === "Management" ? "them" : "the work"}`,
+      !names.error && names.data?.[0]?.full_name === "zztmp rolesubject", JSON.stringify(names.error ?? names.data));
+  }
+  const mine = await plainApi.rpc("staff_personal_details", { p_staff: plain.id });
+  ok("a counselor can read their own personal details", !mine.error && (mine.data ?? []).length === 1, JSON.stringify(mine.error ?? mine.data));
+  const byAdmin = await superApi.rpc("staff_personal_details", { p_staff: subject.id });
+  ok("a Super Admin can read anyone's", !byAdmin.error && byAdmin.data?.[0]?.cnic === "42101-0000000-1", JSON.stringify(byAdmin.error ?? byAdmin.data));
 } finally {
   const removed = await fx.cleanup();
   await browser.close();

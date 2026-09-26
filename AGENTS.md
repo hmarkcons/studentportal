@@ -64,6 +64,16 @@ triggers; `npm run check:studentid` is what proves any of it.
 `withCompensation()`. The embed must name its foreign key, because the table has
 two to `staff` and PostgREST otherwise rejects the entire query.
 
+**A staff member's personal details are not columns you can select.** CNIC,
+date of birth, gender, marital status, address, personal phone and email and
+the emergency contact are withheld from signed-in users on `staff` (0285), so
+naming one — or `*` — fails with "permission denied". Read them through
+`staff_personal_details()`, which returns the caller's own or, for a Super
+Admin, anyone's. A new column on `staff` is unreadable by the app until it is
+granted in a migration; grant it unless it is personal. Only a Super Admin
+manages staff or changes anyone's roles (0283, 0284) — `staff.manage` cannot
+be granted to anyone else.
+
 **An import that writes an empty cell wipes a column.** The catalogue
 imports add or update, and a blank cell means "said nothing", never null — see
 `src/lib/importMerge.ts`. A parser that turns an empty yes/no cell into `false`,
