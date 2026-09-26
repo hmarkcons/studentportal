@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { generateInvoice } from "@/lib/actions/invoices";
 import { computeInvoiceMath, buildInstallmentPlan, SRB_TAX_RATE } from "@/lib/invoiceMath";
 import type { InvoiceBankSettings } from "@/lib/actions/invoiceSettings";
+import { bankFromSettings, hasPaymentInstructions } from "@/lib/invoiceIssuer";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { SERVICE_FEE_NAME, type ServiceType } from "@/lib/serviceType";
@@ -252,7 +253,7 @@ export function InvoiceGenerator({ students, bank }: { students: StudentOption[]
 
           <div className="rounded-md border border-border p-3 text-xs">
             <h4 className="mb-1 font-medium uppercase text-muted">Payable to</h4>
-            {bank?.account_title || bank?.bank_name || bank?.iban || bank?.account_number ? (
+            {bank && hasPaymentInstructions(bankFromSettings(bank)) ? (
               <div className="flex flex-col gap-0.5 text-ink">
                 {bank.account_title && <p>{bank.account_title}</p>}
                 {bank.bank_name && <p>{bank.bank_name}{bank.branch ? `, ${bank.branch}` : ""}</p>}
@@ -262,7 +263,7 @@ export function InvoiceGenerator({ students, bank }: { students: StudentOption[]
                 {bank.payment_note && <p className="text-muted">{bank.payment_note}</p>}
               </div>
             ) : (
-              <p className="text-warning">Not configured — invoices will print without payment instructions.</p>
+              <p className="text-muted">No bank details set — the invoice says nothing about where to pay.</p>
             )}
           </div>
 

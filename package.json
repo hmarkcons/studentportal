@@ -13,6 +13,7 @@
     "test": "npm run test:unit",
     "check:agreement": "node scripts/verify-agreement-flow.mjs",
     "check:invoice": "node scripts/verify-invoice-flow.mjs",
+    "check:invoicesettings": "node scripts/verify-invoice-settings.mjs",
     "check:pay": "node scripts/verify-pay-split.mjs",
     "check:roles": "node scripts/verify-multi-role.mjs",
     "check:speed": "node scripts/check-speed.mjs",

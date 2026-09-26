@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { getInvoiceBankSettings } from "@/lib/actions/invoiceSettings";
+import { bankFromSettings, hasBankDetails } from "@/lib/invoiceIssuer";
 import { resolveInvoiceDefaults } from "@/lib/invoiceDefaults";
 import { computeInvoiceMath, computePaymentProgress, sumLineItems } from "@/lib/invoiceMath";
 import { hasRole } from "@/lib/auth/roles";
@@ -39,7 +40,7 @@ export default async function InvoiceGeneratorPage() {
   }
 
   const bank = await getInvoiceBankSettings();
-  const bankConfigured = Boolean(bank?.account_title || bank?.bank_name || bank?.iban || bank?.account_number);
+  const bankConfigured = hasBankDetails(bankFromSettings(bank));
 
   // Registered students, the country they registered for, and their agreement
   // — everything the picker needs to pre-fill an invoice.
@@ -230,11 +231,11 @@ export default async function InvoiceGeneratorPage() {
       {!bankConfigured && (
         <Card className="mb-4 bg-warning-bg">
           <p className="text-sm text-warning">
-            No bank details are configured, so invoices will print without payment instructions.{" "}
+            No bank details are set, so invoices leave the bank out and tell the student nothing about where to pay.{" "}
             <Link href="/setup/invoice-settings" className="underline">
-              Set them in Setup › Invoice Settings
+              Add them in Setup › Invoice Settings
             </Link>{" "}
-            before sending anything to a student.
+            if students should pay by bank transfer.
           </p>
         </Card>
       )}

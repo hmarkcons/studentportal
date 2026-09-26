@@ -16,11 +16,11 @@ import {
   sumLineItems,
   CURRENT_TAX_BASE,
   SRB_TAX_RATE,
-  conversionNote,
   type AdminChargeLine,
   type TaxBase,
 } from "@/lib/invoiceMath";
 import { planScheduleChange } from "@/lib/invoiceSchedule";
+import { ISSUER_COLUMNS, bankFromSettings, issuerFromSettings, type IssuerRow } from "@/lib/invoiceIssuer";
 import { serviceOf, SERVICE_FEE_NAME, SERVICE_FEE_TITLE, VISA_INVOICE_TERMS } from "@/lib/serviceType";
 
 /**
@@ -827,7 +827,7 @@ export async function buildAndSendInvoiceEmail(
 
   const { data: bankRow } = await supabase
     .from("invoice_settings")
-    .select("bank_name, account_title, account_number, iban, branch, swift_code, payment_note, account_currency")
+    .select(`bank_name, account_title, account_number, iban, branch, swift_code, payment_note, ${ISSUER_COLUMNS}`)
     .eq("id", true)
     .maybeSingle();
 
@@ -862,18 +862,10 @@ export async function buildAndSendInvoiceEmail(
     balanceDue,
     receiptUrl: `${getSiteUrl()}/receipt/${token}`,
     variant,
-    conversionNote: conversionNote(invoice.currency, bankRow?.account_currency),
-    bank: bankRow
-      ? {
-          bankName: bankRow.bank_name,
-          accountTitle: bankRow.account_title,
-          accountNumber: bankRow.account_number,
-          iban: bankRow.iban,
-          branch: bankRow.branch,
-          swiftCode: bankRow.swift_code,
-          paymentNote: bankRow.payment_note,
-        }
-      : null,
+    // Who it is from and what the tax is called, from Invoice Settings.
+    companyName: issuerFromSettings(bankRow as IssuerRow | null).companyName,
+    taxLabel: issuerFromSettings(bankRow as IssuerRow | null).taxLabel,
+    bank: bankFromSettings(bankRow),
   });
 
   const sent = await sendEmail({
@@ -1026,20 +1018,10 @@ export async function buildAndStoreInvoicePdf(
   // would print "bank details not configured" on every cron-generated copy.
   const { data: bankRow } = await supabase
     .from("invoice_settings")
-    .select("bank_name, account_title, account_number, iban, branch, swift_code, payment_note, account_currency")
+    .select(`bank_name, account_title, account_number, iban, branch, swift_code, payment_note, ${ISSUER_COLUMNS}`)
     .eq("id", true)
     .maybeSingle();
-  const bank = bankRow
-    ? {
-        bankName: bankRow.bank_name,
-        accountTitle: bankRow.account_title,
-        accountNumber: bankRow.account_number,
-        iban: bankRow.iban,
-        branch: bankRow.branch,
-        swiftCode: bankRow.swift_code,
-        paymentNote: bankRow.payment_note,
-      }
-    : null;
+  const bank = bankFromSettings(bankRow);
 
   const { renderToBuffer } = await import("@react-pdf/renderer");
   const { InvoiceDocument } = await import("@/lib/pdf/InvoiceDocument");
@@ -1090,7 +1072,7 @@ export async function buildAndStoreInvoicePdf(
       amountPaid,
       balanceDue,
       bank,
-      conversionNote: conversionNote(invoice.currency, bankRow?.account_currency),
+      issuer: issuerFromSettings(bankRow as IssuerRow | null),
       // The rate stamped on this invoice, never today's: a receipt already
       // in a student's hands must not restate itself.
       pkrPerEur: invoice.pkr_per_eur == null ? null : Number(invoice.pkr_per_eur),

@@ -9,6 +9,7 @@
 // clients can be relied on to render — no flexbox, no stylesheet, no webfont.
 
 import { feeLineLabel, installmentNote, type AdminChargeLine, type InvoiceMath } from "@/lib/invoiceMath";
+import { hasPaymentInstructions } from "@/lib/invoiceIssuer";
 
 export type InvoiceEmailData = {
   studentName: string;
@@ -41,8 +42,10 @@ export type InvoiceEmailData = {
    * installment is past due, and an acknowledgement once money has arrived.
    */
   variant?: "invoice" | "overdue" | "receipt";
-  /** Set when the invoice currency differs from the account currency. */
-  conversionNote?: string | null;
+  /** Who the invoice is from (Invoice Settings). Defaults to HMARK's name. */
+  companyName?: string;
+  /** What the tax is called on the invoice (Invoice Settings). */
+  taxLabel?: string;
   bank: {
     bankName: string | null;
     accountTitle: string | null;
@@ -108,6 +111,8 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
   const settled = receipt && data.balanceDue <= 0;
 
   const accent = receipt ? GREEN : overdue ? AMBER : INK;
+  // Who it is from, as Invoice Settings names the company.
+  const company = data.companyName?.trim() || "HMARK Consultants";
 
   // "Receipt", not "Receipt for invoice": what is being sent against a payment
   // of the administrative and consultancy fee is a receipt, and a subject line
@@ -116,7 +121,7 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
     ? `Receipt ${data.invoiceNumber} — ${money(data.currency, data.amountPaid)} received`
     : overdue
       ? `Payment overdue — Invoice ${data.invoiceNumber} — ${money(data.currency, data.balanceDue)} outstanding`
-      : `Invoice ${data.invoiceNumber} from HMARK Consultants — ${money(data.currency, data.balanceDue)} due`;
+      : `Invoice ${data.invoiceNumber} from ${company} — ${money(data.currency, data.balanceDue)} due`;
 
   // The one figure the reader opened the mail for.
   const heroLabel = receipt ? "Payment received" : overdue ? "Payment overdue" : "Amount due";
@@ -128,12 +133,16 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
       : `${money(data.currency, data.balanceDue)} still outstanding on ${data.invoiceNumber}.`
     : overdue
       ? `${money(data.currency, data.balanceDue)} is past its due date.`
-      : `Your invoice from HMARK Consultants${data.intake ? ` for the ${data.intake} intake` : ""}.`;
+      : `Your invoice from ${company}${data.intake ? ` for the ${data.intake} intake` : ""}.`;
 
   // A receipt for a settled invoice should not also tell the student where to
   // send money. It still does when something is left to pay, since a part
   // payment is acknowledged and chased in the same breath.
-  const showBank = Boolean(data.bank) && !settled;
+  //
+  // Only when there is somewhere to pay — bank details, or a payment note on
+  // its own. With the bank fields empty, the email says nothing about a bank
+  // (the settings row always exists, so its presence proved nothing).
+  const showBank = hasPaymentInstructions(data.bank) && !settled;
 
   const breakdown: [string, string][] = [
     [feeLineLabel(data.feeName ?? "Consultancy fee", data.destination), amount(math.consultancyFee)],
@@ -149,7 +158,7 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
   for (const li of data.lineItems) {
     breakdown.push([li.description ? `${li.name} · ${li.description}` : li.name, amount(li.amount)]);
   }
-  if (math.taxAmount > 0) breakdown.push([`SRB tax · ${math.taxRate}%`, amount(math.taxAmount)]);
+  if (math.taxAmount > 0) breakdown.push([`${data.taxLabel?.trim() || "SRB tax"} · ${math.taxRate}%`, amount(math.taxAmount)]);
   // One line per country, as on the receipt. A student with backup countries
   // is paying an administrative fee for each and should be able to see which.
   if (data.adminCharges.length > 0) {
@@ -175,7 +184,7 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
       ? `Thank you — we have received ${money(data.currency, data.amountPaid)} against invoice ${data.invoiceNumber}.${settled ? " Nothing further is outstanding." : ` ${money(data.currency, data.balanceDue)} remains outstanding.`}`
       : overdue
         ? `One or more installments on invoice ${data.invoiceNumber} are now past their due date. Please arrange payment at your earliest convenience.`
-        : `Please find your invoice ${data.invoiceNumber} from HMARK Consultants${data.destination ? ` for ${data.destination}` : ""}${data.intake ? ` (${data.intake} intake)` : ""}.`,
+        : `Please find your invoice ${data.invoiceNumber} from ${company}${data.destination ? ` for ${data.destination}` : ""}${data.intake ? ` (${data.intake} intake)` : ""}.`,
     ``,
     `${heroLabel.toUpperCase()}: ${money(data.currency, heroValue)}`,
     ``,
@@ -204,13 +213,12 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
           data.bank.swiftCode ? `  SWIFT: ${data.bank.swiftCode}` : "",
           `  Payment reference: ${data.invoiceNumber}`,
           data.bank.paymentNote ? `  ${data.bank.paymentNote}` : "",
-          data.conversionNote ? `  ${data.conversionNote}` : "",
         ]
       : []),
     ``,
     `If anything here looks wrong, reply to this email and your counselor will check it.`,
     ``,
-    `HMARK Consultants`,
+    company,
   ]
     .filter((l) => l !== "")
     .join("\n");
@@ -267,7 +275,6 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
               ${data.bank.paymentNote ? `<br><span style="color:${FAINT}">${esc(data.bank.paymentNote)}</span>` : ""}
             </td></tr>
           </table>
-          ${data.conversionNote ? `<div style="padding:12px 2px 0;font:12px ${FONT};color:${FAINT};line-height:1.65">${esc(data.conversionNote)}</div>` : ""}
         </td></tr>`
       : "";
 
@@ -297,7 +304,7 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
       <tr><td style="background:#ffffff;padding:38px 36px 34px">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse">
 
-          <tr><td style="font:600 10px ${FONT};letter-spacing:.16em;text-transform:uppercase;color:${FAINT}">HMARK Consultants</td></tr>
+          <tr><td style="font:600 10px ${FONT};letter-spacing:.16em;text-transform:uppercase;color:${FAINT}">${esc(company)}</td></tr>
 
           <!-- Hero: label small and quiet, figure large. One number should
                answer the reason the mail was opened. -->
@@ -315,7 +322,7 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
                 ? `Thank you, ${esc(data.studentName)} — your payment has been received${settled ? " and nothing further is outstanding" : ""}.`
                 : overdue
                   ? `${esc(data.studentName)}, one or more installments on this invoice are now past their due date.`
-                  : `${esc(data.studentName)}, here is your invoice from HMARK Consultants.`
+                  : `${esc(data.studentName)}, here is your invoice from ${esc(company)}.`
             }
           </td></tr>
 
@@ -358,7 +365,7 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
       </td></tr>
 
       <tr><td align="center" style="padding:20px 0 0;font:11px ${FONT};color:${FAINT}">
-        HMARK Consultants · Karachi, Pakistan
+        ${esc(company)}
       </td></tr>
 
     </table>

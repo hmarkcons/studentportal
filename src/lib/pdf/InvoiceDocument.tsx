@@ -2,6 +2,7 @@ import { Document, Page, Text, View, Image, StyleSheet, Font } from "@react-pdf/
 import { BRAND_LOGO_DATA_URI, BRAND_LOGO_RATIO } from "./brandLogo";
 import { pkrLine, pkrRateNote } from "../receiptPkr";
 import { feeLineLabel, type AdminChargeLine } from "../invoiceMath";
+import { hasPaymentInstructions, type InvoiceBank, type InvoiceIssuer } from "../invoiceIssuer";
 
 // Never break a word across lines.
 //
@@ -29,7 +30,10 @@ const styles = StyleSheet.create({
   head: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   brandLogo: { height: 46, width: 46 * BRAND_LOGO_RATIO },
   headRight: { textAlign: "right", flex: 1, paddingLeft: 24 },
-  docTitle: { fontFamily: "Helvetica-Bold", fontSize: 24, letterSpacing: 0.5, color: INK, marginBottom: 9 },
+  // Its own line height: inherited, the page's is sized for 9.5pt text, which
+  // left the title touching the company name — and a title that wraps, now
+  // that the office types it, would print its two lines over each other.
+  docTitle: { fontFamily: "Helvetica-Bold", fontSize: 24, lineHeight: 1.15, letterSpacing: 0.5, color: INK, marginBottom: 6 },
   companyName: { fontFamily: "Helvetica-Bold", fontSize: 8.5, color: INK_STRONG },
   companyLine: { fontSize: 8.5, color: INK },
   contactLine: { fontSize: 8.5, color: INK },
@@ -141,17 +145,12 @@ export type InvoicePdfData = {
   balanceDue: number;
   // Where the student actually sends the money. Read from invoice_settings so
   // it is maintained in Setup rather than hardcoded into this document.
-  bank: {
-    bankName: string | null;
-    accountTitle: string | null;
-    accountNumber: string | null;
-    iban: string | null;
-    branch: string | null;
-    swiftCode: string | null;
-    paymentNote: string | null;
-  } | null;
-  /** Set when the invoice currency differs from the account currency. */
-  conversionNote: string | null;
+  bank: InvoiceBank | null;
+  /**
+   * Who the invoice is from and the wording around the figures — the company
+   * block, titles, headings, tax name and small print (Invoice Settings, 0286).
+   */
+  issuer: InvoiceIssuer;
   /**
    * Rupees per euro, as stamped on this invoice when it was issued.
    *
@@ -185,7 +184,8 @@ function Pkr({ amount, rate, bold = false }: { amount: number; rate: number | nu
 export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
   // Wave prints RECEIPT once nothing is outstanding and INVOICE while it is,
   // which is also what the emailed "View receipt" button leads to.
-  const title = data.status === "paid" ? "RECEIPT" : "INVOICE";
+  const issuer = data.issuer;
+  const title = data.status === "paid" ? issuer.receiptTitle : issuer.invoiceTitle;
   // The headline band celebrates what was received on a settled invoice; the
   // totals column below always closes on what is still owed, so the arithmetic
   // reads straight down (Total, less payments, balance).
@@ -199,13 +199,26 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
           <Image src={BRAND_LOGO_DATA_URI} style={styles.brandLogo} />
           <View style={styles.headRight}>
             <Text style={styles.docTitle}>{title}</Text>
-            <Text style={styles.companyName}>HMARK Consultants</Text>
-            <Text style={styles.companyLine}>Suite 101, Dashityar Chambers, University Road, Gulshan-e-Iqbal, Block 13-C</Text>
-            <Text style={styles.companyLine}>Karachi, Sindh</Text>
-            <Text style={styles.companyLine}>Pakistan</Text>
-            <Text style={[styles.contactLine, { marginTop: 9 }]}>Phone: +92 213 4999777</Text>
-            <Text style={styles.contactLine}>Mobile: +92 334 3297870</Text>
-            <Text style={styles.contactLine}>www.hmarkconsultants.com</Text>
+            {/* Invoice Settings: each line the office has filled in, and none
+                it has left blank. */}
+            <Text style={styles.companyName}>{issuer.companyName}</Text>
+            {issuer.addressLines.map((line, i) => (
+              <Text key={i} style={styles.companyLine}>
+                {line}
+              </Text>
+            ))}
+            {[
+              issuer.phone && `Phone: ${issuer.phone}`,
+              issuer.mobile && `Mobile: ${issuer.mobile}`,
+              issuer.email && `Email: ${issuer.email}`,
+              issuer.website,
+            ]
+              .filter((line): line is string => Boolean(line))
+              .map((line, i) => (
+                <Text key={line} style={[styles.contactLine, i === 0 ? { marginTop: 9 } : {}]}>
+                  {line}
+                </Text>
+              ))}
           </View>
         </View>
 
@@ -213,7 +226,7 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
 
         <View style={styles.metaRow}>
           <View style={styles.billTo}>
-            <Text style={styles.billLabel}>BILL TO</Text>
+            <Text style={styles.billLabel}>{issuer.billToLabel}</Text>
             <Text style={styles.billName}>{data.studentName}</Text>
             {data.studentPhone && <Text style={[styles.billLine, { marginTop: 10 }]}>{data.studentPhone}</Text>}
             {data.studentEmail && <Text style={styles.billLine}>{data.studentEmail}</Text>}
@@ -265,7 +278,7 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
                 <View key={i} style={styles.itemRow}>
                   <View style={{ flex: 3, paddingRight: 16 }}>
                     <Text style={styles.itemName}>{feeLineLabel("Administrative Fee", c.label, c.isBackup)}</Text>
-                    <Text style={styles.itemDesc}>The administrative fee is non-refundable in any case.</Text>
+                    {issuer.adminFeeNote && <Text style={styles.itemDesc}>{issuer.adminFeeNote}</Text>}
                   </View>
                   <Text style={[styles.num, { flex: 1, textAlign: "right" }]}>{money(data.currencySymbol, c.amount)}</Text>
                   <Text style={[styles.num, { flex: 1, textAlign: "right" }]}>{money(data.currencySymbol, c.amount)}</Text>
@@ -275,7 +288,7 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
               <View style={styles.itemRow}>
                 <View style={{ flex: 3, paddingRight: 16 }}>
                   <Text style={styles.itemName}>{feeLineLabel("Administrative Fee", data.destination)}</Text>
-                  <Text style={styles.itemDesc}>The administrative fee is non-refundable in any case.</Text>
+                  {issuer.adminFeeNote && <Text style={styles.itemDesc}>{issuer.adminFeeNote}</Text>}
                 </View>
                 <Text style={[styles.num, { flex: 1, textAlign: "right" }]}>{money(data.currencySymbol, data.adminCharge)}</Text>
                 <Text style={[styles.num, { flex: 1, textAlign: "right" }]}>{money(data.currencySymbol, data.adminCharge)}</Text>
@@ -342,7 +355,9 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
             <View style={styles.totalsRow}>
               {/* The base is named so the figure is checkable: the net fee,
                   plus any added items, which are taxed at the same rate. */}
-              <Text style={styles.totalsKey}>SRB Tax ({data.taxRate}% of {money(data.currencySymbol, data.taxableAmount)}):</Text>
+              <Text style={styles.totalsKey}>
+                {issuer.taxLabel} ({data.taxRate}% of {money(data.currencySymbol, data.taxableAmount)}):
+              </Text>
               <Text style={styles.totalsNum}>{money(data.currencySymbol, data.taxAmount)}</Text>
             </View>
           )}
@@ -378,33 +393,34 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
         <View style={styles.payRow}>
           {/* Driven by invoice_settings. Previously hardcoded placeholder account
               numbers were printed here, which would have sent students to a bank
-              account that does not exist — so when nothing is configured, say so
-              rather than inventing details. */}
-          <View style={styles.payBlock}>
-            <Text style={styles.sectionLabel}>PAYMENT INSTRUCTIONS</Text>
-            {data.bank?.accountTitle && (
-              <Text style={styles.payLine}>Account Title: <Text style={styles.payValue}>{data.bank.accountTitle}</Text></Text>
-            )}
-            {data.bank?.bankName && (
-              <Text style={styles.payLine}>
-                Bank: <Text style={styles.payValue}>{data.bank.bankName}{data.bank.branch ? `, ${data.bank.branch}` : ""}</Text>
-              </Text>
-            )}
-            {data.bank?.accountNumber && (
-              <Text style={styles.payLine}>Account Number: <Text style={styles.payValue}>{data.bank.accountNumber}</Text></Text>
-            )}
-            {data.bank?.iban && <Text style={styles.payLine}>IBAN: <Text style={styles.payValue}>{data.bank.iban}</Text></Text>}
-            {data.bank?.swiftCode && <Text style={styles.payLine}>SWIFT: <Text style={styles.payValue}>{data.bank.swiftCode}</Text></Text>}
-            <Text style={styles.payLine}>Payment Reference: <Text style={styles.payValue}>{data.invoiceNumber}</Text></Text>
-            {data.bank?.paymentNote && <Text style={styles.payLine}>{data.bank.paymentNote}</Text>}
-            {!data.bank?.accountTitle && !data.bank?.bankName && !data.bank?.iban && !data.bank?.accountNumber && (
-              <Text style={styles.payLine}>Bank details not yet configured — set them in Setup &rsaquo; Invoice Settings.</Text>
-            )}
-          </View>
+              account that does not exist. With no account on file the invoice
+              says nothing about one — no heading, no "not configured" line,
+              which was a note to the office printed for the student. A payment
+              note on its own (cash at the office, say) still gets the block. */}
+          {hasPaymentInstructions(data.bank) && (
+            <View style={styles.payBlock}>
+              <Text style={styles.sectionLabel}>{issuer.paymentHeading}</Text>
+              {data.bank?.accountTitle && (
+                <Text style={styles.payLine}>Account Title: <Text style={styles.payValue}>{data.bank.accountTitle}</Text></Text>
+              )}
+              {data.bank?.bankName && (
+                <Text style={styles.payLine}>
+                  Bank: <Text style={styles.payValue}>{data.bank.bankName}{data.bank.branch ? `, ${data.bank.branch}` : ""}</Text>
+                </Text>
+              )}
+              {data.bank?.accountNumber && (
+                <Text style={styles.payLine}>Account Number: <Text style={styles.payValue}>{data.bank.accountNumber}</Text></Text>
+              )}
+              {data.bank?.iban && <Text style={styles.payLine}>IBAN: <Text style={styles.payValue}>{data.bank.iban}</Text></Text>}
+              {data.bank?.swiftCode && <Text style={styles.payLine}>SWIFT: <Text style={styles.payValue}>{data.bank.swiftCode}</Text></Text>}
+              <Text style={styles.payLine}>Payment Reference: <Text style={styles.payValue}>{data.invoiceNumber}</Text></Text>
+              {data.bank?.paymentNote && <Text style={styles.payLine}>{data.bank.paymentNote}</Text>}
+            </View>
+          )}
 
           {data.payments.length > 0 && (
             <View style={styles.scheduleBlock}>
-              <Text style={styles.sectionLabel}>PAYMENT SCHEDULE</Text>
+              <Text style={styles.sectionLabel}>{issuer.scheduleHeading}</Text>
               <View style={[styles.ledgerRow, { paddingVertical: 0, paddingBottom: 5 }]}>
                 <Text style={[styles.th, { flex: 1.5 }]}>Date</Text>
                 <Text style={[styles.th, { flex: 1.5 }]}>Method</Text>
@@ -444,21 +460,15 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
           </View>
         )}
 
-        {data.conversionNote && (
-          <View style={styles.note}>
-            <Text>{data.conversionNote}</Text>
-          </View>
-        )}
-
         {/* Fixed to the bottom of the page like Wave's, so the closing line sits
             in the same place whether the invoice runs long or short. */}
-        <View style={styles.foot} fixed>
-          <Text>
-            Instalments unpaid past their due date may delay document submission on the student&apos;s application. For queries,
-            contact accounts@hmarkconsultants.com.
-          </Text>
-          <Text>HMARK Consultants reserves the rights, in its sole discretion, to cancel the scholarship or admission.</Text>
-        </View>
+        {issuer.footerLines.length > 0 && (
+          <View style={styles.foot} fixed>
+            {issuer.footerLines.map((line, i) => (
+              <Text key={i}>{line}</Text>
+            ))}
+          </View>
+        )}
       </Page>
     </Document>
   );
