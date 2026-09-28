@@ -53,7 +53,7 @@ export function DestinationStatusCard({ row }: { row: DestinationStatusRow }) {
       data-destination-status={row.name}
       data-role={row.role}
     >
-      <div className={`${backup ? "bg-hero-alt" : "bg-hero"} relative flex flex-wrap items-center justify-between gap-3 px-5 py-4 text-white`}>
+      <div className={`${backup ? "bg-hero-alt" : "bg-hero"} relative flex flex-wrap items-center justify-between gap-3 overflow-hidden px-5 py-4 text-white`}>
         <span aria-hidden className="pointer-events-none absolute -right-10 -top-16 h-40 w-40 rounded-full bg-white/10" />
         <span aria-hidden className="pointer-events-none absolute -bottom-20 right-24 h-32 w-32 rounded-full bg-white/10" />
         <div className="relative flex min-w-0 items-center gap-3">

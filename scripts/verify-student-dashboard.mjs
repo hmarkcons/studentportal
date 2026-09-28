@@ -373,6 +373,14 @@ try {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   ok("on a phone the dashboard does not scroll sideways", overflow <= 1, `${overflow}px too wide`);
   await shot(page, "student-dashboard-phone");
+  // And in the dark theme, which a student can switch to from the header.
+  if (process.env.SHOT_DIR) {
+    await page.setViewportSize({ width: 1500, height: 1400 });
+    await page.goto(`${BASE}/portal`, { waitUntil: "domcontentloaded" });
+    await page.locator("[data-journey]").waitFor({ timeout: 40000 });
+    await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
+    await shot(page, "student-dashboard-dark");
+  }
 } catch (e) {
   ok(`the check itself stopped: ${e?.stack ?? e}`, false);
 } finally {
