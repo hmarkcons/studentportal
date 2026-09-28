@@ -15,7 +15,7 @@ const LONG_DATE: Intl.DateTimeFormatOptions = { weekday: "short", day: "numeric"
 
 type Row = { href: string; icon: string; text: string; detail?: string; urgent?: boolean };
 
-export function PortalAttention({ summary }: { summary: PortalSummary }) {
+export function PortalAttention({ summary, className = "mb-6" }: { summary: PortalSummary; className?: string }) {
   const rows: Row[] = [];
 
   if (summary.documentsNeedingAttention > 0) {
@@ -104,7 +104,8 @@ export function PortalAttention({ summary }: { summary: PortalSummary }) {
 
   if (rows.length === 0) {
     return (
-      <Card className="mb-6">
+      <Card className={className}>
+        <h3 className="mb-3 text-sm font-semibold text-ink">What needs doing</h3>
         <p className="text-sm text-ink">Nothing needs your attention right now.</p>
         <p className="mt-1 text-xs text-muted">
           We&rsquo;ll show anything outstanding here — documents, payments, appointments, profile details and replies.
@@ -114,8 +115,8 @@ export function PortalAttention({ summary }: { summary: PortalSummary }) {
   }
 
   return (
-    <Card className="mb-6">
-      <h3 className="mb-3 text-sm font-medium text-ink">Needs your attention</h3>
+    <Card className={className}>
+      <h3 className="mb-3 text-sm font-semibold text-ink" data-attention>What needs doing</h3>
       <div className="flex flex-col divide-y divide-border">
         {rows.map((r) => (
           <Link

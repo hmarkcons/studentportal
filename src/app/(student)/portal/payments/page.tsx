@@ -91,7 +91,7 @@ export default async function PortalPaymentsPage() {
   const today = new Date().toISOString().slice(0, 10);
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="w-full">
       <h2 className="mb-1 text-lg font-semibold text-ink">Payments</h2>
       <p className="mb-4 text-sm text-muted">
         What you owe, what you have paid, and when the next instalment is due. Payment details are on the invoice itself.
@@ -159,6 +159,10 @@ export default async function PortalPaymentsPage() {
                 </Badge>
               </div>
 
+              {/* The breakdown and the schedule side by side on a wide screen:
+                  what the total is made of, and when it is paid. */}
+              <div className="grid grid-cols-1 gap-x-10 lg:grid-cols-2">
+              <div>
               <dl className="flex flex-col gap-0.5 border-t border-border pt-3">
                 <Line label={feeLineLabel(SERVICE_FEE_NAME[serviceOf(inv.service_type)], primaryCountry)} value={money(cur, math.consultancyFee)} />
                 {math.discountAmount > 0 && (
@@ -196,9 +200,10 @@ export default async function PortalPaymentsPage() {
                   don&rsquo;t currently add up to the same figure. The instalments are what we have on record.
                 </p>
               )}
+              </div>
 
               {mine.length > 0 && (
-                <div className="mt-4 border-t border-border pt-3">
+                <div className="mt-4 border-t border-border pt-3 lg:mt-0">
                   <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Instalments</h3>
                   <div className="flex flex-col gap-2">
                     {mine.map((i) => {
@@ -265,6 +270,7 @@ export default async function PortalPaymentsPage() {
                   </div>
                 </div>
               )}
+              </div>
 
               {/* No payment status shown for the invoice document itself: whether
                   staff have emailed it is our bookkeeping, not something a

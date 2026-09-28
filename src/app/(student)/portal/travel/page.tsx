@@ -34,7 +34,7 @@ export default async function PortalTravelPage() {
     // refused does not need a second page telling them so — and this page is
     // not in their menu, so they only reach it by typing the address.
     return (
-      <div className="mx-auto max-w-3xl">
+      <div className="w-full">
         <h2 className="mb-1 text-lg font-semibold text-ink">Travel &amp; Arrival</h2>
         <Card>
           <EmptyState>
@@ -84,7 +84,7 @@ export default async function PortalTravelPage() {
   const withGuides = approved.filter((a) => (byDestination.get(a.destinationId)?.length ?? 0) > 0);
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="w-full">
       <div className="mb-4">
         <h2 className="mb-1 text-lg font-semibold text-ink">Travel &amp; Arrival</h2>
         <p className="text-sm text-muted">

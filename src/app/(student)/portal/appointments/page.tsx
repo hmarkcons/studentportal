@@ -40,7 +40,7 @@ export default async function PortalAppointmentsPage() {
   const past = appointments.filter((a) => daysUntil(a.date) < 0).reverse();
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="w-full">
       <h2 className="mb-1 text-lg font-semibold text-ink">Appointments</h2>
       <p className="mb-4 text-sm text-muted">
         Dates your counsellor has booked for you. Anything that changes here is updated by them.
@@ -54,7 +54,8 @@ export default async function PortalAppointmentsPage() {
           </EmptyState>
         </Card>
       ) : (
-        <div className="flex flex-col gap-6">
+        // Coming up and past side by side on a wide screen.
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
           {upcoming.length > 0 && (
             <Card>
               <h3 className="mb-3 text-base font-semibold text-ink">Coming up</h3>

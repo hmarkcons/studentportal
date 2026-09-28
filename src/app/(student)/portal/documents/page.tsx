@@ -2,7 +2,8 @@ import Link from "next/link";
 import { MAX_UPLOAD_BYTES, formatFileSize } from "@/lib/fileSize";
 import { documentUrls } from "@/lib/storageUrls";
 import { loadDocumentHistory } from "@/lib/documentHistory";
-import { orderCycles, cycleTabLabel, resolveCycleDocuments, type Cycle } from "@/lib/intakeCycle";
+import { cycleTabLabel } from "@/lib/intakeCycle";
+import { loadCycleDocuments, documentCounts } from "@/lib/studentCycleDocuments";
 import { getStudentUser } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -24,52 +25,14 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
 
   await ensureStudentDocumentRequirements(student.id);
 
-  const [{ data: applications }, { data: cycleRows }, { data: renewTemplates }] = await Promise.all([
+  const [{ data: applications }, cycleDocs] = await Promise.all([
     supabase.from("applications").select("id, university:universities(name)").eq("student_id", student.id),
-    supabase.from("student_cycles").select("id, sequence, intake, is_current").eq("student_id", student.id).order("sequence"),
-    supabase.from("document_templates").select("id").eq("renew_each_intake", true),
+    // Which intake's rows to show — shared with the dashboard, so its
+    // document ring counts exactly these.
+    loadCycleDocuments(supabase, student.id, cycleParam),
   ]);
   const appLabel = new Map((applications ?? []).map((a) => [a.id, one(a.university as never) as { name?: string } | null]));
-
-  const { data: allDocs } = await supabase
-    .from("student_documents")
-    .select(
-      "id, category, custom_name, status, file_path, deadline, rejected_reason, application_id, uploaded_at, uploaded_by_role, verified_at, created_at, template_id, derived_key, cycle_id, template:document_templates(name)"
-    )
-    .eq("student_id", student.id)
-    .order("created_at", { ascending: false });
-
-  // A student who has gone round the process more than once sees a tab per
-  // intake, the current one first. Their previous intake's paperwork stays
-  // readable — it is theirs, and it is what they sent us.
-  const cycles = orderCycles((cycleRows ?? []) as Cycle[]);
-  const showCycleTabs = cycles.length > 1;
-  const currentCycleId = cycles.find((c) => c.is_current)?.id ?? cycles[0]?.id ?? null;
-  const activeCycleId =
-    showCycleTabs && cycleParam && cycles.some((c) => c.id === cycleParam) ? cycleParam : currentCycleId;
-  const activeCycle = cycles.find((c) => c.id === activeCycleId) ?? null;
-  const isPreviousIntake = Boolean(activeCycle && !activeCycle.is_current);
-
-  let rawDocs = allDocs ?? [];
-  const inheritedFromById = new Map<string, number | null>();
-  if (showCycleTabs && activeCycleId) {
-    const resolved = resolveCycleDocuments(
-      rawDocs.map((d) => ({
-        id: d.id,
-        cycle_id: d.cycle_id,
-        category: d.category ?? null,
-        template_id: d.template_id ?? null,
-        derived_key: d.derived_key ?? null,
-        status: d.status,
-      })),
-      activeCycleId,
-      new Map(cycles.map((c) => [c.id, c.sequence])),
-      new Set((renewTemplates ?? []).map((t) => t.id as string))
-    );
-    const keep = new Map(resolved.map((r) => [r.doc.id, r.inheritedFrom]));
-    for (const [docId, from] of keep) inheritedFromById.set(docId, from);
-    rawDocs = rawDocs.filter((d) => keep.has(d.id));
-  }
+  const { docs: rawDocs, cycles, showCycleTabs, activeCycleId, isPreviousIntake, inheritedFromById } = cycleDocs;
 
   const docHistory = await loadDocumentHistory(supabase, rawDocs.map((d) => d.id));
 
@@ -115,12 +78,13 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
   const uncategorised = docsWithUrls.filter((d) => !known.has(d.category ?? "other"));
   if (uncategorised.length > 0) sections.push({ category: "unsorted", label: "Other documents", docs: uncategorised });
 
-  const total = docsWithUrls.length;
-  const approved = docsWithUrls.filter((d) => d.status === "verified").length;
-  const outstanding = docsWithUrls.filter((d) => d.status === "missing" || d.status === "rejected").length;
+  const counts = documentCounts(docsWithUrls);
+  const total = counts.total;
+  const approved = counts.verified;
+  const outstanding = counts.waiting;
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="w-full">
       <h2 className="mb-1 text-lg font-semibold text-ink">Documents</h2>
       <p className="mb-2 text-sm text-muted">
         Everything we need from you, in the order your counsellor works through it.
@@ -170,6 +134,16 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
                   : "Nothing to upload — with us for review"}
             </Badge>
           </div>
+          {/* The same share the dashboard's ring draws. */}
+          <div className="mt-3 flex h-2 w-full overflow-hidden rounded-full bg-border" aria-hidden>
+            <div className="h-full bg-success" style={{ width: `${(approved / total) * 100}%` }} />
+            <div className="h-full bg-warning/60" style={{ width: `${(counts.inReview / total) * 100}%` }} />
+          </div>
+          <p className="mt-1 flex flex-wrap gap-x-4 text-[11px] text-muted">
+            <span><span className="text-success">■</span> Approved {approved}</span>
+            <span><span className="text-warning">■</span> Being checked {counts.inReview}</span>
+            <span>■ To upload {outstanding}</span>
+          </p>
           {outstanding === 0 && approved < total && (
             <p className="mt-1 text-xs text-muted">
               We&rsquo;re checking what you sent. Your counsellor will be in touch if anything needs replacing.

@@ -36,10 +36,14 @@ export default async function SupportPage() {
     .order("sort_order", { ascending: true });
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="w-full">
       <h2 className="mb-4 text-lg font-semibold text-ink">Support</h2>
 
-      <Card className="mb-6">
+      {/* Tickets on the left, the quick ways to get help beside them. */}
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
+      <div className="flex flex-col gap-6 lg:order-2">
+
+      <Card>
         <a
           href={WHATSAPP_LINK}
           className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-ink"
@@ -54,7 +58,7 @@ export default async function SupportPage() {
       {/* Hidden entirely when nothing is published, rather than showing an
           empty "FAQ" heading. */}
       {(faqs ?? []).length > 0 && (
-        <Card className="mb-6">
+        <Card>
           <h3 className="mb-3 text-sm font-medium text-ink">FAQ</h3>
           <div className="flex flex-col gap-3">
             {(faqs ?? []).map((f) => (
@@ -66,8 +70,10 @@ export default async function SupportPage() {
           </div>
         </Card>
       )}
+      </div>
 
-      <Card className="mb-6">
+      <div className="flex flex-col gap-6 lg:order-1 lg:col-span-2">
+      <Card>
         <h3 className="mb-3 text-sm font-medium text-ink">Submit a ticket</h3>
         <NewTicketForm studentId={student.id} />
       </Card>
@@ -106,6 +112,8 @@ export default async function SupportPage() {
             </div>
           )}
         </div>
+      </div>
+      </div>
       </div>
     </div>
   );

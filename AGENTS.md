@@ -65,9 +65,12 @@ triggers; `npm run check:studentid` is what proves any of it.
 two to `staff` and PostgREST otherwise rejects the entire query.
 
 **A staff member's personal details are not columns you can select.** CNIC,
-date of birth, gender, marital status, address, personal phone and email and
-the emergency contact are withheld from signed-in users on `staff` (0285), so
-naming one — or `*` — fails with "permission denied". Read them through
+date of birth, gender, marital status, address, `mobile_personal`,
+`email_personal`, `phone`, `whatsapp_number` and the emergency contact are
+withheld from signed-in users on `staff` (0285), so naming one — or `*` —
+fails with "permission denied", and in an embed it fails the whole query: the
+student dashboard asked for its counsellor's `phone`, found no student, and
+rendered blank. A number to give anyone is `mobile_official`. Read them through
 `staff_personal_details()`, which returns the caller's own or, for a Super
 Admin, anyone's. A new column on `staff` is unreadable by the app until it is
 granted in a migration; grant it unless it is personal. Only a Super Admin

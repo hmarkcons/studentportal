@@ -68,7 +68,7 @@ export default async function PortalAgreementPage() {
   const gate = evaluateAgreementGate(agreements ?? []);
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="w-full">
       <h2 className="mb-1 text-lg font-semibold text-ink">Your agreement</h2>
       <p className="mb-4 text-sm text-muted">
         Your agreement with HMARK Consultants, and every version of it we hold.
@@ -115,7 +115,8 @@ export default async function PortalAgreementPage() {
         </Card>
       )}
 
-      <div className="flex flex-col gap-3">
+      {/* Every version on file, two across on a wide screen. */}
+      <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-2">
         {(agreements ?? []).map((a) => {
           const awaitingReview = a.status !== "signed" && Boolean(a.signed_file_path && a.video_recording_path);
           // Who put the file there: an e-signature agreement is uploaded by the

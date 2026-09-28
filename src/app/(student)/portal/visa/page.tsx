@@ -157,7 +157,7 @@ export default async function PortalVisaPage() {
   // two reads of the same row was how the two could have disagreed.
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="w-full">
       <h2 className="mb-1 text-lg font-semibold text-ink">Visa</h2>
       <p className="mb-4 text-sm text-muted">
         Your visa progress, kept up to date by your counsellor as each step completes.
@@ -211,6 +211,8 @@ export default async function PortalVisaPage() {
                   </div>
                 )}
 
+                {/* Progress and where to apply side by side on a wide screen. */}
+                <div className={s.rows.length > 0 && s.offices.length > 0 ? "grid grid-cols-1 gap-x-10 lg:grid-cols-2" : ""}>
                 {s.rows.length > 0 && (
                   <dl className="flex flex-col gap-0.5">
                     {s.rows.map((r) => (
@@ -226,13 +228,14 @@ export default async function PortalVisaPage() {
                     reference section: the first line answers which of the
                     offices below is theirs. */}
                 {s.offices.length > 0 && (
-                  <div className={s.rows.length > 0 ? "mt-4 border-t border-border pt-4" : ""}>
+                  <div className={s.rows.length > 0 ? "mt-4 border-t border-border pt-4 lg:mt-0 lg:border-t-0 lg:pt-0" : ""}>
                     <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
                       Where to apply
                     </h4>
                     <VisaOfficeList offices={s.offices} countryName={s.country.name} />
                   </div>
                 )}
+                </div>
 
                 {/* Whatever the office added in the builder. Last, because it
                     is guidance around the process rather than the process. */}

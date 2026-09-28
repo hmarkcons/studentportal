@@ -163,7 +163,7 @@ export default async function PortalScholarshipPage() {
           </EmptyState>
         </Card>
       ) : (
-        <div className="flex flex-col gap-5">
+        <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-2">
           {(scholarships ?? []).map((s) => {
             const body = one(s.body as never) as Body | null;
             return (

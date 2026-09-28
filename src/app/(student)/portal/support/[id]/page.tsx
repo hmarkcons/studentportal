@@ -52,7 +52,7 @@ export default async function PortalTicketDetailPage(props: PageProps<"/portal/s
   const revalidateTo = `/portal/support/${id}`;
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="w-full">
       <Link href="/portal/support" className="text-sm text-muted hover:text-ink">
         &larr; Back to support
       </Link>

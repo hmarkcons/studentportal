@@ -22,7 +22,7 @@ export default async function PortalMessagesPage() {
     .returns<MessageRow[]>();
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="w-full">
       <h2 className="mb-1 text-lg font-semibold text-ink">Messages</h2>
       <p className="mb-4 text-sm text-muted">
         Anything you send here reaches your counsellor in the CRM. Internal staff notes are never shown here.

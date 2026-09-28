@@ -75,6 +75,8 @@ export function TravelChecklist({ sections }: { sections: TravelSection[] }) {
 
       {error && <p className="rounded-md border border-danger bg-danger-bg px-3 py-2 text-xs text-danger">{error}</p>}
 
+      {/* Sections two across on a wide screen: each stands on its own. */}
+      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-2">
       {sections.map((section) => {
         const sectionDone = section.items.filter((i) => doneIds.has(i.id)).length;
         return (
@@ -122,6 +124,7 @@ export function TravelChecklist({ sections }: { sections: TravelSection[] }) {
           </div>
         );
       })}
+      </div>
     </div>
   );
 }

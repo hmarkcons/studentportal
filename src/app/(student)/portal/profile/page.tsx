@@ -36,7 +36,7 @@ export default async function PortalProfilePage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="w-full">
       <h2 className="mb-1 text-lg font-semibold text-ink">Profile</h2>
       {/* Their own number. Quoted back at them by the office, so they should
           not have to ring up and ask what it is. */}
@@ -97,12 +97,14 @@ export default async function PortalProfilePage() {
         />
       </Card>
 
-      <Card className="mb-6">
+      {/* The two short lists side by side on a wide screen. */}
+      <div className="mb-6 grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+      <Card>
         <h3 className="mb-3 text-base font-semibold text-ink">Test scores</h3>
         <TestScoresSection studentId={student.id} revalidateTo={revalidateTo} scores={testScores ?? []} />
       </Card>
 
-      <Card className="mb-6">
+      <Card>
         <h3 className="mb-3 text-base font-semibold text-ink">Travel &amp; visa history</h3>
         <TravelVisaHistorySection
           studentId={student.id}
@@ -111,6 +113,7 @@ export default async function PortalProfilePage() {
           refusals={(profile?.visa_refusal_history ?? []) as never}
         />
       </Card>
+      </div>
 
       <Card>
         <h3 className="mb-3 text-base font-semibold text-ink">Academics</h3>

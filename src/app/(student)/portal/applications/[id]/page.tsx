@@ -58,7 +58,7 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
   );
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="w-full">
       <Link href="/portal" className="text-sm text-muted hover:text-ink">
         &larr; Back to dashboard
       </Link>
@@ -74,6 +74,8 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
         />
       </div>
 
+      {/* The rounds and the documents side by side on a wide screen. */}
+      <div className={rounds.length > 0 ? "grid grid-cols-1 items-start gap-6 lg:grid-cols-2" : ""}>
       {/* Read-only. Since 0233 the application names the round it is for, so
           the student's own round is marked rather than left for them to guess
           — which also stops a closed earlier round reading as a deadline they
@@ -81,7 +83,7 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
           still the programme's rounds and says so, because naming one would
           assert something the data does not hold. */}
       {rounds.length > 0 && (
-        <Card className="mb-6">
+        <Card className="mb-6 lg:mb-0">
           <h3 className="mb-1 text-sm font-medium text-ink">Intake rounds</h3>
           <p className="mb-2 text-xs text-muted">
             {app.round_id
@@ -110,6 +112,7 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
           </div>
         )}
       </Card>
+      </div>
     </div>
   );
 }

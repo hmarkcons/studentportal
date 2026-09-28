@@ -24,7 +24,7 @@ export default async function GuidePage() {
     .order("sort_order", { ascending: true });
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="w-full">
       <h2 className="mb-1 text-lg font-semibold text-ink">Guide</h2>
       <p className="mb-4 text-sm text-muted">Short walkthroughs of the things students ask about most.</p>
 
@@ -36,7 +36,7 @@ export default async function GuidePage() {
           </EmptyState>
         </Card>
       ) : (
-        <div className="flex flex-col gap-6">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
           {(videos ?? []).map((v) => (
             <Card key={v.id}>
               <p className="text-sm font-medium text-ink">{v.title}</p>
