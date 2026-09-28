@@ -53,6 +53,9 @@ try {
   for (const u of leftovers?.users ?? []) if (u.email === PORTAL_EMAIL) await admin.auth.admin.deleteUser(u.id).catch(() => {});
 
   const fin = await fx.staff("dashfin", ["finance"]);
+  // The student's team, each with the office number the dashboard shows.
+  const counsellor = await fx.staff("dashcoun", ["counselor"], { extra: { designation: "Senior Counsellor", mobile_official: "0300-7770001" } });
+  const officer = await fx.staff("dashproc", ["processing"], { extra: { designation: "Processing Officer", mobile_official: "0300-7770002" } });
   const { data: italy } = await admin.from("destinations").select("id").eq("display_name", "Italy (Public)").single();
   const { data: template } = await admin.from("agreement_templates").select("id").eq("destination_id", italy.id).limit(1).single();
 
@@ -62,6 +65,7 @@ try {
     status: "registered", registration_status: "registered", registered_at: new Date().toISOString(),
     date_of_inquiry: karachiToday(), country_of_interest: "Italy (Public)", intake: "Fall 2099",
     date_of_birth: "2002-04-17", address: "12 Test Street, Karachi", level_applying_for: "masters",
+    assigned_counselor_id: counsellor.id, processing_officer_id: officer.id,
   });
   await admin.from("lead_destinations").insert({ lead_id: studentId, destination_id: italy.id });
   // A passport inside the six months a visa needs: the profile ring warns, and
@@ -71,7 +75,21 @@ try {
       passport_number: "ZZ1234567", passport_expiry: inDays(60) },
     { onConflict: "student_id" }
   );
-  await admin.from("agreements").insert({ student_id: studentId, template_id: template.id, signing_method: "paper", status: "signed", signed_file_path: `${studentId}/agreements/zztmp-signed.pdf` });
+  // An agreement signed a month ago, and a corrected one signed since; a
+  // draft the office is still preparing, which the student must not see.
+  const signedPath = `${studentId}/agreements/zztmp-signed.pdf`;
+  await admin.storage.from("documents").upload(signedPath, Buffer.from("%PDF-1.4\n% zztmp signed agreement\n"), { contentType: "application/pdf", upsert: true });
+  const { error: agreementsError } = await admin.from("agreements").insert([
+    { student_id: studentId, template_id: template.id, signing_method: "paper", status: "signed", signed_file_path: signedPath,
+      created_at: new Date(Date.now() - 30 * DAY).toISOString(), signed_file_uploaded_at: new Date(Date.now() - 28 * DAY).toISOString() },
+    { student_id: studentId, template_id: template.id, signing_method: "paper", status: "signed", signed_file_path: signedPath,
+      created_at: new Date(Date.now() - 2 * DAY).toISOString(), signed_file_uploaded_at: new Date(Date.now() - DAY).toISOString() },
+    // Every row carries every key: PostgREST sends null for a key a row of a
+    // batch lacks, and created_at is not null (AGENTS.md, rectangular inserts).
+    { student_id: studentId, template_id: template.id, signing_method: "paper", status: "draft", signed_file_path: null,
+      created_at: new Date().toISOString(), signed_file_uploaded_at: null },
+  ]);
+  if (agreementsError) throw new Error(`agreements: ${agreementsError.message}`);
 
   // Documents: three approved, one being checked, two to upload — one of them due.
   const docs = [
@@ -89,7 +107,7 @@ try {
   if (appError) throw new Error(`application: ${appError.message}`);
 
   // An invoice: 500 paid, 700 due in fifteen days.
-  const { data: agreementRow } = await admin.from("agreements").select("id").eq("student_id", studentId).single();
+  const { data: agreementRow } = await admin.from("agreements").select("id").eq("student_id", studentId).eq("status", "signed").order("created_at", { ascending: false }).limit(1).single();
   const asFin = await apiAs(url, anonKey, fin.email);
   const { data: invoiceId, error: rpcError } = await asFin.rpc("generate_invoice", {
     p_student_id: studentId, p_agreement_id: agreementRow.id, p_admin_charge: 200, p_consultancy_fee: 1000,
@@ -204,16 +222,40 @@ try {
   const summaryText = (await page.locator("[data-applications-summary]").innerText()).replace(/\s+/g, " ");
   ok("the summary counts it: 1 application, 1 submitted, 0 offers",
     summaryText.includes("1 application") && summaryText.includes("1 submitted") && summaryText.includes("0 offers"), summaryText);
-  ok("each country's progress is here too", (await page.locator("main").innerText()).includes("Progress by country"));
+  ok("each country's progress is not shown here", !(await page.locator("main").innerText()).includes("Progress by country"));
   await page.locator("[data-applications] a").first().click();
   await page.waitForURL((u) => /\/portal\/applications\/[^/]+$/.test(u.pathname), { timeout: 40000 });
   ok("an application leads back to Applications", (await page.getByRole("link", { name: /Back to applications/ }).getAttribute("href")) === "/portal/applications");
+  await page.locator("[data-documents-pointer]").waitFor({ timeout: 40000 });
+  const appPage = await page.locator("main").innerText();
+  ok("an application's page has no document checklist, only a pointer to Documents",
+    !appPage.includes("zztmp Doc 1") && !/Nothing to upload yet/.test(appPage) && (await page.locator("[data-documents-pointer] a").getAttribute("href")) === "/portal/documents",
+    appPage.replace(/\s+/g, " ").slice(0, 300));
 
   console.log("\n--- the Scholarship page ---");
   await page.goto(`${BASE}/portal/scholarship`, { waitUntil: "domcontentloaded" });
   const italyCard = page.locator('[data-scholarship-country="Italy (Public)"]');
   const hasItaly = await italyCard.waitFor({ timeout: 40000 }).then(() => true, () => false);
   ok("it says what Italy offers", hasItaly && (await italyCard.innerText()).includes("Every student can apply"), await page.locator("main").innerText().catch(() => ""));
+
+  console.log("\n--- the Agreement page ---");
+  await page.goto(`${BASE}/portal/agreement`, { waitUntil: "domcontentloaded" });
+  const signedSection = page.locator("[data-signed-agreements]");
+  await signedSection.waitFor({ timeout: 40000 });
+  ok("the signed copies are headed by their country", (await signedSection.innerText()).includes("Italy (Public)"), (await signedSection.innerText()).slice(0, 120));
+  const current = page.locator('[data-current="yes"]');
+  const replaced = page.locator('[data-current="no"]');
+  ok("both signed Italy agreements are shown, the corrected one in force",
+    (await current.count()) === 1 && (await replaced.count()) === 1 && (await current.innerText()).includes("In force"));
+  ok("...the corrected one says it replaces version 1, which contained mistakes",
+    /Version 2 of 2/.test(await current.innerText()) && /replaces version 1, signed .* which contained mistakes/.test((await current.innerText()).replace(/\s+/g, " ")),
+    (await current.innerText()).replace(/\s+/g, " "));
+  ok("...the older one says it was replaced by version 2 and is kept for records",
+    /contained mistakes and was replaced by version 2/.test((await replaced.innerText()).replace(/\s+/g, " ")), (await replaced.innerText()).replace(/\s+/g, " "));
+  ok("...each with its signed copy", (await page.getByRole("link", { name: /View your signed copy/ }).count()) === 2);
+  const agreementText = await page.locator("main").innerText();
+  ok("the draft the office is preparing is not shown", !/Being prepared/.test(agreementText) && !/Version 3/.test(agreementText));
+  ok("no unsigned agreement is offered to view", (await page.getByRole("link", { name: /View agreement|Download to sign/ }).count()) === 0);
 
   console.log("\n--- full width ---");
   const width = async () => page.evaluate(() => document.querySelector("h2")?.parentElement?.getBoundingClientRect().width ?? 0);
@@ -228,6 +270,30 @@ try {
     ok(`${path} is full width, not a narrow column`, w > 1000, `${Math.round(w)}px`);
     if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/student${path.split("/").join("-")}.png`, fullPage: true });
   }
+
+  console.log("\n--- the team ---");
+  await page.goto(`${BASE}/portal`, { waitUntil: "domcontentloaded" });
+  const team = page.locator("[data-team]");
+  await team.waitFor({ timeout: 40000 });
+  const coun = (await page.locator('[data-team-member="counsellor"]').innerText()).replace(/\s+/g, " ");
+  const proc = (await page.locator('[data-team-member="processing-officer"]').innerText()).replace(/\s+/g, " ");
+  ok("the dashboard shows the counsellor, with their office number", coun.includes("zztmp dashcoun") && coun.includes("0300-7770001"), coun);
+  ok("...and the processing officer, with theirs", proc.includes("zztmp dashproc") && proc.includes("Processing Officer") && proc.includes("0300-7770002"), proc);
+
+  console.log("\n--- the scholarship, once the university is finalised ---");
+  await page.goto(`${BASE}/portal/scholarship`, { waitUntil: "domcontentloaded" });
+  await page.locator("h2").first().waitFor({ timeout: 40000 });
+  ok("before the university is finalised, no scholarship body is named for it", (await page.locator("[data-finalized-scholarship]").count()) === 0);
+  const { data: ergo } = await admin.from("scholarship_bodies").select("id, name").eq("name", "ER.GO").single();
+  await admin.from("universities").update({ dsu_body_id: ergo.id }).eq("id", universityId);
+  await admin.from("applications").update({ is_finalized: true }).eq("student_id", studentId);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  const finalizedCard = page.locator('[data-finalized-for="zztmp Dashboard University"]');
+  const hasGuide = await finalizedCard.waitFor({ timeout: 40000 }).then(() => true, () => false);
+  const guideText = hasGuide ? (await finalizedCard.innerText()).replace(/\s+/g, " ") : (await page.locator("main").innerText()).replace(/\s+/g, " ").slice(0, 400);
+  ok("once finalised for the visa, the student sees their university's scholarship body", hasGuide && guideText.includes("Finalised for your visa") && guideText.includes("ER.GO"), guideText);
+  ok("...with its guide: deadline and how to apply", hasGuide && /Deadline:/.test(guideText), guideText);
+  ok("...worded for a student, not for the office", hasGuide && !/Setup ›|not updated/.test(guideText), guideText);
 
   // On a phone the journey runs down the page and nothing scrolls sideways.
   await page.setViewportSize({ width: 390, height: 900 });
@@ -245,6 +311,7 @@ try {
     await admin.from("applications").delete().eq("student_id", studentId);
     await admin.from("agreements").delete().eq("student_id", studentId);
     await admin.from("student_documents").delete().eq("student_id", studentId);
+    await admin.storage.from("documents").remove([`${studentId}/agreements/zztmp-signed.pdf`]);
   }
   if (universityId) await admin.from("universities").delete().eq("id", universityId);
   const removed = await fx.cleanup();

@@ -3,10 +3,9 @@ import { getStudentUser } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { BoardingPassTracker } from "@/components/ui/BoardingPassTracker";
-import { DestinationPipelineCard } from "@/components/DestinationPipelineCard";
 import { ProgramDates } from "@/components/ProgramDates";
 import { karachiToday } from "@/lib/calendarDates";
-import { loadStudentApplications, destinationProgressRows } from "@/lib/studentApplications";
+import { loadStudentApplications } from "@/lib/studentApplications";
 import { applicationAdmitted, applicationSubmitted } from "@/lib/studentJourney";
 
 /** The same tests the dashboard journey's Applied and Admission steps use. */
@@ -26,7 +25,6 @@ export default async function PortalApplicationsPage() {
   if (!student) return null;
 
   const apps = await loadStudentApplications(supabase, student.id);
-  const progress = await destinationProgressRows(supabase, student.id, apps);
   // Karachi's business day decides which rounds have closed.
   const today = karachiToday();
   const { submitted, offers } = summarise(apps);
@@ -53,11 +51,6 @@ export default async function PortalApplicationsPage() {
         </div>
       )}
 
-      {/* The cards beside their countries' progress on a wide screen: two
-          columns that each fill, rather than two half-empty rows. */}
-      <div className={progress.length > 0 ? "grid grid-cols-1 items-start gap-6 xl:grid-cols-2" : ""}>
-      <section className="flex flex-col gap-3">
-      {progress.length > 0 && <h3 className="text-sm font-semibold text-ink">Your applications</h3>}
       {apps.length === 0 ? (
         <Card>
           <EmptyState>
@@ -66,7 +59,7 @@ export default async function PortalApplicationsPage() {
           </EmptyState>
         </Card>
       ) : (
-        <div className={`grid grid-cols-1 items-start gap-4 ${progress.length > 0 ? "" : "xl:grid-cols-2"}`} data-applications>
+        <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2" data-applications>
           {apps.map(({ app, uni, dest, program }) => {
             // The round's own label, so two applications to one programme in
             // different rounds do not read as the same card twice.
@@ -86,7 +79,7 @@ export default async function PortalApplicationsPage() {
                 <div className="flex flex-wrap items-center justify-between gap-2 px-1">
                   <ProgramDates rounds={program?.rounds ?? []} today={today} highlightRoundId={app.round_id} />
                   <Link href={`/portal/applications/${app.id}`} className="text-xs font-medium text-primary hover:underline">
-                    Documents &amp; rounds →
+                    Intake rounds →
                   </Link>
                 </div>
               </div>
@@ -94,29 +87,6 @@ export default async function PortalApplicationsPage() {
           })}
         </div>
       )}
-      </section>
-
-      {progress.length > 0 && (
-        <section className="flex flex-col gap-3">
-          <h3 className="text-sm font-semibold text-ink">Progress by country</h3>
-          <div className="grid grid-cols-1 items-start gap-4">
-            {progress.map((row) => (
-              <DestinationPipelineCard
-                key={row.destinationId}
-                leadId={student.id}
-                destinationId={row.destinationId}
-                destinationName={row.destinationName}
-                subtitle={row.applicationSummary}
-                stages={row.stages}
-                values={row.values}
-                editable={false}
-                revalidateTo="/portal/applications"
-              />
-            ))}
-          </div>
-        </section>
-      )}
-      </div>
     </div>
   );
 }

@@ -36,7 +36,13 @@ export type GuideBody = {
  * has the student's own records on it — the deadline and the portal are the
  * two things worth seeing without opening anything.
  */
-export function ScholarshipGuide({ body }: { body: GuideBody }) {
+/**
+ * `audience="student"` is the same guide on the student's own Scholarship
+ * page, with the two lines meant for the office — "add one in Setup" and "not
+ * updated" — said the way a student needs them instead.
+ */
+export function ScholarshipGuide({ body, audience = "staff" }: { body: GuideBody; audience?: "staff" | "student" }) {
+  const student = audience === "student";
   const [open, setOpen] = useState(false);
   const sections = body.guide_sections ?? [];
   const call = callLink(body);
@@ -49,7 +55,12 @@ export function ScholarshipGuide({ body }: { body: GuideBody }) {
           {body.region && <span className="text-xs text-muted">{body.region}</span>}
           {body.academic_year && <Badge tone="neutral">A.Y. {body.academic_year}</Badge>}
           {/* Turns itself on in May, so nobody has to remember to mark it. */}
-          {body.staleFor && <Badge tone="warning">still {body.academic_year} — {body.staleFor} not updated</Badge>}
+          {body.staleFor &&
+            (student ? (
+              <Badge tone="warning">details from {body.academic_year} — the {body.staleFor} call is not out yet</Badge>
+            ) : (
+              <Badge tone="warning">still {body.academic_year} — {body.staleFor} not updated</Badge>
+            ))}
           {body.call_status === "awaiting" && (
             <Badge tone="info">
               call not published{body.call_expected_on ? ` · expected ${body.call_expected_on}` : ""}
@@ -66,7 +77,7 @@ export function ScholarshipGuide({ body }: { body: GuideBody }) {
       {/* The two things a counselor reaches for, without opening anything. */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 text-xs">
         <span className="text-muted">
-          Deadline: <span className="font-medium text-ink">{body.application_deadline ?? "not recorded"}</span>
+          Deadline: <span className="font-medium text-ink">{body.application_deadline ?? (student ? "not announced yet" : "not recorded")}</span>
         </span>
         {(body.isee_threshold || body.ispe_threshold) && (
           <span className="text-muted">
@@ -95,7 +106,9 @@ export function ScholarshipGuide({ body }: { body: GuideBody }) {
             sent, and a counselor cannot send what nobody has linked. */}
         {!call && body.call_status !== "awaiting" && (
           <span className="text-muted">
-            No call linked — add one in Setup &rsaquo; Scholarship bodies
+            {student
+              ? "This year's call is not published yet — your counsellor will tell you when it opens."
+              : <>No call linked — add one in Setup &rsaquo; Scholarship bodies</>}
           </span>
         )}
       </div>

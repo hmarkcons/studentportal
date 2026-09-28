@@ -38,7 +38,9 @@ export default async function PortalDashboardPage() {
     // whatsapp_number from signed-in users, and asking for either made this
     // whole query fail — the student found no row of their own and the
     // dashboard rendered blank. The office number is the one to give a student.
-    .select("id, full_name, student_code, intake, assigned_counselor:staff!assigned_counselor_id(full_name, designation, mobile_official)")
+    .select(
+      "id, full_name, student_code, intake, assigned_counselor:staff!assigned_counselor_id(full_name, designation, mobile_official), processing_officer:staff!processing_officer_id(full_name, designation, mobile_official)"
+    )
     .eq("auth_user_id", userId ?? "")
     .maybeSingle();
 
@@ -58,7 +60,8 @@ export default async function PortalDashboardPage() {
       supabase.from("student_scholarships").select("name, status, application_deadline").eq("student_id", student.id),
     ]);
 
-  const counselor = one(student.assigned_counselor);
+  const counselor = one(student.assigned_counselor) as TeamPerson;
+  const processingOfficer = one(student.processing_officer) as TeamPerson;
   // Read on the server so dates are judged on Karachi's business day rather
   // than wherever the student is, and so no component reads the clock.
   const today = karachiToday();
@@ -284,45 +287,72 @@ export default async function PortalDashboardPage() {
           <UpcomingTimeline entries={timeline} />
         </ChartCard>
 
-        <ChartCard title="Your counsellor">
-          {counselor ? (
-            <div className="flex flex-col gap-3" data-counsellor>
-              <div className="flex items-center gap-3">
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/15 text-lg font-semibold text-primary">
-                  {String(counselor.full_name ?? "")
-                    .split(" ")
-                    .map((w: string) => w[0])
-                    .slice(0, 2)
-                    .join("")}
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-sm font-medium text-ink">{counselor.full_name}</span>
-                  <span className="block text-xs text-muted">{counselor.designation ?? "Counsellor"}</span>
-                </span>
-              </div>
-              {/* Tappable: a student on a phone should not copy a number out by hand. */}
-              <div className="flex flex-wrap gap-2">
-                {counselor.mobile_official && (
-                  <a
-                    href={`tel:${counselor.mobile_official.replace(/[^+\d]/g, "")}`}
-                    className="rounded-md border border-border px-3 py-1.5 text-xs text-ink hover:bg-bg"
-                  >
-                    📞 {counselor.mobile_official}
-                  </a>
-                )}
-                <a href={WHATSAPP_LINK} className="rounded-md border border-primary px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10">
-                  💬 WhatsApp HMARK
-                </a>
-                <Link href="/portal/messages" className="rounded-md border border-border px-3 py-1.5 text-xs text-ink hover:bg-bg">
-                  ✉️ Message
-                </Link>
-              </div>
+        {/* Both people who look after them: the counsellor who guides the
+            plan, and the processing officer who files the applications and
+            the visa. Either may not be assigned yet, and says so. */}
+        <ChartCard title="Your HMARK team">
+          <div className="flex flex-col gap-4" data-team>
+            <TeamMember person={counselor} role="Your counsellor" pending="A counsellor will be assigned to you shortly." marker="counsellor" />
+            <TeamMember
+              person={processingOfficer}
+              role="Your processing officer"
+              pending="A processing officer is assigned once your applications begin."
+              marker="processing-officer"
+            />
+            <div className="flex flex-wrap gap-2 border-t border-border pt-3">
+              <a href={WHATSAPP_LINK} className="rounded-md border border-primary px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10">
+                💬 WhatsApp HMARK
+              </a>
+              <Link href="/portal/messages" className="rounded-md border border-border px-3 py-1.5 text-xs text-ink hover:bg-bg">
+                ✉️ Message
+              </Link>
             </div>
-          ) : (
-            <NoData>A counsellor will be assigned to you shortly.</NoData>
-          )}
+          </div>
         </ChartCard>
       </div>
+    </div>
+  );
+}
+
+type TeamPerson = { full_name?: string | null; designation?: string | null; mobile_official?: string | null } | null;
+
+/** One of the student's two people: initials, name, what they do, and a number to tap. */
+function TeamMember({ person, role, pending, marker }: { person: TeamPerson; role: string; pending: string; marker: string }) {
+  if (!person?.full_name) {
+    return (
+      <div className="flex items-center gap-3" data-team-member={marker} data-assigned="no">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-dashed border-border text-lg text-muted">?</span>
+        <span className="min-w-0">
+          <span className="block text-xs font-medium uppercase tracking-wide text-muted">{role}</span>
+          <span className="block text-xs text-muted">{pending}</span>
+        </span>
+      </div>
+    );
+  }
+  const initials = person.full_name
+    .split(" ")
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join("");
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3" data-team-member={marker} data-assigned="yes">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/15 text-base font-semibold text-primary">{initials}</span>
+        <span className="min-w-0">
+          <span className="block text-[11px] font-medium uppercase tracking-wide text-muted">{role}</span>
+          <span className="block text-sm font-medium text-ink">{person.full_name}</span>
+          {person.designation && <span className="block text-xs text-muted">{person.designation}</span>}
+        </span>
+      </div>
+      {/* Tappable: a student on a phone should not copy a number out by hand. */}
+      {person.mobile_official && (
+        <a
+          href={`tel:${person.mobile_official.replace(/[^+\d]/g, "")}`}
+          className="rounded-md border border-border px-3 py-1.5 text-xs text-ink hover:bg-bg"
+        >
+          📞 {person.mobile_official}
+        </a>
+      )}
     </div>
   );
 }

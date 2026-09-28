@@ -7,6 +7,9 @@ import { scholarshipPortals } from "@/lib/scholarshipPortal";
 import { callLink, callAbsenceNote } from "@/lib/scholarshipCallLink";
 import { listCredentialTypesAction } from "@/lib/actions/countryTracker";
 import { VisaCredentials } from "../visa/VisaCredentials";
+import { ScholarshipGuide } from "@/components/ScholarshipGuide";
+import { bodiesForUniversity } from "@/lib/scholarshipMatch";
+import { guideFreshness } from "@/lib/academicYear";
 import {
   SCHOLARSHIP_CURRENCY_SYMBOL,
   SCHOLARSHIP_STATUS_TONE,
@@ -125,7 +128,7 @@ export default async function PortalScholarshipPage() {
     supabase.from("lead_destinations").select("destination:destinations(id, display_name, scholarship_access)").eq("lead_id", student.id),
     supabase
       .from("applications")
-      .select("university:universities(name, dsu_body:scholarship_bodies(name), destination:destinations(id, display_name, scholarship_access))")
+      .select("id, is_finalized, university:universities(name, dsu_body_id, dsu_body:scholarship_bodies(name), destination:destinations(id, display_name, scholarship_access))")
       .eq("student_id", student.id),
   ]);
   type Dest = { id: string; display_name: string; scholarship_access: string | null };
@@ -144,13 +147,54 @@ export default async function PortalScholarshipPage() {
   const { data: bodyLinks } = countries.size
     ? await supabase
         .from("scholarship_body_destinations")
-        .select("destination_id, body:scholarship_bodies(name)")
+        .select(
+          "destination_id, body:scholarship_bodies(id, name, region, covers, academic_year, application_deadline, apply_url, isee_threshold, ispe_threshold, call_status, call_expected_on, call_pdf_url, call_pdf_path, call_pdf_language, call_page_url, source_url, guide_sections)"
+        )
         .in("destination_id", [...countries.keys()])
     : { data: [] };
+  type GuideRow = {
+    id: string;
+    name: string;
+    region: string | null;
+    covers: string[] | null;
+    academic_year: string | null;
+    application_deadline: string | null;
+    apply_url: string | null;
+    isee_threshold: string | null;
+    ispe_threshold: string | null;
+    call_status: string | null;
+    call_expected_on: string | null;
+    call_pdf_url: string | null;
+    call_pdf_path: string | null;
+    call_pdf_language: string | null;
+    call_page_url: string | null;
+    source_url: string | null;
+    guide_sections: unknown;
+  };
+  const bodiesByCountry = new Map<string, GuideRow[]>();
   for (const link of bodyLinks ?? []) {
-    const name = (one(link.body as never) as { name?: string } | null)?.name;
-    if (name) countries.get(link.destination_id as string)?.bodies.push(name);
+    const body = one(link.body as never) as GuideRow | null;
+    if (!body?.name) continue;
+    countries.get(link.destination_id as string)?.bodies.push(body.name);
+    bodiesByCountry.set(link.destination_id as string, [...(bodiesByCountry.get(link.destination_id as string) ?? []), body]);
   }
+
+  // A university finalised for the visa settles which body pays for it: the
+  // one set on the university in Setup, or else the one the directory's covers
+  // name (scholarshipMatch.ts). The student sees that body's guide from then
+  // on, exactly as their counsellor does on the staff Scholarship tab. It used
+  // to wait until a scholarship was recorded, which left the student with
+  // nothing while the office was already reading the deadlines.
+  const finalized = (applied ?? []).flatMap((a) => {
+    if (!a.is_finalized) return [];
+    const uni = one(a.university as never) as { name?: string; dsu_body_id?: string | null; destination?: unknown } | null;
+    const dest = uni?.destination ? (one(uni.destination as never) as Dest | null) : null;
+    const countryBodies = dest?.id ? (bodiesByCountry.get(dest.id) ?? []) : [];
+    if (!dest || !uni?.name || countryBodies.length === 0) return [];
+    const chosen = uni.dsu_body_id ? countryBodies.filter((b) => b.id === uni.dsu_body_id) : [];
+    const bodies = chosen.length > 0 ? chosen : bodiesForUniversity(uni.name, countryBodies);
+    return [{ appId: a.id as string, university: uni.name, country: dest.display_name, access: dest.scholarship_access, bodies }];
+  });
   const offering = [...countries.values()].filter((c) => c.bodies.length > 0);
   const universal = offering.some((c) => c.scholarship_access === "universal");
 
@@ -169,9 +213,10 @@ export default async function PortalScholarshipPage() {
   // Signed once per path: two scholarships in the same region share a body.
   const callPaths = [
     ...new Set(
-      (scholarships ?? [])
-        .map((s) => (one(s.body as never) as Body | null)?.call_pdf_path)
-        .filter((p): p is string => Boolean(p))
+      [
+        ...(scholarships ?? []).map((s) => (one(s.body as never) as Body | null)?.call_pdf_path),
+        ...finalized.flatMap((f) => f.bodies.map((b) => b.call_pdf_path)),
+      ].filter((p): p is string => Boolean(p))
     ),
   ];
   const signedCalls = new Map<string, string>();
@@ -234,10 +279,68 @@ export default async function PortalScholarshipPage() {
         </div>
       )}
 
+      {finalized.length > 0 && (
+        <section className="mb-6 flex flex-col gap-3" data-finalized-scholarship>
+          <h3 className="text-sm font-semibold text-ink">Your university&rsquo;s scholarship</h3>
+          <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
+            {finalized.map((f) => (
+              <Card key={f.appId}>
+                <div className="flex flex-col gap-3" data-finalized-for={f.university}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h4 className="text-base font-semibold text-ink">{f.university}</h4>
+                      <p className="text-xs text-muted">{f.country}</p>
+                    </div>
+                    <Badge tone="success">Finalised for your visa</Badge>
+                  </div>
+                  <p className="text-sm text-ink">
+                    {f.bodies.length === 0
+                      ? `Your counsellor will confirm which scholarship body handles ${f.university}.`
+                      : f.access === "universal"
+                        ? `As a student at ${f.university}, you apply to ${f.bodies.map((b) => b.name).join(" or ")} for your scholarship. What it asks for, and when:`
+                        : `${f.bodies.map((b) => b.name).join(" or ")} awards scholarships here on merit. Your counsellor will tell you whether you are being put forward.`}
+                  </p>
+                  {f.bodies.map((b) => (
+                    <ScholarshipGuide
+                      key={b.id}
+                      audience="student"
+                      body={{
+                        id: b.id,
+                        name: b.name,
+                        region: b.region,
+                        academic_year: b.academic_year,
+                        application_deadline: b.application_deadline,
+                        apply_url: b.apply_url,
+                        isee_threshold: b.isee_threshold,
+                        ispe_threshold: b.ispe_threshold,
+                        call_status: b.call_status ?? "published",
+                        call_expected_on: b.call_expected_on,
+                        call_pdf_url: b.call_pdf_url,
+                        call_pdf_signed_url: b.call_pdf_path ? (signedCalls.get(b.call_pdf_path) ?? null) : null,
+                        call_pdf_language: b.call_pdf_language,
+                        call_page_url: b.call_page_url,
+                        source_url: b.source_url,
+                        guide_sections: Array.isArray(b.guide_sections) ? (b.guide_sections as { title: string; body: string }[]) : [],
+                        staleFor: (() => {
+                          const fresh = guideFreshness(b.academic_year);
+                          return fresh.state === "stale" ? fresh.expected : null;
+                        })(),
+                      }}
+                    />
+                  ))}
+                </div>
+              </Card>
+            ))}
+          </div>
+        </section>
+      )}
+
       {(scholarships ?? []).length === 0 ? (
         <Card>
           <EmptyState>
-            {universal
+            {finalized.some((f) => f.bodies.length > 0)
+              ? `Your application to ${finalized.find((f) => f.bodies.length > 0)!.bodies.map((b) => b.name).join(" or ")} has not been recorded yet. Your counsellor adds it here once it is submitted, with its status and anything still to send.`
+              : universal
               ? "Nothing to show yet. Your scholarship appears here once your pre-enrollment on Universitaly.it has been finalized and we have recorded your application with the regional body. Your counsellor can tell you where it has got to in the meantime."
               : "Nothing recorded yet. If your counsellor puts you forward for a scholarship, it appears here with its deadlines and what to send."}
           </EmptyState>
