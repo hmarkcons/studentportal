@@ -1,16 +1,11 @@
 import Link from "next/link";
 import { getStudentUser } from "@/lib/auth/session";
-import { Card } from "@/components/ui/Card";
-import { BoardingPassTracker } from "@/components/ui/BoardingPassTracker";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { DestinationPipelineCard } from "@/components/DestinationPipelineCard";
-import type { DashboardStageDef } from "@/lib/dashboardPipeline";
 import { loadPortalSummary } from "@/lib/portalSummary";
 import { PortalAttention } from "@/components/PortalAttention";
 import { WHATSAPP_LINK } from "@/lib/constants";
-import { ProgramDates } from "@/components/ProgramDates";
 import { karachiToday } from "@/lib/calendarDates";
-import { sortRounds, type ProgramRound } from "@/lib/programRounds";
+import { sortRounds } from "@/lib/programRounds";
+import { loadStudentApplications } from "@/lib/studentApplications";
 import { ChartCard, NoData } from "@/components/charts/ChartCard";
 import { ProgressRing } from "@/components/charts/ProgressRing";
 import { DonutChart } from "@/components/charts/DonutChart";
@@ -34,8 +29,6 @@ const stageLabel = (stage: string) =>
 
 const LONG_DATE: Intl.DateTimeFormatOptions = { weekday: "short", day: "numeric", month: "short", year: "numeric" };
 
-type DestinationEmbed = { id?: string; display_name?: string; pipeline_stages?: string[]; dashboard_pipeline_stages?: DashboardStageDef[] };
-
 export default async function PortalDashboardPage() {
   const { supabase, userId } = await getStudentUser();
 
@@ -51,19 +44,12 @@ export default async function PortalDashboardPage() {
 
   if (!student) return null;
 
-  const [{ data: applications }, summary, { data: leadDestinations }, { data: agreements }, cycleDocs, visas, { data: scholarships }] =
+  const [apps, summary, { data: agreements }, cycleDocs, visas, { data: scholarships }] =
     await Promise.all([
-      supabase
-        .from("applications")
-        .select(
-          "id, current_stage, intake, round_id, is_finalized, university:universities(name, destination:destinations(id, display_name, pipeline_stages, dashboard_pipeline_stages)), program:programs(name, rounds:program_intake_rounds(id, label, start_date, application_deadline, sort_order))"
-        )
-        .eq("student_id", student.id),
+      // The applications have a page of their own now; the dashboard keeps
+      // what it needs for the journey, the chart and what is coming up.
+      loadStudentApplications(supabase, student.id),
       loadPortalSummary(supabase, student.id),
-      supabase
-        .from("lead_destinations")
-        .select("destination_id, dashboard_stage_values, destination:destinations(display_name, dashboard_pipeline_stages)")
-        .eq("lead_id", student.id),
       supabase.from("agreements").select("status").eq("student_id", student.id),
       // The same rows the Documents page counts — see studentCycleDocuments.
       loadCycleDocuments(supabase, student.id),
@@ -95,12 +81,6 @@ export default async function PortalDashboardPage() {
   }
 
   const docs = documentCounts(cycleDocs.docs);
-  const apps = (applications ?? []).map((a) => {
-    const uni = one(a.university as never) as { name?: string; destination?: unknown } | null;
-    const dest = uni?.destination ? (one(uni.destination as never) as DestinationEmbed | null) : null;
-    const program = one(a.program as never) as { name?: string; rounds?: ProgramRound[] } | null;
-    return { app: a, uni, dest, program };
-  });
 
   const journey = studentJourney({
     studentCode: student.student_code,
@@ -167,40 +147,6 @@ export default async function PortalDashboardPage() {
     const key = app.current_stage ? stageLabel(app.current_stage) : "Not started";
     byStage.set(key, (byStage.get(key) ?? 0) + 1);
   }
-
-  // Destination-level grouping, as on the staff Dashboard: one card per
-  // destination the student has an application to, or chose at registration.
-  const savedValuesByDestinationId = new Map<string, Record<string, string>>(
-    (leadDestinations ?? []).map((sd) => [sd.destination_id, (sd.dashboard_stage_values as Record<string, string> | null) ?? {}])
-  );
-  const destinationGroups = new Map<string, { destinationName: string; stages: DashboardStageDef[]; universityNames: string[] }>();
-  for (const { uni, dest } of apps) {
-    if (!dest?.id) continue;
-    if (!destinationGroups.has(dest.id)) {
-      destinationGroups.set(dest.id, { destinationName: dest.display_name ?? "Destination", stages: dest.dashboard_pipeline_stages ?? [], universityNames: [] });
-    }
-    destinationGroups.get(dest.id)!.universityNames.push(uni?.name ?? "University");
-  }
-  for (const sd of leadDestinations ?? []) {
-    if (destinationGroups.has(sd.destination_id)) continue;
-    const dest = one(sd.destination as never) as { display_name?: string; dashboard_pipeline_stages?: DashboardStageDef[] } | null;
-    if (!dest) continue;
-    destinationGroups.set(sd.destination_id, { destinationName: dest.display_name ?? "Destination", stages: dest.dashboard_pipeline_stages ?? [], universityNames: [] });
-  }
-  const destinationPipelineRows = Array.from(destinationGroups.entries())
-    .filter(([, group]) => group.stages.length > 0)
-    .map(([destinationId, group]) => ({
-      destinationId,
-      destinationName: group.destinationName,
-      applicationSummary:
-        group.universityNames.length === 0
-          ? "No application yet"
-          : group.universityNames.length === 1
-            ? group.universityNames[0]
-            : `${group.universityNames.length} applications`,
-      stages: group.stages,
-      values: savedValuesByDestinationId.get(destinationId) ?? {},
-    }));
 
   const money = summary.money;
   const firstName = student.full_name.split(" ")[0] || student.full_name;
@@ -311,7 +257,12 @@ export default async function PortalDashboardPage() {
         {/* Everything outstanding — documents, money, appointments, replies —
             each computed by the helper its own page uses. */}
         <PortalAttention summary={summary} className="h-full" />
-        <ChartCard title="Your applications by stage" subtitle={`${apps.length} application${apps.length === 1 ? "" : "s"}`}>
+        <ChartCard
+          title="Your applications by stage"
+          subtitle={`${apps.length} application${apps.length === 1 ? "" : "s"}`}
+          href="/portal/applications"
+          linkLabel="View applications"
+        >
           {apps.length === 0 ? (
             <NoData>No applications yet — your counsellor adds them once your documents are ready.</NoData>
           ) : (
@@ -322,63 +273,6 @@ export default async function PortalDashboardPage() {
             />
           )}
         </ChartCard>
-      </div>
-
-      {/* Applications beside their countries' progress: two columns that
-          each fill, rather than two half-empty rows. */}
-      <div className={destinationPipelineRows.length > 0 ? "grid grid-cols-1 items-start gap-6 xl:grid-cols-2" : ""}>
-      <section className="flex flex-col gap-3">
-        <h3 className="text-sm font-semibold text-ink">Your applications</h3>
-        {apps.length === 0 ? (
-          <Card>
-            <EmptyState>No applications yet.</EmptyState>
-          </Card>
-        ) : (
-          <div className={`grid grid-cols-1 gap-4 ${destinationPipelineRows.length > 0 ? "" : "xl:grid-cols-2"}`}>
-            {apps.map(({ app, uni, dest, program }) => {
-              // The round's own label, so two applications to one programme in
-              // different rounds do not read as the same card twice.
-              const roundLabel = (program?.rounds ?? []).find((r) => r.id === app.round_id)?.label ?? null;
-              return (
-                <div key={app.id} className="flex flex-col gap-1">
-                  <Link href={`/portal/applications/${app.id}`}>
-                    <BoardingPassTracker
-                      universityName={uni?.name ?? "University"}
-                      programName={program?.name}
-                      intake={app.intake}
-                      round={roundLabel}
-                      currentStage={app.current_stage}
-                      pipelineStages={dest?.pipeline_stages ?? []}
-                    />
-                  </Link>
-                  <ProgramDates rounds={program?.rounds ?? []} today={today} highlightRoundId={app.round_id} className="px-1" />
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      {destinationPipelineRows.length > 0 && (
-        <section className="flex flex-col gap-3">
-          <h3 className="text-sm font-semibold text-ink">Progress by country</h3>
-          <div className="grid grid-cols-1 gap-4">
-            {destinationPipelineRows.map((row) => (
-              <DestinationPipelineCard
-                key={row.destinationId}
-                leadId={student.id}
-                destinationId={row.destinationId}
-                destinationName={row.destinationName}
-                subtitle={row.applicationSummary}
-                stages={row.stages}
-                values={row.values}
-                editable={false}
-                revalidateTo="/portal"
-              />
-            ))}
-          </div>
-        </section>
-      )}
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">

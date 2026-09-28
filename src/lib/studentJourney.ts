@@ -56,8 +56,13 @@ function reached(app: JourneyApplication, stage: string): boolean {
   return target !== -1 && at !== -1 && at >= target;
 }
 
+/** Submitted: at or past the destination's "application_submitted" stage. */
+export function applicationSubmitted(app: JourneyApplication): boolean {
+  return reached(app, "application_submitted");
+}
+
 /** Past review: an offer, a letter, an acceptance — whatever the destination calls it. */
-function admitted(app: JourneyApplication): boolean {
+export function applicationAdmitted(app: JourneyApplication): boolean {
   if (app.stage && CLOSED.has(app.stage)) return false;
   if (app.finalized) return true;
   const review = app.stages.indexOf("under_review");
@@ -69,8 +74,8 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 
 export function studentJourney(input: JourneyInput): Journey {
   const { agreement, documents: d, applications, visa, travel } = input;
-  const submitted = applications.filter((a) => reached(a, "application_submitted"));
-  const offers = applications.filter(admitted);
+  const submitted = applications.filter(applicationSubmitted);
+  const offers = applications.filter(applicationAdmitted);
 
   type Draft = Omit<JourneyStep, "state"> & { done: boolean; blocked?: boolean };
   const drafts: Draft[] = [
@@ -108,6 +113,7 @@ export function studentJourney(input: JourneyInput): Journey {
       key: "applied",
       label: "Applied",
       done: submitted.length > 0,
+      href: "/portal/applications",
       detail:
         submitted.length > 0
           ? `${plural(submitted.length, "application")} submitted`
@@ -119,6 +125,7 @@ export function studentJourney(input: JourneyInput): Journey {
       key: "admission",
       label: "Admission",
       done: offers.length > 0,
+      href: "/portal/applications",
       detail: offers.length > 0 ? `Offer from ${offers[0].university}` : submitted.length > 0 ? "Waiting for a decision" : "After you apply",
     },
     {

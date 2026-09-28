@@ -118,6 +118,42 @@ export default async function PortalScholarshipPage() {
   const portals = student ? scholarshipPortals(await listCredentialTypesAction("student", student.id)) : [];
   if (!student) return null;
 
+  // What each of the student's countries offers — the menu shows this page
+  // for a country with a scholarship body on file, so the page says what that
+  // is, country by country, rather than assuming Italy.
+  const [{ data: registered }, { data: applied }] = await Promise.all([
+    supabase.from("lead_destinations").select("destination:destinations(id, display_name, scholarship_access)").eq("lead_id", student.id),
+    supabase
+      .from("applications")
+      .select("university:universities(name, dsu_body:scholarship_bodies(name), destination:destinations(id, display_name, scholarship_access))")
+      .eq("student_id", student.id),
+  ]);
+  type Dest = { id: string; display_name: string; scholarship_access: string | null };
+  const countries = new Map<string, Dest & { bodies: string[]; chosen: { university: string; body: string }[] }>();
+  const addCountry = (d: Dest | null) => {
+    if (d?.id && !countries.has(d.id)) countries.set(d.id, { ...d, bodies: [], chosen: [] });
+  };
+  for (const r of registered ?? []) addCountry(one(r.destination as never) as Dest | null);
+  for (const a of applied ?? []) {
+    const uni = one(a.university as never) as { name?: string; dsu_body?: unknown; destination?: unknown } | null;
+    const dest = uni?.destination ? (one(uni.destination as never) as Dest | null) : null;
+    addCountry(dest);
+    const body = uni?.dsu_body ? (one(uni.dsu_body as never) as { name?: string } | null) : null;
+    if (dest?.id && body?.name && uni?.name) countries.get(dest.id)!.chosen.push({ university: uni.name, body: body.name });
+  }
+  const { data: bodyLinks } = countries.size
+    ? await supabase
+        .from("scholarship_body_destinations")
+        .select("destination_id, body:scholarship_bodies(name)")
+        .in("destination_id", [...countries.keys()])
+    : { data: [] };
+  for (const link of bodyLinks ?? []) {
+    const name = (one(link.body as never) as { name?: string } | null)?.name;
+    if (name) countries.get(link.destination_id as string)?.bodies.push(name);
+  }
+  const offering = [...countries.values()].filter((c) => c.bodies.length > 0);
+  const universal = offering.some((c) => c.scholarship_access === "universal");
+
   const { data: scholarships } = await supabase
     .from("student_scholarships")
     .select(
@@ -149,17 +185,61 @@ export default async function PortalScholarshipPage() {
   return (
     <div className="w-full">
       <h2 className="mb-1 text-lg font-semibold text-ink">Scholarship</h2>
-      <p className="mb-5 max-w-2xl text-sm text-muted">
-        Italy&rsquo;s regional scholarships (DSU) are awarded by the region your university sits in, on the basis of
-        your family&rsquo;s ISEE and ISPE assessment.
+      <p className="mb-4 max-w-3xl text-sm text-muted">
+        The scholarships open to you in the countries you are applying to, and — once one is recorded for you — where
+        your application stands.
       </p>
+
+      {offering.length > 0 && (
+        <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3" data-scholarship-countries>
+          {offering.map((c) => (
+            <Card key={c.id}>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2" data-scholarship-country={c.display_name}>
+                <h3 className="text-sm font-semibold text-ink">{c.display_name}</h3>
+                {c.scholarship_access === "universal" ? (
+                  <Badge tone="success">Every student can apply</Badge>
+                ) : (
+                  <Badge tone="info">Merit-based · limited places</Badge>
+                )}
+              </div>
+              <p className="text-xs text-muted">
+                {c.scholarship_access === "universal"
+                  ? "Regional scholarships (DSU) are awarded by the region your university sits in, on the basis of your family’s ISEE and ISPE assessment."
+                  : "Awarded to a few students on merit. Your counsellor will tell you whether you are being put forward."}
+              </p>
+              {c.chosen.length > 0 && (
+                <ul className="mt-2 flex flex-col gap-0.5 text-xs">
+                  {c.chosen.map((u) => (
+                    <li key={u.university} className="text-ink">
+                      <span className="text-muted">{u.university}:</span> {u.body}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {(() => {
+                const others = c.bodies.filter((b) => !c.chosen.some((u) => u.body === b));
+                // Folded: Italy alone has over twenty regional bodies, and the
+                // one that matters is the one above, when it is set.
+                return others.length > 0 ? (
+                  <details className="mt-2 text-[11px] text-muted">
+                    <summary className="cursor-pointer">
+                      {others.length} {c.chosen.length > 0 ? "other " : ""}bod{others.length === 1 ? "y" : "ies"} in {c.display_name}
+                    </summary>
+                    <p className="mt-1">{others.join(", ")}</p>
+                  </details>
+                ) : null;
+              })()}
+            </Card>
+          ))}
+        </div>
+      )}
 
       {(scholarships ?? []).length === 0 ? (
         <Card>
           <EmptyState>
-            Nothing to show yet. Your scholarship appears here once your pre-enrollment on Universitaly.it has been
-            finalized and we have recorded your application with the regional body. Your counsellor can tell you where
-            it has got to in the meantime.
+            {universal
+              ? "Nothing to show yet. Your scholarship appears here once your pre-enrollment on Universitaly.it has been finalized and we have recorded your application with the regional body. Your counsellor can tell you where it has got to in the meantime."
+              : "Nothing recorded yet. If your counsellor puts you forward for a scholarship, it appears here with its deadlines and what to send."}
           </EmptyState>
         </Card>
       ) : (

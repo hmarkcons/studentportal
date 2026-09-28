@@ -121,18 +121,8 @@ export function buildStaffNav({
     .filter((item) => (item.children ? item.children.length > 0 : !item.href || allowed(item.href)));
 }
 
-export const STUDENT_NAV: NavItem[] = [
-  { label: "Dashboard", href: "/portal", icon: "🏠" },
-  { label: "Profile", href: "/portal/profile", icon: "👤" },
-  { label: "Documents", href: "/portal/documents", icon: "📁" },
-  { label: "Visa", href: "/portal/visa", icon: "🛂" },
-  { label: "Appointments", href: "/portal/appointments", icon: "📅" },
-  { label: "Payments", href: "/portal/payments", icon: "💳" },
-  { label: "Agreement", href: "/portal/agreement", icon: "📄" },
-  { label: "Messages", href: "/portal/messages", icon: "💬" },
-  { label: "Support", href: "/portal/support", icon: "🎧" },
-  { label: "Guide", href: "/portal/guide", icon: "🎬" },
-];
+// The student menu is built in studentNav.ts: which entries a student gets
+// depends on where they are going and how far they have got.
 
 export const PARTNER_NAV: NavItem[] = [
   { label: "Dashboard", href: "/partner", icon: "🏠" },

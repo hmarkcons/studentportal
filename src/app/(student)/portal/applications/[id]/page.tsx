@@ -59,8 +59,8 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
 
   return (
     <div className="w-full">
-      <Link href="/portal" className="text-sm text-muted hover:text-ink">
-        &larr; Back to dashboard
+      <Link href="/portal/applications" className="text-sm text-muted hover:text-ink">
+        &larr; Back to applications
       </Link>
 
       <div className="mt-4 mb-6">

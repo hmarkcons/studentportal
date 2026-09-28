@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import { getStudentUser } from "@/lib/auth/session";
 import { AppShell } from "@/components/AppShell";
-import { STUDENT_NAV } from "@/lib/nav";
-import { evaluateAgreementGate, isGateAllowedPath } from "@/lib/portalGate";
+import { studentNav } from "@/lib/studentNav";
+import { evaluateAgreementGate } from "@/lib/portalGate";
 import { countUnreadMessages } from "@/lib/unreadMessages";
 import { loadTicketActivity, loadTicketReadMarkers, hasUnseenStaffReply } from "@/lib/supportSignals";
 import { approvedVisaDestinations } from "@/lib/studentVisaApproval";
@@ -37,35 +37,31 @@ export default async function StudentLayout({ children }: { children: React.Reac
     .select("status, signing_method, signed_file_path, video_recording_path, approval_undone_at")
     .eq("student_id", studentRow.id);
   const gate = evaluateAgreementGate(agreements ?? []);
-  // NavItem.href is optional (group headers have none); a menu entry with no
-  // destination cannot be an allowed one.
-  const visible = gate.locked
-    ? STUDENT_NAV.filter((item) => Boolean(item.href) && isGateAllowedPath(item.href!))
-    : STUDENT_NAV;
-
-  // Scholarship is only in the menu for a student who has one to look at.
-  // Row-level security returns their scholarships only once the application's
-  // pre-enrolment is finalised, so this asks the same question the page will:
-  // an empty entry would be a dead end for everyone applying outside Italy,
-  // which is most of them.
-  const { count: scholarshipCount } = await supabase
-    .from("student_scholarships")
-    .select("id", { count: "exact", head: true })
-    .eq("student_id", studentRow.id);
-  const withScholarship =
-    !gate.locked && (scholarshipCount ?? 0) > 0
-      ? [...visible, { label: "Scholarship", href: "/portal/scholarship", icon: "🎓" }]
-      : visible;
+  // Scholarship is in the menu when a country the student is going to offers
+  // one — a scholarship body serves it (Setup → Scholarship bodies) — or a
+  // scholarship is already recorded for them. Their countries are the ones they
+  // registered for and the ones they have applications to.
+  const [{ data: registered }, { data: applied }, { count: scholarshipCount }] = await Promise.all([
+    supabase.from("lead_destinations").select("destination_id").eq("lead_id", studentRow.id),
+    supabase.from("applications").select("university:universities(destination_id)").eq("student_id", studentRow.id),
+    supabase.from("student_scholarships").select("id", { count: "exact", head: true }).eq("student_id", studentRow.id),
+  ]);
+  const countryIds = [
+    ...new Set([
+      ...(registered ?? []).map((r) => r.destination_id as string),
+      ...(applied ?? []).map((a) => (Array.isArray(a.university) ? a.university[0] : a.university)?.destination_id as string | undefined),
+    ]),
+  ].filter((id): id is string => Boolean(id));
+  const { count: bodiesForCountries } = countryIds.length
+    ? await supabase.from("scholarship_body_destinations").select("destination_id", { count: "exact", head: true }).in("destination_id", countryIds)
+    : { count: 0 };
+  const scholarship = !gate.locked && ((bodiesForCountries ?? 0) > 0 || (scholarshipCount ?? 0) > 0);
 
   // Travel & Arrival appears only once a visa has actually been issued. Not in
   // the menu before that, and never for a refusal: a student who has just been
   // refused should not be looking at a tab about what to pack. The page asks
   // the same question, so the entry and the page cannot disagree.
   const approvedVisas = gate.locked ? [] : await approvedVisaDestinations(supabase, studentRow.id);
-  const withTravel =
-    approvedVisas.length > 0
-      ? [...withScholarship, { label: "Travel & Arrival", href: "/portal/travel", icon: "✈️" }]
-      : withScholarship;
 
   // A message from their counsellor is worth surfacing in the menu — the whole
   // point of the channel is that the student does not have to think to look.
@@ -85,10 +81,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
     "/portal/messages": unread,
     "/portal/support": unreadTickets,
   };
-  const nav = withTravel.map((i) => {
-    const badge = i.href ? badges[i.href] ?? 0 : 0;
-    return badge > 0 ? { ...i, badge } : i;
-  });
+  const nav = studentNav({ locked: gate.locked, scholarship, travel: approvedVisas.length > 0, badges });
 
   return (
     <AppShell brand="HMARK Student Portal" nav={nav} userName={studentRow.full_name} userSubtitle="Student">

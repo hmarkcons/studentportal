@@ -181,13 +181,47 @@ try {
   console.log("\n--- applications ---");
   const donut = await page.locator('svg[aria-label^="Applications by stage"]').getAttribute("aria-label").catch(() => null);
   ok("the donut names the stage the application is at", Boolean(donut?.includes("Under Review 1")), String(donut));
-  ok("the application's boarding pass is listed", (await page.locator("body").innerText()).includes("zztmp Data Science"));
+  // The cards live on their own page now. "Acceptance Letter" is a stage only
+  // a boarding pass prints, so its absence says the cards are gone.
+  const dashText = await page.locator("main").innerText();
+  ok("the dashboard no longer lists the application cards", !dashText.includes("Acceptance Letter"));
+  ok("...but its chart links to them", (await page.getByRole("link", { name: /View applications/ }).getAttribute("href")) === "/portal/applications");
+
+  console.log("\n--- the menu ---");
+  const menu = (await page.locator("aside nav a, nav a").allInnerTexts()).map((t) => t.replace(/\s+/g, " ").trim()).filter(Boolean);
+  const pos = (label) => menu.findIndex((m) => m.includes(label));
+  ok("Applications has its own entry, after Documents", pos("Applications") !== -1 && pos("Applications") === pos("Documents") + 1, menu.join(" | "));
+  ok("Scholarship follows it, Italy having scholarship bodies", pos("Scholarship") === pos("Applications") + 1, menu.join(" | "));
+
+  console.log("\n--- the Applications page ---");
+  await page.getByRole("link", { name: /View applications/ }).click();
+  await page.waitForURL((u) => u.pathname === "/portal/applications", { timeout: 40000 });
+  const cards = page.locator("[data-applications]");
+  await cards.waitFor({ timeout: 40000 });
+  const cardsText = (await cards.innerText()).replace(/\s+/g, " ");
+  ok("it lists the application as a boarding pass", cardsText.includes("zztmp Dashboard University") && cardsText.includes("Acceptance Letter"), cardsText.slice(0, 300));
+  ok("...with its round's closing date", /apply by/i.test(cardsText), cardsText.slice(0, 300));
+  const summaryText = (await page.locator("[data-applications-summary]").innerText()).replace(/\s+/g, " ");
+  ok("the summary counts it: 1 application, 1 submitted, 0 offers",
+    summaryText.includes("1 application") && summaryText.includes("1 submitted") && summaryText.includes("0 offers"), summaryText);
+  ok("each country's progress is here too", (await page.locator("main").innerText()).includes("Progress by country"));
+  await page.locator("[data-applications] a").first().click();
+  await page.waitForURL((u) => /\/portal\/applications\/[^/]+$/.test(u.pathname), { timeout: 40000 });
+  ok("an application leads back to Applications", (await page.getByRole("link", { name: /Back to applications/ }).getAttribute("href")) === "/portal/applications");
+
+  console.log("\n--- the Scholarship page ---");
+  await page.goto(`${BASE}/portal/scholarship`, { waitUntil: "domcontentloaded" });
+  const italyCard = page.locator('[data-scholarship-country="Italy (Public)"]');
+  const hasItaly = await italyCard.waitFor({ timeout: 40000 }).then(() => true, () => false);
+  ok("it says what Italy offers", hasItaly && (await italyCard.innerText()).includes("Every student can apply"), await page.locator("main").innerText().catch(() => ""));
 
   console.log("\n--- full width ---");
   const width = async () => page.evaluate(() => document.querySelector("h2")?.parentElement?.getBoundingClientRect().width ?? 0);
+  await page.goto(`${BASE}/portal`, { waitUntil: "domcontentloaded" });
+  await page.locator("[data-journey]").waitFor({ timeout: 40000 });
   const dashWidth = await page.locator("[data-journey]").evaluate((el) => el.getBoundingClientRect().width);
   ok("the dashboard uses the width of the screen", dashWidth > 1000, `${Math.round(dashWidth)}px`);
-  for (const path of ["/portal/documents", "/portal/payments", "/portal/profile", "/portal/support", "/portal/agreement", "/portal/appointments", "/portal/messages", "/portal/guide", "/portal/visa"]) {
+  for (const path of ["/portal/applications", "/portal/scholarship", "/portal/documents", "/portal/payments", "/portal/profile", "/portal/support", "/portal/agreement", "/portal/appointments", "/portal/messages", "/portal/guide", "/portal/visa"]) {
     await page.goto(`${BASE}${path}`, { waitUntil: "domcontentloaded" });
     await page.locator("h2").first().waitFor({ timeout: 40000 }).catch(() => {});
     const w = await width();
