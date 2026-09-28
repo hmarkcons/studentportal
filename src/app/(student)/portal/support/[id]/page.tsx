@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { TicketThread, type TicketReplyRow } from "@/components/TicketThread";
 import { MarkTicketRead } from "@/components/MarkTicketRead";
 import { formatStamp } from "@/lib/activityStamp";
+import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -52,28 +53,33 @@ export default async function PortalTicketDetailPage(props: PageProps<"/portal/s
   const revalidateTo = `/portal/support/${id}`;
 
   return (
-    <div className="w-full">
-      <Link href="/portal/support" className="text-sm text-muted hover:text-ink">
+    <div className="flex w-full flex-col gap-6" data-portal-page>
+      <Link
+        href="/portal/support"
+        data-rise
+        className="inline-flex w-fit items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-sm text-muted shadow-sm hover:border-primary hover:text-primary"
+      >
         &larr; Back to support
       </Link>
 
       {/* Opening the ticket is what clears its "new reply" flag. */}
       <MarkTicketRead ticketId={ticket.id} side="student" />
 
-      <Card className="mt-2 mb-4">
-        <div className="mb-2 flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="text-lg font-semibold text-ink">{ticket.subject}</h2>
-            {/* created_at was selected here and never shown. */}
-            <p className="text-xs text-muted">Raised {formatStamp(ticket.created_at)}</p>
-          </div>
-          <Badge tone={STATUS_TONE[ticket.status] ?? "warning"}>{ticket.status.replace("_", " ")}</Badge>
-        </div>
-        <p className="whitespace-pre-wrap text-sm text-ink">{ticket.body}</p>
-      </Card>
+      <PortalPageHeader
+        icon="🎫"
+        eyebrow="Support ticket"
+        title={ticket.subject}
+        // created_at was selected here and never shown.
+        description={`Raised ${formatStamp(ticket.created_at)}`}
+        aside={<Badge tone={STATUS_TONE[ticket.status] ?? "warning"}>{ticket.status.replace("_", " ")}</Badge>}
+      >
+        <p className="whitespace-pre-wrap rounded-xl bg-bg/70 px-4 py-3 text-sm text-ink">{ticket.body}</p>
+      </PortalPageHeader>
 
       <Card>
-        <h3 className="mb-3 text-sm font-medium text-ink">Conversation</h3>
+        <h3 className="mb-3 flex items-center gap-2 text-base font-semibold text-ink">
+          <span aria-hidden>💬</span> Conversation
+        </h3>
         <TicketThread ticketId={ticket.id} authorType="student" replies={replies} revalidateTo={revalidateTo} />
       </Card>
     </div>

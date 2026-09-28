@@ -7,6 +7,18 @@ import { TravelVisaHistorySection } from "@/components/TravelVisaHistorySection"
 import { ProfileForm } from "./ProfileForm";
 import { ProfileCompleteness } from "@/components/ProfileCompleteness";
 import { uploadStudentPhoto, deleteStudentPhoto } from "@/lib/actions/studentProfileExtras";
+import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
+
+function SectionTitle({ icon, children }: { icon: string; children: React.ReactNode }) {
+  return (
+    <h3 className="mb-3 flex items-center gap-2.5 text-base font-semibold text-ink">
+      <span aria-hidden className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-base">
+        {icon}
+      </span>
+      {children}
+    </h3>
+  );
+}
 
 export default async function PortalProfilePage() {
   const supabase = await createClient();
@@ -36,87 +48,97 @@ export default async function PortalProfilePage() {
   }
 
   return (
-    <div className="w-full">
-      <h2 className="mb-1 text-lg font-semibold text-ink">Profile</h2>
-      {/* Their own number. Quoted back at them by the office, so they should
-          not have to ring up and ask what it is. */}
-      {student.student_code && (
-        <p className="mb-4 text-xs text-muted">
-          Student ID <span className="font-mono tracking-wide text-ink">{student.student_code}</span>
-        </p>
-      )}
-      {!student.student_code && <div className="mb-4" />}
-
-      {/* What is still outstanding, before the form itself — a student should
-          not have to audit eleven fields to find the two they skipped. */}
-      <ProfileCompleteness
-        input={{
-          contact_number: student.contact_number,
-          date_of_birth: student.date_of_birth,
-          address: student.address,
-          emergency_contact_name: profile?.emergency_contact_name ?? null,
-          emergency_contact_number: profile?.emergency_contact_number ?? null,
-          passport_number: profile?.passport_number ?? null,
-          passport_expiry: profile?.passport_expiry ?? null,
-          cnic: profile?.cnic ?? null,
-          financial_sponsor_name: profile?.financial_sponsor_name ?? null,
-          financial_sponsor_relation: profile?.financial_sponsor_relation ?? null,
-          financial_details: profile?.financial_details ?? null,
-        }}
+    <div className="flex w-full flex-col gap-6" data-portal-page>
+      <PortalPageHeader
+        icon="👤"
+        title="Profile"
+        description="Your personal, passport and sponsor details, your test scores and your academics — what your visa and applications are built from."
+        aside={
+          // Their own number. Quoted back at them by the office, so they should
+          // not have to ring up and ask what it is.
+          student.student_code ? (
+            <span className="rounded-xl border border-border bg-card px-3 py-2 text-xs text-muted">
+              Student ID <span className="ml-1 font-mono text-sm font-semibold tracking-wide text-ink">{student.student_code}</span>
+            </span>
+          ) : undefined
+        }
       />
 
-      <Card className="mb-6">
-        <h3 className="mb-3 text-base font-semibold text-ink">Personal details</h3>
-        <p className="mb-4 text-xs text-muted">Your email and case status can only be changed by your counsellor.</p>
-
-        <div className="mb-4">
-          {/* The student's own photo is theirs to change and theirs to
-              remove — student_profiles_write is staff-or-self, so the same
-              rule covers both sides of this. */}
-          <PhotoUpload
-            action={uploadStudentPhoto.bind(null, student.id, revalidateTo)}
-            photoUrl={photoUrl}
-            onDelete={deleteStudentPhoto.bind(null, student.id, revalidateTo)}
-            deleteLabel="your photo"
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-3">
+        <Card className="xl:col-span-2">
+          <SectionTitle icon="🪪">Personal details</SectionTitle>
+          <p className="-mt-1 mb-4 text-xs text-muted">Your email and case status can only be changed by your counsellor.</p>
+          <ProfileForm
+            studentId={student.id}
+            student={{
+              full_name: student.full_name,
+              contact_number: student.contact_number,
+              date_of_birth: student.date_of_birth,
+              address: student.address,
+              home_phone: student.home_phone,
+              emergency_contact_name: profile?.emergency_contact_name ?? null,
+              emergency_contact_relation: profile?.emergency_contact_relation ?? null,
+              emergency_contact_number: profile?.emergency_contact_number ?? null,
+            }}
+            profile={profile}
           />
-        </div>
+        </Card>
 
-        <ProfileForm
-          studentId={student.id}
-          student={{
-            full_name: student.full_name,
-            contact_number: student.contact_number,
-            date_of_birth: student.date_of_birth,
-            address: student.address,
-            home_phone: student.home_phone,
-            emergency_contact_name: profile?.emergency_contact_name ?? null,
-            emergency_contact_relation: profile?.emergency_contact_relation ?? null,
-            emergency_contact_number: profile?.emergency_contact_number ?? null,
-          }}
-          profile={profile}
-        />
-      </Card>
+        <div className="flex flex-col gap-6 xl:sticky xl:top-20">
+          {/* What is still outstanding, beside the form itself — a student
+              should not have to audit eleven fields to find the two they
+              skipped. */}
+          <ProfileCompleteness
+            input={{
+              contact_number: student.contact_number,
+              date_of_birth: student.date_of_birth,
+              address: student.address,
+              emergency_contact_name: profile?.emergency_contact_name ?? null,
+              emergency_contact_number: profile?.emergency_contact_number ?? null,
+              passport_number: profile?.passport_number ?? null,
+              passport_expiry: profile?.passport_expiry ?? null,
+              cnic: profile?.cnic ?? null,
+              financial_sponsor_name: profile?.financial_sponsor_name ?? null,
+              financial_sponsor_relation: profile?.financial_sponsor_relation ?? null,
+              financial_details: profile?.financial_details ?? null,
+            }}
+          />
+
+          <Card>
+            <SectionTitle icon="📸">Your photo</SectionTitle>
+            {/* The student's own photo is theirs to change and theirs to
+                remove — student_profiles_write is staff-or-self, so the same
+                rule covers both sides of this. */}
+            <PhotoUpload
+              action={uploadStudentPhoto.bind(null, student.id, revalidateTo)}
+              photoUrl={photoUrl}
+              onDelete={deleteStudentPhoto.bind(null, student.id, revalidateTo)}
+              deleteLabel="your photo"
+            />
+          </Card>
+        </div>
+      </div>
 
       {/* The two short lists side by side on a wide screen. */}
-      <div className="mb-6 grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
-      <Card>
-        <h3 className="mb-3 text-base font-semibold text-ink">Test scores</h3>
-        <TestScoresSection studentId={student.id} revalidateTo={revalidateTo} scores={testScores ?? []} />
-      </Card>
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+        <Card>
+          <SectionTitle icon="📝">Test scores</SectionTitle>
+          <TestScoresSection studentId={student.id} revalidateTo={revalidateTo} scores={testScores ?? []} />
+        </Card>
 
-      <Card>
-        <h3 className="mb-3 text-base font-semibold text-ink">Travel &amp; visa history</h3>
-        <TravelVisaHistorySection
-          studentId={student.id}
-          revalidateTo={revalidateTo}
-          travel={(profile?.travel_history ?? []) as never}
-          refusals={(profile?.visa_refusal_history ?? []) as never}
-        />
-      </Card>
+        <Card>
+          <SectionTitle icon="🌐">Travel &amp; visa history</SectionTitle>
+          <TravelVisaHistorySection
+            studentId={student.id}
+            revalidateTo={revalidateTo}
+            travel={(profile?.travel_history ?? []) as never}
+            refusals={(profile?.visa_refusal_history ?? []) as never}
+          />
+        </Card>
       </div>
 
       <Card>
-        <h3 className="mb-3 text-base font-semibold text-ink">Academics</h3>
+        <SectionTitle icon="🎓">Academics</SectionTitle>
         <AcademicsSection
           studentId={student.id}
           revalidateTo="/portal/profile"

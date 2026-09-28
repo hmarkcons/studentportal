@@ -1,7 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { EmptyState } from "@/components/ui/EmptyState";
+import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
+import { PortalStat, PortalStats } from "@/components/studentPortal/PortalStat";
+import { PortalEmpty } from "@/components/studentPortal/PortalEmpty";
 import { formatDateOnly } from "@/lib/formatDate";
 import { loadAppointments, daysUntil, type PortalAppointment } from "@/lib/portalAppointments";
 import { interviewTimes, platformLabel, interviewStatusLabel } from "@/lib/interviews";
@@ -38,27 +40,45 @@ export default async function PortalAppointmentsPage() {
   const appointments = await loadAppointments(supabase, student.id);
   const upcoming = appointments.filter((a) => daysUntil(a.date) >= 0);
   const past = appointments.filter((a) => daysUntil(a.date) < 0).reverse();
+  const next = upcoming[0] ?? null;
+  const daysToNext = next ? daysUntil(next.date) : null;
 
   return (
-    <div className="w-full">
-      <h2 className="mb-1 text-lg font-semibold text-ink">Appointments</h2>
-      <p className="mb-4 text-sm text-muted">
-        Dates your counsellor has booked for you. Anything that changes here is updated by them.
-      </p>
+    <div className="flex w-full flex-col gap-6" data-portal-page>
+      <PortalPageHeader
+        icon="📅"
+        title="Appointments"
+        description="Dates your counsellor has booked for you. Anything that changes here is updated by them."
+      >
+        {appointments.length > 0 && (
+          <PortalStats className="xl:grid-cols-3">
+            <PortalStat
+              icon="⏰"
+              value={daysToNext === null ? "—" : daysToNext === 0 ? "Today" : daysToNext}
+              label={daysToNext === null ? "nothing booked ahead" : daysToNext === 0 ? "your next appointment" : `day${daysToNext === 1 ? "" : "s"} to your next`}
+              tone={daysToNext !== null && daysToNext <= 7 ? "warning" : "default"}
+              hint={next ? next.label : undefined}
+            />
+            <PortalStat icon="📆" value={upcoming.length} label="coming up" tone="info" />
+            <PortalStat icon="🗂️" value={past.length} label="past" />
+          </PortalStats>
+        )}
+      </PortalPageHeader>
 
       {appointments.length === 0 ? (
         <Card>
-          <EmptyState>
-            No appointments booked yet. Once your counsellor books one — a visa appointment, an interview — it will appear
-            here with a countdown.
-          </EmptyState>
+          <PortalEmpty icon="📅" title="No appointments booked yet">
+            Once your counsellor books one — a visa appointment, an interview — it will appear here with a countdown.
+          </PortalEmpty>
         </Card>
       ) : (
         // Coming up and past side by side on a wide screen.
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
           {upcoming.length > 0 && (
             <Card>
-              <h3 className="mb-3 text-base font-semibold text-ink">Coming up</h3>
+              <h3 className="mb-3 flex items-center gap-2 text-base font-semibold text-ink">
+                <span aria-hidden>🗓️</span> Coming up
+              </h3>
               <div className="flex flex-col divide-y divide-border">
                 {upcoming.map((a, i) => (
                   <Row key={`${a.label}-${a.date}-${i}`} appointment={a} />
@@ -71,7 +91,9 @@ export default async function PortalAppointmentsPage() {
               biometrics were on should not have to ask. */}
           {past.length > 0 && (
             <Card>
-              <h3 className="mb-3 text-base font-semibold text-ink">Past</h3>
+              <h3 className="mb-3 flex items-center gap-2 text-base font-semibold text-ink">
+                <span aria-hidden>🕰️</span> Past
+              </h3>
               <div className="flex flex-col divide-y divide-border">
                 {past.map((a, i) => (
                   <Row key={`${a.label}-${a.date}-${i}`} appointment={a} muted />
@@ -89,10 +111,21 @@ function Row({ appointment, muted = false }: { appointment: PortalAppointment; m
   const interview = appointment.interview;
   const times = interview ? interviewTimes(interview.at, interview.timezone) : null;
 
+  // A calendar leaf: the day a student has to turn up on, readable at a glance.
+  const [, month, day] = appointment.date.split("-");
+  const monthName = formatDateOnly(`2000-${month}-01`, { month: "short" });
   return (
-    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-3 text-sm">
+    <div className="flex items-start gap-4 py-3.5 text-sm">
+      <span
+        aria-hidden
+        className={`flex w-14 shrink-0 flex-col overflow-hidden rounded-xl border text-center ${muted ? "border-border opacity-70" : "border-primary/30 shadow-sm"}`}
+      >
+        <span className={`py-0.5 text-[10px] font-semibold uppercase tracking-wider ${muted ? "bg-border text-muted" : "bg-hero text-white"}`}>{monthName}</span>
+        <span className="bg-card py-1 text-xl font-bold leading-tight text-ink">{Number(day)}</span>
+      </span>
+    <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-x-4 gap-y-1">
       <div className="min-w-0">
-        <p className={muted ? "text-muted" : "text-ink"}>{appointment.label}</p>
+        <p className={`font-medium ${muted ? "text-muted" : "text-ink"}`}>{appointment.label}</p>
         <p className="text-xs text-muted">
           {appointment.country}
           {appointment.where && ` · ${appointment.where}`}
@@ -179,6 +212,7 @@ function Row({ appointment, muted = false }: { appointment: PortalAppointment; m
         </span>
         <CountdownBadge dateStr={appointment.date} />
       </div>
+    </div>
     </div>
   );
 }

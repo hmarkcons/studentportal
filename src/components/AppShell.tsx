@@ -24,12 +24,31 @@ export type NavItem = {
   badge?: number;
 };
 
+/**
+ * The student portal's look, applied here and in globals.css under
+ * data-portal="student": the page in its own finish, the menu's current entry
+ * in the brand gradient, each icon on a tile of its own, and the student's
+ * initials beside their name. Staff and partner keep the plain shell.
+ */
+export type ShellVariant = "default" | "student";
+
+function initialsOf(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .slice(0, 2)
+    .join("");
+}
+
 export function AppShell({
   brand,
   nav,
   userName,
   userSubtitle,
   showSearch = false,
+  variant = "default",
+  sidebarFooter,
   children,
 }: {
   brand: string;
@@ -37,8 +56,12 @@ export function AppShell({
   userName: string;
   userSubtitle: string;
   showSearch?: boolean;
+  variant?: ShellVariant;
+  /** Under the menu, at the foot of the sidebar. */
+  sidebarFooter?: React.ReactNode;
   children: React.ReactNode;
 }) {
+  const student = variant === "student";
   const activePath = usePathname();
   const [navOpen, setNavOpen] = useState(false);
   // The sidebar is a fixed off-canvas drawer only below the md breakpoint
@@ -53,8 +76,18 @@ export function AppShell({
     setNavOpen(false);
   }
 
+  // The one entry for the page you are on: the longest link the address sits
+  // under. Matching every prefix lit two at once wherever one link is the
+  // parent of another — the student's Dashboard is /portal, so it stayed
+  // highlighted beside Documents, Payments and every other page.
+  const activeHref =
+    nav
+      .flatMap((item) => (item.children ? item.children.map((c) => c.href) : item.href ? [item.href] : []))
+      .filter((href) => activePath === href || activePath.startsWith(href + "/"))
+      .sort((a, b) => b.length - a.length)[0] ?? null;
+
   function isActive(href: string) {
-    return activePath === href || activePath.startsWith(href + "/");
+    return href === activeHref;
   }
 
   // The menu scrolls on its own, so the page you are on can be below its fold
@@ -72,7 +105,7 @@ export function AppShell({
   }, [activePath]);
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen" data-portal={student ? "student" : undefined}>
       {navOpen && (
         <div
           className="fixed inset-0 z-30 bg-black/40 md:hidden"
@@ -166,16 +199,40 @@ export function AppShell({
                 href={item.href!}
                 prefetch={false}
                 aria-current={isActive(item.href!) ? "page" : undefined}
-                className={`mb-1 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
-                  isActive(item.href!)
-                    ? "bg-sidebar-active-bg text-primary"
-                    : "text-sidebar-ink hover:bg-sidebar-active-bg"
-                }`}
+                className={
+                  student
+                    ? `group mb-1 flex items-center gap-3 rounded-xl px-2.5 py-2 text-sm font-medium transition-all duration-200 ${
+                        isActive(item.href!)
+                          ? "bg-hero text-white shadow-md shadow-primary/25"
+                          : "text-sidebar-ink hover:translate-x-0.5 hover:bg-sidebar-active-bg"
+                      }`
+                    : `mb-1 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
+                        isActive(item.href!)
+                          ? "bg-sidebar-active-bg text-primary"
+                          : "text-sidebar-ink hover:bg-sidebar-active-bg"
+                      }`
+                }
               >
-                {item.icon && <span>{item.icon}</span>}
+                {item.icon &&
+                  (student ? (
+                    <span
+                      aria-hidden
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-base transition-colors ${
+                        isActive(item.href!) ? "bg-white/20" : "bg-sidebar-active-bg group-hover:bg-card"
+                      }`}
+                    >
+                      {item.icon}
+                    </span>
+                  ) : (
+                    <span>{item.icon}</span>
+                  ))}
                 {item.label}
                 {Boolean(item.badge) && (
-                  <span className="ml-auto rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+                  <span
+                    className={`ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
+                      student && isActive(item.href!) ? "bg-white text-danger" : "bg-danger text-white"
+                    }`}
+                  >
                     {item.badge}
                   </span>
                 )}
@@ -183,10 +240,16 @@ export function AppShell({
             )
           )}
         </nav>
+        {sidebarFooter && <div className="shrink-0 border-t border-sidebar-border p-3">{sidebarFooter}</div>}
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header data-app-header className="flex items-center justify-between border-b border-border bg-card px-6 py-3">
+        <header
+          data-app-header
+          className={`flex items-center justify-between border-b border-border px-6 py-3 ${
+            student ? "sticky top-0 z-20 bg-card/85 backdrop-blur-md" : "bg-card"
+          }`}
+        >
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
@@ -203,9 +266,20 @@ export function AppShell({
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <div className="text-right">
-              <p className="text-sm font-medium text-ink">{userName}</p>
-              <p className="text-xs text-muted">{userSubtitle}</p>
+            <div className="flex items-center gap-2.5">
+              <div className="text-right">
+                <p className="text-sm font-medium text-ink">{userName}</p>
+                {/* On a phone the student's ID line would push Sign out onto two lines; the dashboard shows it. */}
+                <p className={`text-xs text-muted ${student ? "hidden sm:block" : ""}`}>{userSubtitle}</p>
+              </div>
+              {student && (
+                <span
+                  aria-hidden
+                  className="bg-hero hidden h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white shadow-sm shadow-primary/30 sm:flex"
+                >
+                  {initialsOf(userName)}
+                </span>
+              )}
             </div>
             <SignOutButton variant="outline">Sign out</SignOutButton>
           </div>

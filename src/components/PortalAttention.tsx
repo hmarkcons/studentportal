@@ -105,27 +105,40 @@ export function PortalAttention({ summary, className = "mb-6" }: { summary: Port
   if (rows.length === 0) {
     return (
       <Card className={className}>
-        <h3 className="mb-3 text-sm font-semibold text-ink">What needs doing</h3>
-        <p className="text-sm text-ink">Nothing needs your attention right now.</p>
-        <p className="mt-1 text-xs text-muted">
-          We&rsquo;ll show anything outstanding here — documents, payments, appointments, profile details and replies.
-        </p>
+        <h3 className="mb-3 text-sm font-semibold text-ink">✅ What needs doing</h3>
+        <div className="flex flex-col items-center gap-2 py-4 text-center">
+          <span aria-hidden className="flex h-14 w-14 items-center justify-center rounded-full bg-success-bg text-2xl ring-8 ring-success-bg/50">
+            🎉
+          </span>
+          <p className="text-sm font-medium text-ink">Nothing needs your attention right now.</p>
+          <p className="max-w-xs text-xs text-muted">
+            We&rsquo;ll show anything outstanding here — documents, payments, appointments, profile details and replies.
+          </p>
+        </div>
       </Card>
     );
   }
 
   return (
     <Card className={className}>
-      <h3 className="mb-3 text-sm font-semibold text-ink" data-attention>What needs doing</h3>
-      <div className="flex flex-col divide-y divide-border">
+      <h3 className="mb-3 flex items-center justify-between gap-2 text-sm font-semibold text-ink" data-attention>
+        <span>📌 What needs doing</span>
+        <span className="rounded-full bg-warning-bg px-2 py-0.5 text-[11px] font-semibold text-warning">{rows.length}</span>
+      </h3>
+      <div className="flex flex-col gap-1.5">
         {rows.map((r) => (
           <Link
             key={r.href + r.text}
             href={r.href}
-            className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-2.5 hover:bg-bg"
+            className={`group flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 transition-colors ${
+              r.urgent ? "border-warning/30 bg-warning-bg/60 hover:bg-warning-bg" : "border-border hover:bg-bg"
+            }`}
           >
-            <span className="flex min-w-0 items-start gap-2.5">
-              <span aria-hidden className="mt-0.5 shrink-0 text-base leading-none">
+            <span className="flex min-w-0 items-center gap-3">
+              <span
+                aria-hidden
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-base ${r.urgent ? "bg-card" : "bg-primary/10"}`}
+              >
                 {r.icon}
               </span>
               <span className="min-w-0">
@@ -133,7 +146,7 @@ export function PortalAttention({ summary, className = "mb-6" }: { summary: Port
                 {r.detail && <span className="block text-xs text-muted">{r.detail}</span>}
               </span>
             </span>
-            <span aria-hidden className="shrink-0 text-xs text-muted">
+            <span aria-hidden className="shrink-0 text-xs text-muted transition-transform group-hover:translate-x-0.5">
               →
             </span>
           </Link>

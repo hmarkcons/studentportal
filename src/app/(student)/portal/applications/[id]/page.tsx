@@ -38,49 +38,68 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
   const rounds = sortRounds(program?.rounds ?? []);
 
   return (
-    <div className="flex w-full flex-col gap-6">
-      <Link href="/portal/applications" className="text-sm text-muted hover:text-ink">
+    <div className="flex w-full flex-col gap-6" data-portal-page>
+      <Link
+        href="/portal/applications"
+        data-rise
+        className="inline-flex w-fit items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-sm text-muted shadow-sm hover:border-primary hover:text-primary"
+      >
         &larr; Back to applications
       </Link>
 
-      <BoardingPassTracker
-        universityName={university?.name ?? "University"}
-        programName={program?.name}
-        intake={app.intake}
-        round={rounds.find((r) => r.id === app.round_id)?.label ?? null}
-        currentStage={app.current_stage}
-        pipelineStages={(destination as { pipeline_stages?: string[] } | null)?.pipeline_stages ?? []}
-      />
+      <div data-rise>
+        <BoardingPassTracker
+          tone="pass"
+          universityName={university?.name ?? "University"}
+          programName={program?.name}
+          intake={app.intake}
+          round={rounds.find((r) => r.id === app.round_id)?.label ?? null}
+          currentStage={app.current_stage}
+          pipelineStages={(destination as { pipeline_stages?: string[] } | null)?.pipeline_stages ?? []}
+        />
+      </div>
 
-      {/* Read-only. Since 0233 the application names the round it is for, so
-          the student's own round is marked rather than left for them to guess
-          — which also stops a closed earlier round reading as a deadline they
-          personally missed. Where no round has been chosen yet the list is
-          still the programme's rounds and says so, because naming one would
-          assert something the data does not hold. */}
-      <Card>
-        <h3 className="mb-1 text-sm font-medium text-ink">Intake rounds</h3>
-        {rounds.length > 0 ? (
-          <>
-            <p className="mb-2 text-xs text-muted">
-              {app.round_id
-                ? "When this programme starts, and the last date to apply. Your round is marked — your counsellor submits the application, so these dates are here for your information."
-                : "When this programme starts, and the last date to apply for each round. Your counsellor will confirm which round your application goes in."}
+      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
+        {/* Read-only. Since 0233 the application names the round it is for, so
+            the student's own round is marked rather than left for them to guess
+            — which also stops a closed earlier round reading as a deadline they
+            personally missed. Where no round has been chosen yet the list is
+            still the programme's rounds and says so, because naming one would
+            assert something the data does not hold. */}
+        <Card className="lg:col-span-2">
+          <h3 className="mb-1 flex items-center gap-2 text-base font-semibold text-ink">
+            <span aria-hidden>🗓️</span> Intake rounds
+          </h3>
+          {rounds.length > 0 ? (
+            <>
+              <p className="mb-3 text-xs text-muted">
+                {app.round_id
+                  ? "When this programme starts, and the last date to apply. Your round is marked — your counsellor submits the application, so these dates are here for your information."
+                  : "When this programme starts, and the last date to apply for each round. Your counsellor will confirm which round your application goes in."}
+              </p>
+              <ProgramDates rounds={rounds} today={karachiToday()} showAll highlightRoundId={app.round_id} highlightLabel="your round" />
+            </>
+          ) : (
+            <p className="text-sm text-muted">No intake rounds are recorded for this programme yet — your counsellor will confirm the dates.</p>
+          )}
+        </Card>
+
+        <Card>
+          <div className="flex flex-col gap-3" data-documents-pointer>
+            <span aria-hidden className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-xl">
+              📁
+            </span>
+            <p className="text-sm text-ink">
+              Documents for this application are on your{" "}
+              <Link href="/portal/documents" className="font-medium text-primary hover:underline">
+                Documents
+              </Link>{" "}
+              page, with everything else we need from you.
             </p>
-            <ProgramDates rounds={rounds} today={karachiToday()} showAll highlightRoundId={app.round_id} highlightLabel="your round" />
-          </>
-        ) : (
-          <p className="text-sm text-muted">No intake rounds are recorded for this programme yet — your counsellor will confirm the dates.</p>
-        )}
-      </Card>
-
-      <p className="text-xs text-muted" data-documents-pointer>
-        Documents for this application are on your{" "}
-        <Link href="/portal/documents" className="font-medium text-primary hover:underline">
-          Documents
-        </Link>{" "}
-        page, with everything else we need from you.
-      </p>
+            <p className="text-xs text-muted">One checklist for everything, so the same passport is never asked for twice.</p>
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }

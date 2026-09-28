@@ -62,13 +62,14 @@ export function TravelChecklist({ sections }: { sections: TravelSection[] }) {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center gap-3">
-        <div className="h-2 flex-1 overflow-hidden rounded-full bg-border">
+        <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-border">
           <div
-            className="h-full rounded-full bg-primary transition-all"
+            className="bg-hero h-full rounded-full transition-all duration-500"
             style={{ width: total ? `${Math.round((doneCount / total) * 100)}%` : "0%" }}
           />
         </div>
-        <span className="text-xs text-muted">
+        <span className="text-xs font-medium text-ink">
+          {doneCount === total && total > 0 ? "🎉 " : ""}
           {doneCount} of {total} done
         </span>
       </div>
@@ -80,25 +81,29 @@ export function TravelChecklist({ sections }: { sections: TravelSection[] }) {
       {sections.map((section) => {
         const sectionDone = section.items.filter((i) => doneIds.has(i.id)).length;
         return (
-          <div key={section.id} className="rounded-lg border border-border">
-            <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border bg-[color-mix(in_srgb,var(--primary)_7%,transparent)] px-3 py-2">
+          <div key={section.id} className="overflow-hidden rounded-2xl border border-border bg-card" data-lift>
+            <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border bg-[color-mix(in_srgb,var(--primary)_8%,transparent)] px-4 py-3">
               <h3 className="text-sm font-semibold text-ink">{section.title}</h3>
-              <span className="text-xs text-muted">
+              <span
+                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                  sectionDone === section.items.length ? "bg-success-bg text-success" : "bg-card text-muted"
+                }`}
+              >
                 {sectionDone}/{section.items.length}
               </span>
             </div>
-            {section.intro && <p className="border-b border-border px-3 py-2 text-xs text-muted">{section.intro}</p>}
+            {section.intro && <p className="border-b border-border px-4 py-2.5 text-xs text-muted">{section.intro}</p>}
             <ul className="flex flex-col divide-y divide-border">
               {section.items.map((item) => {
                 const checked = doneIds.has(item.id);
                 return (
-                  <li key={item.id} className="px-3 py-2">
+                  <li key={item.id} className={`px-4 py-2.5 transition-colors ${checked ? "bg-success-bg/40" : "hover:bg-bg"}`}>
                     <label className="flex cursor-pointer items-start gap-3">
                       <input
                         type="checkbox"
                         checked={checked}
                         onChange={(e) => toggle(item, e.target.checked)}
-                        className="mt-0.5 h-4 w-4 shrink-0"
+                        className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--primary)]"
                       />
                       <span className="min-w-0">
                         <span className="flex flex-wrap items-center gap-x-2">

@@ -45,7 +45,8 @@ export function DocumentSectionShell({
   const panelId = `documents-section-${number}-${label.replace(/\s+/g, "-").toLowerCase()}`;
 
   return (
-    <section className="overflow-hidden rounded-lg border border-border">
+    // data-doc-section: the student portal gives these its card finish (globals.css).
+    <section className="overflow-hidden rounded-lg border border-border" data-doc-section>
       <button
         type="button"
         onClick={toggle}

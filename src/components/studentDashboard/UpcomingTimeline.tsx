@@ -25,7 +25,7 @@ export function UpcomingTimeline({ entries }: { entries: TimelineEntry[] }) {
   if (entries.length === 0) return <NoData>Nothing dated coming up — we&rsquo;ll list deadlines and payments here.</NoData>;
   return (
     <ol className="relative flex flex-col gap-3 pl-6" data-timeline>
-      <span aria-hidden className="absolute bottom-2 left-[9px] top-2 w-0.5 bg-border" />
+      <span aria-hidden className="absolute bottom-2 left-[11px] top-2 w-0.5 rounded-full bg-gradient-to-b from-primary/60 via-border to-border" />
       {entries.map((e, i) => {
         const body = (
           <>
@@ -40,7 +40,7 @@ export function UpcomingTimeline({ entries }: { entries: TimelineEntry[] }) {
           <li key={`${e.kind}-${e.date}-${i}`} className="relative flex items-start justify-between gap-3">
             <span
               aria-hidden
-              className={`absolute -left-6 top-0.5 flex h-5 w-5 items-center justify-center rounded-full border border-border bg-card text-[11px]`}
+              className={`absolute -left-6 top-0 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-card text-xs shadow-sm`}
             >
               {ICON[e.kind]}
             </span>

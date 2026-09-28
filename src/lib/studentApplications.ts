@@ -9,6 +9,7 @@ function one<T>(v: T | T[] | null) {
 export type StudentDestination = {
   id?: string;
   display_name?: string;
+  country_code?: string | null;
   pipeline_stages?: string[];
   dashboard_pipeline_stages?: DashboardStageDef[];
 };
@@ -29,7 +30,7 @@ export async function loadStudentApplications(supabase: SupabaseClient, studentI
   const { data } = await supabase
     .from("applications")
     .select(
-      "id, current_stage, intake, round_id, is_finalized, university:universities(name, destination:destinations(id, display_name, pipeline_stages, dashboard_pipeline_stages)), program:programs(name, rounds:program_intake_rounds(id, label, start_date, application_deadline, sort_order))"
+      "id, current_stage, intake, round_id, is_finalized, university:universities(name, destination:destinations(id, display_name, country_code, pipeline_stages, dashboard_pipeline_stages)), program:programs(name, rounds:program_intake_rounds(id, label, start_date, application_deadline, sort_order))"
     )
     .eq("student_id", studentId)
     .order("created_at", { ascending: true });

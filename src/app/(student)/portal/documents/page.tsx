@@ -6,11 +6,13 @@ import { cycleTabLabel } from "@/lib/intakeCycle";
 import { loadCycleDocuments, documentCounts } from "@/lib/studentCycleDocuments";
 import { getStudentUser } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
 import { PortalDocumentRow } from "../applications/[id]/PortalDocumentRow";
 import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
 import { loadStudentChecklistSections } from "@/lib/studentChecklistSections";
 import { DocumentSectionList } from "@/components/DocumentSectionList";
+import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
+import { PortalStat, PortalStats } from "@/components/studentPortal/PortalStat";
+import { PortalEmpty } from "@/components/studentPortal/PortalEmpty";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -82,28 +84,67 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
   const total = counts.total;
   const approved = counts.verified;
   const outstanding = counts.waiting;
+  const percent = total > 0 ? Math.round((approved / total) * 100) : 0;
 
   return (
-    <div className="w-full">
-      <h2 className="mb-1 text-lg font-semibold text-ink">Documents</h2>
-      <p className="mb-2 text-sm text-muted">
-        Everything we need from you, in the order your counsellor works through it.
-      </p>
+    <div className="flex w-full flex-col gap-6" data-portal-page>
+      <PortalPageHeader
+        icon="📁"
+        title="Documents"
+        description="Everything we need from you, in the order your counsellor works through it."
+        aside={
+          total > 0 ? (
+            <div className="text-right">
+              <p className="bg-hero bg-clip-text text-3xl font-bold leading-none text-transparent">{percent}%</p>
+              <p className="text-xs text-muted">approved</p>
+            </div>
+          ) : undefined
+        }
+      >
+        {total > 0 && (
+          <div className="flex flex-col gap-4">
+            <PortalStats>
+              <PortalStat icon="✅" value={approved} label="approved" tone="success" />
+              <PortalStat icon="⏳" value={counts.inReview} label="being checked" tone="warning" />
+              <PortalStat icon="⬆️" value={outstanding} label="to upload" tone={outstanding > 0 ? "danger" : "default"} />
+              <PortalStat icon="📋" value={total} label={`document${total === 1 ? "" : "s"} in all`} />
+            </PortalStats>
+            {/* The same share the dashboard's ring draws. */}
+            <div>
+              <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-border" aria-hidden>
+                <div className="bg-hero h-full" style={{ width: `${(approved / total) * 100}%` }} />
+                <div className="h-full bg-warning/60" style={{ width: `${(counts.inReview / total) * 100}%` }} />
+              </div>
+              <p className="mt-1.5 text-xs text-muted">
+                {outstanding > 0
+                  ? `${outstanding} still to upload — open a section below to send it.`
+                  : approved === total
+                    ? "Every document is approved. Nothing is needed from you."
+                    : "Nothing to upload — we’re checking what you sent. Your counsellor will be in touch if anything needs replacing."}
+              </p>
+            </div>
+          </div>
+        )}
+      </PortalPageHeader>
+
       {/* Said once, up front, as well as under every picker: a student on a
           phone should know before choosing a file, not after. */}
-      <p className="mb-4 rounded-md border border-info bg-info-bg px-3 py-2 text-xs text-info" data-upload-limit>
-        Each file can be up to <strong className="font-semibold">{formatFileSize(MAX_UPLOAD_BYTES)}</strong> — a PDF, a Word file
-        or a photo. If a photo is larger, you can shrink it with one click when you choose it.
+      <p className="flex items-start gap-2.5 rounded-xl border border-info/30 bg-info-bg px-4 py-3 text-xs text-info" data-upload-limit data-rise>
+        <span aria-hidden className="text-base leading-none">💡</span>
+        <span>
+          Each file can be up to <strong className="font-semibold">{formatFileSize(MAX_UPLOAD_BYTES)}</strong> — a PDF, a Word file
+          or a photo. If a photo is larger, you can shrink it with one click when you choose it.
+        </span>
       </p>
 
       {showCycleTabs && (
-        <div className="mb-4 flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2" data-rise>
           {cycles.map((c) => (
             <Link
               key={c.id}
               href={`/portal/documents?cycle=${c.id}`}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                c.id === activeCycleId ? "bg-primary text-primary-ink" : "border border-border text-muted hover:text-ink"
+              className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+                c.id === activeCycleId ? "bg-hero text-white shadow-sm shadow-primary/25" : "border border-border bg-card text-muted hover:text-ink"
               }`}
             >
               {cycleTabLabel("Docs", c)}
@@ -114,47 +155,18 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
       )}
 
       {isPreviousIntake && (
-        <p className="mb-4 rounded-md border border-border bg-surface-2 px-3 py-2 text-xs text-muted">
+        <p className="rounded-xl border border-border bg-card px-4 py-3 text-xs text-muted">
           This is what you sent us for an earlier intake, kept so you always have it. Anything still valid has already
           been carried over to <strong className="font-medium text-ink">{cycleTabLabel("Docs", cycles[0])}</strong>.
         </p>
       )}
 
-      {total > 0 && (
-        <Card className="mb-6">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm text-ink">
-              {approved} of {total} approved
-            </p>
-            <Badge tone={outstanding > 0 ? "warning" : "success"}>
-              {outstanding > 0
-                ? `${outstanding} to upload`
-                : approved === total
-                  ? "All approved"
-                  : "Nothing to upload — with us for review"}
-            </Badge>
-          </div>
-          {/* The same share the dashboard's ring draws. */}
-          <div className="mt-3 flex h-2 w-full overflow-hidden rounded-full bg-border" aria-hidden>
-            <div className="h-full bg-success" style={{ width: `${(approved / total) * 100}%` }} />
-            <div className="h-full bg-warning/60" style={{ width: `${(counts.inReview / total) * 100}%` }} />
-          </div>
-          <p className="mt-1 flex flex-wrap gap-x-4 text-[11px] text-muted">
-            <span><span className="text-success">■</span> Approved {approved}</span>
-            <span><span className="text-warning">■</span> Being checked {counts.inReview}</span>
-            <span>■ To upload {outstanding}</span>
-          </p>
-          {outstanding === 0 && approved < total && (
-            <p className="mt-1 text-xs text-muted">
-              We&rsquo;re checking what you sent. Your counsellor will be in touch if anything needs replacing.
-            </p>
-          )}
-        </Card>
-      )}
-
       {sections.length === 0 && (
         <Card>
-          <p className="text-sm text-muted">Nothing is required from you yet.</p>
+          <PortalEmpty icon="🗂️" title="Nothing is required from you yet.">
+            Your counsellor builds your checklist once your countries are confirmed. Each document appears here, in order, with a
+            button to upload it.
+          </PortalEmpty>
         </Card>
       )}
 
@@ -162,8 +174,8 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
           through the same components, so a student reading their checklist on a
           phone gets an index rather than forty rows to scroll. The outstanding
           and rejected counts stay in each header, so nothing that needs acting
-          on is hidden by a shut section — and the summary card above still
-          gives the totals for the whole page.
+          on is hidden by a shut section — and the summary above still gives the
+          totals for the whole page.
 
           Expand-all comes from the shared list wrapper: the staff tab has had
           it since these sections became collapsible, and without it reading a

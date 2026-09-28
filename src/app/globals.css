@@ -31,6 +31,16 @@
   --chart-4: #7c3aed;
   --chart-5: #e11d48;
   --chart-6: #64748b;
+  /* The student portal's gradients: the brand green deepening to teal, and a
+     blue-violet for what runs beside it (a backup country). Deep enough at
+     the light end for white text to read: about 4:1 against #22936f. */
+  --hero-from: #22936f;
+  --hero-via: #1c7f68;
+  --hero-to: #155f59;
+  --hero-alt-from: #5b73f0;
+  --hero-alt-to: #4c3fc4;
+  --lift: 0 1px 2px rgb(16 24 40 / 0.04), 0 10px 28px -14px rgb(16 24 40 / 0.16);
+  --lift-hover: 0 2px 4px rgb(16 24 40 / 0.05), 0 18px 36px -16px rgb(16 24 40 / 0.24);
 }
 
 :root[data-theme="semi-dark"] {
@@ -70,6 +80,13 @@
   --chart-4: #a78bfa;
   --chart-5: #fb7185;
   --chart-6: #94a3b8;
+  --hero-from: #1f8163;
+  --hero-via: #196c59;
+  --hero-to: #114a45;
+  --hero-alt-from: #4d63d4;
+  --hero-alt-to: #3f35a8;
+  --lift: 0 1px 2px rgb(0 0 0 / 0.3), 0 10px 28px -14px rgb(0 0 0 / 0.55);
+  --lift-hover: 0 2px 4px rgb(0 0 0 / 0.35), 0 18px 36px -16px rgb(0 0 0 / 0.65);
 }
 
 @theme inline {
@@ -100,6 +117,13 @@
 body {
   background: var(--bg);
   color: var(--ink);
+}
+
+@utility bg-hero {
+  background-image: linear-gradient(135deg, var(--hero-from), var(--hero-via) 55%, var(--hero-to));
+}
+@utility bg-hero-alt {
+  background-image: linear-gradient(135deg, var(--hero-alt-from), var(--hero-alt-to));
 }
 
 /* Default border colour, in @layer base so Tailwind's border-* colour
@@ -554,6 +578,84 @@ body {
   .sidebar-scroll {
     scrollbar-width: thin;
     scrollbar-color: var(--sidebar-muted) transparent;
+  }
+}
+
+/* ---------------------------------------------------------- student portal
+   The student portal's own finish, scoped to it by data-portal="student" on
+   the shell (AppShell), so the staff and partner portals are untouched.
+
+   Every card lifts off the page on a soft shadow with rounder corners, over a
+   faint wash of the brand colours at the top of the page. Cards and page
+   headers rise into place as a page opens; not for anyone who has asked their
+   system for less motion.
+
+   Unlayered, so these win over the utility classes a Card is given — which is
+   the point: one finish across every student page, whatever each page asked
+   for. The animation ends on transform: none, so nothing it leaves behind
+   becomes the containing block of a fixed overlay opened later. */
+[data-portal="student"] main {
+  background:
+    radial-gradient(1100px 440px at 0% -10%, color-mix(in srgb, var(--primary) 14%, transparent), transparent 70%),
+    radial-gradient(900px 400px at 100% -8%, color-mix(in srgb, var(--hero-alt-from) 10%, transparent), transparent 70%),
+    var(--bg);
+}
+[data-portal="student"] main [data-card] {
+  border-radius: 1rem;
+  box-shadow: var(--lift);
+}
+[data-portal="student"] main a:hover > [data-card] {
+  box-shadow: var(--lift-hover);
+}
+/* The Documents checklist's sections (DocumentSectionShell), as cards. */
+[data-portal="student"] main [data-doc-section] {
+  border-radius: 1rem;
+  background: var(--card);
+  box-shadow: var(--lift);
+}
+[data-portal="student"] main [data-doc-section] > button {
+  background: color-mix(in srgb, var(--primary) 6%, var(--card));
+}
+[data-portal="student"] [data-lift] {
+  box-shadow: var(--lift);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+[data-portal="student"] a[data-lift]:hover,
+[data-portal="student"] a:hover > [data-lift] {
+  box-shadow: var(--lift-hover);
+  transform: translateY(-2px);
+}
+@keyframes portal-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+[data-portal="student"] main :is([data-card], [data-rise]) {
+  animation: portal-rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+[data-portal="student"] main [data-card] [data-card] {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-portal="student"] main :is([data-card], [data-rise]) {
+    animation: none;
+  }
+  [data-portal="student"] a[data-lift]:hover,
+  [data-portal="student"] a:hover > [data-lift] {
+    transform: none;
+  }
+}
+@media print {
+  [data-portal="student"] main {
+    background: #fff !important;
+  }
+  [data-portal="student"] main [data-card] {
+    box-shadow: none;
   }
 }
 

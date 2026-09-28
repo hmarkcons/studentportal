@@ -1,7 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { EmptyState } from "@/components/ui/EmptyState";
+import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
+import { PortalStat, PortalStats } from "@/components/studentPortal/PortalStat";
+import { PortalEmpty } from "@/components/studentPortal/PortalEmpty";
 import { formatDateOnly } from "@/lib/formatDate";
 import { scholarshipPortals } from "@/lib/scholarshipPortal";
 import { callLink, callAbsenceNote } from "@/lib/scholarshipCallLink";
@@ -71,14 +73,14 @@ function CallForApplications({ body, signed }: { body: Body; signed: Map<string,
 
   if (!call) {
     return (
-      <p className="mt-3 rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted">
+      <p className="mt-3 rounded-lg border border-border bg-bg/60 px-3 py-2 text-xs text-muted">
         {callAbsenceNote(body)}
       </p>
     );
   }
 
   return (
-    <div className="mt-3 rounded-md border border-primary bg-[color-mix(in_srgb,var(--primary)_7%,transparent)] px-3 py-2">
+    <div className="mt-3 rounded-xl border border-primary/40 bg-[color-mix(in_srgb,var(--primary)_7%,transparent)] px-3.5 py-2.5">
       <a
         href={call.url}
         target="_blank"
@@ -227,20 +229,35 @@ export default async function PortalScholarshipPage() {
     })
   );
 
+  const recorded = (scholarships ?? []).length;
+  const awarded = (scholarships ?? []).filter((s) => s.status === "accepted").length;
+
   return (
-    <div className="w-full">
-      <h2 className="mb-1 text-lg font-semibold text-ink">Scholarship</h2>
-      <p className="mb-4 max-w-3xl text-sm text-muted">
-        The scholarships open to you in the countries you are applying to, and — once one is recorded for you — where
-        your application stands.
-      </p>
+    <div className="flex w-full flex-col gap-6" data-portal-page>
+      <PortalPageHeader
+        icon="🎓"
+        title="Scholarship"
+        description="The scholarships open to you in the countries you are applying to, and — once one is recorded for you — where your application stands."
+      >
+        {(offering.length > 0 || recorded > 0) && (
+          <PortalStats className="xl:grid-cols-3">
+            <PortalStat icon="🌍" value={offering.length} label={`countr${offering.length === 1 ? "y offers" : "ies offer"} one`} tone="info" />
+            <PortalStat icon="📨" value={recorded} label={`application${recorded === 1 ? "" : "s"} recorded`} />
+            <PortalStat icon="🏅" value={awarded} label="awarded" tone={awarded > 0 ? "success" : "default"} />
+          </PortalStats>
+        )}
+      </PortalPageHeader>
 
       {offering.length > 0 && (
-        <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3" data-scholarship-countries>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3" data-scholarship-countries>
           {offering.map((c) => (
-            <Card key={c.id}>
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2" data-scholarship-country={c.display_name}>
-                <h3 className="text-sm font-semibold text-ink">{c.display_name}</h3>
+            <Card key={c.id} className="relative overflow-hidden">
+              <span aria-hidden className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-primary/10" />
+              <div className="relative mb-2 flex flex-wrap items-center justify-between gap-2" data-scholarship-country={c.display_name}>
+                <h3 className="flex items-center gap-2 text-base font-semibold text-ink">
+                  <span aria-hidden>🎓</span>
+                  {c.display_name}
+                </h3>
                 {c.scholarship_access === "universal" ? (
                   <Badge tone="success">Every student can apply</Badge>
                 ) : (
@@ -280,11 +297,14 @@ export default async function PortalScholarshipPage() {
       )}
 
       {finalized.length > 0 && (
-        <section className="mb-6 flex flex-col gap-3" data-finalized-scholarship>
-          <h3 className="text-sm font-semibold text-ink">Your university&rsquo;s scholarship</h3>
+        <section className="flex flex-col gap-3" data-finalized-scholarship>
+          <h3 className="flex items-center gap-2 text-base font-semibold text-ink">
+            <span aria-hidden>🏛️</span> Your university&rsquo;s scholarship
+          </h3>
           <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
             {finalized.map((f) => (
-              <Card key={f.appId}>
+              <Card key={f.appId} className="relative overflow-hidden">
+                <span aria-hidden className="bg-hero absolute inset-x-0 top-0 h-1.5" />
                 <div className="flex flex-col gap-3" data-finalized-for={f.university}>
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
@@ -337,23 +357,27 @@ export default async function PortalScholarshipPage() {
 
       {(scholarships ?? []).length === 0 ? (
         <Card>
-          <EmptyState>
+          <PortalEmpty icon="🏅">
             {finalized.some((f) => f.bodies.length > 0)
               ? `Your application to ${finalized.find((f) => f.bodies.length > 0)!.bodies.map((b) => b.name).join(" or ")} has not been recorded yet. Your counsellor adds it here once it is submitted, with its status and anything still to send.`
               : universal
               ? "Nothing to show yet. Your scholarship appears here once your pre-enrollment on Universitaly.it has been finalized and we have recorded your application with the regional body. Your counsellor can tell you where it has got to in the meantime."
               : "Nothing recorded yet. If your counsellor puts you forward for a scholarship, it appears here with its deadlines and what to send."}
-          </EmptyState>
+          </PortalEmpty>
         </Card>
       ) : (
         <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-2">
           {(scholarships ?? []).map((s) => {
             const body = one(s.body as never) as Body | null;
             return (
-              <Card key={s.id}>
+              <Card key={s.id} className="relative overflow-hidden">
+                <span aria-hidden className={`absolute inset-x-0 top-0 h-1.5 ${s.status === "accepted" ? "bg-success" : s.status === "rejected" ? "bg-danger" : "bg-hero"}`} />
                 <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
                   <div>
-                    <h3 className="text-base font-semibold text-ink">{s.name ?? body?.name ?? "Scholarship"}</h3>
+                    <h3 className="flex items-center gap-2 text-base font-semibold text-ink">
+                      <span aria-hidden>{s.status === "accepted" ? "🏆" : "🏅"}</span>
+                      {s.name ?? body?.name ?? "Scholarship"}
+                    </h3>
                     <p className="text-xs text-muted">
                       {[s.name && body ? body.name : null, body?.region, body?.academic_year]
                         .filter(Boolean)
@@ -411,8 +435,11 @@ export default async function PortalScholarshipPage() {
 
       {/* So a student never has to ring the office for their own password. */}
       {student && portals.length > 0 && (
-        <Card className="mt-6">
-          <h3 className="mb-1 text-sm font-medium text-ink">Your scholarship portal logins</h3>
+        <Card>
+          <h3 className="mb-1 flex items-center gap-2.5 text-base font-semibold text-ink">
+            <span aria-hidden className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-base">🔐</span>
+            Your scholarship portal logins
+          </h3>
           <p className="mb-3 text-xs text-muted">
             Your own accounts on the scholarship portals. Nothing is shown until you ask for it.
           </p>

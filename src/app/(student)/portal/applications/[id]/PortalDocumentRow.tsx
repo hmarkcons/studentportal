@@ -11,6 +11,15 @@ import { uploadedLine, reviewedLine, type UploaderRole } from "@/lib/activitySta
 
 const LONG_DATE: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", year: "numeric" };
 
+// A glance down the list says which rows are done and which need the student.
+const STATUS_ICON: Record<string, { icon: string; tile: string }> = {
+  verified: { icon: "✅", tile: "bg-success-bg" },
+  submitted: { icon: "⏳", tile: "bg-warning-bg" },
+  under_review: { icon: "🔎", tile: "bg-info-bg" },
+  rejected: { icon: "↩️", tile: "bg-danger-bg" },
+  missing: { icon: "⬆️", tile: "bg-primary/10" },
+};
+
 export function PortalDocumentRow({
   doc,
   studentId,
@@ -47,10 +56,17 @@ export function PortalDocumentRow({
   const overdue = doc.status !== "verified" && doc.deadline && doc.deadline < today;
 
   return (
-    <div className="flex flex-col gap-2 py-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="flex flex-col gap-2 py-3.5 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex min-w-0 items-start gap-3">
+      <span
+        aria-hidden
+        className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-base ${(STATUS_ICON[doc.status] ?? STATUS_ICON.missing).tile}`}
+      >
+        {(STATUS_ICON[doc.status] ?? STATUS_ICON.missing).icon}
+      </span>
       <div className="min-w-0">
-        <p className="text-sm text-ink">
-          {number && <span className="mr-1.5 font-mono text-xs text-muted">{number}</span>}
+        <p className="text-sm font-medium text-ink">
+          {number && <span className="mr-1.5 font-mono text-xs font-normal text-muted">{number}</span>}
           {doc.custom_name ?? doc.category ?? "Document"}
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -97,6 +113,7 @@ export function PortalDocumentRow({
               : "Sent back — ask your counsellor what needs changing, then upload a replacement."}
           </p>
         )}
+      </div>
       </div>
       {/* What was sent before, and why it came back. Kept rather than
           overwritten, so it is worth showing the student their own attempt. */}

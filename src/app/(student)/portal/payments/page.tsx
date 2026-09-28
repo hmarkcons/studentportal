@@ -5,7 +5,10 @@ import { formatDateOnly } from "@/lib/formatDate";
 import { carriedFromNote } from "@/lib/partialPayment";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { EmptyState } from "@/components/ui/EmptyState";
+import { ProgressRing } from "@/components/charts/ProgressRing";
+import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
+import { PortalStat, PortalStats } from "@/components/studentPortal/PortalStat";
+import { PortalEmpty } from "@/components/studentPortal/PortalEmpty";
 import {
   computeInvoiceMath,
   computePaymentProgress,
@@ -90,50 +93,108 @@ export default async function PortalPaymentsPage() {
 
   const today = new Date().toISOString().slice(0, 10);
 
-  return (
-    <div className="w-full">
-      <h2 className="mb-1 text-lg font-semibold text-ink">Payments</h2>
-      <p className="mb-4 text-sm text-muted">
-        What you owe, what you have paid, and when the next instalment is due. Payment details are on the invoice itself.
-      </p>
+  // Every invoice worked out once, so the summary at the top and the cards
+  // below cannot disagree.
+  const rows = (invoices ?? []).map((inv) => {
+    const mine = (installments ?? []).filter((i) => i.invoice_id === inv.id);
+    const items = (lineItems ?? []).filter((li) => li.invoice_id === inv.id);
+    const charges = (adminCharges ?? []).filter((c) => c.invoice_id === inv.id && Number(c.amount ?? 0) > 0);
+    // The consultancy fee is the primary country's; a backup country never
+    // carries one.
+    const primaryCountry = charges.find((c) => !c.is_backup)?.country_label ?? null;
+    const math = computeInvoiceMath({
+      consultancyFee: Number(inv.consultancy_fee ?? 0),
+      adminCharge: Number(inv.admin_charge ?? 0),
+      discountAmount: Number(inv.discount_amount ?? 0),
+      taxRate: Number(inv.tax_rate ?? 0),
+      taxBase: (inv.tax_base as "services" | "total" | null) ?? "services",
+      extras: sumLineItems(items),
+    });
+    const progress = computePaymentProgress(mine);
+    // The instalment plan is what the student is actually asked to pay, so it
+    // is what Total reports. It can drift from the fee breakdown: editing an
+    // invoice's fee does not rebuild its instalments, so a later change leaves
+    // the two disagreeing. Say so rather than printing two totals and letting
+    // the student pick.
+    const scheduleTotal = Math.round(mine.reduce((s, i) => s + Number(i.amount ?? 0), 0) * 100) / 100;
+    const total = mine.length > 0 ? scheduleTotal : math.total;
+    return {
+      inv,
+      mine,
+      items,
+      charges,
+      primaryCountry,
+      math,
+      progress,
+      settled: progress.outstanding <= 0,
+      total,
+      mismatch: mine.length > 0 && Math.abs(scheduleTotal - math.total) > 0.01,
+    };
+  });
 
-      {(invoices ?? []).length === 0 && <EmptyState>No invoices yet.</EmptyState>}
+  // Added up only when every invoice is in the same currency; two currencies
+  // summed into one figure would be a number nobody owes.
+  const currencies = [...new Set(rows.map((r) => r.inv.currency))];
+  const oneCurrency = currencies.length === 1 ? currencies[0] : null;
+  const outstanding = rows.reduce((s, r) => s + r.progress.outstanding, 0);
+  const paidSoFar = rows.reduce((s, r) => s + r.progress.paid, 0);
+  const nextDue = rows
+    .map((r) => r.progress.nextDueDate)
+    .filter((d): d is string => Boolean(d))
+    .sort()[0];
+
+  return (
+    <div className="flex w-full flex-col gap-6" data-portal-page>
+      <PortalPageHeader
+        icon="💳"
+        title="Payments"
+        description="What you owe, what you have paid, and when the next instalment is due. Payment details are on the invoice itself."
+      >
+        {rows.length > 0 && oneCurrency && (
+          <PortalStats>
+            <PortalStat
+              icon={outstanding <= 0 ? "🎉" : "💰"}
+              value={outstanding <= 0 ? "Paid" : money(oneCurrency, outstanding)}
+              label={outstanding <= 0 ? "in full" : "to pay"}
+              tone={outstanding <= 0 ? "success" : "warning"}
+            />
+            <PortalStat icon="✅" value={money(oneCurrency, paidSoFar)} label="paid so far" tone="success" />
+            <PortalStat
+              icon="📅"
+              value={nextDue ? formatDateOnly(nextDue, LONG_DATE) : "—"}
+              label={nextDue ? (nextDue < today ? "overdue" : "next due") : "nothing due"}
+              tone={nextDue && nextDue < today ? "danger" : "default"}
+            />
+            <PortalStat icon="🧾" value={rows.length} label={`invoice${rows.length === 1 ? "" : "s"}`} />
+          </PortalStats>
+        )}
+      </PortalPageHeader>
+
+      {rows.length === 0 && (
+        <Card>
+          <PortalEmpty icon="🧾" title="No invoices yet.">
+            Your invoice appears here once your agreement is signed, with every instalment and the date each one is due.
+          </PortalEmpty>
+        </Card>
+      )}
 
       <div className="flex flex-col gap-6">
-        {(invoices ?? []).map((inv) => {
-          const mine = (installments ?? []).filter((i) => i.invoice_id === inv.id);
-          const items = (lineItems ?? []).filter((li) => li.invoice_id === inv.id);
-          const charges = (adminCharges ?? []).filter((c) => c.invoice_id === inv.id && Number(c.amount ?? 0) > 0);
-          // The consultancy fee is the primary country's; a backup country
-          // never carries one.
-          const primaryCountry = charges.find((c) => !c.is_backup)?.country_label ?? null;
-          const math = computeInvoiceMath({
-            consultancyFee: Number(inv.consultancy_fee ?? 0),
-            adminCharge: Number(inv.admin_charge ?? 0),
-            discountAmount: Number(inv.discount_amount ?? 0),
-            taxRate: Number(inv.tax_rate ?? 0),
-            taxBase: (inv.tax_base as "services" | "total" | null) ?? "services",
-            extras: sumLineItems(items),
-          });
-          const progress = computePaymentProgress(mine);
-          const settled = progress.outstanding <= 0;
+        {rows.map(({ inv, mine, items, charges, primaryCountry, math, progress, settled, total, mismatch }) => {
           const cur = inv.currency;
-
-          // The instalment plan is what the student is actually asked to pay,
-          // so it is what Total reports. It can drift from the fee breakdown:
-          // editing an invoice's fee does not rebuild its instalments, so a
-          // later change leaves the two disagreeing. Say so rather than
-          // printing two totals and letting the student pick.
-          const scheduleTotal = Math.round(mine.reduce((s, i) => s + Number(i.amount ?? 0), 0) * 100) / 100;
-          const total = mine.length > 0 ? scheduleTotal : math.total;
-          const mismatch = mine.length > 0 && Math.abs(scheduleTotal - math.total) > 0.01;
+          const paidPercent = total > 0 ? Math.round((progress.paid / total) * 100) : 0;
 
           return (
-            <Card key={inv.id}>
-              <div className="mb-4 flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+            <Card key={inv.id} className="relative overflow-hidden">
+              <span aria-hidden className={`absolute inset-x-0 top-0 h-1.5 ${settled ? "bg-success" : "bg-hero"}`} />
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
                 <div>
-                  <p className="text-xs text-muted">{settled ? "Paid in full" : "Outstanding"}</p>
-                  <p className={`text-2xl font-semibold ${settled ? "text-success" : "text-ink"}`}>
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted">{settled ? "Paid in full" : "Outstanding"}</p>
+                    <Badge tone={settled ? "success" : progress.paid > 0 ? "warning" : "neutral"}>
+                      {PAYMENT_STATUS_LABELS[progress.status]}
+                    </Badge>
+                  </div>
+                  <p className={`text-3xl font-semibold tracking-tight ${settled ? "text-success" : "text-ink"}`}>
                     {money(cur, settled ? progress.paid : progress.outstanding)}
                   </p>
                   {/* What they have already paid, called out rather than left
@@ -141,7 +202,7 @@ export default async function PortalPaymentsPage() {
                       through a plan wants this figure first, and it is the one
                       piece of the page that is reassuring. */}
                   {!settled && progress.paid > 0 && (
-                    <p className="mt-1 inline-flex items-baseline gap-1.5 rounded-md bg-success-bg px-2 py-1">
+                    <p className="mt-2 inline-flex items-baseline gap-1.5 rounded-lg bg-success-bg px-2.5 py-1">
                       <span className="text-xs font-medium text-success">Paid so far</span>
                       <span className="text-base font-semibold text-success">{money(cur, progress.paid)}</span>
                       <span className="text-[11px] text-success opacity-80">
@@ -149,21 +210,35 @@ export default async function PortalPaymentsPage() {
                       </span>
                     </p>
                   )}
-                  <p className="mt-1 text-xs text-muted">
-                    {inv.invoice_number ?? "Invoice"}
+                  <p className="mt-1.5 text-xs text-muted">
+                    🧾 {inv.invoice_number ?? "Invoice"}
                     {inv.intake && ` · ${inv.intake} intake`}
                   </p>
                 </div>
-                <Badge tone={settled ? "success" : progress.paid > 0 ? "warning" : "neutral"}>
-                  {PAYMENT_STATUS_LABELS[progress.status]}
-                </Badge>
+                <div className="flex items-center gap-4">
+                  <ProgressRing value={paidPercent} label="Paid" size={96} tone={settled ? "success" : undefined} />
+                  {/* No payment status shown for the invoice document itself:
+                      whether staff have emailed it is our bookkeeping, not
+                      something a student can act on. */}
+                  {pdfUrls.has(inv.id) && (
+                    <a
+                      href={pdfUrls.get(inv.id)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="bg-hero inline-flex w-fit items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-white shadow-sm shadow-primary/25 hover:opacity-95"
+                    >
+                      👁️ View invoice
+                    </a>
+                  )}
+                </div>
               </div>
 
               {/* The breakdown and the schedule side by side on a wide screen:
                   what the total is made of, and when it is paid. */}
-              <div className="grid grid-cols-1 gap-x-10 lg:grid-cols-2">
-              <div>
-              <dl className="flex flex-col gap-0.5 border-t border-border pt-3">
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <div className="rounded-xl bg-bg/60 px-4 py-3">
+              <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">What it is for</h3>
+              <dl className="flex flex-col gap-0.5">
                 <Line label={feeLineLabel(SERVICE_FEE_NAME[serviceOf(inv.service_type)], primaryCountry)} value={money(cur, math.consultancyFee)} />
                 {math.discountAmount > 0 && (
                   <Line
@@ -195,7 +270,7 @@ export default async function PortalPaymentsPage() {
               </dl>
 
               {mismatch && (
-                <p className="mt-3 rounded-md bg-warning-bg p-3 text-xs text-warning">
+                <p className="mt-3 rounded-lg bg-warning-bg p-3 text-xs text-warning">
                   Please check with your counsellor before paying: the instalment plan below and the fee breakdown above
                   don&rsquo;t currently add up to the same figure. The instalments are what we have on record.
                 </p>
@@ -203,22 +278,43 @@ export default async function PortalPaymentsPage() {
               </div>
 
               {mine.length > 0 && (
-                <div className="mt-4 border-t border-border pt-3 lg:mt-0">
-                  <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Instalments</h3>
-                  <div className="flex flex-col gap-2">
+                <div>
+                  <h3 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">Instalments</h3>
+                  <ol className="relative flex flex-col gap-3 pl-9">
+                    <span aria-hidden className="absolute bottom-3 left-[13px] top-3 w-0.5 rounded-full bg-border" />
                     {mine.map((i) => {
                       const overdue = i.status !== "paid" && i.due_date && i.due_date < today;
+                      const note = installmentNote(i, math, (n) => money(cur, n));
+                      const carried = carriedFromNote(
+                        i.carried_from_installment_no,
+                        i.carried_part_paid ? Number(i.carried_part_paid) : null,
+                        i.carried_paid_date,
+                        (n) => money(cur, n),
+                        (d) => formatDateOnly(d, LONG_DATE)
+                      );
                       return (
-                        <div key={i.id} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm">
-                          <span className="text-ink">
-                            {i.installment_no}. {money(cur, Number(i.amount ?? 0))}
+                        <li key={i.id} className="relative flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm">
+                          <span
+                            aria-hidden
+                            className={`absolute -left-9 top-0 flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${
+                              i.status === "paid"
+                                ? "bg-hero text-white shadow-sm shadow-primary/30"
+                                : overdue
+                                  ? "bg-danger text-white"
+                                  : "border-2 border-border bg-card text-muted"
+                            }`}
+                          >
+                            {i.status === "paid" ? "✓" : overdue ? "!" : "•"}
+                          </span>
+                          <span className="min-w-0 text-ink">
+                            <span className="font-medium">
+                              {i.installment_no}. {money(cur, Number(i.amount ?? 0))}
+                            </span>
                             {/* The administrative charge is collected with the
                                 first instalment, and an added item with the
                                 next one to be paid, so either can be larger
                                 by design. */}
-                            {installmentNote(i, math, (n) => money(cur, n)) && (
-                              <span className="text-muted"> · {installmentNote(i, math, (n) => money(cur, n))}</span>
-                            )}
+                            {note && <span className="text-muted"> · {note}</span>}
                             {i.status === "partial" && Number(i.amount_paid ?? 0) > 0 && (
                               <span className="text-muted"> · {money(cur, Number(i.amount_paid))} received</span>
                             )}
@@ -226,23 +322,7 @@ export default async function PortalPaymentsPage() {
                                 split, and this is the rest of it. Said plainly,
                                 or an extra instalment nobody recognises looks
                                 like a mistake in their plan. */}
-                            {carriedFromNote(
-                              i.carried_from_installment_no,
-                              i.carried_part_paid ? Number(i.carried_part_paid) : null,
-                              i.carried_paid_date,
-                              (n) => money(cur, n),
-                              (d) => formatDateOnly(d, LONG_DATE)
-                            ) && (
-                              <span className="mt-0.5 block text-xs text-muted">
-                                {carriedFromNote(
-                                  i.carried_from_installment_no,
-                                  i.carried_part_paid ? Number(i.carried_part_paid) : null,
-                                  i.carried_paid_date,
-                                  (n) => money(cur, n),
-                                  (d) => formatDateOnly(d, LONG_DATE)
-                                )}
-                              </span>
-                            )}
+                            {carried && <span className="mt-0.5 block text-xs text-muted">{carried}</span>}
                           </span>
                           <span className="flex shrink-0 items-center gap-2">
                             {/* Not nowrap when it is a condition: the sentence
@@ -264,27 +344,13 @@ export default async function PortalPaymentsPage() {
                               {i.status === "paid" ? "Paid" : overdue ? "Overdue" : i.status === "partial" ? "Part paid" : "Due"}
                             </Badge>
                           </span>
-                        </div>
+                        </li>
                       );
                     })}
-                  </div>
+                  </ol>
                 </div>
               )}
               </div>
-
-              {/* No payment status shown for the invoice document itself: whether
-                  staff have emailed it is our bookkeeping, not something a
-                  student can act on. */}
-              {pdfUrls.has(inv.id) && (
-                <a
-                  href={pdfUrls.get(inv.id)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-4 inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
-                >
-                  👁️ View invoice
-                </a>
-              )}
             </Card>
           );
         })}

@@ -15,6 +15,12 @@
 //   coming up         the unpaid instalment, the application deadline, the
 //                     document due and the passport, soonest first.
 //   applications      the donut names the stage the application is at.
+//   each country      a status bar for the primary country and one for the
+//                     backup, each marked as which, the primary's stage under
+//                     way picked out.
+//   the team          the counsellor and the processing officer as staff see
+//                     them: photo, designation, office number and email — the
+//                     photo actually loading.
 //   full width        the dashboard and every other student page use the
 //                     width of the screen, not a 672px column.
 //
@@ -42,10 +48,23 @@ async function poll(fn, seconds = 45) {
   return null;
 }
 
+/**
+ * A screenshot of the page as it settles, not half-way through the cards
+ * rising into place — which reads as a faded page when it is not one.
+ */
+async function shot(page, name) {
+  if (!process.env.SHOT_DIR) return;
+  await page
+    .waitForFunction(() => document.getAnimations().every((a) => a.playState !== "running" || a.effect?.getTiming().iterations === Infinity), null, { timeout: 5000 })
+    .catch(() => {});
+  await page.screenshot({ path: `${process.env.SHOT_DIR}/${name}.png`, fullPage: true });
+}
+
 let browser = null;
 let studentId = null;
 let portalUserId = null;
 let universityId = null;
+let counsellorPhoto = null;
 
 try {
   // Any leftover login from a run that died.
@@ -54,9 +73,18 @@ try {
 
   const fin = await fx.staff("dashfin", ["finance"]);
   // The student's team, each with the office number the dashboard shows.
-  const counsellor = await fx.staff("dashcoun", ["counselor"], { extra: { designation: "Senior Counsellor", mobile_official: "0300-7770001" } });
+  const counsellor = await fx.staff("dashcoun", ["counselor"], {
+    extra: { designation: "Senior Counsellor", mobile_official: "0300-7770001", email_official: "zztmp-dashcoun@hmark-test.local" },
+  });
   const officer = await fx.staff("dashproc", ["processing"], { extra: { designation: "Processing Officer", mobile_official: "0300-7770002" } });
+  // The counsellor's photo: a real image, so the check can tell it loaded.
+  counsellorPhoto = `staff-photos/${counsellor.id}/photo-zztmp.png`;
+  const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "base64");
+  const { error: photoError } = await admin.storage.from("documents").upload(counsellorPhoto, PNG, { contentType: "image/png", upsert: true });
+  if (photoError) throw new Error(`photo: ${photoError.message}`);
+  await admin.from("staff").update({ photo_path: counsellorPhoto }).eq("id", counsellor.id);
   const { data: italy } = await admin.from("destinations").select("id").eq("display_name", "Italy (Public)").single();
+  const { data: germany } = await admin.from("destinations").select("id").eq("display_name", "Germany (Public)").single();
   const { data: template } = await admin.from("agreement_templates").select("id").eq("destination_id", italy.id).limit(1).single();
 
   // ------------------------------------------------------------ the student
@@ -67,7 +95,14 @@ try {
     date_of_birth: "2002-04-17", address: "12 Test Street, Karachi", level_applying_for: "masters",
     assigned_counselor_id: counsellor.id, processing_officer_id: officer.id,
   });
-  await admin.from("lead_destinations").insert({ lead_id: studentId, destination_id: italy.id });
+  // Italy the primary, part-way: admission documents done, the admission
+  // itself in process. Germany a backup with nothing recorded yet. Both rows
+  // carry every key (AGENTS.md, rectangular inserts).
+  const { error: destError } = await admin.from("lead_destinations").insert([
+    { lead_id: studentId, destination_id: italy.id, is_backup: false, dashboard_stage_values: { admission_docs: "Completed", admission: "In process" } },
+    { lead_id: studentId, destination_id: germany.id, is_backup: true, dashboard_stage_values: {} },
+  ]);
+  if (destError) throw new Error(`destinations: ${destError.message}`);
   // A passport inside the six months a visa needs: the profile ring warns, and
   // the date joins what is coming up.
   await admin.from("student_profiles").upsert(
@@ -159,7 +194,7 @@ try {
   ok("the dashboard opens on the journey", shown,
     `${(await page.locator("body").innerText()).replace(/\s+/g, " ").slice(0, 300)} | browser errors: ${browserErrors.slice(0, 5).join(" || ").slice(0, 1500)}`);
   if (!shown) throw new Error("no dashboard to read");
-  if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/student-dashboard.png`, fullPage: true });
+  await shot(page, "student-dashboard");
 
   console.log("\n--- the journey ---");
   const state = async (key) => page.locator(`[data-journey-step="${key}"]`).getAttribute("data-state");
@@ -205,17 +240,43 @@ try {
   ok("the dashboard no longer lists the application cards", !dashText.includes("Acceptance Letter"));
   ok("...but its chart links to them", (await page.getByRole("link", { name: /View applications/ }).getAttribute("href")) === "/portal/applications");
 
+  console.log("\n--- each country ---");
+  const italyBar = page.locator('[data-destination-status="Italy (Public)"]');
+  const germanyBar = page.locator('[data-destination-status="Germany (Public)"]');
+  ok("the primary country and the backup each have their own bar",
+    (await page.locator("[data-destination-status]").count()) === 2 && (await italyBar.count()) === 1 && (await germanyBar.count()) === 1,
+    String(await page.locator("[data-destination-status]").count()));
+  ok("...Italy marked as the primary, first", (await italyBar.getAttribute("data-role")) === "primary"
+    && (await page.locator("[data-destination-status]").first().getAttribute("data-destination-status")) === "Italy (Public)"
+    && (await italyBar.locator("[data-destination-role]").innerText()).trim().toLowerCase() === "primary country");
+  ok("...Germany marked as a backup", (await germanyBar.getAttribute("data-role")) === "backup"
+    && (await germanyBar.locator("[data-destination-role]").innerText()).trim().toLowerCase() === "backup country");
+  const italyHeadline = (await italyBar.locator("[data-destination-headline]").innerText()).trim();
+  ok("...Italy's admission is shown under way, not done", italyHeadline === "Now: Admission — In process"
+    && (await italyBar.locator('[data-stage="admission_docs"]').getAttribute("data-state")) === "done"
+    && (await italyBar.locator('[data-stage="admission"]').getAttribute("data-state")) === "progress", italyHeadline);
+  ok("...one step of Italy's done", /1 of \d+ steps/.test(await italyBar.innerText()), (await italyBar.innerText()).replace(/\s+/g, " ").slice(0, 160));
+  ok("...the application is named on Italy's bar, and Germany has none yet",
+    (await italyBar.innerText()).includes("zztmp Dashboard University") && (await germanyBar.innerText()).includes("No application yet"));
+  ok("...Germany starts at its first step", (await germanyBar.locator("[data-destination-headline]").innerText()).trim() === "Next: Admission Docs"
+    && /0 of \d+ steps/.test(await germanyBar.innerText()));
+
   console.log("\n--- the menu ---");
   const menu = (await page.locator("aside nav a, nav a").allInnerTexts()).map((t) => t.replace(/\s+/g, " ").trim()).filter(Boolean);
   const pos = (label) => menu.findIndex((m) => m.includes(label));
   ok("Applications has its own entry, after Documents", pos("Applications") !== -1 && pos("Applications") === pos("Documents") + 1, menu.join(" | "));
   ok("Scholarship follows it, Italy having scholarship bodies", pos("Scholarship") === pos("Applications") + 1, menu.join(" | "));
+  const currentEntry = async () => (await page.locator('aside nav a[aria-current="page"]').allInnerTexts()).map((t) => t.replace(/\s+/g, " ").trim());
+  ok("on the dashboard, Dashboard is the one entry marked current", JSON.stringify(await currentEntry()) === JSON.stringify(["🏠 Dashboard"]), JSON.stringify(await currentEntry()));
 
   console.log("\n--- the Applications page ---");
   await page.getByRole("link", { name: /View applications/ }).click();
   await page.waitForURL((u) => u.pathname === "/portal/applications", { timeout: 40000 });
   const cards = page.locator("[data-applications]");
   await cards.waitFor({ timeout: 40000 });
+  // /portal is the start of every student address, so Dashboard used to stay
+  // lit beside whichever page was open.
+  ok("on Applications, only Applications is marked current", JSON.stringify(await currentEntry()) === JSON.stringify(["🏛️ Applications"]), JSON.stringify(await currentEntry()));
   const cardsText = (await cards.innerText()).replace(/\s+/g, " ");
   ok("it lists the application as a boarding pass", cardsText.includes("zztmp Dashboard University") && cardsText.includes("Acceptance Letter"), cardsText.slice(0, 300));
   ok("...with its round's closing date", /apply by/i.test(cardsText), cardsText.slice(0, 300));
@@ -258,27 +319,37 @@ try {
   ok("no unsigned agreement is offered to view", (await page.getByRole("link", { name: /View agreement|Download to sign/ }).count()) === 0);
 
   console.log("\n--- full width ---");
-  const width = async () => page.evaluate(() => document.querySelector("h2")?.parentElement?.getBoundingClientRect().width ?? 0);
+  const width = async () => page.evaluate(() => document.querySelector("main [data-portal-page]")?.getBoundingClientRect().width ?? 0);
   await page.goto(`${BASE}/portal`, { waitUntil: "domcontentloaded" });
   await page.locator("[data-journey]").waitFor({ timeout: 40000 });
   const dashWidth = await page.locator("[data-journey]").evaluate((el) => el.getBoundingClientRect().width);
   ok("the dashboard uses the width of the screen", dashWidth > 1000, `${Math.round(dashWidth)}px`);
   for (const path of ["/portal/applications", "/portal/scholarship", "/portal/documents", "/portal/payments", "/portal/profile", "/portal/support", "/portal/agreement", "/portal/appointments", "/portal/messages", "/portal/guide", "/portal/visa"]) {
     await page.goto(`${BASE}${path}`, { waitUntil: "domcontentloaded" });
-    await page.locator("h2").first().waitFor({ timeout: 40000 }).catch(() => {});
+    await page.locator("main [data-portal-page]").waitFor({ timeout: 40000 }).catch(() => {});
     const w = await width();
     ok(`${path} is full width, not a narrow column`, w > 1000, `${Math.round(w)}px`);
-    if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/student${path.split("/").join("-")}.png`, fullPage: true });
+    await shot(page, `student${path.split("/").join("-")}`);
   }
 
   console.log("\n--- the team ---");
   await page.goto(`${BASE}/portal`, { waitUntil: "domcontentloaded" });
   const team = page.locator("[data-team]");
   await team.waitFor({ timeout: 40000 });
-  const coun = (await page.locator('[data-team-member="counsellor"]').innerText()).replace(/\s+/g, " ");
+  const counCard = page.locator('[data-team-member="counsellor"]');
+  const coun = (await counCard.innerText()).replace(/\s+/g, " ");
   const proc = (await page.locator('[data-team-member="processing-officer"]').innerText()).replace(/\s+/g, " ");
   ok("the dashboard shows the counsellor, with their office number", coun.includes("zztmp dashcoun") && coun.includes("0300-7770001"), coun);
+  ok("...their designation and office email, as staff see them", coun.includes("Senior Counsellor") && coun.includes("zztmp-dashcoun@hmark-test.local"), coun);
+  ok("...each one tappable", (await counCard.locator('a[href^="tel:"]').count()) > 0 && (await counCard.locator('a[href^="mailto:zztmp-dashcoun@"]').count()) > 0);
+  // The photo has to have loaded, not merely be in the markup: a link the
+  // student may not open renders as a broken image with the same tag.
+  const photo = counCard.locator("img[data-team-photo]");
+  await photo.scrollIntoViewIfNeeded().catch(() => {});
+  const photoLoaded = await poll(async () => (await photo.count()) > 0 && (await photo.evaluate((img) => img.complete && img.naturalWidth > 0)), 20);
+  ok("...with their photo, which loads", Boolean(photoLoaded), `img count ${await photo.count()}`);
   ok("...and the processing officer, with theirs", proc.includes("zztmp dashproc") && proc.includes("Processing Officer") && proc.includes("0300-7770002"), proc);
+  ok("...who has no photo, so shows initials rather than a broken image", (await page.locator('[data-team-member="processing-officer"] img').count()) === 0);
 
   console.log("\n--- the scholarship, once the university is finalised ---");
   await page.goto(`${BASE}/portal/scholarship`, { waitUntil: "domcontentloaded" });
@@ -301,7 +372,7 @@ try {
   await page.locator("[data-journey]").waitFor({ timeout: 40000 });
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   ok("on a phone the dashboard does not scroll sideways", overflow <= 1, `${overflow}px too wide`);
-  if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/student-dashboard-phone.png`, fullPage: true });
+  await shot(page, "student-dashboard-phone");
 } catch (e) {
   ok(`the check itself stopped: ${e?.stack ?? e}`, false);
 } finally {
@@ -313,6 +384,7 @@ try {
     await admin.from("student_documents").delete().eq("student_id", studentId);
     await admin.storage.from("documents").remove([`${studentId}/agreements/zztmp-signed.pdf`]);
   }
+  if (counsellorPhoto) await admin.storage.from("documents").remove([counsellorPhoto]);
   if (universityId) await admin.from("universities").delete().eq("id", universityId);
   const removed = await fx.cleanup();
   // After the lead: leads.auth_user_id references this login until it goes.

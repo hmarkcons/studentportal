@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
-import { EmptyState } from "@/components/ui/EmptyState";
+import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
+import { PortalEmpty } from "@/components/studentPortal/PortalEmpty";
 
 // Tutorials come from Setup > Guide tutorials. This page used to hold a
 // hardcoded array whose single entry was a placeholder YouTube id — a rickroll
@@ -24,24 +25,38 @@ export default async function GuidePage() {
     .order("sort_order", { ascending: true });
 
   return (
-    <div className="w-full">
-      <h2 className="mb-1 text-lg font-semibold text-ink">Guide</h2>
-      <p className="mb-4 text-sm text-muted">Short walkthroughs of the things students ask about most.</p>
+    <div className="flex w-full flex-col gap-6" data-portal-page>
+      <PortalPageHeader
+        icon="🎬"
+        title="Guide"
+        description="Short walkthroughs of the things students ask about most."
+        aside={
+          (videos ?? []).length > 0 ? (
+            <span className="rounded-full border border-border bg-card px-3 py-1 text-xs text-muted">
+              {(videos ?? []).length} video{(videos ?? []).length === 1 ? "" : "s"}
+            </span>
+          ) : undefined
+        }
+      />
 
       {(videos ?? []).length === 0 ? (
         <Card>
-          <EmptyState>
-            No tutorials here yet. Your counsellor can walk you through anything in the meantime — use Messages or
-            Support.
-          </EmptyState>
+          <PortalEmpty icon="🎬" title="No tutorials here yet">
+            Your counsellor can walk you through anything in the meantime — use Messages or Support.
+          </PortalEmpty>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
-          {(videos ?? []).map((v) => (
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2 2xl:grid-cols-3">
+          {(videos ?? []).map((v, i) => (
             <Card key={v.id}>
-              <p className="text-sm font-medium text-ink">{v.title}</p>
+              <p className="flex items-center gap-2 text-sm font-semibold text-ink">
+                <span aria-hidden className="bg-hero flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white">
+                  {i + 1}
+                </span>
+                {v.title}
+              </p>
               {v.description && <p className="mb-3 mt-1 text-sm text-muted">{v.description}</p>}
-              <div className={`aspect-video overflow-hidden rounded-md ${v.description ? "" : "mt-3"}`}>
+              <div className={`aspect-video overflow-hidden rounded-xl ring-1 ring-border ${v.description ? "" : "mt-3"}`}>
                 <iframe
                   src={embedFor(v)}
                   className="h-full w-full"

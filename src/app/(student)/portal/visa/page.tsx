@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { EmptyState } from "@/components/ui/EmptyState";
+import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
+import { PortalEmpty } from "@/components/studentPortal/PortalEmpty";
 import { listTrackerDefinitions, listCredentialTypesAction } from "@/lib/actions/countryTracker";
 import { formatDateOnly } from "@/lib/formatDate";
 import { readVisaDecision, visaMessage } from "@/lib/visaOutcome";
@@ -157,29 +158,46 @@ export default async function PortalVisaPage() {
   // two reads of the same row was how the two could have disagreed.
 
   return (
-    <div className="w-full">
-      <h2 className="mb-1 text-lg font-semibold text-ink">Visa</h2>
-      <p className="mb-4 text-sm text-muted">
-        Your visa progress, kept up to date by your counsellor as each step completes.
-      </p>
+    <div className="flex w-full flex-col gap-6" data-portal-page>
+      <PortalPageHeader
+        icon="🛂"
+        title="Visa"
+        description="Your visa progress, kept up to date by your counsellor as each step completes — and where to go for your appointment."
+        aside={visible.length === 0 ? undefined : visible.map((s) => (
+          <Badge key={s.country.code} tone={s.decision === "approved" ? "success" : s.decision === "refused" ? "danger" : "warning"}>
+            {s.country.name}: {s.decision === "approved" ? "approved" : s.decision === "refused" ? "not successful" : "in progress"}
+          </Badge>
+        ))}
+      />
 
       {visible.length === 0 ? (
-        <EmptyState>
-          There is nothing to show here yet. Once your visa process begins, your appointments and progress will appear on
-          this page.
-        </EmptyState>
+        <Card>
+          <PortalEmpty icon="🛂" title="Your visa process has not started yet">
+            There is nothing to show here yet. Once your visa process begins, your appointments and progress will appear on
+            this page.
+          </PortalEmpty>
+        </Card>
       ) : (
         <div className="flex flex-col gap-6">
           {visible.map((s) => {
             const message = visaMessage(s.decision, student.full_name, s.country.name, toMessageTemplates(s.messages));
             return (
-              <Card key={s.country.code}>
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <h3 className="text-base font-semibold text-ink">{s.country.name}</h3>
-                    {s.country.universities.length > 0 && (
-                      <p className="text-xs text-muted">{s.country.universities.join(" · ")}</p>
-                    )}
+              <Card key={s.country.code} className="relative overflow-hidden">
+                <span
+                  aria-hidden
+                  className={`absolute inset-x-0 top-0 h-1.5 ${s.decision === "approved" ? "bg-success" : s.decision === "refused" ? "bg-danger" : "bg-hero"}`}
+                />
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span aria-hidden className="bg-hero flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-bold tracking-wider text-white shadow-sm shadow-primary/25">
+                      {s.country.code}
+                    </span>
+                    <div className="min-w-0">
+                      <h3 className="text-base font-semibold text-ink">{s.country.name}</h3>
+                      {s.country.universities.length > 0 && (
+                        <p className="text-xs text-muted">{s.country.universities.join(" · ")}</p>
+                      )}
+                    </div>
                   </div>
                   <Badge tone={s.decision === "approved" ? "success" : s.decision === "refused" ? "danger" : "warning"}>
                     {s.decision === "approved" ? "Visa approved" : s.decision === "refused" ? "Not successful" : "In progress"}
@@ -188,11 +206,12 @@ export default async function PortalVisaPage() {
 
                 {message && (
                   <div
-                    className={`mb-4 rounded-md p-4 ${
+                    className={`mb-4 rounded-xl p-4 ${
                       s.decision === "approved" ? "bg-success-bg" : "bg-warning-bg"
                     }`}
                   >
                     <h4 className={`mb-2 text-sm font-semibold ${s.decision === "approved" ? "text-success" : "text-warning"}`}>
+                      {s.decision === "approved" ? "🎉 " : ""}
                       {message.heading}
                     </h4>
                     {message.body.map((para) => (
@@ -214,9 +233,9 @@ export default async function PortalVisaPage() {
                 {/* Progress and where to apply side by side on a wide screen. */}
                 <div className={s.rows.length > 0 && s.offices.length > 0 ? "grid grid-cols-1 gap-x-10 lg:grid-cols-2" : ""}>
                 {s.rows.length > 0 && (
-                  <dl className="flex flex-col gap-0.5">
+                  <dl className="flex flex-col gap-0.5 rounded-xl bg-bg/60 px-4 py-2">
                     {s.rows.map((r) => (
-                      <div key={r.label} className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border py-1.5 last:border-0">
+                      <div key={r.label} className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border py-2 last:border-0">
                         <dt className="text-xs text-muted">{r.label}</dt>
                         <dd className="text-sm text-ink">{r.value}</dd>
                       </div>
@@ -230,7 +249,7 @@ export default async function PortalVisaPage() {
                 {s.offices.length > 0 && (
                   <div className={s.rows.length > 0 ? "mt-4 border-t border-border pt-4 lg:mt-0 lg:border-t-0 lg:pt-0" : ""}>
                     <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-                      Where to apply
+                      📍 Where to apply
                     </h4>
                     <VisaOfficeList offices={s.offices} countryName={s.country.name} />
                   </div>
@@ -251,8 +270,11 @@ export default async function PortalVisaPage() {
       )}
 
       {appointmentLogin && (
-        <Card className="mt-6">
-          <h3 className="mb-2 text-sm font-medium text-ink">Visa appointment portal</h3>
+        <Card>
+          <h3 className="mb-2 flex items-center gap-2.5 text-base font-semibold text-ink">
+            <span aria-hidden className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-base">🔐</span>
+            Visa appointment portal
+          </h3>
           <VisaCredentials
             studentId={student.id}
             credentialType={appointmentLogin}

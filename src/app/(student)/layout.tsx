@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getStudentUser } from "@/lib/auth/session";
 import { AppShell } from "@/components/AppShell";
@@ -6,6 +7,7 @@ import { evaluateAgreementGate } from "@/lib/portalGate";
 import { countUnreadMessages } from "@/lib/unreadMessages";
 import { loadTicketActivity, loadTicketReadMarkers, hasUnseenStaffReply } from "@/lib/supportSignals";
 import { approvedVisaDestinations } from "@/lib/studentVisaApproval";
+import { WHATSAPP_LINK } from "@/lib/constants";
 
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
   const { supabase, userId } = await getStudentUser();
@@ -84,7 +86,32 @@ export default async function StudentLayout({ children }: { children: React.Reac
   const nav = studentNav({ locked: gate.locked, scholarship, travel: approvedVisas.length > 0, badges });
 
   return (
-    <AppShell brand="HMARK Student Portal" nav={nav} userName={studentRow.full_name} userSubtitle="Student">
+    <AppShell
+      brand="HMARK Student Portal"
+      nav={nav}
+      userName={studentRow.full_name}
+      userSubtitle={`Student · ${studentRow.student_code}`}
+      variant="student"
+      sidebarFooter={
+        // Help is never more than a glance away — the one thing every page of
+        // the portal has in common is that a student may get stuck on it.
+        <div className="relative overflow-hidden rounded-xl bg-hero p-3.5 text-white">
+          <span aria-hidden className="pointer-events-none absolute -right-6 -top-8 h-20 w-20 rounded-full bg-white/15" />
+          <p className="relative text-sm font-semibold">Need a hand?</p>
+          <p className="relative mt-0.5 text-[11px] text-white/85">Your counsellor is one message away.</p>
+          <div className="relative mt-2.5 flex flex-wrap gap-1.5">
+            {!gate.locked && (
+              <Link href="/portal/messages" prefetch={false} className="rounded-md bg-white px-2.5 py-1 text-[11px] font-semibold text-[var(--hero-to)] hover:bg-white/90">
+                Message
+              </Link>
+            )}
+            <a href={WHATSAPP_LINK} className="rounded-md bg-white/20 px-2.5 py-1 text-[11px] font-semibold text-white ring-1 ring-white/30 hover:bg-white/30">
+              WhatsApp
+            </a>
+          </div>
+        </div>
+      }
+    >
       {children}
     </AppShell>
   );

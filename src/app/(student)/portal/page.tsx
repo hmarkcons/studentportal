@@ -16,6 +16,11 @@ import { loadCycleDocuments, documentCounts } from "@/lib/studentCycleDocuments"
 import { visaOutcomes } from "@/lib/studentVisaApproval";
 import { formatFee } from "@/lib/applicationFee";
 import { formatDateOnly } from "@/lib/formatDate";
+import { loadStudentTeam } from "@/lib/studentTeam";
+import { destinationStatusRows, type RegisteredDestination } from "@/lib/destinationStatus";
+import type { DashboardStageDef } from "@/lib/dashboardPipeline";
+import { TeamCard } from "@/components/studentPortal/TeamCard";
+import { DestinationStatusCard } from "@/components/studentPortal/DestinationStatusCard";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -34,19 +39,13 @@ export default async function PortalDashboardPage() {
 
   const { data: student } = await supabase
     .from("students")
-    // mobile_official, not phone: 0285 withholds staff.phone and
-    // whatsapp_number from signed-in users, and asking for either made this
-    // whole query fail — the student found no row of their own and the
-    // dashboard rendered blank. The office number is the one to give a student.
-    .select(
-      "id, full_name, student_code, intake, assigned_counselor:staff!assigned_counselor_id(full_name, designation, mobile_official), processing_officer:staff!processing_officer_id(full_name, designation, mobile_official)"
-    )
+    .select("id, full_name, student_code, intake")
     .eq("auth_user_id", userId ?? "")
     .maybeSingle();
 
   if (!student) return null;
 
-  const [apps, summary, { data: agreements }, cycleDocs, visas, { data: scholarships }] =
+  const [apps, summary, { data: agreements }, cycleDocs, visas, { data: scholarships }, team, { data: registeredCountries }] =
     await Promise.all([
       // The applications have a page of their own now; the dashboard keeps
       // what it needs for the journey, the chart and what is coming up.
@@ -58,10 +57,16 @@ export default async function PortalDashboardPage() {
       // The Visa tab's own reading of the outcome field.
       visaOutcomes(supabase, student.id),
       supabase.from("student_scholarships").select("name, status, application_deadline").eq("student_id", student.id),
+      // Their counsellor and processing officer, as staff see them.
+      loadStudentTeam(supabase, student.id),
+      // Each country they registered for, primary and backups, with the
+      // status staff keep on the Dashboard tab.
+      supabase
+        .from("lead_destinations")
+        .select("destination_id, is_backup, created_at, dashboard_stage_values, destination:destinations(display_name, country_code, dashboard_pipeline_stages)")
+        .eq("lead_id", student.id),
     ]);
 
-  const counselor = one(student.assigned_counselor) as TeamPerson;
-  const processingOfficer = one(student.processing_officer) as TeamPerson;
   // Read on the server so dates are judged on Karachi's business day rather
   // than wherever the student is, and so no component reads the clock.
   const today = karachiToday();
@@ -101,6 +106,43 @@ export default async function PortalDashboardPage() {
     visa: { approved: approved.map((v) => v.country), refused: refused.map((v) => v.country) },
     travel,
   });
+
+  // ------------------------------------------------------ each country
+  // One bar per country: the primary, each backup, and any country applied to
+  // without registering for it. A backup runs its own process alongside the
+  // primary, so it gets a bar of its own rather than being folded in.
+  const countries = destinationStatusRows(
+    (registeredCountries ?? []).flatMap((r): RegisteredDestination[] => {
+      const d = one(r.destination as never) as { display_name?: string; country_code?: string | null; dashboard_pipeline_stages?: DashboardStageDef[] } | null;
+      if (!d?.display_name) return [];
+      return [
+        {
+          destinationId: r.destination_id as string,
+          isBackup: Boolean(r.is_backup),
+          createdAt: r.created_at as string | null,
+          values: (r.dashboard_stage_values as Record<string, string> | null) ?? null,
+          name: d.display_name,
+          code: d.country_code ?? null,
+          stages: d.dashboard_pipeline_stages ?? [],
+        },
+      ];
+    }),
+    apps.flatMap(({ uni, dest }) =>
+      dest?.id
+        ? [
+            {
+              destinationId: dest.id,
+              name: dest.display_name ?? "Destination",
+              code: dest.country_code ?? null,
+              stages: dest.dashboard_pipeline_stages ?? [],
+              university: uni?.name ?? "University",
+            },
+          ]
+        : []
+    )
+  );
+  const backups = countries.filter((c) => c.role === "backup").length;
+  const primaryCountry = countries.find((c) => c.role === "primary") ?? countries[0] ?? null;
 
   // ------------------------------------------------------ what is coming up
   const dated: TimelineInput[] = [];
@@ -155,29 +197,71 @@ export default async function PortalDashboardPage() {
   const firstName = student.full_name.split(" ")[0] || student.full_name;
   const nextAppointment = summary.nextAppointment;
   const profileDone = summary.profileTotal - summary.profileMissing;
+  const soonest = timeline[0] ?? null;
 
   return (
-    <div className="flex w-full flex-col gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-semibold text-ink">Welcome back, {firstName}</h2>
-          <p className="text-sm text-muted">Here is where everything stands with your study abroad plan.</p>
-        </div>
-        <div className="flex flex-wrap gap-2 text-xs">
-          {student.student_code && (
-            <span className="rounded-full border border-border bg-card px-3 py-1 text-ink" data-student-code>
-              🎫 {student.student_code}
+    <div className="flex w-full flex-col gap-6" data-portal-page>
+      {/* ------------------------------------------------------------ hero */}
+      <section
+        data-rise
+        className="bg-hero relative overflow-hidden rounded-3xl px-6 py-7 text-white shadow-xl shadow-primary/20 sm:px-8"
+      >
+        <span aria-hidden className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full bg-white/10" />
+        <span aria-hidden className="pointer-events-none absolute -bottom-32 right-40 h-64 w-64 rounded-full bg-white/10" />
+        <span aria-hidden className="pointer-events-none absolute -left-10 top-1/2 h-40 w-40 rounded-full bg-white/5 blur-2xl" />
+        <div className="relative flex flex-wrap items-center justify-between gap-6">
+          <div className="min-w-0 max-w-2xl">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/80">Your study abroad plan</p>
+            <h2 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Welcome back, {firstName} 👋</h2>
+            <p className="mt-1.5 text-sm text-white/90">
+              {journey.next
+                ? journey.next.state === "blocked"
+                  ? `${journey.next.label} needs attention — ${journey.next.detail}`
+                  : `Right now: ${journey.next.label} — ${journey.next.detail}`
+                : "Every step is done. Safe travels — we are proud of you!"}
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2 text-xs">
+              {student.student_code && (
+                <span className="rounded-full bg-white/15 px-3 py-1 font-medium ring-1 ring-white/25 backdrop-blur-sm" data-student-code>
+                  🎫 {student.student_code}
+                </span>
+              )}
+              {student.intake && (
+                <span className="rounded-full bg-white/15 px-3 py-1 font-medium ring-1 ring-white/25 backdrop-blur-sm">📆 {student.intake} intake</span>
+              )}
+              {primaryCountry && (
+                <span className="rounded-full bg-white/15 px-3 py-1 font-medium ring-1 ring-white/25 backdrop-blur-sm">
+                  🌍 {primaryCountry.name}
+                  {backups > 0 && ` · ${backups} backup${backups === 1 ? "" : "s"}`}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* The one dated thing nearest to now, where it is seen first. */}
+          <Link
+            href={soonest?.href ?? "/portal/appointments"}
+            className="relative flex w-full max-w-xs items-center gap-3 rounded-2xl bg-white/15 px-4 py-3 ring-1 ring-white/25 backdrop-blur-md transition hover:bg-white/20 sm:w-auto"
+          >
+            <span aria-hidden className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/20 text-xl">
+              {soonest ? "⏰" : "✨"}
             </span>
-          )}
-          {student.intake && <span className="rounded-full border border-border bg-card px-3 py-1 text-ink">📆 {student.intake} intake</span>}
+            <span className="min-w-0">
+              <span className="block text-[11px] font-semibold uppercase tracking-wider text-white/80">
+                {soonest ? `Next · ${daysLeftLabel(soonest.daysLeft)}` : "Coming up"}
+              </span>
+              <span className="block truncate text-sm font-semibold">{soonest ? soonest.label : "Nothing due soon — you are on track"}</span>
+              {soonest && <span className="block text-xs text-white/80">{formatDateOnly(soonest.date, LONG_DATE)}</span>}
+            </span>
+          </Link>
         </div>
-      </div>
+      </section>
 
       <JourneyTracker journey={journey} />
 
       {/* The four figures a student checks most, each against its whole. */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <ChartCard title="Documents" subtitle={cycleDocs.showCycleTabs ? "This intake" : undefined} href="/portal/documents" linkLabel="Open">
+        <ChartCard title="📁 Documents" subtitle={cycleDocs.showCycleTabs ? "This intake" : undefined} href="/portal/documents" linkLabel="Open">
           <div data-kpi="documents">
             {docs.total === 0 ? (
               <NoData>Your document list is being prepared.</NoData>
@@ -195,7 +279,7 @@ export default async function PortalDashboardPage() {
           </div>
         </ChartCard>
 
-        <ChartCard title="Payments" href="/portal/payments" linkLabel="Open">
+        <ChartCard title="💳 Payments" href="/portal/payments" linkLabel="Open">
           <div data-kpi="payments">
             {!money || money.total === 0 ? (
               <NoData>No invoice yet.</NoData>
@@ -216,7 +300,7 @@ export default async function PortalDashboardPage() {
           </div>
         </ChartCard>
 
-        <ChartCard title="Profile" href="/portal/profile" linkLabel="Open">
+        <ChartCard title="👤 Profile" href="/portal/profile" linkLabel="Open">
           <div data-kpi="profile">
             <ProgressRing
               value={profileDone}
@@ -236,11 +320,11 @@ export default async function PortalDashboardPage() {
           </div>
         </ChartCard>
 
-        <ChartCard title="Next appointment" href="/portal/appointments" linkLabel="All">
+        <ChartCard title="📅 Next appointment" href="/portal/appointments" linkLabel="All">
           <div data-kpi="appointment" className="flex flex-1 flex-col items-center justify-center gap-1 text-center">
             {nextAppointment ? (
               <>
-                <p className="text-4xl font-bold leading-none text-primary">
+                <p className="bg-hero bg-clip-text text-5xl font-bold leading-none text-transparent">
                   {summary.daysToAppointment === 0 ? "Today" : summary.daysToAppointment}
                 </p>
                 {summary.daysToAppointment !== 0 && (
@@ -256,12 +340,39 @@ export default async function PortalDashboardPage() {
         </ChartCard>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      {/* --------------------------------------------------- each country */}
+      {countries.length > 0 && (
+        <section className="flex flex-col gap-3" data-destinations>
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <h3 className="text-base font-semibold text-ink">{countries.length === 1 ? "Your country" : "Your countries"}</h3>
+              <p className="text-xs text-muted">
+                {backups > 0
+                  ? "Your primary country and each backup, step by step. They run side by side, so each has its own bar."
+                  : "Each step of your process, kept up to date by your counsellor."}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-4">
+            {countries.map((row) => (
+              <DestinationStatusCard key={row.destinationId} row={row} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Everything outstanding — documents, money, appointments, replies —
             each computed by the helper its own page uses. */}
         <PortalAttention summary={summary} className="h-full" />
         <ChartCard
-          title="Your applications by stage"
+          title="⏳ Coming up"
+          subtitle={timeline[0] ? `Next: ${timeline[0].label}, ${daysLeftLabel(timeline[0].daysLeft)}` : "Deadlines, payments and appointments"}
+        >
+          <UpcomingTimeline entries={timeline} />
+        </ChartCard>
+        <ChartCard
+          title="🏛️ Your applications by stage"
           subtitle={`${apps.length} application${apps.length === 1 ? "" : "s"}`}
           href="/portal/applications"
           linkLabel="View applications"
@@ -278,81 +389,55 @@ export default async function PortalDashboardPage() {
         </ChartCard>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <ChartCard
-          title="Coming up"
-          subtitle={timeline[0] ? `Next: ${timeline[0].label}, ${daysLeftLabel(timeline[0].daysLeft)}` : "Deadlines, payments and appointments"}
-          className="lg:col-span-2"
-        >
-          <UpcomingTimeline entries={timeline} />
-        </ChartCard>
-
-        {/* Both people who look after them: the counsellor who guides the
-            plan, and the processing officer who files the applications and
-            the visa. Either may not be assigned yet, and says so. */}
-        <ChartCard title="Your HMARK team">
-          <div className="flex flex-col gap-4" data-team>
-            <TeamMember person={counselor} role="Your counsellor" pending="A counsellor will be assigned to you shortly." marker="counsellor" />
-            <TeamMember
-              person={processingOfficer}
-              role="Your processing officer"
-              pending="A processing officer is assigned once your applications begin."
-              marker="processing-officer"
-            />
-            <div className="flex flex-wrap gap-2 border-t border-border pt-3">
-              <a href={WHATSAPP_LINK} className="rounded-md border border-primary px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10">
+      {/* ---------------------------------------------------------- the team
+          Both people who look after them, as the staff Dashboard shows them
+          to a colleague: the counsellor who guides the plan, and the
+          processing officer who files the applications and the visa. Either
+          may not be assigned yet, and says so. */}
+      <section className="flex flex-col gap-3" data-team>
+        <div>
+          <h3 className="text-base font-semibold text-ink">Your HMARK team</h3>
+          <p className="text-xs text-muted">The people looking after you — call, email or message them any time.</p>
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <TeamCard
+            person={team.counsellor}
+            role="Your counsellor"
+            blurb="Guides your whole plan — universities, documents, your agreement and any question along the way."
+            pending="A counsellor will be assigned to you shortly."
+            marker="counsellor"
+          />
+          <TeamCard
+            person={team.processingOfficer}
+            role="Your processing officer"
+            blurb="Files your applications and your visa, and keeps every deadline on track."
+            pending="Your applications are handled by the HMARK processing team until an officer is named for you."
+            marker="processing-officer"
+          />
+          <div className="relative flex flex-col justify-between gap-4 overflow-hidden rounded-2xl border border-border bg-card p-5 md:col-span-2 xl:col-span-1" data-lift>
+            <span aria-hidden className="pointer-events-none absolute -right-12 -top-12 h-36 w-36 rounded-full bg-primary/10" />
+            <div className="relative">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">Other ways to reach us</p>
+              <p className="mt-1 text-base font-semibold text-ink">We are one message away</p>
+              <p className="mt-1 text-xs text-muted">
+                Messages reach your counsellor in the office. For anything that needs looking into, raise a support ticket and we will
+                keep you posted there.
+              </p>
+            </div>
+            <div className="relative flex flex-wrap gap-2">
+              <a href={WHATSAPP_LINK} className="bg-hero inline-flex w-fit items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-primary/25 hover:opacity-95">
                 💬 WhatsApp HMARK
               </a>
-              <Link href="/portal/messages" className="rounded-md border border-border px-3 py-1.5 text-xs text-ink hover:bg-bg">
+              <Link href="/portal/messages" className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-ink hover:border-primary hover:text-primary">
                 ✉️ Message
+              </Link>
+              <Link href="/portal/support" className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-ink hover:border-primary hover:text-primary">
+                🎧 Support
               </Link>
             </div>
           </div>
-        </ChartCard>
-      </div>
-    </div>
-  );
-}
-
-type TeamPerson = { full_name?: string | null; designation?: string | null; mobile_official?: string | null } | null;
-
-/** One of the student's two people: initials, name, what they do, and a number to tap. */
-function TeamMember({ person, role, pending, marker }: { person: TeamPerson; role: string; pending: string; marker: string }) {
-  if (!person?.full_name) {
-    return (
-      <div className="flex items-center gap-3" data-team-member={marker} data-assigned="no">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-dashed border-border text-lg text-muted">?</span>
-        <span className="min-w-0">
-          <span className="block text-xs font-medium uppercase tracking-wide text-muted">{role}</span>
-          <span className="block text-xs text-muted">{pending}</span>
-        </span>
-      </div>
-    );
-  }
-  const initials = person.full_name
-    .split(" ")
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join("");
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3" data-team-member={marker} data-assigned="yes">
-      <div className="flex min-w-0 items-center gap-3">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/15 text-base font-semibold text-primary">{initials}</span>
-        <span className="min-w-0">
-          <span className="block text-[11px] font-medium uppercase tracking-wide text-muted">{role}</span>
-          <span className="block text-sm font-medium text-ink">{person.full_name}</span>
-          {person.designation && <span className="block text-xs text-muted">{person.designation}</span>}
-        </span>
-      </div>
-      {/* Tappable: a student on a phone should not copy a number out by hand. */}
-      {person.mobile_official && (
-        <a
-          href={`tel:${person.mobile_official.replace(/[^+\d]/g, "")}`}
-          className="rounded-md border border-border px-3 py-1.5 text-xs text-ink hover:bg-bg"
-        >
-          📞 {person.mobile_official}
-        </a>
-      )}
+        </div>
+      </section>
     </div>
   );
 }

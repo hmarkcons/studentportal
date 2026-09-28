@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
-import { EmptyState } from "@/components/ui/EmptyState";
 import { Badge } from "@/components/ui/Badge";
+import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
+import { PortalEmpty } from "@/components/studentPortal/PortalEmpty";
 import { approvedVisaDestinations } from "@/lib/studentVisaApproval";
 import { TravelChecklist, type TravelSection } from "./TravelChecklist";
 
@@ -34,13 +35,13 @@ export default async function PortalTravelPage() {
     // refused does not need a second page telling them so — and this page is
     // not in their menu, so they only reach it by typing the address.
     return (
-      <div className="w-full">
-        <h2 className="mb-1 text-lg font-semibold text-ink">Travel &amp; Arrival</h2>
+      <div className="flex w-full flex-col gap-6" data-portal-page>
+        <PortalPageHeader icon="✈️" title="Travel & Arrival" description="What to carry, and what to do in your first days after you land." />
         <Card>
-          <EmptyState>
+          <PortalEmpty icon="🧳">
             This is where your travel checklist will appear — what to carry, and what to do in your first days after you
             land. It opens once your visa has been issued.
-          </EmptyState>
+          </PortalEmpty>
         </Card>
       </div>
     );
@@ -84,27 +85,27 @@ export default async function PortalTravelPage() {
   const withGuides = approved.filter((a) => (byDestination.get(a.destinationId)?.length ?? 0) > 0);
 
   return (
-    <div className="w-full">
-      <div className="mb-4">
-        <h2 className="mb-1 text-lg font-semibold text-ink">Travel &amp; Arrival</h2>
-        <p className="text-sm text-muted">
-          Your visa is issued — congratulations. This is what to carry with you and what to do once you land. Tick things
-          off as you go; it saves as you tick, and your counsellor can see where you are up to.
-        </p>
-      </div>
+    <div className="flex w-full flex-col gap-6" data-portal-page>
+      <PortalPageHeader
+        icon="✈️"
+        eyebrow="🎉 Your visa is issued — congratulations"
+        title="Travel & Arrival"
+        description="This is what to carry with you and what to do once you land. Tick things off as you go; it saves as you tick, and your counsellor can see where you are up to."
+      />
 
       {withGuides.length === 0 ? (
         <Card>
-          <EmptyState>
+          <PortalEmpty icon="🧳" title="Your checklist is on its way">
             Your counsellor is putting your arrival checklist together. It will appear here shortly — ask them directly
             if you are travelling soon.
-          </EmptyState>
+          </PortalEmpty>
         </Card>
       ) : (
         <div className="flex flex-col gap-8">
           {withGuides.map((a) => (
             <div key={a.destinationId}>
               <div className="mb-3 flex flex-wrap items-center gap-2">
+                <span aria-hidden className="text-lg">🌍</span>
                 <h3 className="text-base font-semibold text-ink">{a.country}</h3>
                 {a.university && <span className="text-xs text-muted">{a.university}</span>}
                 <Badge tone="success">Visa issued</Badge>
@@ -115,8 +116,8 @@ export default async function PortalTravelPage() {
         </div>
       )}
 
-      <p className="mt-6 text-xs text-muted">
-        Rules change. If anything here does not match what an official tells you, believe the official — and tell your
+      <p className="rounded-xl border border-border bg-card px-4 py-3 text-xs text-muted">
+        ℹ️ Rules change. If anything here does not match what an official tells you, believe the official — and tell your
         counsellor so we can correct it for the students coming after you.
       </p>
     </div>

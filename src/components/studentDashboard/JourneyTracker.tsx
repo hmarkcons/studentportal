@@ -15,13 +15,13 @@ export function JourneyTracker({ journey }: { journey: Journey }) {
       <div className="flex flex-col gap-5" data-journey>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Your journey</h3>
-          <p className="text-base font-semibold text-ink">
+          <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">Your journey</h3>
+          <p className="text-lg font-semibold tracking-tight text-ink">
             {next ? (next.state === "blocked" ? `Stopped at ${next.label}` : `Now: ${next.label}`) : "Every step is done — safe travels!"}
           </p>
         </div>
         <div className="text-right">
-          <p className="text-3xl font-bold leading-none text-primary" data-journey-percent>
+          <p className="bg-hero bg-clip-text text-4xl font-bold leading-none text-transparent" data-journey-percent>
             {percent}%
           </p>
           <p className="text-xs text-muted">
@@ -30,8 +30,8 @@ export function JourneyTracker({ journey }: { journey: Journey }) {
         </div>
       </div>
 
-      <div className="h-2 w-full overflow-hidden rounded-full bg-border" aria-hidden>
-        <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${percent}%` }} />
+      <div className="h-2.5 w-full overflow-hidden rounded-full bg-border" aria-hidden>
+        <div className="bg-hero h-full rounded-full transition-all duration-700" style={{ width: `${percent}%` }} />
       </div>
 
       <ol className="grid grid-cols-1 gap-5 lg:grid-cols-7 lg:gap-2">
@@ -42,8 +42,8 @@ export function JourneyTracker({ journey }: { journey: Journey }) {
 
       {next && (
         <div
-          className={`flex flex-wrap items-center justify-between gap-3 rounded-md px-4 py-3 ${
-            next.state === "blocked" ? "bg-danger-bg" : "bg-primary/10"
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl px-4 py-3 ${
+            next.state === "blocked" ? "bg-danger-bg" : "bg-primary/10 ring-1 ring-primary/20"
           }`}
           data-journey-next
         >
@@ -53,7 +53,7 @@ export function JourneyTracker({ journey }: { journey: Journey }) {
           {next.href && (
             <Link
               href={next.href}
-              className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-ink hover:opacity-90"
+              className="bg-hero rounded-lg px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm shadow-primary/25 hover:opacity-95"
             >
               Continue →
             </Link>
@@ -68,13 +68,13 @@ export function JourneyTracker({ journey }: { journey: Journey }) {
 function Step({ step, index, last, nextDone }: { step: JourneyStep; index: number; last: boolean; nextDone: boolean }) {
   const circle =
     step.state === "done"
-      ? "bg-success text-white border-success"
+      ? "bg-hero text-white border-transparent shadow-sm shadow-primary/30"
       : step.state === "current"
         ? "bg-card text-primary border-primary ring-4 ring-primary/15"
         : step.state === "blocked"
           ? "bg-danger text-white border-danger"
           : "bg-card text-muted border-border";
-  const connector = step.state === "done" && nextDone ? "bg-success" : "bg-border";
+  const connector = step.state === "done" && nextDone ? "bg-primary" : "bg-border";
   const mark = step.state === "done" ? "✓" : step.state === "blocked" ? "!" : String(index + 1);
 
   return (

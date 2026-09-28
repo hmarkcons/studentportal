@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { EmptyState } from "@/components/ui/EmptyState";
+import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
+import { PortalEmpty } from "@/components/studentPortal/PortalEmpty";
 import { formatDateOnly } from "@/lib/formatDate";
 import { SubmitSignedAgreementForm } from "./SubmitSignedAgreementForm";
 import { evaluateAgreementGate } from "@/lib/portalGate";
@@ -88,21 +89,32 @@ export default async function PortalAgreementPage() {
   // A draft is still being prepared by the office; only one sent to be signed is worth a line.
   const awaitingPaper = (agreements ?? []).filter((a) => a.signing_method === "paper" && a.status === "pending_signature");
 
+  const inForce = signedGroups.reduce((n, g) => n + g.versions.filter((v) => v.current).length, 0);
+
   return (
-    <div className="w-full">
-      <h2 className="mb-1 text-lg font-semibold text-ink">Your agreement</h2>
-      <p className="mb-4 text-sm text-muted">
-        Your signed agreement with HMARK Consultants. Where one was corrected, the earlier version is kept below it for your
-        records, marked as replaced.
-      </p>
+    <div className="flex w-full flex-col gap-6" data-portal-page>
+      <PortalPageHeader
+        icon="📄"
+        title="Your agreement"
+        description="Your signed agreement with HMARK Consultants. Where one was corrected, the earlier version is kept below it for your records, marked as replaced."
+        aside={
+          inForce > 0 ? (
+            <Badge tone="success">
+              ✍️ {inForce} signed agreement{inForce === 1 ? "" : "s"} in force
+            </Badge>
+          ) : awaitingESignature.length > 0 ? (
+            <Badge tone="warning">Waiting for your signature</Badge>
+          ) : undefined
+        }
+      />
 
       {/* Two different reasons the portal is held back, and telling a student
           to upload something they have already uploaded would be worse than
           saying nothing. When staff take an approval back the student has
           nothing to do: the files are still on file, and the wait is ours. */}
       {gate.locked && gate.reason === "awaiting_reverification" && (
-        <Card className="mb-4 bg-warning-bg">
-          <h3 className="mb-1 text-sm font-semibold text-warning">We are checking your agreement again</h3>
+        <Card className="border-warning/30 bg-warning-bg">
+          <h3 className="mb-1 text-sm font-semibold text-warning">🔎 We are checking your agreement again</h3>
           <p className="mb-2 text-sm text-warning">
             Your signed agreement and consent video are both with us — nothing is missing and there is nothing for you to
             send. Someone at HMARK is reviewing them once more, and the rest of your portal opens again as soon as that is
@@ -116,8 +128,8 @@ export default async function PortalAgreementPage() {
       )}
 
       {gate.locked && gate.reason === "awaiting_submission" && (
-        <Card className="mb-4 bg-warning-bg">
-          <h3 className="mb-1 text-sm font-semibold text-warning">Two things to do before your portal opens</h3>
+        <Card className="border-warning/30 bg-warning-bg">
+          <h3 className="mb-1 text-sm font-semibold text-warning">🔓 Two things to do before your portal opens</h3>
           <p className="mb-2 text-sm text-warning">
             Because you are signing outside Karachi, we need your e-signed agreement and a short video of you confirming
             you signed it. Until both are here, the rest of your portal stays locked.
@@ -142,8 +154,10 @@ export default async function PortalAgreementPage() {
           except the one an electronic signer has to download, sign and send
           back, which is the only way they can sign it. */}
       {awaitingESignature.length > 0 && (
-        <section className="mb-6 flex flex-col gap-3" data-awaiting-signature>
-          <h3 className="text-sm font-semibold text-ink">Waiting for your signature</h3>
+        <section className="flex flex-col gap-3" data-awaiting-signature>
+          <h3 className="flex items-center gap-2 text-base font-semibold text-ink">
+            <span aria-hidden>🖊️</span> Waiting for your signature
+          </h3>
           <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-2">
             {awaitingESignature.map((a) => {
               const awaitingReview = Boolean(a.signed_file_path && a.video_recording_path);
@@ -158,7 +172,7 @@ export default async function PortalAgreementPage() {
                       href={generated.get(a.id)}
                       target="_blank"
                       rel="noreferrer"
-                      className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                      className="bg-hero mt-3 inline-flex w-fit items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-primary/25 hover:opacity-95"
                     >
                       📄 Download to sign
                     </a>
@@ -214,7 +228,8 @@ export default async function PortalAgreementPage() {
       )}
 
       {awaitingPaper.length > 0 && (
-        <p className="mb-6 rounded-md border border-border bg-card px-4 py-3 text-sm text-muted" data-awaiting-paper>
+        <p className="flex items-start gap-2.5 rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted" data-awaiting-paper>
+          <span aria-hidden className="text-base leading-none">🏢</span>
           Your agreement for {awaitingPaper.map(countryOf).join(" and ")} is signed in person at the Karachi office — your
           counsellor will arrange it. Your signed copy appears here once it is filed.
         </p>
@@ -224,29 +239,32 @@ export default async function PortalAgreementPage() {
         <section className="flex flex-col gap-5" data-signed-agreements>
           {signedGroups.map((g) => (
             <div key={`${g.country}-${g.backup}`} className="flex flex-col gap-3">
-              <h3 className="text-sm font-semibold text-ink">
+              <h3 className="flex flex-wrap items-center gap-2 text-base font-semibold text-ink">
+                <span aria-hidden>🌍</span>
                 {g.country}
-                {g.backup && <span className="ml-2 text-xs font-normal text-muted">backup country</span>}
+                {g.backup && <Badge tone="info">backup country</Badge>}
               </h3>
               <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-2">
                 {g.versions.map((v) => (
-                  <Card key={v.id}>
+                  <Card key={v.id} className={`relative overflow-hidden ${v.current ? "" : "opacity-90"}`}>
+                    <span aria-hidden className={`absolute inset-y-0 left-0 w-1.5 ${v.current ? "bg-hero" : "bg-border"}`} />
                     <div className="flex flex-col gap-2" data-signed-version={v.number} data-current={v.current ? "yes" : "no"}>
                       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-                        <p className="text-sm text-ink">
+                        <p className="text-sm font-medium text-ink">
+                          <span aria-hidden className="mr-1.5">{v.current ? "✅" : "🗄️"}</span>
                           {v.of > 1 ? `Version ${v.number} of ${v.of} · ` : ""}signed {formatDateOnly(v.signedOn, LONG_DATE)}
                         </p>
                         {v.current ? <Badge tone="success">In force</Badge> : <Badge tone="neutral">Replaced</Badge>}
                       </div>
                       {v.replaces && (
-                        <p className="text-xs text-success">
+                        <p className="rounded-lg bg-success-bg px-3 py-2 text-xs text-success">
                           This is the corrected agreement. It replaces version {v.replaces.number}, signed{" "}
                           {formatDateOnly(v.replaces.signedOn, LONG_DATE)}, which contained mistakes — this is the one that
                           applies.
                         </p>
                       )}
                       {v.replacedBy && (
-                        <p className="text-xs text-warning">
+                        <p className="rounded-lg bg-warning-bg px-3 py-2 text-xs text-warning">
                           This version contained mistakes and was replaced by version {v.replacedBy.number}, signed{" "}
                           {formatDateOnly(v.replacedBy.signedOn, LONG_DATE)}. It is kept for your records only — please refer
                           to version {v.replacedBy.number}.
@@ -257,8 +275,10 @@ export default async function PortalAgreementPage() {
                           href={signed.get(v.id)}
                           target="_blank"
                           rel="noreferrer"
-                          className={`inline-flex w-fit items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
-                            v.current ? "border-primary text-primary hover:bg-primary/10" : "border-border text-muted hover:bg-bg"
+                          className={`inline-flex w-fit items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                            v.current
+                              ? "bg-hero text-white shadow-sm shadow-primary/25 hover:opacity-95"
+                              : "border border-border text-muted hover:bg-bg"
                           }`}
                         >
                           ✍️ View your signed copy
@@ -277,10 +297,9 @@ export default async function PortalAgreementPage() {
 
       {signedGroups.length === 0 && awaitingESignature.length === 0 && awaitingPaper.length === 0 && (
         <Card>
-          <EmptyState>
-            No signed agreement yet. Your counsellor prepares it once your registration is confirmed, and your signed copy
-            appears here.
-          </EmptyState>
+          <PortalEmpty icon="📄" title="No signed agreement yet">
+            Your counsellor prepares it once your registration is confirmed, and your signed copy appears here.
+          </PortalEmpty>
         </Card>
       )}
     </div>
