@@ -303,18 +303,23 @@ export async function updateChecklistItem(templateId: string, _prevState: unknow
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return { error: "Give the requirement a name." };
 
-  const { error: updateError } = await supabase
+  const { data: updated, error: updateError } = await supabase
     .from("document_templates")
     .update({
       name,
-      description: String(formData.get("description") ?? "").trim() || null,
+      // Not the description: that is the guide's short note now, written in
+      // the guide editor (0300). This form never had a field for it, so saving
+      // a requirement's name or ticks used to wipe its note.
       required: formData.get("required") !== "off",
       level: String(formData.get("level") ?? "all"),
       renew_each_intake: formData.get("renew_each_intake") === "on",
       skip_for_visa_only: formData.get("skip_for_visa_only") === "on",
     })
-    .eq("id", templateId);
+    .eq("id", templateId)
+    .select("id");
   if (updateError) return { error: updateError.message };
+  // Asked for back: an update RLS refuses matches nothing and raises nothing.
+  if (!updated?.length) return { error: "It wasn't saved — only Super Admin and Processing can change the checklist." };
 
   revalidatePath(REVALIDATE);
   return { success: true };

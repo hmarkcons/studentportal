@@ -16,6 +16,8 @@ import { uploadedLine, reviewedLine, addedLine, type UploaderRole } from "@/lib/
 import { DocumentHistory, type ArchivedUpload } from "@/components/DocumentHistory";
 import { DocumentSectionShell, ExpandAllToggle } from "@/components/DocumentSectionShell";
 import { FileField } from "@/components/FileField";
+import { DocumentGuidePanel, DocumentGuideToggle, guideHasMore } from "@/components/DocumentGuide";
+import type { ResolvedGuide } from "@/lib/documentGuides";
 
 export type DocRow = {
   id: string;
@@ -45,8 +47,11 @@ function UploadRow({
   revalidateTo,
   number,
   canManage,
+  guide = null,
 }: {
   doc: DocRow;
+  /** The guide the student reads for it (0300) — the same words, to talk them through. */
+  guide?: ResolvedGuide | null;
   studentId: string;
   revalidateTo: string;
   /** Whether this viewer may delete the requirement (and its file). */
@@ -71,6 +76,9 @@ function UploadRow({
 
   const isVerified = doc.status === "verified";
   const showUploadForm = !isVerified || showReplace;
+  const hasMore = guideHasMore(guide);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const guideId = `staff-guide-${doc.id}`;
 
   function review(status: "verified" | "rejected") {
     const button = status === "verified" ? accept : reject;
@@ -92,12 +100,18 @@ function UploadRow({
     // Accept/reason/Reject/delete cluster need ~600px between them, and at
     // 768px the sidebar leaves the content column narrower than it is at
     // 767px — so switching at sm overflowed exactly where room is tightest.
-    <div className="flex flex-col gap-2 py-3 lg:flex-row lg:items-center lg:justify-between">
+    <div className="flex flex-col gap-2 py-3" data-document-row={doc.id}>
+    <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
       <div className="min-w-[180px] flex-1">
         <p className="text-sm text-ink">
           {number && <span className="mr-1.5 font-mono text-xs text-muted">{number}</span>}
           {doc.name ?? doc.category ?? "Document"}
         </p>
+        {guide?.note && (
+          <p className="mt-0.5 text-xs text-muted" data-guide-note>
+            {guide.note}
+          </p>
+        )}
         <div className="mt-1 flex items-center gap-2">
           <Badge tone={DOCUMENT_STATUS_TONE[doc.status] ?? "neutral"}>{DOCUMENT_STATUS_LABELS[doc.status] ?? doc.status.replace("_", " ")}</Badge>
           {doc.deadline && <span className="text-xs text-muted">Due {formatDateOnly(doc.deadline)}</span>}
@@ -139,6 +153,11 @@ function UploadRow({
             to overwrite what it replaced, so the thing staff rejected — the
             evidence of why — was gone. */}
         <DocumentHistory versions={doc.history ?? []} audience="staff" />
+        {hasMore && (
+          <div className="mt-1">
+            <DocumentGuideToggle open={guideOpen} onToggle={() => setGuideOpen((o) => !o)} controls={guideId} />
+          </div>
+        )}
       </div>
 
       {showUploadForm ? (
@@ -208,6 +227,19 @@ function UploadRow({
       </div>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </div>
+      {guide && hasMore && guideOpen && (
+        <div className="flex flex-col gap-1">
+          <DocumentGuidePanel id={guideId} guide={guide} title={doc.name ?? "this document"} />
+          <p className="text-[11px] text-muted">
+            What the student reads for this document. Written in{" "}
+            <a href="/setup/create-doc-checklist" className="text-primary hover:underline">
+              Setup › Create Doc Checklist
+            </a>
+            .
+          </p>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -275,8 +307,11 @@ export function DocumentChecklist({
   canManage = false,
   sections,
   emptySections = "all",
+  guides = {},
 }: {
   docs: DocRow[];
+  /** Each document's guide by its id (loadDocumentGuides), as the student reads it. */
+  guides?: Record<string, ResolvedGuide>;
   studentId: string;
   applicationId?: string | null;
   revalidateTo: string;
@@ -389,6 +424,7 @@ export function DocumentChecklist({
                         revalidateTo={revalidateTo}
                         number={`${n}.${j + 1}`}
                         canManage={canManage}
+                        guide={guides[doc.id] ?? null}
                       />
                     ))}
                     {section.docs.length === 0 && (

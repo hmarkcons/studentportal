@@ -1,6 +1,9 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { ConfirmedUploadForm } from "@/components/ConfirmedUploadForm";
+import { DocumentGuidePanel, DocumentGuideToggle, guideHasMore } from "@/components/DocumentGuide";
+import type { ResolvedGuide } from "@/lib/documentGuides";
 import { CircleCheck, Eye, Hourglass, ScanSearch, Undo2, Upload, type LucideIcon } from "lucide-react";
 import { DocumentHistory, type ArchivedUpload } from "@/components/DocumentHistory";
 import { studentUploadDocument } from "@/lib/actions/portal-documents";
@@ -27,6 +30,8 @@ export function PortalDocumentRow({
   revalidateTo,
   number,
   readOnly = false,
+  guide = null,
+  guideOpenInitially = false,
 }: {
   doc: {
     id: string;
@@ -48,6 +53,10 @@ export function PortalDocumentRow({
   number?: string;
   /** A closed intake: readable, but nothing new can be sent against it. */
   readOnly?: boolean;
+  /** How to prepare it, written in the checklist builder (0300). */
+  guide?: ResolvedGuide | null;
+  /** Opened, and scrolled to, on arrival — the dashboard's to-dos link here. */
+  guideOpenInitially?: boolean;
 }) {
   const action = studentUploadDocument.bind(null, doc.id, studentId, revalidateTo);
 
@@ -56,8 +65,20 @@ export function PortalDocumentRow({
   const today = new Date().toISOString().slice(0, 10);
   const overdue = doc.status !== "verified" && doc.deadline && doc.deadline < today;
 
+  // The guide opens under the row, beside the upload it is for. Open on
+  // arrival when a link asked for it, and brought into view.
+  const hasMore = guideHasMore(guide);
+  const [guideOpen, setGuideOpen] = useState(guideOpenInitially && hasMore);
+  const rowRef = useRef<HTMLDivElement>(null);
+  const guideId = `guide-${doc.id}`;
+  useEffect(() => {
+    if (guideOpenInitially) rowRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [guideOpenInitially]);
+  const title = doc.custom_name ?? doc.category ?? "this document";
+
   return (
-    <div className="flex flex-col gap-2 py-3.5 sm:flex-row sm:items-start sm:justify-between">
+    <div ref={rowRef} id={`doc-${doc.id}`} className="flex scroll-mt-24 flex-col gap-3 py-3.5" data-document-row={doc.id}>
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
       <div className="flex min-w-0 items-start gap-3">
       <span
         aria-hidden
@@ -73,6 +94,12 @@ export function PortalDocumentRow({
           {number && <span className="mr-1.5 font-mono text-xs font-normal text-muted">{number}</span>}
           {doc.custom_name ?? doc.category ?? "Document"}
         </p>
+        {/* The guide's short note, where the student reads the name. */}
+        {guide?.note && (
+          <p className="mt-0.5 text-[13px] leading-snug text-muted" data-guide-note>
+            {guide.note}
+          </p>
+        )}
         <div className="mt-1 flex flex-wrap items-center gap-2">
           {/* The stored value is "verified"; everyone reads it as Approved,
               which is the word on the button staff press. This row used to
@@ -112,11 +139,31 @@ export function PortalDocumentRow({
         </div>
 
         {doc.status === "rejected" && (
-          <p className="mt-1 text-xs text-danger">
+          <p className="mt-1 text-xs text-danger" data-rejected-reason>
             {doc.rejected_reason
               ? `Sent back: ${doc.rejected_reason}`
               : "Sent back — ask your counsellor what needs changing, then upload a replacement."}
+            {/* The moment a student most needs to know what a correct one looks like. */}
+            {hasMore && !guideOpen && (
+              <>
+                {" "}
+                <button
+                  type="button"
+                  onClick={() => setGuideOpen(true)}
+                  aria-controls={guideId}
+                  className="font-semibold text-primary underline underline-offset-2"
+                  data-guide-from-rejection
+                >
+                  Read how to prepare it before you upload again
+                </button>
+              </>
+            )}
           </p>
+        )}
+        {hasMore && (
+          <div className="mt-1.5">
+            <DocumentGuideToggle open={guideOpen} onToggle={() => setGuideOpen((o) => !o)} controls={guideId} />
+          </div>
         )}
       </div>
       </div>
@@ -138,6 +185,8 @@ export function PortalDocumentRow({
           className="sm:shrink-0"
         />
       )}
+    </div>
+      {guide && hasMore && guideOpen && <DocumentGuidePanel id={guideId} guide={guide} title={title} />}
     </div>
   );
 }

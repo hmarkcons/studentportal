@@ -1,4 +1,5 @@
 import { loadDocumentHistory } from "@/lib/documentHistory";
+import { loadDocumentGuides } from "@/lib/documentGuides";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -180,7 +181,10 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
     return Array.isArray(v) ? v[0] ?? null : v;
   }
 
-  const docHistory = await loadDocumentHistory(supabase, (rawDocs ?? []).map((d) => d.id));
+  const [docHistory, guides] = await Promise.all([
+    loadDocumentHistory(supabase, (rawDocs ?? []).map((d) => d.id)),
+    loadDocumentGuides(supabase, id, rawDocs ?? []),
+  ]);
 
   const docsWithUrls = await Promise.all(
     (rawDocs ?? []).map(async (d) => {
@@ -323,6 +327,7 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
           revalidateTo={revalidateTo}
           sections={sections}
           canManage={canManage}
+          guides={guides}
           // A university's own document ask belongs in Admission Documents,
           // which is where the brief puts it and where it then shows on the
           // student's Documents tab too. The other sections appear here only

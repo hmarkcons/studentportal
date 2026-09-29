@@ -126,8 +126,8 @@ export default async function PortalCalendarPage(props: { searchParams: Promise<
         kind: "document",
         date: d.deadline,
         title: `Upload ${d.custom_name ?? template?.name ?? "a document"}`,
-        href: "/portal/documents",
-        hrefLabel: "Open Documents",
+        href: `/portal/documents?guide=${d.id}`,
+        hrefLabel: "Open it, with how to prepare it",
         origin: d.status === "rejected" ? "It was sent back — upload a new copy by this date." : "Upload it by this date.",
       })
     );

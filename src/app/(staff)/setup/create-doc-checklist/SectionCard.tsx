@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { ChevronDown, ChevronUp, GripVertical } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronUp, GripVertical } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { ChecklistHeading } from "./ChecklistHeading";
 import { Button } from "@/components/ui/Button";
@@ -17,6 +17,7 @@ import {
 } from "@/lib/actions/documentChecklistBuilder";
 import { STUDY_LEVELS } from "@/lib/constants";
 import { toast } from "@/lib/toast";
+import { GuideEditor, guideIsWritten, type EditableGuide } from "./GuideEditor";
 
 export type BuilderItem = {
   id: string;
@@ -29,12 +30,17 @@ export type BuilderItem = {
   renewEachIntake: boolean;
   /** Not asked of a visa-only client (0280). */
   skipForVisaOnly: boolean;
+  /** How the student prepares it (0300). */
+  guide: EditableGuide;
+  /** This destination's note beneath a shared requirement's guide. */
+  countryNote: string | null;
 };
 
 type Section = { key: string; label: string; items: BuilderItem[] };
 
 export function SectionCard({
   destinationId,
+  destinationLabel,
   isAllDestinations,
   section,
   isFirst,
@@ -48,6 +54,8 @@ export function SectionCard({
   onError,
 }: {
   destinationId: string | null;
+  /** The checklist's name — a country's note is labelled with it. */
+  destinationLabel: string;
   isAllDestinations: boolean;
   section: Section;
   isFirst: boolean;
@@ -64,6 +72,8 @@ export function SectionCard({
   const [order, setOrder] = useState<string[]>(section.items.map((i) => i.id));
   const [draggingItem, setDraggingItem] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
+  // Whose guide is open for writing, under its requirement.
+  const [guideFor, setGuideFor] = useState<string | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [label, setLabel] = useState(section.label);
   const [adding, setAdding] = useState(false);
@@ -231,7 +241,7 @@ export function SectionCard({
         {items.map((item, index) => (
           <div
             key={item.id}
-            draggable={!editing}
+            draggable={!editing && !guideFor}
             onDragStart={() => setDraggingItem(item.id)}
             onDragEnd={() => setDraggingItem(null)}
             onDragOver={(e) => e.preventDefault()}
@@ -332,6 +342,17 @@ export function SectionCard({
                   </button>
                   <button
                     type="button"
+                    onClick={() => setGuideFor(guideFor === item.id ? null : item.id)}
+                    aria-expanded={guideFor === item.id}
+                    className={`ml-1 inline-flex items-center gap-1 text-xs hover:underline ${guideIsWritten(item.guide) ? "font-medium text-success" : "text-primary"}`}
+                    title={guideIsWritten(item.guide) ? "Edit the guide students read for this document" : "Write a guide for students preparing this document"}
+                    data-guide-edit={item.id}
+                  >
+                    <BookOpen aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                    {guideIsWritten(item.guide) ? "Guide" : "Add guide"}
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setEditing(item.id)}
                     disabled={busy}
                     className="ml-1 text-xs text-primary hover:underline disabled:opacity-50"
@@ -364,6 +385,20 @@ export function SectionCard({
                   )}
                 </div>
               </>
+            )}
+            {guideFor === item.id && (
+              <div className="basis-full">
+                <GuideEditor
+                  target={{ templateId: item.id }}
+                  name={item.name}
+                  guide={item.guide}
+                  // A shared requirement's guide is written once, on All
+                  // destinations; a country adds a note beneath it.
+                  country={destinationId && item.isShared ? { destinationId, label: destinationLabel, note: item.countryNote } : null}
+                  sharedReadOnly={Boolean(destinationId && item.isShared)}
+                  onClose={() => setGuideFor(null)}
+                />
+              </div>
             )}
           </div>
         ))}

@@ -15,6 +15,7 @@ import {
   includeSharedItem,
 } from "@/lib/actions/documentChecklistBuilder";
 import { SectionCard, type BuilderItem } from "./SectionCard";
+import { ProfileGuides, type ProfileGuideEntry } from "./ProfileGuides";
 
 export type PaletteEntry = { key: string; label: string; isPredefined: boolean; inUse: boolean };
 export type BuilderSection = { key: string; label: string; items: BuilderItem[] };
@@ -31,6 +32,7 @@ export function ChecklistBuilder({
   palette,
   sections,
   excludedItems,
+  profileGuides,
 }: {
   destinationId: string | null;
   destinationLabel: string;
@@ -38,6 +40,8 @@ export function ChecklistBuilder({
   palette: PaletteEntry[];
   sections: BuilderSection[];
   excludedItems: { id: string; name: string; category: string }[];
+  /** The guides of the documents a student's profile adds (0300). */
+  profileGuides: ProfileGuideEntry[];
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -237,6 +241,7 @@ export function ChecklistBuilder({
           <SectionCard
             key={section.key}
             destinationId={destinationId}
+            destinationLabel={destinationLabel}
             isAllDestinations={isAllDestinations}
             section={section}
             isFirst={index === 0}
@@ -277,6 +282,8 @@ export function ChecklistBuilder({
           </div>
         </Card>
       )}
+
+      <ProfileGuides entries={profileGuides} destinationId={destinationId} destinationLabel={destinationLabel} />
     </div>
   );
 }

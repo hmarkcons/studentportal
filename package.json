@@ -38,7 +38,8 @@
     "check:builder": "node scripts/verify-agreement-builder.mjs",
     "check:tables": "node scripts/verify-table-frames.mjs",
     "check:calendar": "node scripts/verify-calendar.mjs",
-    "check:autostages": "node scripts/verify-stage-automation.mjs"
+    "check:autostages": "node scripts/verify-stage-automation.mjs",
+    "check:docguides": "node scripts/verify-document-guides.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

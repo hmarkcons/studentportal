@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { loadDocumentHistory } from "@/lib/documentHistory";
+import { loadDocumentGuides } from "@/lib/documentGuides";
 import { documentUrls } from "@/lib/storageUrls";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
@@ -90,7 +91,11 @@ export default async function StudentDocumentsTab(props: {
 
   const appLabel = new Map((applications ?? []).map((a) => [a.id, one(a.university as never) as { name?: string } | null]));
 
-  const history = await loadDocumentHistory(supabase, docs.map((d) => d.id));
+  // The guide the student reads for each, so staff talk them through the same words (0300).
+  const [history, guides] = await Promise.all([
+    loadDocumentHistory(supabase, docs.map((d) => d.id)),
+    loadDocumentGuides(supabase, id, docs),
+  ]);
 
   // One request for every file's link, then a plain synchronous map.
   const docUrls = await documentUrls(supabase, docs.map((d) => d.file_path));
@@ -148,6 +153,7 @@ export default async function StudentDocumentsTab(props: {
           revalidateTo={`/students/${id}/documents${showCycleTabs && activeCycleId ? `?cycle=${activeCycleId}` : ""}`}
           sections={sections}
           canManage={canManage && !isPreviousIntake}
+          guides={guides}
         />
       </Card>
     </>

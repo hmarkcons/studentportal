@@ -6,6 +6,8 @@ import { resolveChecklist, type TemplateRow } from "@/lib/documentChecklist";
 import { ChecklistBuilder } from "./ChecklistBuilder";
 import { DestinationPicker } from "./DestinationPicker";
 import { ChecklistPageTitle } from "./ChecklistHeading";
+import { GUIDE_COLUMNS, PROFILE_GUIDE_KINDS, guideVideo, type StoredGuide } from "@/lib/documentGuide";
+import type { EditableGuide } from "./GuideEditor";
 
 export default async function CreateDocChecklistPage(props: {
   searchParams: Promise<{ destination?: string }>;
@@ -22,7 +24,7 @@ export default async function CreateDocChecklistPage(props: {
       supabase.from("destination_document_sections").select("destination_id, section_key, sort_order"),
       supabase
         .from("document_templates")
-        .select("id, destination_id, category, name, description, required, level, sort_order, renew_each_intake, skip_for_visa_only")
+        .select(`id, destination_id, category, name, required, level, sort_order, renew_each_intake, skip_for_visa_only, ${GUIDE_COLUMNS}`)
         .order("sort_order"),
     ]);
 
@@ -34,9 +36,38 @@ export default async function CreateDocChecklistPage(props: {
   const selectedDestination = selectedId ? (destinations ?? []).find((d) => d.id === selectedId) : null;
   const hasSelection = destination === "all" || Boolean(selectedDestination);
 
-  const { data: exclusions } = selectedId
-    ? await supabase.from("destination_document_exclusions").select("template_id").eq("destination_id", selectedId)
-    : { data: [] };
+  const [{ data: exclusions }, { data: profileRows }, { data: countryNotes }] = await Promise.all([
+    selectedId
+      ? supabase.from("destination_document_exclusions").select("template_id").eq("destination_id", selectedId)
+      : Promise.resolve({ data: [] as { template_id: string }[] }),
+    // The guides of the documents a profile adds, and this country's notes (0300).
+    supabase.from("profile_document_guides").select(`kind, ${GUIDE_COLUMNS}`),
+    selectedId
+      ? supabase.from("document_guide_country_notes").select("template_id, profile_kind, note").eq("destination_id", selectedId)
+      : Promise.resolve({ data: [] as { template_id: string | null; profile_kind: string | null; note: string }[] }),
+  ]);
+
+  // Current samples, signed for the editor's "current sample" link.
+  const stored = [...((templates ?? []) as unknown as StoredGuide[]), ...((profileRows ?? []) as unknown as StoredGuide[])];
+  const samples = [...new Set(stored.map((g) => g.sample_file_path).filter((v): v is string => Boolean(v)))];
+  const signed = new Map<string, string>();
+  await Promise.all(
+    samples.map(async (path) => {
+      const { data } = await supabase.storage.from("documents").createSignedUrl(path, 3600);
+      if (data?.signedUrl) signed.set(path, data.signedUrl);
+    })
+  );
+  const editable = (g: StoredGuide | undefined): EditableGuide => ({
+    note: g?.description ?? null,
+    body: g?.guide_body ?? null,
+    sampleName: g?.sample_file_path ? (g.sample_file_name ?? "Sample") : null,
+    sampleUrl: g?.sample_file_path ? (signed.get(g.sample_file_path) ?? null) : null,
+    videoUrl: g ? (guideVideo(g)?.watchUrl ?? null) : null,
+  });
+  const guideById = new Map(((templates ?? []) as unknown as (StoredGuide & { id: string })[]).map((t) => [t.id, t]));
+  const noteByTemplate = new Map((countryNotes ?? []).filter((n) => n.template_id).map((n) => [n.template_id as string, n.note]));
+  const noteByKind = new Map((countryNotes ?? []).filter((n) => n.profile_kind).map((n) => [n.profile_kind as string, n.note]));
+  const profileByKind = new Map(((profileRows ?? []) as unknown as (StoredGuide & { kind: string })[]).map((g) => [g.kind, g]));
 
   const checklist = hasSelection
     ? resolveChecklist({
@@ -103,6 +134,8 @@ export default async function CreateDocChecklistPage(props: {
               id: i.id,
               name: i.name,
               description: i.description ?? null,
+              guide: editable(guideById.get(i.id)),
+              countryNote: noteByTemplate.get(i.id) ?? null,
               required: i.required,
               level: i.level,
               isShared: i.isShared,
@@ -111,6 +144,13 @@ export default async function CreateDocChecklistPage(props: {
             })),
           }))}
           excludedItems={excludedItems.map((t) => ({ id: t.id, name: t.name, category: t.category }))}
+          profileGuides={PROFILE_GUIDE_KINDS.map((k) => ({
+            kind: k.kind,
+            label: k.label,
+            example: k.example,
+            guide: editable(profileByKind.get(k.kind)),
+            countryNote: noteByKind.get(k.kind) ?? null,
+          }))}
         />
       )}
     </div>

@@ -22,6 +22,7 @@ import { DocumentSectionShell, ExpandAllToggle } from "@/components/DocumentSect
  */
 export function DocumentSectionList({
   sections,
+  initiallyOpen,
 }: {
   sections: {
     key: string;
@@ -33,9 +34,11 @@ export function DocumentSectionList({
     rejected: number;
     content: React.ReactNode;
   }[];
+  /** A section to start open — the one a link to a document's guide points into. */
+  initiallyOpen?: string | null;
 }) {
   // Holds only the sections somebody has opened during this visit.
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>(initiallyOpen ? { [initiallyOpen]: true } : {});
 
   // Derived from what is open rather than tracked separately, so the button
   // cannot say "Collapse all" while a section is already shut.

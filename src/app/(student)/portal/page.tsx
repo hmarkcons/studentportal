@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlarmClock, ArrowRight, CalendarClock, CalendarDays, CreditCard, FolderOpen, Globe, Headset, IdCard, Landmark, Mail, MessageCircle, Sparkles, UserRound } from "lucide-react";
+import { AlarmClock, ArrowRight, CalendarClock, CalendarDays, CreditCard, FolderOpen, Globe, Headset, IdCard, Landmark, Mail, MessageCircle, Sparkles, UserRound, BookOpen } from "lucide-react";
 import { getStudentUser } from "@/lib/auth/session";
 import { loadPortalSummary } from "@/lib/portalSummary";
 import { PortalAttention } from "@/components/PortalAttention";
@@ -89,6 +89,25 @@ export default async function PortalDashboardPage() {
   }
 
   const docs = documentCounts(cycleDocs.docs);
+  // What is still wanted from the student, each a link to the document and
+  // how to prepare it — the count alone says how much, not what.
+  // Sent back first, then the soonest due, then the checklist's own order —
+  // the three shown are the three most in need of doing.
+  const toUpload = cycleDocs.docs
+    .filter((d) => d.status === "missing" || d.status === "rejected")
+    .map((d, order) => ({
+      id: d.id,
+      name: d.custom_name ?? (one(d.template as never) as { name?: string } | null)?.name ?? "A document",
+      sentBack: d.status === "rejected",
+      deadline: d.deadline as string | null,
+      order,
+    }))
+    .sort(
+      (a, b) =>
+        Number(b.sentBack) - Number(a.sentBack) ||
+        (a.deadline ?? "9999-12-31").localeCompare(b.deadline ?? "9999-12-31") ||
+        a.order - b.order
+    );
 
   const journey = studentJourney({
     studentCode: student.student_code,
@@ -175,7 +194,8 @@ export default async function PortalDashboardPage() {
   for (const d of cycleDocs.docs) {
     if (!d.deadline || (d.status !== "missing" && d.status !== "rejected")) continue;
     const template = one(d.template as never) as { name?: string } | null;
-    dated.push({ date: d.deadline, kind: "document", label: `Upload ${d.custom_name ?? template?.name ?? "a document"}`, href: "/portal/documents" });
+    // Straight to the document, its section open and its guide showing (0300).
+    dated.push({ date: d.deadline, kind: "document", label: `Upload ${d.custom_name ?? template?.name ?? "a document"}`, href: `/portal/documents?guide=${d.id}` });
   }
   if (summary.passport.expiry && (summary.passport.state === "expiring" || summary.passport.state === "expired")) {
     dated.push({ date: summary.passport.expiry, kind: "passport", label: "Your passport expires", href: "/portal/profile" });
@@ -335,6 +355,31 @@ export default async function PortalDashboardPage() {
               />
             )}
           </div>
+          {toUpload.length > 0 && (
+            <div className="mt-3 border-t border-border pt-2.5" data-dashboard-todo>
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">Still to upload</p>
+              <ul className="flex flex-col gap-1">
+                {toUpload.slice(0, 3).map((d) => (
+                  <li key={d.id} className="min-w-0">
+                    <Link
+                      href={`/portal/documents?guide=${d.id}`}
+                      className="flex min-w-0 items-center gap-1.5 text-xs text-ink hover:text-primary"
+                      data-dashboard-todo-item={d.id}
+                    >
+                      <BookOpen aria-hidden className="h-3.5 w-3.5 shrink-0 text-primary" />
+                      <span className="truncate">{d.name}</span>
+                      {d.sentBack && <span className="shrink-0 text-[11px] font-medium text-danger">sent back</span>}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              {toUpload.length > 3 && (
+                <Link href="/portal/documents" className="mt-1 inline-block text-[11px] font-medium text-primary hover:underline">
+                  and {toUpload.length - 3} more
+                </Link>
+              )}
+            </div>
+          )}
         </ChartCard>
 
         <ChartCard icon={CreditCard} title="Payments" href="/portal/payments" linkLabel="Open">

@@ -15,13 +15,16 @@ import { sectionOfCategory } from "@/lib/documentCategories";
 import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
 import { PortalStat, PortalStats } from "@/components/studentPortal/PortalStat";
 import { PortalEmpty } from "@/components/studentPortal/PortalEmpty";
+import { loadDocumentGuides } from "@/lib/documentGuides";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
 }
 
-export default async function PortalDocumentsPage(props: { searchParams: Promise<{ cycle?: string }> }) {
-  const { cycle: cycleParam } = await props.searchParams;
+export default async function PortalDocumentsPage(props: { searchParams: Promise<{ cycle?: string; guide?: string }> }) {
+  // ?guide=<document id>: the dashboard's to-dos link straight to a document's
+  // guide, opened in its section.
+  const { cycle: cycleParam, guide: guideParam } = await props.searchParams;
   const { supabase, userId } = await getStudentUser();
 
   const { data: student } = await supabase.from("students").select("id").eq("auth_user_id", userId ?? "").maybeSingle();
@@ -38,7 +41,11 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
   const appLabel = new Map((applications ?? []).map((a) => [a.id, one(a.university as never) as { name?: string } | null]));
   const { docs: rawDocs, cycles, showCycleTabs, activeCycleId, isPreviousIntake, inheritedFromById } = cycleDocs;
 
-  const docHistory = await loadDocumentHistory(supabase, rawDocs.map((d) => d.id));
+  // How to prepare each one, from the checklist builder (0300).
+  const [docHistory, guides] = await Promise.all([
+    loadDocumentHistory(supabase, rawDocs.map((d) => d.id)),
+    loadDocumentGuides(supabase, student.id, rawDocs),
+  ]);
 
   // Every file's link in one request, then a plain synchronous map. This was
   // one round trip to Storage per document before the page could render.
@@ -183,6 +190,7 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
           it since these sections became collapsible, and without it reading a
           whole checklist here was one click per section. */}
       <DocumentSectionList
+        initiallyOpen={guideParam ? (sections.find((sec) => sec.docs.some((d) => d.id === guideParam))?.category ?? null) : null}
         sections={sections.map((section, i) => ({
           key: section.category,
           number: i + 1,
@@ -201,6 +209,8 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
                   studentId={student.id}
                   revalidateTo={`/portal/documents${showCycleTabs && activeCycleId ? `?cycle=${activeCycleId}` : ""}`}
                   readOnly={isPreviousIntake}
+                  guide={guides[doc.id] ?? null}
+                  guideOpenInitially={guideParam === doc.id}
                 />
               ))}
             </div>
