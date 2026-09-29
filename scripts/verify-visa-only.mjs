@@ -190,6 +190,14 @@ try {
   const raForm = procPage.locator("[data-record-admission-form]");
   await raForm.waitFor({ timeout: 30000 });
   const uniValue = await raForm.locator('select[name="university_id"] option').nth(1).getAttribute("value");
+  // The form is in the server's HTML before React has it; a file chosen then
+  // is never uploaded, and the wait below times out on a slow load.
+  await procPage
+    .waitForFunction(() => {
+      const el = document.querySelector('[data-record-admission-form] input[type="file"]');
+      return Boolean(el && Object.keys(el).some((k) => k.startsWith("__reactProps")));
+    }, null, { timeout: 60000 })
+    .catch(() => {});
   await raForm.locator('select[name="university_id"]').selectOption(uniValue);
   await raForm.locator('input[type="file"]').setInputFiles({ name: "admission-letter.pdf", mimeType: "application/pdf", buffer: PDF_BYTES });
   const staged = await raForm.locator('input[type="file"][data-staged]').waitFor({ timeout: 120000 }).then(() => true, () => false);

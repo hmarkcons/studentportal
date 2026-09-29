@@ -91,7 +91,15 @@ async function strandedIcons(page) {
 /** Any emoji the page shows: the portal draws lucide icons and uses none. © ® ™ are not emoji. */
 async function emojiOnPage(page) {
   return page.evaluate(() => {
-    const found = document.body.innerText.replace(/[\u00a9\u00ae\u2122]/g, "").match(/\p{Extended_Pictographic}/gu);
+    // A dropdown marked data-glyph-preview shows the characters a PDF will
+    // print (the "\u25aa Square" bullet): output, not decoration. Hidden while the
+    // page's text is read, then put back.
+    const previews = [...document.querySelectorAll("[data-glyph-preview]")];
+    const before = previews.map((el) => el.style.display);
+    previews.forEach((el) => (el.style.display = "none"));
+    const text = document.body.innerText;
+    previews.forEach((el, i) => (el.style.display = before[i]));
+    const found = text.replace(/[\u00a9\u00ae\u2122]/g, "").match(/\p{Extended_Pictographic}/gu);
     return found ? [...new Set(found)].join(" ") : "";
   });
 }

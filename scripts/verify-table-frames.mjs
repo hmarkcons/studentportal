@@ -52,6 +52,30 @@ const PAGES = [
   ["/setup/scholarship-bodies", "Scholarship bodies"],
 ];
 
+/**
+ * Until the window has stopped moving and resizing for a few frames. TableFrame
+ * measures on the next animation frame after a scroll or a layout change, so a
+ * fixed pause reads it mid-way on a slow page.
+ */
+async function settled(frame) {
+  await frame
+    .evaluate((el) => new Promise((resolve) => {
+      let last = "";
+      let still = 0;
+      const started = Date.now();
+      const tick = () => {
+        const r = el.getBoundingClientRect();
+        const now = `${Math.round(r.top)}:${Math.round(r.height)}:${Math.round(window.scrollY)}`;
+        still = now === last ? still + 1 : 0;
+        last = now;
+        if (still >= 6 || Date.now() - started > 10_000) resolve(true);
+        else requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }))
+    .catch(() => false);
+}
+
 try {
   const sup = await fx.staff("tables", ["super_admin"]);
   const page = await signIn(browser, sup.email);
@@ -70,7 +94,19 @@ try {
     }
     ok("the table has a scrolling window", found);
     if (!found) continue;
-    await page.waitForTimeout(800);
+    // Until React has hydrated, the window has only its CSS default height;
+    // TableFrame then measures where it starts and sets --frame-top. Measuring
+    // before that — a fixed pause did, on a slow load — reads the default.
+    await frame
+      .evaluate((el) => new Promise((resolve) => {
+        const done = () => el.style.getPropertyValue("--frame-top") !== "";
+        if (done()) return resolve(true);
+        const started = Date.now();
+        const tick = () => (done() || Date.now() - started > 20_000 ? resolve(done()) : requestAnimationFrame(tick));
+        requestAnimationFrame(tick);
+      }))
+      .catch(() => false);
+    await settled(frame);
 
     const box = await frame.evaluate((el) => {
       const r = el.getBoundingClientRect();
@@ -98,13 +134,21 @@ try {
     if (box.tall) {
       const startHeight = box.bottom - box.top;
       await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-      await page.waitForTimeout(400);
+      await settled(frame);
+      // Scrolled again once it has grown: the room it reserves can let the page go further.
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      await settled(frame);
       const grown = await frame.evaluate((el) => {
         const r = el.getBoundingClientRect();
-        return { top: r.top, bottom: r.bottom, height: r.height, viewport: window.innerHeight };
+        return { top: r.top, bottom: r.bottom, height: r.height, viewport: window.innerHeight, whole: el.scrollHeight <= el.clientHeight + 1 };
       });
       ok("scrolling the page, the window still ends on screen", grown.bottom <= grown.viewport + 1, JSON.stringify(grown));
-      if (box.top > 40) ok("...having grown to use the room", grown.height > startHeight + 20, `${Math.round(startHeight)} → ${Math.round(grown.height)}`);
+      // Grown into the room — or, for a table only a little taller than its
+      // window, grown until the whole of it shows, which is all there was to gain.
+      if (box.top > 40) {
+        ok("...having grown to use the room", grown.height > startHeight + 20 || (grown.whole && grown.height > startHeight),
+          `${Math.round(startHeight)} → ${Math.round(grown.height)}${grown.whole ? " (whole table shown)" : ""}`);
+      }
       await page.evaluate(() => window.scrollTo(0, 0));
       await page.waitForTimeout(300);
     }
