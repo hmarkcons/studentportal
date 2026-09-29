@@ -11,6 +11,7 @@ import { applyVisaOnlyStages } from "@/lib/actions/visaOnly";
 import { getStaffSession } from "@/lib/auth/session";
 import { syncStudentFollowUpTask } from "@/lib/actions/studentFollowUp";
 import { createClient } from "@/lib/supabase/server";
+import { syncStudentStages } from "@/lib/autoStagesSync";
 import { LEAD_STATUSES } from "@/lib/constants";
 import { dateOfBirthError } from "@/lib/dateOfBirth";
 import { phoneError, phoneChangeError } from "@/lib/phoneNumber";
@@ -755,6 +756,25 @@ export async function updateRegistrationDetails(studentId: string, revalidateTo:
   const discount_reason = String(formData.get("discount_reason") ?? "").trim() || null;
   const hasNewSelection = Boolean(selection.primaryDestinationId) || selection.backupDestinationIds.length > 0;
 
+  // The registration date, when the form posts one (it always does now; an
+  // older form open in a tab does not, and leaves the date alone). Stored at
+  // midday Karachi, the same as the import, so the day never slips across a
+  // month edge in the students list. Only written when it changed, so saving
+  // the card for anything else keeps the exact moment registration was done.
+  let registeredAt: string | null = null;
+  if (formData.has("registration_date")) {
+    const { registrationDateError, registrationTimestamp } = await import("@/lib/registrationDate");
+    const day = String(formData.get("registration_date") ?? "").trim();
+    if (!day) return { error: "Give the date the student registered." };
+    const problem = registrationDateError(day);
+    if (problem) return { error: problem };
+    const { data: current } = await supabase.from("leads").select("registered_at").eq("id", studentId).maybeSingle();
+    const currentDay = current?.registered_at
+      ? new Date(current.registered_at as string).toLocaleDateString("en-CA", { timeZone: "Asia/Karachi" })
+      : null;
+    if (day !== currentDay) registeredAt = registrationTimestamp(day);
+  }
+
   // Which service they are registered for (0279) — posted only by the form a
   // Super Admin or processing sees. Checked here as well as by the database,
   // so a refusal is a sentence rather than a Postgres error.
@@ -801,6 +821,7 @@ export async function updateRegistrationDetails(studentId: string, revalidateTo:
 
   const patch: Record<string, unknown> = { assigned_counselor_id, processing_officer_id, intake, discount_amount, discount_reason };
   if (serviceChange) patch.service_type = serviceChange;
+  if (registeredAt) patch.registered_at = registeredAt;
   if (hasNewSelection || hadExistingDestinations) {
     // The primary only, matching registerStudentManually and the import. The
     // guard above still decides WHETHER to touch this field at all, so a
@@ -821,6 +842,8 @@ export async function updateRegistrationDetails(studentId: string, revalidateTo:
 
   // The counselor or the processing officer may have changed in that patch.
   await notifyAssignedStaff(studentId);
+  // A country added brings its own steps, which the record may already settle.
+  await syncStudentStages(studentId);
 
   revalidatePath(revalidateTo);
   revalidatePath("/students");

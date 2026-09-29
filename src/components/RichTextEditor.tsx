@@ -1,6 +1,7 @@
 "use client";
 
 import { useEditor, useEditorState, EditorContent, type Editor } from "@tiptap/react";
+import { Grid3x3, IndentDecrease, IndentIncrease, List, PaintBucket, Redo2, SeparatorHorizontal, Undo2 } from "lucide-react";
 import StarterKit from "@tiptap/starter-kit";
 import { TableRow } from "@tiptap/extension-table";
 import { TextStyle, Color, BackgroundColor, FontFamily, FontSize } from "@tiptap/extension-text-style";
@@ -75,6 +76,7 @@ function ToolSelect({
   children,
   className = "",
   disabled,
+  glyphPreview = false,
 }: {
   title: string;
   value: string;
@@ -82,9 +84,12 @@ function ToolSelect({
   children: React.ReactNode;
   className?: string;
   disabled?: boolean;
+  /** Its options show the characters the PDF prints (▪ Square) — a preview of the output, not icons. */
+  glyphPreview?: boolean;
 }) {
   return (
     <select
+      data-glyph-preview={glyphPreview || undefined}
       title={title}
       aria-label={title}
       value={value}
@@ -255,10 +260,10 @@ export function RichTextEditor({
         {/* Row 1 — text */}
         <div className="flex flex-wrap items-center gap-1">
           <ToolbarButton title="Undo (Ctrl+Z)" disabled={!state.canUndo} onClick={() => chain().undo().run()}>
-            ↶
+            <Undo2 aria-hidden className="h-4 w-4" />
           </ToolbarButton>
           <ToolbarButton title="Redo (Ctrl+Y)" disabled={!state.canRedo} onClick={() => chain().redo().run()}>
-            ↷
+            <Redo2 aria-hidden className="h-4 w-4" />
           </ToolbarButton>
           <Divider />
           <ToolSelect title="Paragraph style" value={state.style} onChange={setStyle} className="w-[7.5rem]">
@@ -394,27 +399,27 @@ export function RichTextEditor({
             ))}
           </ToolSelect>
           <ToolbarButton title="Decrease indent (Shift+Tab)" disabled={!state.canOutdent} onClick={() => chain().outdent().run()}>
-            ⇤
+            <IndentDecrease aria-hidden className="h-4 w-4" />
           </ToolbarButton>
           <ToolbarButton title="Increase indent (Tab)" disabled={!state.canIndent} onClick={() => chain().indent().run()}>
-            ⇥
+            <IndentIncrease aria-hidden className="h-4 w-4" />
           </ToolbarButton>
           <ColorMenu
             title="Rule under the paragraph"
-            label="▁"
+            label={<SeparatorHorizontal aria-hidden className="h-4 w-4" />}
             swatch={state.rule}
             clearLabel="No rule (a heading keeps its theme rule)"
             onPick={(c) => chain().setBlockFormat("rule", c).run()}
           />
           <ColorMenu
             title="Paragraph shading"
-            label="▦"
+            label={<PaintBucket aria-hidden className="h-4 w-4" />}
             swatch={state.shade}
             clearLabel="No shading"
             onPick={(c) => chain().setBlockFormat("shade", c).run()}
           />
           <Divider />
-          <ToolSelect title="Bullets and numbering" value={state.listStyle || "none"} onChange={setListStyle} className="w-[8.5rem]">
+          <ToolSelect title="Bullets and numbering" value={state.listStyle || "none"} onChange={setListStyle} className="w-[8.5rem]" glyphPreview>
             <option value="none">No list</option>
             <optgroup label="Bullets">
               <option value="bullet:">• Template bullet</option>
@@ -435,7 +440,7 @@ export function RichTextEditor({
           </ToolSelect>
           <ColorMenu
             title="Bullet or number colour"
-            label="•"
+            label={<List aria-hidden className="h-4 w-4" />}
             disabled={!state.inBullet && !state.inOrdered}
             swatch={state.markerColor}
             clearLabel="Template colour"
@@ -507,14 +512,14 @@ export function RichTextEditor({
             </ToolbarButton>
             <ColorMenu
               title="Cell colour (the selected cells)"
-              label="▦"
+              label={<PaintBucket aria-hidden className="h-4 w-4" />}
               swatch={state.cellFill}
               clearLabel="No cell colour"
               onPick={(c) => chain().setCellAttribute("fill", c).run()}
             />
             <ColorMenu
               title="Table line colour"
-              label="▭"
+              label={<Grid3x3 aria-hidden className="h-4 w-4" />}
               swatch={state.tableBorder}
               clearLabel="Template line colour"
               onPick={(c) => chain().updateAttributes("table", { border: c }).run()}

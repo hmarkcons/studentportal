@@ -57,11 +57,15 @@ export async function listScholarshipProofs(scholarshipIds: string[]): Promise<R
 /**
  * Attaches one proof file to a scholarship application.
  *
- * One file per submit, several submits per application — the office asked for
- * multiple files, and a multi-file input that half-succeeds is worse than
- * three deliberate uploads: with one file per call, a rejected fourth cannot
- * leave the first three in doubt.
+ * Several files in one submit — file, file_1, file_2 … as the form adds
+ * fields — each staged, checked and filed one at a time. A file that is
+ * refused does not take the others with it, and the answer says exactly
+ * which went through: "2 attached; report.pdf wasn't: …" leaves nobody
+ * wondering what is on record.
  */
+/** How many files one submit may carry. */
+const MAX_PROOFS_AT_ONCE = 8;
+
 export async function uploadScholarshipProof(
   scholarshipId: string,
   studentId: string,
@@ -74,38 +78,53 @@ export async function uploadScholarshipProof(
   );
   if (denied) return { error: denied.error };
 
-  const file = await uploadedFile(formData, "file");
-  if (!file || file.size === 0) return { error: "Choose a file to attach." };
-  // The same 5 MB and the same accepted types as every other upload.
-  const invalid = validateDocumentFile(file, "file");
-  if (invalid) return { error: invalid };
-
   const { supabase, staff } = await getStaffSession();
   if (!staff) return { error: "You are signed out — reload the page." };
 
-  // Namespaced by student and scholarship, and stamped, so re-uploading a file
-  // with the same name does not overwrite the earlier one — both are evidence.
-  const safe = sanitizeFilename(file.name);
-  const path = `${studentId}/scholarship-proofs/${scholarshipId}-${Date.now()}-${safe}`;
-
-  const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: false });
-  if (uploadError) return { error: uploadError.message };
-
-  const { error } = await supabase.from("scholarship_proofs").insert({
-    scholarship_id: scholarshipId,
-    file_path: path,
-    file_name: file.name,
-    file_size: file.size,
-    uploaded_by: staff.id,
-  });
-  if (error) {
-    // Do not leave a file in the bucket with no row pointing at it.
-    await supabase.storage.from("documents").remove([path]);
-    return { error: error.message };
+  const names = ["file", ...Array.from({ length: MAX_PROOFS_AT_ONCE - 1 }, (_, i) => `file_${i + 1}`)];
+  let attached = 0;
+  const refused: string[] = [];
+  for (const name of names) {
+    const file = await uploadedFile(formData, name);
+    if (!file || file.size === 0) continue;
+    // The same 5 MB and the same accepted types as every other upload.
+    const invalid = validateDocumentFile(file, "file");
+    if (invalid) {
+      refused.push(`${file.name}: ${invalid}`);
+      continue;
+    }
+    // Namespaced by student and scholarship, and stamped, so re-uploading a
+    // file with the same name does not overwrite the earlier one — both are
+    // evidence.
+    const safe = sanitizeFilename(file.name);
+    const path = `${studentId}/scholarship-proofs/${scholarshipId}-${Date.now()}-${attached}-${safe}`;
+    const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: false });
+    if (uploadError) {
+      refused.push(`${file.name}: ${uploadError.message}`);
+      continue;
+    }
+    const { error } = await supabase.from("scholarship_proofs").insert({
+      scholarship_id: scholarshipId,
+      file_path: path,
+      file_name: file.name,
+      file_size: file.size,
+      uploaded_by: staff.id,
+    });
+    if (error) {
+      // Do not leave a file in the bucket with no row pointing at it.
+      await supabase.storage.from("documents").remove([path]);
+      refused.push(`${file.name}: ${error.message}`);
+      continue;
+    }
+    attached += 1;
   }
 
-  revalidatePath(`/students/${studentId}/scholarship`);
-  return { success: true };
+  if (attached > 0) revalidatePath(`/students/${studentId}/scholarship`);
+  if (attached === 0 && refused.length === 0) return { error: "Choose a file to attach." };
+  if (refused.length > 0) {
+    return { error: `${attached > 0 ? `${attached} attached; ` : ""}${refused.length === 1 ? "this one wasn't" : "these weren't"} — ${refused.join(" · ")}` };
+  }
+  return { success: true, attached };
 }
 
 /** Removes one proof file, and the object behind it. */

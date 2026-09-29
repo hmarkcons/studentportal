@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/Button";
 import { useButtonAction } from "@/components/useButtonAction";
 import { Badge } from "@/components/ui/Badge";
 import { Input, Select } from "@/components/ui/Input";
+import { ActionStatus } from "@/components/ActionStatus";
+import { setScholarshipDocumentsStatus, setScholarshipStatus } from "@/lib/actions/scholarshipStatus";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatDateOnly } from "@/lib/formatDate";
 import {
@@ -18,6 +20,10 @@ import {
   SCHOLARSHIP_STATUS_LABELS,
   SCHOLARSHIP_STATUS_TONE,
   SCHOLARSHIP_CURRENCY_SYMBOL,
+  SCHOLARSHIP_DOCUMENT_STATUSES,
+  SCHOLARSHIP_DOCUMENT_STATUS_LABELS,
+  SCHOLARSHIP_DOCUMENT_STATUS_TONE,
+  isScholarshipDocumentStatus,
   scholarshipStatusLabel,
   type ScholarshipStatus,
 } from "@/lib/scholarships";
@@ -31,7 +37,75 @@ export type StudentScholarship = {
   award_amount: number | null;
   scholarship_body_id: string | null;
   application_deadline: string | null;
+  /** Where its documents stand (0297); null until chosen. */
+  documents_status?: string | null;
 };
+
+/**
+ * The two things staff change most on a scholarship, as dropdowns that save
+ * as they change: the application's status, and where its documents stand.
+ * Each confirms beside itself, and a refusal says so and leaves the choice
+ * where it was.
+ */
+function QuickStatus({ s, studentId }: { s: StudentScholarship; studentId: string }) {
+  const status = useButtonAction();
+  const documents = useButtonAction();
+  const [statusValue, setStatusValue] = useState(s.status);
+  const [documentsValue, setDocumentsValue] = useState(s.documents_status ?? "");
+  return (
+    <div className="mt-2 flex flex-wrap items-end gap-x-4 gap-y-2" data-scholarship-quick={s.id}>
+      <label className="flex flex-col gap-1 text-xs text-muted">
+        Application status
+        <span className="flex flex-wrap items-center gap-2">
+          <Select
+            aria-label="Application status"
+            value={statusValue}
+            disabled={status.pending}
+            onChange={async (e) => {
+              const next = e.target.value;
+              const before = statusValue;
+              setStatusValue(next);
+              const result = await status.run(() => setScholarshipStatus(s.id, studentId, next));
+              if (result && "error" in result && result.error) setStatusValue(before);
+            }}
+            className="w-44"
+            data-scholarship-status
+          >
+            <StatusOptions />
+          </Select>
+          <ActionStatus state={status.state} pending={status.pending} label="Saved." showError />
+        </span>
+      </label>
+      <label className="flex flex-col gap-1 text-xs text-muted">
+        Documents
+        <span className="flex flex-wrap items-center gap-2">
+          <Select
+            aria-label="Documents status"
+            value={documentsValue}
+            disabled={documents.pending}
+            onChange={async (e) => {
+              const next = e.target.value;
+              const before = documentsValue;
+              setDocumentsValue(next);
+              const result = await documents.run(() => setScholarshipDocumentsStatus(s.id, studentId, next || null));
+              if (result && "error" in result && result.error) setDocumentsValue(before);
+            }}
+            className="w-56"
+            data-scholarship-documents
+          >
+            <option value="">Not chosen yet</option>
+            {SCHOLARSHIP_DOCUMENT_STATUSES.map((d) => (
+              <option key={d} value={d}>
+                {SCHOLARSHIP_DOCUMENT_STATUS_LABELS[d]}
+              </option>
+            ))}
+          </Select>
+          <ActionStatus state={documents.state} pending={documents.pending} label="Saved." showError />
+        </span>
+      </label>
+    </div>
+  );
+}
 
 function StatusOptions() {
   return (
@@ -61,12 +135,14 @@ function BodyOptions({ bodies }: { bodies: ScholarshipBody[] }) {
 
 function ScholarshipRow({
   s,
+  studentId,
   bodies,
   revalidateTo,
   canManage,
   currencySymbol,
 }: {
   s: StudentScholarship;
+  studentId: string;
   bodies: ScholarshipBody[];
   revalidateTo: string;
   canManage: boolean;
@@ -155,9 +231,19 @@ function ScholarshipRow({
           </p>
         </div>
         <span className="flex shrink-0 items-center gap-2">
-          <Badge tone={SCHOLARSHIP_STATUS_TONE[s.status as ScholarshipStatus] ?? "neutral"}>
-            {scholarshipStatusLabel(s.status)}
-          </Badge>
+          {/* Read-only for anyone who cannot change them; the dropdowns below are the controls. */}
+          {!canManage && (
+            <>
+              <Badge tone={SCHOLARSHIP_STATUS_TONE[s.status as ScholarshipStatus] ?? "neutral"}>
+                {scholarshipStatusLabel(s.status)}
+              </Badge>
+              {isScholarshipDocumentStatus(s.documents_status) && (
+                <Badge tone={SCHOLARSHIP_DOCUMENT_STATUS_TONE[s.documents_status]}>
+                  Documents: {SCHOLARSHIP_DOCUMENT_STATUS_LABELS[s.documents_status]}
+                </Badge>
+              )}
+            </>
+          )}
           {canManage && (
             <>
               <button
@@ -182,6 +268,7 @@ function ScholarshipRow({
           )}
         </span>
       </div>
+      {canManage && <QuickStatus s={s} studentId={studentId} />}
       {del.state?.error && <p className="mt-1 text-xs text-danger">{del.state.error}</p>}
     </div>
   );
@@ -249,6 +336,7 @@ export function ScholarshipSection({
           <ScholarshipRow
             key={s.id}
             s={s}
+            studentId={studentId}
             bodies={bodies}
             revalidateTo={revalidateTo}
             canManage={canManage}

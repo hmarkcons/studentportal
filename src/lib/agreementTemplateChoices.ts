@@ -9,12 +9,22 @@
 // A student's countries are their primary plus up to three backups, and both
 // count: a backup country gets an administrative-fee-only agreement, which is
 // a deliberate part of the registration flow. Anything else is not theirs.
+//
+// A visa-service template may be for all destinations (0298): it has no
+// country of its own, fits every country the student has, and the country is
+// chosen when the agreement is generated.
 
 export type TemplateLike = {
   id: string;
   name: string;
   destination: { id: string; display_name: string } | { id: string; display_name: string }[] | null;
+  service_type?: string | null;
 };
+
+/** A visa-service template for every destination: no country of its own (0298). */
+export function isGeneralTemplate(t: Pick<TemplateLike, "destination" | "service_type">): boolean {
+  return !templateDestination(t.destination) && t.service_type === "visa_only";
+}
 
 export type RegisteredDestination = { id: string; display_name: string; isBackup: boolean };
 
@@ -53,15 +63,19 @@ export function agreementTemplateChoices<T extends TemplateLike>(
 
   // Built by walking the student's countries rather than filtering the
   // templates, so the result comes out in their order — primary first — and a
-  // template with no destination at all is simply never matched.
-  const available = ordered.flatMap((dest) =>
-    templates.filter((t) => templateDestination(t.destination)?.id === dest.id)
-  );
+  // template with no destination at all is simply never matched. A general
+  // visa-service template follows them: it fits every one of their countries,
+  // so none of them is missing a template.
+  const general = ordered.length > 0 ? templates.filter(isGeneralTemplate) : [];
+  const available = [
+    ...ordered.flatMap((dest) => templates.filter((t) => templateDestination(t.destination)?.id === dest.id)),
+    ...general,
+  ];
 
   const withTemplate = new Set(
     templates.map((t) => templateDestination(t.destination)?.id).filter((id): id is string => Boolean(id))
   );
-  const missingTemplateFor = ordered.filter((r) => !withTemplate.has(r.id)).map((r) => r.display_name);
+  const missingTemplateFor = general.length > 0 ? [] : ordered.filter((r) => !withTemplate.has(r.id)).map((r) => r.display_name);
 
   return { available, missingTemplateFor, hasCountry: ordered.length > 0 };
 }
@@ -76,8 +90,19 @@ export function agreementTemplateChoices<T extends TemplateLike>(
  */
 export function templateNotForStudentError(
   templateDestinationId: string | null | undefined,
-  registeredDestinationIds: string[]
+  registeredDestinationIds: string[],
+  general: { isGeneral: boolean; chosenDestinationId?: string | null } = { isGeneral: false }
 ): string | null {
+  if (!templateDestinationId && general.isGeneral) {
+    if (registeredDestinationIds.length === 0) {
+      return "This student has no country on their registration yet. Add one in the Registration card before generating an agreement.";
+    }
+    if (!general.chosenDestinationId) return "Choose which of the student's countries this agreement is for.";
+    if (!registeredDestinationIds.includes(general.chosenDestinationId)) {
+      return "That country is not one this student is registered for. Pick one of their own, or add it to their registration first.";
+    }
+    return null;
+  }
   if (!templateDestinationId) {
     return "That template has no country set, so it cannot be used for a student. Set its destination in Setup › Agreement templates.";
   }

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlarmClock, CalendarClock, CreditCard, FileSearch, FileText, Headset, MessageSquare, Package, type LucideIcon } from "lucide-react";
+import { AlarmClock, ArrowRight, CalendarClock, CreditCard, FileSearch, FileText, Headset, MessageSquare, Package, type LucideIcon } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import type { StaffQueue, NamedStudent } from "@/lib/staffQueue";
 
@@ -149,8 +149,8 @@ export function StaffQueueCard({ queue }: { queue: StaffQueue }) {
                   {r.students && studentList(r.students, r.icon === MessageSquare ? "/communication" : "")}
                 </span>
               </span>
-              <Link href={r.href} aria-hidden className="shrink-0 text-xs text-muted">
-                →
+              <Link href={r.href} aria-hidden tabIndex={-1} className="shrink-0 text-muted hover:text-ink">
+                <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
           </div>

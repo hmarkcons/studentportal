@@ -9,6 +9,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { categoryCarriesOver } from "@/lib/intakeCycle";
 import { ensureCurrentCycle } from "@/lib/ensureCycle";
 import { uploadedFile } from "@/lib/stagedUpload";
+import { syncStagesForDocument, syncStudentStages } from "@/lib/autoStagesSync";
 
 const MANAGE_DENIED = "Only Super Admin and the Processing team can add or remove document requirements.";
 
@@ -270,6 +271,7 @@ export async function uploadDocument(
 
   if (error) return { error: error.message };
 
+  await syncStudentStages(studentId);
   revalidatePath(revalidateTo);
   return { success: true };
 }
@@ -299,6 +301,7 @@ export async function reviewDocument(documentId: string, revalidateTo: string, s
     })
     .eq("id", documentId);
 
+  if (!error) await syncStagesForDocument(documentId);
   revalidatePath(revalidateTo);
   if (error) return { error: error.message };
   return { success: true };
@@ -310,7 +313,7 @@ export async function deleteDocumentRequirement(documentId: string, revalidateTo
 
   const supabase = await createClient();
 
-  const { data: doc } = await supabase.from("student_documents").select("file_path").eq("id", documentId).maybeSingle();
+  const { data: doc } = await supabase.from("student_documents").select("file_path, student_id").eq("id", documentId).maybeSingle();
 
   // Delete the DB row (the source of truth for what's shown as "on record")
   // before touching storage — if storage cleanup below fails, the worst
@@ -325,7 +328,101 @@ export async function deleteDocumentRequirement(documentId: string, revalidateTo
     await supabase.storage.from("documents").remove([doc.file_path]);
   }
 
+  if (doc?.student_id) await syncStudentStages(doc.student_id as string);
   revalidatePath(revalidateTo);
+  return { success: true };
+}
+
+/**
+ * Files a document the university sent — an acceptance or offer letter, an
+ * admission or invitation letter, a CAS, an I-20 — on the application it
+ * answers (0294).
+ *
+ * Kept as a student document under Acceptance Letters, so it is in the
+ * Documents tab with everything else and on the student's own Documents page,
+ * named after the university. Approved as it is filed: it came from the
+ * university, and there is nothing for the student to send back. The stages
+ * then catch up — a letter moves the application to its offer stage and the
+ * country's Admission to Issued (autoStages.ts).
+ *
+ * The row is written before the file so the path can carry its id, and taken
+ * back out if the file does not follow; a document on record with no file
+ * behind it would say "approved" about nothing.
+ */
+export async function uploadApplicationDocument(
+  studentId: string,
+  applicationId: string,
+  revalidateTo: string,
+  _prevState: unknown,
+  formData: FormData
+) {
+  // The card is shown to those who manage requirements; the action holds the
+  // same line, since what it files is approved on arrival.
+  const denied = await requirePermission("documents.manage_requirements", "Only Super Admin and the Processing team can file documents from the university.");
+  if (denied) return { error: denied.error };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return { error: "Say what the document is — an acceptance letter, an offer letter, a CAS…" };
+  if (name.length > 120) return { error: "Keep the document's name to 120 characters." };
+
+  const file = await uploadedFile(formData, "file");
+  if (!file || file.size === 0) return { error: "Choose a file to upload." };
+  const validationError = validateDocumentFile(file);
+  if (validationError) return { error: validationError };
+
+  const { data: app } = await supabase.from("applications").select("id, student_id, cycle_id").eq("id", applicationId).maybeSingle();
+  if (!app || app.student_id !== studentId) return { error: "That application isn't this student's." };
+  const cycleId = (app.cycle_id as string | null) ?? (await ensureCurrentCycle(studentId))?.id ?? null;
+
+  const now = new Date().toISOString();
+  const { data: row, error: insertError } = await supabase
+    .from("student_documents")
+    .insert({
+      student_id: studentId,
+      application_id: applicationId,
+      category: "acceptance_letters",
+      custom_name: name,
+      status: "verified",
+      uploaded_by_role: "staff",
+      uploaded_at: now,
+      verified_by: user?.id ?? null,
+      verified_at: now,
+      cycle_id: cycleId,
+    })
+    .select("id")
+    .single();
+  if (insertError || !row) {
+    return { error: insertError?.message.includes("row-level security") ? "Only the processing team can file documents for this student." : (insertError?.message ?? "The document wasn't saved.") };
+  }
+
+  const path = `${studentId}/${row.id}-${sanitizeFilename(file.name)}`;
+  const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: true });
+  if (uploadError) {
+    await supabase.from("student_documents").delete().eq("id", row.id);
+    return { error: uploadError.message };
+  }
+  // Asked for back: an UPDATE that RLS refuses matches nothing and raises
+  // nothing, and would leave an approved document with no file behind it.
+  const { data: linked, error: pathError } = await supabase
+    .from("student_documents")
+    .update({ file_path: path })
+    .eq("id", row.id)
+    .select("id");
+  if (pathError || !linked?.length) {
+    await supabase.storage.from("documents").remove([path]);
+    await supabase.from("student_documents").delete().eq("id", row.id);
+    return { error: pathError?.message ?? "The file was stored but couldn't be attached to the document, so neither was kept." };
+  }
+
+  await syncStudentStages(studentId);
+  revalidatePath(revalidateTo);
+  revalidatePath(`/students/${studentId}/documents`);
+  revalidatePath(`/students/${studentId}`);
   return { success: true };
 }
 

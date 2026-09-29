@@ -188,9 +188,10 @@ export function recommendRestart(input: {
  * The office's instruction was to copy everything except the applications, the
  * visa, the scholarship and the scholarship documents. A refused visa's
  * paperwork and a scholarship tied to a university the student is no longer
- * going to are worse than useless in the new intake: they read as done.
+ * going to are worse than useless in the new intake: they read as done. The
+ * universities' letters (0294) likewise answer last year's applications.
  */
-export const CATEGORIES_NOT_CARRIED = ["visa", "visa_sticker", "scholarship_documents", "scholarship"] as const;
+export const CATEGORIES_NOT_CARRIED = ["visa", "visa_sticker", "scholarship_documents", "scholarship", "acceptance_letters", "offer_letter", "rejection_letter"] as const;
 
 export function categoryCarriesOver(category: string | null | undefined): boolean {
   return !CATEGORIES_NOT_CARRIED.includes(String(category ?? "") as (typeof CATEGORIES_NOT_CARRIED)[number]);

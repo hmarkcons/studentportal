@@ -6,6 +6,8 @@ export type PendingTaskRow = {
   notes: string | null;
   due_date: string;
   due_time: string | null;
+  /** From migration 0295; absent before it. */
+  end_time?: string | null;
   all_day: boolean;
   priority: string;
   color: string | null;
@@ -21,6 +23,8 @@ export type PendingPersonalTaskRow = {
   description: string | null;
   due_date: string;
   due_time: string | null;
+  /** From migration 0295; absent before it. */
+  end_time?: string | null;
   all_day: boolean;
   priority: string;
   color: string | null;
@@ -29,6 +33,14 @@ export type PendingPersonalTaskRow = {
 };
 
 export type RecipientBucket = { name: string; items: ReminderEmailItem[] };
+
+/** "18:00", or "18:00–19:30" once an item has an end time. */
+export function reminderTime(allDay: boolean, dueTime: string | null | undefined, endTime?: string | null): string | null {
+  if (allDay || !dueTime) return null;
+  const start = dueTime.slice(0, 5);
+  const end = endTime ? endTime.slice(0, 5) : null;
+  return end && end > start ? `${start}–${end}` : start;
+}
 
 function one<T>(v: T | T[] | null | undefined) {
   return Array.isArray(v) ? v[0] ?? null : v ?? null;
@@ -72,7 +84,7 @@ export function buildReminderRecipients(
       dueDate: t.due_date,
       isOverdue: t.due_date < todayStr,
       allDay: t.all_day,
-      time: t.all_day ? null : t.due_time?.slice(0, 5) ?? null,
+      time: reminderTime(t.all_day, t.due_time, t.end_time),
       priority: t.priority,
       notes: t.notes,
       color: t.color,
@@ -97,7 +109,7 @@ export function buildReminderRecipients(
       dueDate: p.due_date,
       isOverdue: p.due_date < todayStr,
       allDay: p.all_day,
-      time: p.all_day ? null : p.due_time?.slice(0, 5) ?? null,
+      time: reminderTime(p.all_day, p.due_time, p.end_time),
       priority: p.priority,
       notes: p.description,
       color: p.color,

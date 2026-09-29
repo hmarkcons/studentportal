@@ -551,11 +551,16 @@ export function StaffCommissionTable({
         <Button onClick={clear}>Clear</Button>
       </div>
 
-      <TableFrame label="Staff commission" className="rounded-lg border border-border">
+      <TableFrame label="Staff commission" className="rounded-lg border border-border" freezeFirstColumn={false}>
         <table className="w-full min-w-[1700px] text-sm">
           <thead>
             <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-muted">
-              <th className="whitespace-nowrap px-4 py-3">Student</th>
+              <th scope="col" className="w-12 px-3 py-3 text-right font-medium" data-serial>
+                <abbr title="Serial number" className="no-underline">
+                  #
+                </abbr>
+              </th>
+              <th className="whitespace-nowrap px-4 py-3" data-frozen>Student</th>
               <th className="whitespace-nowrap px-4 py-3">Reg. Month</th>
               <th className="whitespace-nowrap px-4 py-3">University</th>
               <th className="whitespace-nowrap px-4 py-3">Program</th>
@@ -569,15 +574,18 @@ export function StaffCommissionTable({
             </tr>
           </thead>
           <tbody>
-            {paged.map((r) => (
+            {paged.map((r, i) => (
               <tr key={r.id} className="border-b border-border last:border-0 align-top">
                 {editingId === r.id ? (
-                  <td colSpan={11} className="px-4 py-3">
+                  <td colSpan={12} className="px-4 py-3">
                     <EditRow row={r} onDone={() => setEditingId(null)} />
                   </td>
                 ) : (
                   <>
-                    <td className="whitespace-nowrap px-4 py-3">
+                    <td className="w-12 px-3 py-3 text-right text-xs tabular-nums text-muted" data-serial>
+                      {(currentPage - 1) * PAGE_SIZE + i + 1}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3" data-frozen>
                       <span className="text-ink">{r.studentName}</span>
                       {r.studentEmail && <span className="ml-2 text-xs text-muted">{r.studentEmail}</span>}
                     </td>
@@ -621,7 +629,7 @@ export function StaffCommissionTable({
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={11} className="px-4 py-10 text-center text-muted">
+                <td colSpan={12} className="px-4 py-10 text-center text-muted">
                   No commission records match this search.
                 </td>
               </tr>

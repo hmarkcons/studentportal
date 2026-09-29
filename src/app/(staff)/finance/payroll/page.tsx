@@ -3,6 +3,7 @@ import { hasRole } from "@/lib/auth/roles";
 import { documentUrls } from "@/lib/storageUrls";
 import { COMPENSATION_EMBED, withCompensation, withCompensationAll } from "@/lib/staffCompensation";
 import { createClient } from "@/lib/supabase/server";
+import { agreementDestination } from "@/lib/agreementCountry";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { CURRENCY_SYMBOLS, toPKR } from "@/lib/constants";
@@ -87,7 +88,7 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
         ? await supabase
             .from("invoices")
             .select(
-              "id, consultancy_fee, currency, agreement:agreements(template:agreement_templates(destination:destinations(track)))"
+              "id, consultancy_fee, currency, agreement:agreements(destination:destinations(track), template:agreement_templates(destination:destinations(track)))"
             )
             .in("student_id", studentIds)
         : { data: [] };
@@ -160,7 +161,7 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
         ? await supabase
             .from("agreements")
             .select(
-              "student_id, discount_amount, consultancy_fee_override, template:agreement_templates(destination:destinations(track, consultancy_fee, consultancy_fee_currency))"
+              "student_id, discount_amount, consultancy_fee_override, destination:destinations(track, consultancy_fee, consultancy_fee_currency), template:agreement_templates(destination:destinations(track, consultancy_fee, consultancy_fee_currency))"
             )
             .eq("status", "signed")
             .in("student_id", allStudentIds)
@@ -168,10 +169,7 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
 
       const commissionBasisByStudent: Record<string, { track: string | null; consultancyFee: number | null; currency: string | null }> = {};
       for (const a of signedAgreements ?? []) {
-        const template = one(a.template as never) as { destination?: unknown } | null;
-        const destination = template?.destination
-          ? (one(template.destination as never) as { track?: string; consultancy_fee?: number; consultancy_fee_currency?: string } | null)
-          : null;
+        const destination = agreementDestination<{ track?: string; consultancy_fee?: number; consultancy_fee_currency?: string }>(a);
         if (!destination) continue;
         const consultancyFee = (a.consultancy_fee_override ?? destination.consultancy_fee ?? 0) - (a.discount_amount ?? 0);
         commissionBasisByStudent[a.student_id] = {

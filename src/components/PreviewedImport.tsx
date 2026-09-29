@@ -4,12 +4,13 @@ import { startTransition, useActionState, useRef, useState, type ReactNode } fro
 import { Button } from "@/components/ui/Button";
 import { FileField } from "@/components/FileField";
 import { ImportReportPanel } from "@/components/ImportReportPanel";
-import type { CatalogueImportResult } from "@/lib/importMerge";
+import { reportIsEmpty, type ImportResult } from "@/lib/importMerge";
 
-type ImportAction = (prev: CatalogueImportResult | undefined, formData: FormData) => Promise<CatalogueImportResult>;
+type ImportAction = (prev: ImportResult | undefined, formData: FormData) => Promise<ImportResult>;
 
 /**
- * Upload, preview, then apply — the shape every catalogue import takes.
+ * Upload, preview, then apply — the shape every catalogue import takes, and
+ * the scholarship bodies import after them.
  *
  * The first submit sends `intent=preview`, and the server does all of its
  * matching and writes nothing. Only once that preview is on screen does Apply
@@ -52,9 +53,9 @@ export function PreviewedImport({
   }
 
   const previewed = state?.success && state.mode === "preview" ? state : null;
-  const hasWork =
-    previewed !== null &&
-    previewed.universities.added + previewed.universities.updated + previewed.programs.added + previewed.programs.updated > 0;
+  // Whatever the import counts — universities and programmes, or scholarship
+  // bodies — something to add or update is something to apply.
+  const hasWork = previewed !== null && !reportIsEmpty(previewed);
   const canApply = hasWork && !stale && file !== null;
 
   function send(next: "preview" | "apply") {

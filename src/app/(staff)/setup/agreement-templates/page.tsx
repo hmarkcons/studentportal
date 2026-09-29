@@ -119,11 +119,11 @@ export default async function AgreementTemplatesPage(props: { searchParams: Prom
           return (
             <div key={t.id} className="flex items-center justify-between px-4 py-3 text-sm">
               <span className="text-ink">
-                {t.name} <span className="text-muted">· {destination?.display_name ?? "—"} · {t.signatory_name}</span>
+                {t.name} <span className="text-muted">· {destination?.display_name ?? "All destinations"} · {t.signatory_name}</span>
                 {t.service_type === "visa_only" && <span className="ml-2 rounded-full bg-info-bg px-2 py-0.5 text-[11px] font-medium text-info">Visa service only</span>}
               </span>
               <TemplateActionsMenu
-                template={{ id: t.id, name: t.name, signatory_name: t.signatory_name, wording: t.wording, destinationName: destination?.display_name ?? null }}
+                template={{ id: t.id, name: t.name, signatory_name: t.signatory_name, wording: t.wording, destinationName: destination?.display_name ?? "All destinations" }}
                 canManage={isSuperAdmin}
               />
             </div>

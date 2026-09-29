@@ -84,11 +84,16 @@ export default async function InventoryPage() {
 
       <Card className="mb-6">
         <h3 className="mb-3 text-sm font-medium text-ink">Stock</h3>
-        <TableFrame label="Inventory" surface="card" className="rounded-lg border border-border">
+        <TableFrame label="Inventory" surface="card" className="rounded-lg border border-border" freezeFirstColumn={false}>
           <table className="w-full min-w-[560px] text-sm">
             <thead>
               <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-muted">
-                <th className="px-4 py-3">Item</th>
+                <th scope="col" className="w-12 px-3 py-3 text-right font-medium" data-serial>
+                  <abbr title="Serial number" className="no-underline">
+                    #
+                  </abbr>
+                </th>
+                <th className="px-4 py-3" data-frozen>Item</th>
                 <th className="px-4 py-3">Category</th>
                 <th className="px-4 py-3">On hand</th>
                 <th className="px-4 py-3">Status</th>
@@ -96,12 +101,12 @@ export default async function InventoryPage() {
               </tr>
             </thead>
             <tbody>
-              {(items ?? []).map((item) => (
-                <ItemRow key={item.id} item={item} canManage={canManage} />
+              {(items ?? []).map((item, i) => (
+                <ItemRow key={item.id} item={item} canManage={canManage} serial={i + 1} />
               ))}
               {(!items || items.length === 0) && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-muted">
+                  <td colSpan={6} className="px-4 py-10 text-center text-muted">
                     No items yet.
                   </td>
                 </tr>

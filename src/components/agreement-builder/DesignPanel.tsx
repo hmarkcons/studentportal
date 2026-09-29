@@ -297,8 +297,11 @@ export function DesignPanel({
           <Section title="Bullets and numbering">
             <div className="flex flex-wrap gap-4">
               <Row label="Bullet">
+                {/* data-glyph-preview: each option shows the character the PDF prints,
+                    which is a preview of the output, not an icon. */}
                 <select
                   aria-label="Bullet"
+                  data-glyph-preview
                   value={t.list.bullet}
                   onChange={(e) => set((d) => void (d.list.bullet = e.target.value as Theme["list"]["bullet"]))}
                   className={`${field} w-36`}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { FileText } from "lucide-react";
+import { FileText, Paperclip, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { FileField } from "@/components/FileField";
 import { ActionStatus } from "@/components/ActionStatus";
@@ -31,7 +31,23 @@ export function ScholarshipProofs({
 }) {
   const action = uploadScholarshipProof.bind(null, scholarshipId, studentId);
   const [state, formAction, pending] = useActionState(action, undefined);
-  const [ready, setReady] = useState(false);
+  // One field per file; each uploads the moment it is chosen (FileField), so
+  // several are sent in one go without a request over the platform's limit.
+  const [fields, setFields] = useState<number[]>([0]);
+  const [readyBy, setReadyBy] = useState<Record<number, boolean>>({});
+  const ready = fields.some((f) => readyBy[f]);
+  const [round, setRound] = useState(0);
+  const [seen, setSeen] = useState(state);
+  if (state !== seen) {
+    setSeen(state);
+    // A clean form after a full success; after a partial one the fields stay,
+    // so the refused file is still there to fix and resend.
+    if (state?.success) {
+      setFields([0]);
+      setReadyBy({});
+      setRound((r) => r + 1);
+    }
+  }
   const [removing, setRemoving] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
 
@@ -96,13 +112,44 @@ export function ScholarshipProofs({
       {removeError && <p className="mb-2 text-xs text-danger">{removeError}</p>}
 
       {canManage && (
-        <form action={formAction} className="flex flex-wrap items-start gap-2">
-          <FileField hint="PDF or image" onChange={(s) => setReady(Boolean(s.file))} />
-          <Button type="submit" size="sm" pending={pending} disabled={!ready} className="mt-0.5">
-            Attach proof
-          </Button>
-          <ActionStatus state={state} pending={pending} label="Attached." className="mt-1.5" />
-          {state?.error && <p className="mt-1.5 text-xs text-danger">{state.error}</p>}
+        <form key={round} action={formAction} className="flex flex-col gap-2" data-scholarship-proof-form>
+          {fields.map((f, i) => (
+            <div key={f} className="flex flex-wrap items-start gap-2">
+              <FileField
+                name={i === 0 ? "file" : `file_${i}`}
+                hint="PDF or image"
+                onChange={(st) => setReadyBy((r) => ({ ...r, [f]: Boolean(st.file) && !st.busy }))}
+              />
+              {fields.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFields((all) => all.filter((x) => x !== f));
+                    setReadyBy((r) => ({ ...r, [f]: false }));
+                  }}
+                  className="mt-1 rounded p-0.5 text-muted hover:bg-bg hover:text-ink"
+                  aria-label="Remove this file"
+                  title="Remove this file"
+                >
+                  <X aria-hidden className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          ))}
+          <div className="flex flex-wrap items-center gap-2">
+            {fields.length < 8 && (
+              <Button type="button" variant="ghost" size="sm" onClick={() => setFields((all) => [...all, Math.max(...all) + 1])}>
+                <Plus aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                Add another file
+              </Button>
+            )}
+            <Button type="submit" size="sm" pending={pending} disabled={!ready}>
+              <Paperclip aria-hidden className="h-3.5 w-3.5 shrink-0" />
+              {fields.length > 1 ? "Attach files" : "Attach proof"}
+            </Button>
+            <ActionStatus state={state} pending={pending} label="Attached." />
+          </div>
+          {state?.error && <p className="text-xs text-danger">{state.error}</p>}
         </form>
       )}
     </div>

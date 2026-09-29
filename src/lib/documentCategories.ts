@@ -15,6 +15,7 @@
 // reads one and then the other.
 export const CATEGORY_ORDER = [
   "admission",
+  "acceptance_letters",
   "attestation",
   "scholarship_documents",
   "interview",
@@ -27,8 +28,20 @@ export const CATEGORY_ORDER = [
   "other",
 ] as const;
 
+/**
+ * The section a document is listed under. Mostly its own category; a partner
+ * university's offer letter (0016) is filed under Acceptance Letters (0294)
+ * with the letters staff file, rather than falling into Other under its raw
+ * category name.
+ */
+export function sectionOfCategory(category: string | null | undefined): string {
+  if (category === "offer_letter") return "acceptance_letters";
+  return category || "other";
+}
+
 export const CATEGORY_LABELS: Record<string, string> = {
   admission: "Admission Documents",
+  acceptance_letters: "Acceptance Letters",
   attestation: "Attestation",
   visa: "Visa Application Requirements",
   scholarship_documents: "Scholarship Documents",

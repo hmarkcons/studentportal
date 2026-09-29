@@ -175,11 +175,16 @@ export function ConsultancyFeeOverview({ rows, canManage }: { rows: FeeRow[]; ca
       {filtered.length === 0 ? (
         <EmptyState>No registered students match these filters.</EmptyState>
       ) : (
-        <TableFrame label="Consultancy fees" className="rounded-lg border border-border">
+        <TableFrame label="Consultancy fees" className="rounded-lg border border-border" freezeFirstColumn={false}>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase text-muted">
-                <Th>Student</Th>
+                <th scope="col" className="w-12 px-3 py-2 text-right font-medium" data-serial>
+                  <abbr title="Serial number" className="no-underline">
+                    #
+                  </abbr>
+                </th>
+                <Th frozen>Student</Th>
                 <Th>Country</Th>
                 <Th>Intake</Th>
                 <Th>Level</Th>
@@ -194,9 +199,12 @@ export function ConsultancyFeeOverview({ rows, canManage }: { rows: FeeRow[]; ca
               </tr>
             </thead>
             <tbody>
-              {filtered.map((r) => (
+              {filtered.map((r, i) => (
                 <tr key={r.studentId} className="border-b border-border last:border-0">
-                  <Td>
+                  <td className="w-12 px-3 py-2 text-right text-xs tabular-nums text-muted" data-serial>
+                    {i + 1}
+                  </td>
+                  <Td frozen>
                     <Link href={`/students/${r.studentId}`} className="text-primary hover:underline">
                       {r.studentName}
                     </Link>
@@ -299,13 +307,22 @@ function Filter({
   );
 }
 
-function Th({ children, right }: { children: React.ReactNode; right?: boolean }) {
-  return <th className={`whitespace-nowrap px-3 py-2 font-medium ${right ? "text-right" : ""}`}>{children}</th>;
+// `frozen` marks the column that stays at the left while the table scrolls
+// sideways (TableFrame) — the student's name, not the serial number before it.
+function Th({ children, right, frozen }: { children: React.ReactNode; right?: boolean; frozen?: boolean }) {
+  return (
+    <th data-frozen={frozen || undefined} className={`whitespace-nowrap px-3 py-2 font-medium ${right ? "text-right" : ""}`}>
+      {children}
+    </th>
+  );
 }
 
-function Td({ children, right, muted }: { children: React.ReactNode; right?: boolean; muted?: boolean }) {
+function Td({ children, right, muted, frozen }: { children: React.ReactNode; right?: boolean; muted?: boolean; frozen?: boolean }) {
   return (
-    <td className={`whitespace-nowrap px-3 py-2 ${right ? "text-right font-mono text-xs" : ""} ${muted ? "text-muted" : "text-ink"}`}>
+    <td
+      data-frozen={frozen || undefined}
+      className={`whitespace-nowrap px-3 py-2 ${right ? "text-right font-mono text-xs" : ""} ${muted ? "text-muted" : "text-ink"}`}
+    >
       {children}
     </td>
   );

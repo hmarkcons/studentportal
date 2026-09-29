@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { agreementCountry } from "@/lib/agreementLabel";
+import { agreementTemplateChoices } from "@/lib/agreementTemplateChoices";
+import { serviceOf, templatesForService } from "@/lib/serviceType";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -77,21 +79,31 @@ export default async function AgreementGeneratorPage(props: {
     const isSuperAdmin = role === "super_admin";
     const canModifyAgreement = role === "super_admin" || role === "processing";
 
-    const { data: templates } = await supabase
-      .from("agreement_templates")
-      .select("id, name, signatory_name, destination:destinations(id, display_name)");
-
-    const { data: backupDestinations } = await supabase
-      .from("lead_destinations")
-      .select("destination_id")
-      .eq("lead_id", selected.id)
-      .eq("is_backup", true);
-    const backupDestinationIds = (backupDestinations ?? []).map((d) => d.destination_id);
+    const [{ data: allTemplates }, { data: registeredRows }, { data: leadService }] = await Promise.all([
+      supabase.from("agreement_templates").select("id, name, signatory_name, service_type, destination:destinations(id, display_name)"),
+      supabase.from("lead_destinations").select("destination_id, is_backup, destination:destinations(display_name)").eq("lead_id", selected.id),
+      supabase.from("leads").select("service_type").eq("id", selected.id).maybeSingle(),
+    ]);
+    const backupDestinationIds = (registeredRows ?? []).filter((d) => d.is_backup).map((d) => d.destination_id as string);
+    // The same narrowing as the student's own page: their countries, their
+    // service — and a general visa template with a country chosen (0298).
+    const registered = (registeredRows ?? []).map((r) => ({
+      id: r.destination_id as string,
+      display_name: (one(r.destination as never) as { display_name?: string } | null)?.display_name ?? "",
+      isBackup: Boolean(r.is_backup),
+    }));
+    const service = serviceOf(leadService?.service_type);
+    const templateChoices = agreementTemplateChoices(templatesForService(allTemplates ?? [], service), registered);
+    const templates = templateChoices.available;
+    const orderedCountries = [...registered.filter((r) => !r.isBackup), ...registered.filter((r) => r.isBackup)].map(({ id: countryId, display_name }) => ({
+      id: countryId,
+      display_name,
+    }));
 
     const { data: agreements } = await supabase
       .from("agreements")
       .select(
-        "id, status, version, signing_method, signed_file_path, pdf_path, email_verified, discount_amount, created_at, template:agreement_templates(file_path, destination:destinations(country))"
+        "id, status, version, signing_method, signed_file_path, pdf_path, email_verified, discount_amount, created_at, destination:destinations(country), template:agreement_templates(file_path, destination:destinations(country))"
       )
       .eq("student_id", selected.id)
       .order("created_at", { ascending: false });
@@ -130,9 +142,13 @@ export default async function AgreementGeneratorPage(props: {
         {(role === "super_admin" || role === "processing") && (
           <GenerateAgreementForm
             studentId={selected.id}
-            templates={templates ?? []}
+            templates={templates}
             discountAmount={selected.discount_amount ?? null}
             backupDestinationIds={backupDestinationIds}
+            missingTemplateFor={templateChoices.missingTemplateFor}
+            hasCountry={templateChoices.hasCountry}
+            service={service}
+            countries={orderedCountries}
           />
         )}
         {agreements && agreements.length > 0 && (

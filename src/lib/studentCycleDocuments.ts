@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { orderCycles, resolveCycleDocuments, type Cycle } from "@/lib/intakeCycle";
+// Relative, with its extension: autoStagesLoad.ts is loaded under plain Node.
+import { orderCycles, resolveCycleDocuments, type Cycle } from "./intakeCycle.ts";
 
 /**
  * A student's documents for one intake, as their Documents page lists them.

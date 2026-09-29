@@ -35,11 +35,16 @@ export default async function AdCampaignsPage() {
       <Card className="mb-6">
         <NewAdCampaignForm universities={universities ?? []} />
       </Card>
-      <TableFrame label="Ad campaigns" className="rounded-lg border border-border">
+      <TableFrame label="Ad campaigns" className="rounded-lg border border-border" freezeFirstColumn={false}>
         <table className="w-full min-w-[720px] text-sm">
           <thead>
             <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-muted">
-              <th className="px-4 py-3">Platform</th>
+              <th scope="col" className="w-12 px-3 py-3 text-right font-medium" data-serial>
+                <abbr title="Serial number" className="no-underline">
+                  #
+                </abbr>
+              </th>
+              <th className="px-4 py-3" data-frozen>Platform</th>
               <th className="px-4 py-3">Target</th>
               <th className="px-4 py-3">Period</th>
               <th className="px-4 py-3 text-right">Planned</th>
@@ -48,11 +53,14 @@ export default async function AdCampaignsPage() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((c) => {
+            {rows.map((c, i) => {
               const state = spendState(c.planned_spend, c.actual_spend);
               return (
               <tr key={c.id} className="border-b border-border last:border-0">
-                <td className="px-4 py-3">{c.platform}</td>
+                <td className="w-12 px-3 py-3 text-right text-xs tabular-nums text-muted" data-serial>
+                  {i + 1}
+                </td>
+                <td className="px-4 py-3" data-frozen>{c.platform}</td>
                 <td className="px-4 py-3">
                   {c.country ?? "—"} {one(c.university)?.name && `· ${one(c.university)?.name}`}
                 </td>
@@ -88,7 +96,7 @@ export default async function AdCampaignsPage() {
             })}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-muted">
+                <td colSpan={7} className="px-4 py-10 text-center text-muted">
                   No ad campaigns yet.
                 </td>
               </tr>

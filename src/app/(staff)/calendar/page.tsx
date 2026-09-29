@@ -1,357 +1,314 @@
 import { hasRole } from "@/lib/auth/roles";
 import { getStaffSession } from "@/lib/auth/session";
-import { toYMD, parseYMD, getMonthGridDays, getWeekDays, eachDateInRange, expandRecurrence, karachiToday } from "@/lib/calendarDates";
-import { CalendarShell } from "./CalendarShell";
-import type { CalendarEvent, CalendarRecurrence } from "./types";
+import { karachiToday } from "@/lib/calendarDates";
+import { parseDateParam, parseView, periodRange } from "@/lib/calendarLayout";
+import { personalEvents, recordEvent, reminderEvent, taskEvents, type CalendarEvent } from "@/lib/calendarItems";
+import { loadPendingPersonalTasks, loadPendingTasks, one, personalInput, taskInput, type StudentRef } from "@/lib/calendarQueries";
+import { readAll } from "@/lib/catalogueReads";
 import { applicationDeadline } from "@/lib/applicationDeadline";
+import { StaffCalendar } from "./StaffCalendar";
 
-function one<T>(v: T | T[] | null) {
-  return Array.isArray(v) ? v[0] ?? null : v;
+/** A read that is allowed to fail without blanking the calendar — but says it failed. */
+async function attempt<T>(what: string, read: () => Promise<T[]>, problems: string[]): Promise<T[]> {
+  try {
+    return await read();
+  } catch (error) {
+    problems.push(`${what} (${(error as Error).message})`);
+    return [];
+  }
 }
 
-function occurrenceDates(
-  dueDate: string,
-  endDate: string | null,
-  recurrence: string | null,
-  recurrenceEndDate: string | null,
-  rangeStartStr: string,
-  rangeEndStr: string
-): string[] {
-  if (recurrence && recurrence !== "none") {
-    return expandRecurrence(dueDate, recurrence as CalendarRecurrence, recurrenceEndDate, rangeStartStr, rangeEndStr);
-  }
-  if (endDate && endDate > dueDate) {
-    return eachDateInRange(dueDate, endDate, rangeStartStr, rangeEndStr);
-  }
-  return dueDate >= rangeStartStr && dueDate <= rangeEndStr ? [dueDate] : [];
-}
+type ReminderRow = {
+  id: string;
+  type: string;
+  due_date: string;
+  due_time: string | null;
+  note: string | null;
+  resolved: boolean;
+  created_by: string | null;
+  student: unknown;
+};
+
+type ApplicationRow = {
+  id: string;
+  deadline: string | null;
+  program: unknown;
+  round: unknown;
+  student: unknown;
+  university: unknown;
+};
+
+type DocumentRow = { id: string; student_id: string; custom_name: string | null; category: string | null; deadline: string; student: unknown };
+
+type AppointmentRow = { field_key: string; field_value: string | null; application: unknown };
 
 export default async function CalendarPage(props: {
   searchParams: Promise<{ view?: string; date?: string; staff?: string }>;
 }) {
   const { view: viewParam, date: dateParam, staff: staffParam } = await props.searchParams;
-  const view = viewParam === "week" ? "week" : viewParam === "day" ? "day" : "month";
+  // Week first, as Google opens.
+  const view = parseView(viewParam, "week");
 
   const { supabase, staff: viewerStaff } = await getStaffSession();
   const viewerId = viewerStaff?.id ?? "";
   const canViewOthers = hasRole(viewerStaff, "management") || hasRole(viewerStaff, "super_admin");
   const targetStaffId = canViewOthers && staffParam ? staffParam : viewerId;
-
-  // Whose calendar is actually on screen — deadlines below are scoped to the
-  // student's processing officer, so a management user browsing someone
-  // else's calendar needs that person's role, not their own.
-  // The whole role set, not just the primary: somebody who covers processing
-  // alongside another job still has the deadlines of a processing officer, and
-  // reading only their primary role would empty their calendar.
-  const targetStaffRoles =
-    targetStaffId === viewerId
-      ? viewerStaff
-      : (await supabase.from("staff").select("role, roles").eq("id", targetStaffId).maybeSingle()).data;
-  const targetIsProcessing = hasRole(targetStaffRoles, "processing");
+  const viewingSomeoneElse = targetStaffId !== viewerId;
 
   // Karachi's day, not the server's. toISOString() is UTC, so for the first
-  // five hours of every Karachi day the grid highlighted yesterday as today and
-  // an item due today counted as not yet due.
+  // five hours of every Karachi day the grid highlighted yesterday as today.
   const todayStr = karachiToday();
-  const referenceDate = parseYMD(dateParam || todayStr);
+  const referenceDate = parseDateParam(dateParam) ?? todayStr;
+  const range = periodRange(view, referenceDate);
+  const problems: string[] = [];
 
-  const rangeDays = view === "month" ? getMonthGridDays(referenceDate) : view === "week" ? getWeekDays(referenceDate) : [referenceDate];
-  const rangeStartStr = toYMD(rangeDays[0]);
-  const rangeEndStr = toYMD(rangeDays[rangeDays.length - 1]);
+  // Everything that does not depend on anything else, at once: each of these
+  // is a round trip to Sydney, and one after another they added up to seconds.
+  const [targetStaffRoles, tasks, reminders, appointmentFields, applications, documentDeadlines, personalTasks, staffList] = await Promise.all([
+    // Whose calendar is on screen — deadlines are scoped to the student's
+    // processing officer, so management browsing someone else's calendar needs
+    // that person's roles. All of them, not only the primary (hasRole).
+    viewingSomeoneElse
+      ? supabase
+          .from("staff")
+          .select("role, roles")
+          .eq("id", targetStaffId)
+          .maybeSingle()
+          .then((r) => r.data)
+      : Promise.resolve(viewerStaff),
+    attempt("student tasks", () => loadPendingTasks(supabase, range.end), problems),
+    // Resolved reminders are still read — one ticked off stays on the calendar
+    // struck through, so it can be reopened, edited or deleted.
+    attempt(
+      "reminders",
+      () =>
+        readAll<ReminderRow>((from, to) =>
+          supabase
+            .from("reminders")
+            .select("id, type, due_date, due_time, note, resolved, created_by, student:leads(id, full_name, assigned_counselor_id, contact_number)")
+            .not("due_date", "is", null)
+            .gte("due_date", range.start)
+            .lte("due_date", range.end)
+            .order("due_date")
+            .order("id")
+            .range(from, to) as never
+        ),
+      problems
+    ),
+    // Appointments live in the documentation tracker; which date fields count
+    // is opted in from Setup > Document trackers (is_appointment).
+    supabase
+      .from("tracker_definitions")
+      .select("country_code, field_key, label")
+      .eq("is_appointment", true)
+      .then((r) => r.data ?? []),
+    // Read once for two things: each application's deadline, and the list a
+    // new student task is attached to.
+    attempt(
+      "application deadlines",
+      () =>
+        readAll<ApplicationRow>((from, to) =>
+          supabase
+            .from("applications")
+            .select(
+              "id, deadline, program:programs(name, application_deadline), round:program_intake_rounds(label, application_deadline), student:leads(id, full_name, processing_officer_id), university:universities(name)"
+            )
+            .order("created_at", { ascending: false })
+            .order("id")
+            .range(from, to) as never
+        ),
+      problems
+    ),
+    attempt(
+      "document deadlines",
+      () =>
+        readAll<DocumentRow>((from, to) =>
+          supabase
+            .from("student_documents")
+            .select("id, student_id, custom_name, category, deadline, student:leads(full_name, processing_officer_id)")
+            .not("deadline", "is", null)
+            .neq("status", "verified")
+            .gte("deadline", range.start)
+            .lte("deadline", range.end)
+            .order("id")
+            .range(from, to) as never
+        ),
+      problems
+    ),
+    targetStaffId ? attempt("personal items", () => loadPendingPersonalTasks(supabase, targetStaffId, range.end), problems) : Promise.resolve([]),
+    canViewOthers
+      ? supabase
+          .from("staff")
+          .select("id, full_name")
+          .eq("status", "active")
+          .order("full_name")
+          .then((r) => r.data ?? [])
+      : Promise.resolve([] as { id: string; full_name: string }[]),
+  ]);
 
-  // No lower bound, because a recurring task that began long ago still has
-  // occurrences in this range — but nothing that starts after the range ends
-  // can appear in it, so that bound is safe and keeps the query from growing
-  // with every task ever created.
-  const { data: tasks } = await supabase
-    .from("application_tasks")
-    .select(
-      "id, description, notes, due_date, due_time, end_date, all_day, priority, status, color, guest_emails, recurrence, recurrence_end_date, application:applications(student:leads(full_name, assigned_counselor_id, processing_officer_id))"
-    )
-    .eq("status", "pending")
-    .not("due_date", "is", null)
-    .lte("due_date", rangeEndStr);
+  const appointmentValues = appointmentFields.length
+    ? await attempt(
+        "visa appointments",
+        () =>
+          readAll<AppointmentRow>((from, to) =>
+            supabase
+              .from("application_country_extra")
+              .select(
+                "field_key, field_value, application:applications(id, student:leads(id, full_name, assigned_counselor_id, processing_officer_id), university:universities(destination:destinations(country_code)))"
+              )
+              .in("field_key", [...new Set(appointmentFields.map((f) => f.field_key))])
+              .gte("field_value", range.start)
+              .lte("field_value", range.end)
+              .order("application_id")
+              .order("field_key")
+              .range(from, to) as never
+          ),
+        problems
+      )
+    : [];
 
-  // Resolved reminders are still fetched (not filtered out) — a completed
-  // reminder stays visible on the calendar so staff can uncheck, edit, or
-  // delete it later instead of it just vanishing.
-  const { data: reminders } = await supabase
-    .from("reminders")
-    .select("id, type, due_date, due_time, note, resolved, created_by, student:leads(full_name, assigned_counselor_id, contact_number)")
-    .not("due_date", "is", null)
-    .gte("due_date", rangeStartStr)
-    .lte("due_date", rangeEndStr)
-    .order("due_date");
+  const targetIsProcessing = hasRole(targetStaffRoles as never, "processing");
 
-  // Appointments live in the documentation tracker, not visa_records — that
-  // table is the pre-tracker system, the form that wrote it is no longer linked
-  // from anywhere and it holds no rows, so this section of the calendar was
-  // always empty. Which date fields count is opted in from Setup > Document
-  // trackers (is_appointment).
-  const { data: appointmentFields } = await supabase
-    .from("tracker_definitions")
-    .select("country_code, field_key, label")
-    .eq("is_appointment", true);
-
-  const { data: appointmentValues } = appointmentFields?.length
-    ? await supabase
-        .from("application_country_extra")
-        .select(
-          "field_key, field_value, application:applications(id, student:leads(full_name, assigned_counselor_id, processing_officer_id), university:universities(destination:destinations(country_code)))"
-        )
-        .in("field_key", [...new Set(appointmentFields.map((f) => f.field_key))])
-        .gte("field_value", rangeStartStr)
-        .lte("field_value", rangeEndStr)
-    : { data: [] };
-
-  // The application's own deadline, the chosen intake round's, and the
-  // programme's. This read only programs.application_deadline, which is the
-  // imported catalogue date and is null for almost every programme — so the
-  // deadline a processing officer typed on the Application Details form never
-  // reached their calendar. It also required a programme, so an application
-  // recorded before one was chosen was skipped even when it had a date.
-  const { data: programDeadlines } = await supabase
-    .from("applications")
-    .select(
-      "id, deadline, program:programs(name, application_deadline), round:program_intake_rounds(label, application_deadline), student:leads(full_name, processing_officer_id)"
-    );
-
-  const { data: documentDeadlines } = await supabase
-    .from("student_documents")
-    .select("id, custom_name, category, deadline, status, student:leads(full_name, processing_officer_id)")
-    .not("deadline", "is", null)
-    .neq("status", "verified")
-    .gte("deadline", rangeStartStr)
-    .lte("deadline", rangeEndStr);
-
-  const { data: personalTasks } = targetStaffId
-    ? await supabase
-        .from("personal_tasks")
-        .select(
-          "id, title, description, due_date, due_time, end_date, all_day, priority, status, color, guest_emails, recurrence, recurrence_end_date, student_id, student:leads!personal_tasks_student_id_fkey(full_name)"
-        )
-        .eq("owner_id", targetStaffId)
-        .eq("status", "pending")
-        .lte("due_date", rangeEndStr)
-    : { data: [] };
-
-  // Whose work this calendar is showing.
-  //
-  // Every other event type re-scoped when management picked another person
-  // from the staff selector, but tasks and appointments did not — so "Sohaib's
-  // calendar" showed Sohaib's personal reminders and follow-ups alongside every
-  // task and appointment in the firm, which is not his calendar.
-  //
-  // Only applied when actually looking at somebody else. On your own calendar
-  // the breadth is unchanged: row-level security already limits it to students
-  // you may see, and narrowing management's own view to just the students they
-  // personally hold would hide work from the people meant to be watching all
-  // of it.
-  const viewingSomeoneElse = targetStaffId !== viewerId;
-  function studentBelongsToTarget(student: { assigned_counselor_id?: string | null; processing_officer_id?: string | null } | null) {
+  // Whose work this calendar shows. On your own calendar RLS already limits
+  // tasks and appointments to students you may see; on a colleague's, only
+  // their students' — otherwise "Sohaib's calendar" held the whole firm's.
+  function studentBelongsToTarget(student: StudentRef | null) {
     if (!viewingSomeoneElse) return true;
     if (!student) return false;
     return student.assigned_counselor_id === targetStaffId || student.processing_officer_id === targetStaffId;
   }
-
-  const events: CalendarEvent[] = [];
-
-  (tasks ?? []).forEach((t) => {
-    const taskStudent = one(one(t.application)?.student) as
-      | { full_name?: string; assigned_counselor_id?: string | null; processing_officer_id?: string | null }
-      | null;
-    if (!studentBelongsToTarget(taskStudent)) return;
-    const dates = occurrenceDates(t.due_date!, t.end_date, t.recurrence, t.recurrence_end_date, rangeStartStr, rangeEndStr);
-    dates.forEach((date) => {
-      events.push({
-        id: `task-${t.id}-${date}`,
-        date,
-        time: t.all_day ? null : t.due_time ? t.due_time.slice(0, 5) : null,
-        kind: "task",
-        label: `${t.description} — ${taskStudent?.full_name ?? "?"}`,
-        tone: "warning",
-        color: t.color,
-        priority: t.priority,
-        done: t.status === "done",
-        taskId: t.id,
-        description: t.description,
-        notes: t.notes,
-        allDay: t.all_day,
-        startDate: t.due_date!,
-        endDate: t.end_date,
-        guestEmails: t.guest_emails ?? [],
-        recurrence: (t.recurrence as CalendarRecurrence) ?? "none",
-        recurrenceEndDate: t.recurrence_end_date,
-        isRecurrenceInstance: dates.length > 1,
-      });
-    });
-  });
-
-  (reminders ?? []).forEach((r) => {
-    const student = one(r.student);
-    // Follow-up reminders belong to a specific person — the lead's assigned
-    // counselor, or whoever set the date if the lead isn't assigned yet —
-    // unlike stall/deadline reminders, which stay visible calendar-wide.
-    if (r.type === "follow_up") {
-      const ownerId = student?.assigned_counselor_id ?? r.created_by;
-      if (ownerId !== targetStaffId) return;
-    }
-    const label =
-      r.type === "follow_up"
-        ? `${student?.full_name ?? "?"} - Follow-up${student?.contact_number ? ` (${student.contact_number})` : ""}`
-        : `${r.type.replace(/_/g, " ")} — ${student?.full_name ?? "?"}`;
-
-    events.push({
-      id: `reminder-${r.id}`,
-      date: r.due_date!,
-      time: r.due_time ? r.due_time.slice(0, 5) : null,
-      kind: "reminder",
-      label,
-      tone: "info",
-      done: r.resolved,
-      reminderId: r.id,
-      notes: r.note,
-    });
-  });
-
-  // The label comes from the tracker field, so a country that calls it a
-  // "Prefettura appointment" says exactly that rather than a generic word of
-  // ours.
-  const apptLabel = new Map((appointmentFields ?? []).map((f) => [f.country_code + ":" + f.field_key, f.label]));
-  (appointmentValues ?? []).forEach((row) => {
-    const value = (row.field_value ?? "").trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
-    const app = one(row.application as never) as { id?: string; student?: unknown; university?: unknown } | null;
-    const student = one(app?.student as never) as
-      | { full_name?: string; assigned_counselor_id?: string | null; processing_officer_id?: string | null }
-      | null;
-    if (!studentBelongsToTarget(student)) return;
-    const uni = one(app?.university as never) as { destination?: unknown } | null;
-    const dest = uni?.destination ? (one(uni.destination as never) as { country_code?: string } | null) : null;
-    // A field key flagged for a different country is not this application's
-    // appointment, even though the key matched.
-    const label = apptLabel.get(dest?.country_code + ":" + row.field_key);
-    if (!label) return;
-    events.push({
-      id: "appt-" + app?.id + "-" + row.field_key + "-" + value,
-      date: value,
-      // Tracker appointment fields are date-only, so there is no time to show.
-      time: null,
-      kind: "visa",
-      label: label + " — " + (student?.full_name ?? "?"),
-      tone: "success",
-    });
-  });
-
-  // A deadline belongs to the student's processing officer. With nobody
-  // assigned it falls back to the whole processing team, so an unassigned
-  // student's deadlines are still on someone's calendar.
+  // A deadline belongs to the student's processing officer; with nobody
+  // assigned, to the whole processing team, so it is still on someone's calendar.
   function deadlineBelongsToTarget(processingOfficerId: string | null | undefined) {
     return processingOfficerId ? processingOfficerId === targetStaffId : targetIsProcessing;
   }
 
-  (programDeadlines ?? []).forEach((a) => {
-    const program = one(a.program);
-    const round = one(a.round) as { label?: string; application_deadline?: string | null } | null;
+  const events: CalendarEvent[] = [];
+
+  for (const raw of tasks) {
+    const { input, student } = taskInput(raw);
+    if (!studentBelongsToTarget(student)) continue;
+    events.push(...taskEvents(input, range));
+  }
+
+  for (const r of reminders) {
+    const student = one(r.student as never) as { id?: string; full_name?: string; assigned_counselor_id?: string | null; contact_number?: string | null } | null;
+    // Follow-ups belong to one person — the lead's counsellor, or whoever set
+    // the date if nobody is assigned — unlike stall and deadline reminders.
+    if (r.type === "follow_up" && (student?.assigned_counselor_id ?? r.created_by) !== targetStaffId) continue;
+    events.push(
+      reminderEvent({
+        id: r.id,
+        type: r.type,
+        due_date: r.due_date,
+        due_time: r.due_time,
+        note: r.note,
+        resolved: r.resolved,
+        studentId: student?.id ?? null,
+        studentName: student?.full_name ?? null,
+        contactNumber: student?.contact_number ?? null,
+      })
+    );
+  }
+
+  // The label comes from the tracker field, so a country that calls it a
+  // "Prefettura appointment" says exactly that.
+  const apptLabel = new Map(appointmentFields.map((f) => [f.country_code + ":" + f.field_key, f.label]));
+  for (const row of appointmentValues) {
+    const value = (row.field_value ?? "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) continue;
+    const app = one(row.application as never) as { id?: string; student?: unknown; university?: unknown } | null;
+    const student = one(app?.student as never) as StudentRef | null;
+    if (!studentBelongsToTarget(student)) continue;
+    const uni = one(app?.university as never) as { destination?: unknown } | null;
+    const dest = uni?.destination ? (one(uni.destination as never) as { country_code?: string } | null) : null;
+    // A field key flagged for a different country is not this application's appointment.
+    const label = apptLabel.get(dest?.country_code + ":" + row.field_key);
+    if (!label) continue;
+    events.push(
+      recordEvent({
+        id: `appt-${app?.id}-${row.field_key}-${value}`,
+        kind: "visa",
+        date: value,
+        title: `${label} — ${student?.full_name ?? "?"}`,
+        subtitle: student?.full_name ?? null,
+        studentId: student?.id ?? null,
+        studentName: student?.full_name ?? null,
+        href: student?.id && app?.id ? `/students/${student.id}/applications/${app.id}/tracker` : null,
+        hrefLabel: "Open the documentation tracker",
+        origin: "Kept in the documentation tracker. Change the date there and it moves here.",
+      })
+    );
+  }
+
+  for (const a of applications) {
+    const program = one(a.program as never) as { name?: string; application_deadline?: string | null } | null;
+    const round = one(a.round as never) as { label?: string; application_deadline?: string | null } | null;
     const deadline = applicationDeadline(a.deadline, round?.application_deadline, program?.application_deadline);
-    if (!deadline) return;
-    if (deadline < rangeStartStr || deadline > rangeEndStr) return;
-    const student = one(a.student);
-    if (!deadlineBelongsToTarget(student?.processing_officer_id)) return;
-    // The round, where one is chosen — two rounds of the same programme are
-    // two different dates, and an entry naming only the programme cannot say
-    // which of them this is.
+    if (!deadline || deadline < range.start || deadline > range.end) continue;
+    const student = one(a.student as never) as StudentRef | null;
+    if (!deadlineBelongsToTarget(student?.processing_officer_id)) continue;
+    // The round, where one is chosen — two rounds of one programme are two dates.
     const what = program?.name ? `${program.name}${round?.label ? ` (${round.label})` : ""} deadline` : "Application deadline";
-    events.push({
-      id: `deadline-${a.id}`,
-      date: deadline,
-      time: null,
-      kind: "deadline",
-      // "Application deadline" when no programme is chosen yet, rather than
-      // the "undefined deadline" the old template produced.
-      label: `${what} — ${student?.full_name ?? "?"}`,
-      tone: "danger",
-    });
-  });
-
-  (documentDeadlines ?? []).forEach((d) => {
-    const student = one(d.student);
-    if (!deadlineBelongsToTarget(student?.processing_officer_id)) return;
-    events.push({
-      id: `docdeadline-${d.id}`,
-      date: d.deadline!,
-      time: null,
-      kind: "deadline",
-      label: `${d.custom_name ?? d.category ?? "Document"} due — ${student?.full_name ?? "?"}`,
-      tone: "danger",
-    });
-  });
-
-  (personalTasks ?? []).forEach((p) => {
-    const dates = occurrenceDates(p.due_date, p.end_date, p.recurrence, p.recurrence_end_date, rangeStartStr, rangeEndStr);
-    dates.forEach((date) => {
-      events.push({
-        id: `personal-${p.id}-${date}`,
-        date,
-        time: p.all_day ? null : p.due_time ? p.due_time.slice(0, 5) : null,
-        kind: "personal",
-        label: p.title,
-        tone: "primary",
-        color: p.color,
-        priority: p.priority,
-        done: p.status === "done",
-        personalTaskId: p.id,
-        description: p.title,
-        notes: p.description ?? "",
-        allDay: p.all_day,
-        startDate: p.due_date,
-        endDate: p.end_date,
-        guestEmails: p.guest_emails ?? [],
-        recurrence: (p.recurrence as CalendarRecurrence) ?? "none",
-        recurrenceEndDate: p.recurrence_end_date,
-        isRecurrenceInstance: dates.length > 1,
-        studentId: p.student_id ?? null,
-        // PostgREST returns an embedded row as an object or a single-element
-        // array depending on the relationship it infers; `one` handles both.
-        studentName: (one(p.student as never) as { full_name?: string } | null)?.full_name ?? null,
-      });
-    });
-  });
-
-  const eventsByDate: Record<string, CalendarEvent[]> = {};
-  for (const e of events) {
-    (eventsByDate[e.date] ??= []).push(e);
-  }
-  for (const key in eventsByDate) {
-    eventsByDate[key].sort((a, b) => (a.time ?? "99:99").localeCompare(b.time ?? "99:99"));
+    events.push(
+      recordEvent({
+        id: `deadline-${a.id}`,
+        kind: "deadline",
+        date: deadline,
+        title: `${what} — ${student?.full_name ?? "?"}`,
+        subtitle: student?.full_name ?? null,
+        studentId: student?.id ?? null,
+        studentName: student?.full_name ?? null,
+        href: student?.id ? `/students/${student.id}/applications/${a.id}` : null,
+        hrefLabel: "Open the application",
+        origin: "The application's deadline. Change it on the application and it moves here.",
+      })
+    );
   }
 
-  const { data: applications } = await supabase
-    .from("applications")
-    .select("id, student:leads(full_name), university:universities(name)")
-    .order("created_at", { ascending: false });
-  const applicationOptions = (applications ?? []).map((a) => ({
+  for (const d of documentDeadlines) {
+    const student = one(d.student as never) as StudentRef | null;
+    if (!deadlineBelongsToTarget(student?.processing_officer_id)) continue;
+    events.push(
+      recordEvent({
+        id: `docdeadline-${d.id}`,
+        kind: "deadline",
+        date: d.deadline,
+        title: `${d.custom_name ?? d.category ?? "Document"} due — ${student?.full_name ?? "?"}`,
+        subtitle: student?.full_name ?? null,
+        studentId: d.student_id,
+        studentName: student?.full_name ?? null,
+        href: `/students/${d.student_id}/documents`,
+        hrefLabel: "Open the student's documents",
+        origin: "The document's deadline. Change it on the student's documents and it moves here.",
+      })
+    );
+  }
+
+  for (const raw of personalTasks) events.push(...personalEvents(personalInput(raw), range));
+
+  const applicationOptions = applications.map((a) => ({
     id: a.id,
-    label: `${one(a.student)?.full_name ?? "Student"} — ${one(a.university)?.name ?? "University"}`,
+    label: `${(one(a.student as never) as { full_name?: string } | null)?.full_name ?? "Student"} — ${
+      (one(a.university as never) as { name?: string } | null)?.name ?? "University"
+    }`,
   }));
 
-  const { data: staffList } = canViewOthers
-    ? await supabase.from("staff").select("id, full_name").eq("status", "active").order("full_name")
-    : { data: [] };
-
   return (
-    <div className="w-full">
-      <h2 className="mb-1 text-lg font-semibold text-ink">Calendar</h2>
-      <p className="mb-4 text-sm text-muted">
-        Daily/weekly/monthly view of tasks, reminders, deadlines, and visa appointments — plus your own personal reminders.
-      </p>
-      <CalendarShell
+    <div className="flex w-full flex-col gap-3">
+      {problems.length > 0 && (
+        <p className="rounded-md border border-warning bg-warning-bg px-3 py-2 text-sm text-warning" role="alert">
+          Some of the calendar could not be loaded, so it may be missing items: {problems.join("; ")}.
+        </p>
+      )}
+      <StaffCalendar
         view={view}
-        referenceDate={toYMD(referenceDate)}
+        referenceDate={referenceDate}
         todayStr={todayStr}
-        eventsByDate={eventsByDate}
+        events={events}
+        loadedRange={range}
         applicationOptions={applicationOptions}
-        staffOptions={staffList ?? []}
+        staffOptions={staffList}
         canViewOthers={canViewOthers}
         selectedStaffId={targetStaffId}
         viewerStaffId={viewerId}

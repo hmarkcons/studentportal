@@ -33,7 +33,8 @@ export function EditAgreementTemplateForm({
     name: string;
     signatory_name: string;
     wording: string;
-    destination_id: string;
+    /** Null for an all-destinations visa-service template (0298). */
+    destination_id: string | null;
     file_path: string | null;
     service_type?: string | null;
     design?: unknown;
@@ -43,6 +44,9 @@ export function EditAgreementTemplateForm({
   const action = updateAgreementTemplate.bind(null, template.id);
   const [state, formAction, pending] = useActionState(action, undefined);
   const [blocked, setBlocked] = useState(false);
+  // "All destinations" is for the visa service only (0298), so choosing it sets the service.
+  const [destination, setDestination] = useState(template.destination_id ?? "all");
+  const [service, setService] = useState(template.service_type ?? "full");
   const del = useButtonAction();
 
   async function handleDelete() {
@@ -56,7 +60,16 @@ export function EditAgreementTemplateForm({
   return (
     <form action={formAction} className="flex flex-col gap-2">
       <div className="flex flex-wrap items-end gap-2">
-        <Select name="destination_id" defaultValue={template.destination_id} required>
+        <Select
+          name="destination_id"
+          required
+          value={destination}
+          onChange={(e) => {
+            setDestination(e.target.value);
+            if (e.target.value === "all") setService("visa_only");
+          }}
+        >
+          <option value="all">All destinations — visa documentation service</option>
           {destinations.map((d) => (
             <option key={d.id} value={d.id}>
               {d.display_name}
@@ -73,8 +86,10 @@ export function EditAgreementTemplateForm({
         />
         {/* 0279: which service this template is for. A visa-only client is
             offered visa-service templates only. */}
-        <Select name="service_type" defaultValue={template.service_type ?? "full"} className="w-auto">
-          <option value="full">Full service (admission and visa)</option>
+        <Select name="service_type" value={service} onChange={(e) => setService(e.target.value)} className="w-auto">
+          <option value="full" disabled={destination === "all"}>
+            Full service (admission and visa)
+          </option>
           <option value="visa_only">Visa documentation &amp; application only</option>
         </Select>
       </div>

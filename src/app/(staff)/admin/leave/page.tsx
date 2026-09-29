@@ -82,11 +82,16 @@ export default async function LeaveAdminPage() {
 
       <Card className="mb-6">
         <h3 className="mb-2 text-sm font-medium text-ink">Balances this leave year</h3>
-        <TableFrame label="Leave balances" surface="card">
+        <TableFrame label="Leave balances" surface="card" freezeFirstColumn={false}>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs text-muted">
-                <th className="py-2 pr-4 font-medium">Staff</th>
+                <th scope="col" className="w-12 py-2 pr-4 text-right font-medium" data-serial>
+                  <abbr title="Serial number" className="no-underline">
+                    #
+                  </abbr>
+                </th>
+                <th className="py-2 pr-4 font-medium" data-frozen>Staff</th>
                 <th className="py-2 pr-4 font-medium">Leave year</th>
                 <th className="py-2 pr-4 font-medium">Allowance</th>
                 <th className="py-2 pr-4 font-medium">Taken</th>
@@ -94,9 +99,12 @@ export default async function LeaveAdminPage() {
               </tr>
             </thead>
             <tbody>
-              {data.balances.map((b) => (
+              {data.balances.map((b, i) => (
                 <tr key={b.staffId} data-leave-balance={b.staffId} className="border-b border-border last:border-0">
-                  <td className="py-2 pr-4 text-ink">{b.name}</td>
+                  <td className="w-12 py-2 pr-4 text-right text-xs tabular-nums text-muted" data-serial>
+                    {i + 1}
+                  </td>
+                  <td className="py-2 pr-4 text-ink" data-frozen>{b.name}</td>
                   <td className="py-2 pr-4 text-muted">
                     {formatLeaveRange(b.year.start, b.year.end)}
                     {!b.joinedOn && <span className="ml-1 text-warning">(no joining date — set it on their record)</span>}

@@ -6,6 +6,8 @@
 // staff are looking for when they go to upload a signed copy.
 
 type WithTemplate = {
+  /** The agreement's own country (0298), read first. */
+  destination?: unknown;
   template?: { destination?: { country?: string | null } | { country?: string | null }[] | null } | { destination?: unknown }[] | null;
 };
 
@@ -22,6 +24,8 @@ function one<T>(v: T | T[] | null | undefined): T | null {
  * being assumed.
  */
 export function agreementCountry(agreement: WithTemplate): string | null {
+  const own = one(agreement.destination as never) as { country?: string | null } | null;
+  if (own?.country) return own.country;
   const template = one(agreement.template as never) as { destination?: unknown } | null;
   if (!template) return null;
   const destination = one(template.destination as never) as { country?: string | null } | null;

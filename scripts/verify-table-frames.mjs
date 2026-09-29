@@ -128,7 +128,7 @@ try {
 
     if (box.wide) {
       const across = await frame.evaluate((el) => {
-        const row = el.querySelector("tbody tr:has(td[data-frozen]), tbody tr");
+        const row = el.querySelector("tbody tr:has(td[data-frozen])") ?? el.querySelector("tbody tr");
         const cells = row ? [...row.children] : [];
         const frozenIndex = Math.max(0, cells.findIndex((c) => c.hasAttribute("data-frozen")));
         const frozen = cells[frozenIndex];
@@ -141,7 +141,7 @@ try {
       });
       await page.waitForTimeout(150);
       const moved = await frame.evaluate((el, i) => {
-        const row = el.querySelector("tbody tr:has(td[data-frozen]), tbody tr");
+        const row = el.querySelector("tbody tr:has(td[data-frozen])") ?? el.querySelector("tbody tr");
         const cells = [...row.children];
         const frameLeft = el.getBoundingClientRect().left;
         return {

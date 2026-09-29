@@ -2,6 +2,7 @@ import { hasRole } from "@/lib/auth/roles";
 import { documentUrls } from "@/lib/storageUrls";
 import { COMPENSATION_EMBED, withCompensationAll } from "@/lib/staffCompensation";
 import { createClient } from "@/lib/supabase/server";
+import { agreementDestination } from "@/lib/agreementCountry";
 import { computeInvoiceStatus } from "@/lib/invoiceStatus";
 import { StaffCommissionTable, type CommissionRow } from "./StaffCommissionTable";
 
@@ -175,7 +176,7 @@ export default async function StaffCommissionPage() {
     ? await supabase
         .from("agreements")
         .select(
-          "student_id, discount_amount, consultancy_fee_override, created_at, template:agreement_templates(destination:destinations(track, consultancy_fee, consultancy_fee_currency))"
+          "student_id, discount_amount, consultancy_fee_override, created_at, destination:destinations(track, consultancy_fee, consultancy_fee_currency), template:agreement_templates(destination:destinations(track, consultancy_fee, consultancy_fee_currency))"
         )
         .eq("status", "signed")
         .in("student_id", allStudentIds)
@@ -184,10 +185,7 @@ export default async function StaffCommissionPage() {
   type StudentCommissionBasis = { track: string | null; consultancyFee: number | null; currency: string | null };
   const commissionBasisByStudent = new Map<string, StudentCommissionBasis>();
   for (const a of signedAgreements ?? []) {
-    const template = one(a.template as never) as { destination?: unknown } | null;
-    const destination = template?.destination
-      ? (one(template.destination as never) as { track?: string; consultancy_fee?: number; consultancy_fee_currency?: string } | null)
-      : null;
+    const destination = agreementDestination<{ track?: string; consultancy_fee?: number; consultancy_fee_currency?: string }>(a);
     if (!destination) continue;
     const consultancyFee = (a.consultancy_fee_override ?? destination.consultancy_fee ?? 0) - (a.discount_amount ?? 0);
     // A student could have more than one signed agreement in theory — last one wins.

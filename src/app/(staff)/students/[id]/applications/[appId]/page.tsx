@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { CredentialField } from "@/components/CredentialField";
 import { StageForm } from "./StageForm";
 import { TaskList } from "./TaskList";
+import { UniversityDocumentUpload } from "./UniversityDocumentUpload";
 import { ApplicationDetailsForm } from "./ApplicationDetailsForm";
 import { AddBackupPrograms } from "./AddBackupPrograms";
 import { LinksContactForm } from "./LinksContactForm";
@@ -297,6 +298,21 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
           />
         </div>
       </Card>
+
+      {/* The university's side of it: whatever it sends back, filed on this
+          application under Acceptance Letters (0294). Processing work, like
+          the rest of the checklist's management. */}
+      {canManage && (
+        <Card className="mb-6">
+          <h3 className="mb-2 text-sm font-medium text-ink">Documents from the university</h3>
+          <UniversityDocumentUpload
+            studentId={id}
+            applicationId={appId}
+            universityName={university?.name ?? "the university"}
+            revalidateTo={revalidateTo}
+          />
+        </Card>
+      )}
 
       <Card className="mb-6">
         <h3 className="mb-3 text-sm font-medium text-ink">Documents</h3>

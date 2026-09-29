@@ -26,7 +26,8 @@
 // is still held back, because then there is no right answer to pick.
 //
 // Everything here is pure so it can be unit-tested; the write side is in
-// src/lib/actions/universities.ts.
+// src/lib/actions/universities.ts, and for the scholarship bodies — which
+// follow the same rules — in src/lib/actions/scholarshipBodyImport.ts.
 
 /** A value as it is stored — after the cell has been parsed into its column's type. */
 export type Cell = string | number | boolean | string[] | null;
@@ -253,6 +254,9 @@ export function mergeRow<T extends Record<string, Cell>>(
 
 export type Tally = { added: number; updated: number; unchanged: number };
 
+/** A tally and the words the report counts it in: "3 scholarship bodies". */
+export type NamedTally = Tally & { one: string; many: string };
+
 /**
  * Accumulated while the import runs — identically for a preview and for the
  * real thing, which is what makes the preview worth trusting. The two differ
@@ -261,6 +265,14 @@ export type Tally = { added: number; updated: number; unchanged: number };
 export type ImportReport = {
   universities: Tally;
   programs: Tally;
+  /**
+   * What an import of anything other than the catalogue counts, in its own
+   * words — the scholarship bodies import counts bodies. When present it is
+   * what the report prints, and `universities` and `programs` stay at zero;
+   * when absent the report counts universities and programmes, which is what
+   * the three catalogue imports rely on.
+   */
+  tallies?: NamedTally[];
   /** "Italy (Public) · Sapienza University of Rome — new university". */
   additions: string[];
   /** "Sapienza · city Rome → Milan". */
@@ -302,10 +314,21 @@ export type CatalogueImportResult =
       overflow: Record<LongList, number>;
     } & ImportReport);
 
-export function emptyReport(): ImportReport {
+/** The same answer, for an import that is not the catalogue's. */
+export type ImportResult = CatalogueImportResult;
+
+/**
+ * A report with nothing in it yet.
+ *
+ * With no argument it counts universities and programmes, exactly as it always
+ * has. An import of something else names what it counts, and the report then
+ * prints those counts instead.
+ */
+export function emptyReport(counts?: readonly { one: string; many: string }[]): ImportReport {
   return {
     universities: { added: 0, updated: 0, unchanged: 0 },
     programs: { added: 0, updated: 0, unchanged: 0 },
+    ...(counts ? { tallies: counts.map((c) => ({ one: c.one, many: c.many, added: 0, updated: 0, unchanged: 0 })) } : {}),
     additions: [],
     changes: [],
     similarMatches: [],
@@ -313,6 +336,20 @@ export function emptyReport(): ImportReport {
     problems: [],
     failures: [],
   };
+}
+
+/**
+ * The counts a report prints, in order, each with its noun.
+ *
+ * A report that names its own counts gets those; any other is a catalogue
+ * report and is counted in universities and programmes.
+ */
+export function reportTallies(report: Pick<ImportReport, "universities" | "programs" | "tallies">): NamedTally[] {
+  if (report.tallies) return report.tallies;
+  return [
+    { ...report.universities, one: "university", many: "universities" },
+    { ...report.programs, one: "programme", many: "programmes" },
+  ];
 }
 
 /**
@@ -336,13 +373,8 @@ export function finishReport(report: ImportReport, mode: ImportMode, fingerprint
 }
 
 /** Nothing added, nothing changed, nothing held back — say so in one line. */
-export function reportIsEmpty(result: ImportReport): boolean {
-  return (
-    result.universities.added === 0 &&
-    result.universities.updated === 0 &&
-    result.programs.added === 0 &&
-    result.programs.updated === 0
-  );
+export function reportIsEmpty(result: Pick<ImportReport, "universities" | "programs" | "tallies">): boolean {
+  return reportTallies(result).every((t) => t.added === 0 && t.updated === 0);
 }
 
 /** One change, for the line the import prints: `city  Rome -> Milan`. */

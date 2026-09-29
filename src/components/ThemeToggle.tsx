@@ -31,7 +31,7 @@ export function ThemeToggle() {
       title={`Theme: ${LABELS[theme]} (click to change)`}
       aria-label="Change theme"
       suppressHydrationWarning
-      className="flex h-9 w-9 items-center justify-center rounded-md border border-border text-sm hover:bg-bg"
+      className="flex items-center justify-center rounded-md border border-border p-2.5 hover:bg-bg"
     >
       {/* All three are rendered and <html data-theme> picks one, rather than
           choosing from state: the server cannot know the stored theme, and a

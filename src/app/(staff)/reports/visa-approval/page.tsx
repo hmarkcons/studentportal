@@ -41,11 +41,16 @@ export default async function VisaApprovalPage() {
         Recorded outcomes per destination. The rate counts decided applications only — pending ones are shown but not
         included, so one early refusal in a new country doesn&rsquo;t read as a 0% approval rate.
       </p>
-      <TableFrame label="Visa approval" className="rounded-lg border border-border">
+      <TableFrame label="Visa approval" className="rounded-lg border border-border" freezeFirstColumn={false}>
         <table className="w-full min-w-[560px] text-sm">
           <thead>
             <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-muted">
-              <th className="px-4 py-3">Destination</th>
+              <th scope="col" className="w-12 px-3 py-3 text-right font-medium" data-serial>
+                <abbr title="Serial number" className="no-underline">
+                  #
+                </abbr>
+              </th>
+              <th className="px-4 py-3" data-frozen>Destination</th>
               <th className="px-4 py-3">Approved</th>
               <th className="px-4 py-3">Refused</th>
               <th className="px-4 py-3">Pending</th>
@@ -53,12 +58,15 @@ export default async function VisaApprovalPage() {
             </tr>
           </thead>
           <tbody>
-            {rows.map(([name, v]) => {
+            {rows.map(([name, v], i) => {
               const decided = v.approved + v.refused;
               const rate = decided ? Math.round((v.approved / decided) * 100) : null;
               return (
                 <tr key={name} className="border-b border-border last:border-0">
-                  <td className="px-4 py-3">{name}</td>
+                  <td className="w-12 px-3 py-3 text-right text-xs tabular-nums text-muted" data-serial>
+                    {i + 1}
+                  </td>
+                  <td className="px-4 py-3" data-frozen>{name}</td>
                   <td className="px-4 py-3">
                     <Badge tone="success">{v.approved}</Badge>
                   </td>
@@ -82,7 +90,7 @@ export default async function VisaApprovalPage() {
             })}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-muted">
+                <td colSpan={6} className="px-4 py-10 text-center text-muted">
                   No visa outcomes recorded yet.
                 </td>
               </tr>

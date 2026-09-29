@@ -4,6 +4,7 @@ import {
   templateDestination,
   agreementTemplateChoices,
   templateNotForStudentError,
+  isGeneralTemplate,
 } from "../src/lib/agreementTemplateChoices.ts";
 
 const ITALY = { id: "d-it", display_name: "Italy (Public)" };
@@ -127,4 +128,34 @@ test("the refusal never blames the staff member", () => {
   ]) {
     assert.doesNotMatch(err, /invalid|error|forbidden/i, err);
   }
+});
+
+// ------------------------------------------- a general visa-service template (0298)
+
+const GENERAL = { id: "t-visa", name: "Visa documentation", destination: null, service_type: "visa_only" };
+
+test("a visa-service template with no country is general; a full one with no country is not", () => {
+  assert.equal(isGeneralTemplate(GENERAL), true);
+  assert.equal(isGeneralTemplate({ ...GENERAL, service_type: "full" }), false);
+  assert.equal(isGeneralTemplate({ ...GENERAL, destination: ITALY }), false);
+});
+
+test("a general template is offered after the country ones, and no country is then missing a template", () => {
+  const c = agreementTemplateChoices([...ALL, GENERAL], [{ ...ITALY, isBackup: false }, { ...TURKEY, isBackup: true }]);
+  assert.deepEqual(c.available.map((x) => x.id), ["t-it", "t-visa"]);
+  assert.deepEqual(c.missingTemplateFor, []);
+});
+
+test("a student with no country is not offered the general template either", () => {
+  const c = agreementTemplateChoices([GENERAL], []);
+  assert.deepEqual(c.available, []);
+  assert.equal(c.hasCountry, false);
+});
+
+test("a general template needs one of the student's own countries chosen", () => {
+  const general = (chosen) => templateNotForStudentError(null, ["d-it", "d-de"], { isGeneral: true, chosenDestinationId: chosen });
+  assert.equal(general("d-de"), null);
+  assert.match(general(null), /Choose which of the student's countries/);
+  assert.match(general("d-gc"), /not one this student is registered for/);
+  assert.match(templateNotForStudentError(null, [], { isGeneral: true, chosenDestinationId: "d-it" }), /no country on their registration/);
 });

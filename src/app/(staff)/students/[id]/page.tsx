@@ -109,7 +109,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         .select("auth_user_id, full_name, portal_active")
         .eq("id", id)
         .maybeSingle(),
-      supabase.from("leads").select("assigned_counselor_id, processing_officer_id, intake, discount_amount, discount_reason, service_type").eq("id", id).maybeSingle(),
+      supabase.from("leads").select("assigned_counselor_id, processing_officer_id, intake, discount_amount, discount_reason, service_type, registered_at").eq("id", id).maybeSingle(),
       supabase
         .from("lead_destinations")
         .select("destination_id, is_backup, created_at, dashboard_stage_values, destination:destinations(display_name, country, admin_charge, country_code, dashboard_pipeline_stages, finalize_action_label, visa_service_fee)")
@@ -117,7 +117,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       supabase
         .from("agreements")
         .select(
-          "id, status, version, signing_method, signed_file_path, video_recording_path, signed_file_uploaded_at, video_uploaded_at, approval_undone_at, approval_undo_note, undone_by:staff!agreements_approval_undone_by_fkey(full_name), pdf_path, email_verified, document_status, video_status, document_review_note, video_review_note, discount_amount, created_at, template_id, admin_charge_override, consultancy_fee_override, installment_count, service_type, visa_service_fee_override, template:agreement_templates(file_path, destination_id, destination:destinations(country, track))"
+          "id, status, version, signing_method, signed_file_path, video_recording_path, signed_file_uploaded_at, video_uploaded_at, approval_undone_at, approval_undo_note, undone_by:staff!agreements_approval_undone_by_fkey(full_name), pdf_path, email_verified, document_status, video_status, document_review_note, video_review_note, discount_amount, created_at, template_id, admin_charge_override, consultancy_fee_override, installment_count, service_type, visa_service_fee_override, destination_id, destination:destinations(country, track), template:agreement_templates(file_path, destination_id, destination:destinations(country, track))"
         )
         .eq("student_id", id)
         .order("created_at", { ascending: false }),
@@ -178,8 +178,9 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       return dest?.id === d.id;
     });
     const agreementsHere = (agreements ?? []).filter((a) => {
+      // The agreement's own country (0298), else its template's.
       const t = one(a.template as never) as { destination_id?: string } | null;
-      return t?.destination_id === d.id;
+      return ((a.destination_id as string | null) ?? t?.destination_id) === d.id;
     });
     return {
       destinationId: d.id,
@@ -196,8 +197,10 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   const signedAgreementTemplate = signedAgreement
     ? (one(signedAgreement.template as never) as { destination_id?: string } | null)
     : null;
-  const signedAgreementDestination = signedAgreementTemplate?.destination_id
-    ? allDestinations.find((d) => d.id === signedAgreementTemplate.destination_id)
+  // The agreement's own country (0298) — a general visa template has none.
+  const signedAgreementCountryId = (signedAgreement?.destination_id as string | null | undefined) ?? signedAgreementTemplate?.destination_id ?? null;
+  const signedAgreementDestination = signedAgreementCountryId
+    ? allDestinations.find((d) => d.id === signedAgreementCountryId)
     : null;
   const defaultInstallmentPlan = signedAgreementDestination?.installment_plan ?? null;
   // Pre-fill the invoice form with the SIGNED agreement's actual figures
@@ -355,6 +358,10 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   // countries missing a template of the kind this student needs.
   const studentService = serviceOf(leadRegistration?.service_type);
   const templateChoices = agreementTemplateChoices(templatesForService(templates ?? [], studentService), registeredForTemplates);
+  // Primary first — what a general visa template offers as its country (0298).
+  const orderedCountries = [...registeredForTemplates.filter((r) => !r.isBackup), ...registeredForTemplates.filter((r) => r.isBackup)].map(
+    ({ id: countryId, display_name }) => ({ id: countryId, display_name })
+  );
   const visaFees: Record<string, number | null> = Object.fromEntries(
     (selectedDestinations ?? []).map((row) => {
       const dest = one(row.destination as never) as { visa_service_fee?: number | null } | null;
@@ -364,7 +371,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   // A visa-only invoice opens on the visa service fee the signed agreement
   // settled — its own figure, else the country's from Setup. Before any
   // discount, which the form carries on its own line and takes off once.
-  const signedAgreementDestinationId = signedAgreementTemplate?.destination_id ?? null;
+  const signedAgreementDestinationId = signedAgreementCountryId;
   const defaultVisaInvoiceFee = signedAgreement
     ? (signedAgreement.visa_service_fee_override ?? (signedAgreementDestinationId ? visaFees[signedAgreementDestinationId] : null) ?? null)
     : null;
@@ -786,6 +793,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         <div className="mb-4">
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Registration</p>
           <RegistrationEditForm
+            registeredAt={(leadRegistration?.registered_at as string | null | undefined) ?? null}
             serviceType={serviceOf(leadRegistration?.service_type)}
             canSetService={canSetService(viewerStaff)}
             destinationWork={destinationWork}
@@ -910,6 +918,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
             hasCountry={templateChoices.hasCountry}
             service={studentService}
             visaFees={visaFees}
+            countries={orderedCountries}
           />
         )}
         {agreements && agreements.length > 0 && (
@@ -972,6 +981,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                         backupDestinationIds={explicitBackupIds}
                         service={studentService}
                         visaFees={visaFees}
+                        countries={orderedCountries}
                         links={links}
                         canEdit={isSuperAdmin && a.status !== "signed"}
                         canDelete={isSuperAdmin}

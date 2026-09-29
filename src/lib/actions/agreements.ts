@@ -32,7 +32,11 @@ function parseAgreementFields(formData: FormData) {
   const visa_service_fee_override = formData.get("visa_service_fee_override")
     ? Number(formData.get("visa_service_fee_override"))
     : null;
-  return { template_id, signing_method, admin_charge_override, consultancy_fee_override, discount_amount, installment_count, visa_service_fee_override };
+  // The country, for a general visa-service template (0298). A country
+  // template names its own, and the database sets it from there whatever this
+  // says (trg_agreements_destination_from_template).
+  const destination_id = String(formData.get("destination_id") ?? "") || null;
+  return { template_id, signing_method, admin_charge_override, consultancy_fee_override, discount_amount, installment_count, visa_service_fee_override, destination_id };
 }
 
 /**
@@ -100,19 +104,21 @@ async function resolveIsBackup(supabase: SupabaseServerClient, studentId: string
 async function templateCountryError(
   supabase: SupabaseServerClient,
   studentId: string,
-  templateId: string | null
+  templateId: string | null,
+  chosenDestinationId: string | null = null
 ): Promise<string | null> {
   if (!templateId) return "Choose a template.";
 
   const [{ data: template }, { data: destRows }] = await Promise.all([
-    supabase.from("agreement_templates").select("destination_id").eq("id", templateId).maybeSingle(),
+    supabase.from("agreement_templates").select("destination_id, service_type").eq("id", templateId).maybeSingle(),
     supabase.from("lead_destinations").select("destination_id").eq("lead_id", studentId),
   ]);
   if (!template) return "That template no longer exists — reload the page.";
 
   return templateNotForStudentError(
     template.destination_id,
-    (destRows ?? []).map((d) => d.destination_id as string)
+    (destRows ?? []).map((d) => d.destination_id as string),
+    { isGeneral: !template.destination_id && template.service_type === "visa_only", chosenDestinationId }
   );
 }
 
@@ -124,7 +130,7 @@ export async function generateAgreement(studentId: string, _prevState: unknown, 
     return { error: "Choose a signing method." };
   }
 
-  const countryIssue = await templateCountryError(supabase, studentId, fields.template_id);
+  const countryIssue = await templateCountryError(supabase, studentId, fields.template_id, fields.destination_id);
   if (countryIssue) return { error: countryIssue };
 
   const service = await applyService(supabase, studentId, fields);
@@ -181,7 +187,7 @@ export async function updateAgreement(agreementId: string, studentId: string, _p
   // The same country rule as generating one. Without it the check is
   // bypassable in two steps: generate for a country they are registered for,
   // then edit it to any other.
-  const countryIssue = await templateCountryError(supabase, studentId, fields.template_id);
+  const countryIssue = await templateCountryError(supabase, studentId, fields.template_id, fields.destination_id);
   if (countryIssue) return { error: countryIssue };
 
   const service = await applyService(supabase, studentId, fields);
@@ -215,7 +221,7 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
 
   const { data: agreement, error: agreementError } = await supabase
     .from("agreements")
-    .select("id, template_id, admin_charge_override, consultancy_fee_override, discount_amount, installment_count, is_backup, created_at, service_type, visa_service_fee_override")
+    .select("id, template_id, destination_id, admin_charge_override, consultancy_fee_override, discount_amount, installment_count, is_backup, created_at, service_type, visa_service_fee_override")
     .eq("id", agreementId)
     .single();
   if (agreementError || !agreement) return { error: agreementError?.message ?? "Agreement not found." };
@@ -228,7 +234,18 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
     )
     .eq("id", agreement.template_id)
     .maybeSingle();
-  const destination = template?.destination ? (one(template.destination as never) as AgreementDestination | null) : null;
+  // The agreement names its country (0298) — the only place a general
+  // visa-service template's agreement has one; otherwise its template's.
+  const { data: ownDestination } = agreement.destination_id
+    ? await supabase
+        .from("destinations")
+        .select("country_code, track, display_name, admin_charge, consultancy_fee, consultancy_fee_currency, visa_service_fee")
+        .eq("id", agreement.destination_id)
+        .maybeSingle()
+    : { data: null };
+  const destination =
+    (ownDestination as AgreementDestination | null) ??
+    (template?.destination ? (one(template.destination as never) as AgreementDestination | null) : null);
   if (!destination?.country_code || !destination.track) return { error: "This agreement's destination could not be resolved." };
 
   const { data: student } = await supabase

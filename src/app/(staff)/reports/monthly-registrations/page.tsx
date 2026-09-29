@@ -49,11 +49,16 @@ export default async function MonthlyRegistrationsPage() {
         Months run to Karachi time, and every row that holds a registration is shown &mdash; including staff who are not
         counselors by role, and anyone who has since left, so past months keep the totals they had.
       </p>
-      <TableFrame label="Monthly registrations" className="rounded-lg border border-border">
+      <TableFrame label="Monthly registrations" className="rounded-lg border border-border" freezeFirstColumn={false}>
         <table className="w-full min-w-[640px] text-sm">
           <thead>
             <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-muted">
-              <th className="px-4 py-3">Assigned to</th>
+              <th scope="col" className="w-12 px-3 py-3 text-right font-medium" data-serial>
+                <abbr title="Serial number" className="no-underline">
+                  #
+                </abbr>
+              </th>
+              <th className="px-4 py-3" data-frozen>Assigned to</th>
               {months.map((m) => (
                 <th key={m.key} className="px-4 py-3 text-right">
                   {m.label}
@@ -62,11 +67,14 @@ export default async function MonthlyRegistrationsPage() {
             </tr>
           </thead>
           <tbody>
-            {owners.map((o) => {
+            {owners.map((o, i) => {
               const note = noteFor(o);
               return (
                 <tr key={o.id} className="border-b border-border last:border-0">
-                  <td className="px-4 py-3">
+                  <td className="w-12 px-3 py-3 text-right text-xs tabular-nums text-muted" data-serial>
+                    {i + 1}
+                  </td>
+                  <td className="px-4 py-3" data-frozen>
                     {o.name}
                     {note && <span className="ml-1 text-xs text-muted">— {note}</span>}
                   </td>
@@ -80,7 +88,7 @@ export default async function MonthlyRegistrationsPage() {
             })}
             {owners.length === 0 && (
               <tr>
-                <td colSpan={months.length + 1} className="px-4 py-10 text-center text-muted">
+                <td colSpan={months.length + 2} className="px-4 py-10 text-center text-muted">
                   No registrations yet.
                 </td>
               </tr>
@@ -89,7 +97,9 @@ export default async function MonthlyRegistrationsPage() {
           {owners.length > 0 && (
             <tfoot>
               <tr className="border-t border-border bg-bg text-xs font-medium uppercase tracking-wide text-muted">
-                <td className="px-4 py-3">All</td>
+                {/* A total, not a record: no serial number. */}
+                <td className="w-12 px-3 py-3" data-serial />
+                <td className="px-4 py-3" data-frozen>All</td>
                 {months.map((m) => (
                   <td key={m.key} className="px-4 py-3 text-right tabular-nums">
                     {monthTotals.get(m.key) ?? 0}

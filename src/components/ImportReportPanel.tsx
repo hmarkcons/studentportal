@@ -1,6 +1,6 @@
 "use client";
 
-import type { CatalogueImportResult } from "@/lib/importMerge";
+import { reportTallies, type ImportResult, type NamedTally, type Tally } from "@/lib/importMerge";
 
 /**
  * What a catalogue import will do, or did, said in full.
@@ -16,7 +16,10 @@ import type { CatalogueImportResult } from "@/lib/importMerge";
  * that matters: it is read before anything is written, and the similar-name
  * matches are the lines to check.
  *
- * Shared by all three sheets so the wording cannot drift between them.
+ * Shared by all three catalogue sheets, and by the scholarship bodies import,
+ * so the wording cannot drift between them. What is counted comes from the
+ * report itself (reportTallies): universities and programmes for the
+ * catalogue, bodies for the directory.
  */
 
 function plural(n: number, one: string, many = `${one}s`) {
@@ -24,12 +27,11 @@ function plural(n: number, one: string, many = `${one}s`) {
 }
 
 /** "3 universities, 41 programmes", skipping whichever is zero. */
-function countLine(universities: number, programs: number) {
-  const parts = [
-    universities > 0 ? plural(universities, "university", "universities") : "",
-    programs > 0 ? plural(programs, "programme") : "",
-  ].filter(Boolean);
-  return parts.join(", ");
+function countLine(tallies: readonly NamedTally[], which: keyof Tally) {
+  return tallies
+    .filter((t) => t[which] > 0)
+    .map((t) => plural(t[which], t.one, t.many))
+    .join(", ");
 }
 
 function Section({
@@ -66,7 +68,7 @@ function Section({
   );
 }
 
-export function ImportReportPanel({ state }: { state: CatalogueImportResult | undefined }) {
+export function ImportReportPanel({ state }: { state: ImportResult | undefined }) {
   if (!state) return null;
   // data-import-report marks the one element that only exists once the action
   // has answered, and says which answer: "preview", "applied" or "error".
@@ -76,10 +78,10 @@ export function ImportReportPanel({ state }: { state: CatalogueImportResult | un
   if (!state.success) return null;
 
   const preview = state.mode === "preview";
-  const { universities, programs } = state;
-  const added = countLine(universities.added, programs.added);
-  const updated = countLine(universities.updated, programs.updated);
-  const unchanged = countLine(universities.unchanged, programs.unchanged);
+  const tallies = reportTallies(state);
+  const added = countLine(tallies, "added");
+  const updated = countLine(tallies, "updated");
+  const unchanged = countLine(tallies, "unchanged");
   const nothingHappens = !added && !updated;
 
   return (

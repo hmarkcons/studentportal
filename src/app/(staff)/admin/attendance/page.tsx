@@ -185,11 +185,16 @@ export default async function AttendancePage(props: { searchParams: Promise<{ mo
         </p>
       </div>
 
-      <TableFrame label="Attendance" className="rounded-lg border border-border">
+      <TableFrame label="Attendance" className="rounded-lg border border-border" freezeFirstColumn={false}>
         <table className="w-full min-w-[680px] text-sm">
           <thead>
             <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-muted">
-              <th className="px-4 py-3">Staff</th>
+              <th scope="col" className="w-12 px-3 py-3 text-right font-medium" data-serial>
+                <abbr title="Serial number" className="no-underline">
+                  #
+                </abbr>
+              </th>
+              <th className="px-4 py-3" data-frozen>Staff</th>
               <th className="px-4 py-3">Date</th>
               <th className="px-4 py-3">Clock in</th>
               <th className="px-4 py-3">Clock out</th>
@@ -198,11 +203,14 @@ export default async function AttendancePage(props: { searchParams: Promise<{ mo
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => {
+            {rows.map((r, i) => {
               const out = clockOutLabel(r);
               return (
                 <tr key={r.id} className="border-b border-border last:border-0">
-                  <td className="px-4 py-3">{one(r.staff)?.full_name}</td>
+                  <td className="w-12 px-3 py-3 text-right text-xs tabular-nums text-muted" data-serial>
+                    {i + 1}
+                  </td>
+                  <td className="px-4 py-3" data-frozen>{one(r.staff)?.full_name}</td>
                   <td className="px-4 py-3">{formatDateOnly(r.work_date)}</td>
                   {/* Karachi. These printed in the server's timezone — UTC on
                       Vercel — so every arrival read five hours early and a
@@ -218,7 +226,7 @@ export default async function AttendancePage(props: { searchParams: Promise<{ mo
             })}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-muted">
+                <td colSpan={7} className="px-4 py-10 text-center text-muted">
                   No attendance recorded for {formatDateOnly(`${month}-01`, { month: "long", year: "numeric" })}.
                 </td>
               </tr>

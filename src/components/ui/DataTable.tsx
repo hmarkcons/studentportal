@@ -56,6 +56,7 @@ export function DataTable({
   pageSize,
   freezeColumn,
   label,
+  serial = true,
 }: {
   columns: Column[];
   rows: Row[];
@@ -86,6 +87,12 @@ export function DataTable({
   freezeColumn?: string;
   /** What the table is, for a screen reader. Defaults to the export name. */
   label?: string;
+  /**
+   * A serial-number column first: 1, 2, 3 down the rows as they are shown —
+   * after search and filters, and carrying on across pages — so "row 14" means
+   * the same thing to two people looking at the same list. On by default.
+   */
+  serial?: boolean;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
@@ -148,10 +155,12 @@ export function DataTable({
 
   function exportCsv() {
     const exportColumns = columns.filter((c) => c.exportable !== false);
-    const header = exportColumns.map((c) => c.header).join(",");
+    const header = [...(serial ? ["S.No."] : []), ...exportColumns.map((c) => c.header)].join(",");
     const lines = visibleRows
       .filter((r) => selected.size === 0 || selected.has(r.id))
-      .map((r) => exportColumns.map((c) => `"${(r.csv?.[c.key] ?? "").replace(/"/g, '""')}"`).join(","));
+      .map((r, i) =>
+        [...(serial ? [String(i + 1)] : []), ...exportColumns.map((c) => `"${(r.csv?.[c.key] ?? "").replace(/"/g, '""')}"`)].join(",")
+      );
     const blob = new Blob([[header, ...lines].join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -221,6 +230,13 @@ export function DataTable({
                   />
                 </th>
               )}
+              {serial && (
+                <th scope="col" className="w-12 px-3 py-3 text-right font-medium" data-serial>
+                  <abbr title="Serial number" className="no-underline">
+                    #
+                  </abbr>
+                </th>
+              )}
               {columns.map((c) => (
                 <th
                   key={c.key}
@@ -235,11 +251,16 @@ export function DataTable({
             </tr>
           </thead>
           <tbody>
-            {pagedRows.map((row) => (
+            {pagedRows.map((row, i) => (
               <tr key={row.id} className="border-b border-border last:border-0 hover:bg-bg/60">
                 {selectable && (
                   <td className="px-4 py-3">
                     <input type="checkbox" checked={selected.has(row.id)} onChange={() => toggle(row.id)} />
+                  </td>
+                )}
+                {serial && (
+                  <td className="w-12 px-3 py-3 text-right text-xs tabular-nums text-muted" data-serial>
+                    {(pageSize ? (currentPage - 1) * pageSize : 0) + i + 1}
                   </td>
                 )}
                 {columns.map((c) => (
@@ -265,7 +286,7 @@ export function DataTable({
             ))}
             {visibleRows.length === 0 && (
               <tr>
-                <td colSpan={columns.length + (selectable ? 1 : 0)} className="px-4 py-10 text-center text-muted">
+                <td colSpan={columns.length + (selectable ? 1 : 0) + (serial ? 1 : 0)} className="px-4 py-10 text-center text-muted">
                   No records.
                 </td>
               </tr>

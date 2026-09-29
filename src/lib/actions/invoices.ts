@@ -3,6 +3,7 @@
 import { createElement } from "react";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { agreementDestination } from "@/lib/agreementCountry";
 import { formatDateOnly } from "@/lib/formatDate";
 import { requirePermission } from "@/lib/auth/permissions";
 import { installmentDuePlan, missingDueDates } from "@/lib/installmentDueConditions";
@@ -94,11 +95,11 @@ async function agreementTrack(
   if (!agreementId) return null;
   const { data } = await supabase
     .from("agreements")
-    .select("template:agreement_templates(destination:destinations(track))")
+    .select("destination:destinations(track), template:agreement_templates(destination:destinations(track))")
     .eq("id", agreementId)
     .maybeSingle();
-  const template = one(data?.template as never) as { destination?: unknown } | null;
-  const destination = template?.destination ? (one(template.destination as never) as { track?: string } | null) : null;
+  // The agreement's own country first (0298) — a general visa template has none.
+  const destination = agreementDestination<{ track?: string }>(data);
   return destination?.track === "public" ? "public" : destination?.track === "private" ? "private" : null;
 }
 
@@ -923,7 +924,7 @@ export async function buildAndStoreInvoicePdf(
     .select(
       `id, invoice_number, intake, terms, admin_charge, consultancy_fee, currency, installment_plan, created_at,
        discount_amount, discount_reason, tax_rate, tax_amount, tax_base, issued_on, pkr_per_eur, service_type,
-       agreement:agreements(generated_by, template:agreement_templates(signatory_name, destination:destinations(display_name)))`
+       agreement:agreements(generated_by, destination:destinations(display_name), template:agreement_templates(signatory_name, destination:destinations(display_name)))`
     )
     .eq("id", invoiceId)
     .single();
@@ -955,8 +956,7 @@ export async function buildAndStoreInvoicePdf(
   ]);
 
   const agreement = one(invoice.agreement as never) as { generated_by?: string | null; template?: unknown } | null;
-  const template = agreement?.template ? (one(agreement.template as never) as { signatory_name?: string | null; destination?: unknown } | null) : null;
-  const destination = template?.destination ? (one(template.destination as never) as { display_name?: string | null } | null) : null;
+  const destination = agreementDestination<{ display_name?: string | null }>(agreement);
 
   // The counselor's name used to be looked up here and printed on the receipt.
   // It is off the document now, so the query goes with it rather than costing

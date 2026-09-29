@@ -198,8 +198,13 @@ try {
         return data.image_path === null ? true : null;
       }, 45);
       ok("super admin: Use the original picture puts it back", Boolean(reset));
-      const { data: left } = await admin.storage.from("site-assets").list("login", { search: uploadedPath.split("/")[1] });
-      ok("...and removes the uploaded file", (left ?? []).length === 0, JSON.stringify(left));
+      // Polled: the action clears the row before it removes the file, so the
+      // row reading null a moment early says nothing about the file.
+      const gone = await poll(async () => {
+        const { data: left } = await admin.storage.from("site-assets").list("login", { search: uploadedPath.split("/")[1] });
+        return (left ?? []).length === 0 ? true : null;
+      }, 30);
+      ok("...and removes the uploaded file", Boolean(gone), uploadedPath);
       const back = await poll(async () => ((await publicAccent(browser)).picture.src.endsWith("/login/beyond-borders.webp") ? true : null), 30);
       ok("...and the public page is on the shipped picture again", Boolean(back));
     }

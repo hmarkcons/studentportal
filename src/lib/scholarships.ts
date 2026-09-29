@@ -35,6 +35,31 @@ export function scholarshipStatusLabel(value: string): string {
   return isScholarshipStatus(value) ? SCHOLARSHIP_STATUS_LABELS[value] : value;
 }
 
+// Where a scholarship application's documents stand (0297), beside its status.
+export const SCHOLARSHIP_DOCUMENT_STATUSES = ["pending", "submitted", "courier", "not_required", "on_arrival"] as const;
+
+export type ScholarshipDocumentStatus = (typeof SCHOLARSHIP_DOCUMENT_STATUSES)[number];
+
+export const SCHOLARSHIP_DOCUMENT_STATUS_LABELS: Record<ScholarshipDocumentStatus, string> = {
+  pending: "Pending",
+  submitted: "Submitted",
+  courier: "Sent via courier",
+  not_required: "Upload not required",
+  on_arrival: "To be submitted upon arrival",
+};
+
+export const SCHOLARSHIP_DOCUMENT_STATUS_TONE: Record<ScholarshipDocumentStatus, "success" | "warning" | "info" | "neutral"> = {
+  pending: "warning",
+  submitted: "success",
+  courier: "info",
+  not_required: "neutral",
+  on_arrival: "info",
+};
+
+export function isScholarshipDocumentStatus(value: unknown): value is ScholarshipDocumentStatus {
+  return typeof value === "string" && (SCHOLARSHIP_DOCUMENT_STATUSES as readonly string[]).includes(value);
+}
+
 /**
  * Italy's regional DSU bodies are the only scholarships this section covers —
  * every one of the 21 in the directory is an Italian regional agency, and the

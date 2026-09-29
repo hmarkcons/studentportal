@@ -18,7 +18,7 @@ type Item = {
   low_stock_threshold: number | null;
 };
 
-export function ItemRow({ item, canManage }: { item: Item; canManage: boolean }) {
+export function ItemRow({ item, canManage, serial }: { item: Item; canManage: boolean; serial: number }) {
   const [editing, setEditing] = useState(false);
   const del = useButtonAction();
   const action = updateInventoryItem.bind(null, item.id);
@@ -36,7 +36,7 @@ export function ItemRow({ item, canManage }: { item: Item; canManage: boolean })
   if (editing) {
     return (
       <tr className="border-b border-border last:border-0">
-        <td colSpan={5} className="px-4 py-3">
+        <td colSpan={6} className="px-4 py-3">
           <form action={formAction} className="flex flex-wrap items-end gap-2">
             <Input name="name" defaultValue={item.name} required />
             <Input name="category" defaultValue={item.category ?? ""} />
@@ -66,7 +66,10 @@ export function ItemRow({ item, canManage }: { item: Item; canManage: boolean })
 
   return (
     <tr className="border-b border-border last:border-0">
-      <td className="px-4 py-3">{item.name}</td>
+      <td className="w-12 px-3 py-3 text-right text-xs tabular-nums text-muted" data-serial>
+        {serial}
+      </td>
+      <td className="px-4 py-3" data-frozen>{item.name}</td>
       <td className="px-4 py-3 text-muted">{item.category ?? "—"}</td>
       <td className="px-4 py-3 text-muted">
         {item.quantity_on_hand} {item.unit ?? ""}

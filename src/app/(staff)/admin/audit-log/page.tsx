@@ -30,20 +30,28 @@ export default async function AuditLogPage() {
   return (
     <div className="w-full">
       <h2 className="mb-4 text-lg font-semibold text-ink">Audit Log</h2>
-      <TableFrame label="Audit log" className="rounded-lg border border-border">
+      <TableFrame label="Audit log" className="rounded-lg border border-border" freezeFirstColumn={false}>
         <table className="w-full min-w-[640px] text-sm">
           <thead>
             <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-muted">
-              <th className="px-4 py-3">Actor</th>
+              <th scope="col" className="w-12 px-3 py-3 text-right font-medium" data-serial>
+                <abbr title="Serial number" className="no-underline">
+                  #
+                </abbr>
+              </th>
+              <th className="px-4 py-3" data-frozen>Actor</th>
               <th className="px-4 py-3">Action</th>
               <th className="px-4 py-3">Entity</th>
               <th className="px-4 py-3">When</th>
             </tr>
           </thead>
           <tbody>
-            {(logs ?? []).map((l) => (
+            {(logs ?? []).map((l, i) => (
               <tr key={l.id} className="border-b border-border last:border-0">
-                <td className="px-4 py-3">{(l.actor_id && actorNames.get(l.actor_id)) ?? "System"}</td>
+                <td className="w-12 px-3 py-3 text-right text-xs tabular-nums text-muted" data-serial>
+                  {i + 1}
+                </td>
+                <td className="px-4 py-3" data-frozen>{(l.actor_id && actorNames.get(l.actor_id)) ?? "System"}</td>
                 <td className="px-4 py-3">{l.action_type}</td>
                 <td className="px-4 py-3">{l.entity_type}</td>
                 <td className="px-4 py-3 text-muted">{new Date(l.created_at).toLocaleString()}</td>
@@ -51,7 +59,7 @@ export default async function AuditLogPage() {
             ))}
             {(!logs || logs.length === 0) && (
               <tr>
-                <td colSpan={4} className="px-4 py-10 text-center text-muted">
+                <td colSpan={5} className="px-4 py-10 text-center text-muted">
                   No audit events yet.
                 </td>
               </tr>

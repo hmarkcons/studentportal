@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/Input";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DOCUMENT_STATUS_TONE, DOCUMENT_STATUS_LABELS } from "@/lib/constants";
 import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
-import { CATEGORY_ORDER, CATEGORY_LABELS } from "@/lib/documentCategories";
+import { CATEGORY_ORDER, CATEGORY_LABELS, sectionOfCategory } from "@/lib/documentCategories";
 import { uploadedLine, reviewedLine, addedLine, type UploaderRole } from "@/lib/activityStamp";
 import { DocumentHistory, type ArchivedUpload } from "@/components/DocumentHistory";
 import { DocumentSectionShell, ExpandAllToggle } from "@/components/DocumentSectionShell";
@@ -304,7 +304,7 @@ export function DocumentChecklist({
 
   const grouped = new Map<string, DocRow[]>();
   for (const doc of docs) {
-    const cat = doc.category ?? "other";
+    const cat = sectionOfCategory(doc.category);
     (grouped.get(cat) ?? grouped.set(cat, []).get(cat)!).push(doc);
   }
   // Section order and labels come from the builder when the caller supplies
@@ -316,7 +316,7 @@ export function DocumentChecklist({
       : CATEGORY_ORDER.map((c) => ({ key: c as string, label: CATEGORY_LABELS[c] ?? c }));
 
   const known = new Set(order.map((o) => o.key));
-  const uncategorized = docs.filter((d) => !d.category || !known.has(d.category));
+  const uncategorized = docs.filter((d) => !d.category || !known.has(sectionOfCategory(d.category)));
 
   // Only the sections that will actually render, so the numbering runs 1..n
   // without gaps.

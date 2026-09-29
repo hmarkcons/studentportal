@@ -4,12 +4,9 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { COMPENSATION_EMBED, withCompensation } from "@/lib/staffCompensation";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { agreementDestination } from "@/lib/agreementCountry";
 import { requirePermission } from "@/lib/auth/permissions";
 import { commissionFor, type CommissionBasis, type CommissionRates } from "@/lib/staffCommissionBasis";
-
-function one<T>(v: T | T[] | null) {
-  return Array.isArray(v) ? v[0] ?? null : v;
-}
 
 /**
  * The consultancy fee this student's commission is a share of.
@@ -24,7 +21,7 @@ async function basisFor(
   const { data: agreement } = await supabase
     .from("agreements")
     .select(
-      "discount_amount, consultancy_fee_override, template:agreement_templates(destination:destinations(track, consultancy_fee, consultancy_fee_currency))"
+      "discount_amount, consultancy_fee_override, destination:destinations(track, consultancy_fee, consultancy_fee_currency), template:agreement_templates(destination:destinations(track, consultancy_fee, consultancy_fee_currency))"
     )
     .eq("student_id", studentId)
     .eq("status", "signed")
@@ -32,14 +29,12 @@ async function basisFor(
     .maybeSingle();
   if (!agreement) return null;
 
-  const template = one(agreement.template as never) as { destination?: unknown } | null;
-  const destination = template?.destination
-    ? (one(template.destination as never) as {
-        track?: string;
-        consultancy_fee?: number;
-        consultancy_fee_currency?: string;
-      } | null)
-    : null;
+  // The agreement's own country first (0298), then its template's.
+  const destination = agreementDestination<{
+    track?: string;
+    consultancy_fee?: number;
+    consultancy_fee_currency?: string;
+  }>(agreement);
   if (!destination) return null;
 
   return {

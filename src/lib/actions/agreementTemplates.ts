@@ -17,25 +17,45 @@ async function requireSuperAdmin(supabase: Awaited<ReturnType<typeof createClien
   return hasRole(staffRow, "super_admin");
 }
 
+/** The destination picker's "All destinations" choice (0298). */
+const ALL_DESTINATIONS = "all";
+
+/**
+ * Only a visa-service template may be for every destination: a full-service
+ * agreement's fees and backup-country rules belong to one country. The
+ * database refuses it too (agreement_templates_general_is_visa_only); this
+ * says so in a sentence.
+ */
+function generalChoiceError(destinationChoice: string, serviceValue: FormDataEntryValue | null): string | null {
+  if (destinationChoice !== ALL_DESTINATIONS) return null;
+  if (serviceOf(serviceValue) !== "visa_only") {
+    return "An all-destinations template is for the visa documentation service only — set its service to \u201cVisa documentation & application only\u201d, or pick one destination.";
+  }
+  return null;
+}
+
 export async function createAgreementTemplate(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
   if (!(await requireSuperAdmin(supabase))) return { error: "Only Super Admin can create agreement templates." };
 
-  const destination_id = String(formData.get("destination_id") ?? "");
+  const destinationChoice = String(formData.get("destination_id") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   const signatory_name = String(formData.get("signatory_name") ?? "").trim();
   const wording = String(formData.get("wording") ?? "").trim();
   const file = await uploadedFile(formData, "file");
 
-  if (!destination_id || !name || !signatory_name) {
+  if (!destinationChoice || !name || !signatory_name) {
     return { error: "Destination, name, and signatory name are all required." };
   }
+  const general = generalChoiceError(destinationChoice, formData.get("service_type"));
+  if (general) return { error: general };
+  const destination_id = destinationChoice === ALL_DESTINATIONS ? null : destinationChoice;
 
   let file_path: string | null = null;
   if (file && file.size > 0) {
     const tooLarge = validateDocumentFile(file, "template");
     if (tooLarge) return { error: tooLarge };
-    file_path = `agreement-templates/${destination_id}-${Date.now()}-${file.name}`;
+    file_path = `agreement-templates/${destination_id ?? "all"}-${Date.now()}-${file.name}`;
     const { error: uploadError } = await supabase.storage.from("documents").upload(file_path, file, { upsert: true });
     if (uploadError) return { error: uploadError.message };
   }
@@ -56,15 +76,18 @@ export async function updateAgreementTemplate(templateId: string, _prevState: un
   const supabase = await createClient();
   if (!(await requireSuperAdmin(supabase))) return { error: "Only Super Admin can edit agreement templates." };
 
-  const destination_id = String(formData.get("destination_id") ?? "");
+  const destinationChoice = String(formData.get("destination_id") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   const signatory_name = String(formData.get("signatory_name") ?? "").trim();
   const wording = String(formData.get("wording") ?? "").trim();
   const file = await uploadedFile(formData, "file");
 
-  if (!destination_id || !name || !signatory_name) {
+  if (!destinationChoice || !name || !signatory_name) {
     return { error: "Destination, name, and signatory name are all required." };
   }
+  const general = generalChoiceError(destinationChoice, formData.get("service_type"));
+  if (general) return { error: general };
+  const destination_id = destinationChoice === ALL_DESTINATIONS ? null : destinationChoice;
 
   const update: Record<string, unknown> = { destination_id, name, signatory_name, wording, service_type: serviceOf(formData.get("service_type")) };
   // Only a form that has the Page & theme panel says anything about the design;
@@ -88,7 +111,7 @@ export async function updateAgreementTemplate(templateId: string, _prevState: un
       .maybeSingle();
     previousPath = existing?.file_path ?? null;
 
-    const file_path = `agreement-templates/${destination_id}-${Date.now()}-${file.name}`;
+    const file_path = `agreement-templates/${destination_id ?? "all"}-${Date.now()}-${file.name}`;
     const { error: uploadError } = await supabase.storage.from("documents").upload(file_path, file, { upsert: true });
     if (uploadError) return { error: uploadError.message };
     update.file_path = file_path;

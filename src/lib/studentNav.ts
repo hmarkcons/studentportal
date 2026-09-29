@@ -11,6 +11,10 @@
 //                      gets no entry, so the menu never promises one.
 //   Travel & Arrival   once a visa has been issued; never for a refusal.
 //
+// Calendar follows Appointments: every dated thing on those pages, and the
+// deadlines and instalments from the others, laid out by day, week, month or
+// year.
+//
 // While the agreement gate is closed only the pages it allows are offered
 // (portalGate.ts) — the proxy refuses the rest anyway.
 //
@@ -37,6 +41,7 @@ export function studentNav({ locked, scholarship, travel, badges = {} }: Student
     { label: "Visa", href: "/portal/visa", icon: "visa" },
     ...(travel ? [{ label: "Travel & Arrival", href: "/portal/travel", icon: "travel" }] : []),
     { label: "Appointments", href: "/portal/appointments", icon: "calendar" },
+    { label: "Calendar", href: "/portal/calendar", icon: "calendar" },
     { label: "Payments", href: "/portal/payments", icon: "payments" },
     { label: "Agreement", href: "/portal/agreement", icon: "agreement" },
     { label: "Messages", href: "/portal/messages", icon: "messages" },

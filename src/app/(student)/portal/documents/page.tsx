@@ -11,6 +11,7 @@ import { PortalDocumentRow } from "../applications/[id]/PortalDocumentRow";
 import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
 import { loadStudentChecklistSections } from "@/lib/studentChecklistSections";
 import { DocumentSectionList } from "@/components/DocumentSectionList";
+import { sectionOfCategory } from "@/lib/documentCategories";
 import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
 import { PortalStat, PortalStats } from "@/components/studentPortal/PortalStat";
 import { PortalEmpty } from "@/components/studentPortal/PortalEmpty";
@@ -71,14 +72,14 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
     .map((entry) => ({
       category: entry.key,
       label: entry.label,
-      docs: docsWithUrls.filter((d) => (d.category ?? "other") === entry.key),
+      docs: docsWithUrls.filter((d) => sectionOfCategory(d.category) === entry.key),
     }))
     .filter((s) => s.docs.length > 0);
 
   // Anything with a category the order does not know about would otherwise
   // vanish from this page entirely.
   const known = new Set<string>(configured.map((c) => c.key));
-  const uncategorised = docsWithUrls.filter((d) => !known.has(d.category ?? "other"));
+  const uncategorised = docsWithUrls.filter((d) => !known.has(sectionOfCategory(d.category)));
   if (uncategorised.length > 0) sections.push({ category: "unsorted", label: "Other documents", docs: uncategorised });
 
   const counts = documentCounts(docsWithUrls);

@@ -33,7 +33,7 @@ export default async function AgreementTemplateDetailPage(props: PageProps<"/set
         &larr; Back to agreement templates
       </Link>
       <h2 className="mt-2 mb-4 text-lg font-semibold text-ink">
-        {template.name} <span className="text-muted">· {destination?.display_name ?? "—"}</span>
+        {template.name} <span className="text-muted">· {destination?.display_name ?? "All destinations"}</span>
       </h2>
 
       <Card>
@@ -42,7 +42,7 @@ export default async function AgreementTemplateDetailPage(props: PageProps<"/set
         ) : (
           <div className="flex flex-col gap-3 text-sm">
             <p>
-              <span className="text-muted">Destination:</span> {destination?.display_name ?? "—"}
+              <span className="text-muted">Destination:</span> {destination?.display_name ?? "All destinations"}
             </p>
             <p>
               <span className="text-muted">Signatory:</span> {template.signatory_name}

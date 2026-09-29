@@ -16,6 +16,9 @@ import { guideFreshness } from "@/lib/academicYear";
 import {
   SCHOLARSHIP_CURRENCY_SYMBOL,
   SCHOLARSHIP_STATUS_TONE,
+  SCHOLARSHIP_DOCUMENT_STATUS_LABELS,
+  SCHOLARSHIP_DOCUMENT_STATUS_TONE,
+  isScholarshipDocumentStatus,
   scholarshipStatusLabel,
   type ScholarshipStatus,
 } from "@/lib/scholarships";
@@ -204,7 +207,7 @@ export default async function PortalScholarshipPage() {
   const { data: scholarships } = await supabase
     .from("student_scholarships")
     .select(
-      "id, name, status, award_amount, application_deadline, body:scholarship_bodies(name, region, academic_year, application_deadline, document_upload_deadline, courier_deadline, isee_threshold, ispe_threshold, stipend_amount, benefits, source_url, call_status, call_expected_on, call_pdf_path, call_pdf_url, call_page_url, call_pdf_language)"
+      "id, name, status, documents_status, award_amount, application_deadline, body:scholarship_bodies(name, region, academic_year, application_deadline, document_upload_deadline, courier_deadline, isee_threshold, ispe_threshold, stipend_amount, benefits, source_url, call_status, call_expected_on, call_pdf_path, call_pdf_url, call_page_url, call_pdf_language)"
     )
     .eq("student_id", student.id);
 
@@ -389,9 +392,17 @@ export default async function PortalScholarshipPage() {
                         .join(" · ")}
                     </p>
                   </div>
-                  <Badge tone={SCHOLARSHIP_STATUS_TONE[s.status as ScholarshipStatus] ?? "neutral"}>
-                    {scholarshipStatusLabel(s.status)}
-                  </Badge>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Badge tone={SCHOLARSHIP_STATUS_TONE[s.status as ScholarshipStatus] ?? "neutral"}>
+                      {scholarshipStatusLabel(s.status)}
+                    </Badge>
+                    {/* Where the paperwork stands (0297), chosen by the office. */}
+                    {isScholarshipDocumentStatus(s.documents_status) && (
+                      <Badge tone={SCHOLARSHIP_DOCUMENT_STATUS_TONE[s.documents_status]}>
+                        Documents: {SCHOLARSHIP_DOCUMENT_STATUS_LABELS[s.documents_status]}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex flex-col gap-2 border-t border-border pt-3">

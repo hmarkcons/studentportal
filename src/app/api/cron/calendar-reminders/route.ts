@@ -4,6 +4,8 @@ import { sendEmail, isEmailConfigured } from "@/lib/email";
 import { buildCalendarReminderEmail } from "@/lib/calendarReminderEmail";
 import { buildReminderRecipients } from "@/lib/calendarReminders";
 import { checkCronRequest } from "@/lib/cronAuth";
+import { karachiToday } from "@/lib/calendarDates";
+import { isMissingColumnError } from "@/lib/calendarEventFields";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -29,20 +31,32 @@ export async function GET(request: NextRequest) {
   }
 
   const admin = createAdminClient();
-  const todayStr = new Date().toISOString().slice(0, 10);
+  // Karachi's day decides what is overdue, as it does on the calendar.
+  const todayStr = karachiToday();
 
-  const { data: tasks } = await admin
-    .from("application_tasks")
-    .select(
-      "id, description, notes, due_date, due_time, all_day, priority, color, guest_emails, application:applications(student:leads(id, full_name, email, assigned_counselor_id))"
-    )
-    .eq("status", "pending")
-    .not("due_date", "is", null);
+  // With the end time where the database has it (0295), and without it
+  // until then — naming a missing column fails the read, and a failed read
+  // here is a morning with no reminders sent to anyone.
+  const readTasks = (withEnd: boolean) =>
+    admin
+      .from("application_tasks")
+      .select(
+        `id, description, notes, due_date, due_time, ${withEnd ? "end_time, " : ""}all_day, priority, color, guest_emails, application:applications(student:leads(id, full_name, email, assigned_counselor_id))`
+      )
+      .eq("status", "pending")
+      .not("due_date", "is", null);
+  const readPersonal = (withEnd: boolean) =>
+    admin
+      .from("personal_tasks")
+      .select(`id, title, description, due_date, due_time, ${withEnd ? "end_time, " : ""}all_day, priority, color, guest_emails, owner_id`)
+      .eq("status", "pending");
 
-  const { data: personalTasks } = await admin
-    .from("personal_tasks")
-    .select("id, title, description, due_date, due_time, all_day, priority, color, guest_emails, owner_id")
-    .eq("status", "pending");
+  let tasksRead = await readTasks(true);
+  if (tasksRead.error && isMissingColumnError(tasksRead.error)) tasksRead = await readTasks(false);
+  let personalRead = await readPersonal(true);
+  if (personalRead.error && isMissingColumnError(personalRead.error)) personalRead = await readPersonal(false);
+  const tasks = tasksRead.data as unknown as { application: { student?: unknown } | { student?: unknown }[] | null }[] | null;
+  const personalTasks = personalRead.data as unknown as { owner_id: string }[] | null;
 
   const staffIds = new Set<string>();
   (tasks ?? []).forEach((t) => {

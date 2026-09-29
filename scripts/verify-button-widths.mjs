@@ -216,10 +216,14 @@ try {
     .single();
   if (taskError) throw new Error(`could not create a personal task: ${taskError.message}`);
   await staffPage.goto(`${BASE}/calendar?view=day&date=${DAY}`, { waitUntil: "domcontentloaded" });
-  const row = staffPage.locator("div", { has: staffPage.getByText("zztmp tick me", { exact: true }) }).last();
-  const box = row.locator('input[type="checkbox"]').first();
-  const found = await box.waitFor({ timeout: 60_000 }).then(() => true, () => false);
-  ok("the personal task's done box is on the day view", found);
+  // The day view is an hour grid now, as Google's is: the task (no time, so
+  // in the all-day row) opens its card when clicked, and the done box is there.
+  const chip = staffPage.locator('[data-event][data-event-title="zztmp tick me"]').first();
+  const chipShown = await chip.waitFor({ timeout: 60_000 }).then(() => true, () => false);
+  if (chipShown) await chip.click();
+  const box = staffPage.locator("[data-calendar-popover] input[data-done-toggle]").first();
+  const found = chipShown && (await box.waitFor({ timeout: 30_000 }).then(() => true, () => false));
+  ok("the personal task's done box is on its card in the day view", found);
   if (found) {
     await box.check();
     // The calendar lists pending tasks only, so the ticked task leaves the

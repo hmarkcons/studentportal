@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { syncStagesForApplication } from "@/lib/autoStagesSync";
 import { sanitizeFilename, validateDocumentFile } from "@/lib/documentUpload";
 import { parseRoundsFromFormData } from "@/lib/programRounds";
 import { saveProgramRounds } from "@/lib/actions/programRoundsWrite";
@@ -15,6 +16,7 @@ export async function partnerUpdateStage(applicationId: string, _prevState: unkn
   const { error } = await supabase.from("applications").update({ current_stage }).eq("id", applicationId);
   if (error) return { error: error.message };
 
+  await syncStagesForApplication(applicationId);
   revalidatePath(`/partner/applications/${applicationId}`);
   return { success: true };
 }
@@ -80,6 +82,8 @@ export async function partnerUploadLetter(applicationId: string, category: "offe
     if (error) return { error: error.message };
   }
 
+  // An offer letter from the university moves the application and the country on.
+  await syncStagesForApplication(applicationId);
   revalidatePath(`/partner/applications/${applicationId}`);
   return { success: true };
 }

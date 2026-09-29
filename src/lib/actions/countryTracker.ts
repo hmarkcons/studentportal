@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { syncStagesForApplication } from "@/lib/autoStagesSync";
 import type { TrackerFieldDef, TrackerFieldType } from "@/lib/countryTrackers";
 import { requirePermission } from "@/lib/auth/permissions";
 
@@ -354,6 +355,8 @@ export async function saveTrackerFields(
 
   if (error) return { error: error.message };
 
+  // An appointment booked, a visa filed, a decision in: the country's steps follow.
+  await syncStagesForApplication(applicationId);
   revalidatePath(revalidateTo);
   return { success: true };
 }

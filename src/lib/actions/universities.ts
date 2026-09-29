@@ -55,6 +55,7 @@ import {
   unreadColumns,
 } from "@/lib/catalogueSheet";
 import { uploadedFile } from "@/lib/stagedUpload";
+import { importIntent as previewOrApply } from "@/lib/importIntent";
 import { FEE_CURRENCIES } from "@/lib/applicationFee";
 
 /**
@@ -439,26 +440,20 @@ function normalizeKeys(row: Record<string, string>): Record<string, string> {
 }
 
 /**
- * Preview or apply, and on apply whether it is the preview that was shown.
+ * Preview or apply, and on apply whether it is the preview that was shown
+ * (src/lib/importIntent.ts, shared with the scholarship bodies import).
  *
  * The fingerprint covers the file's bytes and everything else in the form
  * that changes the outcome, so choosing a different fallback destination after
  * previewing is refused just like a different file.
  */
-function importIntent(
-  formData: FormData,
-  digest: string,
-  ...context: string[]
-): { dryRun: boolean; fingerprint: string } | { error: string } {
-  const fingerprint = createHash("sha256")
-    .update([digest, ...context].join("|"))
-    .digest("hex")
-    .slice(0, 32);
-  if (formData.get("intent") !== "apply") return { dryRun: true, fingerprint };
-  if (String(formData.get("fingerprint") ?? "") !== fingerprint) {
-    return { error: "This is not the file that was previewed, or the destination has changed since. Preview it again, then apply." };
-  }
-  return { dryRun: false, fingerprint };
+function importIntent(formData: FormData, digest: string, ...context: string[]) {
+  return previewOrApply(
+    formData,
+    digest,
+    context,
+    "This is not the file that was previewed, or the destination has changed since. Preview it again, then apply."
+  );
 }
 
 /** The pending id a university gets in a preview, where nothing is inserted. */

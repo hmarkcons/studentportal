@@ -89,11 +89,16 @@ export function StaffTable({
         </Button>
       </div>
 
-      <TableFrame label="Staff" className="rounded-lg border border-border">
+      <TableFrame label="Staff" className="rounded-lg border border-border" freezeFirstColumn={false}>
         <table className="w-full min-w-[720px] text-sm">
           <thead>
             <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-muted">
-              <th className="px-4 py-3">Staff Name</th>
+              <th scope="col" className="w-12 px-3 py-3 text-right font-medium" data-serial>
+                <abbr title="Serial number" className="no-underline">
+                  #
+                </abbr>
+              </th>
+              <th className="px-4 py-3" data-frozen>Staff Name</th>
               <th className="px-4 py-3">Designation</th>
               <th className="px-4 py-3">Mobile (Official)</th>
               <th className="px-4 py-3">Commission Rate</th>
@@ -102,9 +107,12 @@ export function StaffTable({
             </tr>
           </thead>
           <tbody>
-            {rows.map((s) => (
+            {rows.map((s, i) => (
               <tr key={s.id} className="border-b border-border last:border-0">
-                <td className="px-4 py-3">
+                <td className="w-12 px-3 py-3 text-right text-xs tabular-nums text-muted" data-serial>
+                  {i + 1}
+                </td>
+                <td className="px-4 py-3" data-frozen>
                   <div className="flex items-center gap-2">
                     {photoUrls[s.id] ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -159,7 +167,7 @@ export function StaffTable({
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-muted">
+                <td colSpan={7} className="px-4 py-10 text-center text-muted">
                   No staff match this search.
                 </td>
               </tr>

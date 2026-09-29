@@ -32,3 +32,31 @@ test("unread counts become badges on their entries", () => {
   assert.equal(nav.find((i) => i.label === "Messages").badge, 2);
   assert.equal("badge" in nav.find((i) => i.label === "Support"), false);
 });
+
+test("Calendar sits right after Appointments, with the calendar icon", () => {
+  const nav = studentNav({ locked: false, scholarship: true, travel: true });
+  const names = labels(nav);
+  assert.equal(names[names.indexOf("Appointments") + 1], "Calendar");
+  const entry = nav.find((i) => i.label === "Calendar");
+  assert.equal(entry.href, "/portal/calendar");
+  assert.equal(entry.icon, "calendar");
+});
+
+test("the whole menu, in order", () => {
+  assert.deepEqual(labels(studentNav({ locked: false, scholarship: true, travel: true })), [
+    "Dashboard",
+    "Profile",
+    "Documents",
+    "Applications",
+    "Scholarship",
+    "Visa",
+    "Travel & Arrival",
+    "Appointments",
+    "Calendar",
+    "Payments",
+    "Agreement",
+    "Messages",
+    "Support",
+    "Guide",
+  ]);
+});

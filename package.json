@@ -22,6 +22,7 @@
     "check:speed": "node scripts/check-speed.mjs",
     "check:studentid": "node scripts/verify-student-id.mjs",
     "check:catalogue": "node scripts/verify-catalogue-import.mjs",
+    "check:scholarshipimport": "node scripts/verify-scholarship-import.mjs",
     "check:hook": "sh scripts/verify-hook.sh",
     "check:xlsx": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-xlsx-in-excel.ps1",
     "prepare": "node scripts/install-hooks.mjs",
@@ -35,7 +36,9 @@
     "check:login": "node scripts/verify-login-screen.mjs",
     "check:visaonly": "node scripts/verify-visa-only.mjs",
     "check:builder": "node scripts/verify-agreement-builder.mjs",
-    "check:tables": "node scripts/verify-table-frames.mjs"
+    "check:tables": "node scripts/verify-table-frames.mjs",
+    "check:calendar": "node scripts/verify-calendar.mjs",
+    "check:autostages": "node scripts/verify-stage-automation.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

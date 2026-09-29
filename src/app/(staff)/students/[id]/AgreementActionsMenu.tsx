@@ -28,6 +28,7 @@ type AgreementRecord = {
   created_at: string;
   service_type?: string | null;
   visa_service_fee_override?: number | null;
+  destination_id?: string | null;
 };
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
@@ -46,6 +47,7 @@ export function AgreementActionsMenu({
   backupDestinationIds = [],
   service = "full",
   visaFees = {},
+  countries = [],
   links,
   canEdit,
   canDelete,
@@ -56,6 +58,8 @@ export function AgreementActionsMenu({
   backupDestinationIds?: string[];
   service?: ServiceType;
   visaFees?: Record<string, number | null>;
+  /** The student's countries — for a general visa template (0298). */
+  countries?: { id: string; display_name: string }[];
   links?: { templateUrl?: string; signedUrl?: string; pdfUrl?: string };
   canEdit: boolean;
   canDelete: boolean;
@@ -177,6 +181,7 @@ export function AgreementActionsMenu({
             backupDestinationIds={backupDestinationIds}
             service={service}
             visaFees={visaFees}
+            countries={countries}
             onSuccess={() => setEditOpen(false)}
           />
         </SlideOver>

@@ -11,6 +11,7 @@ import { currentAcademicYear, guideFreshness } from "@/lib/academicYear";
 import { UpdateRunsPanel, type UpdateRun } from "./UpdateRunsPanel";
 import { researchConfigured } from "@/lib/scholarshipResearch";
 import { DeleteScholarshipBodyButton } from "./DeleteScholarshipBodyButton";
+import { ScholarshipBodiesHeader } from "./ScholarshipBodiesHeader";
 
 export default async function ScholarshipBodiesPage() {
   const { supabase } = await getStaffSession();
@@ -138,7 +139,19 @@ export default async function ScholarshipBodiesPage() {
 
   return (
     <div className="w-full">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+      {/* Import beside "+ Scholarship body": the same people may do either,
+          and its panel opens under the heading. */}
+      <ScholarshipBodiesHeader
+        canImport={canManage}
+        addButton={
+          canManage ? (
+            <ScholarshipBodyForm
+              destinations={destinationChoices}
+              trigger={<Button type="button" variant="primary">+ Scholarship body</Button>}
+            />
+          ) : undefined
+        }
+      >
         <div>
           <h2 className="text-lg font-semibold text-ink">Scholarship Body Directory</h2>
           <p className="mt-1 max-w-3xl text-sm text-muted">
@@ -147,13 +160,7 @@ export default async function ScholarshipBodiesPage() {
             to its body.
           </p>
         </div>
-        {canManage && (
-          <ScholarshipBodyForm
-            destinations={destinationChoices}
-            trigger={<Button type="button" variant="primary">+ Scholarship body</Button>}
-          />
-        )}
-      </div>
+      </ScholarshipBodiesHeader>
 
       {/* Which countries every student is offered a scholarship for, and which
           are put forward one student at a time. Set per destination in Setup,

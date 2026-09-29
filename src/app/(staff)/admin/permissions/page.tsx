@@ -51,6 +51,8 @@ export default async function RolePermissionsPage(props: { searchParams: Promise
     if (!categories.has(d.category)) categories.set(d.category, []);
     categories.get(d.category)!.push(d);
   }
+  // One count down the whole matrix, through the category headings.
+  const serialOf = new Map([...categories.values()].flat().map((d, i) => [d.key, i + 1]));
 
   return (
     <div className="w-full">
@@ -63,11 +65,16 @@ export default async function RolePermissionsPage(props: { searchParams: Promise
       </p>
 
       <Card>
-        <TableFrame label="Role permissions" surface="card">
+        <TableFrame label="Role permissions" surface="card" freezeFirstColumn={false}>
           <table className="w-full min-w-[900px] text-sm">
             <thead>
               <tr className="border-b border-border bg-card text-left text-xs uppercase tracking-wide text-muted">
-                <th className="py-2 pr-4">Functionality</th>
+                <th scope="col" className="w-12 py-2 pr-4 text-right font-medium" data-serial>
+                  <abbr title="Serial number" className="no-underline">
+                    #
+                  </abbr>
+                </th>
+                <th className="py-2 pr-4" data-frozen>Functionality</th>
                 {EDITABLE_ROLES.map((role) => (
                   <th key={role} className="px-2 py-2 text-center font-medium">
                     {STAFF_ROLE_LABELS[role]}
@@ -79,13 +86,16 @@ export default async function RolePermissionsPage(props: { searchParams: Promise
               {Array.from(categories.entries()).map(([category, rows]) => (
                 <Fragment key={category}>
                   <tr className="bg-bg">
-                    <td colSpan={EDITABLE_ROLES.length + 1} className="px-1 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
+                    <td colSpan={EDITABLE_ROLES.length + 2} className="px-1 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
                       {category}
                     </td>
                   </tr>
                   {rows.map((d) => (
                     <tr key={d.key} className="border-b border-border last:border-0">
-                      <td className="py-3 pr-4 align-top">
+                      <td className="w-12 py-3 pr-4 text-right align-top text-xs tabular-nums text-muted" data-serial>
+                        {serialOf.get(d.key)}
+                      </td>
+                      <td className="py-3 pr-4 align-top" data-frozen>
                         <p className="font-medium text-ink">{d.label}</p>
                         <p className="mt-0.5 text-xs text-muted">{d.description}</p>
                       </td>

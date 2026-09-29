@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { syncStudentStages } from "@/lib/autoStagesSync";
 import { ensureCurrentCycleId } from "@/lib/ensureCycle";
 
 function one<T>(v: T | T[] | null) {
@@ -158,6 +159,8 @@ export async function finalizeApplication(applicationId: string, studentId: stri
   // the RPC directly.
   const { error } = await supabase.rpc("finalize_application", { p_application_id: applicationId, p_student_id: studentId });
   if (error) return { error: error.message };
+  // University & Program: Selection Finalized, and the visa on this one.
+  await syncStudentStages(studentId);
 
   revalidatePath(revalidateTo);
   return { success: true };
@@ -511,7 +514,10 @@ export async function updateApplicationStage(applicationId: string, studentId: s
   const { error } = await supabase.from("applications").update({ current_stage }).eq("id", applicationId);
   if (error) return { error: error.message };
 
+  // A submitted application puts the country's Admission in process.
+  await syncStudentStages(studentId);
   revalidatePath(`/students/${studentId}/applications/${applicationId}`);
+  revalidatePath(`/students/${studentId}`);
   return { success: true };
 }
 
@@ -533,10 +539,19 @@ export async function addApplicationTask(applicationId: string, studentId: strin
   return { success: true };
 }
 
+// The three task writes below ask for their row back: a write that RLS
+// refuses matches nothing and raises nothing, and would read as done.
+const TASK_REFUSED = "You can't change this task — it isn't yours, or it has already been removed.";
+
 export async function toggleApplicationTask(taskId: string, revalidateTo: string, done: boolean) {
   const supabase = await createClient();
-  const { error } = await supabase.from("application_tasks").update({ status: done ? "done" : "pending" }).eq("id", taskId);
+  const { data, error } = await supabase
+    .from("application_tasks")
+    .update({ status: done ? "done" : "pending" })
+    .eq("id", taskId)
+    .select("id");
   if (error) return { error: error.message };
+  if (!data?.length) return { error: TASK_REFUSED };
   revalidatePath(revalidateTo);
   return { success: true };
 }
@@ -549,8 +564,13 @@ export async function updateApplicationTask(taskId: string, revalidateTo: string
 
   if (!description) return { error: "Description is required." };
 
-  const { error } = await supabase.from("application_tasks").update({ description, due_date, priority }).eq("id", taskId);
+  const { data, error } = await supabase
+    .from("application_tasks")
+    .update({ description, due_date, priority })
+    .eq("id", taskId)
+    .select("id");
   if (error) return { error: error.message };
+  if (!data?.length) return { error: TASK_REFUSED };
 
   revalidatePath(revalidateTo);
   return { success: true };
@@ -558,8 +578,9 @@ export async function updateApplicationTask(taskId: string, revalidateTo: string
 
 export async function deleteApplicationTask(taskId: string, revalidateTo: string) {
   const supabase = await createClient();
-  const { error } = await supabase.from("application_tasks").delete().eq("id", taskId);
+  const { data, error } = await supabase.from("application_tasks").delete().eq("id", taskId).select("id");
   if (error) return { error: error.message };
+  if (!data?.length) return { error: TASK_REFUSED };
   revalidatePath(revalidateTo);
   return { success: true };
 }

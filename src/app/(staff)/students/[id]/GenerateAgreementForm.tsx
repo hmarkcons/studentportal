@@ -14,10 +14,40 @@ type AgreementTemplateOption = {
   name: string;
   signatory_name: string;
   destination: { id: string; display_name: string } | { id: string; display_name: string }[] | null;
+  service_type?: string | null;
 };
+
+type Country = { id: string; display_name: string };
 
 function templateDest(d: AgreementTemplateOption["destination"]) {
   return Array.isArray(d) ? d[0] : d;
+}
+
+/** A visa-service template for every destination (0298): the country is chosen with it. */
+function isGeneral(t: AgreementTemplateOption | undefined) {
+  return Boolean(t) && !templateDest(t!.destination) && t!.service_type === "visa_only";
+}
+
+function templateLabel(t: AgreementTemplateOption) {
+  return isGeneral(t) ? `All destinations — ${t.name}` : `${templateDest(t.destination)?.display_name} — ${t.name}`;
+}
+
+/**
+ * Which of the student's countries a general template's agreement is for. The
+ * agreement records it (agreements.destination_id), and its fee and its
+ * currency come from that country.
+ */
+function CountryFor({ countries, value, onChange, wide = false }: { countries: Country[]; value: string; onChange: (id: string) => void; wide?: boolean }) {
+  return (
+    <Select name="destination_id" required value={value} onChange={(e) => onChange(e.target.value)} className={wide ? "w-full" : undefined} aria-label="Country">
+      <option value="">Country…</option>
+      {countries.map((c) => (
+        <option key={c.id} value={c.id}>
+          {c.display_name}
+        </option>
+      ))}
+    </Select>
+  );
 }
 
 /**
@@ -94,10 +124,13 @@ export function GenerateAgreementForm({
   hasCountry = true,
   service = "full",
   visaFees = {},
+  countries = [],
 }: {
   studentId: string;
   /** Already narrowed to this student's own countries and service — see agreementTemplateChoices and templatesForService. */
   templates: AgreementTemplateOption[];
+  /** The student's countries, primary first — offered with a general template. */
+  countries?: Country[];
   discountAmount?: number | null;
   backupDestinationIds?: string[];
   /** Countries they are registered for that nobody has written a template for. */
@@ -112,7 +145,12 @@ export function GenerateAgreementForm({
   const action = generateAgreement.bind(null, studentId);
   const [state, formAction, pending] = useActionState(action, undefined);
   const [templateId, setTemplateId] = useState("");
-  const chosenDest = templateDest(templates.find((t) => t.id === templateId)?.destination ?? null);
+  const [countryId, setCountryId] = useState(countries[0]?.id ?? "");
+  const chosenTemplate = templates.find((t) => t.id === templateId);
+  const general = isGeneral(chosenTemplate);
+  const chosenDest = general
+    ? (countries.find((c) => c.id === countryId) ?? null)
+    : templateDest(chosenTemplate?.destination ?? null);
   const isVisaOnly = service === "visa_only";
   // A backup country's administrative-fee-only agreement has no meaning for
   // a visa-only client, who pays no administrative fee at all.
@@ -155,11 +193,12 @@ export function GenerateAgreementForm({
         <option value="">Template…</option>
         {templates.map((t) => (
           <option key={t.id} value={t.id}>
-            {templateDest(t.destination)?.display_name} — {t.name}
+            {templateLabel(t)}
             {!isVisaOnly && backupDestinationIds.includes(templateDest(t.destination)?.id ?? "") ? " (Backup)" : ""}
           </option>
         ))}
       </Select>
+      {general && <CountryFor countries={countries} value={countryId} onChange={setCountryId} />}
       <Select name="signing_method" required>
         <option value="paper">Paper (Karachi)</option>
         <option value="e_signature">E-signature (outside Karachi)</option>
@@ -219,6 +258,7 @@ export function EditAgreementForm({
   service = "full",
   visaFees = {},
   onSuccess,
+  countries = [],
 }: {
   agreement: {
     id: string;
@@ -229,18 +269,27 @@ export function EditAgreementForm({
     discount_amount: number | null;
     installment_count: number | null;
     visa_service_fee_override?: number | null;
+    /** Its own country (0298). */
+    destination_id?: string | null;
   };
   studentId: string;
   templates: AgreementTemplateOption[];
   backupDestinationIds?: string[];
   service?: ServiceType;
   visaFees?: Record<string, number | null>;
+  /** The student's countries — offered with a general template. */
+  countries?: Country[];
   onSuccess: () => void;
 }) {
   const action = updateAgreement.bind(null, agreement.id, studentId);
   const [state, formAction, pending] = useActionState(action, undefined);
   const [templateId, setTemplateId] = useState(agreement.template_id ?? "");
-  const chosenDest = templateDest(templates.find((t) => t.id === templateId)?.destination ?? null);
+  const [countryId, setCountryId] = useState(agreement.destination_id ?? countries[0]?.id ?? "");
+  const chosenTemplate = templates.find((t) => t.id === templateId);
+  const general = isGeneral(chosenTemplate);
+  const chosenDest = general
+    ? (countries.find((c) => c.id === countryId) ?? null)
+    : templateDest(chosenTemplate?.destination ?? null);
   const isVisaOnly = service === "visa_only";
   const isBackup = !isVisaOnly && backupDestinationIds.includes(chosenDest?.id ?? "");
 
@@ -250,11 +299,12 @@ export function EditAgreementForm({
         <option value="">Template…</option>
         {templates.map((t) => (
           <option key={t.id} value={t.id}>
-            {templateDest(t.destination)?.display_name} — {t.name}
+            {templateLabel(t)}
             {!isVisaOnly && backupDestinationIds.includes(templateDest(t.destination)?.id ?? "") ? " (Backup)" : ""}
           </option>
         ))}
       </Select>
+      {general && <CountryFor countries={countries} value={countryId} onChange={setCountryId} wide />}
       <Select name="signing_method" defaultValue={agreement.signing_method ?? "paper"} required className="w-full">
         <option value="paper">Paper (Karachi)</option>
         <option value="e_signature">E-signature (outside Karachi)</option>

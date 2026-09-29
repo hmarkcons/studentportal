@@ -133,7 +133,7 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
       .order("name"),
     supabase
       .from("student_scholarships")
-      .select("id, name, status, award_amount, application_id, scholarship_body_id, application_deadline")
+      .select("id, name, status, documents_status, award_amount, application_id, scholarship_body_id, application_deadline")
       .in("application_id", appIds),
   ]);
 

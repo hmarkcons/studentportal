@@ -85,11 +85,16 @@ export default async function PartnerCommissionsPage() {
     <div className="w-full">
       <h2 className="mb-4 text-lg font-semibold text-ink">University Commissions</h2>
       {canManage && <AddPartnerCommissionForm students={students ?? []} applications={applications} />}
-      <TableFrame label="Partner commissions" className="rounded-lg border border-border">
+      <TableFrame label="Partner commissions" className="rounded-lg border border-border" freezeFirstColumn={false}>
         <table className="w-full min-w-[720px] text-sm">
           <thead>
             <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-muted">
-              <th className="px-4 py-3">Student</th>
+              <th scope="col" className="w-12 px-3 py-3 text-right font-medium" data-serial>
+                <abbr title="Serial number" className="no-underline">
+                  #
+                </abbr>
+              </th>
+              <th className="px-4 py-3" data-frozen>Student</th>
               <th className="px-4 py-3">University</th>
               <th className="px-4 py-3 text-right">Expected</th>
               <th className="px-4 py-3">Status</th>
@@ -98,12 +103,15 @@ export default async function PartnerCommissionsPage() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => {
+            {rows.map((r, i) => {
               const app = one(r.application);
               const uni = app ? one(app.university as never) : null;
               return (
                 <tr key={r.id} className="border-b border-border last:border-0">
-                  <td className="px-4 py-3">{one(r.student)?.full_name}</td>
+                  <td className="w-12 px-3 py-3 text-right text-xs tabular-nums text-muted" data-serial>
+                    {i + 1}
+                  </td>
+                  <td className="px-4 py-3" data-frozen>{one(r.student)?.full_name}</td>
                   <td className="px-4 py-3">{(uni as { name?: string } | null)?.name ?? "—"}</td>
                   <td className="px-4 py-3 text-right tabular-nums">
                     {r.currency} {r.expected_amount ?? "—"}
@@ -152,7 +160,7 @@ export default async function PartnerCommissionsPage() {
             })}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-muted">
+                <td colSpan={7} className="px-4 py-10 text-center text-muted">
                   No partner commission records.
                 </td>
               </tr>

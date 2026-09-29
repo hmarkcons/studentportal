@@ -4,6 +4,7 @@ import { getStaffSession } from "@/lib/auth/session";
 import { getEffectivePermissions } from "@/lib/auth/permissions";
 import { AppShell } from "@/components/AppShell";
 import { buildStaffNav } from "@/lib/nav";
+import { CalendarNotifier } from "@/components/CalendarNotifier";
 
 const ROLE_LABELS: Record<string, string> = {
   super_admin: "Super Admin",
@@ -45,6 +46,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
       userSubtitle={ROLE_LABELS[staffRow.role] ?? staffRow.role}
       showSearch
     >
+      <CalendarNotifier />
       {children}
     </AppShell>
   );

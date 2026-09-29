@@ -11,6 +11,12 @@ import { intakeConfigFor, type DestinationOption } from "@/app/(staff)/students/
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { ActionStatus } from "@/components/ActionStatus";
+import { registrationDateBounds } from "@/lib/registrationDate";
+
+/** The office's day a timestamp falls on, as YYYY-MM-DD. */
+function karachiDay(at: string | null) {
+  return at ? new Date(at).toLocaleDateString("en-CA", { timeZone: "Asia/Karachi" }) : "";
+}
 
 export function RegistrationEditForm({
   studentId,
@@ -28,6 +34,7 @@ export function RegistrationEditForm({
   destinationWork,
   serviceType = "full",
   canSetService = false,
+  registeredAt = null,
 }: {
   studentId: string;
   revalidateTo: string;
@@ -47,6 +54,8 @@ export function RegistrationEditForm({
   serviceType?: ServiceType;
   /** Super Admin or processing: the only people who may change it. */
   canSetService?: boolean;
+  /** When they registered — the day registration was done unless corrected. */
+  registeredAt?: string | null;
 }) {
   const [editing, setEditing] = useState(false);
   // Starts at whatever the student is already registered for, so the intake
@@ -150,6 +159,15 @@ export function RegistrationEditForm({
         <label className="flex flex-col gap-1 text-xs text-muted">
           Intake
           <IntakeField config={intakeConfigFor(destinations, primaryId)} defaultValue={intake} label="" />
+        </label>
+        {/* The day they registered, as recorded when it happened, for correcting
+            a date typed wrong or a registration entered late. It does not
+            renumber anyone: the place in the intake — and so the Student ID —
+            was taken when they registered (0260). */}
+        <label className="flex flex-col gap-1 text-xs text-muted">
+          Registration date
+          <Input name="registration_date" type="date" required defaultValue={karachiDay(registeredAt)} {...registrationDateBounds()} />
+          <span className="text-[11px]">The Student ID stays as issued.</span>
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
           Discount amount
