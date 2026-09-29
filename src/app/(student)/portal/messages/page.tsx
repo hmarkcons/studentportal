@@ -42,7 +42,7 @@ export default async function PortalMessagesPage() {
                 // eslint-disable-next-line @next/next/no-img-element -- a signed storage URL, sized here
                 <img src={counsellor.photoUrl} alt="" width={40} height={40} className="h-10 w-10 rounded-full object-cover ring-2 ring-primary/20" />
               ) : (
-                <span aria-hidden className="bg-hero flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold text-white">
+                <span aria-hidden className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold bg-[var(--brand-soft)] text-[var(--brand-strong)]">
                   {counsellor.full_name
                     .split(/\s+/)
                     .map((w) => w[0]?.toUpperCase() ?? "")

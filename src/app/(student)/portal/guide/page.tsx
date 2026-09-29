@@ -51,7 +51,7 @@ export default async function GuidePage() {
           {(videos ?? []).map((v, i) => (
             <Card key={v.id}>
               <p className="flex items-center gap-2 text-sm font-semibold text-ink">
-                <span aria-hidden className="bg-hero flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white">
+                <span aria-hidden className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold bg-[var(--brand-soft)] text-[var(--brand-strong)]">
                   {i + 1}
                 </span>
                 {v.title}

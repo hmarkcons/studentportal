@@ -256,7 +256,6 @@ export default async function PortalScholarshipPage() {
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3" data-scholarship-countries>
           {offering.map((c) => (
             <Card key={c.id} className="relative overflow-hidden">
-              <span aria-hidden className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-primary/10" />
               <div className="relative mb-2 flex flex-wrap items-center justify-between gap-2" data-scholarship-country={c.display_name}>
                 <h3 className="flex items-center gap-2 text-base font-semibold text-ink">
                   <Award aria-hidden className="h-5 w-5 text-primary shrink-0" />
@@ -308,7 +307,6 @@ export default async function PortalScholarshipPage() {
           <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
             {finalized.map((f) => (
               <Card key={f.appId} className="relative overflow-hidden">
-                <span aria-hidden className="bg-hero absolute inset-x-0 top-0 h-1.5" />
                 <div className="flex flex-col gap-3" data-finalized-for={f.university}>
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
@@ -375,7 +373,7 @@ export default async function PortalScholarshipPage() {
             const body = one(s.body as never) as Body | null;
             return (
               <Card key={s.id} className="relative overflow-hidden">
-                <span aria-hidden className={`absolute inset-x-0 top-0 h-1.5 ${s.status === "accepted" ? "bg-success" : s.status === "rejected" ? "bg-danger" : "bg-hero"}`} />
+                <span aria-hidden className={`absolute inset-x-0 top-0 h-1.5 ${s.status === "accepted" ? "bg-success" : s.status === "rejected" ? "bg-danger" : "bg-transparent"}`} />
                 <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
                   <div>
                     <h3 className="flex items-center gap-2 text-base font-semibold text-ink">

@@ -3,19 +3,21 @@ import type { LucideIcon } from "lucide-react";
 export type PortalStatTone = "default" | "success" | "warning" | "danger" | "info";
 
 const TILE: Record<PortalStatTone, string> = {
-  default: "bg-primary/15 text-primary",
+  default: "bg-[var(--brand-soft)] text-[var(--brand-strong)]",
   success: "bg-success-bg text-success",
   warning: "bg-warning-bg text-warning",
   danger: "bg-danger-bg text-danger",
   info: "bg-info-bg text-info",
 };
 
+// Every figure in ink: four coloured numbers in a row read as noise, and the
+// tile beside each already says which is good news and which is not.
 const VALUE: Record<PortalStatTone, string> = {
   default: "text-ink",
-  success: "text-success",
-  warning: "text-warning",
-  danger: "text-danger",
-  info: "text-info",
+  success: "text-ink",
+  warning: "text-ink",
+  danger: "text-ink",
+  info: "text-ink",
 };
 
 /**
@@ -37,7 +39,7 @@ export function PortalStat({
   tone?: PortalStatTone;
 }) {
   return (
-    <div className="flex min-w-0 items-center gap-3 rounded-xl border border-border bg-card/80 px-4 py-3 backdrop-blur-sm">
+    <div className="flex min-w-0 items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
       <span aria-hidden className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${TILE[tone]}`}>
         <Icon className="h-5 w-5" strokeWidth={2} />
       </span>

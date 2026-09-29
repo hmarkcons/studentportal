@@ -186,11 +186,11 @@ export default async function PortalVisaPage() {
               <Card key={s.country.code} className="relative overflow-hidden">
                 <span
                   aria-hidden
-                  className={`absolute inset-x-0 top-0 h-1.5 ${s.decision === "approved" ? "bg-success" : s.decision === "refused" ? "bg-danger" : "bg-hero"}`}
+                  className={`absolute inset-x-0 top-0 h-1.5 ${s.decision === "approved" ? "bg-success" : s.decision === "refused" ? "bg-danger" : "bg-transparent"}`}
                 />
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-3">
-                    <span aria-hidden className="bg-hero flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-bold tracking-wider text-white shadow-sm shadow-primary/25">
+                    <span aria-hidden className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-bold tracking-wider bg-[var(--brand-soft)] text-[var(--brand-strong)]">
                       {s.country.code}
                     </span>
                     <div className="min-w-0">

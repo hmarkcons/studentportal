@@ -20,7 +20,7 @@ import { loadStudentTeam } from "@/lib/studentTeam";
 import { destinationHeadline, destinationStatusRows, type RegisteredDestination } from "@/lib/destinationStatus";
 import type { DashboardStageDef } from "@/lib/dashboardPipeline";
 import { TeamCard } from "@/components/studentPortal/TeamCard";
-import { DestinationStatusCard } from "@/components/studentPortal/DestinationStatusCard";
+import { DestinationStatusCard, countryAccent } from "@/components/studentPortal/DestinationStatusCard";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -222,22 +222,23 @@ export default async function PortalDashboardPage() {
   return (
     <div className="flex w-full flex-col gap-6" data-portal-page>
       {/* ------------------------------------------------------------ hero */}
+      {/* A white card, not a block of colour: the brand is its slim top line
+          and its one button, and the next date is the only other tint. */}
       <section
         data-rise
-        className="bg-hero relative overflow-hidden rounded-3xl px-6 py-7 text-white shadow-xl shadow-primary/20 sm:px-8"
+        data-hero
+        className="relative overflow-hidden rounded-3xl border border-border bg-card px-6 py-7 shadow-[var(--lift)] sm:px-8"
       >
-        <span aria-hidden className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full bg-white/10" />
-        <span aria-hidden className="pointer-events-none absolute -bottom-32 right-40 h-64 w-64 rounded-full bg-white/10" />
-        <span aria-hidden className="pointer-events-none absolute -left-10 top-1/2 h-40 w-40 rounded-full bg-white/5 blur-2xl" />
+        <span aria-hidden className="absolute inset-x-0 top-0 h-1 bg-[linear-gradient(90deg,var(--accent-1),var(--accent-5)_50%,var(--accent-2))]" />
         <div className="relative flex flex-wrap items-center justify-between gap-6">
           <div className="min-w-0 max-w-2xl">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/80">Your study abroad plan</p>
-            <h2 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Welcome back, {firstName}</h2>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">Your study abroad plan</p>
+            <h2 className="mt-1 text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Welcome back, {firstName}</h2>
             {/* What to do next — the one thing the seven-step tracker said that
                 the country bars below do not, since it is about the student's
                 own part: documents to send, an agreement to sign. */}
             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-2" data-journey-next>
-              <p className="text-sm text-white/90">
+              <p className="text-sm text-muted">
                 {journey.next
                   ? journey.next.state === "blocked"
                     ? `${journey.next.label} needs attention — ${journey.next.detail}`
@@ -247,7 +248,7 @@ export default async function PortalDashboardPage() {
               {journey.next?.href && (
                 <Link
                   href={journey.next.href}
-                  className="inline-flex w-fit items-center gap-1 rounded-lg bg-white px-3 py-1 text-xs font-semibold text-[var(--hero-to)] shadow-sm hover:bg-white/90"
+                  className="inline-flex w-fit items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-ink shadow-sm transition-colors hover:bg-[var(--brand-strong)]"
                 >
                   Continue
                   <ArrowRight aria-hidden className="h-3.5 w-3.5 shrink-0" />
@@ -256,20 +257,20 @@ export default async function PortalDashboardPage() {
             </div>
             <div className="mt-4 flex flex-wrap gap-2 text-xs">
               {student.student_code && (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 font-medium ring-1 ring-white/25 backdrop-blur-sm" data-student-code>
-                  <IdCard aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-bg px-3 py-1 font-medium text-ink ring-1 ring-border" data-student-code>
+                  <IdCard aria-hidden className="h-3.5 w-3.5 shrink-0 text-[var(--accent-2)]" />
                   {student.student_code}
                 </span>
               )}
               {student.intake && (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 font-medium ring-1 ring-white/25 backdrop-blur-sm">
-                  <CalendarDays aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-bg px-3 py-1 font-medium text-ink ring-1 ring-border">
+                  <CalendarDays aria-hidden className="h-3.5 w-3.5 shrink-0 text-[var(--accent-3)]" />
                   {student.intake} intake
                 </span>
               )}
               {primaryCountry && (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 font-medium ring-1 ring-white/25 backdrop-blur-sm">
-                  <Globe aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-bg px-3 py-1 font-medium text-ink ring-1 ring-border">
+                  <Globe aria-hidden className="h-3.5 w-3.5 shrink-0 text-[var(--accent-1)]" />
                   {primaryCountry.name}
                   {backups > 0 && ` · ${backups} backup${backups === 1 ? "" : "s"}`}
                 </span>
@@ -280,17 +281,18 @@ export default async function PortalDashboardPage() {
           {/* The one dated thing nearest to now, where it is seen first. */}
           <Link
             href={soonest?.href ?? "/portal/appointments"}
-            className="relative flex w-full max-w-xs items-center gap-3 rounded-2xl bg-white/15 px-4 py-3 ring-1 ring-white/25 backdrop-blur-md transition hover:bg-white/20 sm:w-auto"
+            className="relative flex w-full max-w-xs items-center gap-3 rounded-2xl bg-[var(--accent-3-soft)] px-4 py-3 ring-1 ring-[var(--accent-3)]/20 transition hover:ring-[var(--accent-3)]/40 sm:w-auto"
+            data-hero-next
           >
-            <span aria-hidden className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/20 text-xl">
+            <span aria-hidden className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-card text-[var(--accent-3-ink)] shadow-sm">
               {soonest ? <AlarmClock className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
             </span>
             <span className="min-w-0">
-              <span className="block text-[11px] font-semibold uppercase tracking-wider text-white/80">
+              <span className="block text-[11px] font-semibold uppercase tracking-wider text-[var(--accent-3-ink)]">
                 {soonest ? `Next · ${daysLeftLabel(soonest.daysLeft)}` : "Coming up"}
               </span>
-              <span className="block truncate text-sm font-semibold">{soonest ? soonest.label : "Nothing due soon — you are on track"}</span>
-              {soonest && <span className="block text-xs text-white/80">{formatDateOnly(soonest.date, LONG_DATE)}</span>}
+              <span className="block truncate text-sm font-semibold text-ink">{soonest ? soonest.label : "Nothing due soon — you are on track"}</span>
+              {soonest && <span className="block text-xs text-muted">{formatDateOnly(soonest.date, LONG_DATE)}</span>}
             </span>
           </Link>
         </div>
@@ -305,7 +307,7 @@ export default async function PortalDashboardPage() {
       <section className="flex flex-col gap-3" data-journey>
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">Your journey</h3>
+            <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Your journey</h3>
             <p className="text-lg font-semibold tracking-tight text-ink" data-journey-status>
               {primaryCountry ? destinationHeadline(primaryCountry) : "Your journey begins once your country is confirmed"}
             </p>
@@ -319,7 +321,7 @@ export default async function PortalDashboardPage() {
           </div>
           {primaryCountry && primaryCountry.total > 0 && (
             <div className="text-right">
-              <p className="bg-hero bg-clip-text text-4xl font-bold leading-none text-transparent" data-journey-percent>
+              <p className="text-4xl font-bold leading-none tracking-tight text-ink" data-journey-percent>
                 {primaryCountry.percent}%
               </p>
               <p className="text-xs text-muted">
@@ -330,8 +332,8 @@ export default async function PortalDashboardPage() {
         </div>
         {countries.length > 0 && (
           <div className="flex flex-col gap-4">
-            {countries.map((row) => (
-              <DestinationStatusCard key={row.destinationId} row={row} />
+            {countries.map((row, i) => (
+              <DestinationStatusCard key={row.destinationId} row={row} accent={countryAccent(i)} />
             ))}
           </div>
         )}
@@ -427,7 +429,7 @@ export default async function PortalDashboardPage() {
           <div data-kpi="appointment" className="flex flex-1 flex-col items-center justify-center gap-1 text-center">
             {nextAppointment ? (
               <>
-                <p className="bg-hero bg-clip-text text-5xl font-bold leading-none text-transparent">
+                <p className="text-5xl font-bold leading-none tracking-tight text-ink">
                   {summary.daysToAppointment === 0 ? "Today" : summary.daysToAppointment}
                 </p>
                 {summary.daysToAppointment !== 0 && (
@@ -499,7 +501,6 @@ export default async function PortalDashboardPage() {
             marker="processing-officer"
           />
           <div className="relative flex flex-col justify-between gap-4 overflow-hidden rounded-2xl border border-border bg-card p-5 md:col-span-2 xl:col-span-1" data-lift>
-            <span aria-hidden className="pointer-events-none absolute -right-12 -top-12 h-36 w-36 rounded-full bg-primary/10" />
             <div className="relative">
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">Other ways to reach us</p>
               <p className="mt-1 text-base font-semibold text-ink">We are one message away</p>
@@ -509,7 +510,7 @@ export default async function PortalDashboardPage() {
               </p>
             </div>
             <div className="relative flex flex-wrap gap-2">
-              <a href={WHATSAPP_LINK} className="bg-hero inline-flex w-fit items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-primary/25 hover:opacity-95">
+              <a href={WHATSAPP_LINK} className="inline-flex w-fit items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-ink shadow-sm transition-colors hover:bg-[var(--brand-strong)]">
                 <MessageCircle aria-hidden className="h-3.5 w-3.5 shrink-0" />
                 WhatsApp HMARK
               </a>

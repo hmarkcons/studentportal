@@ -45,7 +45,7 @@ export function ProfileCompleteness({ input, className = "" }: { input: ProfileI
 
       <div className="mb-3 flex items-center gap-3">
         <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-border" aria-hidden>
-          <div className="bg-hero h-full rounded-full transition-all duration-700" style={{ width: `${percent}%` }} />
+          <div className="h-full rounded-full bg-[var(--brand-bright)] transition-all duration-700" style={{ width: `${percent}%` }} />
         </div>
         <span className="text-xs font-semibold tabular-nums text-ink">
           {met}/{checks.length}

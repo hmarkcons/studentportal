@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Headset, MessageCircle } from "lucide-react";
 import { redirect } from "next/navigation";
 import { getStudentUser } from "@/lib/auth/session";
 import { AppShell } from "@/components/AppShell";
@@ -95,17 +96,28 @@ export default async function StudentLayout({ children }: { children: React.Reac
       sidebarFooter={
         // Help is never more than a glance away — the one thing every page of
         // the portal has in common is that a student may get stuck on it.
-        <div className="relative overflow-hidden rounded-xl bg-hero p-3.5 text-white">
-          <span aria-hidden className="pointer-events-none absolute -right-6 -top-8 h-20 w-20 rounded-full bg-white/15" />
-          <p className="relative text-sm font-semibold">Need a hand?</p>
-          <p className="relative mt-0.5 text-[11px] text-white/85">Your counsellor is one message away.</p>
-          <div className="relative mt-2.5 flex flex-wrap gap-1.5">
+        // A quiet card: the menu's one green is the page you are on.
+        <div className="rounded-xl border border-sidebar-border bg-[color-mix(in_srgb,var(--sidebar-ink)_3%,transparent)] p-3.5">
+          <div className="flex items-start gap-2.5">
+            <span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--accent-2-soft)] text-[var(--accent-2-ink)]">
+              <Headset className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-sidebar-ink">Need a hand?</p>
+              <p className="mt-0.5 text-[11px] leading-snug text-sidebar-muted">Your counsellor is one message away.</p>
+            </div>
+          </div>
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
             {!gate.locked && (
-              <Link href="/portal/messages" prefetch={false} className="rounded-md bg-white px-2.5 py-1 text-[11px] font-semibold text-[var(--hero-to)] hover:bg-white/90">
+              <Link href="/portal/messages" prefetch={false} className="rounded-md bg-primary px-2.5 py-1 text-[11px] font-semibold text-primary-ink hover:bg-[var(--brand-strong)]">
                 Message
               </Link>
             )}
-            <a href={WHATSAPP_LINK} className="rounded-md bg-white/20 px-2.5 py-1 text-[11px] font-semibold text-white ring-1 ring-white/30 hover:bg-white/30">
+            <a
+              href={WHATSAPP_LINK}
+              className="inline-flex items-center gap-1 rounded-md border border-sidebar-border px-2.5 py-1 text-[11px] font-semibold text-sidebar-ink hover:bg-[color-mix(in_srgb,var(--sidebar-ink)_5%,transparent)]"
+            >
+              <MessageCircle aria-hidden className="h-3 w-3 shrink-0" />
               WhatsApp
             </a>
           </div>

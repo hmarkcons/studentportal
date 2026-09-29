@@ -65,7 +65,7 @@ export function TravelChecklist({ sections }: { sections: TravelSection[] }) {
       <div className="flex flex-wrap items-center gap-3">
         <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-border">
           <div
-            className="bg-hero h-full rounded-full transition-all duration-500"
+            className="h-full rounded-full bg-[var(--brand-bright)] transition-all duration-500"
             style={{ width: total ? `${Math.round((doneCount / total) * 100)}%` : "0%" }}
           />
         </div>

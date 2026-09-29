@@ -186,7 +186,7 @@ export default async function PortalPaymentsPage() {
 
           return (
             <Card key={inv.id} className="relative overflow-hidden">
-              <span aria-hidden className={`absolute inset-x-0 top-0 h-1.5 ${settled ? "bg-success" : "bg-hero"}`} />
+              <span aria-hidden className={`absolute inset-x-0 top-0 h-1.5 ${settled ? "bg-success" : "bg-transparent"}`} />
               <div className="mb-5 flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
                 <div>
                   <div className="mb-1 flex flex-wrap items-center gap-2">
@@ -227,7 +227,7 @@ export default async function PortalPaymentsPage() {
                       href={pdfUrls.get(inv.id)}
                       target="_blank"
                       rel="noreferrer"
-                      className="bg-hero inline-flex w-fit items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-white shadow-sm shadow-primary/25 hover:opacity-95"
+                      className="bg-primary inline-flex w-fit items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-primary-ink shadow-sm transition-colors hover:bg-[var(--brand-strong)]"
                     >
                       <Eye aria-hidden className="h-3.5 w-3.5 shrink-0" />
                       View invoice
@@ -301,7 +301,7 @@ export default async function PortalPaymentsPage() {
                             aria-hidden
                             className={`absolute -left-9 top-0 flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${
                               i.status === "paid"
-                                ? "bg-hero text-white shadow-sm shadow-primary/30"
+                                ? "bg-[var(--brand-bright)] text-white"
                                 : overdue
                                   ? "bg-danger text-white"
                                   : "border-2 border-border bg-card text-muted"

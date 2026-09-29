@@ -180,7 +180,7 @@ export default async function PortalAgreementPage() {
                       href={generated.get(a.id)}
                       target="_blank"
                       rel="noreferrer"
-                      className="bg-hero mt-3 inline-flex w-fit items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-primary/25 hover:opacity-95"
+                      className="bg-primary mt-3 inline-flex w-fit items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-primary-ink shadow-sm transition-colors hover:bg-[var(--brand-strong)]"
                     >
                       <Download aria-hidden className="h-3.5 w-3.5 shrink-0" />
                       Download to sign
@@ -256,7 +256,7 @@ export default async function PortalAgreementPage() {
               <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-2">
                 {g.versions.map((v) => (
                   <Card key={v.id} className={`relative overflow-hidden ${v.current ? "" : "opacity-90"}`}>
-                    <span aria-hidden className={`absolute inset-y-0 left-0 w-1.5 ${v.current ? "bg-hero" : "bg-border"}`} />
+                    <span aria-hidden className={`absolute inset-y-0 left-0 w-1.5 ${v.current ? "bg-[var(--brand-bright)]" : "bg-border"}`} />
                     <div className="flex flex-col gap-2" data-signed-version={v.number} data-current={v.current ? "yes" : "no"}>
                       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                         <p className="text-sm font-medium text-ink">
@@ -290,7 +290,7 @@ export default async function PortalAgreementPage() {
                           rel="noreferrer"
                           className={`inline-flex w-fit items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
                             v.current
-                              ? "bg-hero text-white shadow-sm shadow-primary/25 hover:opacity-95"
+                              ? "bg-primary text-primary-ink shadow-sm transition-colors hover:bg-[var(--brand-strong)]"
                               : "border border-border text-muted hover:bg-bg"
                           }`}
                         >

@@ -585,23 +585,113 @@ body {
    The student portal's own finish, scoped to it by data-portal="student" on
    the shell (AppShell), so the staff and partner portals are untouched.
 
-   Every card lifts off the page on a soft shadow with rounder corners, over a
-   faint wash of the brand colours at the top of the page. Cards and page
-   headers rise into place as a page opens; not for anyone who has asked their
-   system for less motion.
+   Calm first: white cards on a cool grey page, navy-slate ink, and one brand
+   green kept for what means something — the next thing to do, what is done,
+   the page you are on. The colour that makes it fun is small and purposeful:
+   each country a student is going through has an accent of its own (green for
+   the primary, then indigo, amber, rose and sky for backups), shown as a thin
+   stripe, a tinted country tile and its progress — never as a whole block.
+   It replaced full-bleed gradients on every banner, country header, menu entry
+   and button, which stacked four saturated blocks on one screen.
+
+   Every card lifts off the page on a soft shadow with rounder corners. Cards
+   and page headers rise into place as a page opens; not for anyone who has
+   asked their system for less motion.
 
    Unlayered, so these win over the utility classes a Card is given — which is
    the point: one finish across every student page, whatever each page asked
    for. The animation ends on transform: none, so nothing it leaves behind
    becomes the containing block of a fixed overlay opened later. */
+[data-portal="student"] {
+  --bg: #f4f6f9;
+  --card: #ffffff;
+  --ink: #101828;
+  --muted: #667085;
+  --border: #e4e7ec;
+  /* Deep enough for white text on a button: about 5:1. */
+  --primary: #0f7f5c;
+  --primary-ink: #ffffff;
+  /* A tint to sit behind brand text, the brighter green for fills and done
+     steps (never text), and the hover on a brand button. */
+  --brand-soft: #e7f4ee;
+  --brand-bright: #1fa878;
+  --brand-strong: #0b6449;
+  --sidebar-active-bg: var(--brand-soft);
+  /* The current menu entry's text and icon. */
+  --nav-active-ink: var(--brand-strong);
+  /* The old gradient names, flattened to the brand: what still uses them is
+     small — an avatar, a progress fill — and reads as one colour. */
+  --hero-from: #16946c;
+  --hero-via: #13875f;
+  --hero-to: #0f7f5c;
+  --hero-alt-from: #5b5bd6;
+  --hero-alt-to: #4b4bc4;
+  /* A country's accent: its colour, its tint, and its text on the tint. */
+  --accent-1: #1fa878;
+  --accent-1-soft: #e7f4ee;
+  --accent-1-ink: #0b6449;
+  --accent-2: #5b5bd6;
+  --accent-2-soft: #eeeefc;
+  --accent-2-ink: #3f3fb0;
+  --accent-3: #e08a1e;
+  --accent-3-soft: #fdf2e3;
+  --accent-3-ink: #9a5a0c;
+  --accent-4: #d4467e;
+  --accent-4-soft: #fcebf2;
+  --accent-4-ink: #a02b5b;
+  --accent-5: #0e97c0;
+  --accent-5-soft: #e3f4fa;
+  --accent-5-ink: #0a6c8a;
+  --lift: 0 1px 2px rgb(16 24 40 / 0.04), 0 4px 16px -8px rgb(16 24 40 / 0.10);
+  --lift-hover: 0 2px 4px rgb(16 24 40 / 0.05), 0 14px 30px -14px rgb(16 24 40 / 0.20);
+}
+:root[data-theme="dark"] [data-portal="student"] {
+  --bg: #0e141b;
+  --card: #151d26;
+  --ink: #e8edf3;
+  --muted: #98a2b3;
+  --border: #253140;
+  --primary: #34c393;
+  --primary-ink: #04251a;
+  --brand-soft: rgb(52 195 147 / 0.14);
+  --brand-bright: #34c393;
+  --brand-strong: #6fdcb6;
+  --nav-active-ink: #6fdcb6;
+  --hero-from: #2aa87d;
+  --hero-via: #25996f;
+  --hero-to: #1f8a63;
+  --hero-alt-from: #8b8bf0;
+  --hero-alt-to: #7474e0;
+  --accent-1: #34c393;
+  --accent-1-soft: rgb(52 195 147 / 0.14);
+  --accent-1-ink: #6fdcb6;
+  --accent-2: #8b8bf0;
+  --accent-2-soft: rgb(139 139 240 / 0.16);
+  --accent-2-ink: #b3b3f7;
+  --accent-3: #f0a54a;
+  --accent-3-soft: rgb(240 165 74 / 0.16);
+  --accent-3-ink: #f6c689;
+  --accent-4: #ec6fa0;
+  --accent-4-soft: rgb(236 111 160 / 0.16);
+  --accent-4-ink: #f4a3c3;
+  --accent-5: #3cc0e6;
+  --accent-5-soft: rgb(60 192 230 / 0.16);
+  --accent-5-ink: #8fdaf0;
+  --lift: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 22px -12px rgb(0 0 0 / 0.5);
+  --lift-hover: 0 2px 4px rgb(0 0 0 / 0.35), 0 16px 32px -14px rgb(0 0 0 / 0.6);
+}
+/* The semi-dark theme darkens the sidebar alone; its current entry keeps a tint that reads on it. */
+:root[data-theme="semi-dark"] [data-portal="student"] {
+  --sidebar-active-bg: rgb(52 195 147 / 0.16);
+  --nav-active-ink: #6fdcb6;
+}
 [data-portal="student"] main {
-  background:
-    radial-gradient(1100px 440px at 0% -10%, color-mix(in srgb, var(--primary) 14%, transparent), transparent 70%),
-    radial-gradient(900px 400px at 100% -8%, color-mix(in srgb, var(--hero-alt-from) 10%, transparent), transparent 70%),
-    var(--bg);
+  /* A whisper of depth at the top, and nothing coloured behind the page. */
+  background: linear-gradient(180deg, color-mix(in srgb, var(--card) 70%, var(--bg)) 0, var(--bg) 320px);
 }
 [data-portal="student"] main [data-card] {
   border-radius: 1rem;
+  border-color: var(--border);
   box-shadow: var(--lift);
 }
 [data-portal="student"] main a:hover > [data-card] {
@@ -614,7 +704,7 @@ body {
   box-shadow: var(--lift);
 }
 [data-portal="student"] main [data-doc-section] > button {
-  background: color-mix(in srgb, var(--primary) 6%, var(--card));
+  background: color-mix(in srgb, var(--ink) 2.5%, var(--card));
 }
 [data-portal="student"] [data-lift] {
   box-shadow: var(--lift);

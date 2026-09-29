@@ -72,20 +72,26 @@ export default async function SupportPage() {
       {/* Tickets on the left, the quick ways to get help beside them. */}
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
         <div className="flex flex-col gap-6 lg:order-2">
-          <div className="bg-hero relative overflow-hidden rounded-2xl p-5 text-white shadow-lg shadow-primary/20" data-rise>
-            <span aria-hidden className="pointer-events-none absolute -right-10 -top-12 h-32 w-32 rounded-full bg-white/10" />
-            <p className="relative text-[11px] font-semibold uppercase tracking-wider text-white/80">Fastest answer</p>
-            <p className="relative mt-1 text-base font-semibold">Chat with us on WhatsApp</p>
+          <div className="rounded-2xl border border-border bg-card p-5 shadow-[var(--lift)]" data-rise>
+            <div className="flex items-start gap-3">
+              <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-soft)] text-[var(--brand-strong)]">
+                <MessageCircle className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">Fastest answer</p>
+                <p className="mt-0.5 text-base font-semibold text-ink">Chat with us on WhatsApp</p>
+              </div>
+            </div>
             <a
               href={WHATSAPP_LINK}
-              className="relative mt-3 inline-flex w-fit items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-semibold text-[var(--hero-to)] hover:bg-white/90"
+              className="mt-3 inline-flex w-fit items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-ink transition-colors hover:bg-[var(--brand-strong)]"
             >
               <MessageCircle aria-hidden className="h-4 w-4 shrink-0" />
               WhatsApp HMARK Consultants
             </a>
             {/* Shown as well as linked: a student on a desktop browser has no
                 WhatsApp to hand off to, and may want to save the number. */}
-            <p className="relative mt-2 text-xs text-white/85">{WHATSAPP_DISPLAY}</p>
+            <p className="mt-2 text-xs text-muted">{WHATSAPP_DISPLAY}</p>
           </div>
 
           {/* Hidden entirely when nothing is published, rather than showing an

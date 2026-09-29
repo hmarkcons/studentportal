@@ -1,9 +1,9 @@
 import type { LucideIcon } from "lucide-react";
 
 /**
- * The top of every student page: what the page is, in a sentence, on a soft
- * wash of the brand colours, with anything that summarises it (chips, a
- * figure, a button) to the right.
+ * The top of every student page: what the page is, in a sentence, on a plain
+ * white card — its icon the one touch of the brand — with anything that
+ * summarises it (chips, a figure, a button) to the right.
  *
  * The title stays an h2 — pages are found and read by their heading.
  */
@@ -30,18 +30,16 @@ export function PortalPageHeader({
       data-page-header
       className="relative overflow-hidden rounded-2xl border border-border bg-card px-5 py-5 shadow-[var(--lift)] sm:px-6"
     >
-      <span aria-hidden className="pointer-events-none absolute -right-16 -top-24 h-56 w-56 rounded-full bg-primary/15 blur-3xl" />
-      <span aria-hidden className="pointer-events-none absolute -bottom-28 right-1/3 h-48 w-48 rounded-full bg-[var(--hero-alt-from)]/10 blur-3xl" />
       <div className="relative flex flex-wrap items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-4">
           <span
             aria-hidden
-            className="bg-hero flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white shadow-lg shadow-primary/25"
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--brand-soft)] text-[var(--brand-strong)]"
           >
             <Icon className="h-6 w-6" strokeWidth={2} />
           </span>
           <div className="min-w-0">
-            {eyebrow && <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">{eyebrow}</p>}
+            {eyebrow && <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">{eyebrow}</p>}
             <h2 className="text-xl font-semibold tracking-tight text-ink sm:text-2xl">{title}</h2>
             {description && <p className="mt-0.5 max-w-3xl text-sm text-muted">{description}</p>}
           </div>

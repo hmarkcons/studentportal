@@ -104,7 +104,7 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
         aside={
           total > 0 ? (
             <div className="text-right">
-              <p className="bg-hero bg-clip-text text-3xl font-bold leading-none text-transparent">{percent}%</p>
+              <p className="text-3xl font-bold leading-none tracking-tight text-ink">{percent}%</p>
               <p className="text-xs text-muted">approved</p>
             </div>
           ) : undefined
@@ -121,7 +121,7 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
             {/* The same share the dashboard's ring draws. */}
             <div>
               <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-border" aria-hidden>
-                <div className="bg-hero h-full" style={{ width: `${(approved / total) * 100}%` }} />
+                <div className="h-full bg-[var(--brand-bright)]" style={{ width: `${(approved / total) * 100}%` }} />
                 <div className="h-full bg-warning/60" style={{ width: `${(counts.inReview / total) * 100}%` }} />
               </div>
               <p className="mt-1.5 text-xs text-muted">
@@ -153,7 +153,7 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
               key={c.id}
               href={`/portal/documents?cycle=${c.id}`}
               className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-                c.id === activeCycleId ? "bg-hero text-white shadow-sm shadow-primary/25" : "border border-border bg-card text-muted hover:text-ink"
+                c.id === activeCycleId ? "bg-primary text-primary-ink" : "border border-border bg-card text-muted hover:text-ink"
               }`}
             >
               {cycleTabLabel("Docs", c)}

@@ -34,8 +34,8 @@ export function BoardingPassTracker({
   currentStage: string;
   pipelineStages: string[];
   /**
-   * "pass" is the student portal's: the brand gradient, and the ticket's
-   * notches at the tear line. Staff keep the flat card.
+   * "pass" is the student portal's: a ticket — its label and plane, a torn
+   * edge with notches — on a white card. Staff keep the flat card.
    */
   tone?: "flat" | "pass";
 }) {
@@ -45,21 +45,22 @@ export function BoardingPassTracker({
 
   return (
     <div className={`relative overflow-hidden border border-border bg-card ${pass ? "rounded-2xl" : "rounded-xl"}`} data-lift={pass || undefined}>
-      <div className={`flex items-center justify-between px-5 py-4 ${pass ? "bg-hero relative text-white" : "bg-primary text-primary-ink"}`}>
-        {pass && <span aria-hidden className="pointer-events-none absolute -right-8 -top-14 h-32 w-32 rounded-full bg-white/10" />}
-        <div className="relative">
+      <div className={`flex items-center justify-between px-5 py-4 ${pass ? "text-ink" : "bg-primary text-primary-ink"}`}>
+        <div className="flex min-w-0 items-center gap-3">
           {pass && (
-            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/75">
-              <Plane aria-hidden className="h-3 w-3 shrink-0" />
-              Boarding pass
-            </p>
+            <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-soft)] text-[var(--brand-strong)]">
+              <Plane className="h-5 w-5" />
+            </span>
           )}
-          <p className={pass ? "text-base font-semibold" : "text-sm font-semibold"}>{universityName}</p>
-          {programName && <p className="text-xs opacity-90">{programName}</p>}
+          <div className="min-w-0">
+            {pass && <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Boarding pass</p>}
+            <p className={pass ? "text-base font-semibold" : "text-sm font-semibold"}>{universityName}</p>
+            {programName && <p className={pass ? "text-xs text-muted" : "text-xs opacity-90"}>{programName}</p>}
+          </div>
         </div>
         {(intake || round) && (
-          <div className="relative flex shrink-0 flex-col items-end gap-0.5 pl-3">
-            {intake && <span className="text-xs opacity-90">Intake: {intake}</span>}
+          <div className="flex shrink-0 flex-col items-end gap-0.5 pl-3">
+            {intake && <span className={pass ? "text-xs text-muted" : "text-xs opacity-90"}>Intake: {intake}</span>}
             {round && <span className="text-xs font-semibold">{round}</span>}
           </div>
         )}
@@ -85,7 +86,7 @@ export function BoardingPassTracker({
             {pipelineStages.map((stage, i) => (
               <div key={stage} className="flex flex-col items-center gap-1">
                 <div
-                  className={`w-full rounded-full ${pass ? "h-2" : "h-1.5"} ${i <= currentIndex ? (pass ? "bg-hero" : "bg-primary") : "bg-border"}`}
+                  className={`w-full rounded-full ${pass ? "h-2" : "h-1.5"} ${i <= currentIndex ? (pass ? "bg-[var(--brand-bright)]" : "bg-primary") : "bg-border"}`}
                 />
                 <span
                   className={`text-center text-[10px] leading-tight ${

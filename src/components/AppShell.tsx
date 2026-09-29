@@ -202,10 +202,11 @@ export function AppShell({
                 aria-current={isActive(item.href!) ? "page" : undefined}
                 className={
                   student
-                    ? `group mb-1 flex items-center gap-3 rounded-xl px-2.5 py-2 text-sm font-medium transition-all duration-200 ${
+                    ? // The page you are on: a tint and a slim bar, the one green in the menu.
+                      `group relative mb-0.5 flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-150 ${
                         isActive(item.href!)
-                          ? "bg-hero text-white shadow-md shadow-primary/25"
-                          : "text-sidebar-ink hover:translate-x-0.5 hover:bg-sidebar-active-bg"
+                          ? "bg-sidebar-active-bg font-semibold text-[var(--nav-active-ink)] before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-full before:bg-[var(--nav-active-ink)]"
+                          : "font-medium text-sidebar-ink hover:bg-[color-mix(in_srgb,var(--sidebar-ink)_5%,transparent)]"
                       }`
                     : `mb-1 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
                         isActive(item.href!)
@@ -216,14 +217,12 @@ export function AppShell({
               >
                 {item.icon &&
                   (student ? (
-                    <span
-                      aria-hidden
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors ${
-                        isActive(item.href!) ? "bg-white/20 text-white" : "bg-sidebar-active-bg text-primary group-hover:bg-card"
+                    <NavIcon
+                      name={item.icon}
+                      className={`h-[18px] w-[18px] shrink-0 transition-colors ${
+                        isActive(item.href!) ? "text-[var(--nav-active-ink)]" : "text-sidebar-muted group-hover:text-sidebar-ink"
                       }`}
-                    >
-                      <NavIcon name={item.icon} className="h-[18px] w-[18px]" />
-                    </span>
+                    />
                   ) : (
                     <NavIcon
                       name={item.icon}
@@ -234,7 +233,7 @@ export function AppShell({
                 {Boolean(item.badge) && (
                   <span
                     className={`ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
-                      student && isActive(item.href!) ? "bg-white text-danger" : "bg-danger text-white"
+                      "bg-danger text-white"
                     }`}
                   >
                     {item.badge}
@@ -279,7 +278,7 @@ export function AppShell({
               {student && (
                 <span
                   aria-hidden
-                  className="bg-hero hidden h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white shadow-sm shadow-primary/30 sm:flex"
+                  className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--brand-soft)] text-xs font-semibold text-[var(--brand-strong)] sm:flex"
                 >
                   {initialsOf(userName)}
                 </span>

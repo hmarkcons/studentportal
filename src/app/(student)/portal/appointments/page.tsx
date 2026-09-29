@@ -121,7 +121,7 @@ function Row({ appointment, muted = false }: { appointment: PortalAppointment; m
         aria-hidden
         className={`flex w-14 shrink-0 flex-col overflow-hidden rounded-xl border text-center ${muted ? "border-border opacity-70" : "border-primary/30 shadow-sm"}`}
       >
-        <span className={`py-0.5 text-[10px] font-semibold uppercase tracking-wider ${muted ? "bg-border text-muted" : "bg-hero text-white"}`}>{monthName}</span>
+        <span className={`py-0.5 text-[10px] font-semibold uppercase tracking-wider ${muted ? "bg-border text-muted" : "bg-[var(--brand-soft)] text-[var(--brand-strong)]"}`}>{monthName}</span>
         <span className="bg-card py-1 text-xl font-bold leading-tight text-ink">{Number(day)}</span>
       </span>
     <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-x-4 gap-y-1">

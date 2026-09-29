@@ -57,7 +57,6 @@ export function TeamCard({
       data-team-member={marker}
       data-assigned="yes"
     >
-      <span aria-hidden className="bg-hero absolute inset-x-0 top-0 h-1" />
       <div className="flex items-start gap-4">
         {person.photoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- a signed storage URL, sized here; next/image would proxy it through the server for no gain
@@ -72,7 +71,7 @@ export function TeamCard({
             data-team-photo
           />
         ) : (
-          <span aria-hidden className="bg-hero flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-xl font-semibold text-white shadow-md shadow-primary/25">
+          <span aria-hidden className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-xl font-semibold bg-[var(--brand-soft)] text-[var(--brand-strong)]">
             {initials(person.full_name)}
           </span>
         )}
@@ -113,7 +112,7 @@ export function TeamCard({
 
       <div className="flex flex-wrap gap-2">
         {tel && (
-          <a href={tel} className="bg-hero inline-flex w-fit items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-primary/25 hover:opacity-95">
+          <a href={tel} className="bg-primary inline-flex w-fit items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-primary-ink shadow-sm transition-colors hover:bg-[var(--brand-strong)]">
             <Phone aria-hidden className="h-3.5 w-3.5 shrink-0" />
             Call
           </a>
