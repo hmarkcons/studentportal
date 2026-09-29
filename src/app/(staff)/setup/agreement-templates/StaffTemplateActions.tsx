@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Trash2 } from "lucide-react";
 import { deleteStaffAgreementTemplate, duplicateStaffAgreementTemplate } from "@/lib/actions/staffAgreements";
 import { Button } from "@/components/ui/Button";
 import { useButtonAction } from "@/components/useButtonAction";
@@ -36,12 +37,13 @@ export function StaffTemplateActions({ id, name }: { id: string; name: string })
         pending={del.pending}
         status={{ state: del.state, label: "Deleted.", showError: true }}
         aria-label={`Delete ${name}`}
+        title={`Delete ${name}`}
         onClick={() => {
           if (!confirm(`Delete the "${name}" template? Agreements already generated from it keep their own PDFs.`)) return;
           void del.run(() => deleteStaffAgreementTemplate(id), { toast: "Template deleted." });
         }}
       >
-        🗑️
+        <Trash2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
       </Button>
     </div>
   );

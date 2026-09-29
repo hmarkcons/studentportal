@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { Archive, BadgeCheck, Building2, CircleCheck, Download, FileCheck2, FileSignature, Globe, LockKeyholeOpen, PenLine, ScanSearch } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
@@ -94,13 +95,14 @@ export default async function PortalAgreementPage() {
   return (
     <div className="flex w-full flex-col gap-6" data-portal-page>
       <PortalPageHeader
-        icon="📄"
+        icon={FileSignature}
         title="Your agreement"
         description="Your signed agreement with HMARK Consultants. Where one was corrected, the earlier version is kept below it for your records, marked as replaced."
         aside={
           inForce > 0 ? (
             <Badge tone="success">
-              ✍️ {inForce} signed agreement{inForce === 1 ? "" : "s"} in force
+              <BadgeCheck aria-hidden className="mr-1 h-3.5 w-3.5 shrink-0" />
+              {inForce} signed agreement{inForce === 1 ? "" : "s"} in force
             </Badge>
           ) : awaitingESignature.length > 0 ? (
             <Badge tone="warning">Waiting for your signature</Badge>
@@ -114,7 +116,10 @@ export default async function PortalAgreementPage() {
           nothing to do: the files are still on file, and the wait is ours. */}
       {gate.locked && gate.reason === "awaiting_reverification" && (
         <Card className="border-warning/30 bg-warning-bg">
-          <h3 className="mb-1 text-sm font-semibold text-warning">🔎 We are checking your agreement again</h3>
+          <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold text-warning">
+            <ScanSearch aria-hidden className="h-4 w-4 shrink-0" />
+            We are checking your agreement again
+          </h3>
           <p className="mb-2 text-sm text-warning">
             Your signed agreement and consent video are both with us — nothing is missing and there is nothing for you to
             send. Someone at HMARK is reviewing them once more, and the rest of your portal opens again as soon as that is
@@ -129,7 +134,10 @@ export default async function PortalAgreementPage() {
 
       {gate.locked && gate.reason === "awaiting_submission" && (
         <Card className="border-warning/30 bg-warning-bg">
-          <h3 className="mb-1 text-sm font-semibold text-warning">🔓 Two things to do before your portal opens</h3>
+          <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold text-warning">
+            <LockKeyholeOpen aria-hidden className="h-4 w-4 shrink-0" />
+            Two things to do before your portal opens
+          </h3>
           <p className="mb-2 text-sm text-warning">
             Because you are signing outside Karachi, we need your e-signed agreement and a short video of you confirming
             you signed it. Until both are here, the rest of your portal stays locked.
@@ -156,7 +164,7 @@ export default async function PortalAgreementPage() {
       {awaitingESignature.length > 0 && (
         <section className="flex flex-col gap-3" data-awaiting-signature>
           <h3 className="flex items-center gap-2 text-base font-semibold text-ink">
-            <span aria-hidden>🖊️</span> Waiting for your signature
+            <PenLine aria-hidden className="h-5 w-5 text-primary shrink-0" /> Waiting for your signature
           </h3>
           <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-2">
             {awaitingESignature.map((a) => {
@@ -174,7 +182,8 @@ export default async function PortalAgreementPage() {
                       rel="noreferrer"
                       className="bg-hero mt-3 inline-flex w-fit items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-primary/25 hover:opacity-95"
                     >
-                      📄 Download to sign
+                      <Download aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                      Download to sign
                     </a>
                   )}
                   <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted">
@@ -229,7 +238,7 @@ export default async function PortalAgreementPage() {
 
       {awaitingPaper.length > 0 && (
         <p className="flex items-start gap-2.5 rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted" data-awaiting-paper>
-          <span aria-hidden className="text-base leading-none">🏢</span>
+          <Building2 aria-hidden className="mt-0.5 h-4 w-4 text-primary shrink-0" />
           Your agreement for {awaitingPaper.map(countryOf).join(" and ")} is signed in person at the Karachi office — your
           counsellor will arrange it. Your signed copy appears here once it is filed.
         </p>
@@ -240,7 +249,7 @@ export default async function PortalAgreementPage() {
           {signedGroups.map((g) => (
             <div key={`${g.country}-${g.backup}`} className="flex flex-col gap-3">
               <h3 className="flex flex-wrap items-center gap-2 text-base font-semibold text-ink">
-                <span aria-hidden>🌍</span>
+                <Globe aria-hidden className="h-4 w-4 text-primary shrink-0" />
                 {g.country}
                 {g.backup && <Badge tone="info">backup country</Badge>}
               </h3>
@@ -251,7 +260,11 @@ export default async function PortalAgreementPage() {
                     <div className="flex flex-col gap-2" data-signed-version={v.number} data-current={v.current ? "yes" : "no"}>
                       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                         <p className="text-sm font-medium text-ink">
-                          <span aria-hidden className="mr-1.5">{v.current ? "✅" : "🗄️"}</span>
+                          {v.current ? (
+                            <CircleCheck aria-hidden className="mr-1.5 inline h-4 w-4 shrink-0 align-[-3px] text-success" />
+                          ) : (
+                            <Archive aria-hidden className="mr-1.5 inline h-4 w-4 shrink-0 align-[-3px] text-muted" />
+                          )}
                           {v.of > 1 ? `Version ${v.number} of ${v.of} · ` : ""}signed {formatDateOnly(v.signedOn, LONG_DATE)}
                         </p>
                         {v.current ? <Badge tone="success">In force</Badge> : <Badge tone="neutral">Replaced</Badge>}
@@ -281,7 +294,8 @@ export default async function PortalAgreementPage() {
                               : "border border-border text-muted hover:bg-bg"
                           }`}
                         >
-                          ✍️ View your signed copy
+                          <FileCheck2 aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                          View your signed copy
                         </a>
                       ) : (
                         <p className="text-xs text-muted">The office is filing your signed copy — it will appear here shortly.</p>
@@ -297,7 +311,7 @@ export default async function PortalAgreementPage() {
 
       {signedGroups.length === 0 && awaitingESignature.length === 0 && awaitingPaper.length === 0 && (
         <Card>
-          <PortalEmpty icon="📄" title="No signed agreement yet">
+          <PortalEmpty icon={FileSignature} title="No signed agreement yet">
             Your counsellor prepares it once your registration is confirmed, and your signed copy appears here.
           </PortalEmpty>
         </Card>

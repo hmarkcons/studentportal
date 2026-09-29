@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ArrowDown, ArrowUp } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { SectionForm } from "./SectionForm";
@@ -83,11 +84,11 @@ export function SectionRow({
               </Button>
             }
           />
-          <Button type="button" variant="ghost" size="sm" disabled={isFirst} pending={busy === "up"} onClick={() => run("up")}>
-            ↑
+          <Button type="button" variant="ghost" size="sm" disabled={isFirst} pending={busy === "up"} onClick={() => run("up")} aria-label="Move up" title="Move up">
+            <ArrowUp className="h-3.5 w-3.5 shrink-0" aria-hidden />
           </Button>
-          <Button type="button" variant="ghost" size="sm" disabled={isLast} pending={busy === "down"} onClick={() => run("down")}>
-            ↓
+          <Button type="button" variant="ghost" size="sm" disabled={isLast} pending={busy === "down"} onClick={() => run("down")} aria-label="Move down" title="Move down">
+            <ArrowDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
           </Button>
           <Button
             type="button"

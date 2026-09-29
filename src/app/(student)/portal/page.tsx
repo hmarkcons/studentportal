@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AlarmClock, ArrowRight, CalendarClock, CalendarDays, CreditCard, FolderOpen, Globe, Headset, IdCard, Landmark, Mail, MessageCircle, Sparkles, UserRound } from "lucide-react";
 import { getStudentUser } from "@/lib/auth/session";
 import { loadPortalSummary } from "@/lib/portalSummary";
 import { PortalAttention } from "@/components/PortalAttention";
@@ -9,7 +10,6 @@ import { loadStudentApplications } from "@/lib/studentApplications";
 import { ChartCard, NoData } from "@/components/charts/ChartCard";
 import { ProgressRing } from "@/components/charts/ProgressRing";
 import { DonutChart } from "@/components/charts/DonutChart";
-import { JourneyTracker } from "@/components/studentDashboard/JourneyTracker";
 import { UpcomingTimeline } from "@/components/studentDashboard/UpcomingTimeline";
 import { studentJourney, upcomingTimeline, daysLeftLabel, type TimelineInput } from "@/lib/studentJourney";
 import { loadCycleDocuments, documentCounts } from "@/lib/studentCycleDocuments";
@@ -17,7 +17,7 @@ import { visaOutcomes } from "@/lib/studentVisaApproval";
 import { formatFee } from "@/lib/applicationFee";
 import { formatDateOnly } from "@/lib/formatDate";
 import { loadStudentTeam } from "@/lib/studentTeam";
-import { destinationStatusRows, type RegisteredDestination } from "@/lib/destinationStatus";
+import { destinationHeadline, destinationStatusRows, type RegisteredDestination } from "@/lib/destinationStatus";
 import type { DashboardStageDef } from "@/lib/dashboardPipeline";
 import { TeamCard } from "@/components/studentPortal/TeamCard";
 import { DestinationStatusCard } from "@/components/studentPortal/DestinationStatusCard";
@@ -212,26 +212,45 @@ export default async function PortalDashboardPage() {
         <div className="relative flex flex-wrap items-center justify-between gap-6">
           <div className="min-w-0 max-w-2xl">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/80">Your study abroad plan</p>
-            <h2 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Welcome back, {firstName} 👋</h2>
-            <p className="mt-1.5 text-sm text-white/90">
-              {journey.next
-                ? journey.next.state === "blocked"
-                  ? `${journey.next.label} needs attention — ${journey.next.detail}`
-                  : `Right now: ${journey.next.label} — ${journey.next.detail}`
-                : "Every step is done. Safe travels — we are proud of you!"}
-            </p>
+            <h2 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Welcome back, {firstName}</h2>
+            {/* What to do next — the one thing the seven-step tracker said that
+                the country bars below do not, since it is about the student's
+                own part: documents to send, an agreement to sign. */}
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-2" data-journey-next>
+              <p className="text-sm text-white/90">
+                {journey.next
+                  ? journey.next.state === "blocked"
+                    ? `${journey.next.label} needs attention — ${journey.next.detail}`
+                    : `Right now: ${journey.next.label} — ${journey.next.detail}`
+                  : "Every step is done. Safe travels — we are proud of you!"}
+              </p>
+              {journey.next?.href && (
+                <Link
+                  href={journey.next.href}
+                  className="inline-flex w-fit items-center gap-1 rounded-lg bg-white px-3 py-1 text-xs font-semibold text-[var(--hero-to)] shadow-sm hover:bg-white/90"
+                >
+                  Continue
+                  <ArrowRight aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                </Link>
+              )}
+            </div>
             <div className="mt-4 flex flex-wrap gap-2 text-xs">
               {student.student_code && (
-                <span className="rounded-full bg-white/15 px-3 py-1 font-medium ring-1 ring-white/25 backdrop-blur-sm" data-student-code>
-                  🎫 {student.student_code}
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 font-medium ring-1 ring-white/25 backdrop-blur-sm" data-student-code>
+                  <IdCard aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                  {student.student_code}
                 </span>
               )}
               {student.intake && (
-                <span className="rounded-full bg-white/15 px-3 py-1 font-medium ring-1 ring-white/25 backdrop-blur-sm">📆 {student.intake} intake</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 font-medium ring-1 ring-white/25 backdrop-blur-sm">
+                  <CalendarDays aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                  {student.intake} intake
+                </span>
               )}
               {primaryCountry && (
-                <span className="rounded-full bg-white/15 px-3 py-1 font-medium ring-1 ring-white/25 backdrop-blur-sm">
-                  🌍 {primaryCountry.name}
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 font-medium ring-1 ring-white/25 backdrop-blur-sm">
+                  <Globe aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                  {primaryCountry.name}
                   {backups > 0 && ` · ${backups} backup${backups === 1 ? "" : "s"}`}
                 </span>
               )}
@@ -244,7 +263,7 @@ export default async function PortalDashboardPage() {
             className="relative flex w-full max-w-xs items-center gap-3 rounded-2xl bg-white/15 px-4 py-3 ring-1 ring-white/25 backdrop-blur-md transition hover:bg-white/20 sm:w-auto"
           >
             <span aria-hidden className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/20 text-xl">
-              {soonest ? "⏰" : "✨"}
+              {soonest ? <AlarmClock className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
             </span>
             <span className="min-w-0">
               <span className="block text-[11px] font-semibold uppercase tracking-wider text-white/80">
@@ -257,11 +276,50 @@ export default async function PortalDashboardPage() {
         </div>
       </section>
 
-      <JourneyTracker journey={journey} />
+      {/* ------------------------------------------------------ the journey
+          One status bar per country — the primary first, then each backup —
+          under the heading the seven-step tracker used to have. That tracker
+          said much the same thing less precisely, once, for every country
+          together; these are the steps staff actually record, country by
+          country. */}
+      <section className="flex flex-col gap-3" data-journey>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">Your journey</h3>
+            <p className="text-lg font-semibold tracking-tight text-ink" data-journey-status>
+              {primaryCountry ? destinationHeadline(primaryCountry) : "Your journey begins once your country is confirmed"}
+            </p>
+            <p className="text-xs text-muted">
+              {!primaryCountry
+                ? "Your counsellor records the country you are going to, and each step of it appears here."
+                : backups > 0
+                  ? `${primaryCountry.name} is your primary country, with ${backups} backup${backups === 1 ? "" : "s"} running alongside — each has its own bar.`
+                  : `Each step of your ${primaryCountry.name} process, kept up to date by your counsellor.`}
+            </p>
+          </div>
+          {primaryCountry && primaryCountry.total > 0 && (
+            <div className="text-right">
+              <p className="bg-hero bg-clip-text text-4xl font-bold leading-none text-transparent" data-journey-percent>
+                {primaryCountry.percent}%
+              </p>
+              <p className="text-xs text-muted">
+                {primaryCountry.done} of {primaryCountry.total} steps
+              </p>
+            </div>
+          )}
+        </div>
+        {countries.length > 0 && (
+          <div className="flex flex-col gap-4">
+            {countries.map((row) => (
+              <DestinationStatusCard key={row.destinationId} row={row} />
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* The four figures a student checks most, each against its whole. */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <ChartCard title="📁 Documents" subtitle={cycleDocs.showCycleTabs ? "This intake" : undefined} href="/portal/documents" linkLabel="Open">
+        <ChartCard icon={FolderOpen} title="Documents" subtitle={cycleDocs.showCycleTabs ? "This intake" : undefined} href="/portal/documents" linkLabel="Open">
           <div data-kpi="documents">
             {docs.total === 0 ? (
               <NoData>Your document list is being prepared.</NoData>
@@ -279,7 +337,7 @@ export default async function PortalDashboardPage() {
           </div>
         </ChartCard>
 
-        <ChartCard title="💳 Payments" href="/portal/payments" linkLabel="Open">
+        <ChartCard icon={CreditCard} title="Payments" href="/portal/payments" linkLabel="Open">
           <div data-kpi="payments">
             {!money || money.total === 0 ? (
               <NoData>No invoice yet.</NoData>
@@ -300,7 +358,7 @@ export default async function PortalDashboardPage() {
           </div>
         </ChartCard>
 
-        <ChartCard title="👤 Profile" href="/portal/profile" linkLabel="Open">
+        <ChartCard icon={UserRound} title="Profile" href="/portal/profile" linkLabel="Open">
           <div data-kpi="profile">
             <ProgressRing
               value={profileDone}
@@ -320,7 +378,7 @@ export default async function PortalDashboardPage() {
           </div>
         </ChartCard>
 
-        <ChartCard title="📅 Next appointment" href="/portal/appointments" linkLabel="All">
+        <ChartCard icon={CalendarDays} title="Next appointment" href="/portal/appointments" linkLabel="All">
           <div data-kpi="appointment" className="flex flex-1 flex-col items-center justify-center gap-1 text-center">
             {nextAppointment ? (
               <>
@@ -340,39 +398,20 @@ export default async function PortalDashboardPage() {
         </ChartCard>
       </div>
 
-      {/* --------------------------------------------------- each country */}
-      {countries.length > 0 && (
-        <section className="flex flex-col gap-3" data-destinations>
-          <div className="flex flex-wrap items-end justify-between gap-2">
-            <div>
-              <h3 className="text-base font-semibold text-ink">{countries.length === 1 ? "Your country" : "Your countries"}</h3>
-              <p className="text-xs text-muted">
-                {backups > 0
-                  ? "Your primary country and each backup, step by step. They run side by side, so each has its own bar."
-                  : "Each step of your process, kept up to date by your counsellor."}
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-col gap-4">
-            {countries.map((row) => (
-              <DestinationStatusCard key={row.destinationId} row={row} />
-            ))}
-          </div>
-        </section>
-      )}
-
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Everything outstanding — documents, money, appointments, replies —
             each computed by the helper its own page uses. */}
         <PortalAttention summary={summary} className="h-full" />
         <ChartCard
-          title="⏳ Coming up"
+          icon={CalendarClock}
+          title="Coming up"
           subtitle={timeline[0] ? `Next: ${timeline[0].label}, ${daysLeftLabel(timeline[0].daysLeft)}` : "Deadlines, payments and appointments"}
         >
           <UpcomingTimeline entries={timeline} />
         </ChartCard>
         <ChartCard
-          title="🏛️ Your applications by stage"
+          icon={Landmark}
+          title="Your applications by stage"
           subtitle={`${apps.length} application${apps.length === 1 ? "" : "s"}`}
           href="/portal/applications"
           linkLabel="View applications"
@@ -426,13 +465,16 @@ export default async function PortalDashboardPage() {
             </div>
             <div className="relative flex flex-wrap gap-2">
               <a href={WHATSAPP_LINK} className="bg-hero inline-flex w-fit items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-primary/25 hover:opacity-95">
-                💬 WhatsApp HMARK
+                <MessageCircle aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                WhatsApp HMARK
               </a>
               <Link href="/portal/messages" className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-ink hover:border-primary hover:text-primary">
-                ✉️ Message
+                <Mail aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                Message
               </Link>
               <Link href="/portal/support" className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-ink hover:border-primary hover:text-primary">
-                🎧 Support
+                <Headset aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                Support
               </Link>
             </div>
           </div>

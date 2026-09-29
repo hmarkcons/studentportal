@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Trash2 } from "lucide-react";
 import { deleteScholarshipBody } from "@/lib/actions/scholarships";
 import { toast } from "@/lib/toast";
 
@@ -31,9 +32,10 @@ export function DeleteScholarshipBodyButton({ id, name }: { id: string; name: st
         onClick={handleDelete}
         disabled={pending}
         title="Delete"
+        aria-label="Delete"
         className="w-fit rounded p-1 text-muted hover:text-danger disabled:opacity-50"
       >
-        🗑️
+        <Trash2 className="h-4 w-4 shrink-0" aria-hidden />
       </button>
       {/* The refusal to delete a body a student is recorded against is the
           message that matters most here, so it is shown rather than swallowed. */}

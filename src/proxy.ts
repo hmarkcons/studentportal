@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { evaluateAgreementGate, isGateAllowedPath } from "@/lib/portalGate";
 import { accessVerdict, clientIp, isAccessAllowedPath, type AccessState } from "@/lib/officeAccess";
+import { SESSION_ONLY_COOKIE, sessionOnlyCookieOptions } from "@/lib/sessionCookies";
 
 export async function proxy(request: NextRequest) {
   // Cron endpoints authenticate themselves with the CRON_SECRET bearer token
@@ -19,6 +20,9 @@ export async function proxy(request: NextRequest) {
   }
 
   let response = NextResponse.next({ request });
+  // Someone who left "Keep me signed in" unticked: the tokens refreshed here
+  // stay session cookies, so closing the browser still signs them out.
+  const sessionOnly = Boolean(request.cookies.get(SESSION_ONLY_COOKIE));
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -32,7 +36,7 @@ export async function proxy(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           response = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
+            response.cookies.set(name, value, sessionOnly ? sessionOnlyCookieOptions(options) : options)
           );
         },
       },

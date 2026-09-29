@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { CircleCheck, Coins, Contrast, Hourglass } from "lucide-react";
 import Link from "next/link";
 import { PAYMENT_STATUS_LABELS } from "@/lib/invoiceMath";
 import { formatDateOnly } from "@/lib/formatDate";
@@ -117,13 +118,13 @@ export function ConsultancyFeeOverview({ rows, canManage }: { rows: FeeRow[]; ca
   return (
     <div className="mb-8">
       <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Paid in full" value={summary.paid_in_full} tone="success" icon="✅" />
-        <StatCard label="Partially paid" value={summary.partially_paid} tone="warning" icon="◐" />
-        <StatCard label="Payment pending" value={summary.payment_pending} tone="default" icon="⏳" />
+        <StatCard label="Paid in full" value={summary.paid_in_full} tone="success" icon={CircleCheck} />
+        <StatCard label="Partially paid" value={summary.partially_paid} tone="warning" icon={Contrast} />
+        <StatCard label="Payment pending" value={summary.payment_pending} tone="default" icon={Hourglass} />
         {/* Label, value and tone decided together. Computed separately they
             could disagree — a mixed-currency view with one overdue student read
             "Overdue (1)" above "22 students", which says 22 are overdue. */}
-        <StatCard label={fourthCard.label} value={fourthCard.value} tone={fourthCard.tone} icon="💰" />
+        <StatCard label={fourthCard.label} value={fourthCard.value} tone={fourthCard.tone} icon={Coins} />
       </div>
 
       {currencies.length > 1 && (

@@ -1,15 +1,16 @@
 import Link from "next/link";
+import { Award, CalendarDays, CreditCard, FolderOpen, GraduationCap, IdCard, type LucideIcon } from "lucide-react";
 import { formatDateOnly } from "@/lib/formatDate";
 import { daysLeftLabel, type TimelineEntry, type TimelineKind } from "@/lib/studentJourney";
 import { NoData } from "@/components/charts/ChartCard";
 
-const ICON: Record<TimelineKind, string> = {
-  deadline: "🎓",
-  payment: "💳",
-  appointment: "📅",
-  document: "📁",
-  passport: "🛂",
-  scholarship: "🏅",
+const ICON: Record<TimelineKind, LucideIcon> = {
+  deadline: GraduationCap,
+  payment: CreditCard,
+  appointment: CalendarDays,
+  document: FolderOpen,
+  passport: IdCard,
+  scholarship: Award,
 };
 
 const CHIP: Record<TimelineEntry["tone"], string> = {
@@ -40,9 +41,12 @@ export function UpcomingTimeline({ entries }: { entries: TimelineEntry[] }) {
           <li key={`${e.kind}-${e.date}-${i}`} className="relative flex items-start justify-between gap-3">
             <span
               aria-hidden
-              className={`absolute -left-6 top-0 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-card text-xs shadow-sm`}
+              className="absolute -left-6 top-0 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-card text-primary shadow-sm"
             >
-              {ICON[e.kind]}
+              {(() => {
+                const Icon = ICON[e.kind];
+                return <Icon className="h-3.5 w-3.5" />;
+              })()}
             </span>
             {e.href ? (
               <Link href={e.href} className="min-w-0 hover:underline">

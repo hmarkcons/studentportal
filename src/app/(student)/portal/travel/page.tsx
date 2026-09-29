@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { Globe, Info, Luggage, PartyPopper, Plane } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
@@ -36,9 +37,9 @@ export default async function PortalTravelPage() {
     // not in their menu, so they only reach it by typing the address.
     return (
       <div className="flex w-full flex-col gap-6" data-portal-page>
-        <PortalPageHeader icon="✈️" title="Travel & Arrival" description="What to carry, and what to do in your first days after you land." />
+        <PortalPageHeader icon={Plane} title="Travel & Arrival" description="What to carry, and what to do in your first days after you land." />
         <Card>
-          <PortalEmpty icon="🧳">
+          <PortalEmpty icon={Luggage}>
             This is where your travel checklist will appear — what to carry, and what to do in your first days after you
             land. It opens once your visa has been issued.
           </PortalEmpty>
@@ -87,15 +88,20 @@ export default async function PortalTravelPage() {
   return (
     <div className="flex w-full flex-col gap-6" data-portal-page>
       <PortalPageHeader
-        icon="✈️"
-        eyebrow="🎉 Your visa is issued — congratulations"
+        icon={Plane}
+        eyebrow={
+          <span className="inline-flex items-center gap-1.5">
+            <PartyPopper aria-hidden className="h-3.5 w-3.5 shrink-0" />
+            Your visa is issued — congratulations
+          </span>
+        }
         title="Travel & Arrival"
         description="This is what to carry with you and what to do once you land. Tick things off as you go; it saves as you tick, and your counsellor can see where you are up to."
       />
 
       {withGuides.length === 0 ? (
         <Card>
-          <PortalEmpty icon="🧳" title="Your checklist is on its way">
+          <PortalEmpty icon={Luggage} title="Your checklist is on its way">
             Your counsellor is putting your arrival checklist together. It will appear here shortly — ask them directly
             if you are travelling soon.
           </PortalEmpty>
@@ -105,7 +111,7 @@ export default async function PortalTravelPage() {
           {withGuides.map((a) => (
             <div key={a.destinationId}>
               <div className="mb-3 flex flex-wrap items-center gap-2">
-                <span aria-hidden className="text-lg">🌍</span>
+                <Globe aria-hidden className="h-5 w-5 text-primary shrink-0" />
                 <h3 className="text-base font-semibold text-ink">{a.country}</h3>
                 {a.university && <span className="text-xs text-muted">{a.university}</span>}
                 <Badge tone="success">Visa issued</Badge>
@@ -116,8 +122,9 @@ export default async function PortalTravelPage() {
         </div>
       )}
 
-      <p className="rounded-xl border border-border bg-card px-4 py-3 text-xs text-muted">
-        ℹ️ Rules change. If anything here does not match what an official tells you, believe the official — and tell your
+      <p className="flex items-start gap-2 rounded-xl border border-border bg-card px-4 py-3 text-xs text-muted">
+        <Info aria-hidden className="mt-px h-4 w-4 text-info shrink-0" />
+        Rules change. If anything here does not match what an official tells you, believe the official — and tell your
         counsellor so we can correct it for the students coming after you.
       </p>
     </div>

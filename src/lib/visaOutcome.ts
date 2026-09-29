@@ -121,7 +121,7 @@ export function visaMessage(
 
   if (decision === "approved") {
     return {
-      heading: "🎉 Your visa has been issued",
+      heading: "Your visa has been issued",
       body: [
         `Congratulations${name ? `, ${name}` : ""} — it's official.${country ? ` You're going to ${country}.` : ""}`,
         "After everything you put into this application, take a moment to enjoy it. It has been a pleasure supporting you from the first document to this result, and the whole team wishes you every success in your studies.",

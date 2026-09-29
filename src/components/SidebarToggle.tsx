@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
 const KEY = "hmark-sidebar";
 
@@ -42,17 +43,17 @@ export function SidebarToggle({ variant }: { variant: "hide" | "show" }) {
 
   if (variant === "hide") {
     // A bare « in muted grey at p-1 read as decoration and nobody found it.
-    // The answer is the same arrow, large and in the brand green — a coloured
-    // 24px glyph carries on its own, where a 12px grey one did not.
+    // The answer is a panel icon, large and in the brand green — a coloured
+    // 20px icon carries on its own, where a 12px grey glyph did not.
     return (
       <button
         type="button"
         onClick={() => set(true)}
         title="Hide the menu"
         aria-label="Hide the menu"
-        className="hidden shrink-0 items-center justify-center rounded-md px-1.5 py-0.5 text-2xl leading-none text-primary transition-colors hover:bg-sidebar-active-bg md:inline-flex"
+        className="hidden shrink-0 items-center justify-center rounded-md p-1.5 text-primary transition-colors hover:bg-sidebar-active-bg md:inline-flex"
       >
-        &laquo;
+        <PanelLeftClose aria-hidden className="h-5 w-5" />
       </button>
     );
   }
@@ -71,9 +72,9 @@ export function SidebarToggle({ variant }: { variant: "hide" | "show" }) {
       title="Show the menu"
       aria-label="Show the menu"
       aria-expanded={!hidden}
-      className="hidden shrink-0 items-center justify-center rounded-md px-1.5 py-0.5 text-2xl leading-none text-primary transition-colors hover:bg-bg md:inline-flex"
+      className="hidden shrink-0 items-center justify-center rounded-md p-1.5 text-primary transition-colors hover:bg-bg md:inline-flex"
     >
-      &raquo;
+      <PanelLeftOpen aria-hidden className="h-5 w-5" />
     </button>
   );
 }

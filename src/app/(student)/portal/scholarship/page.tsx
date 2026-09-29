@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { Award, FileText, Globe, KeyRound, Landmark, Link2, Medal, Send, Trophy } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
@@ -87,7 +88,7 @@ function CallForApplications({ body, signed }: { body: Body; signed: Map<string,
         rel="noreferrer"
         className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
       >
-        {call.kind === "page" ? "🔗" : "📄"} {call.label}
+        {call.kind === "page" ? <Link2 aria-hidden className="h-4 w-4 shrink-0" /> : <FileText aria-hidden className="h-4 w-4 shrink-0" />} {call.label}
         {call.kind === "stored" ? "" : " →"}
       </a>
       <p className="mt-1 text-xs text-muted">
@@ -235,15 +236,15 @@ export default async function PortalScholarshipPage() {
   return (
     <div className="flex w-full flex-col gap-6" data-portal-page>
       <PortalPageHeader
-        icon="🎓"
+        icon={Award}
         title="Scholarship"
         description="The scholarships open to you in the countries you are applying to, and — once one is recorded for you — where your application stands."
       >
         {(offering.length > 0 || recorded > 0) && (
           <PortalStats className="xl:grid-cols-3">
-            <PortalStat icon="🌍" value={offering.length} label={`countr${offering.length === 1 ? "y offers" : "ies offer"} one`} tone="info" />
-            <PortalStat icon="📨" value={recorded} label={`application${recorded === 1 ? "" : "s"} recorded`} />
-            <PortalStat icon="🏅" value={awarded} label="awarded" tone={awarded > 0 ? "success" : "default"} />
+            <PortalStat icon={Globe} value={offering.length} label={`countr${offering.length === 1 ? "y offers" : "ies offer"} one`} tone="info" />
+            <PortalStat icon={Send} value={recorded} label={`application${recorded === 1 ? "" : "s"} recorded`} />
+            <PortalStat icon={Medal} value={awarded} label="awarded" tone={awarded > 0 ? "success" : "default"} />
           </PortalStats>
         )}
       </PortalPageHeader>
@@ -255,7 +256,7 @@ export default async function PortalScholarshipPage() {
               <span aria-hidden className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-primary/10" />
               <div className="relative mb-2 flex flex-wrap items-center justify-between gap-2" data-scholarship-country={c.display_name}>
                 <h3 className="flex items-center gap-2 text-base font-semibold text-ink">
-                  <span aria-hidden>🎓</span>
+                  <Award aria-hidden className="h-5 w-5 text-primary shrink-0" />
                   {c.display_name}
                 </h3>
                 {c.scholarship_access === "universal" ? (
@@ -299,7 +300,7 @@ export default async function PortalScholarshipPage() {
       {finalized.length > 0 && (
         <section className="flex flex-col gap-3" data-finalized-scholarship>
           <h3 className="flex items-center gap-2 text-base font-semibold text-ink">
-            <span aria-hidden>🏛️</span> Your university&rsquo;s scholarship
+            <Landmark aria-hidden className="h-5 w-5 text-primary shrink-0" /> Your university&rsquo;s scholarship
           </h3>
           <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
             {finalized.map((f) => (
@@ -357,7 +358,7 @@ export default async function PortalScholarshipPage() {
 
       {(scholarships ?? []).length === 0 ? (
         <Card>
-          <PortalEmpty icon="🏅">
+          <PortalEmpty icon={Medal}>
             {finalized.some((f) => f.bodies.length > 0)
               ? `Your application to ${finalized.find((f) => f.bodies.length > 0)!.bodies.map((b) => b.name).join(" or ")} has not been recorded yet. Your counsellor adds it here once it is submitted, with its status and anything still to send.`
               : universal
@@ -375,7 +376,11 @@ export default async function PortalScholarshipPage() {
                 <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
                   <div>
                     <h3 className="flex items-center gap-2 text-base font-semibold text-ink">
-                      <span aria-hidden>{s.status === "accepted" ? "🏆" : "🏅"}</span>
+                      {s.status === "accepted" ? (
+                        <Trophy aria-hidden className="h-5 w-5 shrink-0 text-success" />
+                      ) : (
+                        <Medal aria-hidden className="h-5 w-5 shrink-0 text-primary" />
+                      )}
                       {s.name ?? body?.name ?? "Scholarship"}
                     </h3>
                     <p className="text-xs text-muted">
@@ -437,7 +442,9 @@ export default async function PortalScholarshipPage() {
       {student && portals.length > 0 && (
         <Card>
           <h3 className="mb-1 flex items-center gap-2.5 text-base font-semibold text-ink">
-            <span aria-hidden className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-base">🔐</span>
+            <span aria-hidden className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <KeyRound className="h-[18px] w-[18px]" />
+            </span>
             Your scholarship portal logins
           </h3>
           <p className="mb-3 text-xs text-muted">

@@ -54,6 +54,48 @@ async function stretchedButtons(page) {
   }, SLACK_PX);
 }
 
+/**
+ * Every icon that sits on a line of its own beside text, as `page text`.
+ *
+ * The icons are lucide SVGs, and Tailwind's base styles make every svg a
+ * block. Beside text in anything but a flex or grid box, a block drops onto
+ * its own line, so "[icon] Student ID" renders as the icon with the ID under
+ * it — no error, just a broken-looking chip. An icon marked `inline`, one
+ * placed absolutely (a spinner over its label) and one alone in its box are
+ * all fine.
+ */
+async function strandedIcons(page) {
+  return page.evaluate(() => {
+    const found = [];
+    for (const svg of document.querySelectorAll("svg.lucide")) {
+      const box = svg.getBoundingClientRect();
+      if (box.width === 0 || box.height === 0) continue;
+      const own = getComputedStyle(svg);
+      if (own.display !== "block" || own.position === "absolute" || own.position === "fixed") continue;
+      const parent = svg.parentElement;
+      if (!parent) continue;
+      const layout = getComputedStyle(parent).display;
+      if (/flex|grid/.test(layout)) continue;
+      const text = [...parent.childNodes]
+        .filter((n) => n !== svg)
+        .map((n) => n.textContent ?? "")
+        .join("")
+        .trim();
+      if (!text) continue;
+      found.push(`"${text.replace(/\s+/g, " ").slice(0, 40)}"`);
+    }
+    return found;
+  });
+}
+
+/** Any emoji the page shows: the portal draws lucide icons and uses none. © ® ™ are not emoji. */
+async function emojiOnPage(page) {
+  return page.evaluate(() => {
+    const found = document.body.innerText.replace(/[\u00a9\u00ae\u2122]/g, "").match(/\p{Extended_Pictographic}/gu);
+    return found ? [...new Set(found)].join(" ") : "";
+  });
+}
+
 /** The pages a portal's navigation links to, same-origin and deduplicated. */
 async function navPages(page, prefix) {
   const hrefs = await page.evaluate(() => [...document.querySelectorAll("nav a[href], aside a[href]")].map((a) => a.getAttribute("href")));
@@ -79,6 +121,10 @@ async function sweep(page, label, paths) {
     const stretched = await stretchedButtons(page);
     if (stretched.length === 0) clean += 1;
     ok(`${label} ${path}: no stretched buttons`, stretched.length === 0, stretched.join("; "));
+    const stranded = await strandedIcons(page);
+    ok(`${label} ${path}: every icon sits beside its text`, stranded.length === 0, stranded.join("; "));
+    const emoji = await emojiOnPage(page);
+    ok(`${label} ${path}: no emoji`, !emoji, emoji);
   }
   return clean;
 }

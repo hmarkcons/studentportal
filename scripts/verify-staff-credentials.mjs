@@ -55,7 +55,7 @@ async function openLoginPanel(page, fullName) {
   await page.goto(`${BASE}/admin/staff`, { waitUntil: "domcontentloaded" });
   const row = page.locator("tr", { hasText: fullName }).first();
   await row.locator('button[aria-label="Actions"]').click();
-  await page.getByRole("button", { name: "🔐 Login" }).click();
+  await page.getByRole("button", { name: "Login", exact: true }).click();
   const panel = page.getByRole("dialog").last();
   await panel.getByText("Signs in with").waitFor({ timeout: 30_000 });
   return panel;
@@ -119,7 +119,7 @@ try {
   if (await managerRow.count()) {
     await managerRow.locator('button[aria-label="Actions"]').click();
     ok("Management is not offered the Login panel",
-      (await managerPage.getByRole("button", { name: "🔐 Login" }).count()) === 0);
+      (await managerPage.getByRole("button", { name: "Login", exact: true }).count()) === 0);
   } else {
     ok("Management is not offered the Login panel", true);
   }

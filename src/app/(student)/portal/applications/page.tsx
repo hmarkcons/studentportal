@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowRight, Landmark, PartyPopper, Send, Stamp } from "lucide-react";
 import { getStudentUser } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { BoardingPassTracker } from "@/components/ui/BoardingPassTracker";
@@ -35,23 +36,23 @@ export default async function PortalApplicationsPage() {
   return (
     <div className="flex w-full flex-col gap-6" data-portal-page>
       <PortalPageHeader
-        icon="🏛️"
+        icon={Landmark}
         title="Applications"
         description="Every university you are applying to, how far each application has got, and when its round closes. Your counsellor submits them and keeps this up to date."
       >
         {apps.length > 0 && (
           <PortalStats data-applications-summary>
-            <PortalStat icon="🏛️" value={apps.length} label={`application${apps.length === 1 ? "" : "s"}`} />
-            <PortalStat icon="📨" value={submitted} label="submitted" tone="info" />
-            <PortalStat icon="🎉" value={offers} label={`offer${offers === 1 ? "" : "s"}`} tone={offers > 0 ? "success" : "default"} />
-            <PortalStat icon="🛂" value={finalised} label="finalised for your visa" tone={finalised > 0 ? "success" : "default"} />
+            <PortalStat icon={Landmark} value={apps.length} label={`application${apps.length === 1 ? "" : "s"}`} />
+            <PortalStat icon={Send} value={submitted} label="submitted" tone="info" />
+            <PortalStat icon={PartyPopper} value={offers} label={`offer${offers === 1 ? "" : "s"}`} tone={offers > 0 ? "success" : "default"} />
+            <PortalStat icon={Stamp} value={finalised} label="finalised for your visa" tone={finalised > 0 ? "success" : "default"} />
           </PortalStats>
         )}
       </PortalPageHeader>
 
       {apps.length === 0 ? (
         <Card>
-          <PortalEmpty icon="🏛️" title="No applications yet">
+          <PortalEmpty icon={Landmark} title="No applications yet">
             Your counsellor adds each university here once your documents are ready — you will see it move through every stage.
           </PortalEmpty>
         </Card>
@@ -77,7 +78,8 @@ export default async function PortalApplicationsPage() {
                 <div className="flex flex-wrap items-center justify-between gap-2 px-2">
                   <ProgramDates rounds={program?.rounds ?? []} today={today} highlightRoundId={app.round_id} />
                   <Link href={`/portal/applications/${app.id}`} className="text-xs font-medium text-primary hover:underline">
-                    Intake rounds →
+                    Intake rounds
+                    <ArrowRight aria-hidden className="ml-0.5 inline h-3.5 w-3.5 align-[-2px] shrink-0" />
                   </Link>
                 </div>
               </div>

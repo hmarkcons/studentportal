@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Trash2 } from "lucide-react";
 import { addApplicationTask, toggleApplicationTask, deleteApplicationTask } from "@/lib/actions/applications";
 import { formatDateOnly } from "@/lib/formatDate";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -63,9 +64,11 @@ function TaskRow({ task, revalidateTo }: { task: DashboardTaskRow; revalidateTo:
           onClick={handleDelete}
           disabled={del.pending}
           aria-busy={del.pending || undefined}
-          className="text-xs text-muted hover:text-danger disabled:opacity-50"
+          className="inline-flex items-center text-xs text-muted hover:text-danger disabled:opacity-50"
+          title="Delete"
+          aria-label="Delete task"
         >
-          🗑️
+          <Trash2 aria-hidden className="h-3.5 w-3.5 shrink-0" />
         </button>
       </div>
       {(error ?? del.state?.error) && <p className="text-xs text-danger">{error ?? del.state?.error}</p>}

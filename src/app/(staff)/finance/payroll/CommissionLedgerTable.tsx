@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Eye, Pencil, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -37,7 +38,8 @@ function EditCommissionForm({ record, revalidateTo }: { record: CommissionRecord
   if (!editing) {
     return (
       <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-        ✏️ Edit
+        <Pencil className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        Edit
       </Button>
     );
   }
@@ -98,9 +100,10 @@ function DeleteCommissionButton({ id, revalidateTo }: { id: string; revalidateTo
       onClick={handleDelete}
       pending={del.pending}
       aria-label="Delete commission record"
+      title="Delete commission record"
       status={{ state: del.state, label: "Deleted.", showError: true }}
     >
-      🗑️
+      <Trash2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
     </Button>
   );
 }
@@ -295,7 +298,8 @@ export function CommissionLedgerTable({
                       rel="noreferrer"
                       className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
                     >
-                      👁️ View proof
+                      <Eye className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      View proof
                     </a>
                   )
                 )}

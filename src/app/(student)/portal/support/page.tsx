@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowRight, Bell, CircleCheck, CircleHelp, Headset, MessageCircle, PenLine, Send, Wrench, type LucideIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -10,11 +11,11 @@ import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
 import { PortalStat, PortalStats } from "@/components/studentPortal/PortalStat";
 import { PortalEmpty } from "@/components/studentPortal/PortalEmpty";
 
-function SectionTitle({ icon, children }: { icon: string; children: React.ReactNode }) {
+function SectionTitle({ icon: Icon, children }: { icon: LucideIcon; children: React.ReactNode }) {
   return (
     <h3 className="mb-3 flex items-center gap-2.5 text-base font-semibold text-ink">
-      <span aria-hidden className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-base">
-        {icon}
+      <span aria-hidden className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <Icon className="h-[18px] w-[18px]" />
       </span>
       {children}
     </h3>
@@ -55,15 +56,15 @@ export default async function SupportPage() {
   return (
     <div className="flex w-full flex-col gap-6" data-portal-page>
       <PortalPageHeader
-        icon="🎧"
+        icon={Headset}
         title="Support"
         description="Stuck on something? Raise a ticket and HMARK Support will answer here — or reach us straight away on WhatsApp."
       >
         {(tickets ?? []).length > 0 && (
           <PortalStats className="xl:grid-cols-3">
-            <PortalStat icon="📨" value={open} label={`open ticket${open === 1 ? "" : "s"}`} tone={open > 0 ? "info" : "default"} />
-            <PortalStat icon="🔔" value={newReplies} label={`new repl${newReplies === 1 ? "y" : "ies"}`} tone={newReplies > 0 ? "danger" : "default"} />
-            <PortalStat icon="✅" value={resolved} label="resolved" tone="success" />
+            <PortalStat icon={Send} value={open} label={`open ticket${open === 1 ? "" : "s"}`} tone={open > 0 ? "info" : "default"} />
+            <PortalStat icon={Bell} value={newReplies} label={`new repl${newReplies === 1 ? "y" : "ies"}`} tone={newReplies > 0 ? "danger" : "default"} />
+            <PortalStat icon={CircleCheck} value={resolved} label="resolved" tone="success" />
           </PortalStats>
         )}
       </PortalPageHeader>
@@ -79,7 +80,8 @@ export default async function SupportPage() {
               href={WHATSAPP_LINK}
               className="relative mt-3 inline-flex w-fit items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-semibold text-[var(--hero-to)] hover:bg-white/90"
             >
-              💬 WhatsApp HMARK Consultants
+              <MessageCircle aria-hidden className="h-4 w-4 shrink-0" />
+              WhatsApp HMARK Consultants
             </a>
             {/* Shown as well as linked: a student on a desktop browser has no
                 WhatsApp to hand off to, and may want to save the number. */}
@@ -90,7 +92,7 @@ export default async function SupportPage() {
               empty "FAQ" heading. */}
           {(faqs ?? []).length > 0 && (
             <Card>
-              <SectionTitle icon="❓">FAQ</SectionTitle>
+              <SectionTitle icon={CircleHelp}>FAQ</SectionTitle>
               <div className="flex flex-col gap-2">
                 {(faqs ?? []).map((f) => (
                   <details key={f.id} className="group rounded-xl border border-border px-3 py-2 open:bg-bg/60">
@@ -110,7 +112,7 @@ export default async function SupportPage() {
 
         <div className="flex flex-col gap-6 lg:order-1 lg:col-span-2">
           <Card>
-            <SectionTitle icon="✍️">Submit a ticket</SectionTitle>
+            <SectionTitle icon={PenLine}>Submit a ticket</SectionTitle>
             <NewTicketForm studentId={student.id} />
           </Card>
 
@@ -130,11 +132,17 @@ export default async function SupportPage() {
                   <span className="flex min-w-0 items-center gap-3">
                     <span
                       aria-hidden
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-base ${
-                        t.status === "resolved" ? "bg-success-bg" : t.status === "in_progress" ? "bg-info-bg" : "bg-warning-bg"
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                        t.status === "resolved" ? "bg-success-bg text-success" : t.status === "in_progress" ? "bg-info-bg text-info" : "bg-warning-bg text-warning"
                       }`}
                     >
-                      {t.status === "resolved" ? "✅" : t.status === "in_progress" ? "🛠️" : "📨"}
+                      {t.status === "resolved" ? (
+                        <CircleCheck className="h-[18px] w-[18px]" />
+                      ) : t.status === "in_progress" ? (
+                        <Wrench className="h-[18px] w-[18px]" />
+                      ) : (
+                        <Send className="h-[18px] w-[18px]" />
+                      )}
                     </span>
                     <span className="flex min-w-0 flex-col gap-0.5">
                       <span className="flex min-w-0 items-center gap-2">
@@ -161,14 +169,12 @@ export default async function SupportPage() {
                     <Badge tone={t.status === "resolved" ? "success" : t.status === "in_progress" ? "info" : "warning"}>
                       {t.status.replace("_", " ")}
                     </Badge>
-                    <span aria-hidden className="text-xs text-muted transition-transform group-hover:translate-x-0.5">
-                      →
-                    </span>
+                    <ArrowRight aria-hidden className="h-4 w-4 shrink-0 text-muted transition-transform group-hover:translate-x-0.5" />
                   </span>
                 </Link>
               ))}
               {(!tickets || tickets.length === 0) && (
-                <PortalEmpty icon="🎧" title="No tickets submitted.">
+                <PortalEmpty icon={Headset} title="No tickets submitted.">
                   When you raise one, it appears here with every reply from HMARK Support.
                 </PortalEmpty>
               )}

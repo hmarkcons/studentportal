@@ -1,4 +1,5 @@
 import { Badge } from "./Badge";
+import { Plane } from "lucide-react";
 
 const MANUAL_STATUSES = new Set(["rejected", "declined", "withdrawn"]);
 
@@ -47,7 +48,12 @@ export function BoardingPassTracker({
       <div className={`flex items-center justify-between px-5 py-4 ${pass ? "bg-hero relative text-white" : "bg-primary text-primary-ink"}`}>
         {pass && <span aria-hidden className="pointer-events-none absolute -right-8 -top-14 h-32 w-32 rounded-full bg-white/10" />}
         <div className="relative">
-          {pass && <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/75">✈️ Boarding pass</p>}
+          {pass && (
+            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/75">
+              <Plane aria-hidden className="h-3 w-3 shrink-0" />
+              Boarding pass
+            </p>
+          )}
           <p className={pass ? "text-base font-semibold" : "text-sm font-semibold"}>{universityName}</p>
           {programName && <p className="text-xs opacity-90">{programName}</p>}
         </div>

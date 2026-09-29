@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { FileText } from "lucide-react";
 import { downloadScholarshipCall, removeScholarshipCall } from "@/lib/actions/scholarshipCall";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -70,7 +71,8 @@ export function CallPdfButton({
             rel="noreferrer"
             className="inline-flex items-center gap-1 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
           >
-            📄 Open the call
+            <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            Open the call
           </a>
         )}
         {/* Most regions publish in Italian only. Worth knowing before it is

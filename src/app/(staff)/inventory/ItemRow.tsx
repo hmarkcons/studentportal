@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Pencil, Trash2 } from "lucide-react";
 import { updateInventoryItem, deleteInventoryItem } from "@/lib/actions/inventory";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -74,8 +75,8 @@ export function ItemRow({ item, canManage }: { item: Item; canManage: boolean })
       <td className="px-4 py-3">
         {canManage && (
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
-              ✏️
+            <Button variant="ghost" size="sm" onClick={() => setEditing(true)} aria-label="Edit item" title="Edit item">
+              <Pencil className="h-3.5 w-3.5 shrink-0" aria-hidden />
             </Button>
             <Button
               variant="ghost"
@@ -83,8 +84,10 @@ export function ItemRow({ item, canManage }: { item: Item; canManage: boolean })
               onClick={handleDelete}
               pending={del.pending}
               status={{ state: del.state, label: "Deleted.", showError: true }}
+              aria-label="Delete item"
+              title="Delete item"
             >
-              🗑️
+              <Trash2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
             </Button>
           </div>
         )}

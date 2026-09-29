@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useRef, useState } from "react";
+import { X } from "lucide-react";
 import { submitSignedAgreement } from "@/lib/actions/portal-agreement";
 import { Button } from "@/components/ui/Button";
 import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
@@ -16,8 +17,8 @@ function WhyVideoDialog({ onClose }: { onClose: () => void }) {
       <div className="w-full max-w-md rounded-lg border border-border bg-card p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-start justify-between gap-3">
           <h3 className="text-sm font-semibold text-ink">Why this video is needed</h3>
-          <button type="button" onClick={onClose} className="text-muted hover:text-ink" aria-label="Close">
-            ✕
+          <button type="button" onClick={onClose} className="rounded-md p-0.5 text-muted hover:bg-bg hover:text-ink" aria-label="Close">
+            <X aria-hidden className="h-4 w-4" />
           </button>
         </div>
         <div className="flex flex-col gap-2 text-sm text-ink">

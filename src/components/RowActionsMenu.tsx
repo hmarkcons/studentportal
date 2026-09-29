@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { EllipsisVertical, LoaderCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { deleteStudent } from "@/lib/actions/leads";
@@ -78,9 +79,9 @@ export function RowActionsMenu({
         onClick={toggle}
         disabled={pending}
         aria-label="Row actions"
-        className="rounded-md px-2 py-1 text-muted hover:bg-bg hover:text-ink disabled:opacity-50"
+        className="rounded-md p-1.5 text-muted hover:bg-bg hover:text-ink disabled:opacity-50"
       >
-        {pending ? "…" : "⋮"}
+        {pending ? <LoaderCircle aria-hidden className="h-4 w-4 animate-spin" /> : <EllipsisVertical aria-hidden className="h-4 w-4" />}
       </button>
       <ActionStatus state={del.state} pending={pending} label="Deleted." showError />
       {open &&

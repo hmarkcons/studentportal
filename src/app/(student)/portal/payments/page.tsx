@@ -1,4 +1,5 @@
 import { SERVICE_FEE_NAME, serviceOf } from "@/lib/serviceType";
+import { CalendarDays, Check, CircleCheck, CreditCard, Eye, PartyPopper, Receipt, Wallet } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { documentUrls } from "@/lib/storageUrls";
 import { formatDateOnly } from "@/lib/formatDate";
@@ -146,33 +147,33 @@ export default async function PortalPaymentsPage() {
   return (
     <div className="flex w-full flex-col gap-6" data-portal-page>
       <PortalPageHeader
-        icon="💳"
+        icon={CreditCard}
         title="Payments"
         description="What you owe, what you have paid, and when the next instalment is due. Payment details are on the invoice itself."
       >
         {rows.length > 0 && oneCurrency && (
           <PortalStats>
             <PortalStat
-              icon={outstanding <= 0 ? "🎉" : "💰"}
+              icon={outstanding <= 0 ? PartyPopper : Wallet}
               value={outstanding <= 0 ? "Paid" : money(oneCurrency, outstanding)}
               label={outstanding <= 0 ? "in full" : "to pay"}
               tone={outstanding <= 0 ? "success" : "warning"}
             />
-            <PortalStat icon="✅" value={money(oneCurrency, paidSoFar)} label="paid so far" tone="success" />
+            <PortalStat icon={CircleCheck} value={money(oneCurrency, paidSoFar)} label="paid so far" tone="success" />
             <PortalStat
-              icon="📅"
+              icon={CalendarDays}
               value={nextDue ? formatDateOnly(nextDue, LONG_DATE) : "—"}
               label={nextDue ? (nextDue < today ? "overdue" : "next due") : "nothing due"}
               tone={nextDue && nextDue < today ? "danger" : "default"}
             />
-            <PortalStat icon="🧾" value={rows.length} label={`invoice${rows.length === 1 ? "" : "s"}`} />
+            <PortalStat icon={Receipt} value={rows.length} label={`invoice${rows.length === 1 ? "" : "s"}`} />
           </PortalStats>
         )}
       </PortalPageHeader>
 
       {rows.length === 0 && (
         <Card>
-          <PortalEmpty icon="🧾" title="No invoices yet.">
+          <PortalEmpty icon={Receipt} title="No invoices yet.">
             Your invoice appears here once your agreement is signed, with every instalment and the date each one is due.
           </PortalEmpty>
         </Card>
@@ -211,7 +212,8 @@ export default async function PortalPaymentsPage() {
                     </p>
                   )}
                   <p className="mt-1.5 text-xs text-muted">
-                    🧾 {inv.invoice_number ?? "Invoice"}
+                    <Receipt aria-hidden className="mr-1 inline h-3.5 w-3.5 align-[-2px] shrink-0" />
+                    {inv.invoice_number ?? "Invoice"}
                     {inv.intake && ` · ${inv.intake} intake`}
                   </p>
                 </div>
@@ -227,7 +229,8 @@ export default async function PortalPaymentsPage() {
                       rel="noreferrer"
                       className="bg-hero inline-flex w-fit items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-white shadow-sm shadow-primary/25 hover:opacity-95"
                     >
-                      👁️ View invoice
+                      <Eye aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                      View invoice
                     </a>
                   )}
                 </div>
@@ -304,7 +307,7 @@ export default async function PortalPaymentsPage() {
                                   : "border-2 border-border bg-card text-muted"
                             }`}
                           >
-                            {i.status === "paid" ? "✓" : overdue ? "!" : "•"}
+                            {i.status === "paid" ? <Check className="h-4 w-4" strokeWidth={3} /> : overdue ? "!" : "•"}
                           </span>
                           <span className="min-w-0 text-ink">
                             <span className="font-medium">

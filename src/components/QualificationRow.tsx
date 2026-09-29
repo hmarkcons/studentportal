@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Pencil, Trash2 } from "lucide-react";
 import { useFormAction } from "@/components/useFormAction";
 import { useButtonAction } from "@/components/useButtonAction";
 import { ActionStatus } from "@/components/ActionStatus";
@@ -136,8 +137,9 @@ export function QualificationRow({
           <p className="text-xs text-muted">Grade/percentage: {data?.grade_percentage ?? "—"}</p>
         </div>
         <div className="flex items-center gap-2">
-          <button type="button" onClick={() => setEditing(true)} className="text-xs text-primary hover:underline">
-            ✏️ Edit
+          <button type="button" onClick={() => setEditing(true)} className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+            <Pencil aria-hidden className="h-3.5 w-3.5 shrink-0" />
+            Edit
           </button>
           {deletable && (
             <span className="inline-flex items-center gap-2">
@@ -146,9 +148,10 @@ export function QualificationRow({
                 onClick={handleDelete}
                 disabled={remove.pending}
                 aria-busy={remove.pending || undefined}
-                className="w-fit text-xs text-danger hover:underline disabled:opacity-50"
+                className="inline-flex w-fit items-center gap-1 text-xs text-danger hover:underline disabled:opacity-50"
               >
-                🗑️ Remove
+                <Trash2 aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                Remove
               </button>
               <ActionStatus state={remove.state} pending={remove.pending} label="Removed." showError />
             </span>

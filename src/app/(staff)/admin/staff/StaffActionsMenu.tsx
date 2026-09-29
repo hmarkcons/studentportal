@@ -2,6 +2,7 @@
 
 import { hasRole } from "@/lib/auth/roles";
 import { useState } from "react";
+import { EllipsisVertical, Eye, FileText, KeyRound, LockKeyhole, Pencil, Trash2 } from "lucide-react";
 import { deleteStaffAccount } from "@/lib/actions/admin";
 import { useButtonAction } from "@/components/useButtonAction";
 import { useAnchoredMenu } from "@/components/useAnchoredMenu";
@@ -73,8 +74,8 @@ export function StaffActionsMenu({
 
   return (
     <div className="relative inline-block text-left">
-      <button ref={anchor} onClick={() => setMenuOpen((v) => !v)} className="rounded-md px-2 py-1 text-lg text-muted hover:bg-bg hover:text-ink" aria-label="Actions">
-        ⋮
+      <button ref={anchor} onClick={() => setMenuOpen((v) => !v)} className="inline-flex items-center rounded-md px-2 py-1 text-lg text-muted hover:bg-bg hover:text-ink" aria-label="Actions">
+        <EllipsisVertical className="h-5 w-5 shrink-0" aria-hidden />
       </button>
       {menuOpen &&
         portal(
@@ -87,9 +88,10 @@ export function StaffActionsMenu({
                   setMenuOpen(false);
                 }}
                 data-full-width
-                className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
               >
-                👁️ View
+                <Eye className="h-4 w-4 shrink-0" aria-hidden />
+                View
               </button>
               <button
                 onClick={() => {
@@ -97,9 +99,10 @@ export function StaffActionsMenu({
                   setMenuOpen(false);
                 }}
                 data-full-width
-                className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
               >
-                ✏️ Edit
+                <Pencil className="h-4 w-4 shrink-0" aria-hidden />
+                Edit
               </button>
               {showPermissions && (
                 <button
@@ -108,9 +111,10 @@ export function StaffActionsMenu({
                     setMenuOpen(false);
                   }}
                   data-full-width
-                  className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
                 >
-                  🔑 Permissions
+                  <KeyRound className="h-4 w-4 shrink-0" aria-hidden />
+                  Permissions
                 </button>
               )}
               {canManageAgreements && (
@@ -120,9 +124,10 @@ export function StaffActionsMenu({
                     setMenuOpen(false);
                   }}
                   data-full-width
-                  className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
                 >
-                  📄 Agreements
+                  <FileText className="h-4 w-4 shrink-0" aria-hidden />
+                  Agreements
                 </button>
               )}
               {login && (
@@ -132,13 +137,15 @@ export function StaffActionsMenu({
                     setMenuOpen(false);
                   }}
                   data-full-width
-                  className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
                 >
-                  🔐 Login
+                  <LockKeyhole className="h-4 w-4 shrink-0" aria-hidden />
+                  Login
                 </button>
               )}
-              <button onClick={handleDelete} disabled={del.pending} data-full-width className="block w-full px-3 py-1.5 text-left text-sm text-danger hover:bg-bg">
-                🗑️ Delete
+              <button onClick={handleDelete} disabled={del.pending} data-full-width className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-danger hover:bg-bg">
+                <Trash2 className="h-4 w-4 shrink-0" aria-hidden />
+                Delete
               </button>
             </div>
           </>

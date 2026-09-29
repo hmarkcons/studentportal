@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { Camera, Globe, GraduationCap, IdCard, NotebookPen, UserRound, type LucideIcon } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { AcademicsSection } from "@/components/AcademicsSection";
 import { PhotoUpload } from "@/components/PhotoUpload";
@@ -9,11 +10,11 @@ import { ProfileCompleteness } from "@/components/ProfileCompleteness";
 import { uploadStudentPhoto, deleteStudentPhoto } from "@/lib/actions/studentProfileExtras";
 import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
 
-function SectionTitle({ icon, children }: { icon: string; children: React.ReactNode }) {
+function SectionTitle({ icon: Icon, children }: { icon: LucideIcon; children: React.ReactNode }) {
   return (
     <h3 className="mb-3 flex items-center gap-2.5 text-base font-semibold text-ink">
-      <span aria-hidden className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-base">
-        {icon}
+      <span aria-hidden className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <Icon className="h-[18px] w-[18px]" />
       </span>
       {children}
     </h3>
@@ -50,7 +51,7 @@ export default async function PortalProfilePage() {
   return (
     <div className="flex w-full flex-col gap-6" data-portal-page>
       <PortalPageHeader
-        icon="👤"
+        icon={UserRound}
         title="Profile"
         description="Your personal, passport and sponsor details, your test scores and your academics — what your visa and applications are built from."
         aside={
@@ -66,7 +67,7 @@ export default async function PortalProfilePage() {
 
       <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-3">
         <Card className="xl:col-span-2">
-          <SectionTitle icon="🪪">Personal details</SectionTitle>
+          <SectionTitle icon={IdCard}>Personal details</SectionTitle>
           <p className="-mt-1 mb-4 text-xs text-muted">Your email and case status can only be changed by your counsellor.</p>
           <ProfileForm
             studentId={student.id}
@@ -105,7 +106,7 @@ export default async function PortalProfilePage() {
           />
 
           <Card>
-            <SectionTitle icon="📸">Your photo</SectionTitle>
+            <SectionTitle icon={Camera}>Your photo</SectionTitle>
             {/* The student's own photo is theirs to change and theirs to
                 remove — student_profiles_write is staff-or-self, so the same
                 rule covers both sides of this. */}
@@ -122,12 +123,12 @@ export default async function PortalProfilePage() {
       {/* The two short lists side by side on a wide screen. */}
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
         <Card>
-          <SectionTitle icon="📝">Test scores</SectionTitle>
+          <SectionTitle icon={NotebookPen}>Test scores</SectionTitle>
           <TestScoresSection studentId={student.id} revalidateTo={revalidateTo} scores={testScores ?? []} />
         </Card>
 
         <Card>
-          <SectionTitle icon="🌐">Travel &amp; visa history</SectionTitle>
+          <SectionTitle icon={Globe}>Travel &amp; visa history</SectionTitle>
           <TravelVisaHistorySection
             studentId={student.id}
             revalidateTo={revalidateTo}
@@ -138,7 +139,7 @@ export default async function PortalProfilePage() {
       </div>
 
       <Card>
-        <SectionTitle icon="🎓">Academics</SectionTitle>
+        <SectionTitle icon={GraduationCap}>Academics</SectionTitle>
         <AcademicsSection
           studentId={student.id}
           revalidateTo="/portal/profile"

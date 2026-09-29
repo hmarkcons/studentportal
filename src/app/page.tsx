@@ -1,12 +1,13 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { SignOutButton } from "@/components/SignOutButton";
+import { CalendarClock, FileSignature, type LucideIcon } from "lucide-react";
 
 /**
  * Where a student waits for their portal to open: the brand, what is holding
  * it, and that nothing is lost in the meantime.
  */
-function StudentWaiting({ icon, title, children }: { icon: string; title: string; children: React.ReactNode }) {
+function StudentWaiting({ icon: Icon, title, children }: { icon: LucideIcon; title: string; children: React.ReactNode }) {
   return (
     <div
       className="flex flex-1 items-center justify-center px-4 py-10"
@@ -19,8 +20,8 @@ function StudentWaiting({ icon, title, children }: { icon: string; title: string
         <span aria-hidden className="bg-hero absolute inset-x-0 top-0 h-1.5" />
         {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset */}
         <img src="/hmark-logo.png" alt="HMARK Consultants" className="mx-auto h-10 w-auto" />
-        <span aria-hidden className="bg-hero mx-auto mt-6 flex h-16 w-16 items-center justify-center rounded-2xl text-3xl shadow-lg shadow-primary/25">
-          {icon}
+        <span aria-hidden className="bg-hero mx-auto mt-6 flex h-16 w-16 items-center justify-center rounded-2xl text-white shadow-lg shadow-primary/25">
+          <Icon className="h-8 w-8" strokeWidth={1.9} />
         </span>
         <h1 className="mt-5 text-xl font-semibold tracking-tight text-ink">{title}</h1>
         <p className="mt-2 text-sm text-muted">{children}</p>
@@ -69,7 +70,7 @@ export default async function Home() {
     // redirects becoming a loop.
     if (!studentRow.student_code) {
       return (
-        <StudentWaiting icon="📆" title="Your intake is being confirmed">
+        <StudentWaiting icon={CalendarClock} title="Your intake is being confirmed">
           Your portal opens as soon as HMARK Consultants confirm which intake you are joining and issue your Student ID.
           Your place is already reserved. Contact your counselor if you have your intake confirmed already.
         </StudentWaiting>
@@ -79,7 +80,7 @@ export default async function Home() {
     if (studentRow.portal_active) redirect("/portal");
 
     return (
-      <StudentWaiting icon="✍️" title="Almost there">
+      <StudentWaiting icon={FileSignature} title="Almost there">
         Your portal access will activate once your signed agreement has been uploaded. Please contact the HMARK
         Consultants team if you&apos;ve already sent it in.
       </StudentWaiting>

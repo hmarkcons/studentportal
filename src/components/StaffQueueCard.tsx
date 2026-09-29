@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AlarmClock, CalendarClock, CreditCard, FileSearch, FileText, Headset, MessageSquare, Package, type LucideIcon } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import type { StaffQueue, NamedStudent } from "@/lib/staffQueue";
 
@@ -8,7 +9,7 @@ import type { StaffQueue, NamedStudent } from "@/lib/staffQueue";
 // Rows that point at a specific student name them and link straight to the
 // right tab, because "3 agreements to verify" still leaves you hunting.
 
-type Row = { href: string; icon: string; text: string; detail?: string; urgent?: boolean; students?: NamedStudent[] };
+type Row = { href: string; icon: LucideIcon; text: string; detail?: string; urgent?: boolean; students?: NamedStudent[] };
 
 function studentList(students: NamedStudent[], tab: string) {
   // Three is enough to act on without turning the dashboard into a list page.
@@ -37,7 +38,7 @@ export function StaffQueueCard({ queue }: { queue: StaffQueue }) {
     const soonest = queue.upcomingDeadlines[0];
     rows.push({
       href: "/calendar",
-      icon: "⏰",
+      icon: AlarmClock,
       text:
         queue.upcomingDeadlines.length === 1
           ? `${soonest.label} for ${soonest.studentName} — ${soonest.urgency}`
@@ -53,7 +54,7 @@ export function StaffQueueCard({ queue }: { queue: StaffQueue }) {
   if (queue.agreementsToVerify.length > 0) {
     rows.push({
       href: `/students/${queue.agreementsToVerify[0].id}`,
-      icon: "📄",
+      icon: FileText,
       text: `${queue.agreementsToVerify.length} agreement${queue.agreementsToVerify.length === 1 ? "" : "s"} to verify`,
       // A student who has done their part is blocked until someone signs it
       // off, which is why this sits at the top.
@@ -65,7 +66,7 @@ export function StaffQueueCard({ queue }: { queue: StaffQueue }) {
   if (queue.ticketsWaiting > 0) {
     rows.push({
       href: "/support",
-      icon: "🎧",
+      icon: Headset,
       text: `${queue.ticketsWaiting} support ${queue.ticketsWaiting === 1 ? "ticket" : "tickets"} waiting on a reply`,
       urgent: true,
     });
@@ -74,7 +75,7 @@ export function StaffQueueCard({ queue }: { queue: StaffQueue }) {
   if (queue.unreadFrom.length > 0) {
     rows.push({
       href: `/students/${queue.unreadFrom[0].id}/communication`,
-      icon: "💬",
+      icon: MessageSquare,
       text: `${queue.unreadFrom.length} student${queue.unreadFrom.length === 1 ? "" : "s"} awaiting a reply`,
       students: queue.unreadFrom,
     });
@@ -83,7 +84,7 @@ export function StaffQueueCard({ queue }: { queue: StaffQueue }) {
   if (queue.overdueTasks > 0) {
     rows.push({
       href: "/calendar",
-      icon: "📅",
+      icon: CalendarClock,
       text: `${queue.overdueTasks} task${queue.overdueTasks === 1 ? "" : "s"} past their due date`,
       urgent: true,
     });
@@ -92,7 +93,7 @@ export function StaffQueueCard({ queue }: { queue: StaffQueue }) {
   if (queue.documentsToReview > 0) {
     rows.push({
       href: "/students",
-      icon: "📁",
+      icon: FileSearch,
       text: `${queue.documentsToReview} document${queue.documentsToReview === 1 ? "" : "s"} to review`,
       detail: "Submitted by students and not yet accepted or sent back",
     });
@@ -101,7 +102,7 @@ export function StaffQueueCard({ queue }: { queue: StaffQueue }) {
   if (queue.inventoryRequestsPending > 0) {
     rows.push({
       href: "/inventory",
-      icon: "📦",
+      icon: Package,
       text: `${queue.inventoryRequestsPending} inventory request${queue.inventoryRequestsPending === 1 ? "" : "s"} awaiting a decision`,
       detail: "Fulfil or turn down — a rejection needs a reason the requester can act on",
     });
@@ -110,7 +111,7 @@ export function StaffQueueCard({ queue }: { queue: StaffQueue }) {
   if (queue.overdueInstalments > 0) {
     rows.push({
       href: "/finance/consultancy-fee",
-      icon: "💳",
+      icon: CreditCard,
       text: `${queue.overdueInstalments} instalment${queue.overdueInstalments === 1 ? "" : "s"} overdue`,
       urgent: true,
     });
@@ -136,9 +137,7 @@ export function StaffQueueCard({ queue }: { queue: StaffQueue }) {
           <div key={r.text} className="py-2.5">
             <div className="flex items-start justify-between gap-3">
               <span className="flex min-w-0 items-start gap-2.5">
-                <span aria-hidden className="mt-0.5 shrink-0 text-base leading-none">
-                  {r.icon}
-                </span>
+                <r.icon aria-hidden className={`mt-0.5 h-4 w-4 shrink-0 ${r.urgent ? "text-warning" : "text-muted"}`} />
                 <span className="min-w-0">
                   <Link
                     href={r.href}
@@ -147,7 +146,7 @@ export function StaffQueueCard({ queue }: { queue: StaffQueue }) {
                     {r.text}
                   </Link>
                   {r.detail && <span className="block text-xs text-muted">{r.detail}</span>}
-                  {r.students && studentList(r.students, r.icon === "💬" ? "/communication" : "")}
+                  {r.students && studentList(r.students, r.icon === MessageSquare ? "/communication" : "")}
                 </span>
               </span>
               <Link href={r.href} aria-hidden className="shrink-0 text-xs text-muted">

@@ -1,4 +1,5 @@
 import type { TeamPerson } from "@/lib/studentTeam";
+import { Mail, Phone, UserRound } from "lucide-react";
 
 function initials(name: string) {
   return name
@@ -37,8 +38,8 @@ export function TeamCard({
         data-team-member={marker}
         data-assigned="no"
       >
-        <span aria-hidden className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-dashed border-border text-2xl text-muted">
-          👤
+        <span aria-hidden className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-dashed border-border text-muted">
+          <UserRound className="h-7 w-7" strokeWidth={1.8} />
         </span>
         <span className="min-w-0">
           <span className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">{role}</span>
@@ -89,7 +90,7 @@ export function TeamCard({
             <div className="min-w-0">
               <dt className="sr-only">Office phone</dt>
               <dd className="flex min-w-0 items-center gap-2.5">
-                <span aria-hidden className="shrink-0 text-base leading-none">📞</span>
+                <Phone aria-hidden className="h-4 w-4 shrink-0 text-primary" />
                 <a href={tel!} className="truncate font-medium text-ink hover:text-primary">
                   {person.mobile_official}
                 </a>
@@ -100,7 +101,7 @@ export function TeamCard({
             <div className="min-w-0">
               <dt className="sr-only">Office email</dt>
               <dd className="flex min-w-0 items-center gap-2.5">
-                <span aria-hidden className="shrink-0 text-base leading-none">✉️</span>
+                <Mail aria-hidden className="h-4 w-4 shrink-0 text-primary" />
                 <a href={`mailto:${person.email_official}`} className="truncate font-medium text-ink hover:text-primary">
                   {person.email_official}
                 </a>
@@ -113,7 +114,8 @@ export function TeamCard({
       <div className="flex flex-wrap gap-2">
         {tel && (
           <a href={tel} className="bg-hero inline-flex w-fit items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-primary/25 hover:opacity-95">
-            📞 Call
+            <Phone aria-hidden className="h-3.5 w-3.5 shrink-0" />
+            Call
           </a>
         )}
         {person.email_official && (
@@ -121,7 +123,8 @@ export function TeamCard({
             href={`mailto:${person.email_official}`}
             className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-ink hover:border-primary hover:text-primary"
           >
-            ✉️ Email
+            <Mail aria-hidden className="h-3.5 w-3.5 shrink-0" />
+            Email
           </a>
         )}
       </div>

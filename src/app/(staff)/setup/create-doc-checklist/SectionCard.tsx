@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { ChevronDown, ChevronUp, GripVertical } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { ChecklistHeading } from "./ChecklistHeading";
 import { Button } from "@/components/ui/Button";
@@ -136,7 +137,7 @@ export function SectionCard({
             className="cursor-grab select-none text-muted active:cursor-grabbing"
             title="Drag to reorder this section"
           >
-            ⠿
+            <GripVertical className="h-4 w-4 shrink-0" aria-hidden />
           </span>
 
           {renaming ? (
@@ -182,19 +183,19 @@ export function SectionCard({
             type="button"
             onClick={() => onMove(-1)}
             disabled={isFirst || busy}
-            className="rounded border border-border px-1.5 text-xs text-muted hover:text-ink disabled:opacity-40"
+            className="inline-flex items-center rounded border border-border px-1.5 text-xs text-muted hover:text-ink disabled:opacity-40"
             aria-label={`Move ${section.label} up`}
           >
-            ▲
+            <ChevronUp className="h-3.5 w-3.5 shrink-0" aria-hidden />
           </button>
           <button
             type="button"
             onClick={() => onMove(1)}
             disabled={isLast || busy}
-            className="rounded border border-border px-1.5 text-xs text-muted hover:text-ink disabled:opacity-40"
+            className="inline-flex items-center rounded border border-border px-1.5 text-xs text-muted hover:text-ink disabled:opacity-40"
             aria-label={`Move ${section.label} down`}
           >
-            ▼
+            <ChevronDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
           </button>
           {!renaming && (
             <button
@@ -241,7 +242,7 @@ export function SectionCard({
             className={`flex flex-wrap items-start gap-2 py-2 ${draggingItem === item.id ? "opacity-50" : ""}`}
           >
             <span className="cursor-grab select-none pt-0.5 text-muted active:cursor-grabbing" title="Drag to reorder">
-              ⠿
+              <GripVertical className="h-4 w-4 shrink-0" aria-hidden />
             </span>
 
             {editing === item.id ? (
@@ -315,19 +316,19 @@ export function SectionCard({
                     type="button"
                     onClick={() => moveItem(item.id, -1)}
                     disabled={index === 0 || busy}
-                    className="rounded border border-border px-1.5 text-xs text-muted hover:text-ink disabled:opacity-40"
+                    className="inline-flex items-center rounded border border-border px-1.5 text-xs text-muted hover:text-ink disabled:opacity-40"
                     aria-label={`Move ${item.name} up`}
                   >
-                    ▲
+                    <ChevronUp className="h-3.5 w-3.5 shrink-0" aria-hidden />
                   </button>
                   <button
                     type="button"
                     onClick={() => moveItem(item.id, 1)}
                     disabled={index === items.length - 1 || busy}
-                    className="rounded border border-border px-1.5 text-xs text-muted hover:text-ink disabled:opacity-40"
+                    className="inline-flex items-center rounded border border-border px-1.5 text-xs text-muted hover:text-ink disabled:opacity-40"
                     aria-label={`Move ${item.name} down`}
                   >
-                    ▼
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
                   </button>
                   <button
                     type="button"

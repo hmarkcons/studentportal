@@ -1,3 +1,4 @@
+import { Eye } from "lucide-react";
 import { hasRole } from "@/lib/auth/roles";
 import { documentUrls } from "@/lib/storageUrls";
 import { createClient } from "@/lib/supabase/server";
@@ -126,7 +127,8 @@ export default async function PartnerCommissionsPage() {
                         rel="noreferrer"
                         className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
                       >
-                        👁️ View proof
+                        <Eye className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                        View proof
                       </a>
                     ) : (
                       "—"

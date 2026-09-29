@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ChevronDown, ChevronUp, X } from "lucide-react";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { useFormAction } from "@/components/useFormAction";
@@ -132,27 +133,27 @@ export function TravelGuideEditor({
               onClick={() => moveSection(si, -1)}
               disabled={si === 0 || !canEdit}
               aria-label={`Move ${section.title || "section"} up`}
-              className="rounded border border-border px-1.5 text-xs text-muted hover:text-ink disabled:opacity-40"
+              className="inline-flex items-center rounded border border-border px-1.5 text-xs text-muted hover:text-ink disabled:opacity-40"
             >
-              ▲
+              <ChevronUp className="h-3.5 w-3.5 shrink-0" aria-hidden />
             </button>
             <button
               type="button"
               onClick={() => moveSection(si, 1)}
               disabled={si === sections.length - 1 || !canEdit}
               aria-label={`Move ${section.title || "section"} down`}
-              className="rounded border border-border px-1.5 text-xs text-muted hover:text-ink disabled:opacity-40"
+              className="inline-flex items-center rounded border border-border px-1.5 text-xs text-muted hover:text-ink disabled:opacity-40"
             >
-              ▼
+              <ChevronDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
             </button>
             <button
               type="button"
               onClick={() => removeSection(si)}
               disabled={!canEdit}
               aria-label={`Remove ${section.title || "section"}`}
-              className="rounded border border-border px-1.5 text-xs text-danger hover:bg-danger-bg disabled:opacity-40"
+              className="inline-flex items-center gap-0.5 rounded border border-border px-1.5 text-xs text-danger hover:bg-danger-bg disabled:opacity-40"
             >
-              ✕
+              <X className="h-3.5 w-3.5 shrink-0" aria-hidden />
             </button>
           </div>
 
@@ -208,18 +209,18 @@ export function TravelGuideEditor({
                     onClick={() => moveItem(si, ii, -1)}
                     disabled={ii === 0 || !canEdit}
                     aria-label="Move step up"
-                    className="rounded border border-border px-1.5 text-xs text-muted hover:text-ink disabled:opacity-40"
+                    className="inline-flex items-center rounded border border-border px-1.5 text-xs text-muted hover:text-ink disabled:opacity-40"
                   >
-                    ▲
+                    <ChevronUp className="h-3.5 w-3.5 shrink-0" aria-hidden />
                   </button>
                   <button
                     type="button"
                     onClick={() => moveItem(si, ii, 1)}
                     disabled={ii === section.items.length - 1 || !canEdit}
                     aria-label="Move step down"
-                    className="rounded border border-border px-1.5 text-xs text-muted hover:text-ink disabled:opacity-40"
+                    className="inline-flex items-center rounded border border-border px-1.5 text-xs text-muted hover:text-ink disabled:opacity-40"
                   >
-                    ▼
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
                   </button>
                   <button
                     type="button"
@@ -227,9 +228,10 @@ export function TravelGuideEditor({
                     disabled={!canEdit}
                     aria-label="Remove step"
                     title={item.tickedBy ? `${item.tickedBy} student(s) have ticked this` : undefined}
-                    className="rounded border border-border px-1.5 text-xs text-danger hover:bg-danger-bg disabled:opacity-40"
+                    className="inline-flex items-center gap-0.5 rounded border border-border px-1.5 text-xs text-danger hover:bg-danger-bg disabled:opacity-40"
                   >
-                    ✕{item.tickedBy ? ` ${item.tickedBy}` : ""}
+                    <X className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    {item.tickedBy ? ` ${item.tickedBy}` : ""}
                   </button>
                 </div>
               </li>

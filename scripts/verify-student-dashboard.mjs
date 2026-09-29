@@ -7,17 +7,18 @@
 // under review with a deadline coming, an invoice with one instalment paid and
 // one due, and a passport expiring soon. Then, signed in as them:
 //
-//   the journey       Registered, Agreement and Applied ticked; Documents the
-//                     current step with what is left; 3 of 7, 43%.
+//   the journey       at the top, under "Your journey": a status bar for the
+//                     primary country and one for the backup, each marked as
+//                     which, the primary's stage under way picked out and its
+//                     share of steps done beside the heading. The old seven-
+//                     step tracker is gone; what the student has to do next
+//                     stays in the banner above, with the way to it.
 //   the four figures  documents approved of the total the Documents page
 //                     counts; paid of the invoice total; profile; the next
 //                     appointment (none here, and it says so).
 //   coming up         the unpaid instalment, the application deadline, the
 //                     document due and the passport, soonest first.
 //   applications      the donut names the stage the application is at.
-//   each country      a status bar for the primary country and one for the
-//                     backup, each marked as which, the primary's stage under
-//                     way picked out.
 //   the team          the counsellor and the processing officer as staff see
 //                     them: photo, designation, office number and email — the
 //                     photo actually loading.
@@ -180,11 +181,11 @@ try {
   // login goes nowhere and the wait below times out.
   await page
     .waitForFunction(() => {
-      const el = document.querySelector('input[type="email"]');
+      const el = document.querySelector('input[name="email"]');
       return Boolean(el && Object.keys(el).some((k) => k.startsWith("__reactFiber")));
     }, null, { timeout: 60000 })
     .catch(() => {});
-  await page.fill('input[type="email"]', PORTAL_EMAIL);
+  await page.fill('input[name="email"]', PORTAL_EMAIL);
   await page.fill('input[type="password"]', FIXTURE_PASSWORD);
   await page.click('button[type="submit"]');
   await page.waitForURL((u) => !u.pathname.includes("/login"), { timeout: 40000 });
@@ -197,16 +198,25 @@ try {
   await shot(page, "student-dashboard");
 
   console.log("\n--- the journey ---");
-  const state = async (key) => page.locator(`[data-journey-step="${key}"]`).getAttribute("data-state");
-  ok("Registered, Agreement and Applied are ticked",
-    (await state("registered")) === "done" && (await state("agreement")) === "done" && (await state("applied")) === "done",
-    `${await state("registered")} ${await state("agreement")} ${await state("applied")}`);
-  ok("Documents is the current step", (await state("documents")) === "current", await state("documents"));
-  ok("...and Admission, Visa and Travel are still ahead",
-    (await state("admission")) === "upcoming" && (await state("visa")) === "upcoming" && (await state("travel")) === "upcoming");
-  ok("3 of 7 steps, 43%", (await page.locator("[data-journey-percent]").innerText()).trim() === "43%" && (await journey.innerText()).includes("3 of 7 steps"));
-  const next = (await page.locator("[data-journey-next]").innerText()).replace(/\s+/g, " ");
-  ok("the next step says what is left to do", next.includes("Next — Documents:") && next.includes("2 documents to upload"), next);
+  ok("the journey is headed Your journey, and holds each country's bar",
+    /^your journey$/i.test((await journey.locator("h3").first().innerText()).trim()) && (await journey.locator("[data-destination-status]").count()) === 2,
+    `${await journey.locator("h3").first().innerText()} / ${await journey.locator("[data-destination-status]").count()} bars`);
+  ok("...straight after the welcome banner, before the four figures",
+    await page.evaluate(() => {
+      const j = document.querySelector("[data-journey]");
+      const k = document.querySelector('[data-kpi="documents"]');
+      return Boolean(j && k && j.compareDocumentPosition(k) & Node.DOCUMENT_POSITION_FOLLOWING);
+    }));
+  const status = (await journey.locator("[data-journey-status]").innerText()).trim();
+  ok("...its status is the primary country's: admission under way, 1 step of 10 done",
+    status === "Now: Admission — In process" && (await journey.locator("[data-journey-percent]").innerText()).trim() === "10%"
+    && /1 of 10 steps/.test(await journey.innerText()), status);
+  ok("...and it says the backup runs alongside", /Italy \(Public\) is your primary country, with 1 backup running alongside/.test(await journey.innerText()));
+  ok("the old seven-step tracker is gone", (await page.locator("[data-journey-step]").count()) === 0 && !(await journey.innerText()).includes("3 of 7 steps"));
+  const next = page.locator("[data-journey-next]");
+  const nextText = (await next.innerText()).replace(/\s+/g, " ");
+  ok("what to do next is still said, in the banner", nextText.includes("Documents — 2 documents to upload"), nextText);
+  ok("...with the way to it", (await next.getByRole("link", { name: /Continue/ }).getAttribute("href")) === "/portal/documents");
 
   console.log("\n--- the four figures ---");
   const ring = async (kpi) => page.locator(`[data-kpi="${kpi}"] svg[role="img"]`).getAttribute("aria-label").catch(() => null);
@@ -267,7 +277,7 @@ try {
   ok("Applications has its own entry, after Documents", pos("Applications") !== -1 && pos("Applications") === pos("Documents") + 1, menu.join(" | "));
   ok("Scholarship follows it, Italy having scholarship bodies", pos("Scholarship") === pos("Applications") + 1, menu.join(" | "));
   const currentEntry = async () => (await page.locator('aside nav a[aria-current="page"]').allInnerTexts()).map((t) => t.replace(/\s+/g, " ").trim());
-  ok("on the dashboard, Dashboard is the one entry marked current", JSON.stringify(await currentEntry()) === JSON.stringify(["🏠 Dashboard"]), JSON.stringify(await currentEntry()));
+  ok("on the dashboard, Dashboard is the one entry marked current", JSON.stringify(await currentEntry()) === JSON.stringify(["Dashboard"]), JSON.stringify(await currentEntry()));
 
   console.log("\n--- the Applications page ---");
   await page.getByRole("link", { name: /View applications/ }).click();
@@ -276,7 +286,7 @@ try {
   await cards.waitFor({ timeout: 40000 });
   // /portal is the start of every student address, so Dashboard used to stay
   // lit beside whichever page was open.
-  ok("on Applications, only Applications is marked current", JSON.stringify(await currentEntry()) === JSON.stringify(["🏛️ Applications"]), JSON.stringify(await currentEntry()));
+  ok("on Applications, only Applications is marked current", JSON.stringify(await currentEntry()) === JSON.stringify(["Applications"]), JSON.stringify(await currentEntry()));
   const cardsText = (await cards.innerText()).replace(/\s+/g, " ");
   ok("it lists the application as a boarding pass", cardsText.includes("zztmp Dashboard University") && cardsText.includes("Acceptance Letter"), cardsText.slice(0, 300));
   ok("...with its round's closing date", /apply by/i.test(cardsText), cardsText.slice(0, 300));

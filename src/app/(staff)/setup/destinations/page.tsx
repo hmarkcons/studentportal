@@ -1,3 +1,4 @@
+import { Pencil } from "lucide-react";
 import { hasRole } from "@/lib/auth/roles";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
@@ -37,9 +38,9 @@ export default async function DestinationsPage() {
                   href={`/setup/destinations/${d.id}`}
                   title="Edit destination"
                   aria-label="Edit destination"
-                  className="rounded p-1 text-muted hover:bg-bg hover:text-primary"
+                  className="inline-flex items-center rounded p-1 text-muted hover:bg-bg hover:text-primary"
                 >
-                  ✏️
+                  <Pencil className="h-4 w-4 shrink-0" aria-hidden />
                 </Link>
                 <DeleteDestinationIcon id={d.id} name={d.display_name} />
               </div>

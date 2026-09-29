@@ -1,3 +1,5 @@
+import type { LucideIcon } from "lucide-react";
+
 export type PortalStatTone = "default" | "success" | "warning" | "danger" | "info";
 
 const TILE: Record<PortalStatTone, string> = {
@@ -22,13 +24,13 @@ const VALUE: Record<PortalStatTone, string> = {
  * screen reader and to anything reading the page's text.
  */
 export function PortalStat({
-  icon,
+  icon: Icon,
   value,
   label,
   hint,
   tone = "default",
 }: {
-  icon: string;
+  icon: LucideIcon;
   value: React.ReactNode;
   label: string;
   hint?: React.ReactNode;
@@ -36,8 +38,8 @@ export function PortalStat({
 }) {
   return (
     <div className="flex min-w-0 items-center gap-3 rounded-xl border border-border bg-card/80 px-4 py-3 backdrop-blur-sm">
-      <span aria-hidden className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg ${TILE[tone]}`}>
-        {icon}
+      <span aria-hidden className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${TILE[tone]}`}>
+        <Icon className="h-5 w-5" strokeWidth={2} />
       </span>
       <span className="min-w-0">
         <span className={`text-xl font-semibold leading-tight tabular-nums ${VALUE[tone]}`}>{value}</span>{" "}

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { CircleCheck, Hourglass, TriangleAlert } from "lucide-react";
 import { documentUrls } from "@/lib/storageUrls";
 import { StatCard } from "@/components/ui/StatCard";
 import { computeInvoiceStatus } from "@/lib/invoiceStatus";
@@ -185,9 +186,9 @@ export default async function ConsultancyFeePage() {
         </summary>
         <div className="mt-3">
           <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <StatCard label="Invoices paid" value={counts.paid} tone="success" icon="✅" />
-            <StatCard label="Invoices pending" value={counts.pending} tone="warning" icon="⏳" />
-            <StatCard label="Invoices overdue" value={counts.overdue} tone="danger" icon="⚠️" />
+            <StatCard label="Invoices paid" value={counts.paid} tone="success" icon={CircleCheck} />
+            <StatCard label="Invoices pending" value={counts.pending} tone="warning" icon={Hourglass} />
+            <StatCard label="Invoices overdue" value={counts.overdue} tone="danger" icon={TriangleAlert} />
           </div>
           <FeeProductCatalog products={feeProducts ?? []} canManage={canManage} />
           <ConsultancyFeeList rows={rows} feeProducts={feeProducts ?? []} canManage={canManage} isSuperAdmin={isSuperAdmin} />

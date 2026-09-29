@@ -1,7 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readAll } from "@/lib/catalogueReads";
-import { DEFAULT_LOGIN_FIGURES, isLoginFigureIcon, type LoginFigure } from "@/lib/loginFigures";
 
 // Reference/lookup data that's identical for every staff member and rarely
 // changes (edited only from the Setup pages), but was being re-queried from
@@ -106,21 +105,24 @@ export const getCachedCounselors = unstable_cache(
 );
 
 /**
- * The figures on the login screen (0278), in order.
+ * What the login screen says and shows (0292), as stored: the content still
+ * to be laid over the defaults, and the picture's path.
  *
- * The login page is the busiest page there is and is public, so it reads
- * these from the cache rather than the database on every visit; Setup →
- * Login screen clears the "login-figures" tag when they change. Falls back to
- * the office's figures if the table cannot be read — the login page must
- * never fail for want of a statistic.
+ * The login page is the busiest page there is and is public, so it reads this
+ * from the cache rather than the database on every visit; Setup → Login screen
+ * clears the "login-screen" tag when it saves. Raw on purpose: the defaults and
+ * the rules are applied by readLoginScreen on the way out, in the code that is
+ * running now — Vercel keeps this cache across deploys, and a cached copy that
+ * had already been merged would carry an old deploy's defaults. An unreadable
+ * row gives the reference design; the login page must never fail.
  */
-export const getCachedLoginFigures = unstable_cache(
-  async (): Promise<LoginFigure[]> => {
+export const getCachedLoginScreen = unstable_cache(
+  async (): Promise<{ content: unknown; imagePath: string | null }> => {
     const supabase = createAdminClient();
-    const { data, error } = await supabase.from("login_figures").select("value, label, icon").order("sort_order");
-    if (error || !data?.length) return DEFAULT_LOGIN_FIGURES;
-    return data.map((r) => ({ value: r.value, label: r.label, icon: isLoginFigureIcon(r.icon) ? r.icon : "star" }));
+    const { data, error } = await supabase.from("login_screen").select("content, image_path").maybeSingle();
+    if (error || !data) return { content: {}, imagePath: null };
+    return { content: data.content ?? {}, imagePath: (data.image_path as string | null) ?? null };
   },
-  ["login-figures"],
-  { tags: ["login-figures"], revalidate: 86400 }
+  ["login-screen"],
+  { tags: ["login-screen"], revalidate: 86400 }
 );

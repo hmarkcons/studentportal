@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { FileText } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { FileField } from "@/components/FileField";
 import { ActionStatus } from "@/components/ActionStatus";
@@ -62,11 +63,15 @@ export function ScholarshipProofs({
             <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-1.5">
               <span className="min-w-0 text-xs text-ink">
                 {p.url ? (
-                  <a href={p.url} target="_blank" rel="noreferrer" className="text-primary hover:underline">
-                    📄 {p.fileName}
+                  <a href={p.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+                    <FileText aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                    {p.fileName}
                   </a>
                 ) : (
-                  <>📄 {p.fileName}</>
+                  <span className="inline-flex items-center gap-1">
+                    <FileText aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                    {p.fileName}
+                  </span>
                 )}
                 <span className="ml-2 text-muted">
                   {p.fileSize != null && `${formatFileSize(p.fileSize)} · `}

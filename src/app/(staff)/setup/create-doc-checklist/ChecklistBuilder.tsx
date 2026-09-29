@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { GripVertical } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { ChecklistHeading } from "./ChecklistHeading";
 import { Button } from "@/components/ui/Button";
@@ -139,7 +140,7 @@ export function ChecklistBuilder({
                 }`}
                 title="Drag into the checklist below"
               >
-                <span className="text-muted">⠿</span>
+                <GripVertical className="h-3.5 w-3.5 text-muted shrink-0" aria-hidden />
                 <span className="text-ink">{p.label}</span>
                 {!p.isPredefined && <span className="text-muted">(custom)</span>}
                 <button

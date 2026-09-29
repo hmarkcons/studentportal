@@ -1,4 +1,5 @@
 import { Card } from "@/components/ui/Card";
+import { Check } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import {
   STANDARD_QUALIFICATION_TYPES,
@@ -40,7 +41,9 @@ export function AcademicsSection({
         <div className="flex flex-col gap-1">
           {checklist.map((item) => (
             <div key={item.label} className="flex items-center gap-2 text-sm">
-              <Badge tone={item.met ? "success" : "warning"}>{item.met ? "✓" : "Missing"}</Badge>
+              <Badge tone={item.met ? "success" : "warning"}>
+                {item.met ? <Check aria-label="Done" className="h-3 w-3" strokeWidth={3} /> : "Missing"}
+              </Badge>
               <span className={item.met ? "text-ink" : "text-muted"}>{item.label}</span>
             </div>
           ))}

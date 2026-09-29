@@ -1,3 +1,4 @@
+import { GripVertical } from "lucide-react";
 import { hasRole } from "@/lib/auth/roles";
 import { createClient } from "@/lib/supabase/server";
 import { TrackerOrderBoard } from "./TrackerOrderBoard";
@@ -28,7 +29,13 @@ export default async function DocumentTrackersPage() {
         Each country&apos;s documentation tracker (shown on a registered student&apos;s dashboard, once they have an application there) is built
         from the fields below.{" "}
         {isSuperAdmin
-          ? "Add, edit, or delete fields for any country, and drag the ⠿ handle — or use the arrows — to reorder the trackers and the fields inside them."
+          ? (
+            <>
+              Add, edit, or delete fields for any country, and drag the{" "}
+              <GripVertical className="inline-block h-4 w-4 shrink-0 align-text-bottom" aria-hidden /> handle — or use the arrows — to
+              reorder the trackers and the fields inside them.
+            </>
+          )
           : "Only Super Admin can edit these."}
       </p>
 

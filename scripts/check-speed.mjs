@@ -81,7 +81,7 @@ try {
 
   const page = await browser.newPage({ viewport: { width: 1500, height: 1200 } });
   await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
-  await page.fill('input[type="email"]', EMAIL);
+  await page.fill('input[name="email"]', EMAIL);
   await page.fill('input[type="password"]', PASSWORD);
   await page.click('button[type="submit"]');
   await page.waitForURL((u) => !u.pathname.includes("/login"), { timeout: 60000 });

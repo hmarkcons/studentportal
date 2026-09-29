@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Pencil, Square, SquareCheckBig, Trash2 } from "lucide-react";
 import {
   addStudentScholarship,
   updateStudentScholarship,
@@ -159,17 +160,23 @@ function ScholarshipRow({
           </Badge>
           {canManage && (
             <>
-              <button onClick={() => setEditing(true)} className="text-xs text-muted hover:text-primary" title="Edit">
-                ✏️
+              <button
+                onClick={() => setEditing(true)}
+                className="inline-flex items-center text-xs text-muted hover:text-primary"
+                title="Edit"
+                aria-label="Edit scholarship"
+              >
+                <Pencil aria-hidden className="h-3.5 w-3.5 shrink-0" />
               </button>
               <button
                 onClick={handleDelete}
                 disabled={del.pending}
                 aria-busy={del.pending || undefined}
-                className="text-xs text-muted hover:text-danger disabled:opacity-50"
+                className="inline-flex items-center text-xs text-muted hover:text-danger disabled:opacity-50"
                 title="Delete"
+                aria-label="Delete scholarship"
               >
-                🗑️
+                <Trash2 aria-hidden className="h-3.5 w-3.5 shrink-0" />
               </button>
             </>
           )}
@@ -222,9 +229,11 @@ export function ScholarshipSection({
           rows only once their application is finalised — so it is worth
           stating plainly on the page that depends on it. */}
       <div className="mb-3 flex items-start gap-2 text-sm">
-        <span aria-hidden className={finalized ? "text-success" : "text-muted"}>
-          {finalized ? "☑" : "☐"}
-        </span>
+        {finalized ? (
+          <SquareCheckBig aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+        ) : (
+          <Square aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-muted" />
+        )}
         <span className={finalized ? "text-ink" : "text-muted"}>
           {finalized ? "University finalised — the student can see this scholarship" : "No university finalised yet"}
           <span className="block text-xs text-muted">

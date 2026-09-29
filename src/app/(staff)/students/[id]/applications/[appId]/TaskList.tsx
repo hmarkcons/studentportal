@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Pencil, Trash2 } from "lucide-react";
 import {
   addApplicationTask,
   toggleApplicationTask,
@@ -85,16 +86,23 @@ function TaskRowView({ task, revalidateTo }: { task: TaskRow; revalidateTo: stri
         </span>
         {task.due_date && <span className="text-xs text-muted">due {formatDateOnly(task.due_date)}</span>}
         <ActionStatus state={toggle.state} pending={toggle.pending} label={askedDone ? "Marked done." : "Marked not done."} />
-        <button onClick={() => setEditing(true)} className="text-xs text-muted hover:text-primary">
-          ✏️
+        <button
+          onClick={() => setEditing(true)}
+          className="inline-flex items-center text-xs text-muted hover:text-primary"
+          title="Edit"
+          aria-label="Edit task"
+        >
+          <Pencil aria-hidden className="h-3.5 w-3.5 shrink-0" />
         </button>
         <button
           onClick={handleDelete}
           disabled={del.pending}
           aria-busy={del.pending || undefined}
-          className="text-xs text-muted hover:text-danger disabled:opacity-50"
+          className="inline-flex items-center text-xs text-muted hover:text-danger disabled:opacity-50"
+          title="Delete"
+          aria-label="Delete task"
         >
-          🗑️
+          <Trash2 aria-hidden className="h-3.5 w-3.5 shrink-0" />
         </button>
       </div>
       {(rowError ?? del.state?.error) && <p className="text-xs text-danger">{rowError ?? del.state?.error}</p>}

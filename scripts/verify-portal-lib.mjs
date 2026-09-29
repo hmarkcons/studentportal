@@ -188,7 +188,9 @@ export async function removeStagedFiles(admin, userId) {
 export async function signIn(browser, email, { context = null } = {}) {
   const page = context ? await context.newPage() : await browser.newPage({ viewport: { width: 1500, height: 1200 } });
   await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
-  await page.fill('input[type="email"]', email);
+  // The login field is named "email" whichever tab is open; on the Student
+  // tab it is a text field, because a Student ID is not an email address.
+  await page.fill('input[name="email"]', email);
   await page.fill('input[type="password"]', FIXTURE_PASSWORD);
   await page.click('button[type="submit"]');
   await page.waitForURL((u) => !u.pathname.includes("/login"), { timeout: 40000 });

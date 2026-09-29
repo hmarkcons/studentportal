@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { KeyRound, MapPin, PartyPopper, Stamp } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
@@ -160,7 +161,7 @@ export default async function PortalVisaPage() {
   return (
     <div className="flex w-full flex-col gap-6" data-portal-page>
       <PortalPageHeader
-        icon="🛂"
+        icon={Stamp}
         title="Visa"
         description="Your visa progress, kept up to date by your counsellor as each step completes — and where to go for your appointment."
         aside={visible.length === 0 ? undefined : visible.map((s) => (
@@ -172,7 +173,7 @@ export default async function PortalVisaPage() {
 
       {visible.length === 0 ? (
         <Card>
-          <PortalEmpty icon="🛂" title="Your visa process has not started yet">
+          <PortalEmpty icon={Stamp} title="Your visa process has not started yet">
             There is nothing to show here yet. Once your visa process begins, your appointments and progress will appear on
             this page.
           </PortalEmpty>
@@ -211,7 +212,7 @@ export default async function PortalVisaPage() {
                     }`}
                   >
                     <h4 className={`mb-2 text-sm font-semibold ${s.decision === "approved" ? "text-success" : "text-warning"}`}>
-                      {s.decision === "approved" ? "🎉 " : ""}
+                      {s.decision === "approved" && <PartyPopper aria-hidden className="mr-1.5 inline h-4 w-4 shrink-0 align-[-3px]" />}
                       {message.heading}
                     </h4>
                     {message.body.map((para) => (
@@ -249,7 +250,8 @@ export default async function PortalVisaPage() {
                 {s.offices.length > 0 && (
                   <div className={s.rows.length > 0 ? "mt-4 border-t border-border pt-4 lg:mt-0 lg:border-t-0 lg:pt-0" : ""}>
                     <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-                      📍 Where to apply
+                      <MapPin aria-hidden className="mr-1 inline h-3.5 w-3.5 align-[-2px] shrink-0" />
+                      Where to apply
                     </h4>
                     <VisaOfficeList offices={s.offices} countryName={s.country.name} />
                   </div>
@@ -272,7 +274,9 @@ export default async function PortalVisaPage() {
       {appointmentLogin && (
         <Card>
           <h3 className="mb-2 flex items-center gap-2.5 text-base font-semibold text-ink">
-            <span aria-hidden className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-base">🔐</span>
+            <span aria-hidden className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <KeyRound className="h-[18px] w-[18px]" />
+            </span>
             Visa appointment portal
           </h3>
           <VisaCredentials

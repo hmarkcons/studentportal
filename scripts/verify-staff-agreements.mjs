@@ -189,7 +189,7 @@ try {
   await sa.goto(`${BASE}/admin/staff`, { waitUntil: "domcontentloaded" });
   const bareRow = sa.locator("tr", { hasText: bare.name }).first();
   await bareRow.locator('button[aria-label="Actions"]').click();
-  await sa.getByRole("button", { name: "📄 Agreements" }).click();
+  await sa.getByRole("button", { name: "Agreements", exact: true }).click();
   const slide = sa.getByRole("dialog").last();
   await slide.locator("[data-staff-agreements-panel]").waitFor({ timeout: 60_000 });
   await slide.getByRole("button", { name: "Upload a signed agreement" }).click();

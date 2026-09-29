@@ -8,16 +8,16 @@ import { canOpenPath } from "./pageAccess.ts";
 // left out altogether. Staff Management, Leave and Role Permissions keep the
 // rules they always had, wired up explicitly below.
 const BASE_STAFF_NAV: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard", icon: "🏠" },
-  { label: "Leads", href: "/leads", icon: "📇" },
-  { label: "Students", href: "/students", icon: "🎓" },
-  { label: "Applications", href: "/applications", icon: "🗂️" },
-  { label: "Calendar", href: "/calendar", icon: "📅" },
-  { label: "Support Tickets", href: "/support", icon: "🎧" },
-  { label: "Inventory", href: "/inventory", icon: "📦" },
+  { label: "Dashboard", href: "/dashboard", icon: "dashboard" },
+  { label: "Leads", href: "/leads", icon: "leads" },
+  { label: "Students", href: "/students", icon: "students" },
+  { label: "Applications", href: "/applications", icon: "applications" },
+  { label: "Calendar", href: "/calendar", icon: "calendar" },
+  { label: "Support Tickets", href: "/support", icon: "support" },
+  { label: "Inventory", href: "/inventory", icon: "inventory" },
   {
     label: "Setup",
-    icon: "⚙️",
+    icon: "setup",
     children: [
       { label: "Destinations", href: "/setup/destinations" },
       { label: "Universities", href: "/setup/universities" },
@@ -41,7 +41,7 @@ const BASE_STAFF_NAV: NavItem[] = [
   },
   {
     label: "Accounts & Finance",
-    icon: "💰",
+    icon: "finance",
     children: [
       { label: "Invoice Generator", href: "/finance/invoice-generator" },
       { label: "Staff Commission", href: "/finance/staff-commission" },
@@ -54,7 +54,7 @@ const BASE_STAFF_NAV: NavItem[] = [
   },
   {
     label: "Marketing",
-    icon: "📣",
+    icon: "marketing",
     children: [
       { label: "Campaigns", href: "/marketing/campaigns" },
       { label: "Social calendar", href: "/marketing/social-calendar" },
@@ -62,10 +62,10 @@ const BASE_STAFF_NAV: NavItem[] = [
       { label: "Broadcast message", href: "/marketing/broadcast" },
     ],
   },
-  { label: "Reports", href: "/reports", icon: "📊" },
+  { label: "Reports", href: "/reports", icon: "reports" },
   {
     label: "HR",
-    icon: "👥",
+    icon: "people",
     children: [
       { label: "Staff Management", href: "/admin/staff" },
       { label: "Attendance", href: "/admin/attendance" },
@@ -74,7 +74,7 @@ const BASE_STAFF_NAV: NavItem[] = [
   },
   {
     label: "Admin",
-    icon: "🛠️",
+    icon: "admin",
     children: [
       { label: "Audit log", href: "/admin/audit-log" },
       { label: "Additional services", href: "/admin/additional-services" },
@@ -125,10 +125,10 @@ export function buildStaffNav({
 // depends on where they are going and how far they have got.
 
 export const PARTNER_NAV: NavItem[] = [
-  { label: "Dashboard", href: "/partner", icon: "🏠" },
-  { label: "Programs", href: "/partner/programs", icon: "📚" },
-  { label: "Commissions", href: "/partner/commissions", icon: "💰" },
-  { label: "Documents", href: "/partner/documents", icon: "📁" },
-  { label: "Reports", href: "/partner/reports", icon: "📊" },
-  { label: "Agreement", href: "/partner/agreement", icon: "📄" },
+  { label: "Dashboard", href: "/partner", icon: "dashboard" },
+  { label: "Programs", href: "/partner/programs", icon: "programs" },
+  { label: "Commissions", href: "/partner/commissions", icon: "commissions" },
+  { label: "Documents", href: "/partner/documents", icon: "documents" },
+  { label: "Reports", href: "/partner/reports", icon: "reports" },
+  { label: "Agreement", href: "/partner/agreement", icon: "agreement" },
 ];

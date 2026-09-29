@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { EllipsisVertical, Eye, Pencil, Trash2 } from "lucide-react";
 import { deleteAgreementTemplate } from "@/lib/actions/agreementTemplates";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { useButtonAction } from "@/components/useButtonAction";
@@ -44,8 +45,8 @@ export function TemplateActionsMenu({ template, canManage }: { template: Templat
 
   return (
     <div className="relative inline-block text-left">
-      <button ref={anchor} onClick={() => setMenuOpen((v) => !v)} className="rounded-md px-2 py-1 text-lg text-muted hover:bg-bg hover:text-ink" aria-label="Actions">
-        ⋮
+      <button ref={anchor} onClick={() => setMenuOpen((v) => !v)} className="inline-flex items-center rounded-md px-2 py-1 text-lg text-muted hover:bg-bg hover:text-ink" aria-label="Actions">
+        <EllipsisVertical className="h-5 w-5 shrink-0" aria-hidden />
       </button>
       {menuOpen &&
         portal(
@@ -57,22 +58,25 @@ export function TemplateActionsMenu({ template, canManage }: { template: Templat
                   setViewOpen(true);
                   setMenuOpen(false);
                 }}
-                className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
               >
-                👁️ View
+                <Eye className="h-4 w-4 shrink-0" aria-hidden />
+                View
               </button>
               {canManage && (
                 <Link
                   href={`/setup/agreement-templates/${template.id}`}
                   onClick={() => setMenuOpen(false)}
-                  className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
                 >
-                  ✏️ Edit
+                  <Pencil className="h-4 w-4 shrink-0" aria-hidden />
+                  Edit
                 </Link>
               )}
               {canManage && (
-                <button onClick={handleDelete} className="block w-full px-3 py-1.5 text-left text-sm text-danger hover:bg-bg">
-                  🗑️ Delete
+                <button onClick={handleDelete} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-danger hover:bg-bg">
+                  <Trash2 className="h-4 w-4 shrink-0" aria-hidden />
+                  Delete
                 </button>
               )}
             </div>

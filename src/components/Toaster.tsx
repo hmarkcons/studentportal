@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { X } from "lucide-react";
 import { currentToasts, dismissToast, subscribeToasts, type Toast } from "@/lib/toast";
 
 const EMPTY: Toast[] = [];
@@ -35,9 +36,9 @@ export function Toaster() {
             type="button"
             onClick={() => dismissToast(t.id)}
             aria-label="Dismiss"
-            className="w-fit rounded px-1 text-xs opacity-70 hover:opacity-100"
+            className="w-fit rounded p-0.5 opacity-70 hover:opacity-100"
           >
-            ✕
+            <X aria-hidden className="h-3.5 w-3.5" />
           </button>
         </div>
       ))}

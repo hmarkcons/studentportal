@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useActionState, useState } from "react";
+import { Pencil, Repeat, Trash2, Users } from "lucide-react";
 import { togglePersonalTask, deletePersonalTask, updatePersonalTask } from "@/lib/actions/personalTasks";
 import { Badge } from "@/components/ui/Badge";
 import { Input, Select } from "@/components/ui/Input";
@@ -145,12 +146,12 @@ export function PersonalTaskRow({
           </span>
           {recurrence !== "none" && (
             <span title={RECURRENCE_LABEL[recurrence]} className="text-xs text-muted">
-              🔁
+              <Repeat className="h-3.5 w-3.5 shrink-0" aria-hidden />
             </span>
           )}
           {guestEmails.length > 0 && (
             <span title={`Guests: ${guestEmails.join(", ")}`} className="text-xs text-muted">
-              👥
+              <Users className="h-3.5 w-3.5 shrink-0" aria-hidden />
             </span>
           )}
         </label>
@@ -167,11 +168,11 @@ export function PersonalTaskRow({
         <div className="flex shrink-0 items-center gap-2 pl-6 lg:pl-0">
           <Badge tone={PRIORITY_TONE[priority] ?? "neutral"}>{priority}</Badge>
           <Badge tone="primary">Personal</Badge>
-          <button onClick={() => setEditing(true)} className="text-xs text-muted hover:text-primary">
-            ✏️
+          <button onClick={() => setEditing(true)} aria-label="Edit task" title="Edit task" className="text-xs text-muted hover:text-primary">
+            <Pencil className="h-3.5 w-3.5 shrink-0" aria-hidden />
           </button>
-          <button onClick={handleDelete} disabled={del.pending} className="w-fit text-xs text-muted hover:text-danger disabled:opacity-50">
-            🗑️
+          <button onClick={handleDelete} disabled={del.pending} aria-label="Delete task" title="Delete task" className="w-fit text-xs text-muted hover:text-danger disabled:opacity-50">
+            <Trash2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
           </button>
           <ActionStatus state={del.state} pending={del.pending} label="Deleted." showError />
         </div>

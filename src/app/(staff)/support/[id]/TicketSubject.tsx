@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Pencil } from "lucide-react";
 import { updateTicketSubject } from "@/lib/actions/support";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -31,7 +32,7 @@ export function TicketSubject({
           aria-label="Edit subject"
           title="Fix a garbled subject"
         >
-          ✏️
+          <Pencil className="h-3.5 w-3.5 shrink-0" aria-hidden />
         </button>
       </h2>
     );

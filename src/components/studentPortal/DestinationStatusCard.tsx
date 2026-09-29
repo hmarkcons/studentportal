@@ -1,4 +1,5 @@
 import { destinationHeadline, type DestinationStatusRow, type StageState } from "@/lib/destinationStatus";
+import { ArrowRight, Check, CircleDot, Globe, Redo2, X, type LucideIcon } from "lucide-react";
 
 const ROLE_LABEL: Record<DestinationStatusRow["role"], string> = {
   primary: "Primary country",
@@ -6,13 +7,13 @@ const ROLE_LABEL: Record<DestinationStatusRow["role"], string> = {
   applied: "Also applying",
 };
 
-const MARK: Record<StageState, string> = {
-  done: "✓",
-  skipped: "↷",
-  progress: "●",
-  blocked: "✕",
-  next: "→",
-  ahead: "",
+const MARK: Record<StageState, LucideIcon | null> = {
+  done: Check,
+  skipped: Redo2,
+  progress: CircleDot,
+  blocked: X,
+  next: ArrowRight,
+  ahead: null,
 };
 
 /**
@@ -61,7 +62,7 @@ export function DestinationStatusCard({ row }: { row: DestinationStatusRow }) {
             aria-hidden
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/20 text-sm font-bold tracking-wider ring-1 ring-white/30"
           >
-            {row.code ?? "🌍"}
+            {row.code ?? <Globe className="h-5 w-5" />}
           </span>
           <div className="min-w-0">
             <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-base font-semibold">
@@ -99,16 +100,19 @@ export function DestinationStatusCard({ row }: { row: DestinationStatusRow }) {
                 <li key={stage.key} className="flex min-w-0 flex-col gap-1.5" data-stage={stage.key} data-state={stage.state}>
                   <span aria-hidden className={`h-2 rounded-full ${bar[stage.state]} ${here ? "ring-2 ring-offset-1 ring-offset-card " + (backup ? "ring-[var(--hero-alt-from)]/40" : "ring-primary/40") : ""}`} />
                   <span className={`text-[11px] font-medium leading-tight ${stage.state === "ahead" ? "text-muted" : "text-ink"}`}>
-                    {MARK[stage.state] && (
-                      <span
-                        aria-hidden
-                        className={`mr-1 ${
-                          stage.state === "blocked" ? "text-danger" : stage.state === "progress" ? "text-warning" : stage.state === "skipped" ? "text-muted" : backup ? "text-[var(--hero-alt-to)]" : "text-primary"
-                        }`}
-                      >
-                        {MARK[stage.state]}
-                      </span>
-                    )}
+                    {(() => {
+                      const Mark = MARK[stage.state];
+                      if (!Mark) return null;
+                      return (
+                        <Mark
+                          aria-hidden
+                          strokeWidth={3}
+                          className={`mr-1 inline h-3 w-3 shrink-0 align-[-2px] ${
+                            stage.state === "blocked" ? "text-danger" : stage.state === "progress" ? "text-warning" : stage.state === "skipped" ? "text-muted" : backup ? "text-[var(--hero-alt-to)]" : "text-primary"
+                          }`}
+                        />
+                      );
+                    })()}
                     {stage.label}
                   </span>
                   <span

@@ -1,5 +1,6 @@
 "use client";
 
+import { Trash2 } from "lucide-react";
 import { deletePartnerCommission } from "@/lib/actions/finance";
 import { Button } from "@/components/ui/Button";
 import { useButtonAction } from "@/components/useButtonAction";
@@ -20,9 +21,10 @@ export function DeletePartnerCommissionButton({ id }: { id: string }) {
       onClick={handleDelete}
       pending={del.pending}
       aria-label="Delete commission record"
+      title="Delete commission record"
       status={{ state: del.state, label: "Deleted.", showError: true }}
     >
-      🗑️
+      <Trash2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
     </Button>
   );
 }

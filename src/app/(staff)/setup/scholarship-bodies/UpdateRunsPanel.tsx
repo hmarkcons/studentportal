@@ -10,6 +10,7 @@ import {
   processNextScholarshipUpdate,
   testScholarshipResearch,
 } from "@/lib/actions/scholarshipUpdates";
+import { ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
@@ -122,8 +123,9 @@ function Proposal({
         </span>
         <span className="flex items-center gap-2">
           {run.source_url && (
-            <a href={run.source_url} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
-              source ↗
+            <a href={run.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+              source
+              <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden />
             </a>
           )}
           <Button

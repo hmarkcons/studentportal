@@ -1,6 +1,7 @@
 "use client";
 
 import { useId } from "react";
+import { X } from "lucide-react";
 
 export function SlideOver({
   open,
@@ -34,8 +35,8 @@ export function SlideOver({
           <h3 id={titleId} className="text-sm font-semibold text-ink">
             {title}
           </h3>
-          <button onClick={onClose} className="text-lg text-muted hover:text-ink" aria-label="Close">
-            ✕
+          <button type="button" onClick={onClose} className="rounded-md p-1 text-muted hover:bg-bg hover:text-ink" aria-label="Close">
+            <X aria-hidden className="h-5 w-5" />
           </button>
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-4">{children}</div>

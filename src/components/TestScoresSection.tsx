@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Trash2 } from "lucide-react";
 import { saveTestScores } from "@/lib/actions/studentProfileExtras";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
@@ -121,9 +122,10 @@ export function TestScoresSection({ studentId, revalidateTo, scores }: { student
           <button
             type="button"
             onClick={() => setRows((prev) => prev.filter((x) => x.key !== r.key))}
-            className="pb-2 text-xs text-danger hover:underline"
+            className="inline-flex items-center gap-1 pb-2 text-xs text-danger hover:underline"
           >
-            🗑️ Remove
+            <Trash2 aria-hidden className="h-3.5 w-3.5 shrink-0" />
+            Remove
           </button>
         </div>
       ))}

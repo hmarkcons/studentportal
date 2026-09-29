@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { AlarmClock, CalendarClock, CalendarDays, CalendarRange, History } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
@@ -46,28 +47,28 @@ export default async function PortalAppointmentsPage() {
   return (
     <div className="flex w-full flex-col gap-6" data-portal-page>
       <PortalPageHeader
-        icon="📅"
+        icon={CalendarDays}
         title="Appointments"
         description="Dates your counsellor has booked for you. Anything that changes here is updated by them."
       >
         {appointments.length > 0 && (
           <PortalStats className="xl:grid-cols-3">
             <PortalStat
-              icon="⏰"
+              icon={AlarmClock}
               value={daysToNext === null ? "—" : daysToNext === 0 ? "Today" : daysToNext}
               label={daysToNext === null ? "nothing booked ahead" : daysToNext === 0 ? "your next appointment" : `day${daysToNext === 1 ? "" : "s"} to your next`}
               tone={daysToNext !== null && daysToNext <= 7 ? "warning" : "default"}
               hint={next ? next.label : undefined}
             />
-            <PortalStat icon="📆" value={upcoming.length} label="coming up" tone="info" />
-            <PortalStat icon="🗂️" value={past.length} label="past" />
+            <PortalStat icon={CalendarRange} value={upcoming.length} label="coming up" tone="info" />
+            <PortalStat icon={History} value={past.length} label="past" />
           </PortalStats>
         )}
       </PortalPageHeader>
 
       {appointments.length === 0 ? (
         <Card>
-          <PortalEmpty icon="📅" title="No appointments booked yet">
+          <PortalEmpty icon={CalendarDays} title="No appointments booked yet">
             Once your counsellor books one — a visa appointment, an interview — it will appear here with a countdown.
           </PortalEmpty>
         </Card>
@@ -77,7 +78,7 @@ export default async function PortalAppointmentsPage() {
           {upcoming.length > 0 && (
             <Card>
               <h3 className="mb-3 flex items-center gap-2 text-base font-semibold text-ink">
-                <span aria-hidden>🗓️</span> Coming up
+                <CalendarClock aria-hidden className="h-5 w-5 text-primary shrink-0" /> Coming up
               </h3>
               <div className="flex flex-col divide-y divide-border">
                 {upcoming.map((a, i) => (
@@ -92,7 +93,7 @@ export default async function PortalAppointmentsPage() {
           {past.length > 0 && (
             <Card>
               <h3 className="mb-3 flex items-center gap-2 text-base font-semibold text-ink">
-                <span aria-hidden>🕰️</span> Past
+                <History aria-hidden className="h-5 w-5 text-muted shrink-0" /> Past
               </h3>
               <div className="flex flex-col divide-y divide-border">
                 {past.map((a, i) => (

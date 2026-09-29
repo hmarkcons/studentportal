@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Eye } from "lucide-react";
 import { useActionState } from "react";
 import { updateApplicationLinks } from "@/lib/actions/applications";
 import { Button } from "@/components/ui/Button";
@@ -133,7 +134,8 @@ function LinkRow({ label, href, cta }: { label: string; href: string | null; cta
           rel="noreferrer"
           className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
         >
-          👁️ {cta}
+          <Eye aria-hidden className="h-3.5 w-3.5 shrink-0" />
+          {cta}
         </a>
       ) : (
         <span className="text-muted">—</span>

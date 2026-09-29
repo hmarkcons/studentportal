@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Trash2 } from "lucide-react";
 import { deleteStudent } from "@/lib/actions/leads";
 import { useButtonAction } from "@/components/useButtonAction";
 
@@ -9,7 +10,7 @@ export function DeleteStudentButton({
   studentId,
   studentName,
   redirectTo = "/students",
-  label = "🗑️ Delete student",
+  label = "Delete student",
 }: {
   studentId: string;
   studentName: string;
@@ -54,9 +55,16 @@ export function DeleteStudentButton({
       <button
         onClick={handleDelete}
         disabled={pending}
-        className="w-fit text-xs text-danger hover:underline disabled:opacity-50"
+        className="inline-flex w-fit items-center gap-1 text-xs text-danger hover:underline disabled:opacity-50"
       >
-        {pending ? "Deleting…" : label}
+        {pending ? (
+          "Deleting…"
+        ) : (
+          <>
+            <Trash2 aria-hidden className="h-3.5 w-3.5 shrink-0" />
+            {label}
+          </>
+        )}
       </button>
       {del.state?.error && <p className="mt-1 text-xs text-danger">{del.state.error}</p>}
     </div>

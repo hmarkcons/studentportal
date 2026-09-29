@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ExternalLink, FileText, Link2 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { callLink } from "@/lib/scholarshipCallLink";
 
@@ -85,21 +86,29 @@ export function ScholarshipGuide({ body, audience = "staff" }: { body: GuideBody
           </span>
         )}
         {body.apply_url && (
-          <a href={body.apply_url} target="_blank" rel="noreferrer" className="text-primary hover:underline">
-            Apply portal ↗
+          <a href={body.apply_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+            Apply portal
+            <ExternalLink aria-hidden className="h-3.5 w-3.5 shrink-0" />
           </a>
         )}
         {/* The stored copy first, then the region's PDF, then the page it
             sits on — resolved in scholarshipCallLink so the student's own
             Scholarship tab cannot end up showing a different paper. */}
         {call && (
-          <a href={call.url} target="_blank" rel="noreferrer" className="font-medium text-primary hover:underline">
-            {call.kind === "page" ? "🔗" : "📄"} {call.label} {call.kind === "stored" ? "" : "↗"}
+          <a href={call.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-primary hover:underline">
+            {call.kind === "page" ? (
+              <Link2 aria-hidden className="h-3.5 w-3.5 shrink-0" />
+            ) : (
+              <FileText aria-hidden className="h-3.5 w-3.5 shrink-0" />
+            )}
+            {call.label}
+            {call.kind !== "stored" && <ExternalLink aria-hidden className="h-3.5 w-3.5 shrink-0" />}
           </a>
         )}
         {body.source_url && (
-          <a href={body.source_url} target="_blank" rel="noreferrer" className="text-muted hover:underline">
-            {new URL(body.source_url).hostname.replace(/^www\./, "")} ↗
+          <a href={body.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-muted hover:underline">
+            {new URL(body.source_url).hostname.replace(/^www\./, "")}
+            <ExternalLink aria-hidden className="h-3.5 w-3.5 shrink-0" />
           </a>
         )}
         {/* Said here rather than left blank: the call is what the student is

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 
 // One collapsible document section, shared by the staff Documents tab and the
@@ -56,9 +57,7 @@ export function DocumentSectionShell({
         data-collapsible-toggle
         className="flex w-full flex-wrap items-center gap-2 border-b border-border bg-bg px-4 py-3 text-left"
       >
-        <span aria-hidden className={`shrink-0 text-xs text-muted transition-transform ${open ? "rotate-90" : ""}`}>
-          ▶
-        </span>
+        <ChevronRight aria-hidden className={`h-4 w-4 shrink-0 text-muted transition-transform ${open ? "rotate-90" : ""}`} />
         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-ink">
           {number}
         </span>

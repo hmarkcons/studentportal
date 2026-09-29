@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ArrowUpDown, ChevronDown, ChevronUp, GripVertical } from "lucide-react";
 import { reorderApplications } from "@/lib/actions/applications";
 import { useReorderList } from "@/components/useReorderList";
 import { Button } from "@/components/ui/Button";
@@ -21,11 +22,11 @@ function Handle({ onDragStart, onDragEnd, label }: { onDragStart: () => void; on
       draggable
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      className="cursor-grab select-none px-1 text-muted active:cursor-grabbing"
+      className="inline-flex cursor-grab select-none items-center px-1 text-muted active:cursor-grabbing"
       title={`Drag to move ${label}`}
       aria-hidden
     >
-      ⠿
+      <GripVertical className="h-4 w-4 shrink-0" />
     </span>
   );
 }
@@ -52,19 +53,19 @@ function Arrows({
         type="button"
         onClick={onUp}
         disabled={disableUp}
-        className="rounded border border-border px-1.5 text-xs text-muted hover:text-ink disabled:opacity-40"
+        className="inline-flex items-center rounded border border-border px-1.5 py-px text-xs text-muted hover:text-ink disabled:opacity-40"
         aria-label={`Move ${label} up`}
       >
-        ▲
+        <ChevronUp aria-hidden className="h-3.5 w-3.5 shrink-0" />
       </button>
       <button
         type="button"
         onClick={onDown}
         disabled={disableDown}
-        className="rounded border border-border px-1.5 text-xs text-muted hover:text-ink disabled:opacity-40"
+        className="inline-flex items-center rounded border border-border px-1.5 py-px text-xs text-muted hover:text-ink disabled:opacity-40"
         aria-label={`Move ${label} down`}
       >
-        ▼
+        <ChevronDown aria-hidden className="h-3.5 w-3.5 shrink-0" />
       </button>
     </>
   );
@@ -105,7 +106,8 @@ export function ApplicationOrderList({
           Highest priority first — drag a card, use the arrows, or reorder them all at once.
         </p>
         <Button type="button" size="sm" onClick={() => setDialogOpen(true)}>
-          ↕ Reorder applications
+          <ArrowUpDown aria-hidden className="h-3.5 w-3.5 shrink-0" />
+          Reorder applications
         </Button>
       </div>
 

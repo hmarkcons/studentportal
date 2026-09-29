@@ -1,5 +1,6 @@
 "use client";
 
+import { Trash2 } from "lucide-react";
 import { useButtonAction } from "@/components/useButtonAction";
 import { deleteApplication } from "@/lib/actions/applications";
 
@@ -15,8 +16,19 @@ export function DeleteApplicationButton({ applicationId, revalidateTo, label }: 
 
   return (
     <div>
-      <button onClick={handleDelete} disabled={del.pending} className="w-fit text-xs text-danger hover:underline disabled:opacity-50">
-        {del.pending ? "Deleting…" : "🗑️ Delete"}
+      <button
+        onClick={handleDelete}
+        disabled={del.pending}
+        className="inline-flex w-fit items-center gap-1 text-xs text-danger hover:underline disabled:opacity-50"
+      >
+        {del.pending ? (
+          "Deleting…"
+        ) : (
+          <>
+            <Trash2 aria-hidden className="h-3.5 w-3.5 shrink-0" />
+            Delete
+          </>
+        )}
       </button>
       {del.state?.error && <p className="text-xs text-danger">{del.state.error}</p>}
     </div>

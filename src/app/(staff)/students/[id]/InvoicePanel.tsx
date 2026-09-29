@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Eye, Mail, Pencil, Trash2 } from "lucide-react";
 import {
   generateInvoice,
   markInstallmentPaid,
@@ -363,9 +364,10 @@ function DeleteInvoiceButton({ invoiceId, studentId, revalidateTo }: { invoiceId
         onClick={handle}
         disabled={del.pending}
         aria-busy={del.pending || undefined}
-        className="w-fit rounded-md border border-border px-2 py-0.5 text-xs text-muted hover:text-danger disabled:opacity-50"
+        className="inline-flex w-fit items-center gap-1.5 rounded-md border border-border px-2 py-0.5 text-xs text-muted hover:text-danger disabled:opacity-50"
       >
-        🗑️ Delete invoice
+        <Trash2 aria-hidden className="h-3.5 w-3.5 shrink-0" />
+        Delete invoice
       </button>
       {del.state?.error && <p className="mt-1 text-xs text-danger">{del.state.error}</p>}
     </div>
@@ -703,7 +705,8 @@ function SendInvoiceEmailButton({ invoiceId, studentId }: { invoiceId: string; s
       size="sm"
       status={{ state: send.state, label: `Sent to ${sentTo ?? "the student"}.`, showError: true }}
     >
-      📧 Email invoice
+      <Mail aria-hidden className="h-3.5 w-3.5 shrink-0" />
+      Email invoice
     </Button>
   );
 }
@@ -849,7 +852,8 @@ export function InvoiceCard({
                 Send receipt
               </Button>
               <Button type="button" onClick={() => setEditingInvoice((v) => !v)} size="sm">
-                ✏️ Edit
+                <Pencil aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                Edit
               </Button>
             </>
           )}
@@ -969,8 +973,14 @@ export function InvoiceCard({
                   <Badge tone="warning">{i.status}</Badge>
                 )}
                 {canManage && (
-                  <button type="button" onClick={() => setEditingInstallmentId(i.id)} className="rounded-md border border-border px-1.5 py-0.5 text-xs hover:bg-bg">
-                    ✏️
+                  <button
+                    type="button"
+                    onClick={() => setEditingInstallmentId(i.id)}
+                    className="inline-flex items-center rounded-md border border-border px-1.5 py-0.5 text-xs hover:bg-bg"
+                    title="Edit installment"
+                    aria-label="Edit installment"
+                  >
+                    <Pencil aria-hidden className="h-4 w-4 shrink-0" />
                   </button>
                 )}
               </div>
@@ -999,7 +1009,8 @@ export function InvoiceCard({
             rel="noreferrer"
             className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
           >
-            👁️ View invoice
+            <Eye aria-hidden className="h-3.5 w-3.5 shrink-0" />
+            View invoice
           </a>
         )}
         {canManage && (

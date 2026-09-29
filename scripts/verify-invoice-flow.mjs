@@ -665,13 +665,13 @@ try {
       await page.reload({ waitUntil: "domcontentloaded" });
       await expand(page, "Invoice");
       // The pencil on each instalment row opens its editor. Found by its row,
-      // not by counting pencils down the page: another card's ✏️ ahead of the
+      // not by counting pencils down the page: another card's pencil ahead of the
       // schedule once made "the second pencil" instalment 1's, and the split
       // under test happened to the wrong instalment.
       // The last match is the row itself: the list around it matches too when
       // this instalment happens to be first, and ancestors come first.
       const rows = page.locator("div").filter({ hasText: new RegExp(`^\\s*Installment ${second.installment_no} —`) });
-      const pencil = rows.last().getByRole("button", { name: "✏️", exact: true });
+      const pencil = rows.last().getByRole("button", { name: "Edit installment", exact: true });
       const matches = await rows.evaluateAll((els) => els.map((e) => `${e.className} :: ${e.textContent?.slice(0, 60)}`));
       ok("an instalment can be edited", (await pencil.count()) === 1, `${await pencil.count()} found in ${JSON.stringify(matches)}`);
 
@@ -843,7 +843,7 @@ try {
 
         const studentPage = await browser.newPage({ viewport: { width: 1100, height: 1600 } });
         await studentPage.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
-        await studentPage.fill('input[type="email"]', PORTAL_EMAIL);
+        await studentPage.fill('input[name="email"]', PORTAL_EMAIL);
         await studentPage.fill('input[type="password"]', FIXTURE_PASSWORD);
         await studentPage.click('button[type="submit"]');
         await studentPage.waitForURL((u) => !u.pathname.includes("/login"), { timeout: 40000 });
@@ -928,7 +928,7 @@ try {
       await page.reload({ waitUntil: "domcontentloaded" });
       await expand(page, "Invoice");
       page.once("dialog", (d) => d.accept());
-      const del = page.getByRole("button", { name: "🗑️ Delete invoice", exact: true }).first();
+      const del = page.getByRole("button", { name: "Delete invoice", exact: true }).first();
       ok("Super Admin is offered the delete", (await del.count()) > 0);
       if (await del.count()) {
         await del.click();
@@ -1153,7 +1153,7 @@ try {
         console.log("\n--- editing an invoice ---");
         await page.goto(`${BASE}/students/${studentId}`, { waitUntil: "domcontentloaded" });
         await expand(page, "Invoice");
-        const edit = page.getByRole("button", { name: "✏️ Edit" }).first();
+        const edit = page.getByRole("button", { name: "Edit", exact: true }).first();
         ok("an invoice can be opened for editing", (await edit.count()) > 0,
           (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(-300));
 

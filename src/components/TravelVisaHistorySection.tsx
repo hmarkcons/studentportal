@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Trash2 } from "lucide-react";
 import { saveTravelAndVisaHistory } from "@/lib/actions/studentProfileExtras";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
@@ -99,8 +100,13 @@ export function TravelVisaHistorySection({
                 onChange={(e) => setTrips((prev) => prev.map((x) => (x.key === r.key ? { ...x, to_date: e.target.value } : x)))}
               />
             </label>
-            <button type="button" onClick={() => setTrips((prev) => prev.filter((x) => x.key !== r.key))} className="pb-2 text-xs text-danger hover:underline">
-              🗑️ Remove
+            <button
+              type="button"
+              onClick={() => setTrips((prev) => prev.filter((x) => x.key !== r.key))}
+              className="inline-flex items-center gap-1 pb-2 text-xs text-danger hover:underline"
+            >
+              <Trash2 aria-hidden className="h-3.5 w-3.5 shrink-0" />
+              Remove
             </button>
           </div>
         ))}
@@ -164,9 +170,10 @@ export function TravelVisaHistorySection({
             <button
               type="button"
               onClick={() => setRecords((prev) => prev.filter((x) => x.key !== r.key))}
-              className="pb-2 text-xs text-danger hover:underline"
+              className="inline-flex items-center gap-1 pb-2 text-xs text-danger hover:underline"
             >
-              🗑️ Remove
+              <Trash2 aria-hidden className="h-3.5 w-3.5 shrink-0" />
+              Remove
             </button>
           </div>
         ))}

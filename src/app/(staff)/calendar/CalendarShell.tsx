@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Input";
@@ -103,13 +104,13 @@ export function CalendarShell({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Button size="sm" onClick={goPrev} aria-label="Previous">
-              ◀
+              <ChevronLeft className="h-3.5 w-3.5 shrink-0" aria-hidden />
             </Button>
             <Button size="sm" onClick={goToday}>
               Today
             </Button>
             <Button size="sm" onClick={goNext} aria-label="Next">
-              ▶
+              <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
             </Button>
             <h3 className="ml-2 text-base font-semibold text-ink">{headerLabel}</h3>
           </div>

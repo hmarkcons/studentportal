@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { X } from "lucide-react";
 import { parseYMD, MONTH_LABELS, WEEKDAY_FULL_LABELS } from "@/lib/calendarDates";
 import { DayEventList } from "./DayEventList";
 import { AddEventForm } from "./AddEventForm";
@@ -39,7 +40,7 @@ export function DayPanel({
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-ink">{heading}</h3>
           <button type="button" onClick={onClose} className="text-muted hover:text-ink" aria-label="Close">
-            ✕
+            <X className="h-4 w-4 shrink-0" aria-hidden />
           </button>
         </div>
 

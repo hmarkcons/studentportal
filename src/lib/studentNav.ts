@@ -29,19 +29,19 @@ export type StudentNavInput = {
 
 export function studentNav({ locked, scholarship, travel, badges = {} }: StudentNavInput): NavItem[] {
   const items: NavItem[] = [
-    { label: "Dashboard", href: "/portal", icon: "🏠" },
-    { label: "Profile", href: "/portal/profile", icon: "👤" },
-    { label: "Documents", href: "/portal/documents", icon: "📁" },
-    { label: "Applications", href: "/portal/applications", icon: "🏛️" },
-    ...(scholarship ? [{ label: "Scholarship", href: "/portal/scholarship", icon: "🎓" }] : []),
-    { label: "Visa", href: "/portal/visa", icon: "🛂" },
-    ...(travel ? [{ label: "Travel & Arrival", href: "/portal/travel", icon: "✈️" }] : []),
-    { label: "Appointments", href: "/portal/appointments", icon: "📅" },
-    { label: "Payments", href: "/portal/payments", icon: "💳" },
-    { label: "Agreement", href: "/portal/agreement", icon: "📄" },
-    { label: "Messages", href: "/portal/messages", icon: "💬" },
-    { label: "Support", href: "/portal/support", icon: "🎧" },
-    { label: "Guide", href: "/portal/guide", icon: "🎬" },
+    { label: "Dashboard", href: "/portal", icon: "dashboard" },
+    { label: "Profile", href: "/portal/profile", icon: "profile" },
+    { label: "Documents", href: "/portal/documents", icon: "documents" },
+    { label: "Applications", href: "/portal/applications", icon: "universities" },
+    ...(scholarship ? [{ label: "Scholarship", href: "/portal/scholarship", icon: "scholarship" }] : []),
+    { label: "Visa", href: "/portal/visa", icon: "visa" },
+    ...(travel ? [{ label: "Travel & Arrival", href: "/portal/travel", icon: "travel" }] : []),
+    { label: "Appointments", href: "/portal/appointments", icon: "calendar" },
+    { label: "Payments", href: "/portal/payments", icon: "payments" },
+    { label: "Agreement", href: "/portal/agreement", icon: "agreement" },
+    { label: "Messages", href: "/portal/messages", icon: "messages" },
+    { label: "Support", href: "/portal/support", icon: "support" },
+    { label: "Guide", href: "/portal/guide", icon: "guide" },
   ];
   const open = locked ? items.filter((item) => Boolean(item.href) && isGateAllowedPath(item.href!)) : items;
   return open.map((item) => {

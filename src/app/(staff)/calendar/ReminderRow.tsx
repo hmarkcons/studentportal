@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Pencil, Trash2 } from "lucide-react";
 import { toggleReminderResolved, updateReminder, deleteReminder } from "@/lib/actions/calendarEvents";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -93,11 +94,11 @@ export function ReminderRow({
           <ActionStatus state={toggle.state} pending={toggle.pending} label={checked ? "Resolved." : "Reopened."} />
         </div>
         <div className="flex shrink-0 items-center gap-2 pl-6 lg:pl-0">
-          <button onClick={() => setEditing(true)} className="text-xs text-muted hover:text-primary">
-            ✏️
+          <button onClick={() => setEditing(true)} aria-label="Edit reminder" title="Edit reminder" className="text-xs text-muted hover:text-primary">
+            <Pencil className="h-3.5 w-3.5 shrink-0" aria-hidden />
           </button>
-          <button onClick={handleDelete} disabled={del.pending} className="w-fit text-xs text-muted hover:text-danger disabled:opacity-50">
-            🗑️
+          <button onClick={handleDelete} disabled={del.pending} aria-label="Delete reminder" title="Delete reminder" className="w-fit text-xs text-muted hover:text-danger disabled:opacity-50">
+            <Trash2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
           </button>
           <ActionStatus state={del.state} pending={del.pending} label="Deleted." showError />
         </div>

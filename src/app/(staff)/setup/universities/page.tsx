@@ -1,3 +1,4 @@
+import { Pencil } from "lucide-react";
 import { hasRole } from "@/lib/auth/roles";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
@@ -97,9 +98,9 @@ export default async function UniversitiesPage(props: { searchParams: Promise<{ 
                   href={`/setup/universities/${u.id}`}
                   title="Edit university"
                   aria-label="Edit university"
-                  className="rounded p-1 text-muted hover:bg-bg hover:text-primary"
+                  className="inline-flex items-center rounded p-1 text-muted hover:bg-bg hover:text-primary"
                 >
-                  ✏️
+                  <Pencil className="h-4 w-4 shrink-0" aria-hidden />
                 </Link>
                 <DeleteUniversityIcon id={u.id} name={u.name} />
               </div>

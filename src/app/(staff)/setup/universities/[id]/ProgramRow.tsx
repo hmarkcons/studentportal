@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Pencil, Trash2 } from "lucide-react";
 import { updateProgram, deleteProgram, upsertProgramCommissionRate } from "@/lib/actions/universities";
 import { STUDY_LEVELS } from "@/lib/constants";
 import { Button } from "@/components/ui/Button";
@@ -162,7 +163,7 @@ export function ProgramRow({
             {canEdit && (
               <>
                 <button onClick={() => setEditing(true)} title="Edit program" aria-label="Edit program" className="rounded p-1 text-muted hover:bg-bg hover:text-primary">
-                  ✏️
+                  <Pencil className="h-4 w-4 shrink-0" aria-hidden />
                 </button>
                 <span className="inline-flex items-center gap-2">
                   <button
@@ -173,7 +174,7 @@ export function ProgramRow({
                     aria-label="Delete program"
                     className="w-fit rounded p-1 text-muted hover:bg-danger-bg hover:text-danger disabled:opacity-50"
                   >
-                    🗑️
+                    <Trash2 className="h-4 w-4 shrink-0" aria-hidden />
                   </button>
                   <ActionStatus state={del.state} pending={del.pending} label="Deleted." showError />
                 </span>

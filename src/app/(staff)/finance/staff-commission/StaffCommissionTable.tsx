@@ -1,5 +1,6 @@
 "use client";
 
+import { CircleCheck, Coins, Hourglass, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { hasRole } from "@/lib/auth/roles";
 import { useMemo, useState } from "react";
 import { useActionState } from "react";
@@ -351,9 +352,10 @@ function DeleteCommissionButton({ id, studentName }: { id: string; studentName: 
       onClick={handleDelete}
       pending={del.pending}
       aria-label="Delete commission record"
+      title="Delete commission record"
       status={{ state: del.state, label: "Deleted.", showError: true }}
     >
-      🗑️
+      <Trash2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
     </Button>
   );
 }
@@ -372,7 +374,7 @@ function StatCard({
   value,
   caption,
 }: {
-  icon: string;
+  icon: React.ReactNode;
   iconTone: "primary" | "success" | "danger" | "warning";
   label: string;
   value: string;
@@ -471,10 +473,10 @@ export function StaffCommissionTable({
   return (
     <div>
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard icon="💰" iconTone="primary" label="Total Commission" value={`₨ ${Math.round(stats.totalPKR).toLocaleString("en-US")}`} caption="Filtered records" />
-        <StatCard icon="✅" iconTone="success" label="Paid" value={String(stats.paid)} caption="Commission paid" />
-        <StatCard icon="⏳" iconTone="warning" label="Unpaid" value={String(stats.unpaid)} caption="Awaiting payment" />
-        <StatCard icon="🔄" iconTone="danger" label="Refunds" value={String(stats.refunds)} caption="Refund requests on file" />
+        <StatCard icon={<Coins className="h-4 w-4 shrink-0" aria-hidden />} iconTone="primary" label="Total Commission" value={`₨ ${Math.round(stats.totalPKR).toLocaleString("en-US")}`} caption="Filtered records" />
+        <StatCard icon={<CircleCheck className="h-4 w-4 shrink-0" aria-hidden />} iconTone="success" label="Paid" value={String(stats.paid)} caption="Commission paid" />
+        <StatCard icon={<Hourglass className="h-4 w-4 shrink-0" aria-hidden />} iconTone="warning" label="Unpaid" value={String(stats.unpaid)} caption="Awaiting payment" />
+        <StatCard icon={<RotateCcw className="h-4 w-4 shrink-0" aria-hidden />} iconTone="danger" label="Refunds" value={String(stats.refunds)} caption="Refund requests on file" />
       </div>
 
       <div className="mb-3 flex items-center justify-between">
@@ -607,7 +609,8 @@ export function StaffCommissionTable({
                         {r.status !== "paid" && <MarkPaidButton id={r.id} />}
                         {r.status === "paid" && !r.hasCredit && <CarryForwardButton id={r.id} studentName={r.studentName} />}
                         <Button type="button" variant="outline" size="sm" onClick={() => setEditingId(r.id)}>
-                          ✏️ Edit
+                          <Pencil className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                          Edit
                         </Button>
                         <DeleteCommissionButton id={r.id} studentName={r.studentName} />
                       </div>

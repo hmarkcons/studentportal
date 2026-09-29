@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Play } from "lucide-react";
 
 /**
  * Plays the consent video a student recorded when e-signing. Collapsed by
@@ -19,7 +20,14 @@ export function ConsentVideoLink({ url, version }: { url: string; version: numbe
         onClick={() => setOpen((v) => !v)}
         className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
       >
-        {open ? "Hide consent video" : "▶ Consent video"}
+        {open ? (
+          "Hide consent video"
+        ) : (
+          <>
+            <Play aria-hidden className="h-3.5 w-3.5 shrink-0" />
+            Consent video
+          </>
+        )}
       </button>
 
       {open && (

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { CirclePlay } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
 import { PortalEmpty } from "@/components/studentPortal/PortalEmpty";
@@ -27,7 +28,7 @@ export default async function GuidePage() {
   return (
     <div className="flex w-full flex-col gap-6" data-portal-page>
       <PortalPageHeader
-        icon="🎬"
+        icon={CirclePlay}
         title="Guide"
         description="Short walkthroughs of the things students ask about most."
         aside={
@@ -41,7 +42,7 @@ export default async function GuidePage() {
 
       {(videos ?? []).length === 0 ? (
         <Card>
-          <PortalEmpty icon="🎬" title="No tutorials here yet">
+          <PortalEmpty icon={CirclePlay} title="No tutorials here yet">
             Your counsellor can walk you through anything in the meantime — use Messages or Support.
           </PortalEmpty>
         </Card>

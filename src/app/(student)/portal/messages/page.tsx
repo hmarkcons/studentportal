@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { MessageCircle } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { MessageThread, type MessageRow } from "@/components/MessageThread";
 import { MarkMessagesRead } from "@/components/MarkMessagesRead";
@@ -31,7 +32,7 @@ export default async function PortalMessagesPage() {
   return (
     <div className="flex w-full flex-col gap-6" data-portal-page>
       <PortalPageHeader
-        icon="💬"
+        icon={MessageCircle}
         title="Messages"
         description="Anything you send here reaches your counsellor in the CRM. Internal staff notes are never shown here."
         aside={

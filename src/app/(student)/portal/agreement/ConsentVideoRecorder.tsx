@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { CircleCheck } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { MAX_VIDEO_SECONDS, MAX_VIDEO_SIZE_BYTES, ACCEPTED_VIDEO_ACCEPT, validateVideoFile } from "@/lib/documentUpload";
 import { formatFileSize } from "@/lib/fileSize";
@@ -218,7 +219,10 @@ export function ConsentVideoRecorder({ onVideo, disabled }: { onVideo: (file: Fi
 
       {mode === "review" && (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-success">✓ Video ready</span>
+          <span className="inline-flex items-center gap-1 text-xs text-success">
+            <CircleCheck aria-hidden className="h-3.5 w-3.5 shrink-0" />
+            Video ready
+          </span>
           <Button type="button" variant="outline" size="sm" onClick={reset} disabled={disabled}>
             Re-record
           </Button>

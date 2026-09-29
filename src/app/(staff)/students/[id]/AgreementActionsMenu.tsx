@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { EllipsisVertical, Eye, Pencil, Trash2 } from "lucide-react";
 import { deleteAgreement } from "@/lib/actions/agreements";
 import { useButtonAction } from "@/components/useButtonAction";
 import { useAnchoredMenu } from "@/components/useAnchoredMenu";
@@ -77,8 +78,8 @@ export function AgreementActionsMenu({
 
   return (
     <div className="relative inline-block text-left">
-      <button ref={anchor} onClick={() => setMenuOpen((v) => !v)} className="rounded-md px-2 py-1 text-lg text-muted hover:bg-bg hover:text-ink" aria-label="Actions">
-        ⋮
+      <button ref={anchor} onClick={() => setMenuOpen((v) => !v)} className="inline-flex items-center rounded-md px-2 py-1 text-lg text-muted hover:bg-bg hover:text-ink" aria-label="Actions">
+        <EllipsisVertical aria-hidden className="h-5 w-5 shrink-0" />
       </button>
       {menuOpen &&
         portal(
@@ -92,9 +93,10 @@ export function AgreementActionsMenu({
                   setViewOpen(true);
                   setMenuOpen(false);
                 }}
-                className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
               >
-                👁️ View
+                <Eye aria-hidden className="h-4 w-4 shrink-0" />
+                View
               </button>
               {canEdit && (
                 <button
@@ -103,9 +105,10 @@ export function AgreementActionsMenu({
                     setEditOpen(true);
                     setMenuOpen(false);
                   }}
-                  className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
                 >
-                  ✏️ Edit
+                  <Pencil aria-hidden className="h-4 w-4 shrink-0" />
+                  Edit
                 </button>
               )}
               {canDelete && (
@@ -114,9 +117,10 @@ export function AgreementActionsMenu({
                   onClick={handleDelete}
                   disabled={del.pending}
                   aria-busy={del.pending || undefined}
-                  className="block w-full px-3 py-1.5 text-left text-sm text-danger hover:bg-bg disabled:opacity-50"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-danger hover:bg-bg disabled:opacity-50"
                 >
-                  🗑️ Delete
+                  <Trash2 aria-hidden className="h-4 w-4 shrink-0" />
+                  Delete
                 </button>
               )}
             </div>

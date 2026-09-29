@@ -1,4 +1,5 @@
 import { Card } from "@/components/ui/Card";
+import { BadgeCheck, PenLine, TriangleAlert } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { formatDateOnly } from "@/lib/formatDate";
 import {
@@ -28,7 +29,14 @@ export function ProfileCompleteness({ input, className = "" }: { input: ProfileI
     <Card className={className}>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-base font-semibold text-ink">
-          {missing === 0 ? "🌟 Your profile is complete" : "✏️ Finish your profile"}
+          <span className="flex items-center gap-2">
+            {missing === 0 ? (
+              <BadgeCheck aria-hidden className="h-5 w-5 shrink-0 text-success" />
+            ) : (
+              <PenLine aria-hidden className="h-5 w-5 shrink-0 text-primary" />
+            )}
+            {missing === 0 ? "Your profile is complete" : "Finish your profile"}
+          </span>
         </h3>
         <Badge tone={missing === 0 ? "success" : "warning"}>
           {missing === 0 ? "Nothing missing" : `${missing} to add`}
@@ -54,15 +62,17 @@ export function ProfileCompleteness({ input, className = "" }: { input: ProfileI
           application dead — so it is called out rather than left as one tick
           among eleven. */}
       {passport.state === "expired" && (
-        <p className="mb-3 rounded-xl bg-warning-bg p-3 text-sm text-warning">
-          🛂 Your passport expired on {formatDateOnly(passport.expiry!, LONG_DATE)}. You will need to renew it before a visa
-          application can be filed — tell your counsellor once you have the new one.
+        <p className="mb-3 flex gap-2 rounded-xl bg-warning-bg p-3 text-sm text-warning">
+          <TriangleAlert aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>Your passport expired on {formatDateOnly(passport.expiry!, LONG_DATE)}. You will need to renew it before a visa
+          application can be filed — tell your counsellor once you have the new one.</span>
         </p>
       )}
       {passport.state === "expiring" && (
-        <p className="mb-3 rounded-xl bg-warning-bg p-3 text-sm text-warning">
-          🛂 Your passport expires on {formatDateOnly(passport.expiry!, LONG_DATE)}, in {passport.daysLeft} days. Most
-          student visas need at least {PASSPORT_MIN_MONTHS} months&rsquo; validity, so it is worth starting a renewal now.
+        <p className="mb-3 flex gap-2 rounded-xl bg-warning-bg p-3 text-sm text-warning">
+          <TriangleAlert aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>Your passport expires on {formatDateOnly(passport.expiry!, LONG_DATE)}, in {passport.daysLeft} days. Most
+          student visas need at least {PASSPORT_MIN_MONTHS} months&rsquo; validity, so it is worth starting a renewal now.</span>
         </p>
       )}
 

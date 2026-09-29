@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useCallback, useEffect, useState } from "react";
+import { Trash2 } from "lucide-react";
 import {
   deleteStaffAgreement,
   generateStaffAgreement,
@@ -173,7 +174,7 @@ function AgreementRow({ staffId, agreement, reload }: { staffId: string; agreeme
           }}
           aria-label={`Delete ${a.title}`}
         >
-          🗑️
+          <Trash2 aria-hidden className="h-4 w-4 shrink-0" />
         </Button>
       </div>
 

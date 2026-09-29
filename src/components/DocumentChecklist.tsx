@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Eye, Trash2 } from "lucide-react";
 import { useButtonAction } from "@/components/useButtonAction";
 import { uploadDocument, reviewDocument, addDocumentRequirement, deleteDocumentRequirement } from "@/lib/actions/documents";
 import { formatDateOnly } from "@/lib/formatDate";
@@ -107,7 +108,8 @@ function UploadRow({
               rel="noreferrer"
               className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
             >
-              👁️ View file
+              <Eye aria-hidden className="h-3.5 w-3.5 shrink-0" />
+              View file
             </a>
           )}
         </div>
@@ -197,9 +199,10 @@ function UploadRow({
             disabled={reviewPending}
             pending={del.pending}
             title="Remove this requirement from the checklist"
+            aria-label="Remove requirement"
             status={{ state: del.state, label: "Removed.", showError: true }}
           >
-            🗑️
+            <Trash2 aria-hidden className="h-4 w-4 shrink-0" />
           </Button>
         )}
       </div>

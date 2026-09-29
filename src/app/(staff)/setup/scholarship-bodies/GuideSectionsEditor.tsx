@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ChevronDown, ChevronUp, X } from "lucide-react";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 
@@ -69,18 +70,18 @@ export function GuideSectionsEditor({ name, initial }: { name: string; initial: 
               onClick={() => move(index, -1)}
               disabled={index === 0}
               aria-label={`Move ${section.title || "section"} up`}
-              className="rounded border border-border px-1.5 text-xs text-muted hover:text-ink disabled:opacity-40"
+              className="inline-flex items-center rounded border border-border px-1.5 text-xs text-muted hover:text-ink disabled:opacity-40"
             >
-              ▲
+              <ChevronUp className="h-3.5 w-3.5 shrink-0" aria-hidden />
             </button>
             <button
               type="button"
               onClick={() => move(index, 1)}
               disabled={index === sections.length - 1}
               aria-label={`Move ${section.title || "section"} down`}
-              className="rounded border border-border px-1.5 text-xs text-muted hover:text-ink disabled:opacity-40"
+              className="inline-flex items-center rounded border border-border px-1.5 text-xs text-muted hover:text-ink disabled:opacity-40"
             >
-              ▼
+              <ChevronDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
             </button>
             <button
               type="button"
@@ -89,9 +90,9 @@ export function GuideSectionsEditor({ name, initial }: { name: string; initial: 
                 setSections((prev) => prev.filter((_, i) => i !== index));
               }}
               aria-label={`Remove ${section.title || "section"}`}
-              className="rounded px-1 text-xs text-danger hover:underline"
+              className="inline-flex items-center rounded px-1 text-xs text-danger hover:underline"
             >
-              ✕
+              <X className="h-3.5 w-3.5 shrink-0" aria-hidden />
             </button>
           </div>
           <Textarea

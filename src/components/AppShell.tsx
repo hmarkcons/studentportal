@@ -7,6 +7,8 @@ import { useEffect, useRef, useState } from "react";
 import { ThemeToggle } from "./ThemeToggle";
 import { SignOutButton } from "./SignOutButton";
 import { SidebarToggle } from "./SidebarToggle";
+import { ChevronRight, Menu, X } from "lucide-react";
+import { NavIcon } from "./NavIcon";
 
 // Pulls in React Query's client runtime — only staff nav uses search, so
 // student/partner portals never ship this code.
@@ -18,6 +20,7 @@ const GlobalSearch = dynamic(() => import("./GlobalSearch").then((m) => m.Global
 export type NavItem = {
   label: string;
   href?: string;
+  /** A name from NavIcon's set — the menus are data, so they name their icon. */
   icon?: string;
   children?: { label: string; href: string }[];
   /** Unread count shown beside the label. Omitted or 0 renders nothing. */
@@ -141,7 +144,7 @@ export function AppShell({
               aria-label="Close menu"
               className="rounded-md p-1 text-sidebar-ink hover:bg-sidebar-active-bg md:hidden"
             >
-              ✕
+              <X aria-hidden className="h-5 w-5" />
             </button>
           </div>
         </div>
@@ -167,13 +170,11 @@ export function AppShell({
                 className="group mb-1"
               >
                 <summary className="flex cursor-pointer list-none items-center justify-between rounded-md px-3 py-2 text-sm font-medium text-sidebar-ink hover:bg-sidebar-active-bg">
-                  <span className="flex items-center gap-2">
-                    {item.icon && <span>{item.icon}</span>}
+                  <span className="flex items-center gap-2.5">
+                    {item.icon && <NavIcon name={item.icon} className="h-[18px] w-[18px] text-sidebar-muted" />}
                     {item.label}
                   </span>
-                  <span className="text-xs text-sidebar-muted transition-transform group-open:rotate-90">
-                    ›
-                  </span>
+                  <ChevronRight aria-hidden className="h-4 w-4 text-sidebar-muted transition-transform group-open:rotate-90" />
                 </summary>
                 <div className="ml-4 mt-1 flex flex-col gap-0.5 border-l border-sidebar-border pl-3">
                   {item.children.map((child) => (
@@ -217,14 +218,17 @@ export function AppShell({
                   (student ? (
                     <span
                       aria-hidden
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-base transition-colors ${
-                        isActive(item.href!) ? "bg-white/20" : "bg-sidebar-active-bg group-hover:bg-card"
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors ${
+                        isActive(item.href!) ? "bg-white/20 text-white" : "bg-sidebar-active-bg text-primary group-hover:bg-card"
                       }`}
                     >
-                      {item.icon}
+                      <NavIcon name={item.icon} className="h-[18px] w-[18px]" />
                     </span>
                   ) : (
-                    <span>{item.icon}</span>
+                    <NavIcon
+                      name={item.icon}
+                      className={`h-[18px] w-[18px] ${isActive(item.href!) ? "text-primary" : "text-sidebar-muted"}`}
+                    />
                   ))}
                 {item.label}
                 {Boolean(item.badge) && (
@@ -257,7 +261,7 @@ export function AppShell({
               aria-label="Open menu"
               className="rounded-md p-1.5 text-ink hover:bg-bg md:hidden"
             >
-              ☰
+              <Menu aria-hidden className="h-5 w-5" />
             </button>
             {/* Its desktop twin, which CSS keeps out of sight until the menu
                 is actually away. */}

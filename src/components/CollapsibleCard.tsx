@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 
 // Every section starts CLOSED on each page load, and the choice is never
@@ -70,12 +71,10 @@ export function CollapsibleCard({
         data-collapsible-toggle
         className="flex min-w-0 flex-1 items-center gap-2 text-left"
       >
-        <span
+        <ChevronRight
           aria-hidden
-          className={`shrink-0 text-xs text-muted transition-transform ${open ? "rotate-90" : ""}`}
-        >
-          ▶
-        </span>
+          className={`h-4 w-4 shrink-0 text-muted transition-transform ${open ? "rotate-90" : ""}`}
+        />
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-medium text-ink">{title}</span>
           {subtitle && <span className="block text-xs text-muted">{subtitle}</span>}

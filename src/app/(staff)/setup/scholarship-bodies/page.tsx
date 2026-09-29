@@ -1,3 +1,4 @@
+import { ExternalLink, FileText, Link2, Pencil } from "lucide-react";
 import { getStaffSession } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
 import { Card } from "@/components/ui/Card";
@@ -281,12 +282,14 @@ export default async function ScholarshipBodiesPage() {
               stipend: r.body.stipend_amount ?? "—",
               source: r.body.call_pdf_path && r.callUrl ? (
                 <span className="flex items-center gap-2">
-                  <a href={r.callUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
-                    📄 call
+                  <a href={r.callUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+                    <FileText className="h-4 w-4 shrink-0" aria-hidden />
+                    call
                   </a>
                   {r.body.source_url && (
-                    <a href={r.body.source_url} target="_blank" rel="noreferrer" className="text-muted hover:underline">
-                      site ↗
+                    <a href={r.body.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-muted hover:underline">
+                      site
+                      <ExternalLink className="h-4 w-4 shrink-0" aria-hidden />
                     </a>
                   )}
                 </span>
@@ -295,10 +298,11 @@ export default async function ScholarshipBodiesPage() {
                   href={r.body.source_url}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-primary hover:underline"
+                  className="inline-flex items-center gap-1 text-primary hover:underline"
                   title={r.body.source_url}
                 >
-                  🔗 View source
+                  <Link2 className="h-4 w-4 shrink-0" aria-hidden />
+                  View source
                 </a>
               ) : (
                 "—"
@@ -309,8 +313,8 @@ export default async function ScholarshipBodiesPage() {
                     body={r.body}
                     destinations={destinationChoices}
                     trigger={
-                      <button type="button" title="Edit" className="rounded p-1 text-muted hover:text-primary">
-                        ✏️
+                      <button type="button" title="Edit" aria-label="Edit" className="rounded p-1 text-muted hover:text-primary">
+                        <Pencil className="h-4 w-4 shrink-0" aria-hidden />
                       </button>
                     }
                   />

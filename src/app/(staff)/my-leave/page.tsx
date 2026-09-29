@@ -1,4 +1,5 @@
 import { loadMyLeave } from "@/lib/actions/leave";
+import { CalendarDays, CircleCheck, TreePalm } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { StatCard } from "@/components/ui/StatCard";
 import { LeaveSummary } from "@/components/LeaveBits";
@@ -25,9 +26,9 @@ export default async function MyLeavePage() {
       </p>
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="Paid leave a year" value={balance.allowance} icon="📅" />
-        <StatCard label="Taken" value={balance.used} icon="🏖️" />
-        <StatCard label="Left" value={balance.remaining} tone={balance.remaining > 0 ? "success" : "warning"} icon="✅" />
+        <StatCard label="Paid leave a year" value={balance.allowance} icon={CalendarDays} />
+        <StatCard label="Taken" value={balance.used} icon={TreePalm} />
+        <StatCard label="Left" value={balance.remaining} tone={balance.remaining > 0 ? "success" : "warning"} icon={CircleCheck} />
       </div>
 
       <Card className="mb-6">

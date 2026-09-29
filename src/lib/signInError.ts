@@ -12,6 +12,9 @@
  * Wrong credentials keep the vague wording on purpose. Saying which half was
  * wrong tells whoever is guessing whether an email address is registered here.
  */
+/** What wrong credentials are told — deliberately not which half was wrong. */
+export const WRONG_CREDENTIALS = "Incorrect email or password.";
+
 export function signInErrorMessage(error: { status?: number; code?: string; message?: string } | null): string | null {
   if (!error) return null;
 
@@ -32,5 +35,5 @@ export function signInErrorMessage(error: { status?: number; code?: string; mess
   if (status === undefined || status >= 500) {
     return "Sign-in is temporarily unavailable. Please try again in a moment.";
   }
-  return "Incorrect email or password.";
+  return WRONG_CREDENTIALS;
 }

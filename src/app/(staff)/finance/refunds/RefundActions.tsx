@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Trash2 } from "lucide-react";
 import { updateRefundStatus, deleteRefundRequest } from "@/lib/actions/finance";
 import { Button } from "@/components/ui/Button";
 import { ActionStatus } from "@/components/ActionStatus";
@@ -71,8 +72,8 @@ export function RefundActions({
           </>
         )}
         {isSuperAdmin && (
-          <Button variant="outline" size="sm" onClick={handleDelete} pending={del.pending} aria-label="Delete refund">
-            🗑️
+          <Button variant="outline" size="sm" onClick={handleDelete} pending={del.pending} aria-label="Delete refund" title="Delete refund">
+            <Trash2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
           </Button>
         )}
         <ActionStatus state={change.state} pending={change.pending} label={DONE_LABELS[lastValue ?? ""] ?? "Saved."} />

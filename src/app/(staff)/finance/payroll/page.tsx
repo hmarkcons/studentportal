@@ -1,3 +1,4 @@
+import { Award, Check } from "lucide-react";
 import { hasRole } from "@/lib/auth/roles";
 import { documentUrls } from "@/lib/storageUrls";
 import { COMPENSATION_EMBED, withCompensation, withCompensationAll } from "@/lib/staffCompensation";
@@ -353,9 +354,14 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
                 <h3 className="text-sm font-semibold text-ink">Payroll Summary</h3>
                 {staff.bonus_eligible && (
                   <Badge tone={bonusApplies ? "success" : "neutral"}>
-                    {bonusApplies
-                      ? `🎉 +${staff.bonus_rate_percent}% bonus applied`
-                      : `Bonus eligible (+${staff.bonus_rate_percent ?? "—"}% at ${staff.monthly_target ?? "—"} registrations)`}
+                    {bonusApplies ? (
+                      <span className="inline-flex items-center gap-1">
+                        <Award className="h-3 w-3 shrink-0" aria-hidden />
+                        {`+${staff.bonus_rate_percent}% bonus applied`}
+                      </span>
+                    ) : (
+                      `Bonus eligible (+${staff.bonus_rate_percent ?? "—"}% at ${staff.monthly_target ?? "—"} registrations)`
+                    )}
                   </Badge>
                 )}
               </div>
@@ -422,9 +428,14 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted">Students registered</span>
-                  <span className={targetReached ? "font-medium text-success" : "text-ink"}>
+                  <span className={targetReached ? "inline-flex items-center gap-1 font-medium text-success" : "text-ink"}>
                     {studentIds.length}/{staff.monthly_target ?? "—"}
-                    {targetReached && " ✓ target reached"}
+                    {targetReached && (
+                      <>
+                        <Check className="h-4 w-4 shrink-0" aria-hidden />
+                        target reached
+                      </>
+                    )}
                   </span>
                 </div>
                 <div className="flex justify-between">

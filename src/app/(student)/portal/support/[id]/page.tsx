@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowLeft, MessagesSquare, Ticket } from "lucide-react";
 import { notFound } from "next/navigation";
 import { getStudentUser } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
@@ -59,14 +60,15 @@ export default async function PortalTicketDetailPage(props: PageProps<"/portal/s
         data-rise
         className="inline-flex w-fit items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-sm text-muted shadow-sm hover:border-primary hover:text-primary"
       >
-        &larr; Back to support
+        <ArrowLeft aria-hidden className="h-4 w-4 shrink-0" />
+        Back to support
       </Link>
 
       {/* Opening the ticket is what clears its "new reply" flag. */}
       <MarkTicketRead ticketId={ticket.id} side="student" />
 
       <PortalPageHeader
-        icon="🎫"
+        icon={Ticket}
         eyebrow="Support ticket"
         title={ticket.subject}
         // created_at was selected here and never shown.
@@ -78,7 +80,7 @@ export default async function PortalTicketDetailPage(props: PageProps<"/portal/s
 
       <Card>
         <h3 className="mb-3 flex items-center gap-2 text-base font-semibold text-ink">
-          <span aria-hidden>💬</span> Conversation
+          <MessagesSquare aria-hidden className="h-5 w-5 text-primary shrink-0" /> Conversation
         </h3>
         <TicketThread ticketId={ticket.id} authorType="student" replies={replies} revalidateTo={revalidateTo} />
       </Card>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowLeft, CalendarRange, FolderOpen } from "lucide-react";
 import { notFound } from "next/navigation";
 import { getStudentUser } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
@@ -44,7 +45,8 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
         data-rise
         className="inline-flex w-fit items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-sm text-muted shadow-sm hover:border-primary hover:text-primary"
       >
-        &larr; Back to applications
+        <ArrowLeft aria-hidden className="h-4 w-4 shrink-0" />
+        Back to applications
       </Link>
 
       <div data-rise>
@@ -68,7 +70,7 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
             assert something the data does not hold. */}
         <Card className="lg:col-span-2">
           <h3 className="mb-1 flex items-center gap-2 text-base font-semibold text-ink">
-            <span aria-hidden>🗓️</span> Intake rounds
+            <CalendarRange aria-hidden className="h-5 w-5 text-primary shrink-0" /> Intake rounds
           </h3>
           {rounds.length > 0 ? (
             <>
@@ -86,8 +88,8 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
 
         <Card>
           <div className="flex flex-col gap-3" data-documents-pointer>
-            <span aria-hidden className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-xl">
-              📁
+            <span aria-hidden className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <FolderOpen className="h-5 w-5" />
             </span>
             <p className="text-sm text-ink">
               Documents for this application are on your{" "}

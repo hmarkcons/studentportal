@@ -1,6 +1,7 @@
 "use client";
 
 import { useOptimistic, useState, startTransition } from "react";
+import { PartyPopper } from "lucide-react";
 import { setTravelItemDone } from "@/lib/actions/travelGuide";
 import { ActionStatus } from "@/components/ActionStatus";
 
@@ -69,7 +70,7 @@ export function TravelChecklist({ sections }: { sections: TravelSection[] }) {
           />
         </div>
         <span className="text-xs font-medium text-ink">
-          {doneCount === total && total > 0 ? "🎉 " : ""}
+          {doneCount === total && total > 0 && <PartyPopper aria-hidden className="mr-1 inline h-4 w-4 shrink-0 align-[-3px] text-success" />}
           {doneCount} of {total} done
         </span>
       </div>

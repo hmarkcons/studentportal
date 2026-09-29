@@ -1,6 +1,7 @@
 import { hasRole } from "@/lib/auth/roles";
 import Link from "next/link";
 import { headers } from "next/headers";
+import { Printer } from "lucide-react";
 import QRCode from "qrcode";
 import { createClient } from "@/lib/supabase/server";
 import { formatDateOnly } from "@/lib/formatDate";
@@ -139,7 +140,8 @@ export default async function AttendancePage(props: { searchParams: Promise<{ mo
                 href="/admin/attendance/qr-sheet"
                 className="inline-flex items-center gap-1.5 rounded-md border border-primary px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
               >
-                🖨️ Open the printable sheet
+                <Printer className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                Open the printable sheet
               </Link>
               <RotateQrButton />
             </div>

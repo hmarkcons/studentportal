@@ -247,7 +247,7 @@ try {
     await page.getByRole("button", { name: "Actions" }).first().click();
     // Exact. "Edit registration" sits in another card on the same page, and
     // only escapes this by being collapsed — which is not something to rely on.
-    const edit = page.getByRole("button", { name: "✏️ Edit", exact: true }).first();
+    const edit = page.getByRole("button", { name: "Edit", exact: true }).first();
     ok("Super Admin is offered the edit", (await edit.count()) > 0,
       (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(-200));
 
@@ -345,7 +345,7 @@ try {
       await expand(page, "Agreement");
       await page.getByRole("button", { name: "Actions" }).first().click();
       ok("...and the edit closes once it is signed",
-        (await page.getByRole("button", { name: "✏️ Edit", exact: true }).count()) === 0,
+        (await page.getByRole("button", { name: "Edit", exact: true }).count()) === 0,
         "Edit is still offered on a signed agreement");
       await page.keyboard.press("Escape");
     }
@@ -393,7 +393,7 @@ try {
 
     const studentPage = await browser.newPage({ viewport: { width: 1100, height: 1400 } });
     await studentPage.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
-    await studentPage.fill('input[type="email"]', STUDENT_EMAIL);
+    await studentPage.fill('input[name="email"]', STUDENT_EMAIL);
     await studentPage.fill('input[type="password"]', FIXTURE_PASSWORD);
     await studentPage.click('button[type="submit"]');
     await studentPage.waitForURL((u) => !u.pathname.includes("/login"), { timeout: 40000 });
@@ -692,9 +692,9 @@ try {
         await expand(page, "Agreement");
         page.once("dialog", (d) => d.accept());
         await page.getByRole("button", { name: "Actions" }).first().click();
-        // Exact: "🗑️ Delete student" is on the same page and matched first,
+        // Exact: "Delete student" is on the same page and matched first,
         // then sat behind the open menu's overlay waiting to be clickable.
-        const del = page.getByRole("button", { name: "🗑️ Delete", exact: true }).first();
+        const del = page.getByRole("button", { name: "Delete", exact: true }).first();
         ok("Super Admin is offered the delete", (await del.count()) > 0);
 
         if (await del.count()) {

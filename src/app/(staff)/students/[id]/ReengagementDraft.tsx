@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Check, ExternalLink, Mail } from "lucide-react";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { sendReengagementMessage, logWhatsappReengagement } from "@/lib/actions/reengagement";
@@ -82,9 +83,10 @@ export function ReengagementDraft({
         type="button"
         data-collapsible-toggle
         onClick={() => setOpen(true)}
-        className="mt-3 w-fit rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-ink hover:bg-bg"
+        className="mt-3 inline-flex w-fit items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-ink hover:bg-bg"
       >
-        ✉️ Write to them {draft.kind === "ghost" ? "— suggested chase message" : "— suggested win-back message"}
+        <Mail aria-hidden className="h-3.5 w-3.5 shrink-0" />
+        <span>Write to them {draft.kind === "ghost" ? "— suggested chase message" : "— suggested win-back message"}</span>
       </button>
     );
   }
@@ -140,16 +142,24 @@ export function ReengagementDraft({
             Send
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={copyForWhatsapp}>
-            {copied ? "Copied ✓" : "Copy for WhatsApp"}
+            {copied ? (
+              <>
+                <Check aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                Copied
+              </>
+            ) : (
+              "Copy for WhatsApp"
+            )}
           </Button>
           {waLink && (
             <a
               href={waLink}
               target="_blank"
               rel="noreferrer"
-              className="rounded-md border border-border px-2 py-1 text-xs text-ink hover:bg-bg"
+              className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-ink hover:bg-bg"
             >
-              Open in WhatsApp ↗
+              Open in WhatsApp
+              <ExternalLink aria-hidden className="h-3.5 w-3.5 shrink-0" />
             </a>
           )}
         </div>

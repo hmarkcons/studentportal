@@ -1,4 +1,5 @@
 import { hasRole } from "@/lib/auth/roles";
+import { CircleCheck, CirclePause, Users } from "lucide-react";
 import { avatarUrlMap } from "@/lib/storageUrls";
 import { getStaffSession } from "@/lib/auth/session";
 import { getEffectivePermissions } from "@/lib/auth/permissions";
@@ -169,9 +170,9 @@ export default async function StaffAdminPage() {
       <p className="mb-4 text-sm text-muted">Manage all staff members — add, edit, and track their details, roles and commission rates.</p>
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="Total Staff" value={total} icon="👥" />
-        <StatCard label="Active" value={active} tone="success" icon="✅" />
-        <StatCard label="Inactive" value={inactive} tone="warning" icon="⏸️" />
+        <StatCard label="Total Staff" value={total} icon={Users} />
+        <StatCard label="Active" value={active} tone="success" icon={CircleCheck} />
+        <StatCard label="Inactive" value={inactive} tone="warning" icon={CirclePause} />
       </div>
 
       <StaffTable

@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { Trash2 } from "lucide-react";
 import { addOfficeHoliday, deleteOfficeHoliday } from "@/lib/actions/leave";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -21,11 +22,12 @@ function HolidayRow({ date, name, canEdit }: { date: string; name: string; canEd
           size="sm"
           variant="ghost"
           aria-label={`Remove ${name}`}
+          title={`Remove ${name}`}
           pending={del.pending}
           status={{ state: del.state, label: "Removed.", showError: true }}
           onClick={() => void del.run(() => deleteOfficeHoliday(date), { toast: `${name} removed.` })}
         >
-          🗑️
+          <Trash2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
         </Button>
       )}
     </li>

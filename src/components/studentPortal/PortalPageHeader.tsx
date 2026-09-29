@@ -1,3 +1,5 @@
+import type { LucideIcon } from "lucide-react";
+
 /**
  * The top of every student page: what the page is, in a sentence, on a soft
  * wash of the brand colours, with anything that summarises it (chips, a
@@ -6,14 +8,14 @@
  * The title stays an h2 — pages are found and read by their heading.
  */
 export function PortalPageHeader({
-  icon,
+  icon: Icon,
   title,
   description,
   eyebrow,
   aside,
   children,
 }: {
-  icon: string;
+  icon: LucideIcon;
   title: React.ReactNode;
   description?: React.ReactNode;
   /** A short line above the title: "Step 3 of your journey", "Italy (Public)". */
@@ -34,9 +36,9 @@ export function PortalPageHeader({
         <div className="flex min-w-0 items-center gap-4">
           <span
             aria-hidden
-            className="bg-hero flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-2xl shadow-lg shadow-primary/25"
+            className="bg-hero flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white shadow-lg shadow-primary/25"
           >
-            {icon}
+            <Icon className="h-6 w-6" strokeWidth={2} />
           </span>
           <div className="min-w-0">
             {eyebrow && <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">{eyebrow}</p>}

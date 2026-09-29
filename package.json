@@ -51,6 +51,7 @@
     "@tiptap/starter-kit": "^3.30.5",
     "fflate": "^0.8.3",
     "jszip": "^3.10.2",
+    "lucide-react": "^1.48.0",
     "mammoth": "^1.12.2",
     "next": "16.3.5",
     "node-html-parser": "^9.0.2",

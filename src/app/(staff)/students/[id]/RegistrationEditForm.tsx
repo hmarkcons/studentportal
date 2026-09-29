@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Pencil } from "lucide-react";
 import { updateRegistrationDetails } from "@/lib/actions/leads";
 import { SERVICE_LABELS, SERVICE_TYPES, type ServiceType } from "@/lib/serviceType";
 import { PrimaryBackupDestinationSelect } from "@/components/PrimaryBackupDestinationSelect";
@@ -57,8 +58,9 @@ export function RegistrationEditForm({
 
   if (!editing) {
     return (
-      <button data-collapsible-toggle onClick={() => setEditing(true)} className="w-fit text-xs font-medium text-primary hover:underline">
-        ✏️ Edit registration
+      <button data-collapsible-toggle onClick={() => setEditing(true)} className="inline-flex w-fit items-center gap-1 text-xs font-medium text-primary hover:underline">
+        <Pencil aria-hidden className="h-3.5 w-3.5 shrink-0" />
+        Edit registration
       </button>
     );
   }

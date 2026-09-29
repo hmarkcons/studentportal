@@ -1,5 +1,6 @@
 "use client";
 
+import { Trash2 } from "lucide-react";
 import { deleteUniversity } from "@/lib/actions/universities";
 import { ActionStatus } from "@/components/ActionStatus";
 import { useButtonAction } from "@/components/useButtonAction";
@@ -28,7 +29,7 @@ export function DeleteUniversityIcon({ id, name }: { id: string; name: string })
         aria-label="Delete university"
         className="w-fit rounded p-1 text-muted hover:bg-danger-bg hover:text-danger disabled:opacity-50"
       >
-        🗑️
+        <Trash2 className="h-4 w-4 shrink-0" aria-hidden />
       </button>
       <ActionStatus state={del.state} pending={del.pending} label="Deleted." showError />
     </span>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CircleCheck, ClipboardList, FolderOpen, Hourglass, Lightbulb, Upload } from "lucide-react";
 import { MAX_UPLOAD_BYTES, formatFileSize } from "@/lib/fileSize";
 import { documentUrls } from "@/lib/storageUrls";
 import { loadDocumentHistory } from "@/lib/documentHistory";
@@ -89,7 +90,7 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
   return (
     <div className="flex w-full flex-col gap-6" data-portal-page>
       <PortalPageHeader
-        icon="📁"
+        icon={FolderOpen}
         title="Documents"
         description="Everything we need from you, in the order your counsellor works through it."
         aside={
@@ -104,10 +105,10 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
         {total > 0 && (
           <div className="flex flex-col gap-4">
             <PortalStats>
-              <PortalStat icon="✅" value={approved} label="approved" tone="success" />
-              <PortalStat icon="⏳" value={counts.inReview} label="being checked" tone="warning" />
-              <PortalStat icon="⬆️" value={outstanding} label="to upload" tone={outstanding > 0 ? "danger" : "default"} />
-              <PortalStat icon="📋" value={total} label={`document${total === 1 ? "" : "s"} in all`} />
+              <PortalStat icon={CircleCheck} value={approved} label="approved" tone="success" />
+              <PortalStat icon={Hourglass} value={counts.inReview} label="being checked" tone="warning" />
+              <PortalStat icon={Upload} value={outstanding} label="to upload" tone={outstanding > 0 ? "danger" : "default"} />
+              <PortalStat icon={ClipboardList} value={total} label={`document${total === 1 ? "" : "s"} in all`} />
             </PortalStats>
             {/* The same share the dashboard's ring draws. */}
             <div>
@@ -130,7 +131,7 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
       {/* Said once, up front, as well as under every picker: a student on a
           phone should know before choosing a file, not after. */}
       <p className="flex items-start gap-2.5 rounded-xl border border-info/30 bg-info-bg px-4 py-3 text-xs text-info" data-upload-limit data-rise>
-        <span aria-hidden className="text-base leading-none">💡</span>
+        <Lightbulb aria-hidden className="mt-px h-4 w-4 shrink-0" />
         <span>
           Each file can be up to <strong className="font-semibold">{formatFileSize(MAX_UPLOAD_BYTES)}</strong> — a PDF, a Word file
           or a photo. If a photo is larger, you can shrink it with one click when you choose it.
@@ -163,7 +164,7 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
 
       {sections.length === 0 && (
         <Card>
-          <PortalEmpty icon="🗂️" title="Nothing is required from you yet.">
+          <PortalEmpty icon={ClipboardList} title="Nothing is required from you yet.">
             Your counsellor builds your checklist once your countries are confirmed. Each document appears here, in order, with a
             button to upload it.
           </PortalEmpty>

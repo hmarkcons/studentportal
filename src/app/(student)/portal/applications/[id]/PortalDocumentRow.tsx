@@ -1,6 +1,7 @@
 "use client";
 
 import { ConfirmedUploadForm } from "@/components/ConfirmedUploadForm";
+import { CircleCheck, Eye, Hourglass, ScanSearch, Undo2, Upload, type LucideIcon } from "lucide-react";
 import { DocumentHistory, type ArchivedUpload } from "@/components/DocumentHistory";
 import { studentUploadDocument } from "@/lib/actions/portal-documents";
 import { formatDateOnly } from "@/lib/formatDate";
@@ -12,12 +13,12 @@ import { uploadedLine, reviewedLine, type UploaderRole } from "@/lib/activitySta
 const LONG_DATE: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", year: "numeric" };
 
 // A glance down the list says which rows are done and which need the student.
-const STATUS_ICON: Record<string, { icon: string; tile: string }> = {
-  verified: { icon: "✅", tile: "bg-success-bg" },
-  submitted: { icon: "⏳", tile: "bg-warning-bg" },
-  under_review: { icon: "🔎", tile: "bg-info-bg" },
-  rejected: { icon: "↩️", tile: "bg-danger-bg" },
-  missing: { icon: "⬆️", tile: "bg-primary/10" },
+const STATUS_ICON: Record<string, { icon: LucideIcon; tile: string }> = {
+  verified: { icon: CircleCheck, tile: "bg-success-bg text-success" },
+  submitted: { icon: Hourglass, tile: "bg-warning-bg text-warning" },
+  under_review: { icon: ScanSearch, tile: "bg-info-bg text-info" },
+  rejected: { icon: Undo2, tile: "bg-danger-bg text-danger" },
+  missing: { icon: Upload, tile: "bg-primary/10 text-primary" },
 };
 
 export function PortalDocumentRow({
@@ -60,9 +61,12 @@ export function PortalDocumentRow({
       <div className="flex min-w-0 items-start gap-3">
       <span
         aria-hidden
-        className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-base ${(STATUS_ICON[doc.status] ?? STATUS_ICON.missing).tile}`}
+        className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${(STATUS_ICON[doc.status] ?? STATUS_ICON.missing).tile}`}
       >
-        {(STATUS_ICON[doc.status] ?? STATUS_ICON.missing).icon}
+        {(() => {
+          const Icon = (STATUS_ICON[doc.status] ?? STATUS_ICON.missing).icon;
+          return <Icon className="h-[18px] w-[18px]" />;
+        })()}
       </span>
       <div className="min-w-0">
         <p className="text-sm font-medium text-ink">
@@ -89,7 +93,8 @@ export function PortalDocumentRow({
               rel="noreferrer"
               className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
             >
-              👁️ View file
+              <Eye aria-hidden className="h-3.5 w-3.5 shrink-0" />
+              View file
             </a>
           )}
         </div>

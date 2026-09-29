@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Eye } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { FileField } from "@/components/FileField";
 import { addedLine } from "@/lib/activityStamp";
@@ -30,7 +31,8 @@ export function ProofFileCell({
           rel="noreferrer"
           className="inline-flex w-fit items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
         >
-          👁️ View proof
+          <Eye aria-hidden className="h-3.5 w-3.5 shrink-0" />
+          View proof
         </a>
       )}
       {/* Every caller shows the proof through this cell, so the date lives

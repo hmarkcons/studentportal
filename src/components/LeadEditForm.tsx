@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Pencil } from "lucide-react";
 import { updateLead } from "@/lib/actions/leads";
 import { STUDY_LEVELS, QUALIFICATION_LEVELS } from "@/lib/constants";
 import { Button } from "@/components/ui/Button";
@@ -44,8 +45,9 @@ export function LeadEditForm({
 
   if (!editing) {
     return (
-      <button onClick={() => setEditing(true)} className="text-xs font-medium text-primary hover:underline">
-        ✏️ Edit details
+      <button onClick={() => setEditing(true)} className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+        <Pencil aria-hidden className="h-3.5 w-3.5 shrink-0" />
+        Edit details
       </button>
     );
   }

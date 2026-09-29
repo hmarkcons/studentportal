@@ -63,7 +63,7 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
             {LEAD_STATUS_LABELS[lead.status as never] ?? lead.status}
           </Badge>
           {canDeleteLead && (
-            <DeleteStudentButton studentId={id} studentName={lead.full_name} redirectTo="/leads" label="🗑️ Delete lead" />
+            <DeleteStudentButton studentId={id} studentName={lead.full_name} redirectTo="/leads" label="Delete lead" />
           )}
         </div>
       </div>

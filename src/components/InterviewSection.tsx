@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Pencil, Trash2 } from "lucide-react";
 import { addInterview, updateInterview, deleteInterview } from "@/lib/actions/interviews";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -305,17 +306,23 @@ function InterviewCard({
           </Badge>
           {canManage && (
             <>
-              <button onClick={() => setEditing(true)} className="text-xs text-muted hover:text-primary" title="Edit">
-                ✏️
+              <button
+                onClick={() => setEditing(true)}
+                className="inline-flex items-center text-xs text-muted hover:text-primary"
+                title="Edit"
+                aria-label="Edit interview"
+              >
+                <Pencil aria-hidden className="h-3.5 w-3.5 shrink-0" />
               </button>
               <button
                 onClick={remove}
                 disabled={del.pending}
                 aria-busy={del.pending || undefined}
-                className="w-fit text-xs text-muted hover:text-danger disabled:opacity-50"
+                className="inline-flex w-fit items-center text-xs text-muted hover:text-danger disabled:opacity-50"
                 title="Delete"
+                aria-label="Delete interview"
               >
-                🗑️
+                <Trash2 aria-hidden className="h-3.5 w-3.5 shrink-0" />
               </button>
               <ActionStatus state={del.state} pending={del.pending} label="Deleted." showError />
             </>

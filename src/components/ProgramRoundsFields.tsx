@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { X } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { ROUNDS_PRESENT_FIELD, defaultRoundLabel, sortRounds, type ProgramRound } from "@/lib/programRounds";
 
@@ -105,9 +106,9 @@ export function ProgramRoundsFields({
               onClick={() => setRows((current) => current.filter((r) => r.key !== row.key))}
               title="Remove this round"
               aria-label="Remove this round"
-              className="rounded p-1 text-xs text-muted hover:bg-danger-bg hover:text-danger"
+              className="rounded p-1 text-muted hover:bg-danger-bg hover:text-danger"
             >
-              ✕
+              <X aria-hidden className="h-3.5 w-3.5" />
             </button>
           </div>
         ))}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { ArrowDown, ArrowUp, Pencil, Trash2 } from "lucide-react";
 import { createGuideVideo, updateGuideVideo, deleteGuideVideo, moveGuideVideo } from "@/lib/actions/guideVideos";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
@@ -133,34 +134,37 @@ function VideoRowEditor({ video, isFirst, isLast }: { video: GuideVideoRow; isFi
             type="button"
             disabled={isFirst || busy}
             onClick={() => run(() => moveGuideVideo(video.id, "up"))}
-            className="rounded-md border border-border px-2 py-1 text-xs text-ink hover:bg-bg disabled:opacity-40"
+            className="inline-flex items-center rounded-md border border-border px-2 py-1 text-xs text-ink hover:bg-bg disabled:opacity-40"
             aria-label="Move up"
           >
-            ↑
+            <ArrowUp className="h-3.5 w-3.5 shrink-0" aria-hidden />
           </button>
           <button
             type="button"
             disabled={isLast || busy}
             onClick={() => run(() => moveGuideVideo(video.id, "down"))}
-            className="rounded-md border border-border px-2 py-1 text-xs text-ink hover:bg-bg disabled:opacity-40"
+            className="inline-flex items-center rounded-md border border-border px-2 py-1 text-xs text-ink hover:bg-bg disabled:opacity-40"
             aria-label="Move down"
           >
-            ↓
+            <ArrowDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
           </button>
           <Button type="button" size="sm" onClick={() => setEditing(true)}>
-            ✏️ Edit
+            <Pencil className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            Edit
           </Button>
           <Button
             type="button"
             variant="danger"
             size="sm"
             pending={busy}
+            aria-label="Delete video"
+            title="Delete video"
             onClick={() => {
               if (!confirm(`Remove "${video.title}" from the guide?`)) return;
               void run(() => deleteGuideVideo(video.id), "Deleted.");
             }}
           >
-            🗑️
+            <Trash2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
           </Button>
         </div>
       </div>

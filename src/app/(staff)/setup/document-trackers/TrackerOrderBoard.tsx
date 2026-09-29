@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { ChevronDown, ChevronUp, GripVertical } from "lucide-react";
 import { reorderTrackerCountries, reorderTrackerFields } from "@/lib/actions/countryTracker";
 import { CollapsibleCard } from "@/components/CollapsibleCard";
 import { Badge } from "@/components/ui/Badge";
@@ -124,25 +125,25 @@ export function TrackerOrderBoard({ countries, canEdit }: { countries: TrackerCo
                     className="cursor-grab select-none px-1 text-muted active:cursor-grabbing"
                     title={`Drag to move ${country.name}`}
                   >
-                    ⠿
+                    <GripVertical className="h-4 w-4 shrink-0" aria-hidden />
                   </span>
                   <button
                     type="button"
                     onClick={() => move(country.code, -1)}
                     disabled={index === 0 || pending}
-                    className="rounded border border-border px-1.5 text-xs text-muted hover:text-ink disabled:opacity-40"
+                    className="inline-flex items-center rounded border border-border px-1.5 text-xs text-muted hover:text-ink disabled:opacity-40"
                     aria-label={`Move ${country.name} up`}
                   >
-                    ▲
+                    <ChevronUp className="h-3.5 w-3.5 shrink-0" aria-hidden />
                   </button>
                   <button
                     type="button"
                     onClick={() => move(country.code, 1)}
                     disabled={index === ordered.length - 1 || pending}
-                    className="rounded border border-border px-1.5 text-xs text-muted hover:text-ink disabled:opacity-40"
+                    className="inline-flex items-center rounded border border-border px-1.5 text-xs text-muted hover:text-ink disabled:opacity-40"
                     aria-label={`Move ${country.name} down`}
                   >
-                    ▼
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
                   </button>
                 </span>
               ) : null
@@ -249,26 +250,26 @@ function FieldList({
                 className="cursor-grab select-none text-muted active:cursor-grabbing"
                 title={`Drag to move ${field.label}`}
               >
-                ⠿
+                <GripVertical className="h-4 w-4 shrink-0" aria-hidden />
               </span>
               <span className="flex flex-col">
                 <button
                   type="button"
                   onClick={() => move(field.id, -1)}
                   disabled={index === 0 || pending}
-                  className="rounded border border-border px-1 text-[10px] leading-tight text-muted hover:text-ink disabled:opacity-40"
+                  className="inline-flex items-center justify-center rounded border border-border px-1 text-[10px] leading-tight text-muted hover:text-ink disabled:opacity-40"
                   aria-label={`Move ${field.label} up`}
                 >
-                  ▲
+                  <ChevronUp className="h-3 w-3 shrink-0" aria-hidden />
                 </button>
                 <button
                   type="button"
                   onClick={() => move(field.id, 1)}
                   disabled={index === ordered.length - 1 || pending}
-                  className="rounded border border-border px-1 text-[10px] leading-tight text-muted hover:text-ink disabled:opacity-40"
+                  className="inline-flex items-center justify-center rounded border border-border px-1 text-[10px] leading-tight text-muted hover:text-ink disabled:opacity-40"
                   aria-label={`Move ${field.label} down`}
                 >
-                  ▼
+                  <ChevronDown className="h-3 w-3 shrink-0" aria-hidden />
                 </button>
               </span>
             </span>
