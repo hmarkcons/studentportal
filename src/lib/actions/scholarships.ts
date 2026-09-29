@@ -298,6 +298,7 @@ export async function addStudentScholarship(
   const { error: insertError } = await supabase
     .from("student_scholarships")
     .insert({ student_id: studentId, application_id: applicationId, ...fields });
+  if (insertError?.code === "23505") return { error: "That body is already recorded for this application — change it there instead." };
   if (insertError) return { error: insertError.message };
 
   revalidatePath(revalidateTo);
@@ -378,8 +379,14 @@ export async function updateStudentScholarship(
   // name, amount and status, so a scholarship recorded against the wrong
   // regional body could never be corrected — the dropdown was offered when
   // adding and then had no effect for the rest of the record's life.
-  const { error: updateError } = await supabase.from("student_scholarships").update(fields).eq("id", scholarshipId);
+  // Asked for back: an update RLS refuses matches nothing and raises nothing.
+  const { data: updated, error: updateError } = await supabase
+    .from("student_scholarships")
+    .update(fields)
+    .eq("id", scholarshipId)
+    .select("id");
   if (updateError) return { error: updateError.message };
+  if (!updated?.length) return { error: "It wasn't saved — your role may not be allowed to change this student's scholarships." };
 
   revalidatePath(revalidateTo);
   return { success: true };
@@ -390,8 +397,13 @@ export async function deleteStudentScholarship(scholarshipId: string, revalidate
   if (error) return { error };
   const supabase = await createClient();
 
-  const { error: deleteError } = await supabase.from("student_scholarships").delete().eq("id", scholarshipId);
+  const { data: deleted, error: deleteError } = await supabase
+    .from("student_scholarships")
+    .delete()
+    .eq("id", scholarshipId)
+    .select("id");
   if (deleteError) return { error: deleteError.message };
+  if (!deleted?.length) return { error: "It wasn't deleted — your role may not be allowed to change this student's scholarships." };
 
   revalidatePath(revalidateTo);
   return { success: true };

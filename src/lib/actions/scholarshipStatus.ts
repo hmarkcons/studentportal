@@ -4,6 +4,9 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requirePermission } from "@/lib/auth/permissions";
 import { isScholarshipDocumentStatus, isScholarshipStatus } from "@/lib/scholarships";
+import { resolveScholarship, type ScholarshipRef } from "@/lib/scholarshipRecord";
+
+export type { ScholarshipRef } from "@/lib/scholarshipRecord";
 
 const DENIED = "Only staff who manage scholarships can change this.";
 
@@ -15,33 +18,36 @@ const DENIED = "Only staff who manage scholarships can change this.";
  * Super Admin write) matches nothing and reads as success, and a dropdown
  * that says Saved over a change that never happened is worse than an error.
  */
-async function setField(scholarshipId: string, studentId: string, patch: Record<string, string | null>) {
+async function setField(ref: ScholarshipRef, studentId: string, patch: Record<string, string | null>) {
   const denied = await requirePermission("scholarships.manage", DENIED);
   if (denied) return { error: denied.error };
 
   const supabase = await createClient();
+  const resolved = await resolveScholarship(supabase, ref, studentId);
+  if ("error" in resolved) return { error: resolved.error };
+
   const { data, error } = await supabase
     .from("student_scholarships")
     .update(patch)
-    .eq("id", scholarshipId)
+    .eq("id", resolved.id)
     .eq("student_id", studentId)
     .select("id");
-  if (error) return { error: error.message };
+  if (error) return { error: error.message, scholarshipId: resolved.created ? resolved.id : undefined };
   if (!data?.length) return { error: "It wasn't saved — your role may not be allowed to change this student's scholarships." };
 
   revalidatePath(`/students/${studentId}/scholarship`);
-  return { success: true as const };
+  return { success: true as const, scholarshipId: resolved.id };
 }
 
-/** The application's status: Submitted, Pending, Accepted, Modification requested or Rejected. */
-export async function setScholarshipStatus(scholarshipId: string, studentId: string, status: string) {
+/** The application's status: Pending, Submitted, Accepted, Modification requested or Rejected. */
+export async function setScholarshipStatus(ref: ScholarshipRef, studentId: string, status: string) {
   if (!isScholarshipStatus(status)) return { error: "Choose a status from the list." };
-  return setField(scholarshipId, studentId, { status });
+  return setField(ref, studentId, { status });
 }
 
 /** Where its documents stand (0297); empty clears it back to not chosen. */
-export async function setScholarshipDocumentsStatus(scholarshipId: string, studentId: string, value: string | null) {
+export async function setScholarshipDocumentsStatus(ref: ScholarshipRef, studentId: string, value: string | null) {
   const next = value ? value : null;
   if (next !== null && !isScholarshipDocumentStatus(next)) return { error: "Choose a documents status from the list." };
-  return setField(scholarshipId, studentId, { documents_status: next });
+  return setField(ref, studentId, { documents_status: next });
 }

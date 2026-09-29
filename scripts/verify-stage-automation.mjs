@@ -15,10 +15,13 @@
 //                             rejected application with a letter of its own
 //                             stays rejected (forward only, never undo), and
 //                             a step staff already set keeps its value
-//   the scholarship tab       its two dropdowns save on change — Submitted,
-//                             and the documents Sent via courier — two proof
-//                             files attach at once, and the student sees the
-//                             documents status
+//   the scholarship tab       the finalised university's own body is there
+//                             to work on before anything is recorded: its two
+//                             dropdowns save on change and the first records
+//                             it — once, however fast two changes follow each
+//                             other — two proof files chosen together attach
+//                             at once, and the student sees the documents
+//                             status (and nothing before staff act)
 //   one visa agreement        a template for all destinations is visa-only by
 //                             construction; a full-service student is not
 //                             offered it; a visa-only student is, with a
@@ -28,7 +31,8 @@
 // Staff steps run as the people who do them in production: Processing files
 // the letter; a Super Admin works the scholarship tab (production has taken
 // scholarships.manage away from Processing) and writes the template.
-// Fixtures are zztmp and removed in the finally.
+// Fixtures are zztmp and removed in the finally. SHOT_DIR=<folder> saves a
+// screenshot of the Scholarship tab once its scholarship is recorded.
 import { BASE, clients, fixtures, FIXTURE_PASSWORD, openBrowser, reporter, requireConfirmation, signIn } from "./verify-portal-lib.mjs";
 
 requireConfirmation("check:autostages");
@@ -115,7 +119,11 @@ try {
   });
   if (destError) throw new Error(`destination: ${destError.message}`);
 
-  const { data: uni } = await admin.from("universities").insert({ destination_id: italy.id, name: "zztmp Stages University", city: "zztmp City", type: "public" }).select("id").single();
+  // Its DSU body set as Setup › Universities sets it (0287), so the Scholarship
+  // tab knows which body to offer.
+  const { data: uni } = await admin.from("universities")
+    .insert({ destination_id: italy.id, name: "zztmp Stages University", city: "zztmp City", type: "public", dsu_body_id: italyBody.scholarship_body_id })
+    .select("id").single();
   universityIds.push(uni.id);
   const { data: progs } = await admin.from("programs").insert([
     { university_id: uni.id, level: "masters", name: "zztmp Stages Programme" },
@@ -137,10 +145,6 @@ try {
     student_id: studentId, application_id: refused.id, category: "acceptance_letters", custom_name: "zztmp Old letter", status: "verified",
   });
   if (oldLetterError) throw new Error(`old letter: ${oldLetterError.message}`);
-  const { data: scholarship, error: scholarshipError } = await admin.from("student_scholarships")
-    .insert({ student_id: studentId, application_id: app.id, scholarship_body_id: italyBody.scholarship_body_id, status: "pending" })
-    .select("id").single();
-  if (scholarshipError) throw new Error(`scholarship: ${scholarshipError.message}`);
   // The portal opens once a signed agreement is on file.
   const { data: italyTemplate } = await admin.from("agreement_templates").select("id").eq("destination_id", italy.id).limit(1).single();
   const signedPath = `${studentId}/agreements/zztmp-signed.pdf`;
@@ -253,55 +257,69 @@ try {
 
   // ================================================ the scholarship tab
   console.log("\n--- the scholarship tab ---");
+  const recordsNow = async () =>
+    (await admin.from("student_scholarships").select("id, scholarship_body_id, status, documents_status").eq("student_id", studentId)).data ?? [];
+
+  // Nothing recorded yet, so the student has nothing to see.
+  await studentPage.goto(`${BASE}/portal/scholarship`, { waitUntil: "domcontentloaded" });
+  await studentPage.locator("[data-portal-page], main").first().waitFor({ timeout: 60_000 }).catch(() => {});
+  // The page has to be showing the country first, or an absent status proves nothing.
+  const countryShown = await studentPage.locator("[data-scholarship-countries]").waitFor({ timeout: 60_000 }).then(() => true, () => false);
+  ok("before staff record anything the student sees their country, and no scholarship status",
+    countryShown && !/Documents: /.test(await studentPage.locator("body").innerText()), await bodyTail(studentPage));
+
   const supPage = await signIn(browser, sup.email);
   await supPage.goto(`${BASE}/students/${studentId}/scholarship`, { waitUntil: "domcontentloaded" });
-  const quick = supPage.locator(`[data-scholarship-quick="${scholarship.id}"]`);
-  ok("the scholarship has its two status dropdowns", await quick.waitFor({ timeout: 60_000 }).then(() => true, () => false), await bodyTail(supPage));
-  if (await quick.count()) {
-    const documentOptions = await quick.locator("select[data-scholarship-documents] option").evaluateAll((os) => os.map((o) => o.textContent.trim()));
-    ok("...the documents one offering all five statuses",
+  const panel = supPage.locator(`[data-scholarship-panel][data-scholarship-body="${italyBody.scholarship_body_id}"]`);
+  ok("the finalised university's own body is there to work on, before anything is recorded",
+    await panel.waitFor({ timeout: 60_000 }).then(() => true, () => false) && (await panel.getAttribute("data-scholarship-panel")) === "draft" && (await recordsNow()).length === 0,
+    await bodyTail(supPage));
+  if (await panel.count()) {
+    const documentOptions = await panel.locator("select[data-scholarship-documents] option").evaluateAll((os) => os.map((o) => o.textContent.trim()));
+    ok("...its documents dropdown offering all five statuses",
       ["Pending", "Submitted", "Sent via courier", "Upload not required", "To be submitted upon arrival"].every((l) => documentOptions.includes(l)),
       documentOptions.join(" | "));
-    const statusOptions = await quick.locator("select[data-scholarship-status] option").evaluateAll((os) => os.map((o) => o.textContent.trim()));
-    ok("...and the application one Submitted and Pending", statusOptions.includes("Submitted") && statusOptions.includes("Pending"), statusOptions.join(" | "));
+    const statusOptions = await panel.locator("select[data-scholarship-status] option").evaluateAll((os) => os.map((o) => o.textContent.trim()));
+    ok("...its application dropdown Pending and Submitted", statusOptions.includes("Submitted") && statusOptions.includes("Pending"), statusOptions.join(" | "));
+    ok("...and a proof upload that takes several files at once", (await panel.locator("input[data-proof-input][multiple]").count()) === 1);
 
     // Hydrated before the first change, or the change goes nowhere.
     await supPage.waitForFunction(() => {
       const el = document.querySelector("select[data-scholarship-status]");
       return Boolean(el && Object.keys(el).some((k) => k.startsWith("__reactFiber")));
     }, null, { timeout: 30_000 }).catch(() => {});
-    await quick.locator("select[data-scholarship-status]").selectOption("submitted");
-    const submitted = await poll(async () => {
-      const { data } = await admin.from("student_scholarships").select("status").eq("id", scholarship.id).single();
-      return data?.status === "submitted" ? data : null;
-    }, 30);
-    ok("choosing Submitted saves it, with no button to press", Boolean(submitted));
-    await poll(async () => (await quick.locator("select[data-scholarship-documents]").isEnabled()) || null, 15);
-    await quick.locator("select[data-scholarship-documents]").selectOption("courier");
-    const courier = await poll(async () => {
-      const { data } = await admin.from("student_scholarships").select("documents_status").eq("id", scholarship.id).single();
-      return data?.documents_status === "courier" ? data : null;
-    }, 30);
-    ok("choosing Sent via courier saves the documents status", Boolean(courier));
-  }
+    // Two changes back to back, the second before the first has answered:
+    // the first records the scholarship, and the second must use that record.
+    await panel.locator("select[data-scholarship-status]").selectOption("submitted");
+    await panel.locator("select[data-scholarship-documents]").selectOption("courier");
+    const recorded = await poll(async () => {
+      const rows = await recordsNow();
+      return rows.length >= 1 && rows.every((r) => r.status === "submitted" && r.documents_status === "courier") ? rows : null;
+    }, 45);
+    const rows = await recordsNow();
+    ok("choosing Submitted and then Sent via courier records the scholarship with both, no button pressed", Boolean(recorded), JSON.stringify(rows));
+    ok("...exactly once, against the university's body", rows.length === 1 && rows[0].scholarship_body_id === italyBody.scholarship_body_id, JSON.stringify(rows));
 
-  const proofForm = supPage.locator("form[data-scholarship-proof-form]").first();
-  ok("the scholarship takes proof of submission", await proofForm.waitFor({ timeout: 30_000 }).then(() => true, () => false));
-  if (await proofForm.count()) {
-    await proofForm.getByRole("button", { name: "Add another file" }).click();
-    const inputs = proofForm.locator('input[type="file"]');
-    await poll(async () => ((await inputs.count()) === 2) || null, 10);
-    await inputs.nth(0).setInputFiles(PDF("zztmp-proof-portal"));
-    await inputs.nth(1).setInputFiles(PDF("zztmp-proof-email"));
-    const attach = proofForm.getByRole("button", { name: "Attach files" });
-    await poll(async () => (await attach.isEnabled()) || null, 20);
-    await attach.click();
+    const scholarshipId = rows[0]?.id;
+    await panel.locator("input[data-proof-input]").setInputFiles([PDF("zztmp-proof-portal"), PDF("zztmp-proof-email")]);
     const proofs = await poll(async () => {
-      const { data } = await admin.from("scholarship_proofs").select("file_name").eq("scholarship_id", scholarship.id);
+      if (!scholarshipId) return null;
+      const { data } = await admin.from("scholarship_proofs").select("file_name, file_path").eq("scholarship_id", scholarshipId);
       return (data ?? []).length >= 2 ? data : null;
     });
-    ok("two proof files attach in one go", JSON.stringify((proofs ?? []).map((p) => p.file_name).sort()) === JSON.stringify(["zztmp-proof-email.pdf", "zztmp-proof-portal.pdf"]),
+    ok("two proof files chosen together are both attached, with nothing more to press",
+      JSON.stringify((proofs ?? []).map((p) => p.file_name).sort()) === JSON.stringify(["zztmp-proof-email.pdf", "zztmp-proof-portal.pdf"]),
       JSON.stringify(proofs));
+    if (proofs?.[0]?.file_path) {
+      const { data: file } = await admin.storage.from("documents").download(proofs[0].file_path);
+      const bytes = file ? Buffer.from(await file.arrayBuffer()) : null;
+      ok("...each file really stored", Boolean(bytes) && bytes.subarray(0, 4).toString() === "%PDF");
+    }
+    const listed = await poll(async () => ((await panel.locator("[data-proof-list] li").count()) === 2) || null, 30);
+    ok("...and listed under Proof of submission", Boolean(listed));
+    ok("the panel is now the record", (await panel.getAttribute("data-scholarship-panel")) === scholarshipId, await panel.getAttribute("data-scholarship-panel"));
+    ok("...and still only one record", (await recordsNow()).length === 1);
+    if (process.env.SHOT_DIR) await supPage.screenshot({ path: `${process.env.SHOT_DIR}/scholarship-tab.png`, fullPage: true });
   }
 
   await studentPage.goto(`${BASE}/portal/scholarship`, { waitUntil: "domcontentloaded" });

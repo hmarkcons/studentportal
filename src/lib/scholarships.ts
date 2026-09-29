@@ -7,7 +7,9 @@
 // on. The display side printed the raw value too, so a row read "modification"
 // rather than "Modification requested".
 
-export const SCHOLARSHIP_STATUSES = ["submitted", "pending", "accepted", "modification", "rejected"] as const;
+// In the order an application moves through them, so the dropdown reads as a
+// sequence: not submitted yet, submitted, then the answer.
+export const SCHOLARSHIP_STATUSES = ["pending", "submitted", "accepted", "modification", "rejected"] as const;
 
 export type ScholarshipStatus = (typeof SCHOLARSHIP_STATUSES)[number];
 

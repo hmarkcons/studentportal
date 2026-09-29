@@ -10,13 +10,12 @@ import { scholarshipGate, scholarshipGateMessage } from "@/lib/scholarshipGate";
 import { scholarshipPortals } from "@/lib/scholarshipPortal";
 import { listCredentialTypesAction } from "@/lib/actions/countryTracker";
 import { listScholarshipProofs } from "@/lib/actions/scholarshipProofs";
-import { ScholarshipProofs } from "./ScholarshipProofs";
 import { AddScholarships } from "./AddScholarships";
 import { ScholarshipPortals } from "./ScholarshipPortals";
 import { guideFreshness } from "@/lib/academicYear";
 import { ScholarshipGuide } from "@/components/ScholarshipGuide";
 import { SCHOLARSHIP_CURRENCY_SYMBOL } from "@/lib/scholarships";
-import { ScholarshipSection } from "../applications/[appId]/tracker/ScholarshipSection";
+import { ScholarshipApplications } from "./ScholarshipApplications";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -179,6 +178,18 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
           : [];
         const offeredBodies = designated.length > 0 ? designated : countryBodies;
 
+        // Where Italy's DSU is a right, the university's own body is offered
+        // ready to work — its status, its documents, its proof — without an
+        // "Add" step first: the record is made by the first change. With no
+        // body listing the university, one panel asks which of the country's
+        // it is. A merit-based country is put forward body by body instead,
+        // through the picker below.
+        const recordedBodies = new Set(scholarships.map((s) => s.scholarship_body_id).filter(Boolean));
+        const universal = w.access === "universal";
+        const drafts = universal ? designated.filter((b) => !recordedBodies.has(b.id)) : [];
+        const chooseFrom = universal && designated.length === 0 ? countryBodies : null;
+        const bodyChoices = offeredBodies.map((b) => ({ id: b.id, name: b.name, region: b.region }));
+
         return (
           <Card key={w.app.id}>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -222,8 +233,48 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
                 offered to everyone. Add one below if this student is being put forward for it.
               </p>
             )}
+            {canManage && intentByApp.get(w.app.id) === "Yes" && (
+              <div className="mb-3">
+                <AddScholarships
+                  studentId={id}
+                  applicationId={w.app.id}
+                  revalidateTo={`/students/${id}/scholarship`}
+                  countryName={w.country ?? "this country"}
+                  bodies={offeredBodies.map((b) => ({
+                    id: b.id,
+                    name: b.name,
+                    region: b.region,
+                    alreadyAdded: scholarships.some((s) => s.scholarship_body_id === b.id),
+                  }))}
+                />
+              </div>
+            )}
+            {canManage && intentByApp.get(w.app.id) === "Not decided" && (
+              <p className="mb-3 rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted">
+                Nobody has decided yet whether this student is applying for a {w.country ?? ""} scholarship. Answer
+                &ldquo;Applying for a scholarship?&rdquo; on the{" "}
+                <Link href={`/students/${id}`} className="text-primary hover:underline">
+                  Dashboard tracker
+                </Link>
+                , and the ones to choose from appear here.
+              </p>
+            )}
+
+            <ScholarshipApplications
+              studentId={id}
+              applicationId={w.app.id}
+              records={scholarships}
+              drafts={drafts.map((b) => ({ id: b.id, name: b.name, region: b.region }))}
+              chooseFrom={chooseFrom ? chooseFrom.map((b) => ({ id: b.id, name: b.name, region: b.region })) : null}
+              bodies={bodyChoices}
+              proofsByScholarship={proofsByScholarship}
+              canManage={canManage}
+              currencySymbol={w.currencySymbol}
+              revalidateTo={`/students/${id}/scholarship`}
+            />
+
             {offeredBodies.length > 0 && (
-              <div className="mb-3 flex flex-col gap-2">
+              <div className="flex flex-col gap-2">
                 {offeredBodies.map((b) => (
                   <ScholarshipGuide
                     key={b.id}
@@ -255,58 +306,6 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
                 ))}
               </div>
             )}
-            {/* Outside Italy, a scholarship is a decision somebody takes on
-                the Dashboard tracker. Until they answer Yes, the list of
-                bodies is reference material, not a thing to fill in — and
-                offering the picker would be answering the question for them. */}
-            {canManage && intentByApp.get(w.app.id) === "Yes" && (
-              <div className="mb-3">
-                <AddScholarships
-                  studentId={id}
-                  applicationId={w.app.id}
-                  revalidateTo={`/students/${id}/scholarship`}
-                  countryName={w.country ?? "this country"}
-                  bodies={offeredBodies.map((b) => ({
-                    id: b.id,
-                    name: b.name,
-                    region: b.region,
-                    alreadyAdded: scholarships.some((s) => s.scholarship_body_id === b.id),
-                  }))}
-                />
-              </div>
-            )}
-            {canManage && intentByApp.get(w.app.id) === "Not decided" && (
-              <p className="mb-3 rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted">
-                Nobody has decided yet whether this student is applying for a {w.country ?? ""} scholarship. Answer
-                &ldquo;Applying for a scholarship?&rdquo; on the{" "}
-                <Link href={`/students/${id}`} className="text-primary hover:underline">
-                  Dashboard tracker
-                </Link>
-                , and the ones to choose from appear here.
-              </p>
-            )}
-
-            <ScholarshipSection
-              studentId={id}
-              applicationId={w.app.id}
-              revalidateTo={`/students/${id}/scholarship`}
-              bodies={offeredBodies.map((b) => ({ id: b.id, name: b.name, region: b.region }))}
-              scholarships={scholarships}
-              preenrollmentFinalized={w.app.preenrollment_finalized}
-              canManage={canManage}
-              currencySymbol={w.currencySymbol}
-            />
-            {/* The evidence each application was actually submitted, kept with
-                the application it belongs to rather than in one pile. */}
-            {scholarships.map((sc) => (
-              <ScholarshipProofs
-                key={sc.id}
-                scholarshipId={sc.id}
-                studentId={id}
-                proofs={proofsByScholarship[sc.id] ?? []}
-                canManage={canManage}
-              />
-            ))}
           </Card>
         );
       })}

@@ -11,7 +11,7 @@ import { redirect } from "next/navigation";
  * was a live way to lose an afternoon's work.
  *
  * The scholarship half of this page was never unique to it either: the
- * Scholarship tab renders the same ScholarshipSection for every application,
+ * Scholarship tab shows every finalised application's scholarships (ScholarshipApplications),
  * which is where it belongs.
  *
  * Kept as a redirect rather than deleted, because the link lived on every
