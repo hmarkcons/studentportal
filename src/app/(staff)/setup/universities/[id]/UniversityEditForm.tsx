@@ -7,10 +7,12 @@ import { ActionStatus } from "@/components/ActionStatus";
 import { useButtonAction } from "@/components/useButtonAction";
 import { Input, Select } from "@/components/ui/Input";
 import { FeeInput } from "@/components/FeeInput";
+import { autoShortName } from "@/lib/finalizedStage";
 
 type University = {
   id: string;
   name: string;
+  short_name?: string | null;
   city: string | null;
   region: string | null;
   type: string;
@@ -49,6 +51,11 @@ export function UniversityEditForm({
         <label className="flex flex-col gap-1 text-xs text-muted">
           Name
           <Input name="name" defaultValue={university.name} required />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-muted">
+          Short name
+          <Input name="short_name" defaultValue={university.short_name ?? ""} maxLength={32} placeholder={autoShortName(university.name)} />
+          <span className="text-[11px]">Shown under a finalized student&apos;s Pre-Enrolled / University Finalized step. Blank shortens the name itself, as shown.</span>
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
           Type

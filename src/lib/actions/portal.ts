@@ -1,18 +1,16 @@
 "use server";
 
 import { hasRole } from "@/lib/auth/roles";
-import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { generatePassword } from "@/lib/generatePassword";
+import { chosenPasswordError } from "@/lib/passwordPolicy";
+import { finishPasswordSet, passwordRefusal, type PasswordSetResult } from "@/lib/passwordSet";
+import { sendEmail } from "@/lib/email";
+import { getSiteUrl } from "@/lib/siteUrl";
+import { staffLoginHtml, staffLoginSubject, staffLoginText, type StaffLoginEmailData } from "@/lib/staffLoginEmail";
 
-function generatePassword() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#%";
-  const bytes = randomBytes(20);
-  let pw = "";
-  for (let i = 0; i < 20; i++) pw += chars[bytes[i] % chars.length];
-  return pw;
-}
 
 export async function inviteStudentToPortal(studentId: string, _prevState: unknown, _formData: FormData) {
   const supabase = await createClient();
@@ -79,6 +77,10 @@ export async function inviteStudentToPortal(studentId: string, _prevState: unkno
 
 export async function resetStudentPortalPassword(studentId: string, _prevState: unknown, _formData: FormData) {
   const supabase = await createClient();
+  // Only a Super Admin resets or sets a password — setStudentPortalPassword,
+  // below, is what the page offers them now.
+  const denied = await requireSuperAdmin(supabase);
+  if (denied) return { error: "Only a Super Admin can reset a student's password." };
 
   const { data: student, error } = await supabase
     .from("students")
@@ -228,4 +230,62 @@ export async function deleteStudentPortalAccess(studentId: string) {
 
   revalidatePath(`/students/${studentId}`, "layout");
   return { success: true };
+}
+
+/**
+ * A student's portal password, as a Super Admin chose it — typed or generated.
+ * The student is signed out everywhere, a copy is kept (Reveal credentials, as
+ * for every portal login) and they are emailed it, with their Student ID,
+ * which they can sign in with too. See finishPasswordSet.
+ */
+export async function setStudentPortalPassword(studentId: string, password: string): Promise<PasswordSetResult> {
+  const supabase = await createClient();
+  const denied = await requireSuperAdmin(supabase);
+  if (denied) return { error: "Only a Super Admin can set a student's password." };
+  const problem = chosenPasswordError(password);
+  if (problem) return { error: problem };
+
+  const { data: student } = await supabase
+    .from("students")
+    .select("id, full_name, email, auth_user_id, student_code")
+    .eq("id", studentId)
+    .maybeSingle();
+  if (!student) return { error: "Not found or not authorized." };
+  if (!student.auth_user_id) return { error: "Portal access isn't set up for this student yet — create their portal login first." };
+
+  const admin = createAdminClient();
+  const { data: authUser } = await admin.auth.admin.getUserById(student.auth_user_id);
+  const email = authUser?.user?.email ?? student.email ?? "";
+  const { error: authError } = await admin.auth.admin.updateUserById(student.auth_user_id, { password });
+  if (authError) return { error: passwordRefusal(authError.message) };
+
+  const { data: me } = await supabase.auth.getUser();
+  const { data: actor } = await supabase.from("staff").select("full_name").eq("id", me.user?.id ?? "").maybeSingle();
+  const done = await finishPasswordSet({
+    signOut: () => supabase.rpc("revoke_user_sessions", { p_user_id: student.auth_user_id }),
+    keepCopy: () =>
+      supabase.rpc("store_credential", {
+        p_owner_type: "student",
+        p_owner_id: studentId,
+        p_credential_type: "portal_login",
+        p_plaintext: JSON.stringify({ username: email, password }),
+      }),
+    mail: async () => {
+      if (!email) return "the student has no email address";
+      const payload: StaffLoginEmailData = {
+        staffName: student.full_name ?? "there",
+        email,
+        password,
+        loginUrl: `${getSiteUrl()}/login`,
+        issuedBy: actor?.full_name ?? null,
+        reason: "password_set",
+        audience: "student",
+        studentCode: student.student_code ?? null,
+      };
+      const sent = await sendEmail({ to: email, subject: staffLoginSubject(payload), text: staffLoginText(payload), html: staffLoginHtml(payload) });
+      return sent && "error" in sent && sent.error ? String(sent.error) : null;
+    },
+  });
+  revalidatePath(`/students/${studentId}`, "layout");
+  return { success: true, email, password, ...done };
 }

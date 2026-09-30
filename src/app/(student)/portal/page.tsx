@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AlarmClock, ArrowRight, CalendarClock, CalendarDays, CreditCard, FolderOpen, Globe, Headset, IdCard, Landmark, Mail, MessageCircle, Sparkles, UserRound, BookOpen } from "lucide-react";
 import { getStudentUser } from "@/lib/auth/session";
 import { loadPortalSummary } from "@/lib/portalSummary";
+import { universityShortName } from "@/lib/finalizedStage";
 import { PortalAttention } from "@/components/PortalAttention";
 import { WHATSAPP_LINK } from "@/lib/constants";
 import { karachiToday } from "@/lib/calendarDates";
@@ -130,6 +131,12 @@ export default async function PortalDashboardPage() {
   // One bar per country: the primary, each backup, and any country applied to
   // without registering for it. A backup runs its own process alongside the
   // primary, so it gets a bar of its own rather than being folded in.
+  // The university finalized for the visa in each country, named under its
+  // Pre-Enrolled / University Finalized step.
+  const finalizedByDestination = new Map<string, { short: string; full: string }>();
+  for (const { app, uni, dest } of apps) {
+    if (app.is_finalized && dest?.id && uni?.name) finalizedByDestination.set(dest.id, { short: universityShortName(uni.name, uni.short_name), full: uni.name });
+  }
   const countries = destinationStatusRows(
     (registeredCountries ?? []).flatMap((r): RegisteredDestination[] => {
       const d = one(r.destination as never) as { display_name?: string; country_code?: string | null; dashboard_pipeline_stages?: DashboardStageDef[] } | null;
@@ -143,6 +150,7 @@ export default async function PortalDashboardPage() {
           name: d.display_name,
           code: d.country_code ?? null,
           stages: d.dashboard_pipeline_stages ?? [],
+          finalizedUniversity: finalizedByDestination.get(r.destination_id as string) ?? null,
         },
       ];
     }),
@@ -155,6 +163,7 @@ export default async function PortalDashboardPage() {
               code: dest.country_code ?? null,
               stages: dest.dashboard_pipeline_stages ?? [],
               university: uni?.name ?? "University",
+              finalizedUniversity: finalizedByDestination.get(dest.id) ?? null,
             },
           ]
         : []

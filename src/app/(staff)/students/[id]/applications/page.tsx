@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { BoardingPassTracker } from "@/components/ui/BoardingPassTracker";
+import { applicationStageLabel, universityShortName } from "@/lib/finalizedStage";
 import { DeleteApplicationButton } from "./DeleteApplicationButton";
 import { FinalizeApplicationButton } from "./FinalizeApplicationButton";
 import { ApplicationOrderList } from "./ApplicationOrderList";
@@ -44,7 +45,7 @@ export default async function StudentApplicationsTab(props: {
       .from("applications")
       .select(
         `id, current_stage, intake, deadline, is_finalized, cycle_id, round_id,
-       university:universities(name, destination:destinations(display_name, country_code, pipeline_stages, finalize_action_label, finalized_badge_label)),
+       university:universities(name, short_name, destination:destinations(display_name, country_code, pipeline_stages, finalize_action_label, finalized_badge_label)),
        program:programs(name, application_deadline, rounds:program_intake_rounds(id)),
        round:program_intake_rounds(label, start_date, application_deadline)`
       )
@@ -369,6 +370,7 @@ export default async function StudentApplicationsTab(props: {
                   <Link prefetch={false} href={`/students/${id}/applications/${a.id}`} className="block">
                     <BoardingPassTracker
                       universityName={uni?.name ?? "University"}
+                      universityShortName={uni?.name ? universityShortName(uni.name, (uni as { short_name?: string | null }).short_name) : null}
                       programName={program?.name}
                       intake={a.intake}
                       currentStage={a.current_stage}
@@ -397,7 +399,7 @@ export default async function StudentApplicationsTab(props: {
                     <span className="text-xs text-muted">
                       <span className={overdue ? "font-medium text-danger" : ""}>{deadlineText}</span>
                       {" · "}
-                      <Badge tone="info">{a.current_stage.replace(/_/g, " ")}</Badge>
+                      <Badge tone="info">{applicationStageLabel(a.current_stage)}</Badge>
                       {a.is_finalized && (
                         <>
                           {" · "}

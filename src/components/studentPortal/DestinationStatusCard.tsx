@@ -164,6 +164,7 @@ export function DestinationStatusCard({ row, accent = row.role === "primary" ? 1
                     {stage.label}
                   </span>
                   <span
+                    title={stage.title}
                     className={`text-[10px] leading-tight ${
                       stage.state === "blocked" ? "text-danger" : stage.state === "progress" ? "text-warning" : "text-muted"
                     }`}

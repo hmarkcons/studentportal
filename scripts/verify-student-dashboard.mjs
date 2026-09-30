@@ -208,9 +208,10 @@ try {
       return Boolean(j && k && j.compareDocumentPosition(k) & Node.DOCUMENT_POSITION_FOLLOWING);
     }));
   const status = (await journey.locator("[data-journey-status]").innerText()).trim();
-  ok("...its status is the primary country's: admission under way, 1 step of 10 done",
-    status === "Now: Admission — In process" && (await journey.locator("[data-journey-percent]").innerText()).trim() === "10%"
-    && /1 of 10 steps/.test(await journey.innerText()), status);
+  // Eleven steps since Pre-Enrolled joined Italy's (0301): 1 of 11 is 9%.
+  ok("...its status is the primary country's: admission under way, 1 step of 11 done",
+    status === "Now: Admission — In process" && (await journey.locator("[data-journey-percent]").innerText()).trim() === "9%"
+    && /1 of 11 steps/.test(await journey.innerText()), status);
   ok("...and it says the backup runs alongside", /Italy \(Public\) is your primary country, with 1 backup running alongside/.test(await journey.innerText()));
   ok("the old seven-step tracker is gone", (await page.locator("[data-journey-step]").count()) === 0 && !(await journey.innerText()).includes("3 of 7 steps"));
   const next = page.locator("[data-journey-next]");

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { syncStagesForApplication } from "@/lib/autoStagesSync";
+import { refuseFinalizedStageByHand } from "@/lib/finalizedStageGuard";
 import { sanitizeFilename, validateDocumentFile } from "@/lib/documentUpload";
 import { parseRoundsFromFormData } from "@/lib/programRounds";
 import { saveProgramRounds } from "@/lib/actions/programRoundsWrite";
@@ -12,6 +13,8 @@ export async function partnerUpdateStage(applicationId: string, _prevState: unkn
   const supabase = await createClient();
   const current_stage = String(formData.get("current_stage") ?? "");
   if (!current_stage) return { error: "Choose a stage." };
+  const refused = await refuseFinalizedStageByHand(supabase, applicationId, current_stage);
+  if (refused) return { error: refused.error };
 
   const { error } = await supabase.from("applications").update({ current_stage }).eq("id", applicationId);
   if (error) return { error: error.message };

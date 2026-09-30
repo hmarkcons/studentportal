@@ -15,6 +15,7 @@ import { loadTrackerPrefillSource } from "@/lib/trackerPrefillSource";
 import { trackerSuggestions } from "@/lib/trackerPrefill";
 import { listTrackerDefinitions } from "@/lib/actions/countryTracker";
 import { DestinationPipelineCard } from "@/components/DestinationPipelineCard";
+import { universityShortName } from "@/lib/finalizedStage";
 import { seesStagesOnly } from "@/lib/auth/studentAccess";
 import { canSetService, serviceOf, templatesForService } from "@/lib/serviceType";
 import { StagesOnlyView } from "./StagesOnlyView";
@@ -126,7 +127,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     Promise.all([
       supabase
         .from("students")
-        .select("auth_user_id, full_name, portal_active")
+        .select("auth_user_id, full_name, email, portal_active")
         .eq("id", id)
         .maybeSingle(),
       supabase.from("leads").select("assigned_counselor_id, processing_officer_id, intake, discount_amount, discount_reason, service_type, registered_at").eq("id", id).maybeSingle(),
@@ -154,8 +155,8 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       supabase
         .from("applications")
         .select(
-          `id, current_stage, intake, deadline, round_id,
-           university:universities(name, destination:destinations(id, country_code, display_name, pipeline_stages, dashboard_pipeline_stages)),
+          `id, current_stage, intake, deadline, round_id, is_finalized,
+           university:universities(name, short_name, destination:destinations(id, country_code, display_name, pipeline_stages, dashboard_pipeline_stages)),
            program:programs(name),
            round:program_intake_rounds(label)`
         )
@@ -396,11 +397,18 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
 
   const destinationPipelineGroups = new Map<
     string,
-    { destinationName: string; stages: DashboardStageDef[]; universityNames: string[] }
+    {
+      destinationName: string;
+      stages: DashboardStageDef[];
+      universityNames: string[];
+      /** The one finalized for the visa, named under Pre-Enrolled / University Finalized. */
+      finalizedUniversity: { short: string; full: string } | null;
+    }
   >();
   for (const a of applications ?? []) {
     const uni = one(a.university as never) as {
       name?: string;
+      short_name?: string | null;
       destination?:
         | { id?: string; display_name?: string; dashboard_pipeline_stages?: DashboardStageDef[] }
         | { id?: string; display_name?: string; dashboard_pipeline_stages?: DashboardStageDef[] }[];
@@ -414,9 +422,12 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         destinationName: dest.display_name ?? "Destination",
         stages: dest.dashboard_pipeline_stages ?? [],
         universityNames: [],
+        finalizedUniversity: null,
       });
     }
-    destinationPipelineGroups.get(dest.id)!.universityNames.push(uni?.name ?? "University");
+    const group = destinationPipelineGroups.get(dest.id)!;
+    group.universityNames.push(uni?.name ?? "University");
+    if (a.is_finalized && uni?.name) group.finalizedUniversity = { short: universityShortName(uni.name, uni.short_name), full: uni.name };
   }
   for (const sd of selectedDestinations ?? []) {
     if (destinationPipelineGroups.has(sd.destination_id)) continue;
@@ -426,6 +437,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       destinationName: dest.display_name ?? "Destination",
       stages: dest.dashboard_pipeline_stages ?? [],
       universityNames: [],
+      finalizedUniversity: null,
     });
   }
 
@@ -441,6 +453,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
           : `${group.universityNames.length} applications`,
       stages: group.stages,
       values: savedStageValuesByDestinationId.get(destinationId) ?? {},
+      finalizedUniversity: group.finalizedUniversity,
     }));
 
   // The consent video a student recorded when e-signing, for staff to watch
@@ -803,6 +816,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                 subtitle={row.applicationSummary}
                 stages={row.stages}
                 values={row.values}
+                finalizedUniversity={row.finalizedUniversity}
                 editable
                 revalidateTo={`/students/${id}`}
               />
@@ -857,6 +871,8 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Portal access</p>
           <PortalAccessPanel
             studentId={id}
+            studentName={student?.full_name ?? "this student"}
+            email={student?.email ?? null}
             enabled={Boolean(student?.auth_user_id)}
             portalActive={Boolean(student?.portal_active)}
             isSuperAdmin={isSuperAdminRole}

@@ -3,13 +3,16 @@
 import { useActionState } from "react";
 import { partnerUpdateStage } from "@/lib/actions/partner";
 import { MANUAL_APPLICATION_STATUSES } from "@/lib/constants";
+import { applicationStageLabel, isFinalizedStage } from "@/lib/finalizedStage";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Input";
 
 export function PartnerStageForm({ applicationId, currentStage, pipelineStages }: { applicationId: string; currentStage: string; pipelineStages: string[] }) {
   const action = partnerUpdateStage.bind(null, applicationId);
   const [state, formAction, pending] = useActionState(action, undefined);
-  const options = [...pipelineStages, ...MANUAL_APPLICATION_STATUSES];
+  // Pre-Enrolled / University Finalized is reached by finalizing the
+  // university, so it is listed only while the application stands on it.
+  const options = [...pipelineStages.filter((s) => !isFinalizedStage(s) || s === currentStage), ...MANUAL_APPLICATION_STATUSES];
 
   // The select is w-full, so without wrapping the submit button is pushed
   // past the viewport edge on a narrow phone.
@@ -18,7 +21,7 @@ export function PartnerStageForm({ applicationId, currentStage, pipelineStages }
       <Select name="current_stage" defaultValue={currentStage}>
         {options.map((s) => (
           <option key={s} value={s}>
-            {s.replace(/_/g, " ")}
+            {applicationStageLabel(s)}
           </option>
         ))}
       </Select>

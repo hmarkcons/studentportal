@@ -14,6 +14,7 @@ import type { StaffRecord } from "./StaffForm";
 import { COMPENSATION_EMBED, withCompensationAll, type Compensation } from "@/lib/staffCompensation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { StaffLoginSummary } from "./StaffLoginPanel";
+import { PartnerAccountsPanel, type PartnerAccountRow } from "./PartnerAccountsPanel";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -101,6 +102,8 @@ export default async function StaffAdminPage() {
     { data: assignedLeads },
     [{ data: permissionDefs }, { data: roleOverrides }, { data: staffOverrides }],
     { data: kept },
+    { data: partnerAccounts },
+    { data: partnerKept },
   ] = await Promise.all([
     supabase.from("staff").select(`${WORK_COLUMNS}, ${COMPENSATION_EMBED}`).order("full_name").returns<StaffRow[]>(),
     supabase.rpc("staff_personal_details"),
@@ -117,6 +120,12 @@ export default async function StaffAdminPage() {
       : Promise.resolve([{ data: null }, { data: null }, { data: null }] as const),
     // Whether a copy of each password is kept — see the Login panel below.
     admin ? admin.from("staff_login_credentials").select("staff_id, updated_at") : Promise.resolve({ data: null }),
+    // Every partner university account, and which have a kept copy, for the
+    // Super Admin's list of their logins.
+    admin
+      ? admin.from("partner_university_accounts").select("id, staff_name, status, university:universities(name)").order("staff_name")
+      : Promise.resolve({ data: null }),
+    admin ? admin.from("partner_login_credentials").select("partner_id, updated_at") : Promise.resolve({ data: null }),
   ]);
 
   // Flattened, so the form, the table and the View panel keep reading
@@ -124,7 +133,7 @@ export default async function StaffAdminPage() {
   // columns on this table.
   const staff = withCompensationAll(withPersonal(staffRows, personal as PersonalDetails[] | null)) as (StaffRecord & { photo_path: string | null })[];
 
-  const [photoByPath, users] = await Promise.all([
+  const [photoByPath, users, partnerUsers] = await Promise.all([
     // One request for the whole directory's photos, not one per person, and
     // through avatarUrls so the URLs are the ones the browser already has.
     // This page shows every staff member, so it was the worst of both
@@ -132,6 +141,8 @@ export default async function StaffAdminPage() {
     avatarUrlMap((staff ?? []).map((s) => s.photo_path)),
     // Each staff member's sign-in account, for the Super Admin's Login panel.
     admin ? Promise.all(staff.map((s) => admin.auth.admin.getUserById(s.id))) : Promise.resolve(null),
+    // And each partner account's.
+    admin ? Promise.all((partnerAccounts ?? []).map((a) => admin.auth.admin.getUserById(a.id as string))) : Promise.resolve(null),
   ]);
   const photoUrls: Record<string, string> = {};
   for (const s of staff ?? []) {
@@ -159,9 +170,26 @@ export default async function StaffAdminPage() {
         loginEmail: user?.email ?? null,
         lastSignInAt: user?.last_sign_in_at ?? null,
         copyKeptAt: keptAt.get(s.id) ?? null,
+        isSelf: s.id === viewer?.id,
       };
     });
   }
+
+  const partnerKeptAt = new Map((partnerKept ?? []).map((k: { partner_id: string; updated_at: string }) => [k.partner_id, k.updated_at]));
+  const partnerRows: PartnerAccountRow[] | null = partnerUsers
+    ? (partnerAccounts ?? []).map((a, i) => {
+        const user = partnerUsers[i].data?.user;
+        return {
+          id: a.id as string,
+          name: a.staff_name as string,
+          university: one(a.university as never as { name?: string } | { name?: string }[] | null)?.name ?? "University",
+          status: a.status as string,
+          loginEmail: user?.email ?? null,
+          lastSignInAt: user?.last_sign_in_at ?? null,
+          copyKeptAt: partnerKeptAt.get(a.id as string) ?? null,
+        };
+      })
+    : null;
 
   const total = staff.length;
   const active = staff.filter((s) => s.status === "active").length;
@@ -211,6 +239,15 @@ export default async function StaffAdminPage() {
               </div>
             ))}
           </div>
+        </Card>
+      )}
+
+      {/* Every partner university account's login, for the Super Admin alone. */}
+      {partnerRows && (
+        <Card className="mt-6">
+          <h3 className="mb-1 text-sm font-medium text-ink">Partner university accounts</h3>
+          <p className="mb-3 text-xs text-muted">Open one to see its login, reveal its kept password or set a new one.</p>
+          <PartnerAccountsPanel rows={partnerRows} />
         </Card>
       )}
     </div>

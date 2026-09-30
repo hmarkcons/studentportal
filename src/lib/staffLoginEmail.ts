@@ -1,9 +1,10 @@
 /**
- * The mail a staff member gets with their login.
+ * The mail a person gets with their login.
  *
- * Sent when a Super Admin creates their account or issues new credentials, to
- * their official address — which is also the address they sign in with, so
- * the mail proves the one thing it has to: that this inbox is theirs.
+ * Sent when a Super Admin creates a staff account or issues new credentials,
+ * or sets a password — for a staff member, a student or a partner university
+ * — to the address they sign in with, so the mail proves the one thing it has
+ * to: that this inbox is theirs.
  *
  * It carries the password itself, because the office chose that over a
  * set-your-own-password link, and staff cannot change their password in the
@@ -20,8 +21,21 @@ export type StaffLoginEmailData = {
   loginUrl: string;
   /** Who issued it, so a mail nobody expected can be checked with a person. */
   issuedBy: string | null;
-  /** A first login, or a replacement for one they already had. */
-  reason: "new_account" | "reissued";
+  /**
+   * A first login, a replacement generated for one they already had, or a
+   * password a Super Admin chose for them.
+   */
+  reason: "new_account" | "reissued" | "password_set";
+  /** Whose portal: staff unless said. It decides the wording, not the layout. */
+  audience?: "staff" | "student" | "partner";
+  /** A student can sign in with their Student ID as well as their email. */
+  studentCode?: string | null;
+};
+
+const ACCOUNT: Record<NonNullable<StaffLoginEmailData["audience"]>, string> = {
+  staff: "HMARK staff portal account",
+  student: "HMARK Student Portal account",
+  partner: "HMARK partner portal account",
 };
 
 function esc(s: string | null | undefined): string {
@@ -38,18 +52,36 @@ const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial
 const MONO = "ui-monospace,SFMono-Regular,Menlo,Consolas,monospace";
 
 export function staffLoginSubject(data: StaffLoginEmailData): string {
+  if (data.reason === "password_set") return "Your new HMARK portal password";
   return data.reason === "new_account" ? "Your HMARK portal login" : "Your new HMARK portal login";
 }
 
+const SIGNED_OUT = "Your previous password no longer works, and you have been signed out of any device that was still signed in.";
+
 function opening(data: StaffLoginEmailData): string {
   const by = data.issuedBy ? ` by ${data.issuedBy}` : "";
+  const account = ACCOUNT[data.audience ?? "staff"];
+  if (data.reason === "password_set") return `A new password has been set for your ${account}${by}. ${SIGNED_OUT}`;
   return data.reason === "new_account"
-    ? `An HMARK staff portal account has been created for you${by}. Here is how to sign in.`
-    : `New login details have been issued for your HMARK staff portal account${by}. Your previous password no longer works, and you have been signed out of any device that was still signed in.`;
+    ? `An ${account} has been created for you${by}. Here is how to sign in.`
+    : `New login details have been issued for your ${account}${by}. ${SIGNED_OUT}`;
 }
 
-const KEEP_IT =
-  "This is your password to keep — it will not change unless a Super Admin issues a new one. Don't forward this email or share the password. If you lose it, ask your Super Admin to issue new login details.";
+/** Who to go to when it is lost: a Super Admin for staff, HMARK for everyone else. */
+function keepIt(data: StaffLoginEmailData): string {
+  const audience = data.audience ?? "staff";
+  if (audience === "staff") {
+    return "This is your password to keep — it will not change unless a Super Admin issues a new one. Don't forward this email or share the password. If you lose it, ask your Super Admin to issue new login details.";
+  }
+  const ask = audience === "student" ? "your counsellor at HMARK" : "HMARK";
+  return `This is your password to keep. Don't forward this email or share the password. If you lose it, ask ${ask} for a new one.`;
+}
+
+function unexpected(data: StaffLoginEmailData): string {
+  return (data.audience ?? "staff") === "staff"
+    ? "If you weren't expecting this, tell your Super Admin straight away."
+    : "If you weren't expecting this, tell HMARK straight away.";
+}
 
 export function staffLoginText(data: StaffLoginEmailData): string {
   return [
@@ -59,11 +91,12 @@ export function staffLoginText(data: StaffLoginEmailData): string {
     "",
     `Sign in at: ${data.loginUrl}`,
     `Email:      ${data.email}`,
+    ...(data.studentCode ? [`Student ID: ${data.studentCode}  (either this or your email)`] : []),
     `Password:   ${data.password}`,
     "",
-    KEEP_IT,
+    keepIt(data),
     "",
-    "If you weren't expecting this, tell your Super Admin straight away.",
+    unexpected(data),
   ].join("\n");
 }
 
@@ -82,11 +115,12 @@ export function staffLoginHtml(data: StaffLoginEmailData): string {
       <p style="margin:0 0 20px;color:${BODY};font-size:14px;line-height:1.55">${esc(opening(data))}</p>
       <table role="presentation" style="border-collapse:collapse;width:100%;border-top:1px solid ${HAIR};border-bottom:1px solid ${HAIR};margin:0 0 20px">
         ${row("Email", data.email)}
+        ${data.studentCode ? row("Student ID", `${data.studentCode} — either this or your email`) : ""}
         ${row("Password", data.password, true)}
       </table>
       <a href="${esc(data.loginUrl)}" style="display:inline-block;background:${GREEN};color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:10px 18px;border-radius:8px">Sign in</a>
-      <p style="margin:20px 0 0;color:${BODY};font-size:13px;line-height:1.55">${esc(KEEP_IT)}</p>
-      <p style="margin:12px 0 0;color:${FAINT};font-size:12px">If you weren't expecting this, tell your Super Admin straight away.</p>
+      <p style="margin:20px 0 0;color:${BODY};font-size:13px;line-height:1.55">${esc(keepIt(data))}</p>
+      <p style="margin:12px 0 0;color:${FAINT};font-size:12px">${esc(unexpected(data))}</p>
     </div>
   </div>
 </body></html>`;

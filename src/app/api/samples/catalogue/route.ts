@@ -31,6 +31,8 @@ import { EXAMPLE_UNIVERSITY, type CatalogueRow, type RoundRow } from "@/lib/cata
 const university = {
   destination: "Italy (Public)",
   university_name: EXAMPLE_UNIVERSITY,
+  // Optional: what a finalized student's Pre-Enrolled step shows.
+  university_short_name: "Example Univ.",
   city: "Rome",
   region: "Lazio",
   type: "public",

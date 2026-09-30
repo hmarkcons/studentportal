@@ -16,9 +16,9 @@
 //     server is configured with, without having to know which.
 //
 // Pure apart from the randomness, which is injectable, so it is unit-tested
-// (scripts/generate-password-test.mjs).
-
-import { randomBytes } from "node:crypto";
+// (scripts/generate-password-test.mjs). The default is the Web Crypto source,
+// which Node and every browser have, so the Super Admin's Generate button and
+// the server draw from the same generator.
 
 const UPPER = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 const LOWER = "abcdefghijkmnpqrstuvwxyz";
@@ -41,7 +41,10 @@ function pick(n: number, random: RandomSource): number {
   }
 }
 
-export function generatePassword(length = PASSWORD_LENGTH, random: RandomSource = (n) => randomBytes(n)): string {
+export function generatePassword(
+  length = PASSWORD_LENGTH,
+  random: RandomSource = (n) => globalThis.crypto.getRandomValues(new Uint8Array(n))
+): string {
   if (length < 4) throw new Error("A password needs room for one of each character class.");
 
   const chars = [UPPER, LOWER, DIGIT, SYMBOL].map((set) => set[pick(set.length, random)]);

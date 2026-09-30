@@ -63,7 +63,7 @@ export async function GET(request: Request) {
       supabase
         .from("universities")
         .select(
-          "id, destination_id, name, city, region, type, levels_offered, fields_offered, contact_email, " +
+          "id, destination_id, name, short_name, city, region, type, levels_offered, fields_offered, contact_email, " +
             "application_fee, application_fee_currency, dsu_body_id"
         )
         .in("destination_id", chunk)

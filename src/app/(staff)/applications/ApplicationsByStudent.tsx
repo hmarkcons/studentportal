@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
+import { applicationStageLabel } from "@/lib/finalizedStage";
 
 export type StudentApplicationRow = {
   id: string;
@@ -73,7 +74,7 @@ export function ApplicationsByStudent({
     const header = ["Student", "Counselor", "Registered", "Country", "University", "Program", "Stage", "Deadline"].join(",");
     const lines = visible.flatMap((g) =>
       g.apps.map((a) =>
-        [g.name, g.counselorName ?? "", g.registeredMonth ?? "", a.country, a.university, a.program, a.stage.replace(/_/g, " "), a.deadline ?? ""]
+        [g.name, g.counselorName ?? "", g.registeredMonth ?? "", a.country, a.university, a.program, applicationStageLabel(a.stage), a.deadline ?? ""]
           .map((v) => `"${v.replace(/"/g, '""')}"`)
           .join(",")
       )
@@ -183,7 +184,7 @@ export function ApplicationsByStudent({
                       </div>
                       <div className="flex items-center gap-3">
                         {a.deadline && <span className="text-xs text-muted">Due {a.deadline}</span>}
-                        <Badge tone="info">{a.stage.replace(/_/g, " ")}</Badge>
+                        <Badge tone="info">{applicationStageLabel(a.stage)}</Badge>
                       </div>
                     </Link>
                   ))}

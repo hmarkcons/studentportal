@@ -17,6 +17,10 @@
 
 import type { DashboardStageDef } from "./dashboardPipeline.ts";
 import { formatDateOnly } from "./formatDate.ts";
+import { isFinalizedStage } from "./finalizedStage.ts";
+
+/** The university finalized for the visa in a country: its short name, and its full one to hover. */
+export type FinalizedUniversity = { short: string; full: string };
 
 export type StageTone = "done" | "skipped" | "progress" | "blocked";
 
@@ -39,6 +43,8 @@ export type DestinationStage = {
   value: string | null;
   /** As shown: a date spelled out, anything else as written. */
   display: string | null;
+  /** The full wording, where display is a shortened form of it (a university's short name). */
+  title?: string;
   state: StageState;
 };
 
@@ -69,6 +75,8 @@ export type RegisteredDestination = {
   name: string;
   code: string | null;
   stages: DashboardStageDef[];
+  /** Shown under Pre-Enrolled / University Finalized once that step is reached. */
+  finalizedUniversity?: FinalizedUniversity | null;
 };
 
 export type AppliedDestination = {
@@ -77,6 +85,7 @@ export type AppliedDestination = {
   code: string | null;
   stages: DashboardStageDef[];
   university: string;
+  finalizedUniversity?: FinalizedUniversity | null;
 };
 
 const LONG_DATE: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", year: "numeric" };
@@ -87,8 +96,15 @@ function displayValue(stage: DashboardStageDef, value: string | null): string | 
   return value;
 }
 
-/** One country's stages, each with where it stands. */
-export function destinationStages(stages: readonly DashboardStageDef[], values: Record<string, string> | null): DestinationStage[] {
+/**
+ * One country's stages, each with where it stands. Under Pre-Enrolled or
+ * University Finalized, once reached, the university it was reached with.
+ */
+export function destinationStages(
+  stages: readonly DashboardStageDef[],
+  values: Record<string, string> | null,
+  finalizedUniversity: FinalizedUniversity | null = null
+): DestinationStage[] {
   const saved = values ?? {};
   let nextGiven = false;
   return stages.map((stage) => {
@@ -101,6 +117,9 @@ export function destinationStages(stages: readonly DashboardStageDef[], values: 
     // Only the first empty stage is "next"; one reached out of order does not
     // make a later empty stage the next thing to happen.
     if (state === "next") nextGiven = true;
+    if (value && finalizedUniversity && isFinalizedStage(stage.key)) {
+      return { key: stage.key, label: stage.label, value, display: finalizedUniversity.short, title: finalizedUniversity.full, state };
+    }
     return { key: stage.key, label: stage.label, value, display: displayValue(stage, value), state };
   });
 }
@@ -133,7 +152,7 @@ export function destinationStatusRows(
       code: r.code,
       role: r.isBackup ? "backup" : "primary",
       universities: [],
-      stages: destinationStages(r.stages, r.values),
+      stages: destinationStages(r.stages, r.values, r.finalizedUniversity ?? null),
     });
   }
   for (const a of applied) {
@@ -148,7 +167,7 @@ export function destinationStatusRows(
       code: a.code,
       role: "applied",
       universities: [a.university],
-      stages: destinationStages(a.stages, null),
+      stages: destinationStages(a.stages, null, a.finalizedUniversity ?? null),
     });
   }
   return [...rows.values()].map((base) => {

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getStudentUser } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { BoardingPassTracker } from "@/components/ui/BoardingPassTracker";
+import { universityShortName } from "@/lib/finalizedStage";
 import { ProgramDates } from "@/components/ProgramDates";
 import { karachiToday } from "@/lib/calendarDates";
 import { sortRounds, type ProgramRound } from "@/lib/programRounds";
@@ -26,7 +27,7 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
   const { data: app, error } = await supabase
     .from("applications")
     .select(
-      "id, student_id, current_stage, intake, round_id, university:universities(name, destination:destinations(pipeline_stages)), program:programs(name, rounds:program_intake_rounds(id, label, start_date, application_deadline, sort_order)), student:leads!inner(auth_user_id)"
+      "id, student_id, current_stage, intake, round_id, university:universities(name, short_name, destination:destinations(pipeline_stages)), program:programs(name, rounds:program_intake_rounds(id, label, start_date, application_deadline, sort_order)), student:leads!inner(auth_user_id)"
     )
     .eq("id", id)
     .maybeSingle();
@@ -54,6 +55,7 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
         <BoardingPassTracker
           tone="pass"
           universityName={university?.name ?? "University"}
+          universityShortName={university?.name ? universityShortName(university.name, (university as { short_name?: string | null }).short_name) : null}
           programName={program?.name}
           intake={app.intake}
           round={rounds.find((r) => r.id === app.round_id)?.label ?? null}

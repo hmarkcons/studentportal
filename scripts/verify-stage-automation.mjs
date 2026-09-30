@@ -122,7 +122,7 @@ try {
   // Its DSU body set as Setup › Universities sets it (0287), so the Scholarship
   // tab knows which body to offer.
   const { data: uni } = await admin.from("universities")
-    .insert({ destination_id: italy.id, name: "zztmp Stages University", city: "zztmp City", type: "public", dsu_body_id: italyBody.scholarship_body_id })
+    .insert({ destination_id: italy.id, name: "zztmp Stages University", short_name: "zztmp Stages U", city: "zztmp City", type: "public", dsu_body_id: italyBody.scholarship_body_id })
     .select("id").single();
   universityIds.push(uni.id);
   const { data: progs } = await admin.from("programs").insert([
@@ -210,20 +210,29 @@ try {
 
   // ================================================ the stages follow
   console.log("\n--- the stages follow ---");
+  // Finalised, it goes past its acceptance stage to Pre-Enrolled (0301).
   const moved = await poll(async () => {
     const { data } = await admin.from("applications").select("current_stage").eq("id", app.id).single();
-    return data?.current_stage === acceptance ? data : null;
+    return data?.current_stage === "pre_enrolled" ? data : null;
   }, 30);
-  ok(`the application moved on to ${acceptance} by itself`, Boolean(moved),
+  ok(`the application moved on by itself — past ${acceptance} to Pre-Enrolled, being finalised`, Boolean(moved),
     (await admin.from("applications").select("current_stage").eq("id", app.id).single()).data?.current_stage);
   const { data: bar } = await admin.from("lead_destinations").select("dashboard_stage_values").eq("lead_id", studentId).eq("destination_id", italy.id).single();
   const values = bar?.dashboard_stage_values ?? {};
   ok("the country's Admission went from In process to Issued", values.admission === "Issued", JSON.stringify(values));
   ok("...and its university to Selection Finalized, the application being finalised", values.university_and_program === "Selection Finalized", JSON.stringify(values));
+  ok("...and the step after it to Pre-Enrolled", values.pre_enrolled === "Pre-Enrolled", JSON.stringify(values));
   ok("...while a step staff set by hand kept its value", values.enrollment === "Skip", JSON.stringify(values));
   ok("...and nothing was marked done that has not happened", !values.visa_status && !values.visa_app && !values.admission_docs, JSON.stringify(values));
   const { data: stillRefused } = await admin.from("applications").select("current_stage").eq("id", refused.id).single();
   ok("a rejected application with a letter of its own stays rejected", stillRefused?.current_stage === "rejected", stillRefused?.current_stage);
+
+  // The university under Pre-Enrolled, by its short name, on the staff record.
+  await procPage.goto(`${BASE}/students/${studentId}`, { waitUntil: "domcontentloaded" });
+  const named = procPage.locator("[data-destination-pipeline] [data-finalized-university]").first();
+  ok("the staff record names the university under Pre-Enrolled, by its short name",
+    await named.waitFor({ timeout: 60_000 }).then(async () => (await named.innerText()).trim() === "zztmp Stages U", () => false),
+    await bodyTail(procPage));
 
   // The staff Documents tab.
   await procPage.goto(`${BASE}/students/${studentId}/documents`, { waitUntil: "domcontentloaded" });
@@ -247,6 +256,13 @@ try {
   await studentPage.fill('input[type="password"]', FIXTURE_PASSWORD);
   await studentPage.click('button[type="submit"]');
   await studentPage.waitForURL((u) => !u.pathname.includes("/login"), { timeout: 40_000 });
+  // Their journey names it too, with the full name to hover.
+  await studentPage.goto(`${BASE}/portal`, { waitUntil: "domcontentloaded" });
+  const journeyName = studentPage.locator('[data-journey] [title="zztmp Stages University"]').first();
+  ok("the student's journey names the university under Pre-Enrolled",
+    await journeyName.waitFor({ timeout: 60_000 }).then(async () => (await journeyName.innerText()).trim() === "zztmp Stages U", () => false),
+    await bodyTail(studentPage));
+
   await studentPage.goto(`${BASE}/portal/documents`, { waitUntil: "domcontentloaded" });
   const portalSection = await openSection(studentPage, "Acceptance Letters");
   ok("the student's Documents page has an Acceptance Letters section", Boolean(portalSection), await bodyTail(studentPage));
@@ -398,6 +414,23 @@ try {
   ok("the agreement is stored against the country chosen, on the one template",
     agreement?.template_id === templateId && agreement?.destination_id === uk.id && agreement?.service_type === "visa_only",
     JSON.stringify(agreement) ?? (await bodyTail(supPage)));
+
+  // ================================================ un-finalizing
+  // Last, because everything above rests on the university being finalised.
+  console.log("\n--- un-finalizing ---");
+  await procPage.goto(`${BASE}/students/${studentId}/applications`, { waitUntil: "domcontentloaded" });
+  const undo = procPage.getByRole("button", { name: /^Undo pre-enrolled/i }).first();
+  await undo.waitFor({ timeout: 60_000 });
+  await undo.click();
+  const undone = await poll(async () => {
+    const [{ data: a }, { data: b }] = await Promise.all([
+      admin.from("applications").select("current_stage, is_finalized").eq("id", app.id).single(),
+      admin.from("lead_destinations").select("dashboard_stage_values").eq("lead_id", studentId).eq("destination_id", italy.id).single(),
+    ]);
+    return a && !a.is_finalized && a.current_stage !== "pre_enrolled" ? { a, values: b?.dashboard_stage_values ?? {} } : null;
+  }, 30);
+  ok(`un-finalizing takes the application back to ${acceptance}`, undone?.a.current_stage === acceptance, JSON.stringify(undone?.a));
+  ok("...and the country's Pre-Enrolled off, leaving the rest", undone && !undone.values.pre_enrolled && undone.values.admission === "Issued", JSON.stringify(undone?.values));
 } finally {
   await browser?.close().catch(() => {});
   for (const id of studentIds) {

@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { issueStaffCredentials, revealStaffCredentials, switchStaffLoginEmail } from "@/lib/actions/admin";
+import { issueStaffCredentials, revealStaffCredentials, setStaffPassword, switchStaffLoginEmail } from "@/lib/actions/admin";
 import { Button } from "@/components/ui/Button";
 import { useButtonAction } from "@/components/useButtonAction";
+import { CredentialsBox, SetPasswordForm } from "@/components/SetPasswordForm";
 
 /** What the page knows about a staff member's login, for a Super Admin viewer. */
 export type StaffLoginSummary = {
@@ -12,6 +13,8 @@ export type StaffLoginSummary = {
   lastSignInAt: string | null;
   /** When the kept copy was issued; null when none is kept. */
   copyKeptAt: string | null;
+  /** The Super Admin's own record: setting their password keeps them signed in here. */
+  isSelf?: boolean;
 };
 
 type Credentials = { email: string; password: string };
@@ -26,47 +29,6 @@ const WHEN: Intl.DateTimeFormatOptions = {
 };
 const when = (iso: string) => new Date(iso).toLocaleString("en-GB", WHEN);
 
-function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <Button
-      type="button"
-      size="sm"
-      onClick={async () => {
-        await navigator.clipboard.writeText(text);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      }}
-    >
-      {copied ? "Copied" : label}
-    </Button>
-  );
-}
-
-/** The credentials, as the Super Admin reads them out or pastes them on. */
-function CredentialsBox({ credentials, note }: { credentials: Credentials; note?: React.ReactNode }) {
-  const loginUrl = typeof window === "undefined" ? "/login" : `${window.location.origin}/login`;
-  const message = `Your HMARK portal login\nSign in at: ${loginUrl}\nEmail: ${credentials.email}\nPassword: ${credentials.password}\n\nThis is your password to keep — don't share it.`;
-  return (
-    <div data-credentials className="mt-3 rounded-md border border-border bg-bg p-3 text-sm">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="w-20 text-xs text-muted">Email</span>
-        <code data-credential-email className="break-all text-ink">{credentials.email}</code>
-        <CopyButton text={credentials.email} />
-      </div>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <span className="w-20 text-xs text-muted">Password</span>
-        <code data-credential-password className="break-all font-mono tracking-wide text-ink">{credentials.password}</code>
-        <CopyButton text={credentials.password} />
-      </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <CopyButton text={message} label="Copy as a message" />
-        {note}
-      </div>
-    </div>
-  );
-}
-
 /**
  * A staff member's login, as a Super Admin manages it: which email they sign
  * in with, whether they ever have, the kept copy of their password, and a way
@@ -76,6 +38,10 @@ function CredentialsBox({ credentials, note }: { credentials: Credentials; note?
  * signs them out everywhere, keeps an encrypted copy and mails them — see
  * issueStaffCredentials. It asks first, because it locks them out of every
  * device they are on until they have the new password.
+ *
+ * Or the Super Admin sets the password they want (typed or generated) and it
+ * goes the same way, but the login keeps its email — see setStaffPassword. On
+ * their own record, they stay signed in here.
  */
 export function StaffLoginPanel({
   staffId,
@@ -248,6 +214,22 @@ export function StaffLoginPanel({
         )}
         {issued?.warning && <p className="mt-2 text-xs text-warning">{issued.warning}</p>}
       </div>
+
+      {/* A password the Super Admin chooses, for an account that has a login. */}
+      {status === "active" && login.loginEmail && (
+        <div className="border-t border-border pt-4" data-staff-set-password>
+          <SetPasswordForm
+            name={staffName}
+            email={login.loginEmail}
+            self={login.isSelf}
+            action={(password) => setStaffPassword(staffId, password)}
+            onDone={() => {
+              setRevealed(null);
+              setIssued(null);
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

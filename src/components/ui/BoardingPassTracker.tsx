@@ -1,14 +1,10 @@
 import { Badge } from "./Badge";
 import { Plane } from "lucide-react";
+import { applicationStageLabel, isFinalizedStage } from "@/lib/finalizedStage";
 
 const MANUAL_STATUSES = new Set(["rejected", "declined", "withdrawn"]);
 
-function label(stage: string) {
-  return stage
-    .split("_")
-    .map((w) => w[0]?.toUpperCase() + w.slice(1))
-    .join(" ");
-}
+const label = applicationStageLabel;
 
 export function BoardingPassTracker({
   universityName,
@@ -17,6 +13,7 @@ export function BoardingPassTracker({
   round,
   currentStage,
   pipelineStages,
+  universityShortName = null,
   tone = "flat",
 }: {
   universityName: string;
@@ -33,6 +30,11 @@ export function BoardingPassTracker({
   round?: string | null;
   currentStage: string;
   pipelineStages: string[];
+  /**
+   * The university's short name, shown under Pre-Enrolled / University
+   * Finalized once the application has reached it.
+   */
+  universityShortName?: string | null;
   /**
    * "pass" is the student portal's: a ticket — its label and plane, a torn
    * edge with notches — on a white card. Staff keep the flat card.
@@ -98,6 +100,11 @@ export function BoardingPassTracker({
                 >
                   {label(stage)}
                 </span>
+                {isFinalizedStage(stage) && i <= currentIndex && (
+                  <span className="text-center text-[9px] font-medium leading-tight text-[var(--brand-strong)]" title={universityName} data-finalized-university>
+                    {universityShortName ?? universityName}
+                  </span>
+                )}
               </div>
             ))}
           </div>

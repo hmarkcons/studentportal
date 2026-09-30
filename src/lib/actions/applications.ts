@@ -3,7 +3,8 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { syncStudentStages } from "@/lib/autoStagesSync";
+import { clearFinalizedStages, syncStudentStages } from "@/lib/autoStagesSync";
+import { refuseFinalizedStageByHand } from "@/lib/finalizedStageGuard";
 import { ensureCurrentCycleId } from "@/lib/ensureCycle";
 
 function one<T>(v: T | T[] | null) {
@@ -135,8 +136,13 @@ export async function createApplication(studentId: string, _prevState: unknown, 
 
 export async function deleteApplication(applicationId: string, revalidateTo: string) {
   const supabase = await createClient();
+  // Whose it was, for the finalized step below — asked before it is gone.
+  const { data: owner } = await supabase.from("applications").select("student_id").eq("id", applicationId).maybeSingle();
   const { error } = await supabase.from("applications").delete().eq("id", applicationId);
   if (error) return { error: error.message };
+  // The finalized application gone: its country's Pre-Enrolled or University
+  // Finalized step goes with it.
+  if (owner?.student_id) await clearFinalizedStages(owner.student_id as string);
 
   revalidatePath(revalidateTo);
   return { success: true };
@@ -159,7 +165,9 @@ export async function finalizeApplication(applicationId: string, studentId: stri
   // the RPC directly.
   const { error } = await supabase.rpc("finalize_application", { p_application_id: applicationId, p_student_id: studentId });
   if (error) return { error: error.message };
-  // University & Program: Selection Finalized, and the visa on this one.
+  // University & Program: Selection Finalized, then Pre-Enrolled (Italy) or
+  // University Finalized in the country's bar and this application's stages,
+  // and the visa on this one.
   await syncStudentStages(studentId);
 
   revalidatePath(revalidateTo);
@@ -170,6 +178,9 @@ export async function unfinalizeApplication(applicationId: string, studentId: st
   const supabase = await createClient();
   const { error } = await supabase.from("applications").update({ is_finalized: false }).eq("id", applicationId);
   if (error) return { error: error.message };
+  // Pre-Enrolled / University Finalized come off: the application goes back a
+  // stage and the country's bar loses the step.
+  await clearFinalizedStages(studentId);
 
   revalidatePath(revalidateTo);
   return { success: true };
@@ -510,6 +521,8 @@ export async function updateApplicationStage(applicationId: string, studentId: s
   const supabase = await createClient();
   const current_stage = String(formData.get("current_stage") ?? "");
   if (!current_stage) return { error: "Choose a stage." };
+  const refused = await refuseFinalizedStageByHand(supabase, applicationId, current_stage);
+  if (refused) return { error: refused.error };
 
   const { error } = await supabase.from("applications").update({ current_stage }).eq("id", applicationId);
   if (error) return { error: error.message };

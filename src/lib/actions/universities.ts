@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { redirect } from "next/navigation";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { SHORT_NAME_MAX } from "@/lib/finalizedStage";
 import { parseCsvWithHeader } from "@/lib/csv";
 import { requirePermission } from "@/lib/auth/permissions";
 import { MAX_UPLOAD_BYTES, fileSizeError } from "@/lib/fileSize";
@@ -76,6 +77,19 @@ function feeFromForm(formData: FormData): { application_fee: number | null; appl
 /** The same rule the database holds programs.coordinator_email to (0287). */
 const EMAIL = /^[^@\s]+@[^@\s]+$/;
 
+/**
+ * The short name a university is shown by under a finalized student's
+ * Pre-Enrolled / University Finalized step. Blank is none: the portal then
+ * shortens the full name itself (universityShortName).
+ */
+function shortNameFromForm(formData: FormData): { short_name: string | null } | { error: string } {
+  const short_name = String(formData.get("short_name") ?? "").trim().replace(/\s+/g, " ") || null;
+  if (short_name && short_name.length > SHORT_NAME_MAX) {
+    return { error: `Keep the short name to ${SHORT_NAME_MAX} characters — it sits under a stage, in a narrow column.` };
+  }
+  return { short_name };
+}
+
 export async function createUniversity(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
 
@@ -93,6 +107,8 @@ export async function createUniversity(_prevState: unknown, formData: FormData) 
   if (contact_email && !EMAIL.test(contact_email)) return { error: "The university email doesn't look like an email address." };
   const fee = feeFromForm(formData);
   if ("error" in fee) return { error: fee.error };
+  const short = shortNameFromForm(formData);
+  if ("error" in short) return { error: short.error };
   if (dsu_body_id) {
     const { data: serves } = await supabase
       .from("scholarship_body_destinations")
@@ -105,7 +121,7 @@ export async function createUniversity(_prevState: unknown, formData: FormData) 
 
   const { data, error } = await supabase
     .from("universities")
-    .insert({ destination_id, name, city, region, type, contact_email, dsu_body_id, ...fee })
+    .insert({ destination_id, name, city, region, type, contact_email, dsu_body_id, ...fee, ...short })
     .select("id")
     .single();
   if (error) return { error: error.message };
@@ -131,6 +147,8 @@ export async function updateUniversity(universityId: string, _prevState: unknown
   if (contact_email && !EMAIL.test(contact_email)) return { error: "The university email doesn't look like an email address." };
   const fee = feeFromForm(formData);
   if ("error" in fee) return { error: fee.error };
+  const short = shortNameFromForm(formData);
+  if ("error" in short) return { error: short.error };
 
   // The picker offers only the bodies that serve this university's country;
   // checked here too, so a stale page cannot file a German scheme on Pavia.
@@ -149,7 +167,7 @@ export async function updateUniversity(universityId: string, _prevState: unknown
   // 0039) matches no rows and raises nothing.
   const { data: updated, error } = await supabase
     .from("universities")
-    .update({ name, city, region, type, status, contact_email, dsu_body_id, ...fee })
+    .update({ name, city, region, type, status, contact_email, dsu_body_id, ...fee, ...short })
     .eq("id", universityId)
     .select("id");
   if (error) return { error: error.message };
@@ -463,13 +481,14 @@ const isPending = (id: string) => id.startsWith(PENDING);
 // --------------------------------------------------------------- universities
 
 const UNIVERSITY_COLUMNS =
-  "id, destination_id, name, city, region, type, levels_offered, fields_offered, contact_email, " +
+  "id, destination_id, name, short_name, city, region, type, levels_offered, fields_offered, contact_email, " +
   "application_fee, application_fee_currency, dsu_body_id";
 
 type StoredUniversity = {
   id: string;
   destination_id: string;
   name: string;
+  short_name: string | null;
   city: string | null;
   region: string | null;
   type: string;
@@ -498,6 +517,7 @@ const universityKey = (destinationId: string, name: string) => `${destinationId}
 /** The columns an import may change. Name is the key, so it is not among them. */
 function universityPatchFields(input: UniversityInput): Record<string, Cell> {
   return {
+    short_name: input.short_name,
     city: input.city,
     region: input.region,
     type: input.type,

@@ -25,6 +25,7 @@ import { stageTone } from "./destinationStatus.ts";
 import { admittedStage } from "./serviceType.ts";
 import { applicationAdmitted, applicationSubmitted } from "./studentJourney.ts";
 import { readVisaDecision } from "./visaOutcome.ts";
+import { finalizedStageIn, isFinalizedStage } from "./finalizedStage.ts";
 
 export type AutoStageCountry = {
   destinationId: string;
@@ -179,6 +180,10 @@ export function planAutoStages(input: AutoStageInput): AutoStagePlan {
     const sameCountry = input.applications.filter((a) => a.destinationId === app.destinationId);
     const carriesVisa = app.finalized || (sameCountry.length === 1 && !sameCountry.some((a) => a.finalized));
     if (carriesVisa && decisionFor(app.destinationId) === "approved") move(app, "visa_granted");
+    // Finalized for the visa: Pre-Enrolled (Italy) or University Finalized.
+    // Taken back off by planFinalizedUndo when it is un-finalized — the one
+    // step that is not only ever forward, because it is not something done.
+    if (app.finalized) move(app, finalizedStageIn(app.pipeline));
   }
   for (const app of input.applications) {
     const to = nextStage.get(app.id);
@@ -241,6 +246,9 @@ export function planAutoStages(input: AutoStageInput): AutoStagePlan {
     if (apps.some((a) => a.finalized)) {
       const s = stageBy(stages, (k) => k === "university_and_program");
       write(s, s && doneValue(s));
+      // And the step after it: Pre-Enrolled, or University Finalized.
+      const f = stageBy(stages, (k) => isFinalizedStage(k));
+      write(f, f && doneValue(f));
     }
 
     // The visa tracker. An appointment is a visa one — not an academic

@@ -19,6 +19,8 @@ import { MAX_PHOTO_BYTES, fileSizeError, reduceHint } from "@/lib/fileSize";
 import { notifyAssignedStaff } from "@/lib/actions/registrationNotice";
 import { compensationFromFormData } from "@/lib/staffCompensation";
 import { generatePassword } from "@/lib/generatePassword";
+import { chosenPasswordError } from "@/lib/passwordPolicy";
+import { finishPasswordSet, passwordRefusal, staySignedIn, type PasswordSetResult } from "@/lib/passwordSet";
 import { sendEmail } from "@/lib/email";
 import { getSiteUrl } from "@/lib/siteUrl";
 import {
@@ -892,6 +894,11 @@ export async function issueStaffCredentials(staffId: string): Promise<StaffLogin
     issuedBy: actor.full_name,
     reason: "reissued",
   });
+  // Their own: the new password signed them out here too — see staySignedIn.
+  if (staffId === actor.id) {
+    const stay = await staySignedIn(email, password);
+    if (stay) warning = [warning, stay].filter(Boolean).join(" ");
+  }
 
   revalidatePath("/admin/staff");
   return {
@@ -929,5 +936,97 @@ export async function revealStaffCredentials(
       issuedAt: row.updated_at,
       issuedBy: row.updated_by_name,
     },
+  };
+}
+
+// ------------------------------------------------ setting a chosen password
+//
+// Only a Super Admin sets anyone's password — a staff member's (their own
+// included), a partner university's, and a student's (actions/portal.ts) —
+// typed or generated, and meeting passwordPolicy.ts. Then, in this order,
+// each worth doing once the one before has worked: the person is signed out
+// everywhere else (0302, which keeps the Super Admin's own current session
+// when the password is theirs), a copy is kept for Reveal, and they are
+// emailed it. A step that fails after the password itself has changed is a
+// warning, not a failure: the password works, and it is on the screen.
+
+/** A staff member's password, as a Super Admin chose it — their own too. */
+export async function setStaffPassword(staffId: string, password: string): Promise<PasswordSetResult> {
+  const actor = await superAdminActor();
+  if (!actor) return { error: "Only a Super Admin can set a password." };
+  const problem = chosenPasswordError(password);
+  if (problem) return { error: problem };
+
+  const supabase = await createClient();
+  const { data: member } = await supabase.from("staff").select("id, full_name, status").eq("id", staffId).maybeSingle();
+  if (!member) return { error: "That staff member no longer exists." };
+  if (member.status !== "active") return { error: "Their account isn't active, so they couldn't sign in with it. Set them to Active first." };
+
+  const admin = createAdminClient();
+  // The email they sign in with now: setting a password does not move it.
+  const { data: authUser } = await admin.auth.admin.getUserById(staffId);
+  const email = authUser?.user?.email ?? "";
+  if (!email) return { error: "They have no login yet — issue their login credentials first." };
+
+  const { error: authError } = await admin.auth.admin.updateUserById(staffId, { password });
+  if (authError) return { error: passwordRefusal(authError.message) };
+
+  const done = await finishPasswordSet({
+    signOut: () => supabase.rpc("revoke_user_sessions", { p_user_id: staffId }),
+    keepCopy: () => supabase.rpc("store_staff_login", { p_staff_id: staffId, p_plaintext: JSON.stringify({ username: email, password }) }),
+    mail: () => mailStaffLogin({ staffName: member.full_name, email, password, issuedBy: actor.full_name, reason: "password_set" }),
+  });
+  // Their own: the change signed them out here too, so they sign straight back in.
+  if (staffId === actor.id) {
+    const stay = await staySignedIn(email, password);
+    if (stay) done.warning = [done.warning, stay].filter(Boolean).join(" ");
+  }
+  revalidatePath("/admin/staff");
+  return { success: true, email, password, ...done };
+}
+
+/** A partner university account's password, as a Super Admin chose it. */
+export async function setPartnerPassword(partnerId: string, password: string): Promise<PasswordSetResult> {
+  const actor = await superAdminActor();
+  if (!actor) return { error: "Only a Super Admin can set a password." };
+  const problem = chosenPasswordError(password);
+  if (problem) return { error: problem };
+
+  const admin = createAdminClient();
+  const { data: partner } = await admin.from("partner_university_accounts").select("id, staff_name").eq("id", partnerId).maybeSingle();
+  if (!partner) return { error: "That partner account no longer exists." };
+  const { data: authUser } = await admin.auth.admin.getUserById(partnerId);
+  const email = authUser?.user?.email ?? "";
+  if (!email) return { error: "That partner account has no login." };
+
+  const { error: authError } = await admin.auth.admin.updateUserById(partnerId, { password });
+  if (authError) return { error: passwordRefusal(authError.message) };
+
+  const supabase = await createClient();
+  const done = await finishPasswordSet({
+    signOut: () => supabase.rpc("revoke_user_sessions", { p_user_id: partnerId }),
+    keepCopy: () => supabase.rpc("store_partner_login", { p_partner_id: partnerId, p_plaintext: JSON.stringify({ username: email, password }) }),
+    mail: () =>
+      mailStaffLogin({ staffName: partner.staff_name as string, email, password, issuedBy: actor.full_name, reason: "password_set", audience: "partner" }),
+  });
+  revalidatePath("/admin/staff");
+  return { success: true, email, password, ...done };
+}
+
+/** The kept copy of a partner account's login, for a Super Admin. Null when none was kept. */
+export async function revealPartnerCredentials(
+  partnerId: string
+): Promise<{ error: string } | { success: true; credentials: { email: string; password: string; issuedAt: string; issuedBy: string | null } | null }> {
+  if (!(await superAdminActor())) return { error: "Only a Super Admin can see login credentials." };
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("read_partner_login", { p_partner_id: partnerId });
+  if (error) return { error: error.message };
+  const row = (data as { plaintext: string; updated_at: string; updated_by_name: string | null }[] | null)?.[0];
+  if (!row) return { success: true, credentials: null };
+  const parsed = JSON.parse(row.plaintext) as { username: string; password: string };
+  const { data: authUser } = await createAdminClient().auth.admin.getUserById(partnerId);
+  return {
+    success: true,
+    credentials: { email: authUser?.user?.email ?? parsed.username, password: parsed.password, issuedAt: row.updated_at, issuedBy: row.updated_by_name },
   };
 }

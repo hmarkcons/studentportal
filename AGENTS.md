@@ -75,7 +75,8 @@ rendered blank. A number to give anyone is `mobile_official`. Read them through
 Admin, anyone's. A new column on `staff` is unreadable by the app until it is
 granted in a migration; grant it unless it is personal. Only a Super Admin
 manages staff or changes anyone's roles (0283, 0284) — `staff.manage` cannot
-be granted to anyone else.
+be granted to anyone else — and only a Super Admin sets or resets anyone's
+password, staff, student or partner (0302).
 
 **An import that writes an empty cell wipes a column.** The catalogue
 imports add or update, and a blank cell means "said nothing", never null — see
@@ -99,6 +100,14 @@ the role itself and say so, or it will report work it did not do.
 **A paused destination must still be selectable where a student already has
 it.** Pickers use `selectableDestinations(all, keepIds)`; omit `keepIds` on an
 editing form and re-saving silently drops the country the student is going to.
+
+**Pre-Enrolled / University Finalized is found by its key, and the key comes
+from its label.** It is set when a university is finalized and taken off when
+it is un-finalized (`src/lib/finalizedStage.ts`, 0301), keyed `pre_enrolled` /
+`university_finalized`. The stage editor in Setup re-derives every key from its
+label, so renaming the step there gives it a key nothing sets — it then sits
+empty for every student and nothing says why. Keep the label, or change the
+keys in `finalizedStage.ts` with it.
 
 **`unstable_cache` survives deployments.** Vercel's Data Cache is not cleared by
 a deploy, so a stale entry can outlive the code that wrote it. Cached reads take

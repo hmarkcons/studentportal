@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { CredentialField } from "@/components/CredentialField";
 import { StageForm } from "./StageForm";
+import { applicationStageLabel } from "@/lib/finalizedStage";
 import { TaskList } from "./TaskList";
 import { UniversityDocumentUpload } from "./UniversityDocumentUpload";
 import { ApplicationDetailsForm } from "./ApplicationDetailsForm";
@@ -251,7 +252,7 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
             </p>
           )}
         </div>
-        <Badge tone="info">{app.current_stage.replace(/_/g, " ")}</Badge>
+        <Badge tone="info">{applicationStageLabel(app.current_stage)}</Badge>
       </div>
 
       {/* One tracker per country, on the student's dashboard — not one per

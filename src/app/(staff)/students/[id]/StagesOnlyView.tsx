@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { DestinationPipelineCard } from "@/components/DestinationPipelineCard";
+import { universityShortName } from "@/lib/finalizedStage";
 import { buildStageRows, stageSnapshot, type StageApplication, type StageDestination } from "@/lib/stageProgress";
 import type { DashboardStageDef, DashboardStageValues } from "@/lib/dashboardPipeline";
 
@@ -37,7 +38,7 @@ export async function StagesOnlyView({ studentId, supabase }: { studentId: strin
       .order("is_backup"),
     supabase
       .from("applications")
-      .select("id, university:universities(name, destination:destinations(id, display_name, dashboard_pipeline_stages))")
+      .select("id, is_finalized, university:universities(name, short_name, destination:destinations(id, display_name, dashboard_pipeline_stages))")
       .eq("student_id", studentId)
       .order("sort_order", { ascending: true, nullsFirst: false }),
   ]);
@@ -69,6 +70,15 @@ export async function StagesOnlyView({ studentId, supabase }: { studentId: strin
     };
   });
   const rows = buildStageRows(stageApplications, registered);
+  // The university finalized for the visa in each country, for under its
+  // Pre-Enrolled / University Finalized step.
+  const finalizedByDestination = new Map<string, { short: string; full: string }>();
+  for (const a of applications ?? []) {
+    if (!a.is_finalized) continue;
+    const uni = one(a.university as never) as { name?: string; short_name?: string | null; destination?: unknown } | null;
+    const dest = one(uni?.destination as never) as Dest | null;
+    if (dest?.id && uni?.name) finalizedByDestination.set(dest.id, { short: universityShortName(uni.name, uni.short_name), full: uni.name });
+  }
 
   return (
     <div className="flex flex-col gap-6" data-stages-only>
@@ -99,6 +109,7 @@ export async function StagesOnlyView({ studentId, supabase }: { studentId: strin
                   subtitle={row.applicationSummary}
                   stages={row.stages}
                   values={row.values}
+                  finalizedUniversity={finalizedByDestination.get(row.destinationId) ?? null}
                   editable={false}
                   revalidateTo={`/students/${studentId}`}
                 />

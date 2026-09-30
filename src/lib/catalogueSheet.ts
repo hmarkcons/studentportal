@@ -39,6 +39,9 @@ export const CATALOGUE_COLUMNS = [
   // in the form, so a single-country sheet can leave it out entirely.
   { header: "destination", width: 22, group: "university" },
   { header: "university_name", width: 34, group: "university" },
+  // What a finalized student's Pre-Enrolled / University Finalized step names
+  // it by. Blank leaves the portal to shorten the full name itself.
+  { header: "university_short_name", width: 16, group: "university" },
   { header: "city", width: 16, group: "university" },
   { header: "region", width: 16, group: "university" },
   { header: "type", width: 10, group: "university" },
@@ -128,6 +131,7 @@ export type ExportUniversity = {
   /** The destination's display name. Optional so a caller that has none still builds a row. */
   destination?: string | null;
   name: string;
+  short_name?: string | null;
   city: string | null;
   region: string | null;
   type: string | null;
@@ -165,6 +169,7 @@ function universityCells(university: ExportUniversity): Partial<CatalogueRow> {
   return {
     destination: university.destination ?? "",
     university_name: university.name,
+    university_short_name: university.short_name ?? "",
     city: university.city ?? "",
     region: university.region ?? "",
     type: university.type ?? "",
@@ -352,7 +357,7 @@ export function normalizeHeader(header: string): string {
 
 /** The universities-only sheet's columns, in the order its sample writes them. */
 export const UNIVERSITY_SHEET_HEADERS = [
-  "destination", "name", "city", "region", "type", "levels_offered", "fields_offered", "contact_email",
+  "destination", "name", "short_name", "city", "region", "type", "levels_offered", "fields_offered", "contact_email",
   "application_fee", "application_fee_currency", "dsu_body",
 ] as const;
 

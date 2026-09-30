@@ -27,6 +27,24 @@ test("a reissue says the old password is gone and they were signed out", () => {
   assert.equal(staffLoginSubject(base), "Your new HMARK portal login");
 });
 
+test("a password a Super Admin set: said as that, for a student with their Student ID too", () => {
+  const set = { ...base, reason: "password_set", audience: "student", studentCode: "HMC-SEP27-IT-0007" };
+  assert.equal(staffLoginSubject(set), "Your new HMARK portal password");
+  const text = staffLoginText(set);
+  assert.match(text, /new password has been set for your HMARK Student Portal account by Abdul Hadi/);
+  assert.match(text, /previous password no longer works/);
+  assert.match(text, /HMC-SEP27-IT-0007/);
+  assert.match(text, /ask your counsellor at HMARK/);
+  assert.doesNotMatch(text, /Super Admin/);
+  assert.ok(staffLoginHtml(set).includes("HMC-SEP27-IT-0007"));
+});
+
+test("a partner university's mail names its own portal and sends them to HMARK", () => {
+  const set = { ...base, reason: "password_set", audience: "partner" };
+  assert.match(staffLoginText(set), /HMARK partner portal account/);
+  assert.match(staffLoginText(set), /tell HMARK straight away/);
+});
+
 test("a new account is worded as a first login", () => {
   const first = { ...base, reason: "new_account" };
   assert.match(staffLoginText(first), /account has been created for you/);

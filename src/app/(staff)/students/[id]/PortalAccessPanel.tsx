@@ -3,11 +3,12 @@
 import { useActionState, useState } from "react";
 import {
   inviteStudentToPortal,
-  resetStudentPortalPassword,
+  setStudentPortalPassword,
   suspendStudentPortalAccess,
   activateStudentPortalAccess,
   deleteStudentPortalAccess,
 } from "@/lib/actions/portal";
+import { SetPasswordForm } from "@/components/SetPasswordForm";
 import { readCredentialAction } from "@/lib/actions/countryTracker";
 import { Button } from "@/components/ui/Button";
 import { useButtonAction } from "@/components/useButtonAction";
@@ -48,18 +49,29 @@ function ToggleButton({
   );
 }
 
+/**
+ * A student's portal login. Anyone who manages the student can create it (it
+ * gets a generated password, shown here and revealable later), but only a
+ * Super Admin can set or reset its password afterwards — typed or generated,
+ * the student emailed it and signed out everywhere (setStudentPortalPassword).
+ */
 export function PortalAccessPanel({
   studentId,
+  studentName,
+  email,
   enabled,
   portalActive,
   isSuperAdmin,
 }: {
   studentId: string;
+  studentName: string;
+  /** Where a new password is emailed. */
+  email: string | null;
   enabled: boolean;
   portalActive: boolean;
   isSuperAdmin: boolean;
 }) {
-  const action = enabled ? resetStudentPortalPassword.bind(null, studentId) : inviteStudentToPortal.bind(null, studentId);
+  const action = inviteStudentToPortal.bind(null, studentId);
   const [state, formAction, pending] = useActionState<ActionState, FormData>(action, undefined);
   const [revealed, setRevealed] = useState<{ username: string; password: string } | null>(null);
   const [revealing, setRevealing] = useState(false);
@@ -93,12 +105,14 @@ export function PortalAccessPanel({
               Reveal credentials
             </Button>
           )}
-          <form action={formAction}>
-            {/* The credentials themselves are shown below; this only says it worked. */}
-            <Button type="submit" pending={pending} status={{ state, label: enabled ? "Password reset." : "Login created." }}>
-              {enabled ? "Reset password" : "Create portal login"}
-            </Button>
-          </form>
+          {!enabled && (
+            <form action={formAction}>
+              {/* The credentials themselves are shown below; this only says it worked. */}
+              <Button type="submit" pending={pending} status={{ state, label: "Login created." }}>
+                Create portal login
+              </Button>
+            </form>
+          )}
           {isSuperAdmin && enabled && portalActive && (
             <ToggleButton
               action={() => suspendStudentPortalAccess(studentId)}
@@ -122,6 +136,20 @@ export function PortalAccessPanel({
           )}
         </div>
       </div>
+
+      {enabled && isSuperAdmin && (
+        <div className="mt-3" data-student-set-password>
+          <SetPasswordForm
+            name={studentName}
+            email={email}
+            action={(password) => setStudentPortalPassword(studentId, password)}
+            onDone={() => setRevealed(null)}
+          />
+        </div>
+      )}
+      {enabled && !isSuperAdmin && (
+        <p className="mt-2 text-xs text-muted">Only a Super Admin can reset or set a student&apos;s portal password.</p>
+      )}
 
       {state?.error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{state.error}</p>}
 

@@ -446,6 +446,8 @@ export function resolveDestination(
 /** What a sheet says about a university. Nulls mean "said nothing". */
 export type UniversityInput = {
   name: string;
+  /** Null says nothing, as everywhere here: a blank cell never clears one set in Setup. */
+  short_name: string | null;
   city: string | null;
   region: string | null;
   type: "public" | "private" | null;
@@ -476,8 +478,14 @@ export function universityFromRow(
   const feeKey = nameKey === "university_name" ? "university_application_fee" : "application_fee";
   const currencyKey = `${feeKey}_currency`;
 
+  // The combined sheet names it for the university, as it does the fee.
+  const shortKey = nameKey === "university_name" ? "university_short_name" : "short_name";
+  const short_name = (row[shortKey] ?? "").trim().replace(/\s+/g, " ") || null;
+  if (short_name && short_name.length > 32) problems.push(`${shortKey} "${short_name}" is longer than 32 characters — ignored`);
+
   return {
     name,
+    short_name: short_name && short_name.length <= 32 ? short_name : null,
     city: (row.city ?? "").trim() || null,
     region: (row.region ?? "").trim() || null,
     type,
@@ -628,6 +636,7 @@ export function universityInsertValues(
   return {
     destination_id: destinationId,
     name: input.name,
+    short_name: input.short_name,
     // A new university inherits the destination's own track when the sheet is
     // silent, rather than a hardcoded "public".
     type: input.type ?? defaultType,

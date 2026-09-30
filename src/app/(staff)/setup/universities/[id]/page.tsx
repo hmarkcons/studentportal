@@ -28,7 +28,7 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
   const { data: university, error } = await supabase
     .from("universities")
     .select(
-      "id, name, city, region, type, status, contact_email, application_fee, application_fee_currency, dsu_body_id, destination_id, destination:destinations(display_name, currency), dsu_body:scholarship_bodies(name)"
+      "id, name, short_name, city, region, type, status, contact_email, application_fee, application_fee_currency, dsu_body_id, destination_id, destination:destinations(display_name, currency), dsu_body:scholarship_bodies(name)"
     )
     .eq("id", id)
     .maybeSingle();

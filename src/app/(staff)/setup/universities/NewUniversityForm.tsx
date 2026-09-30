@@ -67,6 +67,12 @@ export function NewUniversityForm({ destinations, bodies }: { destinations: NewU
       </label>
 
       <label className="flex flex-col gap-1 text-xs text-muted">
+        <span>Short name</span>
+        <Input name="short_name" maxLength={32} placeholder="e.g. UniPV" />
+        <span className="text-[11px]">For under a finalized student&apos;s Pre-Enrolled / University Finalized step. Blank shortens the name itself.</span>
+      </label>
+
+      <label className="flex flex-col gap-1 text-xs text-muted">
         <span>
           City <span className="text-danger">*</span>
         </span>

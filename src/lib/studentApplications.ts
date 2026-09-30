@@ -16,7 +16,8 @@ export type StudentDestination = {
 
 export type StudentApplication = {
   app: { id: string; current_stage: string | null; intake: string | null; round_id: string | null; is_finalized: boolean | null };
-  uni: { name?: string } | null;
+  /** short_name as set in Setup — see universityShortName. */
+  uni: { name?: string; short_name?: string | null } | null;
   dest: StudentDestination | null;
   program: { name?: string; rounds?: ProgramRound[] } | null;
 };
@@ -30,17 +31,17 @@ export async function loadStudentApplications(supabase: SupabaseClient, studentI
   const { data } = await supabase
     .from("applications")
     .select(
-      "id, current_stage, intake, round_id, is_finalized, university:universities(name, destination:destinations(id, display_name, country_code, pipeline_stages, dashboard_pipeline_stages)), program:programs(name, rounds:program_intake_rounds(id, label, start_date, application_deadline, sort_order))"
+      "id, current_stage, intake, round_id, is_finalized, university:universities(name, short_name, destination:destinations(id, display_name, country_code, pipeline_stages, dashboard_pipeline_stages)), program:programs(name, rounds:program_intake_rounds(id, label, start_date, application_deadline, sort_order))"
     )
     .eq("student_id", studentId)
     .order("created_at", { ascending: true });
   return (data ?? []).map((a) => {
-    const uni = one(a.university as never) as { name?: string; destination?: unknown } | null;
+    const uni = one(a.university as never) as { name?: string; short_name?: string | null; destination?: unknown } | null;
     const dest = uni?.destination ? (one(uni.destination as never) as StudentDestination | null) : null;
     const program = one(a.program as never) as StudentApplication["program"];
     return {
       app: { id: a.id, current_stage: a.current_stage, intake: a.intake, round_id: a.round_id, is_finalized: a.is_finalized },
-      uni: uni ? { name: uni.name } : null,
+      uni: uni ? { name: uni.name, short_name: uni.short_name ?? null } : null,
       dest,
       program,
     };

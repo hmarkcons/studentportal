@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getStaffSession } from "@/lib/auth/session";
 import { seesStagesOnly } from "@/lib/auth/studentAccess";
+import { isFinalizedStage } from "@/lib/finalizedStage";
 
 // Staff-only — students see the result read-only on their own portal
 // dashboard, via a plain select query (no write action needed for them).
@@ -13,6 +14,10 @@ export async function setDashboardStageValue(
   revalidateTo: string,
   value: string | null
 ) {
+  // Pre-Enrolled / University Finalized says which university is finalized for
+  // the visa; it follows the Finalize button on the application.
+  if (isFinalizedStage(stageKey)) return { error: "This step is set by finalizing a university for the visa, on its application." };
+
   const { supabase, staff } = await getStaffSession();
 
   // A counsellor follows a registered student's stages; processing records

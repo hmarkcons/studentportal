@@ -6,6 +6,7 @@ import { reorderApplications } from "@/lib/actions/applications";
 import { useReorderList } from "@/components/useReorderList";
 import { Button } from "@/components/ui/Button";
 import { SlideOver } from "@/components/ui/SlideOver";
+import { applicationStageLabel } from "@/lib/finalizedStage";
 
 export type OrderableApplication = {
   id: string;
@@ -166,7 +167,7 @@ export function ApplicationOrderList({
                   {/* The programme, because the office prioritises a
                       university-and-programme pair, not a university. */}
                   <span className="block truncate text-xs text-muted">
-                    {a.programName ?? "No programme chosen"} · {a.stage.replace(/_/g, " ")}
+                    {a.programName ?? "No programme chosen"} · {applicationStageLabel(a.stage)}
                   </span>
                 </span>
                 <Arrows

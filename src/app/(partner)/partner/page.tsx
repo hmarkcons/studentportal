@@ -15,6 +15,7 @@ import { karachiToday } from "@/lib/calendarDates";
 import { summarizePartner } from "@/lib/dashboards/partner";
 import { formatAmount } from "@/lib/marketing";
 import { getCurrentUser } from "@/lib/auth/currentUser";
+import { applicationStageLabel } from "@/lib/finalizedStage";
 
 type PartnerApplicationRow = {
   application_id: string;
@@ -219,7 +220,7 @@ export default async function PartnerDashboardPage() {
               <span>
                 {a.student_name} {a.program_name && `· ${a.program_name}`} {a.intake && `· ${a.intake}`}
               </span>
-              <Badge tone="info">{a.current_stage.replace(/_/g, " ")}</Badge>
+              <Badge tone="info">{applicationStageLabel(a.current_stage)}</Badge>
             </Link>
           ))}
           {pending.length === 0 && <p className="py-2 text-sm text-muted">Nothing pending review.</p>}

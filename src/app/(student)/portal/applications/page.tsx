@@ -3,6 +3,7 @@ import { ArrowRight, Landmark, PartyPopper, Send, Stamp } from "lucide-react";
 import { getStudentUser } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { BoardingPassTracker } from "@/components/ui/BoardingPassTracker";
+import { universityShortName } from "@/lib/finalizedStage";
 import { ProgramDates } from "@/components/ProgramDates";
 import { karachiToday } from "@/lib/calendarDates";
 import { loadStudentApplications } from "@/lib/studentApplications";
@@ -68,6 +69,7 @@ export default async function PortalApplicationsPage() {
                   <BoardingPassTracker
                     tone="pass"
                     universityName={uni?.name ?? "University"}
+                    universityShortName={uni?.name ? universityShortName(uni.name, uni.short_name) : null}
                     programName={program?.name}
                     intake={app.intake}
                     round={roundLabel}

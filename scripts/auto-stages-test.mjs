@@ -115,6 +115,47 @@ test("finalising a university ticks University & Program", () => {
   assert.equal(countryValues(plan).admission, "Issued");
 });
 
+test("finalising a university reaches Pre-Enrolled in the country's bar and the application's own stages", () => {
+  const stages = [...ITALY_STAGES.slice(0, 3), { key: "pre_enrolled", label: "Pre-Enrolled", type: "checkbox", options: ["Pre-Enrolled"] }, ...ITALY_STAGES.slice(3)];
+  const pipeline = [...ITALY_PIPELINE, "pre_enrolled"];
+  const plan = planAutoStages(base({
+    countries: [{ destinationId: "it", stages, values: {} }],
+    applications: [
+      { id: "a1", destinationId: "it", stage: "acceptance_letter", pipeline, finalized: true },
+      { id: "a2", destinationId: "it", stage: "acceptance_letter", pipeline, finalized: false },
+    ],
+  }));
+  assert.equal(countryValues(plan).pre_enrolled, "Pre-Enrolled");
+  assert.equal(appTo(plan, "a1"), "pre_enrolled");
+  // Only the finalized one.
+  assert.equal(appTo(plan, "a2"), null);
+});
+
+test("not finalized: the step stays empty, and a country without it is left alone", () => {
+  const stages = [...ITALY_STAGES.slice(0, 3), { key: "university_finalized", label: "University Finalized", type: "checkbox", options: ["Finalized"] }];
+  const pipeline = [...ITALY_PIPELINE, "university_finalized"];
+  const plan = planAutoStages(base({
+    countries: [{ destinationId: "it", stages, values: {} }],
+    applications: [{ id: "a1", destinationId: "it", stage: "acceptance_letter", pipeline, finalized: false }],
+  }));
+  assert.equal(countryValues(plan).university_finalized, undefined);
+  assert.equal(appTo(plan), null);
+  // A pipeline without the stage: finalizing moves nothing there.
+  const plain = planAutoStages(base({
+    applications: [{ id: "a1", destinationId: "it", stage: "acceptance_letter", pipeline: ITALY_PIPELINE, finalized: true }],
+  }));
+  assert.equal(appTo(plain), null);
+});
+
+test("a later stage already reached is never pulled back to it", () => {
+  const pipeline = ["documents_pending", "offer_accepted", "university_finalized", "visa_filed", "visa_granted"];
+  const plan = planAutoStages(base({
+    countries: [],
+    applications: [{ id: "a1", destinationId: "it", stage: "visa_filed", pipeline, finalized: true }],
+  }));
+  assert.equal(appTo(plan), null);
+});
+
 test("the visa tracker: appointment booked, application submitted, decision recorded", () => {
   const plan = planAutoStages(base({
     trackers: [{ destinationId: "it", fields: ITALY_TRACKER_FIELDS, values: {

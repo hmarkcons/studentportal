@@ -12,6 +12,7 @@ import {
   type DashboardStageValues,
 } from "@/lib/dashboardPipeline";
 import { Select, Input } from "@/components/ui/Input";
+import { isFinalizedStage } from "@/lib/finalizedStage";
 
 function StageField({
   leadId,
@@ -19,12 +20,14 @@ function StageField({
   revalidateTo,
   stage,
   value,
+  finalizedUniversity,
 }: {
   leadId: string;
   destinationId: string;
   revalidateTo: string;
   stage: DashboardStageDef;
   value: string | undefined;
+  finalizedUniversity?: { short: string; full: string } | null;
 }) {
   // Each field saves as it changes; the confirmation or the refusal sits
   // beside it, and the field is held while the save is in flight.
@@ -35,6 +38,17 @@ function StageField({
     void save.run(() => setDashboardStageValue(leadId, destinationId, stage.key, revalidateTo, next));
   }
   const status = <ActionStatus state={save.state} pending={pending} label="Saved." showError />;
+
+  // Not a field: it follows the Finalize button on the application.
+  if (isFinalizedStage(stage.key)) {
+    return (
+      <div className="flex flex-col gap-1" data-finalized-stage-field>
+        <span className="text-xs text-muted">{stage.label}</span>
+        <p className="text-sm text-ink">{value ? (finalizedUniversity?.full ?? value) : "Not yet"}</p>
+        <p className="text-[11px] text-muted">Set by finalizing a university for the visa, on its application.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-1">
@@ -89,6 +103,7 @@ export function DestinationPipelineCard({
   editable,
   revalidateTo,
   accent = 1,
+  finalizedUniversity = null,
 }: {
   leadId: string;
   destinationId: string;
@@ -100,6 +115,8 @@ export function DestinationPipelineCard({
   revalidateTo: string;
   /** Which of the five country accents (globals.css) it wears: the primary first, then each in turn. */
   accent?: number;
+  /** The university finalized for the visa here, shown under Pre-Enrolled / University Finalized. */
+  finalizedUniversity?: { short: string; full: string } | null;
 }) {
   const [editing, setEditing] = useState(false);
   const idx = currentStageIndex(stages, values);
@@ -151,7 +168,13 @@ export function DestinationPipelineCard({
                     filled ? (i === idx && negative ? "bg-danger" : "bg-[var(--a)]") : "bg-border"
                   }`}
                 />
-                <span className={`text-center text-[9px] leading-tight ${negative ? "text-danger" : "text-muted"}`}>{value ?? "—"}</span>
+                {value && finalizedUniversity && isFinalizedStage(stage.key) ? (
+                  <span className="text-center text-[9px] font-medium leading-tight text-ink" title={finalizedUniversity.full} data-finalized-university>
+                    {finalizedUniversity.short}
+                  </span>
+                ) : (
+                  <span className={`text-center text-[9px] leading-tight ${negative ? "text-danger" : "text-muted"}`}>{value ?? "—"}</span>
+                )}
               </div>
             );
           })}
@@ -174,6 +197,7 @@ export function DestinationPipelineCard({
                 revalidateTo={revalidateTo}
                 stage={stage}
                 value={values[stage.key]}
+                finalizedUniversity={finalizedUniversity}
               />
             ))}
           </div>
