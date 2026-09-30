@@ -27,7 +27,20 @@ export async function countUnreadMessages(
     .eq("student_id", studentId)
     .eq("side", side)
     .maybeSingle();
+  return countUnreadSince(supabase, studentId, side, marker?.read_at ?? null);
+}
 
+/**
+ * The same count for a caller that already holds the marker — the student
+ * layout reads it along with the student, a round trip earlier. `readAt` is
+ * null when the thread has never been opened.
+ */
+export async function countUnreadSince(
+  supabase: SupabaseClient,
+  studentId: string,
+  side: "student" | "staff",
+  readAt: string | null
+): Promise<number> {
   let query = supabase
     .from("messages")
     .select("id", { count: "exact", head: true })
@@ -37,7 +50,7 @@ export async function countUnreadMessages(
     .eq("direction", side === "student" ? "outbound" : "inbound");
 
   // No marker means the thread has never been opened, so everything is unread.
-  if (marker?.read_at) query = query.gt("sent_at", marker.read_at);
+  if (readAt) query = query.gt("sent_at", readAt);
 
   const { count } = await query;
   return count ?? 0;

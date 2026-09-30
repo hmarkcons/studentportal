@@ -36,7 +36,7 @@ export function ChartCard({
           {subtitle && <p className="text-xs text-muted">{subtitle}</p>}
         </div>
         {href && (
-          <Link href={href} className="shrink-0 text-xs font-medium text-primary hover:underline">
+          <Link prefetch={false} href={href} className="shrink-0 text-xs font-medium text-primary hover:underline">
             {linkLabel} →
           </Link>
         )}

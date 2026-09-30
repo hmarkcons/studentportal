@@ -56,6 +56,7 @@ export default async function PortalTicketDetailPage(props: PageProps<"/portal/s
   return (
     <div className="flex w-full flex-col gap-6" data-portal-page>
       <Link
+        prefetch={false}
         href="/portal/support"
         data-rise
         className="inline-flex w-fit items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-sm text-muted shadow-sm hover:border-primary hover:text-primary"

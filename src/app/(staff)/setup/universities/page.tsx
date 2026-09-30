@@ -9,6 +9,7 @@ import { NewUniversityForm } from "./NewUniversityForm";
 import { ImportUniversitiesForm } from "./ImportUniversitiesForm";
 import { ImportCatalogueForm } from "./ImportCatalogueForm";
 import { DeleteUniversityIcon } from "./DeleteUniversityIcon";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -18,9 +19,7 @@ export default async function UniversitiesPage(props: { searchParams: Promise<{ 
   const { destination: destinationFilter } = await props.searchParams;
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   const { data: staffRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
   const isSuperAdmin = hasRole(staffRow, "super_admin");
 
@@ -64,6 +63,7 @@ export default async function UniversitiesPage(props: { searchParams: Promise<{ 
 
       <div className="mb-3 flex flex-wrap gap-2">
         <Link
+          prefetch={false}
           href="/setup/universities"
           className={`rounded-full border px-3 py-1 text-xs ${!destinationFilter ? "border-primary bg-primary text-primary-ink" : "border-border text-muted hover:text-ink"}`}
         >
@@ -71,6 +71,7 @@ export default async function UniversitiesPage(props: { searchParams: Promise<{ 
         </Link>
         {(destinations ?? []).map((d) => (
           <Link
+            prefetch={false}
             key={d.id}
             href={`/setup/universities?destination=${d.id}`}
             className={`rounded-full border px-3 py-1 text-xs ${destinationFilter === d.id ? "border-primary bg-primary text-primary-ink" : "border-border text-muted hover:text-ink"}`}
@@ -83,7 +84,7 @@ export default async function UniversitiesPage(props: { searchParams: Promise<{ 
       <div className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
         {(universities ?? []).map((u) => (
           <div key={u.id} className="flex items-center justify-between px-4 py-3 text-sm hover:bg-bg">
-            <Link href={`/setup/universities/${u.id}`} className="flex flex-1 items-center gap-3 text-ink">
+            <Link prefetch={false} href={`/setup/universities/${u.id}`} className="flex flex-1 items-center gap-3 text-ink">
               <span>
                 {u.name}
                 <span className="text-muted">
@@ -95,6 +96,7 @@ export default async function UniversitiesPage(props: { searchParams: Promise<{ 
             {isSuperAdmin && (
               <div className="flex items-center gap-1">
                 <Link
+                  prefetch={false}
                   href={`/setup/universities/${u.id}`}
                   title="Edit university"
                   aria-label="Edit university"

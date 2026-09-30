@@ -24,7 +24,7 @@ export default async function RecordAdmissionPage(props: { params: Promise<{ id:
   ]);
 
   const back = (
-    <Link href={`/students/${id}/applications`} className="text-sm text-primary hover:underline">
+    <Link prefetch={false} href={`/students/${id}/applications`} className="text-sm text-primary hover:underline">
       ← Back to applications
     </Link>
   );

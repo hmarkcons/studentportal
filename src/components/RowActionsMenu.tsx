@@ -87,7 +87,7 @@ export function RowActionsMenu({
       {open &&
         portal(
           <div ref={menuRef} style={menuStyle} data-menu className="z-50 w-36 rounded-md border border-border bg-card py-1 shadow-md">
-            <Link href={editHref} onClick={() => setOpen(false)} className="block px-3 py-1.5 text-sm text-ink hover:bg-bg">
+            <Link prefetch={false} href={editHref} onClick={() => setOpen(false)} className="block px-3 py-1.5 text-sm text-ink hover:bg-bg">
               Modify
             </Link>
             {canDelete && (

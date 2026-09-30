@@ -22,6 +22,8 @@ import {
   scholarshipStatusLabel,
   type ScholarshipStatus,
 } from "@/lib/scholarships";
+import { getCurrentUser } from "@/lib/auth/currentUser";
+import { documentUrls } from "@/lib/storageUrls";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -115,28 +117,35 @@ function CallForApplications({ body, signed }: { body: Body; signed: Map<string,
 // nothing rather than needing a second check in the app.
 export default async function PortalScholarshipPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   const { data: student } = await supabase.from("leads").select("id").eq("auth_user_id", user?.id ?? "").maybeSingle();
 
-  // Their own logins for the agency portals. Listed here and decrypted only
-  // when they press Show — read_credential has always allowed a student to
-  // read their own, the same as the visa appointment login.
-  const portals = student ? scholarshipPortals(await listCredentialTypesAction("student", student.id)) : [];
   if (!student) return null;
 
-  // What each of the student's countries offers — the menu shows this page
-  // for a country with a scholarship body on file, so the page says what that
-  // is, country by country, rather than assuming Italy.
-  const [{ data: registered }, { data: applied }] = await Promise.all([
+  // Everything that needs only the student, at once. It used to be asked for
+  // a piece at a time, six round trips before the page could show anything.
+  const [credentialTypes, { data: registered }, { data: applied }, { data: scholarships }] = await Promise.all([
+    // Their own logins for the agency portals. Listed here and decrypted only
+    // when they press Show — read_credential has always allowed a student to
+    // read their own, the same as the visa appointment login.
+    listCredentialTypesAction("student", student.id),
+    // What each of the student's countries offers — the menu shows this page
+    // for a country with a scholarship body on file, so the page says what
+    // that is, country by country, rather than assuming Italy.
     supabase.from("lead_destinations").select("destination:destinations(id, display_name, scholarship_access)").eq("lead_id", student.id),
     supabase
       .from("applications")
       .select("id, is_finalized, university:universities(name, dsu_body_id, dsu_body:scholarship_bodies(name), destination:destinations(id, display_name, scholarship_access))")
       .eq("student_id", student.id),
+    supabase
+      .from("student_scholarships")
+      .select(
+        "id, name, status, documents_status, award_amount, application_deadline, body:scholarship_bodies(name, region, academic_year, application_deadline, document_upload_deadline, courier_deadline, isee_threshold, ispe_threshold, stipend_amount, benefits, source_url, call_status, call_expected_on, call_pdf_path, call_pdf_url, call_page_url, call_pdf_language)"
+      )
+      .eq("student_id", student.id),
   ]);
+  const portals = scholarshipPortals(credentialTypes);
   type Dest = { id: string; display_name: string; scholarship_access: string | null };
   const countries = new Map<string, Dest & { bodies: string[]; chosen: { university: string; body: string }[] }>();
   const addCountry = (d: Dest | null) => {
@@ -204,19 +213,13 @@ export default async function PortalScholarshipPage() {
   const offering = [...countries.values()].filter((c) => c.bodies.length > 0);
   const universal = offering.some((c) => c.scholarship_access === "universal");
 
-  const { data: scholarships } = await supabase
-    .from("student_scholarships")
-    .select(
-      "id, name, status, documents_status, award_amount, application_deadline, body:scholarship_bodies(name, region, academic_year, application_deadline, document_upload_deadline, courier_deadline, isee_threshold, ispe_threshold, stipend_amount, benefits, source_url, call_status, call_expected_on, call_pdf_path, call_pdf_url, call_page_url, call_pdf_language)"
-    )
-    .eq("student_id", student.id);
-
   // The copy HMARK holds of each call, signed for this student. Any signed-in
   // user may read scholarship-calls (0175), so this is the student's own link
   // to the same paper their counsellor is reading — and it keeps answering
   // after the region takes the original down, which they do every year.
   //
-  // Signed once per path: two scholarships in the same region share a body.
+  // Signed once per path, since two scholarships in the same region share a
+  // body — and all in one request.
   const callPaths = [
     ...new Set(
       [
@@ -225,13 +228,7 @@ export default async function PortalScholarshipPage() {
       ].filter((p): p is string => Boolean(p))
     ),
   ];
-  const signedCalls = new Map<string, string>();
-  await Promise.all(
-    callPaths.map(async (path) => {
-      const { data } = await supabase.storage.from("documents").createSignedUrl(path, 3600);
-      if (data?.signedUrl) signedCalls.set(path, data.signedUrl);
-    })
-  );
+  const signedCalls = await documentUrls(supabase, callPaths);
 
   const recorded = (scholarships ?? []).length;
   const awarded = (scholarships ?? []).filter((s) => s.status === "accepted").length;

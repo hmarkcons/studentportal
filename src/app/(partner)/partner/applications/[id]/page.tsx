@@ -82,7 +82,7 @@ export default async function PartnerApplicationDetailPage(props: PageProps<"/pa
 
   return (
     <div className="mx-auto max-w-2xl">
-      <Link href="/partner" className="text-sm text-muted hover:text-ink">
+      <Link prefetch={false} href="/partner" className="text-sm text-muted hover:text-ink">
         &larr; Back to dashboard
       </Link>
 

@@ -29,7 +29,7 @@ export default async function AgreementTemplateDetailPage(props: PageProps<"/set
   return (
     // Wide enough for the builder's page, which is drawn at the paper's own width.
     <div className={isSuperAdmin ? "w-full max-w-6xl" : "w-full max-w-3xl"}>
-      <Link href="/setup/agreement-templates" className="text-sm text-muted hover:text-ink">
+      <Link prefetch={false} href="/setup/agreement-templates" className="text-sm text-muted hover:text-ink">
         &larr; Back to agreement templates
       </Link>
       <h2 className="mt-2 mb-4 text-lg font-semibold text-ink">

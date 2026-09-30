@@ -4,12 +4,11 @@ import { ProgramDates } from "@/components/ProgramDates";
 import { karachiToday } from "@/lib/calendarDates";
 import { AddProgramForm } from "./AddProgramForm";
 import { DeleteProgramButton } from "./DeleteProgramButton";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 export default async function PartnerProgramsPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   const { data: account } = await supabase.from("partner_university_accounts").select("university_id").eq("id", user?.id ?? "").maybeSingle();
   if (!account) return null;

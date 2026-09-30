@@ -41,6 +41,13 @@ export async function loadRestartContext(studentId: string): Promise<RestartCont
   // would belong to no intake at all.
   await ensureCurrentCycleId(studentId);
 
+  // Whether a visa was refused needs only the student, so it is asked beside
+  // everything else here rather than after it. Not wanted for a student
+  // already marked ghosted or withdrawn — the catch is only so that case is
+  // not an unhandled rejection; where it is wanted, awaiting it still throws.
+  const outcomesRead = visaOutcomes(supabase, studentId);
+  outcomesRead.catch(() => {});
+
   const [{ data: student }, { data: cycleRows }, { data: destRows }, { data: apps }] = await Promise.all([
     supabase.from("leads").select("intake, registration_status, status").eq("id", studentId).maybeSingle(),
     supabase
@@ -109,7 +116,7 @@ export async function loadRestartContext(studentId: string): Promise<RestartCont
   } else if (student?.registration_status === "withdrawn") {
     eligibility = { reason: "withdrawn", detail: "This student is marked as withdrawn." };
   } else {
-    const outcomes = await visaOutcomes(supabase, studentId);
+    const outcomes = await outcomesRead;
     const refused = outcomes.filter((o) => o.decision === "refused");
     if (refused.length > 0 && !outcomes.some((o) => o.decision === "approved")) {
       eligibility = {

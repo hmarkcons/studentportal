@@ -14,6 +14,7 @@ import { loadVisaOffices } from "@/lib/actions/visaOfficeQueries";
 import { loadVisaPageContent } from "@/lib/actions/visaPageQueries";
 import { VisaPageSections } from "@/components/VisaPageSections";
 import { mergeVisaMessages, sectionsFor, toMessageTemplates } from "@/lib/visaPage";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -34,9 +35,7 @@ function display(value: string, type: string | undefined) {
 
 export default async function PortalVisaPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   const { data: student } = await supabase
     .from("students")
@@ -48,10 +47,15 @@ export default async function PortalVisaPage() {
   // Everything on this page comes from the documentation tracker — there is no
   // separate visa record. Which fields appear is opted in per field from
   // Setup › Document trackers, so a country added later needs no code change.
-  const { data: applications } = await supabase
-    .from("applications")
-    .select("id, is_finalized, university:universities(name, destination:destinations(id, country_code, display_name))")
-    .eq("student_id", student.id);
+  const [{ data: applications }, credentialTypes] = await Promise.all([
+    supabase
+      .from("applications")
+      .select("id, is_finalized, university:universities(name, destination:destinations(id, country_code, display_name))")
+      .eq("student_id", student.id),
+    // The student's saved logins, for the appointment login further down.
+    // Needs only the student, so it is not left until the end.
+    listCredentialTypesAction("student", student.id),
+  ]);
 
   // Which countries are actually in the visa process is decided in
   // visaCountries, shared with the staff Visa tab so the two cannot disagree
@@ -74,66 +78,74 @@ export default async function PortalVisaPage() {
   );
 
   const codes = countries.map((c) => c.code);
-  const defsByCountry = codes.length ? await listTrackerDefinitions(codes) : {};
-  // The same table the staff tab reads: the address a counsellor gives on the
-  // phone and the one the student turns up to have to be the same address.
   const destinationIds = countries.map((c) => c.destinationId).filter((d): d is string => Boolean(d));
-  const officesByDestination = await loadVisaOffices(destinationIds);
-  // The sections and per-country wording set in Setup › Visa page builder.
-  const built = await loadVisaPageContent(destinationIds);
+  // Four reads that each need only the countries, so they go together. They
+  // used to go one at a time, and then a fifth per country.
+  const [defsByCountry, officesByDestination, built, { data: allExtras }] = await Promise.all([
+    codes.length ? listTrackerDefinitions(codes) : Promise.resolve({} as Awaited<ReturnType<typeof listTrackerDefinitions>>),
+    // The same table the staff tab reads: the address a counsellor gives on
+    // the phone and the one the student turns up to have to be the same.
+    loadVisaOffices(destinationIds),
+    // The sections and per-country wording set in Setup › Visa page builder.
+    loadVisaPageContent(destinationIds),
+    // What every country's tracker holds, in one read.
+    countries.length
+      ? supabase
+          .from("application_country_extra")
+          .select("application_id, field_key, field_value")
+          .in(
+            "application_id",
+            countries.map((c) => c.appId)
+          )
+      : Promise.resolve({ data: [] as { application_id: string; field_key: string; field_value: string | null }[] }),
+  ]);
 
-  const sections = await Promise.all(
-    countries.map(async (c) => {
-      const fields = (defsByCountry[c.code] ?? []).filter((f) => f.showOnStudentVisa);
-      // No early return on an empty list. A country can have no visa tracker
-      // fields defined yet and still have an address to go to and sections
-      // written in the builder — Ireland is exactly that, and returning here
-      // made both silently unreachable however much had been written for it.
-      // The combined test further down is the one that decides whether there
-      // is anything worth showing.
+  const sections = countries.map((c) => {
+    const fields = (defsByCountry[c.code] ?? []).filter((f) => f.showOnStudentVisa);
+    // No early return on an empty list. A country can have no visa tracker
+    // fields defined yet and still have an address to go to and sections
+    // written in the builder — Ireland is exactly that, and returning here
+    // made both silently unreachable however much had been written for it.
+    // The combined test further down is the one that decides whether there
+    // is anything worth showing.
 
-      const { data: extras } = await supabase
-        .from("application_country_extra")
-        .select("field_key, field_value")
-        .eq("application_id", c.appId);
-      const values: Record<string, string> = {};
-      for (const e of extras ?? []) values[e.field_key] = e.field_value ?? "";
+    const values: Record<string, string> = {};
+    for (const e of allExtras ?? []) if (e.application_id === c.appId) values[e.field_key] = e.field_value ?? "";
 
-      const outcomeField = fields.find((f) => f.visaRole === "outcome");
-      const reasonField = fields.find((f) => f.visaRole === "outcome_reason");
-      const decision = readVisaDecision(outcomeField ? values[outcomeField.key] : null);
+    const outcomeField = fields.find((f) => f.visaRole === "outcome");
+    const reasonField = fields.find((f) => f.visaRole === "outcome_reason");
+    const decision = readVisaDecision(outcomeField ? values[outcomeField.key] : null);
 
-      // A country whose fields are all still blank has nothing to say. A card
-      // of dashes under an "In progress" badge tells a student less than the
-      // empty state does — it reads as the page being broken rather than as
-      // their visa process not having started.
-      //
-      // The addresses are the exception, and the reason the rule is now "or":
-      // knowing which centre to go to is useful from the day a university is
-      // finalised, and an address is not a dash.
-      const anythingRecorded = fields.some((f) => (values[f.key] ?? "").trim() !== "");
-      const offices = c.destinationId ? officesByDestination[c.destinationId] ?? [] : [];
-      const extraSections = sectionsFor(built.sections, c.destinationId, "student");
-      if (!anythingRecorded && offices.length === 0 && extraSections.length === 0) return null;
+    // A country whose fields are all still blank has nothing to say. A card
+    // of dashes under an "In progress" badge tells a student less than the
+    // empty state does — it reads as the page being broken rather than as
+    // their visa process not having started.
+    //
+    // The addresses are the exception, and the reason the rule is now "or":
+    // knowing which centre to go to is useful from the day a university is
+    // finalised, and an address is not a dash.
+    const anythingRecorded = fields.some((f) => (values[f.key] ?? "").trim() !== "");
+    const offices = c.destinationId ? officesByDestination[c.destinationId] ?? [] : [];
+    const extraSections = sectionsFor(built.sections, c.destinationId, "student");
+    if (!anythingRecorded && offices.length === 0 && extraSections.length === 0) return null;
 
-      return {
-        country: c,
-        // The decision and its reason are shown in the message, not repeated
-        // as ordinary rows.
-        rows: anythingRecorded
-          ? fields.filter((f) => !f.visaRole).map((f) => ({ label: f.label, value: display(values[f.key] ?? "", f.type) }))
-          : [],
-        decision,
-        reason: reasonField ? values[reasonField.key] ?? "" : "",
-        anythingRecorded,
-        offices,
-        extraSections,
-        // The shared wording with this country's own laid over it, field by
-        // field, so an override that changes only a heading keeps the rest.
-        messages: mergeVisaMessages(built.shared, c.destinationId ? built.overrides[c.destinationId] ?? null : null),
-      };
-    })
-  );
+    return {
+      country: c,
+      // The decision and its reason are shown in the message, not repeated
+      // as ordinary rows.
+      rows: anythingRecorded
+        ? fields.filter((f) => !f.visaRole).map((f) => ({ label: f.label, value: display(values[f.key] ?? "", f.type) }))
+        : [],
+      decision,
+      reason: reasonField ? values[reasonField.key] ?? "" : "",
+      anythingRecorded,
+      offices,
+      extraSections,
+      // The shared wording with this country's own laid over it, field by
+      // field, so an override that changes only a heading keeps the rest.
+      messages: mergeVisaMessages(built.shared, c.destinationId ? built.overrides[c.destinationId] ?? null : null),
+    };
+  });
 
   const visible = sections.filter((s): s is NonNullable<typeof s> => s !== null);
 
@@ -145,7 +157,6 @@ export default async function PortalVisaPage() {
   //
   // The row is listed here and decrypted only when the student asks, in
   // VisaCredentials.
-  const credentialTypes = await listCredentialTypesAction("student", student.id);
   // The preset first; then anything a staff member typed by hand before it
   // existed, so an older visa_portal or vfs_login is not stranded.
   const appointmentLogin =

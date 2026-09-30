@@ -9,6 +9,7 @@ import { formatDateOnly } from "@/lib/formatDate";
 import { loadAppointments, daysUntil, type PortalAppointment } from "@/lib/portalAppointments";
 import { interviewTimes, platformLabel, interviewStatusLabel } from "@/lib/interviews";
 import { addedLine, changedLine } from "@/lib/activityStamp";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 // Appointments come from the documentation tracker, the same place as the Visa
 // tab. They used to be read from visa_records, which is the pre-tracker system:
@@ -29,9 +30,7 @@ function CountdownBadge({ dateStr }: { dateStr: string }) {
 
 export default async function PortalAppointmentsPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   const { data: student } = await supabase.from("students").select("id").eq("auth_user_id", user?.id ?? "").maybeSingle();
   if (!student) return null;

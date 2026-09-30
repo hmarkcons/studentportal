@@ -95,31 +95,39 @@ export async function loadStudentProgress(db: Db, counselorId: string) {
   return { students: students.length, rows: rows.map((r) => ({ ...r, studentName: nameOf.get(r.studentId) ?? "Student" })) };
 }
 
+type StageDestinationRow = { lead_id: string; destination_id: string; dashboard_stage_values: DashboardStageValues | null; destination: unknown };
+type StageApplicationRow = { id: string; student_id: string; university: unknown };
+
+/** What an application's university has to carry for its stage row: see stageRowsFrom. */
+const STAGE_UNIVERSITY = "university:universities(name, destination:destinations(id, display_name, dashboard_pipeline_stages))";
+
+function readStageDestinations(db: Db, studentIds: string[]) {
+  return readAllIn<StageDestinationRow>(studentIds, (chunk, from, to) =>
+    db
+      .from("lead_destinations")
+      .select("lead_id, destination_id, dashboard_stage_values, destination:destinations(id, display_name, dashboard_pipeline_stages)")
+      .in("lead_id", chunk)
+      // No id column: the pair is the key, and paging needs a unique order.
+      .order("lead_id")
+      .order("destination_id")
+      .range(from, to)
+  );
+}
+
 /** Every student's country-stage rows, built the way their record builds them (buildStageRows). */
 async function stageRowsFor(db: Db, studentIds: string[]): Promise<ProcStages[]> {
   if (studentIds.length === 0) return [];
-  type Dest = { id?: string; display_name?: string; dashboard_pipeline_stages?: DashboardStageDef[] | null };
   const [destinations, applications] = await Promise.all([
-    readAllIn<{ lead_id: string; destination_id: string; dashboard_stage_values: DashboardStageValues | null; destination: unknown }>(studentIds, (chunk, from, to) =>
-      db
-        .from("lead_destinations")
-        .select("lead_id, destination_id, dashboard_stage_values, destination:destinations(id, display_name, dashboard_pipeline_stages)")
-        .in("lead_id", chunk)
-        // No id column: the pair is the key, and paging needs a unique order.
-        .order("lead_id")
-        .order("destination_id")
-        .range(from, to)
-    ),
-    readAllIn<{ id: string; student_id: string; university: unknown }>(studentIds, (chunk, from, to) =>
-      db
-        .from("applications")
-        .select("id, student_id, university:universities(name, destination:destinations(id, display_name, dashboard_pipeline_stages))")
-        .in("student_id", chunk)
-        .order("id")
-        .range(from, to)
+    readStageDestinations(db, studentIds),
+    readAllIn<StageApplicationRow>(studentIds, (chunk, from, to) =>
+      db.from("applications").select(`id, student_id, ${STAGE_UNIVERSITY}`).in("student_id", chunk).order("id").range(from, to)
     ),
   ]);
+  return stageRowsFrom(studentIds, applications, destinations);
+}
 
+function stageRowsFrom(studentIds: string[], applications: StageApplicationRow[], destinations: StageDestinationRow[]): ProcStages[] {
+  type Dest = { id?: string; display_name?: string; dashboard_pipeline_stages?: DashboardStageDef[] | null };
   const appsBy = new Map<string, StageApplication[]>();
   for (const a of applications) {
     const uni = one(a.university as never) as { name?: string; destination?: unknown } | null;
@@ -154,6 +162,10 @@ export async function loadProcessingRows(
   scholarships: ProcScholarship[];
   stages: ProcStages[];
 }> {
+  // Which tracker field holds each country's visa decision. Nothing to do with
+  // the students, so it is asked for beside them instead of after everything
+  // else — it was a wave of its own at the foot of the dashboard.
+  const outcomeFields = Promise.resolve(restricted.from("tracker_definitions").select("country_code, field_key").eq("visa_role", "outcome"));
   const students = await readAll<ProcStudent>((from, to) => {
     let q = db.from("students").select("id, full_name, processing_officer_id").eq("registration_status", "registered").order("id").range(from, to);
     if (officerId) q = q.eq("processing_officer_id", officerId);
@@ -162,12 +174,14 @@ export async function loadProcessingRows(
   const ids = students.map((s) => s.id);
   if (ids.length === 0) return { students, applications: [], documents: [], visas: [], scholarships: [], stages: [] };
 
-  const [rawApps, documents, scholarships, stages] = await Promise.all([
+  const [rawApps, documents, scholarships, stageDestinations] = await Promise.all([
+    // Read once for the list and for the stage rows both, so the university's
+    // destination carries what each needs.
     readAllIn<{ id: string; student_id: string; current_stage: string | null; deadline: string | null; university: unknown; program: unknown; round: unknown }>(ids, (chunk, from, to) =>
       db
         .from("applications")
         .select(
-          "id, student_id, current_stage, deadline, university:universities(name, destination:destinations(country_code, pipeline_stages)), program:programs(application_deadline), round:program_intake_rounds(application_deadline)"
+          "id, student_id, current_stage, deadline, university:universities(name, destination:destinations(id, display_name, country_code, pipeline_stages, dashboard_pipeline_stages)), program:programs(application_deadline), round:program_intake_rounds(application_deadline)"
         )
         .in("student_id", chunk)
         .order("id")
@@ -185,8 +199,9 @@ export async function loadProcessingRows(
     readAllIn<ProcScholarship>(ids, (chunk, from, to) =>
       restricted.from("student_scholarships").select("student_id, status, application_deadline, name").in("student_id", chunk).order("id").range(from, to)
     ),
-    stageRowsFor(db, ids),
+    readStageDestinations(db, ids),
   ]);
+  const stages = stageRowsFrom(ids, rawApps, stageDestinations);
 
   const applications: ProcApplication[] = rawApps.map((a) => {
     const uni = one(a.university as never) as { name?: string; destination?: unknown } | null;
@@ -203,7 +218,7 @@ export async function loadProcessingRows(
     };
   });
 
-  const visas = await loadVisaDecisions(restricted, rawApps);
+  const visas = await loadVisaDecisions(restricted, rawApps, await outcomeFields);
   return { students, applications, documents, visas, scholarships, stages };
 }
 
@@ -212,8 +227,11 @@ export async function loadProcessingRows(
  * marks as the outcome (visa_role 'outcome') — the same source
  * listVisaDecisions reads, but only for these applications and paged.
  */
-async function loadVisaDecisions(db: Db, apps: { id: string; student_id: string; university: unknown }[]): Promise<ProcVisa[]> {
-  const { data: defs } = await db.from("tracker_definitions").select("country_code, field_key").eq("visa_role", "outcome");
+async function loadVisaDecisions(
+  db: Db,
+  apps: { id: string; student_id: string; university: unknown }[],
+  { data: defs }: { data: { country_code: string; field_key: string }[] | null }
+): Promise<ProcVisa[]> {
   const keyByCountry = new Map((defs ?? []).map((d) => [d.country_code as string, d.field_key as string]));
   if (keyByCountry.size === 0 || apps.length === 0) return [];
   const values = await readAllIn<{ application_id: string; field_key: string; field_value: string | null; updated_at: string | null }>(

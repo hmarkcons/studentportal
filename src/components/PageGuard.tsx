@@ -43,7 +43,7 @@ export async function PageGuard({ path, children }: { path: string; children: Re
           ))}
           . If you need it for your work, ask a Super Admin to allow it for your role on the Role Permissions screen.
         </p>
-        <Link href="/dashboard" className="mt-3 inline-block w-fit text-sm font-medium text-primary hover:underline">
+        <Link prefetch={false} href="/dashboard" className="mt-3 inline-block w-fit text-sm font-medium text-primary hover:underline">
           Back to the dashboard
         </Link>
       </Card>

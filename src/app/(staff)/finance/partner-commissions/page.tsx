@@ -11,6 +11,7 @@ import { EditPartnerCommissionForm } from "./EditPartnerCommissionForm";
 import { AddPartnerCommissionForm } from "./AddPartnerCommissionForm";
 import { PARTNER_COMMISSION_STATUS_LABELS, type PartnerCommissionStatus } from "@/lib/constants";
 import { TableFrame } from "@/components/ui/TableFrame";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -28,9 +29,7 @@ const TONE: Record<PartnerCommissionStatus, "success" | "warning" | "danger" | "
 export default async function PartnerCommissionsPage() {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   const { data: staffRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
   const isSuperAdmin = hasRole(staffRow, "super_admin");
   const canManage = hasRole(staffRow, "finance") || hasRole(staffRow, "super_admin");

@@ -19,7 +19,7 @@ export default async function EditStaffAgreementTemplatePage(props: { params: Pr
 
   return (
     <div className="w-full">
-      <Link href="/setup/agreement-templates?tab=staff" className="mb-3 inline-block text-sm text-primary hover:underline">
+      <Link prefetch={false} href="/setup/agreement-templates?tab=staff" className="mb-3 inline-block text-sm text-primary hover:underline">
         ← Staff agreement templates
       </Link>
       <h2 className="mb-4 text-lg font-semibold text-ink">{template.name}</h2>

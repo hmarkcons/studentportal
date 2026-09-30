@@ -64,7 +64,7 @@ export default async function PortalApplicationsPage() {
             const roundLabel = (program?.rounds ?? []).find((r) => r.id === app.round_id)?.label ?? null;
             return (
               <div key={app.id} className="flex flex-col gap-1.5" data-rise>
-                <Link href={`/portal/applications/${app.id}`} className="block rounded-2xl">
+                <Link prefetch={false} href={`/portal/applications/${app.id}`} className="block rounded-2xl">
                   <BoardingPassTracker
                     tone="pass"
                     universityName={uni?.name ?? "University"}
@@ -77,7 +77,7 @@ export default async function PortalApplicationsPage() {
                 </Link>
                 <div className="flex flex-wrap items-center justify-between gap-2 px-2">
                   <ProgramDates rounds={program?.rounds ?? []} today={today} highlightRoundId={app.round_id} />
-                  <Link href={`/portal/applications/${app.id}`} className="text-xs font-medium text-primary hover:underline">
+                  <Link prefetch={false} href={`/portal/applications/${app.id}`} className="text-xs font-medium text-primary hover:underline">
                     Intake rounds
                     <ArrowRight aria-hidden className="ml-0.5 inline h-3.5 w-3.5 align-[-2px] shrink-0" />
                   </Link>

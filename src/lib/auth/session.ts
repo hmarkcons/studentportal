@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { StaffRole } from "@/lib/constants";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 export type StaffSession = {
   supabase: Awaited<ReturnType<typeof createClient>>;
@@ -13,9 +14,7 @@ export type StaffSession = {
 // each a real network round trip — only ever run once per navigation.
 export const getStaffSession = cache(async (): Promise<StaffSession> => {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   if (!user) return { supabase, userId: null, staff: null };
 
@@ -35,8 +34,6 @@ export type StudentSession = {
 
 export const getStudentUser = cache(async (): Promise<StudentSession> => {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   return { supabase, userId: user?.id ?? null };
 });

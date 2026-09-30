@@ -5,6 +5,7 @@ import { RefundActions } from "./RefundActions";
 import { NewRefundForm } from "./NewRefundForm";
 import { RefundEligibilityForm } from "./RefundEligibilityForm";
 import { syncVisaRefusalRefunds } from "@/lib/actions/finance";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -36,9 +37,7 @@ function deadlineInfo(refusalNoticeDate: string | null) {
 export default async function RefundsPage() {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   const { data: staffRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
   const isSuperAdmin = hasRole(staffRow, "super_admin");
   const canManage = hasRole(staffRow, "finance") || hasRole(staffRow, "management") || hasRole(staffRow, "super_admin");

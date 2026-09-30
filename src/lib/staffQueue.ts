@@ -14,6 +14,7 @@ import { karachiToday } from "@/lib/calendarDates";
 import { applicationDeadline, deadlineUrgency, isUpcoming } from "@/lib/applicationDeadline";
 import { DEADLINE_WINDOW_DAYS } from "@/lib/deadlineReminders";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -130,9 +131,7 @@ export async function loadStaffQueue(supabase: SupabaseClient): Promise<StaffQue
 
   // A deadline is the assigned processing officer's to chase, which is the
   // same rule the calendar and the reminder email use.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   const viewerId = user?.id ?? "";
 
   const upcomingDeadlines = (deadlineRows.data ?? [])

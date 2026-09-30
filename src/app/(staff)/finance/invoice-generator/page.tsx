@@ -11,6 +11,7 @@ import { readAll } from "@/lib/catalogueReads";
 import { serviceOf } from "@/lib/serviceType";
 import { InvoiceGenerator, type StudentOption } from "./InvoiceGenerator";
 import { GeneratedInvoiceList, type GeneratedInvoice } from "./GeneratedInvoiceList";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -18,10 +19,12 @@ function one<T>(v: T | T[] | null) {
 
 export default async function InvoiceGeneratorPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
+  const user = await getCurrentUser();
+  // The bank details beside the viewer's own row rather than after it.
+  const [{ data: staffRow }, bank] = await Promise.all([
+    supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle(),
+    getInvoiceBankSettings(),
+  ]);
   // Every role they hold, not the primary one: a counsellor who also holds
   // Finance was turned away here, and a Super Admin whose primary role is
   // another was not offered Delete.
@@ -39,14 +42,13 @@ export default async function InvoiceGeneratorPage() {
     );
   }
 
-  const bank = await getInvoiceBankSettings();
   const bankConfigured = hasBankDetails(bankFromSettings(bank));
 
   // Registered students, the country they registered for, and their agreement
   // — everything the picker needs to pre-fill an invoice.
   // Paged: each of these can pass the 1000 rows PostgREST returns at once,
   // and a truncated list silently left students out of the picker.
-  const [students, { data: destinations }, agreements, picked, visaOnlyLeads] = await Promise.all([
+  const [students, { data: destinations }, agreements, picked, visaOnlyLeads, { data: invoices }] = await Promise.all([
     readAll((from, to) =>
       supabase
         .from("students")
@@ -70,6 +72,18 @@ export default async function InvoiceGeneratorPage() {
     // Who is registered for the visa service only (0279): their invoice is the
     // visa fee alone.
     readAll((from, to) => supabase.from("leads").select("id, service_type").eq("service_type", "visa_only").order("id").range(from, to)),
+    // Already-issued invoices, for the view / modify / delete / record-payment
+    // list — in this wave, since it needs none of the above.
+    supabase
+      .from("invoices")
+      .select(
+        `id, student_id, invoice_number, intake, currency, admin_charge, consultancy_fee,
+         discount_amount, discount_reason, tax_rate, tax_amount, tax_base, issued_on,
+         admin_fee_status, sent_status, sent_at, pdf_path, created_at, service_type,
+         student:leads(full_name, email)`
+      )
+      .order("created_at", { ascending: false })
+      .limit(100),
   ]);
   const visaOnlyIds = new Set(visaOnlyLeads.filter((l) => serviceOf(l.service_type) === "visa_only").map((l) => l.id as string));
 
@@ -137,18 +151,6 @@ export default async function InvoiceGeneratorPage() {
       source: defaults.source,
     };
   });
-
-  // Already-issued invoices, for the view / modify / delete / record-payment list.
-  const { data: invoices } = await supabase
-    .from("invoices")
-    .select(
-      `id, student_id, invoice_number, intake, currency, admin_charge, consultancy_fee,
-       discount_amount, discount_reason, tax_rate, tax_amount, tax_base, issued_on,
-       admin_fee_status, sent_status, sent_at, pdf_path, created_at, service_type,
-       student:leads(full_name, email)`
-    )
-    .order("created_at", { ascending: false })
-    .limit(100);
 
   const invoiceIds = (invoices ?? []).map((i) => i.id);
   const [{ data: installments }, { data: lineItems }] = invoiceIds.length
@@ -232,7 +234,7 @@ export default async function InvoiceGeneratorPage() {
         <Card className="mb-4 bg-warning-bg">
           <p className="text-sm text-warning">
             No bank details are set, so invoices leave the bank out and tell the student nothing about where to pay.{" "}
-            <Link href="/setup/invoice-settings" className="underline">
+            <Link prefetch={false} href="/setup/invoice-settings" className="underline">
               Add them in Setup › Invoice Settings
             </Link>{" "}
             if students should pay by bank transfer.

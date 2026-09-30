@@ -13,14 +13,13 @@ import { ProgramRow } from "./ProgramRow";
 import { uploadedLine } from "@/lib/activityStamp";
 import { karachiToday } from "@/lib/calendarDates";
 import { formatFee } from "@/lib/applicationFee";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 export default async function UniversityDetailPage(props: PageProps<"/setup/universities/[id]">) {
   const { id } = await props.params;
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   const { data: staffRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
   const isSuperAdmin = hasRole(staffRow, "super_admin");
   const canManageRates = await hasPermission("finance.program_rates.manage");
@@ -103,7 +102,7 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
 
   return (
     <div className="w-full">
-      <Link href="/setup/universities" className="text-sm text-muted hover:text-ink">
+      <Link prefetch={false} href="/setup/universities" className="text-sm text-muted hover:text-ink">
         &larr; Back to universities
       </Link>
       <h2 className="mt-2 mb-1 text-xl font-semibold text-ink">{university.name}</h2>

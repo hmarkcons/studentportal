@@ -111,6 +111,11 @@ try {
   await page.close();
 
   // Finance needs every rate to run payroll; losing that would break it quietly.
+  // Payroll is an editor-only page: it also needs "Manage commissions &
+  // payroll", which Role Permissions may have switched off for Finance —
+  // production has. Granted to this one person, so this is about where pay is
+  // read from, not about today's switch.
+  await admin.from("staff_permission_overrides").upsert({ staff_id: finance.id, permission_key: "finance.commissions.manage", allowed: true });
   page = await signIn(browser, finance.email);
   await page.goto(`${BASE}/finance/payroll?staff=${victim.id}`, { waitUntil: "domcontentloaded" });
   const payroll = (await pageShows(page, `${COMMISSION}%`)) ?? (await page.locator("body").innerText());
@@ -119,6 +124,7 @@ try {
   ok("...and the basic salary is prefilled from the new table",
     payroll.includes("777777") || (await page.locator('input[name="basic_salary"]').count()) > 0);
   await page.close();
+  await admin.from("staff_permission_overrides").delete().eq("staff_id", finance.id).eq("permission_key", "finance.commissions.manage");
 
   // ------------------------------------------- and nobody else can reach it
   for (const [label, who, mayRead] of [

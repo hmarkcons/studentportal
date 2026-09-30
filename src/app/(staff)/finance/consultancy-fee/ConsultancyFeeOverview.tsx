@@ -205,7 +205,7 @@ export function ConsultancyFeeOverview({ rows, canManage }: { rows: FeeRow[]; ca
                     {i + 1}
                   </td>
                   <Td frozen>
-                    <Link href={`/students/${r.studentId}`} className="text-primary hover:underline">
+                    <Link prefetch={false} href={`/students/${r.studentId}`} className="text-primary hover:underline">
                       {r.studentName}
                     </Link>
                   </Td>

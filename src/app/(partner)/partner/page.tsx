@@ -14,6 +14,7 @@ import { ProgressRing } from "@/components/charts/ProgressRing";
 import { karachiToday } from "@/lib/calendarDates";
 import { summarizePartner } from "@/lib/dashboards/partner";
 import { formatAmount } from "@/lib/marketing";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 type PartnerApplicationRow = {
   application_id: string;
@@ -58,17 +59,17 @@ function enrolledYearApprox(row: PartnerApplicationRow): number {
 export default async function PartnerDashboardPage() {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
-  const { data: account } = await supabase
-    .from("partner_university_accounts")
-    .select("university_id")
-    .eq("id", user?.id ?? "")
-    .maybeSingle();
-
-  const { data: applicationsData } = await supabase.rpc("get_partner_applications");
+  // At once: only the messages further down need an answer from here (the
+  // university), so the rest no longer wait for one another.
+  const [{ data: account }, { data: applicationsData }, { data: commissionRows }] = await Promise.all([
+    supabase.from("partner_university_accounts").select("university_id").eq("id", user?.id ?? "").maybeSingle(),
+    supabase.rpc("get_partner_applications"),
+    supabase
+      .from("partner_commissions")
+      .select("id, expected_amount, currency, status, student:leads(full_name), application:applications(intake)"),
+  ]);
   const applications = (applicationsData ?? []) as PartnerApplicationRow[];
 
   const pending = applications.filter((a) => !["enrolled", "rejected", "declined", "withdrawn"].includes(a.current_stage));
@@ -105,11 +106,9 @@ export default async function PartnerDashboardPage() {
   });
   const trendData = [...trendMap.entries()].sort((a, b) => a[0] - b[0]).map(([year, v]) => ({ year, ...v }));
 
-  const { data: commissionsRaw } = account
-    ? await supabase
-        .from("partner_commissions")
-        .select("id, expected_amount, currency, status, student:leads(full_name), application:applications(intake)")
-    : { data: [] };
+  // Only for a partner account, as before; row-level security keeps the rows
+  // to this partner's own.
+  const commissionsRaw = account ? commissionRows : [];
 
   const summary = summarizePartner({
     apps: applications.map((a) => ({ ...a, pipeline_stages: Array.isArray(a.pipeline_stages) ? a.pipeline_stages : [] })),
@@ -196,7 +195,7 @@ export default async function PartnerDashboardPage() {
             <ul className="flex flex-col divide-y divide-border text-sm">
               {summary.awaitingDecision.map((a) => (
                 <li key={a.id} className="flex items-center justify-between gap-3 py-1.5">
-                  <Link href={`/partner/applications/${a.id}`} className="min-w-0 truncate text-primary hover:underline">
+                  <Link prefetch={false} href={`/partner/applications/${a.id}`} className="min-w-0 truncate text-primary hover:underline">
                     {a.label}
                   </Link>
                   <span className={`shrink-0 text-xs tabular-nums ${a.days >= 14 ? "text-danger" : "text-muted"}`}>{a.days} days</span>
@@ -216,7 +215,7 @@ export default async function PartnerDashboardPage() {
         <h3 className="mb-3 text-sm font-medium text-ink">Applications pending review</h3>
         <div className="flex flex-col divide-y divide-border">
           {pending.map((a) => (
-            <Link key={a.application_id} href={`/partner/applications/${a.application_id}`} className="flex items-center justify-between py-2 text-sm hover:text-primary">
+            <Link prefetch={false} key={a.application_id} href={`/partner/applications/${a.application_id}`} className="flex items-center justify-between py-2 text-sm hover:text-primary">
               <span>
                 {a.student_name} {a.program_name && `· ${a.program_name}`} {a.intake && `· ${a.intake}`}
               </span>
@@ -260,7 +259,7 @@ export default async function PartnerDashboardPage() {
           ))}
           {(!commissionsRaw || commissionsRaw.length === 0) && <p className="py-2 text-sm text-muted">No commission records yet.</p>}
         </div>
-        <Link href="/partner/commissions" className="mt-3 inline-block text-sm text-primary hover:underline">
+        <Link prefetch={false} href="/partner/commissions" className="mt-3 inline-block text-sm text-primary hover:underline">
           Manage commissions →
         </Link>
       </Card>

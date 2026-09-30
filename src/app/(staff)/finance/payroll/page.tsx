@@ -24,6 +24,7 @@ import {
 import { formatDuration } from "@/lib/attendance";
 import { AttendanceSummaryCard } from "./AttendanceSummaryCard";
 import { leaveForMonth } from "@/lib/leave";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -42,9 +43,7 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
   const { staff: staffId = "", month: monthParam } = await props.searchParams;
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   const { data: viewerRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
   const canManage = hasRole(viewerRow, "finance") || hasRole(viewerRow, "super_admin");
 

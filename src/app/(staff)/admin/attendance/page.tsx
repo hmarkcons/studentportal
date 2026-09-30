@@ -22,6 +22,7 @@ import {
   totalMinutes,
 } from "@/lib/attendance";
 import { TableFrame } from "@/components/ui/TableFrame";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -37,9 +38,7 @@ export default async function AttendancePage(props: { searchParams: Promise<{ mo
   const { month: monthParam, staff: staffParam } = await props.searchParams;
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   // A month at a time, rather than "the last 100 rows whoever they belong to".
   // With twenty staff and twenty-two working days a month, a flat hundred-row
@@ -137,6 +136,7 @@ export default async function AttendancePage(props: { searchParams: Promise<{ mo
                   anything to print: this code sits at 220px between a button
                   and a month of records. */}
               <Link
+                prefetch={false}
                 href="/admin/attendance/qr-sheet"
                 className="inline-flex items-center gap-1.5 rounded-md border border-primary px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
               >
@@ -155,6 +155,7 @@ export default async function AttendancePage(props: { searchParams: Promise<{ mo
           <div className="flex flex-wrap gap-1">
             {months.slice(0, 6).map((m) => (
               <Link
+                prefetch={false}
                 key={m}
                 href={`/admin/attendance?month=${m}${staffParam ? `&staff=${staffParam}` : ""}`}
                 className={`rounded-md px-2 py-1 text-xs font-medium ${

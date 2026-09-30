@@ -66,8 +66,14 @@ export const REPORT_CATALOGUE: ReportCatalogueEntry[] = [
   },
 ];
 
-export function visibleReports(role: StaffRole | undefined) {
-  if (!role) return [];
-  if (role === "super_admin") return REPORT_CATALOGUE;
-  return REPORT_CATALOGUE.filter((r) => r.roles.includes(role));
+/**
+ * Every report any of these roles may open. Takes all of a person's roles
+ * (staffRoles), not the primary one: somebody who is a counsellor first and
+ * Management as well is an audience for Management's reports too.
+ */
+export function visibleReports(roles: StaffRole | readonly StaffRole[] | undefined) {
+  const held = (Array.isArray(roles) ? roles : roles ? [roles] : []) as StaffRole[];
+  if (held.length === 0) return [];
+  if (held.includes("super_admin")) return REPORT_CATALOGUE;
+  return REPORT_CATALOGUE.filter((r) => r.roles.some((role) => held.includes(role)));
 }

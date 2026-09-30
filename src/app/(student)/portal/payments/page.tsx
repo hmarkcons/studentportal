@@ -18,6 +18,7 @@ import {
   sumLineItems,
   PAYMENT_STATUS_LABELS,
 } from "@/lib/invoiceMath";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 // The figures here go through computeInvoiceMath and computePaymentProgress,
 // the same functions behind the receipt PDF and the invoice email. This page
@@ -33,9 +34,7 @@ const LONG_DATE: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", 
 
 export default async function PortalPaymentsPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   const { data: student } = await supabase.from("students").select("id").eq("auth_user_id", user?.id ?? "").maybeSingle();
   if (!student) return null;
@@ -48,49 +47,51 @@ export default async function PortalPaymentsPage() {
     .eq("student_id", student.id)
     .order("created_at", { ascending: false });
 
-  const pdfByPath = await documentUrls(supabase, (invoices ?? []).map((i) => i.pdf_path));
+  const invoiceIds = (invoices ?? []).map((i) => i.id);
+  // Everything below needs only the invoices, so it is asked for at once. It
+  // went one read after another: the links, then the instalments, then the
+  // added items, then the fees.
+  const [pdfByPath, { data: installments }, { data: lineItems }, { data: adminCharges }] = await Promise.all([
+    documentUrls(supabase, (invoices ?? []).map((i) => i.pdf_path)),
+    // Ordered explicitly: without it the installments came back in whatever
+    // order Postgres returned them, so "Installment 3" could sit above 1.
+    invoiceIds.length
+      ? supabase
+          .from("invoice_installments")
+          // due_condition matters as much as due_date: the last instalment of a
+          // two- or three-payment plan deliberately has no date and falls due on
+          // the admission instead (installmentDueConditions). Without it this
+          // page told the student "No due date" for the one instalment whose
+          // timing is most carefully explained everywhere else.
+          .select("id, invoice_id, installment_no, amount, amount_paid, status, due_date, due_condition, paid_date, carried_from_installment_no, carried_part_paid, carried_paid_date, extras_amount")
+          .in("invoice_id", invoiceIds)
+          .order("installment_no", { ascending: true })
+      : Promise.resolve({ data: [] }),
+    // Items added after the invoice was raised. Readable by the student since
+    // migration 0256; before it the policy named staff only, so this page
+    // could not have shown them even if it had asked.
+    invoiceIds.length
+      ? supabase
+          .from("invoice_line_items")
+          .select("id, invoice_id, name, amount")
+          .in("invoice_id", invoiceIds)
+          .order("created_at", { ascending: true })
+      : Promise.resolve({ data: [] }),
+    // One administrative fee per country they registered for — the primary
+    // and any backups. Readable by the student since migration 0257.
+    invoiceIds.length
+      ? supabase
+          .from("invoice_admin_charges")
+          .select("id, invoice_id, country_label, amount, is_backup")
+          .in("invoice_id", invoiceIds)
+          .order("sort_order", { ascending: true })
+      : Promise.resolve({ data: [] }),
+  ]);
   const pdfUrls = new Map<string, string>();
   for (const i of invoices ?? []) {
     const url = i.pdf_path ? pdfByPath.get(i.pdf_path) : undefined;
     if (url) pdfUrls.set(i.id, url);
   }
-
-  const invoiceIds = (invoices ?? []).map((i) => i.id);
-  // Ordered explicitly: without it the installments came back in whatever
-  // order Postgres returned them, so "Installment 3" could sit above 1.
-  const { data: installments } = invoiceIds.length
-    ? await supabase
-        .from("invoice_installments")
-        // due_condition matters as much as due_date: the last instalment of a
-        // two- or three-payment plan deliberately has no date and falls due on
-        // the admission instead (installmentDueConditions). Without it this
-        // page told the student "No due date" for the one instalment whose
-        // timing is most carefully explained everywhere else.
-        .select("id, invoice_id, installment_no, amount, amount_paid, status, due_date, due_condition, paid_date, carried_from_installment_no, carried_part_paid, carried_paid_date, extras_amount")
-        .in("invoice_id", invoiceIds)
-        .order("installment_no", { ascending: true })
-    : { data: [] };
-
-  // Items added after the invoice was raised. Readable by the student since
-  // migration 0256; before it the policy named staff only, so this page could
-  // not have shown them even if it had asked.
-  const { data: lineItems } = invoiceIds.length
-    ? await supabase
-        .from("invoice_line_items")
-        .select("id, invoice_id, name, amount")
-        .in("invoice_id", invoiceIds)
-        .order("created_at", { ascending: true })
-    : { data: [] };
-
-  // One administrative fee per country they registered for — the primary and
-  // any backups. Readable by the student since migration 0257.
-  const { data: adminCharges } = invoiceIds.length
-    ? await supabase
-        .from("invoice_admin_charges")
-        .select("id, invoice_id, country_label, amount, is_backup")
-        .in("invoice_id", invoiceIds)
-        .order("sort_order", { ascending: true })
-    : { data: [] };
 
   const today = new Date().toISOString().slice(0, 10);
 

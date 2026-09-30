@@ -6,8 +6,10 @@ import { RadialGauge } from "@/components/ui/RadialGauge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LEAD_STATUS_LABELS } from "@/lib/constants";
 import { visibleReports } from "@/lib/reportsCatalogue";
+import { staffRoles } from "@/lib/auth/roles";
 import { listVisaDecisions } from "@/lib/visaDecisions";
 import { buildLeadOwners, ownerKey, karachiMonthKey, recentMonths } from "@/lib/leadOwners";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -16,28 +18,29 @@ function one<T>(v: T | T[] | null) {
 export default async function ReportsPage() {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
-  const catalogue = visibleReports(staffRow?.role as never);
-
-  const { data: leads } = await supabase.from("leads").select("id, status, assigned_counselor_id, registered_at, date_of_inquiry");
-  const { data: logs } = await supabase.from("lead_call_logs").select("id, counselor:staff(full_name), created_at");
-  const visaDecisions = await listVisaDecisions(supabase);
-  const { data: staff } = await supabase.from("staff").select("id, full_name, role, roles, status, monthly_target");
-
+  const user = await getCurrentUser();
   const today = new Date().toISOString().slice(0, 10);
-  const { count: overdueTasks } = await supabase
-    .from("application_tasks")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "pending")
-    .lt("due_date", today);
-  const { count: overdueReminders } = await supabase
-    .from("reminders")
-    .select("id", { count: "exact", head: true })
-    .eq("resolved", false)
-    .lt("due_date", today);
+
+  // All of it at once. None of these needs another, and they went one after
+  // another — seven round trips before the page could show a figure.
+  const [
+    { data: staffRow },
+    { data: leads },
+    { data: logs },
+    visaDecisions,
+    { data: staff },
+    { count: overdueTasks },
+    { count: overdueReminders },
+  ] = await Promise.all([
+    supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle(),
+    supabase.from("leads").select("id, status, assigned_counselor_id, registered_at, date_of_inquiry"),
+    supabase.from("lead_call_logs").select("id, counselor:staff(full_name), created_at"),
+    listVisaDecisions(supabase),
+    supabase.from("staff").select("id, full_name, role, roles, status, monthly_target"),
+    supabase.from("application_tasks").select("id", { count: "exact", head: true }).eq("status", "pending").lt("due_date", today),
+    supabase.from("reminders").select("id", { count: "exact", head: true }).eq("resolved", false).lt("due_date", today),
+  ]);
+  const catalogue = visibleReports(staffRoles(staffRow));
   const overdueCount = (overdueTasks ?? 0) + (overdueReminders ?? 0);
 
   const totalLeads = leads?.length ?? 0;
@@ -88,7 +91,7 @@ export default async function ReportsPage() {
         <StatCard label="Registered" value={registeredCount} tone="success" />
         <StatCard label="Visa approval rate" value={`${Math.round(visaApprovalRate)}%`} tone="success" />
         <StatCard label="Calls logged" value={logs?.length ?? 0} />
-        <Link href="/calendar">
+        <Link prefetch={false} href="/calendar">
           <StatCard label="Overdue" value={overdueCount} tone={overdueCount > 0 ? "danger" : "default"} />
         </Link>
       </div>
@@ -162,7 +165,7 @@ export default async function ReportsPage() {
           <h3 className="mt-8 mb-3 text-sm font-medium text-ink">More reports</h3>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {catalogue.map((r) => (
-              <Link key={r.href} href={r.href}>
+              <Link prefetch={false} key={r.href} href={r.href}>
                 <Card className="h-full transition hover:border-primary">
                   <p className="text-sm font-medium text-ink">{r.label}</p>
                   <p className="mt-1 text-xs text-muted">{r.description}</p>

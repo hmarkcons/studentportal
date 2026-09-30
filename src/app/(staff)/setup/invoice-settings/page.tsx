@@ -4,12 +4,11 @@ import { Card } from "@/components/ui/Card";
 import { getInvoiceBankSettings } from "@/lib/actions/invoiceSettings";
 import { bankFromSettings, hasBankDetails } from "@/lib/invoiceIssuer";
 import { InvoiceSettingsForm } from "./InvoiceSettingsForm";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 export default async function InvoiceSettingsPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   const { data: staffRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
   // Fixed rather than a Role Permissions switch, and the database agrees (0286).
   const canEdit = hasRole(staffRow, "super_admin", "finance");

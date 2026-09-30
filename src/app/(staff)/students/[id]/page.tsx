@@ -77,17 +77,35 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   // the checklist, prices the invoice and reads the trackers.
   if (seesStagesOnly(viewerStaff)) return <StagesOnlyView studentId={id} supabase={supabase} />;
   const isSuperAdminRole = hasRole(viewerStaff, "super_admin");
-  const perms = await getEffectivePermissions();
-  const isSuperAdmin = perms["agreements.edit_delete"] === true;
-  const canModifyAgreement = perms["agreements.process"] === true;
-  const canManageInvoice = perms["finance.invoices.manage"] === true;
-  const canDeleteInvoice = perms["finance.invoices.delete"] === true;
 
-  await ensureStudentDocumentRequirements(id);
+  // The checklist as this page lists it. A function because it can be read
+  // twice in one render — see requirementsChanged below.
+  const readDocs = (afterWrite = false) => {
+    const q = supabase
+      .from("student_documents")
+      .select(
+        "id, category, custom_name, status, file_path, deadline, rejected_reason, application_id, uploaded_at, uploaded_by_role, verified_at, created_at, template_id, template:document_templates(name)"
+      )
+      .eq("student_id", id)
+      .order("created_at", { ascending: false });
+    // Next memoises identical fetches within a render, so a second read made
+    // exactly like the first is handed the first one's response, from before
+    // the write. Ordering by id as well asks for the same rows differently.
+    return (afterWrite ? q.order("id") : q).returns<
+      (DocRow & { application_id: string | null; custom_name: string | null; template: { name: string } | { name: string }[] | null })[]
+    >();
+  };
 
   // ---- Level 1: every query below is independent of every other — fetch all
-  // of them concurrently instead of one round trip at a time. ----
+  // of them concurrently instead of one round trip at a time.
+  //
+  // That includes bringing the checklist up to date, which used to go first
+  // and on its own, holding everything else back by two round trips. It
+  // almost always finds nothing to do, so the documents are read beside it and
+  // read again only on the load where it did add or remove one. ----
   const [
+    perms,
+    requirementsChanged,
     [
       { data: student },
       { data: leadRegistration },
@@ -95,7 +113,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       { data: agreements },
       { data: invoices },
       { data: applications },
-      { data: rawDocs },
+      { data: docsBeforeTopUp },
       existingCredentialTypes,
     ],
     allDestinations,
@@ -103,6 +121,8 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     templates,
     feeProducts,
   ] = await Promise.all([
+    getEffectivePermissions(),
+    ensureStudentDocumentRequirements(id),
     Promise.all([
       supabase
         .from("students")
@@ -141,14 +161,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         )
         .eq("student_id", id)
         .order("created_at", { ascending: true }),
-      supabase
-        .from("student_documents")
-        .select(
-      "id, category, custom_name, status, file_path, deadline, rejected_reason, application_id, uploaded_at, uploaded_by_role, verified_at, created_at, template_id, template:document_templates(name)"
-    )
-        .eq("student_id", id)
-        .order("created_at", { ascending: false })
-        .returns<(DocRow & { application_id: string | null; custom_name: string | null; template: { name: string } | { name: string }[] | null })[]>(),
+      readDocs(),
       listCredentialTypesAction("student", id),
     ]),
     // Reference/lookup data — identical for every staff member, cached for 5
@@ -158,6 +171,11 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     getCachedAgreementTemplates(),
     getCachedFeeProducts(),
   ]);
+  const isSuperAdmin = perms["agreements.edit_delete"] === true;
+  const canModifyAgreement = perms["agreements.process"] === true;
+  const canManageInvoice = perms["finance.invoices.manage"] === true;
+  const canDeleteInvoice = perms["finance.invoices.delete"] === true;
+  const rawDocs = requirementsChanged ? (await readDocs(true)).data : docsBeforeTopUp;
 
   const signedAgreement = agreements?.find((a) => a.status === "signed");
   // Header summaries for the collapsible sections below. They open closed, so
@@ -425,10 +443,24 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       values: savedStageValuesByDestinationId.get(destinationId) ?? {},
     }));
 
+  // The consent video a student recorded when e-signing, for staff to watch
+  // before verifying (see VerifySignedAgreement).
+
+  // The consent video is the evidence that an e-signature is attributable, so
+  // it has to stay watchable after verification — it was previously hidden the
+  // moment the agreement was marked signed, exactly when it matters most.
+  // It is footage of a person, so viewing is limited to Super Admin and the
+  // two people handling this student's case. No fallback to the whole
+  // processing team when nobody is assigned.
+  const canViewConsentVideo =
+    isSuperAdminRole ||
+    (Boolean(viewerStaff?.id) &&
+      (viewerStaff!.id === leadRegistration?.assigned_counselor_id ||
+        viewerStaff!.id === leadRegistration?.processing_officer_id));
+
   // ---- Level 2: each of these depends only on level-1 results, and is
   // independent of every other level-2 query — fetch concurrently again. ----
-  const docHistory = await loadDocumentHistory(supabase, (rawDocs ?? []).map((d) => d.id));
-
+  const primaryApps = Array.from(primaryAppByCountry.values());
   const [
     agreementLinkEntries,
     { data: allLineItems },
@@ -441,6 +473,10 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     { data: processingOfficers },
     { data: allAdminCharges },
     restartContext,
+    consentVideoEntries,
+    { data: trackerExtras },
+    { data: scholarshipBodies },
+    prefillSourceIfTracked,
   ] = await Promise.all([
     // The template and the signed scan are ordinary links, so they batch. The
     // generated PDF carries a per-agreement download filename, which the batch
@@ -484,10 +520,15 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     // Every document's URL in one request rather than one per file. A student
     // with thirty documents was thirty round trips to Storage before this page
     // could render, and they were the single biggest thing on it.
-    documentUrls(
-      supabase,
-      (rawDocs ?? []).map((d) => d.file_path)
-    ).then((urls) =>
+    Promise.all([
+      documentUrls(
+        supabase,
+        (rawDocs ?? []).map((d) => d.file_path)
+      ),
+      // Each document's earlier versions. Needs only the ids, so it is read in
+      // this wave rather than in one of its own ahead of it.
+      loadDocumentHistory(supabase, (rawDocs ?? []).map((d) => d.id)),
+    ]).then(([urls, docHistory]) =>
       (rawDocs ?? []).map((d) => {
         const templateName = one(d.template as never) as { name?: string } | null;
         // Which application this requirement belongs to, now named down to the
@@ -539,6 +580,37 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     // in one of its own after the trackers. It was the last of five queries
     // that ran strictly one after another at the foot of this page.
     loadRestartContext(id),
+    // Every version's video, not just the latest, so a superseded agreement can
+    // still be evidenced if its signature is ever questioned.
+    canViewConsentVideo
+      ? Promise.all(
+          (agreements ?? [])
+            .filter((a) => a.video_recording_path)
+            .map(async (a) => {
+              const { data } = await supabase.storage.from("documents").createSignedUrl(a.video_recording_path!, 3600);
+              return data?.signedUrl ? ([a.id, data.signedUrl] as const) : null;
+            })
+        ).then((list) => list.filter((e): e is readonly [string, string] => e !== null))
+      : Promise.resolve([] as (readonly [string, string])[]),
+    // What each country's tracker already holds, one read for every country.
+    // It needs only the applications, not the definitions read beside it, so
+    // it no longer waits a wave for them — nor does the scholarship region
+    // list the Italian tracker offers, nor what the rest of the record could
+    // prefill. The last two are wasted on a student whose countries turn out
+    // to have no tracker at all, which is rare and costs nothing in time.
+    primaryApps.length
+      ? supabase
+          .from("application_country_extra")
+          .select("application_id, field_key, field_value")
+          .in(
+            "application_id",
+            primaryApps.map((entry) => entry.id)
+          )
+      : Promise.resolve({ data: [] as { application_id: string; field_key: string; field_value: string | null }[] }),
+    primaryAppByCountry.has("IT")
+      ? supabase.from("scholarship_bodies").select("region, covers")
+      : Promise.resolve({ data: null as { region: string; covers: string[] | null }[] | null }),
+    primaryApps.length ? loadTrackerPrefillSource(id, rawDocs ?? []) : Promise.resolve(null),
   ]);
 
   // Header summary for the Invoice section, which also opens collapsed. Counted
@@ -580,34 +652,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   const agreementLinks = new Map(agreementLinkEntries);
   const invoicePdfUrls = new Map(invoicePdfEntries.filter((e): e is readonly [string, string] => Boolean(e[1])));
 
-  // The consent video a student recorded when e-signing, for staff to watch
-  // before verifying (see VerifySignedAgreement).
-
-  // The consent video is the evidence that an e-signature is attributable, so
-  // it has to stay watchable after verification — it was previously hidden the
-  // moment the agreement was marked signed, exactly when it matters most.
-  // It is footage of a person, so viewing is limited to Super Admin and the
-  // two people handling this student's case. No fallback to the whole
-  // processing team when nobody is assigned.
-  const canViewConsentVideo =
-    isSuperAdminRole ||
-    (Boolean(viewerStaff?.id) &&
-      (viewerStaff!.id === leadRegistration?.assigned_counselor_id ||
-        viewerStaff!.id === leadRegistration?.processing_officer_id));
-
-  // Every version's video, not just the latest, so a superseded agreement can
-  // still be evidenced if its signature is ever questioned.
-  const consentVideoUrls = new Map<string, string>();
-  if (canViewConsentVideo) {
-    await Promise.all(
-      (agreements ?? [])
-        .filter((a) => a.video_recording_path)
-        .map(async (a) => {
-          const { data } = await supabase.storage.from("documents").createSignedUrl(a.video_recording_path!, 3600);
-          if (data?.signedUrl) consentVideoUrls.set(a.id, data.signedUrl);
-        })
-    );
-  }
+  const consentVideoUrls = new Map(consentVideoEntries);
 
   const taskRows: DashboardTaskRow[] = (rawTasks ?? []).map((t) => ({
     id: t.id,
@@ -664,47 +709,42 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     };
   }
 
-  // ---- Level 3: per-country tracker sections — each country's fields fetch
-  // in parallel, one level below trackerDefsByCountry (level 2). ----
-  const trackerSections = await Promise.all(
-    Array.from(primaryAppByCountry.values())
-      .filter((entry) => (trackerDefsByCountry[entry.countryCode]?.length ?? 0) > 0)
-      .map(async (entry) => {
-        const needsScholarshipBodies = entry.countryCode === "IT";
-        const [{ data: extras }, bodiesResult] = await Promise.all([
-          supabase.from("application_country_extra").select("field_key, field_value").eq("application_id", entry.id),
-          needsScholarshipBodies
-            ? supabase.from("scholarship_bodies").select("region, covers")
-            : Promise.resolve({ data: null as { region: string; covers: string[] | null }[] | null }),
-        ]);
-        const values: Record<string, string> = {};
-        (extras ?? []).forEach((e) => (values[e.field_key] = e.field_value ?? ""));
+  // ---- Per-country tracker sections, from what level 2 read. ----
+  const extrasByApplication = new Map<string, { field_key: string; field_value: string | null }[]>();
+  for (const e of trackerExtras ?? []) {
+    (extrasByApplication.get(e.application_id) ?? extrasByApplication.set(e.application_id, []).get(e.application_id)!).push(e);
+  }
+  const trackerSections = primaryApps
+    .filter((entry) => (trackerDefsByCountry[entry.countryCode]?.length ?? 0) > 0)
+    .map((entry) => {
+      const needsScholarshipBodies = entry.countryCode === "IT";
+      const values: Record<string, string> = {};
+      (extrasByApplication.get(entry.id) ?? []).forEach((e) => (values[e.field_key] = e.field_value ?? ""));
 
-        // One entry per university, not per application: a student with two
-        // programmes at the same university produced the same university twice
-        // in this picker. Keyed by name, and when an application id for that
-        // university is already stored in this tracker we keep that exact id so
-        // an existing saved answer does not silently lose its selection.
-        const savedIds = new Set(Object.values(values));
-        const byUniversity = new Map<string, { value: string; label: string }>();
+      // One entry per university, not per application: a student with two
+      // programmes at the same university produced the same university twice
+      // in this picker. Keyed by name, and when an application id for that
+      // university is already stored in this tracker we keep that exact id so
+      // an existing saved answer does not silently lose its selection.
+      const savedIds = new Set(Object.values(values));
+      const byUniversity = new Map<string, { value: string; label: string }>();
+      for (const a of appsByCountry.get(entry.countryCode) ?? []) {
+        const existing = byUniversity.get(a.name);
+        if (!existing) byUniversity.set(a.name, { value: a.id, label: a.name });
+        else if (savedIds.has(a.id)) byUniversity.set(a.name, { value: a.id, label: a.name });
+      }
+      const universityOptions = Array.from(byUniversity.values());
+      const regionByUniversityValue: Record<string, string> = {};
+
+      if (needsScholarshipBodies) {
         for (const a of appsByCountry.get(entry.countryCode) ?? []) {
-          const existing = byUniversity.get(a.name);
-          if (!existing) byUniversity.set(a.name, { value: a.id, label: a.name });
-          else if (savedIds.has(a.id)) byUniversity.set(a.name, { value: a.id, label: a.name });
+          const match = (scholarshipBodies ?? []).find((b) => (b.covers ?? []).includes(a.name));
+          if (match?.region) regionByUniversityValue[a.id] = match.region;
         }
-        const universityOptions = Array.from(byUniversity.values());
-        const regionByUniversityValue: Record<string, string> = {};
+      }
 
-        if (needsScholarshipBodies) {
-          for (const a of appsByCountry.get(entry.countryCode) ?? []) {
-            const match = (bodiesResult.data ?? []).find((b) => (b.covers ?? []).includes(a.name));
-            if (match?.region) regionByUniversityValue[a.id] = match.region;
-          }
-        }
-
-        return { entry, values, fields: trackerDefsByCountry[entry.countryCode] ?? [], universityOptions, regionByUniversityValue };
-      })
-  );
+      return { entry, values, fields: trackerDefsByCountry[entry.countryCode] ?? [], universityOptions, regionByUniversityValue };
+    });
 
   const trackerProgress = summariseTracker(trackerSections);
 
@@ -733,9 +773,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
 
   // What the rest of the record already says about the fields the tracker
   // leaves empty. Offered beside each one; nothing is written by this.
-  const prefillSource = trackerSections.length > 0
-    ? await loadTrackerPrefillSource(id, rawDocs ?? [])
-    : null;
+  const prefillSource = trackerSections.length > 0 ? prefillSourceIfTracked : null;
 
   const trackerTabs = trackerSections
     .map((section) => ({
@@ -755,9 +793,10 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       {destinationPipelineRows.length > 0 && (
         <>
           <div className="mb-6 flex flex-col gap-4">
-            {destinationPipelineRows.map((row) => (
+            {destinationPipelineRows.map((row, i) => (
               <DestinationPipelineCard
                 key={row.destinationId}
+                accent={(i % 5) + 1}
                 leadId={id}
                 destinationId={row.destinationId}
                 destinationName={row.destinationName}
@@ -829,7 +868,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         <Card>
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-medium text-ink">Missing Documents</h3>
-            <Link href={`/students/${id}/documents`} className="text-xs text-primary hover:underline">
+            <Link prefetch={false} href={`/students/${id}/documents`} className="text-xs text-primary hover:underline">
               View all documents →
             </Link>
           </div>

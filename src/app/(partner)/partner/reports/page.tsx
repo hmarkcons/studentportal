@@ -8,14 +8,16 @@ function one<T>(v: T | T[] | null) {
 export default async function PartnerReportsPage() {
   const supabase = await createClient();
 
-  const { data: applications } = await supabase.rpc("get_partner_applications");
-
-  // RLS (partner_commissions_select_partner) already scopes this to the
-  // caller's own university via the joined application's university_id —
-  // no extra filter needed here.
-  const { data: commissions } = await supabase
-    .from("partner_commissions")
-    .select("expected_amount, paid_fee, currency, status, application:applications(program:programs(name))");
+  // Both at once; neither needs the other.
+  const [{ data: applications }, { data: commissions }] = await Promise.all([
+    supabase.rpc("get_partner_applications"),
+    // RLS (partner_commissions_select_partner) already scopes this to the
+    // caller's own university via the joined application's university_id —
+    // no extra filter needed here.
+    supabase
+      .from("partner_commissions")
+      .select("expected_amount, paid_fee, currency, status, application:applications(program:programs(name))"),
+  ]);
 
   const byProgram = new Map<string, { total: number; enrolled: number }>();
   const byIntake = new Map<string, number>();

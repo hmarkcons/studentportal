@@ -199,7 +199,7 @@ export default async function VisaPageBuilder({
               <Badge tone={hasMessageOverride(overrideRow) ? "info" : "neutral"}>
                 {hasMessageOverride(overrideRow) ? "Its own wording" : "Shared wording"}
               </Badge>
-              <Link href="/setup/visa-messages" className="text-xs text-primary hover:underline">
+              <Link prefetch={false} href="/setup/visa-messages" className="text-xs text-primary hover:underline">
                 edit the shared wording &rarr;
               </Link>
             </div>
@@ -257,7 +257,7 @@ export default async function VisaPageBuilder({
           <Card>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-sm font-semibold text-ink">3. Progress fields</h3>
-              <Link href="/setup/document-trackers" className="text-xs text-primary hover:underline">
+              <Link prefetch={false} href="/setup/document-trackers" className="text-xs text-primary hover:underline">
                 choose which fields appear &rarr;
               </Link>
             </div>

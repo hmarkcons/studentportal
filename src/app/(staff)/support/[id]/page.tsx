@@ -49,7 +49,7 @@ export default async function TicketDetailPage(props: PageProps<"/support/[id]">
 
   return (
     <div className="w-full max-w-2xl">
-      <Link href="/support" className="text-sm text-muted hover:text-ink">
+      <Link prefetch={false} href="/support" className="text-sm text-muted hover:text-ink">
         &larr; Back to support tickets
       </Link>
 

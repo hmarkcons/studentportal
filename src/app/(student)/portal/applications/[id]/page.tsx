@@ -41,6 +41,7 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
   return (
     <div className="flex w-full flex-col gap-6" data-portal-page>
       <Link
+        prefetch={false}
         href="/portal/applications"
         data-rise
         className="inline-flex w-fit items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-sm text-muted shadow-sm hover:border-primary hover:text-primary"
@@ -93,7 +94,7 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
             </span>
             <p className="text-sm text-ink">
               Documents for this application are on your{" "}
-              <Link href="/portal/documents" className="font-medium text-primary hover:underline">
+              <Link prefetch={false} href="/portal/documents" className="font-medium text-primary hover:underline">
                 Documents
               </Link>{" "}
               page, with everything else we need from you.

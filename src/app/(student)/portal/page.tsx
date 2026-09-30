@@ -250,6 +250,7 @@ export default async function PortalDashboardPage() {
               </p>
               {journey.next?.href && (
                 <Link
+                  prefetch={false}
                   href={journey.next.href}
                   className="inline-flex w-fit items-center gap-1 rounded-lg bg-white px-3 py-1 text-xs font-semibold text-[var(--banner-to)] shadow-sm hover:bg-white/90"
                 >
@@ -283,6 +284,7 @@ export default async function PortalDashboardPage() {
 
           {/* The one dated thing nearest to now, where it is seen first. */}
           <Link
+            prefetch={false}
             href={soonest?.href ?? "/portal/appointments"}
             className="relative flex w-full max-w-xs items-center gap-3 rounded-2xl bg-white/15 px-4 py-3 ring-1 ring-white/25 backdrop-blur-md transition hover:bg-white/20 sm:w-auto"
             data-hero-next
@@ -367,6 +369,7 @@ export default async function PortalDashboardPage() {
                 {toUpload.slice(0, 3).map((d) => (
                   <li key={d.id} className="min-w-0">
                     <Link
+                      prefetch={false}
                       href={`/portal/documents?guide=${d.id}`}
                       className="flex min-w-0 items-center gap-1.5 text-xs text-ink hover:text-primary"
                       data-dashboard-todo-item={d.id}
@@ -379,7 +382,7 @@ export default async function PortalDashboardPage() {
                 ))}
               </ul>
               {toUpload.length > 3 && (
-                <Link href="/portal/documents" className="mt-1 inline-block text-[11px] font-medium text-primary hover:underline">
+                <Link prefetch={false} href="/portal/documents" className="mt-1 inline-block text-[11px] font-medium text-primary hover:underline">
                   and {toUpload.length - 3} more
                 </Link>
               )}
@@ -517,11 +520,11 @@ export default async function PortalDashboardPage() {
                 <MessageCircle aria-hidden className="h-3.5 w-3.5 shrink-0" />
                 WhatsApp HMARK
               </a>
-              <Link href="/portal/messages" className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-ink hover:border-primary hover:text-primary">
+              <Link prefetch={false} href="/portal/messages" className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-ink hover:border-primary hover:text-primary">
                 <Mail aria-hidden className="h-3.5 w-3.5 shrink-0" />
                 Message
               </Link>
-              <Link href="/portal/support" className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-ink hover:border-primary hover:text-primary">
+              <Link prefetch={false} href="/portal/support" className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-ink hover:border-primary hover:text-primary">
                 <Headset aria-hidden className="h-3.5 w-3.5 shrink-0" />
                 Support
               </Link>

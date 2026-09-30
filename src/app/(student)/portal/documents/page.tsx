@@ -30,26 +30,30 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
   const { data: student } = await supabase.from("students").select("id").eq("auth_user_id", userId ?? "").maybeSingle();
   if (!student) return null;
 
-  await ensureStudentDocumentRequirements(student.id);
-
-  const [{ data: applications }, cycleDocs] = await Promise.all([
+  // The checklist is brought up to date before it is read, here where the
+  // student is the one reading it. What does not depend on it is read beside
+  // it rather than after.
+  const [{ data: applications }, configured] = await Promise.all([
     supabase.from("applications").select("id, university:universities(name)").eq("student_id", student.id),
-    // Which intake's rows to show — shared with the dashboard, so its
-    // document ring counts exactly these.
-    loadCycleDocuments(supabase, student.id, cycleParam),
+    // Order and labels come from what the Create Doc Checklist builder set for
+    // this student's destinations — see the sections below.
+    loadStudentChecklistSections(supabase, student.id),
+    ensureStudentDocumentRequirements(student.id),
   ]);
+  // Which intake's rows to show — shared with the dashboard, so its
+  // document ring counts exactly these.
+  const cycleDocs = await loadCycleDocuments(supabase, student.id, cycleParam);
   const appLabel = new Map((applications ?? []).map((a) => [a.id, one(a.university as never) as { name?: string } | null]));
   const { docs: rawDocs, cycles, showCycleTabs, activeCycleId, isPreviousIntake, inheritedFromById } = cycleDocs;
 
-  // How to prepare each one, from the checklist builder (0300).
-  const [docHistory, guides] = await Promise.all([
+  const [docHistory, guides, docUrls] = await Promise.all([
     loadDocumentHistory(supabase, rawDocs.map((d) => d.id)),
+    // How to prepare each one, from the checklist builder (0300).
     loadDocumentGuides(supabase, student.id, rawDocs),
+    // Every file's link in one request, then a plain synchronous map. This was
+    // one round trip to Storage per document before the page could render.
+    documentUrls(supabase, rawDocs.map((d) => d.file_path)),
   ]);
-
-  // Every file's link in one request, then a plain synchronous map. This was
-  // one round trip to Storage per document before the page could render.
-  const docUrls = await documentUrls(supabase, rawDocs.map((d) => d.file_path));
 
   const docsWithUrls = rawDocs.map((d) => {
       const uni = d.application_id ? appLabel.get(d.application_id) : null;
@@ -74,7 +78,6 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
   // Order and labels come from what the Create Doc Checklist builder set for
   // this student's destinations, so a section created in Setup reads under its
   // own name here instead of being lumped in as "Other documents".
-  const configured = await loadStudentChecklistSections(supabase, student.id);
   const sections: { category: string; label: string; docs: typeof docsWithUrls }[] = configured
     .map((entry) => ({
       category: entry.key,
@@ -150,6 +153,7 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
         <div className="flex flex-wrap gap-2" data-rise>
           {cycles.map((c) => (
             <Link
+              prefetch={false}
               key={c.id}
               href={`/portal/documents?cycle=${c.id}`}
               className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${

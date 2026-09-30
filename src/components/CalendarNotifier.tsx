@@ -96,7 +96,20 @@ export function CalendarNotifier() {
     }
 
     forgetOld();
-    void refresh();
+    // Not while the page is still arriving. The first read is a server action,
+    // which is a request of its own through the proxy's checks, and made on
+    // mount it went out while the page it sits on was still streaming in — on
+    // every full load of every staff page. Nothing it could say is due in the
+    // next second, so it waits for the page to finish and the browser to be
+    // idle.
+    let firstRead: number | undefined;
+    // Safari has no requestIdleCallback.
+    const idle = window.requestIdleCallback ?? ((cb: () => void, _options?: IdleRequestOptions) => window.setTimeout(cb, 1500));
+    const startReading = () => {
+      firstRead = idle(() => void refresh(), { timeout: 5000 }) as number;
+    };
+    if (document.readyState === "complete") startReading();
+    else window.addEventListener("load", startReading, { once: true });
     const interval = window.setInterval(() => void refresh(), REFRESH_MS);
     const onChange = () => void refresh();
     const onVisible = () => {
@@ -108,6 +121,8 @@ export function CalendarNotifier() {
       cancelled = true;
       timers.forEach((t) => window.clearTimeout(t));
       window.clearInterval(interval);
+      window.removeEventListener("load", startReading);
+      if (firstRead !== undefined) (window.cancelIdleCallback ?? window.clearTimeout)(firstRead);
       window.removeEventListener("calendar:changed", onChange);
       document.removeEventListener("visibilitychange", onVisible);
     };

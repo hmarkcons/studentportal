@@ -28,15 +28,15 @@ function formatTotals(totals: Map<string, number>) {
 export default async function RevenueCommissionPage() {
   const { supabase } = await requireReportAccess("/reports/revenue-commission");
 
-  const { data: invoices } = await supabase
-    .from("invoices")
-    .select("id, admin_charge, consultancy_fee, discount_amount, tax_rate, tax_base, currency");
-  const { data: installments } = await supabase
-    .from("invoice_installments")
-    .select("invoice_id, amount, amount_paid, status, due_date");
-  const { data: lineItems } = await supabase.from("invoice_line_items").select("invoice_id, amount");
-  const { data: staffCommissions } = await supabase.from("staff_commissions").select("amount, status, currency");
-  const { data: partnerCommissions } = await supabase.from("partner_commissions").select("expected_amount, status, currency");
+  // All five at once; none needs another. They were read one after another.
+  const [{ data: invoices }, { data: installments }, { data: lineItems }, { data: staffCommissions }, { data: partnerCommissions }] =
+    await Promise.all([
+      supabase.from("invoices").select("id, admin_charge, consultancy_fee, discount_amount, tax_rate, tax_base, currency"),
+      supabase.from("invoice_installments").select("invoice_id, amount, amount_paid, status, due_date"),
+      supabase.from("invoice_line_items").select("invoice_id, amount"),
+      supabase.from("staff_commissions").select("amount, status, currency"),
+      supabase.from("partner_commissions").select("expected_amount, status, currency"),
+    ]);
 
   type ScheduleRow = { amount: number | null; amount_paid: number | null; status: string | null; due_date: string | null };
   const scheduleByInvoice = new Map<string, ScheduleRow[]>();
@@ -122,7 +122,7 @@ export default async function RevenueCommissionPage() {
 
   return (
     <div className="w-full">
-      <Link href="/reports" className="text-sm text-muted hover:text-ink">
+      <Link prefetch={false} href="/reports" className="text-sm text-muted hover:text-ink">
         &larr; Back to reports
       </Link>
       <h2 className="mt-2 mb-4 text-lg font-semibold text-ink">Revenue & Commission</h2>

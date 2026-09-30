@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { agreementDestination } from "@/lib/agreementCountry";
 import { computeInvoiceStatus } from "@/lib/invoiceStatus";
 import { StaffCommissionTable, type CommissionRow } from "./StaffCommissionTable";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -18,9 +19,7 @@ const MONTH_NAMES = [
 export default async function StaffCommissionPage() {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   const { data: staffRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
   const allowed = hasRole(staffRow, "super_admin") || hasRole(staffRow, "finance");
 

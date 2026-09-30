@@ -11,7 +11,7 @@
 import { countUnreadMessages } from "@/lib/unreadMessages";
 import { loadTicketActivity, loadTicketReadMarkers, hasUnseenStaffReply } from "@/lib/supportSignals";
 import { loadAppointments, daysUntil, type PortalAppointment } from "@/lib/portalAppointments";
-import { computePaymentProgress } from "@/lib/invoiceMath";
+import { computePaymentProgress, type InstallmentLike } from "@/lib/invoiceMath";
 import { profileChecklist, countMissing, passportStatus, type PassportStatus } from "@/lib/profileCompleteness";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -45,7 +45,10 @@ export type PortalSummary = {
 export async function loadPortalSummary(supabase: SupabaseClient, studentId: string): Promise<PortalSummary> {
   const today = new Date().toISOString().slice(0, 10);
 
-  const [unreadMessages, documentsNeedingAttention, appointments, invoices, tickets, student, profile] = await Promise.all([
+  // One wave. The reads that need an earlier one's answer — each ticket's
+  // replies, each invoice's instalments — chain onto it inside the wave rather
+  // than waiting for all of it, and the appointments were the slowest.
+  const [unreadMessages, documentsNeedingAttention, appointments, invoices, ticketsWithNewReply, student, profile] = await Promise.all([
     countUnreadMessages(supabase, studentId, "student"),
     supabase
       .from("student_documents")
@@ -54,11 +57,26 @@ export async function loadPortalSummary(supabase: SupabaseClient, studentId: str
       .in("status", ["missing", "rejected"])
       .then((r) => r.count ?? 0),
     loadAppointments(supabase, studentId),
+    // Money: the instalment rows are the schedule of record (see
+    // computePaymentProgress), so the balance comes from them rather than from
+    // the fee fields — in the same read as their invoices.
     supabase
       .from("invoices")
-      .select("id, currency")
+      .select("id, currency, installments:invoice_installments(invoice_id, installment_no, amount, amount_paid, status, due_date)")
       .eq("student_id", studentId),
-    supabase.from("support_tickets").select("id").eq("student_id", studentId),
+    // Support: how many tickets carry a reply the student has not opened.
+    supabase
+      .from("support_tickets")
+      .select("id")
+      .eq("student_id", studentId)
+      .then(async ({ data: tickets }) => {
+        const ticketIds = (tickets ?? []).map((t) => t.id as string);
+        const [activity, markers] = await Promise.all([
+          loadTicketActivity(supabase, ticketIds),
+          loadTicketReadMarkers(supabase, ticketIds, "student"),
+        ]);
+        return ticketIds.filter((id) => hasUnseenStaffReply(id, activity, markers)).length;
+      }),
     supabase.from("students").select("contact_number, date_of_birth, address").eq("id", studentId).maybeSingle(),
     supabase
       .from("student_profiles")
@@ -76,30 +94,17 @@ export async function loadPortalSummary(supabase: SupabaseClient, studentId: str
   const profileMissing = countMissing(checklist);
   const passport = passportStatus(profile.data?.passport_expiry ?? null);
 
-  // Support: how many tickets carry a reply the student has not opened.
-  const ticketIds = (tickets.data ?? []).map((t) => t.id);
-  const [activity, markers] = await Promise.all([
-    loadTicketActivity(supabase, ticketIds),
-    loadTicketReadMarkers(supabase, ticketIds, "student"),
-  ]);
-  const ticketsWithNewReply = ticketIds.filter((id) => hasUnseenStaffReply(id, activity, markers)).length;
-
   // Only appointments still to come — a dashboard prompting a student towards
   // a date that has passed is worse than saying nothing.
   const upcoming = appointments.filter((a) => daysUntil(a.date) >= 0);
   const nextAppointment = upcoming[0] ?? null;
 
-  // Money: the instalment rows are the schedule of record (see
-  // computePaymentProgress), so the balance comes from them rather than from
-  // the fee fields.
   let money: PortalSummary["money"] = null;
   const invoiceRows = invoices.data ?? [];
   if (invoiceRows.length > 0) {
-    const invoiceIds = invoiceRows.map((i) => i.id);
-    const { data: installments } = await supabase
-      .from("invoice_installments")
-      .select("invoice_id, installment_no, amount, amount_paid, status, due_date")
-      .in("invoice_id", invoiceIds);
+    const installments = invoiceRows.flatMap(
+      (i) => (i.installments ?? []) as (InstallmentLike & { invoice_id: string; installment_no: number | null })[]
+    );
 
     let outstanding = 0;
     let paid = 0;

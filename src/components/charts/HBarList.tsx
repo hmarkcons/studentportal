@@ -39,7 +39,7 @@ export function HBarList({
       {items.map((item) => {
         const pct = scalePercent(item.value, item.of ?? max);
         const name = item.href ? (
-          <Link href={item.href} className="truncate text-primary hover:underline">
+          <Link prefetch={false} href={item.href} className="truncate text-primary hover:underline">
             {item.label}
           </Link>
         ) : (

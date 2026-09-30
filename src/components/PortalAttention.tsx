@@ -135,6 +135,7 @@ export function PortalAttention({ summary, className = "mb-6" }: { summary: Port
       <div className="flex flex-col gap-1.5">
         {rows.map((r) => (
           <Link
+            prefetch={false}
             key={r.href + r.text}
             href={r.href}
             className={`group flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 transition-colors ${

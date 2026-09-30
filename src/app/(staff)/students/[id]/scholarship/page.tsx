@@ -253,7 +253,7 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
               <p className="mb-3 rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted">
                 Nobody has decided yet whether this student is applying for a {w.country ?? ""} scholarship. Answer
                 &ldquo;Applying for a scholarship?&rdquo; on the{" "}
-                <Link href={`/students/${id}`} className="text-primary hover:underline">
+                <Link prefetch={false} href={`/students/${id}`} className="text-primary hover:underline">
                   Dashboard tracker
                 </Link>
                 , and the ones to choose from appear here.

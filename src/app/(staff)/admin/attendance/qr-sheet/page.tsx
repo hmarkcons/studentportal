@@ -50,7 +50,7 @@ export default async function QrSheetPage() {
   return (
     <div className="w-full">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2 print:hidden">
-        <Link href="/admin/attendance" className="text-sm text-primary hover:underline">
+        <Link prefetch={false} href="/admin/attendance" className="text-sm text-primary hover:underline">
           ← Back to attendance
         </Link>
         <PrintButton />

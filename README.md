@@ -25,6 +25,15 @@ The better end state for a Karachi office is both in `ap-south-1` (Mumbai), abou
 
 `npm run check:speed` measures this. It signs in and times each page, and prints the median of several loads. Time-to-first-byte is flat at about 80ms everywhere because the App Router flushes a shell and streams the rest, so it ranks pages by full load instead.
 
+### Keeping a page to few round trips
+
+Even in-region, what a page costs is roughly the number of *waves* of queries it makes one after another — each one tens of milliseconds, and a layout's waves come before every page under it. The rules that keep that number down:
+
+- **Who is signed in comes from the token.** Pages, layouts and read-only helpers call `getCurrentUser()` (`src/lib/auth/currentUser.ts`), which verifies the session's JWT locally. The proxy has already asked the auth server with `getUser()` for that same request — that is the check that ends a revoked session — so asking again was a wave on every page. Server actions that change data keep their own `getUser()`.
+- **The proxy overlaps its checks** with `getUser()` — the office check for staff, the agreement gate for students — but only while the token has minutes left. Two calls that both refresh a session spend the same refresh token and sign the person out, so near expiry they go one after another as before.
+- **A read that needs nothing from another goes in the same `Promise.all`,** and one that needs a row's children embeds them (`leads` with its agreements, destinations and tickets, in the student layout). A follow-up that needs one read's answer chains onto that read inside the wave rather than waiting for all of it.
+- **Links do not prefetch.** A `<Link>` prefetches a server render the moment it scrolls into view, so a dashboard of links quietly rendered pages nobody opened. ESLint requires a `prefetch` prop on every `<Link>` (`eslint.config.mjs`); the `loading.tsx` skeletons give the feedback on click.
+
 ## Getting started
 
 ```bash

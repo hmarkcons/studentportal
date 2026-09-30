@@ -43,9 +43,14 @@ const MANAGE_DENIED = "Only Super Admin and the Processing team can add or remov
 //     one row each for travel history and prior refusals when they have any.
 //     These carry a derived_key so this stays idempotent and so a requirement
 //     whose profile entry has gone can be found again.
-export async function ensureStudentDocumentRequirements(studentId: string) {
+//
+// Resolves to whether it added, renamed or removed anything, so a page that
+// read the checklist beside it knows when that read is out of date.
+export async function ensureStudentDocumentRequirements(studentId: string): Promise<boolean> {
   const supabase = createAdminClient();
+  let changed = false;
   const [
+    currentCycle,
     { data: student },
     { data: destRows },
     { data: templates },
@@ -55,6 +60,12 @@ export async function ensureStudentDocumentRequirements(studentId: string) {
     { data: testScores },
     { data: profile },
   ] = await Promise.all([
+    // Beside the reads rather than after them. When it has to create the
+    // student's first cycle it also stamps their existing rows with it, which
+    // the `existing` read below may or may not see — and neither matters: a
+    // first cycle is sequence 1, and on a first attempt every row counts
+    // whatever its cycle says.
+    ensureCurrentCycle(studentId),
     supabase.from("leads").select("level_applying_for, service_type").eq("id", studentId).maybeSingle(),
     supabase.from("lead_destinations").select("destination_id").eq("lead_id", studentId),
     supabase.from("document_templates").select("id, category, level, destination_id, name, sort_order, renew_each_intake, skip_for_visa_only"),
@@ -89,7 +100,6 @@ export async function ensureStudentDocumentRequirements(studentId: string) {
   // memoizes identical fetch GETs within a render, so re-querying
   // student_cycles here returned the pre-insert empty response and stamped
   // every document with no intake. See the note in ensureCycle.ts.
-  const currentCycle = await ensureCurrentCycle(studentId);
   const currentCycleId = currentCycle?.id ?? null;
   const isFirstAttempt = !currentCycle || currentCycle.sequence === 1;
 
@@ -183,6 +193,7 @@ export async function ensureStudentDocumentRequirements(studentId: string) {
     // 23505 = the partial unique index caught a concurrent duplicate insert
     // (two page loads racing) — safe to ignore, the row already exists.
     if (error && error.code !== "23505") throw error;
+    changed = true;
   }
 
   const wanted = profileDerivedRequirements({
@@ -207,6 +218,7 @@ export async function ensureStudentDocumentRequirements(studentId: string) {
       }))
     );
     if (error && error.code !== "23505") throw error;
+    changed = true;
   }
 
   // A school renamed or first named in the profile, so the requirement says
@@ -215,6 +227,7 @@ export async function ensureStudentDocumentRequirements(studentId: string) {
   for (const row of toRename) {
     const { error } = await supabase.from("student_documents").update({ custom_name: row.name }).eq("id", row.id);
     if (error) throw error;
+    changed = true;
   }
 
   // A student made visa-only after their checklist was built: the admission
@@ -227,6 +240,7 @@ export async function ensureStudentDocumentRequirements(studentId: string) {
     if (unwanted.length > 0) {
       const { error } = await supabase.from("student_documents").delete().in("id", unwanted);
       if (error) throw error;
+      changed = true;
     }
   }
 
@@ -236,7 +250,9 @@ export async function ensureStudentDocumentRequirements(studentId: string) {
   if (toDeleteIds.length > 0) {
     const { error } = await supabase.from("student_documents").delete().in("id", toDeleteIds);
     if (error) throw error;
+    changed = true;
   }
+  return changed;
 }
 
 export async function uploadDocument(

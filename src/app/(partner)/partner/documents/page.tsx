@@ -3,12 +3,11 @@ import { documentUrls } from "@/lib/storageUrls";
 import { Card } from "@/components/ui/Card";
 import { UploadExchangeForm } from "./UploadExchangeForm";
 import { uploadedLine } from "@/lib/activityStamp";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 export default async function PartnerDocumentsPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   const { data: account } = await supabase.from("partner_university_accounts").select("university_id").eq("id", user?.id ?? "").maybeSingle();
   if (!account) return null;

@@ -54,6 +54,7 @@ export default async function SupportTicketsPage(props: { searchParams: Promise<
       <div className="mb-4 flex gap-2">
         {tabs.map((t) => (
           <Link
+            prefetch={false}
             key={t.key}
             href={t.key ? `/support?status=${t.key}` : "/support"}
             className={`rounded-md px-3 py-1.5 text-xs font-medium ${
@@ -71,6 +72,7 @@ export default async function SupportTicketsPage(props: { searchParams: Promise<
             const student = one(t.student as never) as { full_name?: string } | null;
             return (
               <Link
+                prefetch={false}
                 key={t.id}
                 href={`/support/${t.id}`}
                 className="flex items-center justify-between py-3 text-sm hover:bg-bg"

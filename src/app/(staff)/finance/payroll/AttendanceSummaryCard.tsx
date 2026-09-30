@@ -56,7 +56,7 @@ export function AttendanceSummaryCard({
       {!scheduleConfigured && (
         <p className="mb-3 text-sm text-warning">
           Hours worked are counted, but nobody can be late or absent until a working day is set.{" "}
-          <Link href="/setup/attendance-policy" className="underline">
+          <Link prefetch={false} href="/setup/attendance-policy" className="underline">
             Set the office hours
           </Link>
           , or give this person their own on their staff record.
@@ -110,7 +110,7 @@ export function AttendanceSummaryCard({
         <p className="mt-3 text-xs text-warning">
           {staffName ? `${staffName} has` : "This staff member has"} no monthly salary on their staff record, and every
           figure here is priced from it — so nothing is added to or taken off the payslip.{" "}
-          <Link href="/admin/staff" className="text-primary hover:underline">
+          <Link prefetch={false} href="/admin/staff" className="text-primary hover:underline">
             Set their salary
           </Link>
           .
@@ -119,7 +119,7 @@ export function AttendanceSummaryCard({
       {money.missing === "schedule" && (
         <p className="mt-3 text-xs text-muted">
           No working hours are set, so there is nothing to be late against and nothing to price.{" "}
-          <Link href="/setup/attendance-policy" className="text-primary hover:underline">
+          <Link prefetch={false} href="/setup/attendance-policy" className="text-primary hover:underline">
             Set the office day
           </Link>
           .

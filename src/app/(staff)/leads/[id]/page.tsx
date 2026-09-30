@@ -11,6 +11,7 @@ import { CallLogForm } from "./CallLogForm";
 import { RegisterLeadButton } from "./RegisterLeadButton";
 import { LeadEditForm } from "@/components/LeadEditForm";
 import { DeleteStudentButton } from "../../students/[id]/DeleteStudentButton";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 type CallLog = { id: string; status_at_time: string; remark: string; created_at: string; counselor: { full_name: string } | { full_name: string }[] | null };
 
@@ -22,9 +23,7 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
   const { id } = await props.params;
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   const { data: staffRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
   const canDeleteLead = hasRole(staffRow, "super_admin") || hasRole(staffRow, "processing");
 
@@ -47,7 +46,7 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
 
   return (
     <div className="w-full">
-      <Link href="/leads" className="text-sm text-muted hover:text-ink">
+      <Link prefetch={false} href="/leads" className="text-sm text-muted hover:text-ink">
         &larr; Back to leads
       </Link>
 
@@ -72,7 +71,7 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
         <Card className="mb-6 bg-success-bg">
           <p className="text-sm text-success">
             Registered on {new Date(lead.registered_at).toLocaleDateString()}.{" "}
-            <Link href={`/students/${lead.id}`} className="font-medium underline">
+            <Link prefetch={false} href={`/students/${lead.id}`} className="font-medium underline">
               View student record
             </Link>
           </p>

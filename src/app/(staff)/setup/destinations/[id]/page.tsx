@@ -7,14 +7,13 @@ import { StagesForm } from "./StagesForm";
 import { DashboardStagesForm } from "./DashboardStagesForm";
 import { DestinationEditForm } from "./DestinationEditForm";
 import { formatDashboardStagesText, type DashboardStageDef } from "@/lib/dashboardPipeline";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 export default async function DestinationDetailPage(props: PageProps<"/setup/destinations/[id]">) {
   const { id } = await props.params;
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   const { data: staffRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
   const isSuperAdmin = hasRole(staffRow, "super_admin");
 
@@ -25,7 +24,7 @@ export default async function DestinationDetailPage(props: PageProps<"/setup/des
 
   return (
     <div className="w-full">
-      <Link href="/setup/destinations" className="text-sm text-muted hover:text-ink">
+      <Link prefetch={false} href="/setup/destinations" className="text-sm text-muted hover:text-ink">
         &larr; Back to destinations
       </Link>
       <h2 className="mt-2 mb-6 text-xl font-semibold text-ink">{destination.display_name}</h2>
@@ -72,7 +71,7 @@ export default async function DestinationDetailPage(props: PageProps<"/setup/des
         <h3 className="mb-3 text-sm font-medium text-ink">Universities in this destination</h3>
         <div className="flex flex-col divide-y divide-border">
           {(universities ?? []).map((u) => (
-            <Link key={u.id} href={`/setup/universities/${u.id}`} className="py-2 text-sm text-ink hover:text-primary">
+            <Link prefetch={false} key={u.id} href={`/setup/universities/${u.id}`} className="py-2 text-sm text-ink hover:text-primary">
               {u.name}
             </Link>
           ))}

@@ -16,8 +16,12 @@ export function StatCard({
   /** A line under the figure saying what it is measured against: "target 10", "≈ in PKR". */
   hint?: string;
 }) {
-  const valueColor =
-    tone === "success"
+  // A zero is not news: coloured, a row of red and amber noughts reads as a
+  // set of alarms about nothing.
+  const quiet = value === 0 || value === "0";
+  const valueColor = quiet
+    ? "text-ink"
+    : tone === "success"
       ? "text-success"
       : tone === "warning"
         ? "text-warning"

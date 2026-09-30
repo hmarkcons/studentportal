@@ -23,7 +23,7 @@ export async function ProcessingTabGuard({ studentId, children }: { studentId: s
           Once a student is registered, their documents, applications, scholarship and visa are handled by the processing
           team. You can follow their progress through the country stages on the student&apos;s dashboard.
         </p>
-        <Link href={`/students/${studentId}`} className="mt-3 inline-block w-fit text-sm font-medium text-primary hover:underline">
+        <Link prefetch={false} href={`/students/${studentId}`} className="mt-3 inline-block w-fit text-sm font-medium text-primary hover:underline">
           Back to the student&apos;s progress
         </Link>
       </Card>

@@ -6,13 +6,12 @@ import { listTrackerDefinitions, listTrackerCountries } from "@/lib/actions/coun
 import { NewTrackerFieldForm, TrackerFieldRow } from "./TrackerFieldForm";
 import { NewCountryForm } from "./NewCountryForm";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 export default async function DocumentTrackersPage() {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   const { data: staffRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
   const isSuperAdmin = hasRole(staffRow, "super_admin");
 

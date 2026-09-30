@@ -236,11 +236,11 @@ export default async function StudentVisaTab(props: PageProps<"/students/[id]/vi
               <p className="mt-3 text-xs text-muted">
                 These are the tracker fields marked for the visa view. The rest of {s.country.name}&rsquo;s tracker is on
                 the{" "}
-                <Link href={`/students/${id}`} className="text-primary hover:underline">
+                <Link prefetch={false} href={`/students/${id}`} className="text-primary hover:underline">
                   Dashboard
                 </Link>
                 . What appears on this page is built in{" "}
-                <Link href="/setup/visa-page-builder" className="text-primary hover:underline">
+                <Link prefetch={false} href="/setup/visa-page-builder" className="text-primary hover:underline">
                   Setup &rsaquo; Visa page builder
                 </Link>
                 .

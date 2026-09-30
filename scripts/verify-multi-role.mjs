@@ -97,6 +97,14 @@ try {
     return (await p.locator("option", { hasText: "Student…" }).count()) > 0;
   };
 
+  // Payroll is an editor-only page: it also needs "Manage commissions &
+  // payroll", which Role Permissions may have switched off for Finance —
+  // production has. Granted to both people here, so this is about what the
+  // second role gives, not about today's switch.
+  await admin.from("staff_permission_overrides").upsert([
+    { staff_id: subject.id, permission_key: "finance.commissions.manage", allowed: true },
+    { staff_id: plain.id, permission_key: "finance.commissions.manage", allowed: true },
+  ]);
   page = await signIn(browser, subject.email);
   ok("a counselor who also holds Finance gets the finance-only payroll controls",
     await hasFinanceControls(page, subject.id));
@@ -105,13 +113,18 @@ try {
   page = await signIn(browser, plain.email);
   ok("a counselor alone does not", !(await hasFinanceControls(page, plain.id)));
   await page.close();
+  await admin.from("staff_permission_overrides").delete().eq("permission_key", "finance.commissions.manage").in("staff_id", [subject.id, plain.id]);
 
   // ---------------------------- everyone else: their own record, read-only
-  // Collapsed nav sections keep their children out of innerText, so the markup
-  // is what says whether a link is there.
+  // Collapsed nav sections keep their children out of the page's text, so the
+  // link itself is what says whether it is there. For anyone but a Super Admin
+  // it is "My profile": the page is their own record, not staff management.
   for (const [who, person] of [["a counselor", plain], ["Management", manager]]) {
     page = await signIn(browser, person.email);
-    ok(`${who} has the Staff Management link`, /Staff Management/.test(await page.content()));
+    const ownLink = page.locator('a[href="/admin/staff"]');
+    ok(`${who} has a link to their own record, called My profile`,
+      (await ownLink.count()) > 0 && /My profile/.test((await ownLink.first().textContent()) ?? ""),
+      String(await ownLink.count()));
     await page.goto(`${BASE}/admin/staff`, { waitUntil: "domcontentloaded" });
     const own = page.locator("[data-own-staff-record]");
     await own.waitFor({ timeout: 60_000 }).catch(() => {});

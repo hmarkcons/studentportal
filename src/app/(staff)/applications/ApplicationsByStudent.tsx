@@ -167,6 +167,7 @@ export function ApplicationsByStudent({
                 <div className="divide-y divide-border border-t border-border">
                   {g.apps.map((a) => (
                     <Link
+                      prefetch={false}
                       key={a.id}
                       href={a.href}
                       className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm hover:bg-bg/40"

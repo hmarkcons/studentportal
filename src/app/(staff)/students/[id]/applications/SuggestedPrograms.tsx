@@ -127,7 +127,7 @@ export function SuggestedPrograms({
         <p className="text-sm font-medium text-ink">No suggested programmes yet</p>
         <p className="mt-1 text-xs text-muted">
           Set this student&rsquo;s course of interest on the{" "}
-          <Link href={`/students/${studentId}/profile`} className="font-medium text-primary hover:underline">
+          <Link prefetch={false} href={`/students/${studentId}/profile`} className="font-medium text-primary hover:underline">
             Profile tab
           </Link>{" "}
           and matching programmes from their own countries will be suggested here.
@@ -199,6 +199,7 @@ export function SuggestedPrograms({
         </p>
         <div className="flex items-center gap-3">
           <Link
+            prefetch={false}
             href={`/students/${studentId}/applications/new`}
             className="text-xs font-medium text-primary hover:underline"
           >

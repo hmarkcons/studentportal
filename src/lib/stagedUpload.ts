@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { STAGING_MAX_AGE_MS, isStagedRef, parseStagedRef, stagedAtFromName } from "./stagedUploadRef.ts";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 /**
  * The file a form sent in `name`, wherever it travelled.
@@ -28,9 +29,7 @@ export async function uploadedFile(
   if (!isStagedRef(value)) return null;
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return null;
 
   const ref = parseStagedRef(value, user.id, { allowVideo });

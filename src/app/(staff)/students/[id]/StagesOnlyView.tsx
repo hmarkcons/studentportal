@@ -83,7 +83,7 @@ export async function StagesOnlyView({ studentId, supabase }: { studentId: strin
         </Card>
       ) : (
         <div className="flex flex-col gap-4">
-          {rows.map((row) => {
+          {rows.map((row, i) => {
             const snap = stageSnapshot(row.stages, row.values);
             return (
               <div key={row.destinationId} className="flex flex-col gap-1.5">
@@ -92,6 +92,7 @@ export async function StagesOnlyView({ studentId, supabase }: { studentId: strin
                   {snap.blocked && snap.latest ? ` · ${snap.latest}` : ""}
                 </p>
                 <DestinationPipelineCard
+                  accent={(i % 5) + 1}
                   leadId={studentId}
                   destinationId={row.destinationId}
                   destinationName={row.destinationName}
@@ -139,7 +140,7 @@ export async function StagesOnlyView({ studentId, supabase }: { studentId: strin
               {officer?.mobile_official && <span className="block text-xs text-muted">{officer.mobile_official}</span>}
             </dd>
           </dl>
-          <Link href={`/students/${studentId}/communication`} className="mt-3 inline-block text-xs font-medium text-primary hover:underline">
+          <Link prefetch={false} href={`/students/${studentId}/communication`} className="mt-3 inline-block text-xs font-medium text-primary hover:underline">
             Messages with the student →
           </Link>
         </Card>

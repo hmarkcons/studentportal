@@ -14,6 +14,7 @@ import { IncentiveAmountInput } from "./IncentiveAmountInput";
 import { LogReferralForm } from "./LogReferralForm";
 import { ReferralPartyForm, type ReferralParty } from "./ReferralPartyForm";
 import { ReferralPaymentCell } from "./ReferralPaymentCell";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 export const dynamic = "force-dynamic";
 
@@ -23,9 +24,7 @@ export default async function ReferralsPage() {
   const supabase = await createClient();
   const today = karachiToday();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   const { data: staffRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
   const orgWideRoles = ["management", "super_admin", "marketing", "digital_marketing", "finance"];
 
@@ -163,7 +162,7 @@ export default async function ReferralsPage() {
                     <span className="text-muted">{r.referrer_name}</span>
                   ),
                   student: (
-                    <Link href={`/students/${r.lead_id}`} className="text-primary hover:underline">
+                    <Link prefetch={false} href={`/students/${r.lead_id}`} className="text-primary hover:underline">
                       {student?.full_name ?? "Unknown student"}
                     </Link>
                   ),

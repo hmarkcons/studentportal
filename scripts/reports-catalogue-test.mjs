@@ -58,8 +58,18 @@ test("a counselor is not offered the money reports", () => {
   }
 });
 
+test("every role a person holds counts, not only the primary one", () => {
+  const primaryOnly = visibleReports(["counselor"]).map((r) => r.href);
+  const withManagement = visibleReports(["counselor", "management"]).map((r) => r.href);
+  const management = visibleReports("management").map((r) => r.href);
+  for (const href of management) assert.ok(withManagement.includes(href), `a counsellor who is also Management should see ${href}`);
+  assert.ok(withManagement.length > primaryOnly.length, "the second role added nothing");
+  assert.equal(visibleReports(["counselor", "super_admin"]).length, REPORT_CATALOGUE.length);
+});
+
 test("no role is offered a report, and nobody at all is offered an unknown one", () => {
   assert.deepEqual(visibleReports(undefined), []);
+  assert.deepEqual(visibleReports([]), []);
   assert.ok(!REPORT_CATALOGUE.some((r) => r.roles.length === 0), "a report nobody can see is dead weight");
 });
 

@@ -2,13 +2,12 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { AppShell } from "@/components/AppShell";
 import { PARTNER_NAV } from "@/lib/nav";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 export default async function PartnerLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   const { data: partnerRow } = await supabase
     .from("partner_university_accounts")

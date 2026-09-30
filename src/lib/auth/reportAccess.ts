@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getStaffSession } from "./session";
+import { staffRoles } from "./roles";
 import { visibleReports } from "@/lib/reportsCatalogue";
 
 /**
@@ -25,6 +26,6 @@ import { visibleReports } from "@/lib/reportsCatalogue";
  */
 export async function requireReportAccess(href: string) {
   const { supabase, staff } = await getStaffSession();
-  if (!visibleReports(staff?.role).some((r) => r.href === href)) redirect("/dashboard");
+  if (!visibleReports(staffRoles(staff)).some((r) => r.href === href)) redirect("/dashboard");
   return { supabase, staff };
 }

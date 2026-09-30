@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { SignOutButton } from "@/components/SignOutButton";
 import { CalendarClock, FileSignature, type LucideIcon } from "lucide-react";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 /**
  * Where a student waits for their portal to open: the brand, what is holding
@@ -33,9 +34,7 @@ function StudentWaiting({ icon: Icon, title, children }: { icon: LucideIcon; tit
 
 export default async function Home() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   if (!user) redirect("/login");
 

@@ -39,7 +39,7 @@ export default async function MarketingRoiPage() {
 
   return (
     <div className="w-full">
-      <Link href="/reports" className="text-sm text-muted hover:text-ink">
+      <Link prefetch={false} href="/reports" className="text-sm text-muted hover:text-ink">
         &larr; Back to reports
       </Link>
       <h2 className="mt-2 mb-4 text-lg font-semibold text-ink">Marketing Channel ROI</h2>

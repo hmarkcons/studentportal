@@ -51,10 +51,9 @@ function withPersonal<T extends { id: string }>(rows: T[] | null, personal: Pers
 }
 
 export default async function StaffAdminPage() {
-  const { supabase, staff: viewer } = await getStaffSession();
+  const [{ supabase, staff: viewer }, perms] = await Promise.all([getStaffSession(), getEffectivePermissions()]);
   const isSuperAdminViewer = hasRole(viewer, "super_admin");
 
-  const perms = await getEffectivePermissions();
   // The Super Admin's alone, and not grantable to anyone else (0284).
   const canManageStaff = perms["staff.manage"] === true;
 
@@ -92,9 +91,32 @@ export default async function StaffAdminPage() {
     );
   }
 
-  const [{ data: staffRows }, { data: personal }] = await Promise.all([
+  // Everything that needs only the viewer, in one wave; then the photos and
+  // the logins, which need the list. This was seven waves one after another.
+  const admin = isSuperAdminViewer ? createAdminClient() : null;
+  const [
+    { data: staffRows },
+    { data: personal },
+    { data: pendingPartners },
+    { data: assignedLeads },
+    [{ data: permissionDefs }, { data: roleOverrides }, { data: staffOverrides }],
+    { data: kept },
+  ] = await Promise.all([
     supabase.from("staff").select(`${WORK_COLUMNS}, ${COMPENSATION_EMBED}`).order("full_name").returns<StaffRow[]>(),
     supabase.rpc("staff_personal_details"),
+    supabase.from("partner_university_accounts").select("id, staff_name, status, university:universities(name)").eq("status", "pending"),
+    // Powers the "you must pick a replacement" prompt when deactivating a
+    // staff member who still has students pointed at them.
+    supabase.from("leads").select("assigned_counselor_id").not("assigned_counselor_id", "is", null),
+    isSuperAdminViewer
+      ? Promise.all([
+          supabase.from("permission_definitions").select("key, category, label, description, default_roles"),
+          supabase.from("role_permission_overrides").select("role, permission_key, allowed"),
+          supabase.from("staff_permission_overrides").select("staff_id, permission_key, allowed"),
+        ])
+      : Promise.resolve([{ data: null }, { data: null }, { data: null }] as const),
+    // Whether a copy of each password is kept — see the Login panel below.
+    admin ? admin.from("staff_login_credentials").select("staff_id, updated_at") : Promise.resolve({ data: null }),
   ]);
 
   // Flattened, so the form, the table and the View panel keep reading
@@ -102,36 +124,25 @@ export default async function StaffAdminPage() {
   // columns on this table.
   const staff = withCompensationAll(withPersonal(staffRows, personal as PersonalDetails[] | null)) as (StaffRecord & { photo_path: string | null })[];
 
-  // One request for the whole directory's photos, not one per person, and
-  // through avatarUrls so the URLs are the ones the browser already has. This
-  // page shows every staff member, so it was the worst of both problems.
-  const photoByPath = await avatarUrlMap((staff ?? []).map((s) => s.photo_path));
+  const [photoByPath, users] = await Promise.all([
+    // One request for the whole directory's photos, not one per person, and
+    // through avatarUrls so the URLs are the ones the browser already has.
+    // This page shows every staff member, so it was the worst of both
+    // problems.
+    avatarUrlMap((staff ?? []).map((s) => s.photo_path)),
+    // Each staff member's sign-in account, for the Super Admin's Login panel.
+    admin ? Promise.all(staff.map((s) => admin.auth.admin.getUserById(s.id))) : Promise.resolve(null),
+  ]);
   const photoUrls: Record<string, string> = {};
   for (const s of staff ?? []) {
     const url = s.photo_path ? photoByPath.get(s.photo_path) : undefined;
     if (url) photoUrls[s.id] = url;
   }
 
-  const { data: pendingPartners } = await supabase
-    .from("partner_university_accounts")
-    .select("id, staff_name, status, university:universities(name)")
-    .eq("status", "pending");
-
-  // Powers the "you must pick a replacement" prompt when deactivating a
-  // staff member who still has students pointed at them.
-  const { data: assignedLeads } = await supabase.from("leads").select("assigned_counselor_id").not("assigned_counselor_id", "is", null);
   const assignedStudentCounts: Record<string, number> = {};
   for (const l of assignedLeads ?? []) {
     if (l.assigned_counselor_id) assignedStudentCounts[l.assigned_counselor_id] = (assignedStudentCounts[l.assigned_counselor_id] ?? 0) + 1;
   }
-
-  const [{ data: permissionDefs }, { data: roleOverrides }, { data: staffOverrides }] = isSuperAdminViewer
-    ? await Promise.all([
-        supabase.from("permission_definitions").select("key, category, label, description, default_roles"),
-        supabase.from("role_permission_overrides").select("role, permission_key, allowed"),
-        supabase.from("staff_permission_overrides").select("staff_id, permission_key, allowed"),
-      ])
-    : [{ data: null }, { data: null }, { data: null }];
 
   // Each staff member's login, for the Super Admin's Login panel: the email
   // they actually sign in with, whether they ever have, and whether a copy of
@@ -139,12 +150,7 @@ export default async function StaffAdminPage() {
   // only with the service role, so this is fetched for a Super Admin viewer
   // and nobody else — for anyone else the panel is not offered at all.
   let logins: Record<string, StaffLoginSummary> | undefined;
-  if (isSuperAdminViewer) {
-    const admin = createAdminClient();
-    const [users, { data: kept }] = await Promise.all([
-      Promise.all(staff.map((s) => admin.auth.admin.getUserById(s.id))),
-      admin.from("staff_login_credentials").select("staff_id, updated_at"),
-    ]);
+  if (users) {
     const keptAt = new Map((kept ?? []).map((k: { staff_id: string; updated_at: string }) => [k.staff_id, k.updated_at]));
     logins = {};
     staff.forEach((s, i) => {

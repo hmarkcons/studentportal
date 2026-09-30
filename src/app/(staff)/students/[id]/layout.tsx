@@ -2,6 +2,7 @@ import { hasRole } from "@/lib/auth/roles";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getStaffSession } from "@/lib/auth/session";
+import { createClient } from "@/lib/supabase/server";
 import { Badge } from "@/components/ui/Badge";
 import { StudentTabs } from "./StudentTabs";
 import { DeleteStudentButton } from "./DeleteStudentButton";
@@ -13,14 +14,14 @@ import { seesStagesOnly } from "@/lib/auth/studentAccess";
 import { SERVICE_SHORT, serviceOf } from "@/lib/serviceType";
 
 export default async function StudentLayout({ children, params }: { children: React.ReactNode; params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const { supabase, staff: staffRow } = await getStaffSession();
-  const canDeleteStudent = hasRole(staffRow, "super_admin") || hasRole(staffRow, "processing");
+  const [{ id }, supabase] = await Promise.all([params, createClient()]);
 
-  // One wave for everything that depends on nothing. The unread count, the
+  // One wave for everything that depends on nothing — the viewer's own staff
+  // row among them, which none of the rest needs. The unread count, the
   // scholarship-body list and the student's own row used to run one after
   // another below, each waiting on the last for no reason.
   const [
+    { staff: staffRow },
     { data: student, error },
     { data: italyApp },
     { data: profile },
@@ -29,6 +30,7 @@ export default async function StudentLayout({ children, params }: { children: Re
     { data: scholarshipBodyLinks },
     { data: serviceRow },
   ] = await Promise.all([
+    getStaffSession(),
     supabase
       .from("students")
       .select(
@@ -36,10 +38,13 @@ export default async function StudentLayout({ children, params }: { children: Re
       )
       .eq("id", id)
       .maybeSingle(),
+    // With any "scholarship_intent" answer the tracker holds for each, which
+    // used to be a second wave of its own.
     supabase
       .from("applications")
-      .select("id, university:universities(destination:destinations(id, country_code))")
-      .eq("student_id", id),
+      .select("id, university:universities(destination:destinations(id, country_code)), intent:application_country_extra(field_value)")
+      .eq("student_id", id)
+      .eq("intent.field_key", "scholarship_intent"),
     supabase.from("student_profiles").select("photo_path").eq("student_id", id).maybeSingle(),
     supabase
       .from("applications")
@@ -53,6 +58,7 @@ export default async function StudentLayout({ children, params }: { children: Re
     // Which service (0279) — not on the students view, so read from leads.
     supabase.from("leads").select("service_type").eq("id", id).maybeSingle(),
   ]);
+  const canDeleteStudent = hasRole(staffRow, "super_admin") || hasRole(staffRow, "processing");
   const visaOnly = serviceOf(serviceRow?.service_type) === "visa_only";
 
   if (error || !student) notFound();
@@ -81,22 +87,18 @@ export default async function StudentLayout({ children, params }: { children: Re
   // scholarshipGate: nothing until a university is finalised for pre-enrolment.
   const destinationsWithBodies = new Set((scholarshipBodyLinks ?? []).map((l) => l.destination_id as string));
 
-  // The second and last wave: both of these need something from the first.
+  // The photo's link, kept for an hour (avatarUrls), so this seldom goes out.
+  const photoMap = await avatarUrlMap([profile?.photo_path]);
+  const photoUrl = profile?.photo_path ? photoMap.get(profile.photo_path) ?? null : null;
   // A country somebody has answered "No" for on the tracker does not count
   // towards showing the tab. If that is every country the student has, the
   // tab goes away entirely rather than opening onto an explanation — the
   // decision was taken and there is nothing there to manage.
-  const [photoMap, { data: declinedRows }] = await Promise.all([
-    avatarUrlMap([profile?.photo_path]),
-    supabase
-      .from("application_country_extra")
-      .select("application_id")
-      .eq("field_key", "scholarship_intent")
-      .eq("field_value", "No")
-      .in("application_id", (italyApp ?? []).map((a) => a.id)),
-  ]);
-  const photoUrl = profile?.photo_path ? photoMap.get(profile.photo_path) ?? null : null;
-  const declined = new Set((declinedRows ?? []).map((r) => r.application_id));
+  const declined = new Set(
+    (italyApp ?? [])
+      .filter((a) => ((a.intent ?? []) as { field_value: string | null }[]).some((e) => e.field_value === "No"))
+      .map((a) => a.id)
+  );
 
   const showScholarship = (italyApp ?? []).some((a) => {
     if (declined.has(a.id)) return false;
@@ -107,7 +109,7 @@ export default async function StudentLayout({ children, params }: { children: Re
 
   return (
     <div className="w-full">
-      <Link href="/students" className="text-sm text-muted hover:text-ink">
+      <Link prefetch={false} href="/students" className="text-sm text-muted hover:text-ink">
         &larr; Back to students
       </Link>
       <div className="mt-2 mb-4 flex flex-wrap items-center justify-between gap-4">

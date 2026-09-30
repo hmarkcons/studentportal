@@ -1,4 +1,5 @@
 import { loadDocumentHistory } from "@/lib/documentHistory";
+import { documentUrls } from "@/lib/storageUrls";
 import { loadDocumentGuides } from "@/lib/documentGuides";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -45,18 +46,58 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
 
   if (error || !app) notFound();
 
+  // Everything below needs at most this application, so it is all asked for
+  // now and awaited where it is used — the page used to make seven waves of
+  // reads, one after another. The catches only keep a failure from going
+  // unhandled while something else is awaited; awaiting still throws it.
+  //
+  // The student-level checklist is brought up to date on the way, but nothing
+  // waits on it: this page lists only the application's own documents, which
+  // that never adds or removes.
+  const setupRead = Promise.all([
+    ensureStudentDocumentRequirements(id),
+    loadStudentChecklistSections(supabase, id),
+    hasPermission("documents.manage_requirements"),
+    hasPermission("interviews.manage"),
+  ]);
+  setupRead.catch(() => {});
+  const recordsRead = Promise.all([
+    supabase
+      .from("application_tasks")
+      .select("id, description, due_date, status, priority")
+      .eq("application_id", appId)
+      .order("due_date", { ascending: true }),
+    supabase
+      .from("student_documents")
+      .select(
+        "id, category, custom_name, status, file_path, deadline, rejected_reason, application_id, uploaded_at, uploaded_by_role, verified_at, created_at, template_id, template:document_templates(name)"
+      )
+      .eq("student_id", id)
+      // Only requirements added for THIS application. The standard checklist is
+      // student-level and identical for every university, so pulling it in here
+      // repeated the same documents on every university's application page.
+      .eq("application_id", appId)
+      .returns<(DocRow & { custom_name: string | null; application_id: string | null; template: { name: string } | { name: string }[] | null })[]>(),
+    supabase
+      .from("application_interviews")
+      .select(
+        "id, round_label, confirmed_datetime, timezone, platform, platform_other, status, interview_details, interview_link, preparation_notes, created_at, updated_at, credentials:application_interview_credentials(login_username, login_password, login_instructions, share_with_student)"
+      )
+      .eq("application_id", appId)
+      .order("confirmed_datetime", { ascending: true, nullsFirst: false }),
+  ]);
+  recordsRead.catch(() => {});
+
   const university = one(app.university);
   const destination = university ? one(university.destination) : null;
   const pipelineStages: string[] = (destination?.pipeline_stages as string[]) ?? [];
   const countryCode = (destination as { country_code?: string } | null)?.country_code;
-  const trackerDefs = countryCode ? (await listTrackerDefinitions([countryCode]))[countryCode] : undefined;
-  const hasTracker = Boolean(trackerDefs?.length);
   const program = one(app.program);
 
   // Every programme at this university, and which of them this student already
   // has an application for — the two things the Details form and the backup
   // picker each need.
-  const [{ data: universityPrograms }, { data: siblingApps }] = await Promise.all([
+  const [{ data: universityPrograms }, { data: siblingApps }, trackerDefs] = await Promise.all([
     university?.id
       ? supabase
           .from("programs")
@@ -78,7 +119,9 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
       : Promise.resolve({
           data: [] as { id: string; program_id: string | null; round_id: string | null; cycle_id: string | null; program: unknown }[],
         }),
+    countryCode ? listTrackerDefinitions([countryCode]).then((defs) => defs[countryCode]) : Promise.resolve(undefined),
   ]);
+  const hasTracker = Boolean(trackerDefs?.length);
 
   // Only this intake's applications block a programme. The query above is not
   // scoped by cycle — the uniqueness rule is per cycle, so a programme applied
@@ -134,38 +177,9 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
 
   const revalidateTo = `/students/${id}/applications/${appId}`;
 
-  await ensureStudentDocumentRequirements(id);
-
-  const [sections, canManage, canManageInterviews] = await Promise.all([
-    loadStudentChecklistSections(supabase, id),
-    hasPermission("documents.manage_requirements"),
-    hasPermission("interviews.manage"),
-  ]);
-
-  const [{ data: tasks }, { data: rawDocs }, { data: interviews }] = await Promise.all([
-    supabase
-      .from("application_tasks")
-      .select("id, description, due_date, status, priority")
-      .eq("application_id", appId)
-      .order("due_date", { ascending: true }),
-    supabase
-      .from("student_documents")
-      .select(
-      "id, category, custom_name, status, file_path, deadline, rejected_reason, application_id, uploaded_at, uploaded_by_role, verified_at, created_at, template_id, template:document_templates(name)"
-    )
-      .eq("student_id", id)
-      // Only requirements added for THIS application. The standard checklist is
-      // student-level and identical for every university, so pulling it in here
-      // repeated the same documents on every university's application page.
-      .eq("application_id", appId)
-      .returns<(DocRow & { custom_name: string | null; application_id: string | null; template: { name: string } | { name: string }[] | null })[]>(),
-    supabase
-      .from("application_interviews")
-      .select(
-        "id, round_label, confirmed_datetime, timezone, platform, platform_other, status, interview_details, interview_link, preparation_notes, created_at, updated_at, credentials:application_interview_credentials(login_username, login_password, login_instructions, share_with_student)"
-      )
-      .eq("application_id", appId)
-      .order("confirmed_datetime", { ascending: true, nullsFirst: false }),
+  const [[, sections, canManage, canManageInterviews], [{ data: tasks }, { data: rawDocs }, { data: interviews }]] = await Promise.all([
+    setupRead,
+    recordsRead,
   ]);
 
   // PostgREST returns an embedded one-to-one row as an object or a
@@ -181,13 +195,17 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
     return Array.isArray(v) ? v[0] ?? null : v;
   }
 
-  const [docHistory, guides] = await Promise.all([
+  const [docHistory, guides, fileUrls] = await Promise.all([
     loadDocumentHistory(supabase, (rawDocs ?? []).map((d) => d.id)),
     loadDocumentGuides(supabase, id, rawDocs ?? []),
+    // Every file's link in one request, rather than one each.
+    documentUrls(
+      supabase,
+      (rawDocs ?? []).map((d) => d.file_path)
+    ),
   ]);
 
-  const docsWithUrls = await Promise.all(
-    (rawDocs ?? []).map(async (d) => {
+  const docsWithUrls = (rawDocs ?? []).map((d) => {
       const templateName = one2(d.template as never) as { name?: string } | null;
       const baseName = d.custom_name ?? templateName?.name ?? d.category ?? "Document";
       // Student-level documents (application_id null) are shared across every
@@ -196,14 +214,12 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
       const name = d.application_id === null ? `${baseName} (shared — all applications)` : baseName;
       const past = docHistory.get(d.id) ?? [];
       if (!d.file_path) return { ...d, name, history: past };
-      const { data } = await supabase.storage.from("documents").createSignedUrl(d.file_path, 3600);
-      return { ...d, name, history: past, fileUrl: data?.signedUrl ?? null };
-    })
-  );
+      return { ...d, name, history: past, fileUrl: fileUrls.get(d.file_path) ?? null };
+  });
 
   return (
     <div className="w-full">
-      <Link href={`/students/${id}/applications`} className="text-sm text-muted hover:text-ink">
+      <Link prefetch={false} href={`/students/${id}/applications`} className="text-sm text-muted hover:text-ink">
         &larr; Back to applications
       </Link>
 
@@ -243,7 +259,7 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
           application, whose answers the dashboard could not see. */}
       {hasTracker && (
         <div className="mb-6">
-          <Link href={`/students/${id}`} className="text-sm font-medium text-primary hover:underline">
+          <Link prefetch={false} href={`/students/${id}`} className="text-sm font-medium text-primary hover:underline">
             Open the country documentation tracker on the dashboard →
           </Link>
         </div>

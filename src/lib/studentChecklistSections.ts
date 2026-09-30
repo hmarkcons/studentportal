@@ -23,15 +23,15 @@ export async function loadStudentChecklistSections(
   supabase: Client,
   studentId: string
 ): Promise<ChecklistSectionRef[]> {
-  const [{ data: destRows }, { data: sections }] = await Promise.all([
+  // All three at once: the arrangement is read whole and filtered here, so it
+  // never needed to wait for the student's destinations.
+  const [{ data: destRows }, { data: sections }, { data: destinationSections }] = await Promise.all([
     supabase.from("lead_destinations").select("destination_id").eq("lead_id", studentId),
     supabase.from("document_sections").select("key, label"),
+    supabase.from("destination_document_sections").select("destination_id, section_key, sort_order"),
   ]);
 
   const destinationIds = new Set((destRows ?? []).map((d) => d.destination_id as string));
-  const { data: destinationSections } = await supabase
-    .from("destination_document_sections")
-    .select("destination_id, section_key, sort_order");
 
   const labelOf = new Map((sections ?? []).map((s) => [s.key, s.label]));
 

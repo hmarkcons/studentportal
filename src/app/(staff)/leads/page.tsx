@@ -29,44 +29,46 @@ function one<T>(v: T | T[] | null) {
 
 export default async function LeadsPage() {
   const supabase = await createClient();
-  const canDelete = await hasPermission("leads.delete");
-
-  const { data: leads, error } = await supabase
-    .from("leads")
-    .select(
-      "id, full_name, contact_number, email, country_of_interest, status, date_of_inquiry, assigned_counselor_id, assigned_counselor:staff!assigned_counselor_id(full_name)"
-    )
-    .order("date_of_inquiry", { ascending: false })
-    .returns<LeadRow[]>();
+  // Two waves where there were five: the list with what needs nothing, then
+  // the two things that need the list.
+  const [canDelete, { data: leads, error }, counselors] = await Promise.all([
+    hasPermission("leads.delete"),
+    supabase
+      .from("leads")
+      .select(
+        "id, full_name, contact_number, email, country_of_interest, status, date_of_inquiry, assigned_counselor_id, assigned_counselor:staff!assigned_counselor_id(full_name)"
+      )
+      .order("date_of_inquiry", { ascending: false })
+      .returns<LeadRow[]>(),
+    getCachedCounselors(),
+  ]);
 
   const leadIds = (leads ?? []).map((r) => r.id);
 
-  // Powers the Follow-up column's "View (N)" count — every follow_up remark
-  // ever logged for the lead (see addLeadFollowUpRemark), resolved or not.
-  // The Calendar page reads the same rows directly, so adding one here
-  // surfaces it there automatically.
-  const { data: followUps } =
+  const [{ data: followUps }, { data: callLogs }] = await Promise.all([
+    // Powers the Follow-up column's "View (N)" count — every follow_up remark
+    // ever logged for the lead (see addLeadFollowUpRemark), resolved or not.
+    // The Calendar page reads the same rows directly, so adding one here
+    // surfaces it there automatically.
     leadIds.length > 0
-      ? await supabase.from("reminders").select("student_id").eq("type", "follow_up").in("student_id", leadIds)
-      : { data: [] as { student_id: string }[] };
+      ? supabase.from("reminders").select("student_id").eq("type", "follow_up").in("student_id", leadIds)
+      : Promise.resolve({ data: [] as { student_id: string }[] }),
+    // Powers the status button's hover tooltip — the most recent call-log
+    // remark per lead (see update_lead_status). Ordered newest-first so the
+    // first row seen per lead_id is already the latest one.
+    leadIds.length > 0
+      ? supabase.from("lead_call_logs").select("lead_id, remark").in("lead_id", leadIds).order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] as { lead_id: string; remark: string }[] }),
+  ]);
   const followUpCountByLead = new Map<string, number>();
   for (const f of followUps ?? []) {
     followUpCountByLead.set(f.student_id, (followUpCountByLead.get(f.student_id) ?? 0) + 1);
   }
 
-  // Powers the status button's hover tooltip — the most recent call-log
-  // remark per lead (see update_lead_status). Ordered newest-first so the
-  // first row seen per lead_id is already the latest one.
-  const { data: callLogs } =
-    leadIds.length > 0
-      ? await supabase.from("lead_call_logs").select("lead_id, remark").in("lead_id", leadIds).order("created_at", { ascending: false })
-      : { data: [] as { lead_id: string; remark: string }[] };
   const latestRemarkByLead = new Map<string, string>();
   for (const log of callLogs ?? []) {
     if (!latestRemarkByLead.has(log.lead_id)) latestRemarkByLead.set(log.lead_id, log.remark);
   }
-
-  const counselors = await getCachedCounselors();
 
   // Everything on one line, with the table scrolling sideways — a name, a
   // number and a country each wrapping onto two lines made a row three deep
@@ -139,7 +141,7 @@ export default async function LeadsPage() {
           <h2 className="text-lg font-semibold text-ink">Leads</h2>
           <p className="text-sm text-muted">{leads?.length ?? 0} in the pipeline</p>
         </div>
-        <Link href="/leads/new" className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink">
+        <Link prefetch={false} href="/leads/new" className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink">
           + New lead
         </Link>
       </div>

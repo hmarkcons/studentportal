@@ -24,13 +24,13 @@ export default async function DashboardPage(props: { searchParams: Promise<{ vie
   const views = viewsFor(staff);
   const view = pickView(views, requested);
 
-  // Scoped by RLS to what this person can see, then to what is their job.
-  const queue = scopeQueue(await loadStaffQueue(supabase), staff);
-
   return (
     <div className="w-full">
       <h2 className="mb-4 text-lg font-semibold text-ink">Dashboard</h2>
-      <StaffQueueCard queue={queue} />
+      {/* A component of its own, not awaited here: the view below then starts
+          reading beside it rather than after it. It has no boundary, so it
+          still arrives with the page, as before. */}
+      <Queue supabase={supabase} staff={staff} />
 
       <SectionTabs tabs={views.map((v) => ({ key: v, label: VIEW_LABELS[v], href: `/dashboard?view=${v}` }))} active={view ?? ""} />
 
@@ -50,6 +50,11 @@ export default async function DashboardPage(props: { searchParams: Promise<{ vie
 }
 
 type Session = Awaited<ReturnType<typeof getStaffSession>>;
+
+async function Queue({ supabase, staff }: { supabase: Session["supabase"]; staff: Session["staff"] }) {
+  // Scoped by RLS to what this person can see, then to what is their job.
+  return <StaffQueueCard queue={scopeQueue(await loadStaffQueue(supabase), staff)} />;
+}
 
 async function ViewFor({ view, staff, supabase }: { view: DashboardView; staff: NonNullable<Session["staff"]>; supabase: Session["supabase"] }) {
   // Visa decisions and scholarships are readable only by Processing and Super

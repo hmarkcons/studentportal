@@ -6,6 +6,7 @@ import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
 import { PortalEmpty } from "@/components/studentPortal/PortalEmpty";
 import { approvedVisaDestinations } from "@/lib/studentVisaApproval";
 import { TravelChecklist, type TravelSection } from "./TravelChecklist";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 /**
  * Travel & Arrival — what to take, and what to do once you land.
@@ -18,9 +19,7 @@ import { TravelChecklist, type TravelSection } from "./TravelChecklist";
  */
 export default async function PortalTravelPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   const { data: student } = await supabase
     .from("students")

@@ -45,7 +45,10 @@ export function BoardingPassTracker({
 
   return (
     <div className={`relative overflow-hidden border border-border bg-card ${pass ? "rounded-2xl" : "rounded-xl"}`} data-lift={pass || undefined}>
-      <div className={`flex items-center justify-between px-5 py-4 ${pass ? "text-ink" : "bg-primary text-primary-ink"}`}>
+      {/* Staff's flat card: a slim brand stripe rather than a green header,
+          so a list of applications does not stack block on block of colour. */}
+      {!pass && <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-[var(--brand-bright)]" />}
+      <div className={`flex items-center justify-between px-5 ${pass ? "py-4" : "py-3.5"} text-ink`}>
         <div className="flex min-w-0 items-center gap-3">
           {pass && (
             <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-soft)] text-[var(--brand-strong)]">
@@ -55,12 +58,12 @@ export function BoardingPassTracker({
           <div className="min-w-0">
             {pass && <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Boarding pass</p>}
             <p className={pass ? "text-base font-semibold" : "text-sm font-semibold"}>{universityName}</p>
-            {programName && <p className={pass ? "text-xs text-muted" : "text-xs opacity-90"}>{programName}</p>}
+            {programName && <p className="text-xs text-muted">{programName}</p>}
           </div>
         </div>
         {(intake || round) && (
           <div className="flex shrink-0 flex-col items-end gap-0.5 pl-3">
-            {intake && <span className={pass ? "text-xs text-muted" : "text-xs opacity-90"}>Intake: {intake}</span>}
+            {intake && <span className="text-xs text-muted">Intake: {intake}</span>}
             {round && <span className="text-xs font-semibold">{round}</span>}
           </div>
         )}
@@ -86,7 +89,7 @@ export function BoardingPassTracker({
             {pipelineStages.map((stage, i) => (
               <div key={stage} className="flex flex-col items-center gap-1">
                 <div
-                  className={`w-full rounded-full ${pass ? "h-2" : "h-1.5"} ${i <= currentIndex ? (pass ? "bg-[var(--brand-bright)]" : "bg-primary") : "bg-border"}`}
+                  className={`w-full rounded-full ${pass ? "h-2" : "h-1.5"} ${i <= currentIndex ? "bg-[var(--brand-bright)]" : "bg-border"}`}
                 />
                 <span
                   className={`text-center text-[10px] leading-tight ${

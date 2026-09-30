@@ -191,6 +191,7 @@ export default async function StudentApplicationsTab(props: {
           </p>
           {canSetService(staffRow) ? (
             <Link
+              prefetch={false}
               href={`/students/${id}/applications/record-admission`}
               className="mt-3 inline-block w-fit rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink hover:opacity-90"
             >
@@ -208,6 +209,7 @@ export default async function StudentApplicationsTab(props: {
         <div className="mb-4 flex flex-wrap gap-2">
           {cycles.map((c) => (
             <Link
+              prefetch={false}
               key={c.id}
               href={`/students/${id}/applications?cycle=${c.id}`}
               className={`rounded-md px-3 py-1.5 text-sm font-medium ${
@@ -231,7 +233,7 @@ export default async function StudentApplicationsTab(props: {
         {/* A closed intake takes no new applications — an application added to
             last year would quietly reopen work that is finished. */}
         {!isPreviousIntake && (
-          <Link href={`/students/${id}/applications/new`} className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink">
+          <Link prefetch={false} href={`/students/${id}/applications/new`} className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink">
             + Add application
           </Link>
         )}
@@ -273,6 +275,7 @@ export default async function StudentApplicationsTab(props: {
         <div className="mb-4 flex flex-wrap gap-2 border-b border-border pb-2">
           {tabs.map((t) => (
             <Link
+              prefetch={false}
               key={t.code}
               href={`/students/${id}/applications?country=${t.code}${activeCycleId ? `&cycle=${activeCycleId}` : ""}`}
               className={`rounded-md px-3 py-1.5 text-xs font-medium ${
@@ -363,7 +366,7 @@ export default async function StudentApplicationsTab(props: {
                     </span>
                     <span className="text-xs font-medium text-muted">Application #{number}</span>
                   </div>
-                  <Link href={`/students/${id}/applications/${a.id}`} className="block">
+                  <Link prefetch={false} href={`/students/${id}/applications/${a.id}`} className="block">
                     <BoardingPassTracker
                       universityName={uni?.name ?? "University"}
                       programName={program?.name}

@@ -29,7 +29,7 @@ export function LinkList({ items, empty }: { items: ListItem[]; empty: string })
       {items.map((i) => (
         <li key={i.key} className="flex items-center justify-between gap-3 py-1.5">
           {i.href ? (
-            <Link href={i.href} className="min-w-0 truncate text-primary hover:underline">
+            <Link prefetch={false} href={i.href} className="min-w-0 truncate text-primary hover:underline">
               {i.label}
             </Link>
           ) : (

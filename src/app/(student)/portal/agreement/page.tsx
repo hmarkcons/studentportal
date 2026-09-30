@@ -9,6 +9,8 @@ import { SubmitSignedAgreementForm } from "./SubmitSignedAgreementForm";
 import { evaluateAgreementGate } from "@/lib/portalGate";
 import { uploadedLine } from "@/lib/activityStamp";
 import { signedAgreementGroups } from "@/lib/studentAgreements";
+import { getCurrentUser } from "@/lib/auth/currentUser";
+import { documentUrls } from "@/lib/storageUrls";
 
 
 // The stored values are draft / pending_signature / signed. Those are database
@@ -23,20 +25,24 @@ const LONG_DATE: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", 
 
 export default async function PortalAgreementPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   const { data: student } = await supabase.from("students").select("id").eq("auth_user_id", user?.id ?? "").maybeSingle();
   if (!student) return null;
 
-  const { data: agreements } = await supabase
-    .from("agreements")
-    .select(
-      "id, status, version, signed_file_path, video_recording_path, pdf_path, signing_method, created_at, document_status, video_status, document_review_note, video_review_note, signed_file_uploaded_at, video_uploaded_at, approval_undone_at, is_backup"
-    )
-    .eq("student_id", student.id)
-    .order("created_at", { ascending: false });
+  const [{ data: agreements }, { data: countries }] = await Promise.all([
+    supabase
+      .from("agreements")
+      .select(
+        "id, status, version, signed_file_path, video_recording_path, pdf_path, signing_method, created_at, document_status, video_status, document_review_note, video_review_note, signed_file_uploaded_at, video_uploaded_at, approval_undone_at, is_backup"
+      )
+      .eq("student_id", student.id)
+      .order("created_at", { ascending: false }),
+    // The country each is for, from a function that answers that and nothing
+    // else: the templates themselves are staff-only (0290). Beside the
+    // agreements rather than after them — it needs only who is asking.
+    supabase.rpc("my_agreement_countries"),
+  ]);
 
   // Two links per agreement: the agreement HMARK generated (pdf_path) and the
   // signed copy the student sent back (signed_file_path).
@@ -44,36 +50,25 @@ export default async function PortalAgreementPage() {
   // The generated one was never offered here, so a student told to "attach your
   // signed agreement" had no way to obtain the agreement in the first place —
   // the one thing this page exists to hand over.
+  //
+  // Every one of them in a single signing request.
+  const urls = await documentUrls(
+    supabase,
+    (agreements ?? []).flatMap((a) => [a.pdf_path, a.signed_file_path])
+  );
   const generated = new Map<string, string>();
   const signed = new Map<string, string>();
-  await Promise.all(
-    (agreements ?? []).flatMap((a) => [
-      a.pdf_path
-        ? supabase.storage
-            .from("documents")
-            .createSignedUrl(a.pdf_path, 3600)
-            .then(({ data }) => {
-              if (data?.signedUrl) generated.set(a.id, data.signedUrl);
-            })
-        : Promise.resolve(),
-      a.signed_file_path
-        ? supabase.storage
-            .from("documents")
-            .createSignedUrl(a.signed_file_path, 3600)
-            .then(({ data }) => {
-              if (data?.signedUrl) signed.set(a.id, data.signedUrl);
-            })
-        : Promise.resolve(),
-    ])
-  );
+  for (const a of agreements ?? []) {
+    const pdf = a.pdf_path ? urls.get(a.pdf_path) : undefined;
+    if (pdf) generated.set(a.id, pdf);
+    const copy = a.signed_file_path ? urls.get(a.signed_file_path) : undefined;
+    if (copy) signed.set(a.id, copy);
+  }
 
   // While this is outstanding the proxy holds the student here, so say plainly
   // why the rest of the portal is unavailable and what unlocks it.
   const gate = evaluateAgreementGate(agreements ?? []);
 
-  // The country each is for, from a function that answers that and nothing
-  // else: the templates themselves are staff-only (0290).
-  const { data: countries } = await supabase.rpc("my_agreement_countries");
   const countryById = new Map(((countries ?? []) as { agreement_id: string; country: string | null }[]).map((c) => [c.agreement_id, c.country]));
   const countryOf = (a: { id: string }) => countryById.get(a.id) ?? "Your agreement";
   const signedGroups = signedAgreementGroups(

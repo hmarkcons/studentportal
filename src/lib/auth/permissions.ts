@@ -1,5 +1,7 @@
 import { cache } from "react";
 import { getStaffSession } from "./session";
+import { getCurrentUser } from "./currentUser";
+import { createClient } from "@/lib/supabase/server";
 import { staffRoles } from "./roles";
 import type { PermissionKey } from "@/lib/permissions";
 
@@ -10,11 +12,21 @@ import type { PermissionKey } from "@/lib/permissions";
 // over both. Cached per request the same way getStaffSession is, since a
 // page can need several of these checks.
 export const getEffectivePermissions = cache(async (): Promise<Record<string, boolean>> => {
-  const { supabase, staff } = await getStaffSession();
-  if (!staff) return {};
-
-  const { data: defs } = await supabase.from("permission_definitions").select("key, default_roles");
-  if (!defs) return {};
+  // Everything it reads is asked for at once, beside the staff row rather than
+  // after it: none of it depends on the roles, only on who is signed in, which
+  // the token already says. It used to wait for the staff row, then the
+  // definitions, then the overrides — three waves every page stood behind.
+  const user = await getCurrentUser();
+  if (!user) return {};
+  const supabase = await createClient();
+  const [{ staff }, { data: defs }, { data: roleOverrides }, { data: staffOverrides }] = await Promise.all([
+    getStaffSession(),
+    supabase.from("permission_definitions").select("key, default_roles"),
+    // A handful of rows in all; only this person's roles are looked up below.
+    supabase.from("role_permission_overrides").select("role, permission_key, allowed"),
+    supabase.from("staff_permission_overrides").select("permission_key, allowed").eq("staff_id", user.id),
+  ]);
+  if (!staff || !defs) return {};
 
   // Every role this person holds, not just their primary one (0247).
   const roles = staffRoles(staff);
@@ -22,11 +34,6 @@ export const getEffectivePermissions = cache(async (): Promise<Record<string, bo
   if (roles.includes("super_admin")) {
     return Object.fromEntries(defs.map((d) => [d.key, true]));
   }
-
-  const [{ data: roleOverrides }, { data: staffOverrides }] = await Promise.all([
-    supabase.from("role_permission_overrides").select("role, permission_key, allowed").in("role", roles),
-    supabase.from("staff_permission_overrides").select("permission_key, allowed").eq("staff_id", staff.id),
-  ]);
 
   // Keyed by role AND key, because the same key can be overridden differently
   // for two roles the same person holds.

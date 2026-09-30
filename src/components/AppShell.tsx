@@ -108,7 +108,7 @@ export function AppShell({
   }, [activePath]);
 
   return (
-    <div className="flex min-h-screen" data-portal={student ? "student" : undefined}>
+    <div className="flex min-h-screen" data-shell data-portal={student ? "student" : undefined}>
       {navOpen && (
         <div
           className="fixed inset-0 z-30 bg-black/40 md:hidden"
@@ -169,7 +169,7 @@ export function AppShell({
                 open={item.children.some((c) => isActive(c.href))}
                 className="group mb-1"
               >
-                <summary className="flex cursor-pointer list-none items-center justify-between rounded-md px-3 py-2 text-sm font-medium text-sidebar-ink hover:bg-sidebar-active-bg">
+                <summary className="flex cursor-pointer list-none items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-sidebar-ink transition-colors hover:bg-[color-mix(in_srgb,var(--sidebar-ink)_5%,transparent)]">
                   <span className="flex items-center gap-2.5">
                     {item.icon && <NavIcon name={item.icon} className="h-[18px] w-[18px] text-sidebar-muted" />}
                     {item.label}
@@ -183,10 +183,10 @@ export function AppShell({
                       href={child.href}
                       prefetch={false}
                       aria-current={isActive(child.href) ? "page" : undefined}
-                      className={`rounded-md px-3 py-1.5 text-sm ${
+                      className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
                         isActive(child.href)
-                          ? "bg-sidebar-active-bg font-medium text-primary"
-                          : "text-sidebar-muted hover:text-sidebar-ink"
+                          ? "bg-sidebar-active-bg font-semibold text-[var(--nav-active-ink)]"
+                          : "text-sidebar-muted hover:bg-[color-mix(in_srgb,var(--sidebar-ink)_5%,transparent)] hover:text-sidebar-ink"
                       }`}
                     >
                       {child.label}
@@ -201,34 +201,22 @@ export function AppShell({
                 prefetch={false}
                 aria-current={isActive(item.href!) ? "page" : undefined}
                 className={
-                  student
-                    ? // The page you are on: a tint and a slim bar, the one green in the menu.
-                      `group relative mb-0.5 flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-150 ${
-                        isActive(item.href!)
-                          ? "bg-sidebar-active-bg font-semibold text-[var(--nav-active-ink)] before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-full before:bg-[var(--nav-active-ink)]"
-                          : "font-medium text-sidebar-ink hover:bg-[color-mix(in_srgb,var(--sidebar-ink)_5%,transparent)]"
-                      }`
-                    : `mb-1 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
-                        isActive(item.href!)
-                          ? "bg-sidebar-active-bg text-primary"
-                          : "text-sidebar-ink hover:bg-sidebar-active-bg"
-                      }`
+                  // The page you are on: a tint and a slim bar, the one green in the menu — in every portal.
+                  `group relative mb-0.5 flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-150 ${
+                    isActive(item.href!)
+                      ? "bg-sidebar-active-bg font-semibold text-[var(--nav-active-ink)] before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-full before:bg-[var(--nav-active-ink)]"
+                      : "font-medium text-sidebar-ink hover:bg-[color-mix(in_srgb,var(--sidebar-ink)_5%,transparent)]"
+                  }`
                 }
               >
-                {item.icon &&
-                  (student ? (
-                    <NavIcon
-                      name={item.icon}
-                      className={`h-[18px] w-[18px] shrink-0 transition-colors ${
-                        isActive(item.href!) ? "text-[var(--nav-active-ink)]" : "text-sidebar-muted group-hover:text-sidebar-ink"
-                      }`}
-                    />
-                  ) : (
-                    <NavIcon
-                      name={item.icon}
-                      className={`h-[18px] w-[18px] ${isActive(item.href!) ? "text-primary" : "text-sidebar-muted"}`}
-                    />
-                  ))}
+                {item.icon && (
+                  <NavIcon
+                    name={item.icon}
+                    className={`h-[18px] w-[18px] shrink-0 transition-colors ${
+                      isActive(item.href!) ? "text-[var(--nav-active-ink)]" : "text-sidebar-muted group-hover:text-sidebar-ink"
+                    }`}
+                  />
+                )}
                 {item.label}
                 {Boolean(item.badge) && (
                   <span
@@ -273,16 +261,14 @@ export function AppShell({
               <div className="text-right">
                 <p className="text-sm font-medium text-ink">{userName}</p>
                 {/* On a phone the student's ID line would push Sign out onto two lines; the dashboard shows it. */}
-                <p className={`text-xs text-muted ${student ? "hidden sm:block" : ""}`}>{userSubtitle}</p>
+                <p className="hidden text-xs text-muted sm:block">{userSubtitle}</p>
               </div>
-              {student && (
-                <span
-                  aria-hidden
-                  className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--brand-soft)] text-xs font-semibold text-[var(--brand-strong)] sm:flex"
-                >
-                  {initialsOf(userName)}
-                </span>
-              )}
+              <span
+                aria-hidden
+                className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--brand-soft)] text-xs font-semibold text-[var(--brand-strong)] sm:flex"
+              >
+                {initialsOf(userName)}
+              </span>
             </div>
             <SignOutButton variant="outline">Sign out</SignOutButton>
           </div>

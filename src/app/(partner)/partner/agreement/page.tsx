@@ -2,12 +2,11 @@ import { createClient } from "@/lib/supabase/server";
 import { formatDateOnly } from "@/lib/formatDate";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 export default async function PartnerAgreementPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   const { data: account } = await supabase.from("partner_university_accounts").select("university_id").eq("id", user?.id ?? "").maybeSingle();
   if (!account) return null;

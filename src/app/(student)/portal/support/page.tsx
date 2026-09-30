@@ -10,6 +10,7 @@ import { formatStamp } from "@/lib/activityStamp";
 import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
 import { PortalStat, PortalStats } from "@/components/studentPortal/PortalStat";
 import { PortalEmpty } from "@/components/studentPortal/PortalEmpty";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 function SectionTitle({ icon: Icon, children }: { icon: LucideIcon; children: React.ReactNode }) {
   return (
@@ -24,9 +25,7 @@ function SectionTitle({ icon: Icon, children }: { icon: LucideIcon; children: Re
 
 export default async function SupportPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   const { data: student } = await supabase.from("students").select("id").eq("auth_user_id", user?.id ?? "").maybeSingle();
   if (!student) return null;
@@ -131,6 +130,7 @@ export default async function SupportPage() {
             <div className="flex flex-col divide-y divide-border">
               {(tickets ?? []).map((t) => (
                 <Link
+                  prefetch={false}
                   key={t.id}
                   href={`/portal/support/${t.id}`}
                   className="group flex items-center justify-between gap-4 px-5 py-3.5 text-sm transition-colors hover:bg-bg"

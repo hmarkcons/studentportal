@@ -14,6 +14,7 @@ export function StaffTemplateActions({ id, name }: { id: string; name: string })
   return (
     <div className="flex items-center gap-2">
       <Link
+        prefetch={false}
         href={`/setup/agreement-templates/staff/${id}`}
         className="rounded-md border border-border px-2 py-1 text-xs font-medium text-ink hover:bg-bg"
       >

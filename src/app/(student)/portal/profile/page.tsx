@@ -9,6 +9,7 @@ import { ProfileForm } from "./ProfileForm";
 import { ProfileCompleteness } from "@/components/ProfileCompleteness";
 import { uploadStudentPhoto, deleteStudentPhoto } from "@/lib/actions/studentProfileExtras";
 import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 function SectionTitle({ icon: Icon, children }: { icon: LucideIcon; children: React.ReactNode }) {
   return (
@@ -23,9 +24,7 @@ function SectionTitle({ icon: Icon, children }: { icon: LucideIcon; children: Re
 
 export default async function PortalProfilePage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   const { data: student } = await supabase
     .from("students")

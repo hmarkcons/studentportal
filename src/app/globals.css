@@ -586,9 +586,12 @@ body {
   }
 }
 
-/* ---------------------------------------------------------- student portal
-   The student portal's own finish, scoped to it by data-portal="student" on
-   the shell (AppShell), so the staff and partner portals are untouched.
+/* ---------------------------------------------------------- the palette
+   One palette for every portal — staff, partner universities and students —
+   set on :root below, after the originals at the top of this file, which it
+   replaces (the dark and semi-dark blocks win by specificity, and follow).
+   It was the student portal's alone at first; staff and partners now read
+   in the same colours.
 
    Calm first: white cards on a cool grey page, navy-slate ink, and one brand
    green kept for what means something — the next thing to do, what is done,
@@ -607,12 +610,19 @@ body {
    the point: one finish across every student page, whatever each page asked
    for. The animation ends on transform: none, so nothing it leaves behind
    becomes the containing block of a fixed overlay opened later. */
-[data-portal="student"] {
+:root {
   --bg: #f4f6f9;
   --card: #ffffff;
   --ink: #101828;
   --muted: #667085;
   --border: #e4e7ec;
+  --secondary: #667085;
+  --sidebar-bg: #ffffff;
+  --sidebar-ink: #101828;
+  --sidebar-muted: #667085;
+  --sidebar-border: #e4e7ec;
+  --chart-1: #1fa878;
+  --chart-enrolled: #1fa878;
   /* Deep enough for white text on a button: about 5:1. */
   --primary: #0f7f5c;
   --primary-ink: #ffffff;
@@ -655,12 +665,20 @@ body {
   --lift: 0 1px 2px rgb(16 24 40 / 0.04), 0 4px 16px -8px rgb(16 24 40 / 0.10);
   --lift-hover: 0 2px 4px rgb(16 24 40 / 0.05), 0 14px 30px -14px rgb(16 24 40 / 0.20);
 }
-:root[data-theme="dark"] [data-portal="student"] {
+:root[data-theme="dark"] {
   --bg: #0e141b;
   --card: #151d26;
   --ink: #e8edf3;
   --muted: #98a2b3;
   --border: #253140;
+  --secondary: #98a2b3;
+  --sidebar-bg: #0b1117;
+  --sidebar-ink: #e8edf3;
+  --sidebar-muted: #98a2b3;
+  --sidebar-border: #1f2a37;
+  --sidebar-active-bg: rgb(52 195 147 / 0.14);
+  --chart-1: #34c393;
+  --chart-enrolled: #34c393;
   --primary: #34c393;
   --primary-ink: #04251a;
   --brand-soft: rgb(52 195 147 / 0.14);
@@ -693,14 +711,28 @@ body {
   --lift: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 22px -12px rgb(0 0 0 / 0.5);
   --lift-hover: 0 2px 4px rgb(0 0 0 / 0.35), 0 16px 32px -14px rgb(0 0 0 / 0.6);
 }
-/* The semi-dark theme darkens the sidebar alone; its current entry keeps a tint that reads on it. */
-:root[data-theme="semi-dark"] [data-portal="student"] {
+/* The semi-dark theme darkens the sidebar alone — in navy-slate, the palette's
+   own dark — and its current entry keeps a tint that reads on it. */
+:root[data-theme="semi-dark"] {
+  --sidebar-bg: #111a24;
+  --sidebar-ink: #e8edf3;
+  --sidebar-muted: #98a2b3;
+  --sidebar-border: #1f2a37;
   --sidebar-active-bg: rgb(52 195 147 / 0.16);
   --nav-active-ink: #6fdcb6;
 }
-[data-portal="student"] main {
+[data-shell] main {
   /* A whisper of depth at the top, and nothing coloured behind the page. */
   background: linear-gradient(180deg, color-mix(in srgb, var(--card) 70%, var(--bg)) 0, var(--bg) 320px);
+}
+/* Staff and partner cards: the same soft lift, a touch squarer than the
+   student portal's — the work there is tables and forms, not tiles. */
+[data-shell] main [data-card] {
+  border-color: var(--border);
+  box-shadow: 0 1px 2px rgb(16 24 40 / 0.04), 0 2px 10px -6px rgb(16 24 40 / 0.08);
+}
+:root[data-theme="dark"] [data-shell] main [data-card] {
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
 }
 [data-portal="student"] main [data-card] {
   border-radius: 1rem;

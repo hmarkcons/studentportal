@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 import { getStaffSession } from "@/lib/auth/session";
 import { hasRole } from "@/lib/auth/roles";
 import { readEventForm } from "@/lib/calendarEventFields";
@@ -254,9 +255,9 @@ type NotifyRow = {
  */
 export async function loadCalendarNotifications(): Promise<DueNotification[]> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Only reads, and only the caller's own rows, so the token the proxy has
+  // just checked for this very request is enough — see getCurrentUser.
+  const user = await getCurrentUser();
   if (!user) return [];
 
   const now = Date.now();

@@ -19,7 +19,7 @@ function studentList(students: NamedStudent[], tab: string) {
       {shown.map((s, i) => (
         <span key={s.id}>
           {i > 0 && ", "}
-          <Link href={`/students/${s.id}${tab}`} className="text-primary hover:underline">
+          <Link prefetch={false} href={`/students/${s.id}${tab}`} className="text-primary hover:underline">
             {s.name}
           </Link>
         </span>
@@ -140,6 +140,7 @@ export function StaffQueueCard({ queue }: { queue: StaffQueue }) {
                 <r.icon aria-hidden className={`mt-0.5 h-4 w-4 shrink-0 ${r.urgent ? "text-warning" : "text-muted"}`} />
                 <span className="min-w-0">
                   <Link
+                    prefetch={false}
                     href={r.href}
                     className={`block text-sm hover:underline ${r.urgent ? "font-medium text-warning" : "text-ink"}`}
                   >
@@ -149,7 +150,7 @@ export function StaffQueueCard({ queue }: { queue: StaffQueue }) {
                   {r.students && studentList(r.students, r.icon === MessageSquare ? "/communication" : "")}
                 </span>
               </span>
-              <Link href={r.href} aria-hidden tabIndex={-1} className="shrink-0 text-muted hover:text-ink">
+              <Link prefetch={false} href={r.href} aria-hidden tabIndex={-1} className="shrink-0 text-muted hover:text-ink">
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </div>

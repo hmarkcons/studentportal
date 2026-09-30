@@ -49,7 +49,7 @@ export function UpcomingTimeline({ entries }: { entries: TimelineEntry[] }) {
               })()}
             </span>
             {e.href ? (
-              <Link href={e.href} className="min-w-0 hover:underline">
+              <Link prefetch={false} href={e.href} className="min-w-0 hover:underline">
                 {body}
               </Link>
             ) : (

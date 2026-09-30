@@ -5,12 +5,11 @@ import { MessageThread, type MessageRow } from "@/components/MessageThread";
 import { MarkMessagesRead } from "@/components/MarkMessagesRead";
 import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
 import { loadStudentTeam } from "@/lib/studentTeam";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 export default async function PortalMessagesPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   const { data: student } = await supabase.from("students").select("id").eq("auth_user_id", user?.id ?? "").maybeSingle();
   if (!student) return null;

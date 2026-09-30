@@ -15,6 +15,8 @@ import { GenerateAgreementPdfButton } from "@/app/(staff)/students/[id]/Generate
 import { SectionTabs } from "@/components/SectionTabs";
 import { getEffectivePermissions } from "@/lib/auth/permissions";
 import { StaffAgreementGenerator } from "./StaffAgreementGenerator";
+import { getCurrentUser } from "@/lib/auth/currentUser";
+import { hasRole } from "@/lib/auth/roles";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -71,13 +73,11 @@ export default async function AgreementGeneratorPage(props: {
 
   let panel: React.ReactNode = null;
   if (selected) {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await getCurrentUser();
     const { data: staffRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
-    const role = staffRow?.role;
-    const isSuperAdmin = role === "super_admin";
-    const canModifyAgreement = role === "super_admin" || role === "processing";
+    // Every role this person holds, not only the primary one.
+    const isSuperAdmin = hasRole(staffRow, "super_admin");
+    const canModifyAgreement = hasRole(staffRow, "super_admin", "processing");
 
     const [{ data: allTemplates }, { data: registeredRows }, { data: leadService }] = await Promise.all([
       supabase.from("agreement_templates").select("id, name, signatory_name, service_type, destination:destinations(id, display_name)"),
@@ -135,11 +135,11 @@ export default async function AgreementGeneratorPage(props: {
       <Card className="mt-6">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-sm font-medium text-ink">Agreement — {selected.full_name}</h3>
-          <Link href={`/students/${selected.id}`} className="text-xs text-primary hover:underline">
+          <Link prefetch={false} href={`/students/${selected.id}`} className="text-xs text-primary hover:underline">
             View full student record →
           </Link>
         </div>
-        {(role === "super_admin" || role === "processing") && (
+        {canModifyAgreement && (
           <GenerateAgreementForm
             studentId={selected.id}
             templates={templates}

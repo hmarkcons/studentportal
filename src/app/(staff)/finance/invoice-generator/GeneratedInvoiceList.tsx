@@ -281,7 +281,7 @@ function InvoiceRow({ inv, canDelete }: { inv: GeneratedInvoice; canDelete: bool
 
           <p className="mt-3 text-xs text-muted">
             Full payment history and receipts live on{" "}
-            <Link href={`/students/${inv.studentId}`} className="text-primary underline">
+            <Link prefetch={false} href={`/students/${inv.studentId}`} className="text-primary underline">
               this student&apos;s page
             </Link>
             .

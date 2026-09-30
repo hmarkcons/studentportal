@@ -421,7 +421,7 @@ function FinalizedUniversityField({
           <>
             From the finalised application.{" "}
             {studentId && (
-              <Link href={`/students/${studentId}/applications`} className="text-primary hover:underline">
+              <Link prefetch={false} href={`/students/${studentId}/applications`} className="text-primary hover:underline">
                 Change it on the Applications tab
               </Link>
             )}
@@ -430,7 +430,7 @@ function FinalizedUniversityField({
           <>
             Use &ldquo;{actionLabel}&rdquo; on the{" "}
             {studentId ? (
-              <Link href={`/students/${studentId}/applications`} className="text-primary hover:underline">
+              <Link prefetch={false} href={`/students/${studentId}/applications`} className="text-primary hover:underline">
                 Applications tab
               </Link>
             ) : (

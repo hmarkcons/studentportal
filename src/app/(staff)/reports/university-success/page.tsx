@@ -86,7 +86,7 @@ export default async function UniversitySuccessPage() {
 
   return (
     <div className="w-full">
-      <Link href="/reports" className="text-sm text-muted hover:text-ink">
+      <Link prefetch={false} href="/reports" className="text-sm text-muted hover:text-ink">
         &larr; Back to reports
       </Link>
       <h2 className="mt-2 mb-1 text-lg font-semibold text-ink">University-wise Application / Success Rate</h2>

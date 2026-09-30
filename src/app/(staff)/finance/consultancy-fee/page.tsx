@@ -1,10 +1,11 @@
-import { createClient } from "@/lib/supabase/server";
 import { CircleCheck, Hourglass, TriangleAlert } from "lucide-react";
 import { documentUrls } from "@/lib/storageUrls";
 import { StatCard } from "@/components/ui/StatCard";
 import { computeInvoiceStatus } from "@/lib/invoiceStatus";
 import { computeInvoiceMath, computePaymentProgress, sumLineItems } from "@/lib/invoiceMath";
 import { getEffectivePermissions } from "@/lib/auth/permissions";
+import { hasRole } from "@/lib/auth/roles";
+import { getStaffSession } from "@/lib/auth/session";
 import { FeeProductCatalog } from "./FeeProductCatalog";
 import { ConsultancyFeeList } from "./ConsultancyFeeList";
 import { ConsultancyFeeOverview, type FeeRow, type FeeStatus } from "./ConsultancyFeeOverview";
@@ -14,21 +15,17 @@ function one<T>(v: T | T[] | null) {
 }
 
 export default async function ConsultancyFeePage() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
-  const role = staffRow?.role ?? null;
-  const isSuperAdmin = role === "super_admin";
-  const canView = isSuperAdmin || role === "finance";
+  // The staff row the layout has already asked for, and the permissions, at once.
+  const [{ supabase, staff: staffRow }, perms] = await Promise.all([getStaffSession(), getEffectivePermissions()]);
+  // Every role this person holds, not only the primary one: somebody who is a
+  // counsellor first and on the accounts team as well was turned away here.
+  const isSuperAdmin = hasRole(staffRow, "super_admin");
+  const canView = hasRole(staffRow, "super_admin", "finance");
   // Read from the permission system rather than hardcoding the role. These
   // records are the accounts team's to manage as well as Super Admin's, which
   // is exactly what finance.invoices.manage already grants by default
   // (migration 0094) — and it stays adjustable in Admin > Role Permissions
   // instead of being fixed here.
-  const perms = await getEffectivePermissions();
   const canManage = perms["finance.invoices.manage"] === true;
 
   if (!canView) {
@@ -42,39 +39,47 @@ export default async function ConsultancyFeePage() {
     );
   }
 
-  const { data: invoices } = await supabase
-    .from("invoices")
-    .select(
-      `id, student_id, admin_charge, consultancy_fee, currency, sent_status, pdf_path, invoice_number, intake, terms,
-       discount_amount, discount_reason, tax_rate, tax_amount, tax_base, issued_on,
-       admin_fee_status, admin_fee_paid_date, admin_fee_payment_method, service_type,
-       student:leads(full_name, registered_at)`
-    )
-    .order("created_at", { ascending: false });
+  // Two waves where there were nine: everything that needs nothing, then
+  // everything that needs the invoices.
+  const [{ data: invoices }, { data: feeProducts }, { data: regStudents }, { data: counselors }] = await Promise.all([
+    supabase
+      .from("invoices")
+      .select(
+        `id, student_id, admin_charge, consultancy_fee, currency, sent_status, pdf_path, invoice_number, intake, terms,
+         discount_amount, discount_reason, tax_rate, tax_amount, tax_base, issued_on,
+         admin_fee_status, admin_fee_paid_date, admin_fee_payment_method, service_type,
+         student:leads(full_name, registered_at)`
+      )
+      .order("created_at", { ascending: false }),
+    supabase.from("fee_products").select("id, name, default_amount, default_currency").order("name"),
+    // Per-student payment position for the filterable overview. Driven from
+    // the registered-student list rather than from invoices, so a student who
+    // has never been invoiced still shows up as owing everything instead of
+    // being silently absent from the finance view.
+    supabase
+      .from("students")
+      .select("id, full_name, country_of_interest, intake, level_applying_for, registration_status, assigned_counselor_id")
+      .order("registered_at", { ascending: false }),
+    supabase.from("staff").select("id, full_name"),
+  ]);
 
   const invoiceIds = (invoices ?? []).map((i) => i.id);
-
-  const { data: installments } = invoiceIds.length
-    ? await supabase.from("invoice_installments").select("*").in("invoice_id", invoiceIds)
-    : { data: [] };
-
-  const { data: lineItems } = invoiceIds.length
-    ? await supabase.from("invoice_line_items").select("id, invoice_id, name, description, amount").in("invoice_id", invoiceIds)
-    : { data: [] };
-
-  const { data: adminCharges } = invoiceIds.length
-    ? await supabase
-        .from("invoice_admin_charges")
-        .select("id, invoice_id, destination_id, country_label, amount, is_backup")
-        .in("invoice_id", invoiceIds)
-        .order("sort_order", { ascending: true })
-    : { data: [] };
-
-  const { data: feeProducts } = await supabase.from("fee_products").select("id, name, default_amount, default_currency").order("name");
-
-  // Every invoice PDF in one request. This page lists every invoice on file,
-  // so it was one round trip per invoice before the page could render.
-  const pdfByPath = await documentUrls(supabase, (invoices ?? []).map((i) => i.pdf_path));
+  const [{ data: installments }, { data: lineItems }, { data: adminCharges }, pdfByPath] = await Promise.all([
+    invoiceIds.length ? supabase.from("invoice_installments").select("*").in("invoice_id", invoiceIds) : Promise.resolve({ data: [] }),
+    invoiceIds.length
+      ? supabase.from("invoice_line_items").select("id, invoice_id, name, description, amount").in("invoice_id", invoiceIds)
+      : Promise.resolve({ data: [] }),
+    invoiceIds.length
+      ? supabase
+          .from("invoice_admin_charges")
+          .select("id, invoice_id, destination_id, country_label, amount, is_backup")
+          .in("invoice_id", invoiceIds)
+          .order("sort_order", { ascending: true })
+      : Promise.resolve({ data: [] }),
+    // Every invoice PDF in one request. This page lists every invoice on file,
+    // so it was one round trip per invoice before the page could render.
+    documentUrls(supabase, (invoices ?? []).map((i) => i.pdf_path)),
+  ]);
   const pdfUrls = new Map<string, string>();
   for (const i of invoices ?? []) {
     const url = i.pdf_path ? pdfByPath.get(i.pdf_path) : undefined;
@@ -95,16 +100,6 @@ export default async function ConsultancyFeePage() {
     };
   });
 
-  // Per-student payment position for the filterable overview. Driven from the
-  // registered-student list rather than from invoices, so a student who has
-  // never been invoiced still shows up as owing everything instead of being
-  // silently absent from the finance view.
-  const { data: regStudents } = await supabase
-    .from("students")
-    .select("id, full_name, country_of_interest, intake, level_applying_for, registration_status, assigned_counselor_id")
-    .order("registered_at", { ascending: false });
-
-  const { data: counselors } = await supabase.from("staff").select("id, full_name");
   const counselorName = new Map((counselors ?? []).map((c) => [c.id, c.full_name]));
 
   const invoiceByStudent = new Map<string, (typeof rows)[number]>();

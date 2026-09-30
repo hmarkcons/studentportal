@@ -61,7 +61,7 @@ export function AddBackupPrograms({
           {siblings.map((sib, i) => (
             <span key={sib.id}>
               {i > 0 && ", "}
-              <Link href={`/students/${studentId}/applications/${sib.id}`} className="text-primary hover:underline">
+              <Link prefetch={false} href={`/students/${studentId}/applications/${sib.id}`} className="text-primary hover:underline">
                 {sib.name ?? "no programme chosen"}
               </Link>
             </span>

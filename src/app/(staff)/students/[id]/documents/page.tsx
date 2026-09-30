@@ -22,14 +22,12 @@ export default async function StudentDocumentsTab(props: {
   const { cycle: cycleParam } = await props.searchParams;
   const supabase = await createClient();
 
-  await ensureStudentDocumentRequirements(id);
-
-  const [sections, canManage] = await Promise.all([
+  // One wave for everything but the documents themselves, which are read once
+  // the checklist is up to date. These were three waves of their own.
+  const [, sections, canManage, { data: applications }, { data: cycleRows }, { data: renewTemplates }] = await Promise.all([
+    ensureStudentDocumentRequirements(id),
     loadStudentChecklistSections(supabase, id),
     hasPermission("documents.manage_requirements"),
-  ]);
-
-  const [{ data: applications }, { data: cycleRows }, { data: renewTemplates }] = await Promise.all([
     supabase.from("applications").select("id, university:universities(name)").eq("student_id", id),
     supabase.from("student_cycles").select("id, sequence, intake, is_current").eq("student_id", id).order("sequence"),
     supabase.from("document_templates").select("id").eq("renew_each_intake", true),
@@ -91,14 +89,13 @@ export default async function StudentDocumentsTab(props: {
 
   const appLabel = new Map((applications ?? []).map((a) => [a.id, one(a.university as never) as { name?: string } | null]));
 
-  // The guide the student reads for each, so staff talk them through the same words (0300).
-  const [history, guides] = await Promise.all([
+  const [history, guides, docUrls] = await Promise.all([
     loadDocumentHistory(supabase, docs.map((d) => d.id)),
+    // The guide the student reads for each, so staff talk them through the same words (0300).
     loadDocumentGuides(supabase, id, docs),
+    // One request for every file's link, then a plain synchronous map.
+    documentUrls(supabase, docs.map((d) => d.file_path)),
   ]);
-
-  // One request for every file's link, then a plain synchronous map.
-  const docUrls = await documentUrls(supabase, docs.map((d) => d.file_path));
 
   const docsWithUrls = docs.map((d) => {
       const templateName = one(d.template as never) as { name?: string } | null;
@@ -124,6 +121,7 @@ export default async function StudentDocumentsTab(props: {
         <div className="mb-4 flex flex-wrap gap-2">
           {cycles.map((c) => (
             <Link
+              prefetch={false}
               key={c.id}
               href={`/students/${id}/documents?cycle=${c.id}`}
               className={`rounded-md px-3 py-1.5 text-sm font-medium ${

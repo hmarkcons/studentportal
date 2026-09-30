@@ -11,6 +11,7 @@ import {
   type GuideVideo,
   type StoredGuide,
 } from "./documentGuide.ts";
+import { documentUrls } from "@/lib/storageUrls";
 
 /**
  * A requirement's guide as a page shows it: parsed, its sample signed, its
@@ -100,13 +101,9 @@ export async function loadDocumentGuides(
   const samplePaths = [
     ...new Set([...byTemplate.values(), ...byKind.values()].map((g) => g.sample_file_path).filter((p): p is string => Boolean(p))),
   ];
-  const signed = new Map<string, string>();
-  await Promise.all(
-    samplePaths.map(async (path) => {
-      const { data } = await supabase.storage.from("documents").createSignedUrl(path, 3600);
-      if (data?.signedUrl) signed.set(path, data.signedUrl);
-    })
-  );
+  // In one request: signed one at a time they were a round trip each, and the
+  // slowest part of the Documents page.
+  const signed = await documentUrls(supabase, samplePaths);
 
   const out: Record<string, ResolvedGuide> = {};
   for (const doc of docs) {

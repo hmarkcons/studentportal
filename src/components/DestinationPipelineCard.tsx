@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
+import { Pencil } from "lucide-react";
 import { useButtonAction } from "@/components/useButtonAction";
 import { ActionStatus } from "@/components/ActionStatus";
 import { setDashboardStageValue } from "@/lib/actions/dashboardPipeline";
@@ -87,6 +88,7 @@ export function DestinationPipelineCard({
   values,
   editable,
   revalidateTo,
+  accent = 1,
 }: {
   leadId: string;
   destinationId: string;
@@ -96,21 +98,35 @@ export function DestinationPipelineCard({
   values: DashboardStageValues;
   editable: boolean;
   revalidateTo: string;
+  /** Which of the five country accents (globals.css) it wears: the primary first, then each in turn. */
+  accent?: number;
 }) {
   const [editing, setEditing] = useState(false);
   const idx = currentStageIndex(stages, values);
   const currentValue = values[stages[idx]?.key];
   const currentIsNegative = isNegativeValue(currentValue);
 
+  // The country's colour is in the details — a stripe, its done steps — so
+  // two countries one above the other are told apart without two blocks of
+  // colour (as the student portal's own cards do).
+  const style = { "--a": `var(--accent-${accent})` } as CSSProperties;
+
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-card">
-      <div className="flex items-center justify-between bg-primary px-5 py-4 text-primary-ink">
-        <div>
-          <p className="text-sm font-semibold">{destinationName}</p>
-          <p className="text-xs opacity-90">{subtitle}</p>
+    <div className="relative overflow-hidden rounded-xl border border-border bg-card" style={style} data-destination-pipeline data-accent={accent}>
+      <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-[var(--a)]" />
+      <div className="flex items-center justify-between gap-3 px-5 py-3.5">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-ink">{destinationName}</p>
+          <p className="truncate text-xs text-muted">{subtitle}</p>
         </div>
         {editable && (
-          <button type="button" onClick={() => setEditing((v) => !v)} className="text-xs underline">
+          <button
+            type="button"
+            onClick={() => setEditing((v) => !v)}
+            aria-expanded={editing}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-ink transition-colors hover:bg-bg"
+          >
+            {!editing && <Pencil aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted" />}
             {editing ? "Done" : "Update stages"}
           </button>
         )}
@@ -132,7 +148,7 @@ export function DestinationPipelineCard({
                 </span>
                 <div
                   className={`h-1.5 w-full rounded-full ${
-                    filled ? (i === idx && negative ? "bg-danger" : "bg-primary") : "bg-border"
+                    filled ? (i === idx && negative ? "bg-danger" : "bg-[var(--a)]") : "bg-border"
                   }`}
                 />
                 <span className={`text-center text-[9px] leading-tight ${negative ? "text-danger" : "text-muted"}`}>{value ?? "—"}</span>

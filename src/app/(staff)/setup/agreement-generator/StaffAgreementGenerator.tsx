@@ -32,6 +32,7 @@ export async function StaffAgreementGenerator({ selectedId }: { selectedId?: str
             return (
               <li key={s.id}>
                 <Link
+                  prefetch={false}
                   href={`/setup/agreement-generator?tab=staff&staff=${s.id}`}
                   data-full-width
                   className={`flex items-center justify-between gap-2 px-1 py-2 text-sm hover:bg-bg ${s.id === selectedId ? "font-medium text-primary" : "text-ink"}`}

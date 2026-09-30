@@ -5,6 +5,7 @@ import { SignOutButton } from "@/components/SignOutButton";
 import { RequestAccessForm } from "./RequestAccessForm";
 import { currentRequestIp, latestAccessRequest } from "@/lib/actions/officeAccess";
 import { formatDateOnly } from "@/lib/formatDate";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 export const dynamic = "force-dynamic";
 
@@ -21,9 +22,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function AccessPendingPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) redirect("/login");
 
   const admin = createAdminClient();

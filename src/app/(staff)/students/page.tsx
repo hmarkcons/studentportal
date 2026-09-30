@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { ImportRegisteredStudentsForm } from "./ImportRegisteredStudentsForm";
 import { InlineRegistrationStatusCell } from "./InlineRegistrationStatusCell";
 import { RowActionsMenu } from "@/components/RowActionsMenu";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
 type StudentRow = {
   id: string;
@@ -44,19 +45,19 @@ function initials(name: string) {
 export default async function StudentsPage() {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: staffRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
+  const user = await getCurrentUser();
+  // Both at once: the list does not wait on the viewer's own row.
+  const [{ data: staffRow }, { data: students, error }] = await Promise.all([
+    supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle(),
+    supabase
+      .from("students")
+      .select(
+        "id, student_code, student_seq, full_name, email, contact_number, country_of_interest, registered_at, registration_status, portal_active, intake, assigned_counselor:staff!assigned_counselor_id(full_name), processing_officer:staff!processing_officer_id(full_name)"
+      )
+      .order("registered_at", { ascending: false })
+      .returns<StudentRow[]>(),
+  ]);
   const canDelete = hasRole(staffRow, "super_admin") || hasRole(staffRow, "processing");
-
-  const { data: students, error } = await supabase
-    .from("students")
-    .select(
-      "id, student_code, student_seq, full_name, email, contact_number, country_of_interest, registered_at, registration_status, portal_active, intake, assigned_counselor:staff!assigned_counselor_id(full_name), processing_officer:staff!processing_officer_id(full_name)"
-    )
-    .order("registered_at", { ascending: false })
-    .returns<StudentRow[]>();
 
   const studentIds = (students ?? []).map((r) => r.id);
   const { data: backupRows } =
@@ -209,7 +210,7 @@ export default async function StudentsPage() {
           <h2 className="text-lg font-semibold text-ink">Registered Students</h2>
           <p className="text-sm text-muted">{students?.length ?? 0} students</p>
         </div>
-        <Link href="/students/new" className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink">
+        <Link prefetch={false} href="/students/new" className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink">
           + Register student manually
         </Link>
       </div>

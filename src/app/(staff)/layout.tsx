@@ -1,6 +1,8 @@
 import { hasRole } from "@/lib/auth/roles";
 import { redirect } from "next/navigation";
 import { getStaffSession } from "@/lib/auth/session";
+import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 import { getEffectivePermissions } from "@/lib/auth/permissions";
 import { AppShell } from "@/components/AppShell";
 import { buildStaffNav } from "@/lib/nav";
@@ -17,20 +19,23 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 export default async function StaffLayout({ children }: { children: React.ReactNode }) {
-  const { staff: staffRow, supabase } = await getStaffSession();
+  // All at once, the staff row included: this layout runs on every page, and
+  // each round trip to the database is felt. A staff member's id is their
+  // sign-in's, so nothing here has to wait for the row to learn it. The count
+  // is of the viewer's own agreements that have been sent to them — RLS
+  // returns nothing else (0271).
+  const [user, supabase] = await Promise.all([getCurrentUser(), createClient()]);
+  const [{ staff: staffRow }, perms, { count: ownAgreements }] = await Promise.all([
+    getStaffSession(),
+    getEffectivePermissions(),
+    supabase.from("staff_agreements").select("id", { count: "exact", head: true }).eq("staff_id", user?.id ?? ""),
+  ]);
 
   if (!staffRow || staffRow.status !== "active") {
     redirect("/");
   }
 
   const isSuperAdmin = hasRole(staffRow, "super_admin");
-  // In parallel, not after: this layout runs on every page, and each round
-  // trip to the database is felt. The count is of the viewer's own agreements
-  // that have been sent to them — RLS returns nothing else (0271).
-  const [perms, { count: ownAgreements }] = await Promise.all([
-    getEffectivePermissions(),
-    supabase.from("staff_agreements").select("id", { count: "exact", head: true }).eq("staff_id", staffRow.id),
-  ]);
   const nav = buildStaffNav({
     isSuperAdmin,
     hasOwnAgreement: (ownAgreements ?? 0) > 0,

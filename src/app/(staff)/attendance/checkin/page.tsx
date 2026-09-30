@@ -64,7 +64,7 @@ function CheckinRunner() {
           {detail && status === "already_in" && <p className="text-xs text-muted">{detail}</p>}
         </>
       )}
-      <Link href="/admin/attendance" className="text-sm text-primary hover:underline">
+      <Link prefetch={false} href="/admin/attendance" className="text-sm text-primary hover:underline">
         View attendance
       </Link>
     </div>
