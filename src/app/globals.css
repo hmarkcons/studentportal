@@ -721,6 +721,56 @@ body {
   --sidebar-active-bg: rgb(52 195 147 / 0.16);
   --nav-active-ink: #6fdcb6;
 }
+/* The colour a little louder, in small places only — never a coloured block
+   (that was what made the student portal read as messy).
+
+   Each section has one of the five accents (NavIcon's NAV_ACCENT): its icon in
+   the menu, and the tile at the top of its pages, which AppShell marks with
+   data-page-accent. Figures in a row take the accents in turn, as a stripe on
+   a staff card and as the tile on a student one. Table headers carry a wash of
+   the brand, and the top bar a thin ribbon of three accents. */
+[data-shell] main {
+  --page-accent: var(--brand-bright);
+  --page-accent-soft: var(--brand-soft);
+  --page-accent-ink: var(--brand-strong);
+}
+[data-shell] main[data-page-accent="1"] { --page-accent: var(--accent-1); --page-accent-soft: var(--accent-1-soft); --page-accent-ink: var(--accent-1-ink); }
+[data-shell] main[data-page-accent="2"] { --page-accent: var(--accent-2); --page-accent-soft: var(--accent-2-soft); --page-accent-ink: var(--accent-2-ink); }
+[data-shell] main[data-page-accent="3"] { --page-accent: var(--accent-3); --page-accent-soft: var(--accent-3-soft); --page-accent-ink: var(--accent-3-ink); }
+[data-shell] main[data-page-accent="4"] { --page-accent: var(--accent-4); --page-accent-soft: var(--accent-4-soft); --page-accent-ink: var(--accent-4-ink); }
+[data-shell] main[data-page-accent="5"] { --page-accent: var(--accent-5); --page-accent-soft: var(--accent-5-soft); --page-accent-ink: var(--accent-5-ink); }
+[data-stat] { --stat-accent: var(--accent-1); --stat-soft: var(--accent-1-soft); --stat-ink: var(--accent-1-ink); }
+[data-stat]:nth-child(5n + 2) { --stat-accent: var(--accent-2); --stat-soft: var(--accent-2-soft); --stat-ink: var(--accent-2-ink); }
+[data-stat]:nth-child(5n + 3) { --stat-accent: var(--accent-3); --stat-soft: var(--accent-3-soft); --stat-ink: var(--accent-3-ink); }
+[data-stat]:nth-child(5n + 4) { --stat-accent: var(--accent-5); --stat-soft: var(--accent-5-soft); --stat-ink: var(--accent-5-ink); }
+[data-stat]:nth-child(5n + 5) { --stat-accent: var(--accent-4); --stat-soft: var(--accent-4-soft); --stat-ink: var(--accent-4-ink); }
+:root[data-theme="dark"] [data-stat] {
+  box-shadow: none;
+}
+/* On the semi-dark theme's dark sidebar, the menu's colours are the dark
+   theme's brighter ones, so each icon still reads. */
+:root[data-theme="semi-dark"] [data-sidebar-nav] {
+  --accent-1: #34c393;
+  --accent-2: #8b8bf0;
+  --accent-3: #f0a54a;
+  --accent-4: #ec6fa0;
+  --accent-5: #3cc0e6;
+}
+[data-shell] main thead tr {
+  background: color-mix(in srgb, var(--brand-bright) 8%, var(--card));
+  color: var(--brand-strong);
+}
+[data-app-header] {
+  background-image: linear-gradient(90deg, var(--accent-1), var(--accent-5) 50%, var(--accent-2));
+  background-size: 100% 3px;
+  background-repeat: no-repeat;
+  background-position: top;
+}
+@media print {
+  [data-app-header] {
+    background-image: none;
+  }
+}
 [data-shell] main {
   /* A whisper of depth at the top, and nothing coloured behind the page. */
   background: linear-gradient(180deg, color-mix(in srgb, var(--card) 70%, var(--bg)) 0, var(--bg) 320px);

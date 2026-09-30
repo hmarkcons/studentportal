@@ -8,7 +8,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import { SignOutButton } from "./SignOutButton";
 import { SidebarToggle } from "./SidebarToggle";
 import { ChevronRight, Menu, X } from "lucide-react";
-import { NavIcon } from "./NavIcon";
+import { NAV_ACCENT_TEXT, NavIcon, navAccent } from "./NavIcon";
 
 // Pulls in React Query's client runtime — only staff nav uses search, so
 // student/partner portals never ship this code.
@@ -92,6 +92,13 @@ export function AppShell({
   function isActive(href: string) {
     return href === activeHref;
   }
+  const iconColour = (icon: string | undefined, fallback: string) => {
+    const n = navAccent(icon);
+    return n ? NAV_ACCENT_TEXT[n] : fallback;
+  };
+  // The section the current page belongs to, whose colour its header takes.
+  const pageAccent =
+    navAccent(nav.find((item) => (item.href && isActive(item.href)) || item.children?.some((c) => isActive(c.href)))?.icon) ?? undefined;
 
   // The menu scrolls on its own, so the page you are on can be below its fold
   // — Setup's pages are the last dozen links. Brought into view in the menu
@@ -171,7 +178,7 @@ export function AppShell({
               >
                 <summary className="flex cursor-pointer list-none items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-sidebar-ink transition-colors hover:bg-[color-mix(in_srgb,var(--sidebar-ink)_5%,transparent)]">
                   <span className="flex items-center gap-2.5">
-                    {item.icon && <NavIcon name={item.icon} className="h-[18px] w-[18px] text-sidebar-muted" />}
+                    {item.icon && <NavIcon name={item.icon} className={`h-[18px] w-[18px] ${iconColour(item.icon, "text-sidebar-muted")}`} />}
                     {item.label}
                   </span>
                   <ChevronRight aria-hidden className="h-4 w-4 text-sidebar-muted transition-transform group-open:rotate-90" />
@@ -213,7 +220,7 @@ export function AppShell({
                   <NavIcon
                     name={item.icon}
                     className={`h-[18px] w-[18px] shrink-0 transition-colors ${
-                      isActive(item.href!) ? "text-[var(--nav-active-ink)]" : "text-sidebar-muted group-hover:text-sidebar-ink"
+                      isActive(item.href!) ? "text-[var(--nav-active-ink)]" : iconColour(item.icon, "text-sidebar-muted group-hover:text-sidebar-ink")
                     }`}
                   />
                 )}
@@ -273,7 +280,9 @@ export function AppShell({
             <SignOutButton variant="outline">Sign out</SignOutButton>
           </div>
         </header>
-        <main className="flex-1 bg-bg px-6 py-8">{children}</main>
+        <main className="flex-1 bg-bg px-6 py-8" data-page-accent={pageAccent}>
+          {children}
+        </main>
       </div>
     </div>
   );

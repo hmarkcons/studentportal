@@ -2,7 +2,8 @@ import type { LucideIcon } from "lucide-react";
 
 /**
  * The top of every student page: what the page is, in a sentence, on a plain
- * white card — its icon the one touch of the brand — with anything that
+ * white card — its icon on a tile of the section's own colour, the same as its
+ * icon in the menu (--page-accent, from AppShell) — with anything that
  * summarises it (chips, a figure, a button) to the right.
  *
  * The title stays an h2 — pages are found and read by their heading.
@@ -34,7 +35,7 @@ export function PortalPageHeader({
         <div className="flex min-w-0 items-center gap-4">
           <span
             aria-hidden
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--brand-soft)] text-[var(--brand-strong)]"
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--page-accent-soft)] text-[var(--page-accent-ink)]"
           >
             <Icon className="h-6 w-6" strokeWidth={2} />
           </span>

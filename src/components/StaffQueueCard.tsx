@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlarmClock, ArrowRight, CalendarClock, CreditCard, FileSearch, FileText, Headset, MessageSquare, Package, type LucideIcon } from "lucide-react";
+import { AlarmClock, ArrowRight, CalendarClock, CircleCheck, CreditCard, FileSearch, FileText, Headset, MessageSquare, Package, type LucideIcon } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import type { StaffQueue, NamedStudent } from "@/lib/staffQueue";
 
@@ -120,11 +120,18 @@ export function StaffQueueCard({ queue }: { queue: StaffQueue }) {
   if (rows.length === 0) {
     return (
       <Card className="mb-6">
-        <p className="text-sm text-ink">Nothing is waiting on you.</p>
-        <p className="mt-1 text-xs text-muted">
-          Application deadlines, agreements to verify, tickets, unanswered students, overdue tasks, documents,
-          inventory requests and payments all show here.
-        </p>
+        <div className="flex items-start gap-3">
+          <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand-strong)]">
+            <CircleCheck className="h-5 w-5" />
+          </span>
+          <div>
+            <p className="text-sm font-medium text-ink">Nothing is waiting on you.</p>
+            <p className="mt-1 text-xs text-muted">
+              Application deadlines, agreements to verify, tickets, unanswered students, overdue tasks, documents,
+              inventory requests and payments all show here.
+            </p>
+          </div>
+        </div>
       </Card>
     );
   }

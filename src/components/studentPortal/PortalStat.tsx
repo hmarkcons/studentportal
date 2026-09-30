@@ -3,7 +3,9 @@ import type { LucideIcon } from "lucide-react";
 export type PortalStatTone = "default" | "success" | "warning" | "danger" | "info";
 
 const TILE: Record<PortalStatTone, string> = {
-  default: "bg-[var(--brand-soft)] text-[var(--brand-strong)]",
+  // Not all green: in a row they take the five accents in turn (data-stat,
+  // globals.css). A tile that means something keeps its meaning's colour.
+  default: "bg-[var(--stat-soft)] text-[var(--stat-ink)]",
   success: "bg-success-bg text-success",
   warning: "bg-warning-bg text-warning",
   danger: "bg-danger-bg text-danger",
@@ -39,7 +41,7 @@ export function PortalStat({
   tone?: PortalStatTone;
 }) {
   return (
-    <div className="flex min-w-0 items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
+    <div data-stat className="flex min-w-0 items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
       <span aria-hidden className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${TILE[tone]}`}>
         <Icon className="h-5 w-5" strokeWidth={2} />
       </span>

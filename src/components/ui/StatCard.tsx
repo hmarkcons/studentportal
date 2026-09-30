@@ -29,11 +29,19 @@ export function StatCard({
           ? "text-danger"
           : "text-ink";
 
+  // A stripe down the left in one of the five accents — the cards in a row
+  // take them in turn (data-stat, globals.css) — so a row of figures is not a
+  // row of identical white boxes. The figure itself keeps its meaning's colour.
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
-      <div className="flex items-center justify-between">
+    <div data-stat className="relative overflow-hidden rounded-lg border border-border bg-card p-4 pl-5 shadow-[0_1px_2px_rgb(16_24_40/0.04),0_2px_10px_-6px_rgb(16_24_40/0.08)]">
+      <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-[var(--stat-accent)]" />
+      <div className="flex items-center justify-between gap-2">
         <p className="text-xs uppercase tracking-wide text-muted">{label}</p>
-        {Icon && <Icon aria-hidden className="h-5 w-5 shrink-0 text-muted" />}
+        {Icon && (
+          <span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--stat-soft)] text-[var(--stat-ink)]">
+            <Icon className="h-4 w-4" />
+          </span>
+        )}
       </div>
       <p className={`mt-1 text-2xl font-semibold ${valueColor}`}>{value}</p>
       {trend && (
