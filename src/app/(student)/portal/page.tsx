@@ -344,8 +344,9 @@ export default async function PortalDashboardPage() {
         )}
       </section>
 
-      {/* The four figures a student checks most, each against its whole. */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {/* The four figures a student checks most, each against its whole.
+          data-dashboard-cards: each card in its accent (globals.css). */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" data-dashboard-cards>
         <ChartCard icon={FolderOpen} title="Documents" subtitle={cycleDocs.showCycleTabs ? "This intake" : undefined} href="/portal/documents" linkLabel="Open">
           <div data-kpi="documents">
             {docs.total === 0 ? (
@@ -451,7 +452,7 @@ export default async function PortalDashboardPage() {
         </ChartCard>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3" data-dashboard-cards>
         {/* Everything outstanding — documents, money, appointments, replies —
             each computed by the helper its own page uses. */}
         <PortalAttention summary={summary} className="h-full" />
@@ -491,7 +492,7 @@ export default async function PortalDashboardPage() {
           <h3 className="text-base font-semibold text-ink">Your HMARK team</h3>
           <p className="text-xs text-muted">The people looking after you — call, email or message them any time.</p>
         </div>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3" data-dashboard-cards>
           <TeamCard
             person={team.counsellor}
             role="Your counsellor"

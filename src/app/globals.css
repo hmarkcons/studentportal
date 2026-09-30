@@ -816,6 +816,37 @@ body {
 :root[data-theme="dark"] [data-dashboard] [data-queue-tick] {
   color: #0e141b;
 }
+/* The student dashboard, bolder the same way — asked for. The welcome banner
+   and the country cards stay as they are; below them, every card takes one of
+   the accents in turn along its row: a coloured top edge, a wash of it behind
+   the heading, the heading in it and its icon on a solid tile. The progress
+   rings keep the colours of what they say (green done, amber waiting). */
+[data-portal="student"] main [data-dashboard-cards] > :is([data-card], [data-lift]) {
+  --card-accent: var(--accent-1);
+  --card-ink: var(--accent-1-ink);
+  border-top: 3px solid var(--card-accent);
+  background: linear-gradient(170deg, color-mix(in srgb, var(--card-accent) 12%, var(--card)) 0%, var(--card) 45%);
+}
+[data-portal="student"] main [data-dashboard-cards] > :is([data-card], [data-lift]):nth-child(5n + 2) { --card-accent: var(--accent-2); --card-ink: var(--accent-2-ink); }
+[data-portal="student"] main [data-dashboard-cards] > :is([data-card], [data-lift]):nth-child(5n + 3) { --card-accent: var(--accent-3); --card-ink: var(--accent-3-ink); }
+[data-portal="student"] main [data-dashboard-cards] > :is([data-card], [data-lift]):nth-child(5n + 4) { --card-accent: var(--accent-5); --card-ink: var(--accent-5-ink); }
+[data-portal="student"] main [data-dashboard-cards] > :is([data-card], [data-lift]):nth-child(5n + 5) { --card-accent: var(--accent-4); --card-ink: var(--accent-4-ink); }
+[data-portal="student"] main [data-dashboard-cards] > [data-card] h3 {
+  color: var(--card-ink);
+}
+[data-portal="student"] main [data-dashboard-cards] > [data-card] h3 svg:first-of-type {
+  box-sizing: content-box;
+  width: 1rem;
+  height: 1rem;
+  padding: 0.45rem;
+  border-radius: 0.65rem;
+  background: var(--card-accent);
+  color: #ffffff;
+  box-shadow: 0 8px 16px -10px var(--card-accent);
+}
+:root[data-theme="dark"] [data-portal="student"] main [data-dashboard-cards] > [data-card] h3 svg:first-of-type {
+  color: #0e141b;
+}
 [data-shell] main thead tr {
   background: color-mix(in srgb, var(--brand-bright) 8%, var(--card));
   color: var(--brand-strong);
