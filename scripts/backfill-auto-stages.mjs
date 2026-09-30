@@ -2,6 +2,7 @@
 //
 //   node scripts/backfill-auto-stages.mjs            # dry run: reports, writes nothing
 //   node scripts/backfill-auto-stages.mjs --apply    # writes what the dry run reported
+//   ... --student HMC-SEP27-IT-0007                  # one student, by Student ID
 //
 // Stages move themselves forward when something happens — a document
 // approved, a letter filed, the visa tracker saved (src/lib/autoStagesSync.ts).
@@ -17,6 +18,8 @@ import { clients } from "./verify-portal-lib.mjs";
 import { planStudentStages, writeStagePlan } from "../src/lib/autoStagesLoad.ts";
 
 const apply = process.argv.includes("--apply");
+const only = process.argv.includes("--student") ? process.argv[process.argv.indexOf("--student") + 1] : null;
+if (process.argv.includes("--student") && !only) throw new Error("--student needs a Student ID");
 const { admin } = clients();
 
 /** Every registered student, a page at a time: PostgREST returns 1000 rows at most. */
@@ -36,7 +39,8 @@ async function registeredStudents() {
   }
 }
 
-const students = await registeredStudents();
+const students = (await registeredStudents()).filter((s) => !only || s.student_code === only);
+if (only && students.length === 0) throw new Error(`no registered student with the Student ID ${only}`);
 console.log(`${apply ? "APPLYING" : "Dry run"} — ${students.length} registered students\n`);
 
 const countryStages = new Map();
