@@ -125,6 +125,11 @@ body {
 @utility bg-hero-alt {
   background-image: linear-gradient(135deg, var(--hero-alt-from), var(--hero-alt-to));
 }
+/* The student dashboard's welcome banner: the one full-colour block in the
+   portal, so it keeps the rich gradient the rest has let go of. */
+@utility bg-hero-banner {
+  background-image: linear-gradient(135deg, var(--banner-from), var(--banner-via) 55%, var(--banner-to));
+}
 
 /* Default border colour, in @layer base so Tailwind's border-* colour
    utilities (which live in the later utilities layer) can override it.
@@ -626,6 +631,11 @@ body {
   --hero-to: #0f7f5c;
   --hero-alt-from: #5b5bd6;
   --hero-alt-to: #4b4bc4;
+  /* The welcome banner (bg-hero-banner). Deep enough at its light end for
+     white text: about 4:1 against #22936f. */
+  --banner-from: #22936f;
+  --banner-via: #1c7f68;
+  --banner-to: #155f59;
   /* A country's accent: its colour, its tint, and its text on the tint. */
   --accent-1: #1fa878;
   --accent-1-soft: #e7f4ee;
@@ -662,6 +672,9 @@ body {
   --hero-to: #1f8a63;
   --hero-alt-from: #8b8bf0;
   --hero-alt-to: #7474e0;
+  --banner-from: #1f8163;
+  --banner-via: #196c59;
+  --banner-to: #114a45;
   --accent-1: #34c393;
   --accent-1-soft: rgb(52 195 147 / 0.14);
   --accent-1-ink: #6fdcb6;

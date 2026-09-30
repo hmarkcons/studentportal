@@ -222,23 +222,26 @@ export default async function PortalDashboardPage() {
   return (
     <div className="flex w-full flex-col gap-6" data-portal-page>
       {/* ------------------------------------------------------------ hero */}
-      {/* A white card, not a block of colour: the brand is its slim top line
-          and its one button, and the next date is the only other tint. */}
+      {/* ------------------------------------------------------------ hero
+          The one full-colour block on the dashboard: the brand's green, with
+          everything below it calm, so it is where the eye lands first. */}
       <section
         data-rise
         data-hero
-        className="relative overflow-hidden rounded-3xl border border-border bg-card px-6 py-7 shadow-[var(--lift)] sm:px-8"
+        className="bg-hero-banner relative overflow-hidden rounded-3xl px-6 py-7 text-white shadow-xl shadow-[var(--banner-to)]/20 sm:px-8"
       >
-        <span aria-hidden className="absolute inset-x-0 top-0 h-1 bg-[linear-gradient(90deg,var(--accent-1),var(--accent-5)_50%,var(--accent-2))]" />
+        <span aria-hidden className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full bg-white/10" />
+        <span aria-hidden className="pointer-events-none absolute -bottom-32 right-40 h-64 w-64 rounded-full bg-white/10" />
+        <span aria-hidden className="pointer-events-none absolute -left-10 top-1/2 h-40 w-40 rounded-full bg-white/5 blur-2xl" />
         <div className="relative flex flex-wrap items-center justify-between gap-6">
           <div className="min-w-0 max-w-2xl">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">Your study abroad plan</p>
-            <h2 className="mt-1 text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Welcome back, {firstName}</h2>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/80">Your study abroad plan</p>
+            <h2 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Welcome back, {firstName}</h2>
             {/* What to do next — the one thing the seven-step tracker said that
                 the country bars below do not, since it is about the student's
                 own part: documents to send, an agreement to sign. */}
             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-2" data-journey-next>
-              <p className="text-sm text-muted">
+              <p className="text-sm text-white/90">
                 {journey.next
                   ? journey.next.state === "blocked"
                     ? `${journey.next.label} needs attention — ${journey.next.detail}`
@@ -248,7 +251,7 @@ export default async function PortalDashboardPage() {
               {journey.next?.href && (
                 <Link
                   href={journey.next.href}
-                  className="inline-flex w-fit items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-ink shadow-sm transition-colors hover:bg-[var(--brand-strong)]"
+                  className="inline-flex w-fit items-center gap-1 rounded-lg bg-white px-3 py-1 text-xs font-semibold text-[var(--banner-to)] shadow-sm hover:bg-white/90"
                 >
                   Continue
                   <ArrowRight aria-hidden className="h-3.5 w-3.5 shrink-0" />
@@ -257,20 +260,20 @@ export default async function PortalDashboardPage() {
             </div>
             <div className="mt-4 flex flex-wrap gap-2 text-xs">
               {student.student_code && (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-bg px-3 py-1 font-medium text-ink ring-1 ring-border" data-student-code>
-                  <IdCard aria-hidden className="h-3.5 w-3.5 shrink-0 text-[var(--accent-2)]" />
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 font-medium ring-1 ring-white/25 backdrop-blur-sm" data-student-code>
+                  <IdCard aria-hidden className="h-3.5 w-3.5 shrink-0" />
                   {student.student_code}
                 </span>
               )}
               {student.intake && (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-bg px-3 py-1 font-medium text-ink ring-1 ring-border">
-                  <CalendarDays aria-hidden className="h-3.5 w-3.5 shrink-0 text-[var(--accent-3)]" />
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 font-medium ring-1 ring-white/25 backdrop-blur-sm">
+                  <CalendarDays aria-hidden className="h-3.5 w-3.5 shrink-0" />
                   {student.intake} intake
                 </span>
               )}
               {primaryCountry && (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-bg px-3 py-1 font-medium text-ink ring-1 ring-border">
-                  <Globe aria-hidden className="h-3.5 w-3.5 shrink-0 text-[var(--accent-1)]" />
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 font-medium ring-1 ring-white/25 backdrop-blur-sm">
+                  <Globe aria-hidden className="h-3.5 w-3.5 shrink-0" />
                   {primaryCountry.name}
                   {backups > 0 && ` · ${backups} backup${backups === 1 ? "" : "s"}`}
                 </span>
@@ -281,18 +284,18 @@ export default async function PortalDashboardPage() {
           {/* The one dated thing nearest to now, where it is seen first. */}
           <Link
             href={soonest?.href ?? "/portal/appointments"}
-            className="relative flex w-full max-w-xs items-center gap-3 rounded-2xl bg-[var(--accent-3-soft)] px-4 py-3 ring-1 ring-[var(--accent-3)]/20 transition hover:ring-[var(--accent-3)]/40 sm:w-auto"
+            className="relative flex w-full max-w-xs items-center gap-3 rounded-2xl bg-white/15 px-4 py-3 ring-1 ring-white/25 backdrop-blur-md transition hover:bg-white/20 sm:w-auto"
             data-hero-next
           >
-            <span aria-hidden className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-card text-[var(--accent-3-ink)] shadow-sm">
+            <span aria-hidden className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/20 text-xl">
               {soonest ? <AlarmClock className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
             </span>
             <span className="min-w-0">
-              <span className="block text-[11px] font-semibold uppercase tracking-wider text-[var(--accent-3-ink)]">
+              <span className="block text-[11px] font-semibold uppercase tracking-wider text-white/80">
                 {soonest ? `Next · ${daysLeftLabel(soonest.daysLeft)}` : "Coming up"}
               </span>
-              <span className="block truncate text-sm font-semibold text-ink">{soonest ? soonest.label : "Nothing due soon — you are on track"}</span>
-              {soonest && <span className="block text-xs text-muted">{formatDateOnly(soonest.date, LONG_DATE)}</span>}
+              <span className="block truncate text-sm font-semibold">{soonest ? soonest.label : "Nothing due soon — you are on track"}</span>
+              {soonest && <span className="block text-xs text-white/80">{formatDateOnly(soonest.date, LONG_DATE)}</span>}
             </span>
           </Link>
         </div>
