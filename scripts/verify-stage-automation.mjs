@@ -421,6 +421,13 @@ try {
   await procPage.goto(`${BASE}/students/${studentId}/applications`, { waitUntil: "domcontentloaded" });
   const undo = procPage.getByRole("button", { name: /^Undo pre-enrolled/i }).first();
   await undo.waitFor({ timeout: 60_000 });
+  // The button is in the page's HTML before React is ready to hear it; a
+  // click in between is lost, which on the deployed portal it was.
+  await procPage.waitForFunction(
+    () => [...document.querySelectorAll("button")].some((b) => /Undo pre-enrolled/i.test(b.textContent ?? "") && Object.keys(b).some((k) => k.startsWith("__reactProps"))),
+    null,
+    { timeout: 60_000 }
+  ).catch(() => {});
   await undo.click();
   const undone = await poll(async () => {
     const [{ data: a }, { data: b }] = await Promise.all([
