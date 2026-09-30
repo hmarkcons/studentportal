@@ -1,3 +1,4 @@
+import { Inbox, Percent, PhoneCall, UserCheck } from "lucide-react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { StatCard } from "@/components/ui/StatCard";
 import { ChartCard, NoData } from "@/components/charts/ChartCard";
@@ -42,10 +43,10 @@ export async function SalesView({ db, staffId, team }: { db: SupabaseClient; sta
   return (
     <div className="flex flex-col gap-4" data-dashboard-view={team ? "sales_team" : "sales"}>
       <Kpis>
-        <StatCard label="Registered this month" value={s.registeredThisMonth} tone="success" trend={versus(s.registeredThisMonth, s.registeredLastMonth)} hint={team ? (teamTarget ? `team target ${teamTarget}` : undefined) : target ? `target ${target}` : "no target set"} />
-        <StatCard label="Open leads" value={s.openLeads} hint={`${s.newLeadsThisMonth} new this month${s.parkedLeads ? ` · ${s.parkedLeads} waiting for a later intake` : ""}`} />
-        <StatCard label="Due a call" value={s.followUpsDue} tone={s.followUpsDue ? "warning" : "default"} hint={`no contact for ${FOLLOW_UP_AFTER_DAYS}+ days`} />
-        <StatCard label="Conversion" value={s.conversion.rate === null ? "—" : `${s.conversion.rate}%`} hint={`of the last ${RECENT_DAYS} days' leads`} />
+        <StatCard icon={UserCheck} label="Registered this month" value={s.registeredThisMonth} tone="success" trend={versus(s.registeredThisMonth, s.registeredLastMonth)} hint={team ? (teamTarget ? `team target ${teamTarget}` : undefined) : target ? `target ${target}` : "no target set"} />
+        <StatCard icon={Inbox} label="Open leads" value={s.openLeads} hint={`${s.newLeadsThisMonth} new this month${s.parkedLeads ? ` · ${s.parkedLeads} waiting for a later intake` : ""}`} />
+        <StatCard icon={PhoneCall} label="Due a call" value={s.followUpsDue} tone={s.followUpsDue ? "warning" : "default"} hint={`no contact for ${FOLLOW_UP_AFTER_DAYS}+ days`} />
+        <StatCard icon={Percent} label="Conversion" value={s.conversion.rate === null ? "—" : `${s.conversion.rate}%`} hint={`of the last ${RECENT_DAYS} days' leads`} />
       </Kpis>
 
       <Row cols={3}>

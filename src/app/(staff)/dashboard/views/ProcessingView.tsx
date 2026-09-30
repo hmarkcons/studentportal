@@ -1,3 +1,4 @@
+import { CalendarClock, FileSearch, GraduationCap, Stamp } from "lucide-react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { StatCard } from "@/components/ui/StatCard";
 import { ChartCard } from "@/components/charts/ChartCard";
@@ -63,10 +64,10 @@ export async function ProcessingView({
   return (
     <div className="flex flex-col gap-4" data-dashboard-view={team ? "processing_team" : "processing"}>
       <Kpis>
-        <StatCard label={team ? "Registered students" : "My students"} value={s.students} hint={`${s.completeCount} through every stage`} />
-        <StatCard label="Documents to review" value={s.docsWaiting} tone={s.docsWaiting ? "warning" : "default"} hint={s.turnaroundDays === null ? undefined : `approved in ${days(s.turnaroundDays)} on average`} />
-        <StatCard label="Deadlines coming up" value={s.deadlines.length} tone={s.deadlines.length ? "danger" : "default"} hint={`next ${DEADLINE_WINDOW_DAYS} days`} />
-        <StatCard label="Visa approval rate" value={s.visaYear.rate === null ? "—" : `${s.visaYear.rate}%`} tone={s.visaYear.rate !== null && s.visaYear.rate >= 80 ? "success" : "default"} hint={`${s.visaYear.approved} approved · ${s.visaYear.refused} refused, last 12 months`} />
+        <StatCard icon={GraduationCap} label={team ? "Registered students" : "My students"} value={s.students} hint={`${s.completeCount} through every stage`} />
+        <StatCard icon={FileSearch} label="Documents to review" value={s.docsWaiting} tone={s.docsWaiting ? "warning" : "default"} hint={s.turnaroundDays === null ? undefined : `approved in ${days(s.turnaroundDays)} on average`} />
+        <StatCard icon={CalendarClock} label="Deadlines coming up" value={s.deadlines.length} tone={s.deadlines.length ? "danger" : "default"} hint={`next ${DEADLINE_WINDOW_DAYS} days`} />
+        <StatCard icon={Stamp} label="Visa approval rate" value={s.visaYear.rate === null ? "—" : `${s.visaYear.rate}%`} tone={s.visaYear.rate !== null && s.visaYear.rate >= 80 ? "success" : "default"} hint={`${s.visaYear.approved} approved · ${s.visaYear.refused} refused, last 12 months`} />
       </Kpis>
 
       <Row cols={3}>

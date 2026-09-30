@@ -1,3 +1,4 @@
+import { AlarmClock, Clock, GraduationCap, Hourglass, Inbox, Stamp, UserCheck, Wallet } from "lucide-react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { StatCard } from "@/components/ui/StatCard";
 import { ChartCard } from "@/components/charts/ChartCard";
@@ -40,21 +41,22 @@ export async function OverviewView({ db, restricted }: { db: SupabaseClient; res
   return (
     <div className="flex flex-col gap-4" data-dashboard-view="overview">
       <Kpis>
-        <StatCard label="Registered this month" value={sales.registeredThisMonth} tone="success" trend={versus(sales.registeredThisMonth, sales.registeredLastMonth)} />
-        <StatCard label="Open leads" value={sales.openLeads} hint={`${sales.followUpsDue} due a call`} tone={sales.followUpsDue > sales.openLeads / 2 ? "warning" : "default"} />
-        <StatCard label="Students in processing" value={proc.students} hint={`${proc.docsWaiting} document${proc.docsWaiting === 1 ? "" : "s"} to review · ${proc.deadlines.length} deadline${proc.deadlines.length === 1 ? "" : "s"} in 14 days`} />
-        <StatCard label="Visa approval rate" value={proc.visaYear.rate === null ? "—" : `${proc.visaYear.rate}%`} hint={`${proc.visaYear.approved} approved · ${proc.visaYear.refused} refused, 12 months`} />
+        <StatCard icon={UserCheck} label="Registered this month" value={sales.registeredThisMonth} tone="success" trend={versus(sales.registeredThisMonth, sales.registeredLastMonth)} />
+        <StatCard icon={Inbox} label="Open leads" value={sales.openLeads} hint={`${sales.followUpsDue} due a call`} tone={sales.followUpsDue > sales.openLeads / 2 ? "warning" : "default"} />
+        <StatCard icon={GraduationCap} label="Students in processing" value={proc.students} hint={`${proc.docsWaiting} document${proc.docsWaiting === 1 ? "" : "s"} to review · ${proc.deadlines.length} deadline${proc.deadlines.length === 1 ? "" : "s"} in 14 days`} />
+        <StatCard icon={Stamp} label="Visa approval rate" value={proc.visaYear.rate === null ? "—" : `${proc.visaYear.rate}%`} hint={`${proc.visaYear.approved} approved · ${proc.visaYear.refused} refused, 12 months`} />
       </Kpis>
       <Kpis>
-        <StatCard label="Collected this month" value={approxPkr(money.collectedMonthlyPkr.at(-1)?.pkr ?? 0)} tone="success" />
-        <StatCard label="Overdue" value={approxPkr(money.overduePkr)} tone={money.overdueCount ? "danger" : "default"} hint={`${money.overdueCount} instalment${money.overdueCount === 1 ? "" : "s"}`} />
+        <StatCard icon={Wallet} label="Collected this month" value={approxPkr(money.collectedMonthlyPkr.at(-1)?.pkr ?? 0)} tone="success" />
+        <StatCard icon={AlarmClock} label="Overdue" value={approxPkr(money.overduePkr)} tone={money.overdueCount ? "danger" : "default"} hint={`${money.overdueCount} instalment${money.overdueCount === 1 ? "" : "s"}`} />
         <StatCard
+          icon={Clock}
           label="In today"
           value={`${teamToday.present}/${teamToday.activeStaff}`}
           tone={teamToday.late ? "warning" : "default"}
           hint={`${teamToday.late} late · clocked in on Attendance`}
         />
-        <StatCard label="Waiting on management" value={teamToday.leavePending} tone={teamToday.leavePending ? "warning" : "default"} hint={`leave to decide · ${teamToday.ticketsOpen} support tickets open`} />
+        <StatCard icon={Hourglass} label="Waiting on management" value={teamToday.leavePending} tone={teamToday.leavePending ? "warning" : "default"} hint={`leave to decide · ${teamToday.ticketsOpen} support tickets open`} />
       </Kpis>
 
       <ChartCard title="Leads and registrations" subtitle="Last 12 months" href="/dashboard?view=sales_team" linkLabel="Sales team">

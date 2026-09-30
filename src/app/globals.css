@@ -756,6 +756,66 @@ body {
   --accent-4: #ec6fa0;
   --accent-5: #3cc0e6;
 }
+/* The staff dashboard, a step bolder than everywhere else — asked for. Each
+   figure is washed in its accent with its icon on a solid tile of it; each
+   chart card carries a coloured top edge, the cards in a row taking the
+   accents in turn; the chosen view's tab is a green pill; trend areas fill
+   more deeply; and an empty queue is a green card, not a white one. Still no
+   saturated blocks of colour: the washes stay light enough to read ink on. */
+[data-dashboard] [data-stat] {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--stat-accent) 15%, var(--card)) 0%, var(--card) 78%);
+  border-color: color-mix(in srgb, var(--stat-accent) 30%, var(--border));
+}
+[data-dashboard] [data-stat-label] {
+  color: var(--stat-ink);
+  font-weight: 600;
+}
+[data-dashboard] [data-stat-icon] {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.75rem;
+  background: var(--stat-accent);
+  color: #ffffff;
+  box-shadow: 0 8px 16px -10px var(--stat-accent);
+}
+[data-dashboard] [data-stat-icon] svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+:root[data-theme="dark"] [data-dashboard] [data-stat-icon] {
+  color: #0e141b;
+}
+/* Out-ranks the staff card rule below, which sets every card border grey. */
+[data-shell] main [data-dashboard-view] [data-card] {
+  --card-accent: var(--accent-1);
+  border-top: 3px solid var(--card-accent);
+}
+[data-shell] main [data-dashboard-view] [data-card]:nth-child(5n + 2) { --card-accent: var(--accent-2); }
+[data-shell] main [data-dashboard-view] [data-card]:nth-child(5n + 3) { --card-accent: var(--accent-3); }
+[data-shell] main [data-dashboard-view] [data-card]:nth-child(5n + 4) { --card-accent: var(--accent-5); }
+[data-shell] main [data-dashboard-view] [data-card]:nth-child(5n + 5) { --card-accent: var(--accent-4); }
+[data-dashboard-view] [data-card] h3 svg {
+  color: var(--card-accent);
+}
+[data-dashboard] [role="tablist"] [role="tab"][aria-selected="true"] {
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+  border-radius: 0.5rem 0.5rem 0 0;
+}
+[data-dashboard] [data-area] {
+  opacity: 0.26;
+}
+[data-dashboard] [data-card]:has(> [data-queue-empty]) {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--brand-bright) 16%, var(--card)) 0%, var(--card) 80%);
+  border-color: color-mix(in srgb, var(--brand-bright) 35%, var(--border));
+}
+[data-dashboard] [data-queue-tick] {
+  background: var(--brand-bright);
+  color: #ffffff;
+}
+:root[data-theme="dark"] [data-dashboard] [data-queue-tick] {
+  color: #0e141b;
+}
 [data-shell] main thead tr {
   background: color-mix(in srgb, var(--brand-bright) 8%, var(--card));
   color: var(--brand-strong);

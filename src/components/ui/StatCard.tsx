@@ -36,9 +36,9 @@ export function StatCard({
     <div data-stat className="relative overflow-hidden rounded-lg border border-border bg-card p-4 pl-5 shadow-[0_1px_2px_rgb(16_24_40/0.04),0_2px_10px_-6px_rgb(16_24_40/0.08)]">
       <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-[var(--stat-accent)]" />
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs uppercase tracking-wide text-muted">{label}</p>
+        <p data-stat-label className="text-xs uppercase tracking-wide text-muted">{label}</p>
         {Icon && (
-          <span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--stat-soft)] text-[var(--stat-ink)]">
+          <span aria-hidden data-stat-icon className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--stat-soft)] text-[var(--stat-ink)]">
             <Icon className="h-4 w-4" />
           </span>
         )}

@@ -120,8 +120,8 @@ export function StaffQueueCard({ queue }: { queue: StaffQueue }) {
   if (rows.length === 0) {
     return (
       <Card className="mb-6">
-        <div className="flex items-start gap-3">
-          <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand-strong)]">
+        <div data-queue-empty className="flex items-start gap-3">
+          <span aria-hidden data-queue-tick className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand-strong)]">
             <CircleCheck className="h-5 w-5" />
           </span>
           <div>

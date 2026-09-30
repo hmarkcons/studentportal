@@ -69,7 +69,7 @@ export function TrendChart({
               const pts = pointsFor(s.values);
               return (
                 <g key={s.name}>
-                  {i === 0 && <path d={`${linePath(pts)} L${pts.at(-1)?.x ?? 0} 100 L${pts[0]?.x ?? 0} 100 Z`} fill={color} opacity={0.12} />}
+                  {i === 0 && <path data-area d={`${linePath(pts)} L${pts.at(-1)?.x ?? 0} 100 L${pts[0]?.x ?? 0} 100 Z`} fill={color} opacity={0.12} />}
                   <path d={linePath(pts)} fill="none" stroke={color} strokeWidth={2.5} vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
                 </g>
               );

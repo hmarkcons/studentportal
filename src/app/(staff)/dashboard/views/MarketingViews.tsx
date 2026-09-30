@@ -1,3 +1,4 @@
+import { CalendarCheck, CalendarClock, CalendarDays, CalendarX, Gift, Megaphone, UserPlus, UserX } from "lucide-react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { StatCard } from "@/components/ui/StatCard";
 import { ChartCard } from "@/components/charts/ChartCard";
@@ -29,10 +30,10 @@ export async function SocialView({ db }: { db: SupabaseClient }) {
   return (
     <div className="flex flex-col gap-4" data-dashboard-view="social">
       <Kpis>
-        <StatCard label={`Due in ${UPCOMING_DAYS} days`} value={s.upcomingCount} hint={`${inProduction} posts in production`} />
-        <StatCard label="Missed posts" value={s.missedCount} tone={s.missedCount ? "danger" : "default"} hint="date passed, not posted" />
-        <StatCard label="Posted on time" value={s.onTime.rate === null ? "—" : `${s.onTime.rate}%`} tone={s.onTime.rate !== null && s.onTime.rate < 80 ? "warning" : "success"} hint={`last ${ON_TIME_DAYS} days · ${s.onTime.posted} of ${s.onTime.due}`} />
-        <StatCard label="Ad spend (running)" value={formatAmount(s.adSpendActive.actual)} hint={s.adSpendActive.planned ? `of ${formatAmount(s.adSpendActive.planned)} planned` : "no budget planned"} tone={s.adSpendActive.planned && s.adSpendActive.actual > s.adSpendActive.planned ? "danger" : "default"} />
+        <StatCard icon={CalendarClock} label={`Due in ${UPCOMING_DAYS} days`} value={s.upcomingCount} hint={`${inProduction} posts in production`} />
+        <StatCard icon={CalendarX} label="Missed posts" value={s.missedCount} tone={s.missedCount ? "danger" : "default"} hint="date passed, not posted" />
+        <StatCard icon={CalendarCheck} label="Posted on time" value={s.onTime.rate === null ? "—" : `${s.onTime.rate}%`} tone={s.onTime.rate !== null && s.onTime.rate < 80 ? "warning" : "success"} hint={`last ${ON_TIME_DAYS} days · ${s.onTime.posted} of ${s.onTime.due}`} />
+        <StatCard icon={Megaphone} label="Ad spend (running)" value={formatAmount(s.adSpendActive.actual)} hint={s.adSpendActive.planned ? `of ${formatAmount(s.adSpendActive.planned)} planned` : "no budget planned"} tone={s.adSpendActive.planned && s.adSpendActive.actual > s.adSpendActive.planned ? "danger" : "default"} />
       </Kpis>
 
       <Row cols={3}>
@@ -99,10 +100,10 @@ export async function LeadGenView({ db }: { db: SupabaseClient }) {
   return (
     <div className="flex flex-col gap-4" data-dashboard-view="leadgen">
       <Kpis>
-        <StatCard label="Leads this month" value={s.leadsThisMonth} tone="success" trend={versus(s.leadsThisMonth, s.leadsLastMonth)} />
-        <StatCard label="Not yet with a counsellor" value={s.unassigned} tone={s.unassigned ? "warning" : "default"} hint="open leads nobody is assigned" />
-        <StatCard label="Referral incentives owed" value={s.referralsOwed.count} hint={s.referralsOwed.count ? formatAmount(s.referralsOwed.amount) : undefined} />
-        <StatCard label="Upcoming events" value={s.upcomingEventCount} hint={s.upcomingEvents[0] ? `next ${s.upcomingEvents[0].date}` : undefined} />
+        <StatCard icon={UserPlus} label="Leads this month" value={s.leadsThisMonth} tone="success" trend={versus(s.leadsThisMonth, s.leadsLastMonth)} />
+        <StatCard icon={UserX} label="Not yet with a counsellor" value={s.unassigned} tone={s.unassigned ? "warning" : "default"} hint="open leads nobody is assigned" />
+        <StatCard icon={Gift} label="Referral incentives owed" value={s.referralsOwed.count} hint={s.referralsOwed.count ? formatAmount(s.referralsOwed.amount) : undefined} />
+        <StatCard icon={CalendarDays} label="Upcoming events" value={s.upcomingEventCount} hint={s.upcomingEvents[0] ? `next ${s.upcomingEvents[0].date}` : undefined} />
       </Kpis>
 
       <ChartCard title="Leads and what became of them" subtitle="Leads per month, and how many of each month's leads have since registered">

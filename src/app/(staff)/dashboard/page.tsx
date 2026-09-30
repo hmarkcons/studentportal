@@ -25,7 +25,9 @@ export default async function DashboardPage(props: { searchParams: Promise<{ vie
   const view = pickView(views, requested);
 
   return (
-    <div className="w-full">
+    // data-dashboard: the page gets a bolder finish than the rest of the app —
+    // tinted figures on solid icon tiles, coloured chart edges (globals.css).
+    <div className="w-full" data-dashboard>
       <h2 className="mb-4 text-lg font-semibold text-ink">Dashboard</h2>
       {/* A component of its own, not awaited here: the view below then starts
           reading beside it rather than after it. It has no boundary, so it

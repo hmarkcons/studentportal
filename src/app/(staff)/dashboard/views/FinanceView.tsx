@@ -1,3 +1,4 @@
+import { AlarmClock, CalendarClock, Receipt, Wallet } from "lucide-react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { StatCard } from "@/components/ui/StatCard";
 import { ChartCard } from "@/components/charts/ChartCard";
@@ -29,10 +30,10 @@ export async function FinanceView({ db }: { db: SupabaseClient }) {
   return (
     <div className="flex flex-col gap-4" data-dashboard-view="finance">
       <Kpis>
-        <StatCard label="Collected this month" value={s.collectedThisMonth.length ? approxPkr(s.collectedMonthlyPkr.at(-1)?.pkr ?? 0) : "—"} tone="success" hint={collectedText} />
-        <StatCard label="Overdue" value={approxPkr(s.overduePkr)} tone={s.overdueCount ? "danger" : "default"} hint={`${s.overdueCount} instalment${s.overdueCount === 1 ? "" : "s"} past due`} />
-        <StatCard label={`Due in ${DUE_SOON_DAYS} days`} value={approxPkr(s.dueSoonPkr)} tone={s.dueSoonCount ? "warning" : "default"} hint={`${s.dueSoonCount} instalment${s.dueSoonCount === 1 ? "" : "s"}`} />
-        <StatCard label="Outstanding" value={approxPkr(s.outstandingPkr)} hint={`${rows.unsentInvoices} invoice${rows.unsentInvoices === 1 ? "" : "s"} not yet sent`} />
+        <StatCard icon={Wallet} label="Collected this month" value={s.collectedThisMonth.length ? approxPkr(s.collectedMonthlyPkr.at(-1)?.pkr ?? 0) : "—"} tone="success" hint={collectedText} />
+        <StatCard icon={AlarmClock} label="Overdue" value={approxPkr(s.overduePkr)} tone={s.overdueCount ? "danger" : "default"} hint={`${s.overdueCount} instalment${s.overdueCount === 1 ? "" : "s"} past due`} />
+        <StatCard icon={CalendarClock} label={`Due in ${DUE_SOON_DAYS} days`} value={approxPkr(s.dueSoonPkr)} tone={s.dueSoonCount ? "warning" : "default"} hint={`${s.dueSoonCount} instalment${s.dueSoonCount === 1 ? "" : "s"}`} />
+        <StatCard icon={Receipt} label="Outstanding" value={approxPkr(s.outstandingPkr)} hint={`${rows.unsentInvoices} invoice${rows.unsentInvoices === 1 ? "" : "s"} not yet sent`} />
       </Kpis>
 
       <Row cols={3}>
