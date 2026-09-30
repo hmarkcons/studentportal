@@ -664,6 +664,15 @@ body {
   --accent-5-ink: #0a6c8a;
   --lift: 0 1px 2px rgb(16 24 40 / 0.04), 0 4px 16px -8px rgb(16 24 40 / 0.10);
   --lift-hover: 0 2px 4px rgb(16 24 40 / 0.05), 0 14px 30px -14px rgb(16 24 40 / 0.20);
+  /* The dashboards' boxes use these two pastels in place of indigo and sky:
+     peach and butter. Deep enough for the white icon on a solid tile, light
+     enough to read as pastel beside the brand green. */
+  --pastel-peach: #f0957a;
+  --pastel-peach-soft: #fdefe9;
+  --pastel-peach-ink: #a9492a;
+  --pastel-butter: #e3ac38;
+  --pastel-butter-soft: #fcf4dd;
+  --pastel-butter-ink: #85600c;
 }
 :root[data-theme="dark"] {
   --bg: #0e141b;
@@ -710,6 +719,12 @@ body {
   --accent-5-ink: #8fdaf0;
   --lift: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 22px -12px rgb(0 0 0 / 0.5);
   --lift-hover: 0 2px 4px rgb(0 0 0 / 0.35), 0 16px 32px -14px rgb(0 0 0 / 0.6);
+  --pastel-peach: #f5a78f;
+  --pastel-peach-soft: rgb(245 167 143 / 0.16);
+  --pastel-peach-ink: #f8c4b3;
+  --pastel-butter: #efc462;
+  --pastel-butter-soft: rgb(239 196 98 / 0.16);
+  --pastel-butter-ink: #f5d993;
 }
 /* The semi-dark theme darkens the sidebar alone — in navy-slate, the palette's
    own dark — and its current entry keeps a tint that reads on it. */
@@ -759,13 +774,18 @@ body {
 /* The staff dashboard, a step bolder than everywhere else — asked for. Each
    figure is washed in its accent with its icon on a solid tile of it; each
    chart card carries a coloured top edge, the cards in a row taking the
-   accents in turn; the chosen view's tab is a green pill; trend areas fill
-   more deeply; and an empty queue is a green card, not a white one. Still no
+   colours in turn — green, peach, butter, pink, amber, and no indigo or sky;
+   the chosen view's tab is a green pill; trend areas fill more deeply; and
+   an empty queue is a green card, not a white one. Still no
    saturated blocks of colour: the washes stay light enough to read ink on. */
 [data-dashboard] [data-stat] {
   background: linear-gradient(135deg, color-mix(in srgb, var(--stat-accent) 15%, var(--card)) 0%, var(--card) 78%);
   border-color: color-mix(in srgb, var(--stat-accent) 30%, var(--border));
 }
+[data-dashboard] [data-stat]:nth-child(5n + 2) { --stat-accent: var(--pastel-peach); --stat-soft: var(--pastel-peach-soft); --stat-ink: var(--pastel-peach-ink); }
+[data-dashboard] [data-stat]:nth-child(5n + 3) { --stat-accent: var(--pastel-butter); --stat-soft: var(--pastel-butter-soft); --stat-ink: var(--pastel-butter-ink); }
+[data-dashboard] [data-stat]:nth-child(5n + 4) { --stat-accent: var(--accent-4); --stat-soft: var(--accent-4-soft); --stat-ink: var(--accent-4-ink); }
+[data-dashboard] [data-stat]:nth-child(5n + 5) { --stat-accent: var(--accent-3); --stat-soft: var(--accent-3-soft); --stat-ink: var(--accent-3-ink); }
 [data-dashboard] [data-stat-label] {
   color: var(--stat-ink);
   font-weight: 600;
@@ -790,10 +810,10 @@ body {
   --card-accent: var(--accent-1);
   border-top: 3px solid var(--card-accent);
 }
-[data-shell] main [data-dashboard-view] [data-card]:nth-child(5n + 2) { --card-accent: var(--accent-2); }
-[data-shell] main [data-dashboard-view] [data-card]:nth-child(5n + 3) { --card-accent: var(--accent-3); }
-[data-shell] main [data-dashboard-view] [data-card]:nth-child(5n + 4) { --card-accent: var(--accent-5); }
-[data-shell] main [data-dashboard-view] [data-card]:nth-child(5n + 5) { --card-accent: var(--accent-4); }
+[data-shell] main [data-dashboard-view] [data-card]:nth-child(5n + 2) { --card-accent: var(--pastel-peach); }
+[data-shell] main [data-dashboard-view] [data-card]:nth-child(5n + 3) { --card-accent: var(--pastel-butter); }
+[data-shell] main [data-dashboard-view] [data-card]:nth-child(5n + 4) { --card-accent: var(--accent-4); }
+[data-shell] main [data-dashboard-view] [data-card]:nth-child(5n + 5) { --card-accent: var(--accent-3); }
 [data-dashboard-view] [data-card] h3 svg {
   color: var(--card-accent);
 }
@@ -818,7 +838,8 @@ body {
 }
 /* The student dashboard, bolder the same way — asked for. The welcome banner
    and the country cards stay as they are; below them, every card takes one of
-   the accents in turn along its row: a coloured top edge, a wash of it behind
+   the colours in turn along its row — green, peach, butter, pink, amber, as on
+   the staff dashboard: a coloured top edge, a wash of it behind
    the heading, the heading in it and its icon on a solid tile. The progress
    rings keep the colours of what they say (green done, amber waiting). */
 [data-portal="student"] main [data-dashboard-cards] > :is([data-card], [data-lift]) {
@@ -827,10 +848,10 @@ body {
   border-top: 3px solid var(--card-accent);
   background: linear-gradient(170deg, color-mix(in srgb, var(--card-accent) 12%, var(--card)) 0%, var(--card) 45%);
 }
-[data-portal="student"] main [data-dashboard-cards] > :is([data-card], [data-lift]):nth-child(5n + 2) { --card-accent: var(--accent-2); --card-ink: var(--accent-2-ink); }
-[data-portal="student"] main [data-dashboard-cards] > :is([data-card], [data-lift]):nth-child(5n + 3) { --card-accent: var(--accent-3); --card-ink: var(--accent-3-ink); }
-[data-portal="student"] main [data-dashboard-cards] > :is([data-card], [data-lift]):nth-child(5n + 4) { --card-accent: var(--accent-5); --card-ink: var(--accent-5-ink); }
-[data-portal="student"] main [data-dashboard-cards] > :is([data-card], [data-lift]):nth-child(5n + 5) { --card-accent: var(--accent-4); --card-ink: var(--accent-4-ink); }
+[data-portal="student"] main [data-dashboard-cards] > :is([data-card], [data-lift]):nth-child(5n + 2) { --card-accent: var(--pastel-peach); --card-ink: var(--pastel-peach-ink); }
+[data-portal="student"] main [data-dashboard-cards] > :is([data-card], [data-lift]):nth-child(5n + 3) { --card-accent: var(--pastel-butter); --card-ink: var(--pastel-butter-ink); }
+[data-portal="student"] main [data-dashboard-cards] > :is([data-card], [data-lift]):nth-child(5n + 4) { --card-accent: var(--accent-4); --card-ink: var(--accent-4-ink); }
+[data-portal="student"] main [data-dashboard-cards] > :is([data-card], [data-lift]):nth-child(5n + 5) { --card-accent: var(--accent-3); --card-ink: var(--accent-3-ink); }
 [data-portal="student"] main [data-dashboard-cards] > [data-card] h3 {
   color: var(--card-ink);
 }
