@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { issueStaffCredentials, revealStaffCredentials } from "@/lib/actions/admin";
+import { issueStaffCredentials, revealStaffCredentials, switchStaffLoginEmail } from "@/lib/actions/admin";
 import { Button } from "@/components/ui/Button";
 import { useButtonAction } from "@/components/useButtonAction";
 
@@ -92,12 +92,27 @@ export function StaffLoginPanel({
 }) {
   const issue = useButtonAction();
   const reveal = useButtonAction();
+  const switchLogin = useButtonAction();
+  const [switched, setSwitched] = useState<{ email: string; emailed: boolean } | null>(null);
   const [issued, setIssued] = useState<{ credentials: Credentials; emailed: boolean; warning?: string } | null>(null);
   const [revealed, setRevealed] = useState<Credentials | null>(null);
   const [nothingKept, setNothingKept] = useState(false);
 
   const official = (officialEmail ?? "").trim();
-  const drifted = Boolean(login.loginEmail && official && login.loginEmail.toLowerCase() !== official.toLowerCase());
+  const drifted = !switched && Boolean(login.loginEmail && official && login.loginEmail.toLowerCase() !== official.toLowerCase());
+
+  async function handleSwitch() {
+    if (
+      !confirm(
+        `Switch ${staffName}'s sign-in email to ${official}?\n\n` +
+          `They'll sign in with ${official} from now on, instead of ${login.loginEmail}. Their password stays the same, and they'll be emailed at both addresses.`
+      )
+    ) {
+      return;
+    }
+    const result = await switchLogin.run(() => switchStaffLoginEmail(staffId));
+    if (result && "success" in result && result.success) setSwitched({ email: result.email, emailed: result.emailed });
+  }
   const blocked = status !== "active" ? "Their account isn't active, so they couldn't sign in. Set them to Active first." : !official ? "Add their official email first — it's the email they sign in with." : null;
 
   async function handleIssue() {
@@ -131,7 +146,7 @@ export function StaffLoginPanel({
       <dl className="flex flex-col">
         <div className="flex items-start justify-between gap-4 border-b border-border py-2">
           <dt className="text-muted">Signs in with</dt>
-          <dd className="break-all text-right text-ink">{login.loginEmail ?? "—"}</dd>
+          <dd className="break-all text-right text-ink" data-login-email>{switched?.email ?? login.loginEmail ?? "—"}</dd>
         </div>
         <div className="flex items-start justify-between gap-4 border-b border-border py-2">
           <dt className="text-muted">Last signed in</dt>
@@ -148,9 +163,32 @@ export function StaffLoginPanel({
       </dl>
 
       {drifted && (
-        <p className="rounded-md border border-warning bg-warning-bg px-3 py-2 text-xs text-warning">
-          They sign in with <strong>{login.loginEmail}</strong>, not their official email <strong>{official}</strong>.
-          Issuing new credentials moves their login to the official email.
+        // The move on its own, keeping their password — issuing new
+        // credentials does it too, but also signs them out everywhere.
+        <div className="rounded-md border border-warning bg-warning-bg px-3 py-2 text-xs text-warning" data-login-drift>
+          <p>
+            They sign in with <strong>{login.loginEmail}</strong>, not their official email <strong>{official}</strong>.
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="primary"
+              onClick={handleSwitch}
+              pending={switchLogin.pending}
+              status={{ state: switchLogin.state, label: "Switched.", showError: true }}
+              data-switch-login-email
+            >
+              Switch sign-in to {official}
+            </Button>
+            <span className="text-muted">Their password stays the same.</span>
+          </div>
+        </div>
+      )}
+      {switched && (
+        <p className="rounded-md border border-success/30 bg-success-bg px-3 py-2 text-xs text-success" data-login-switched>
+          They now sign in with <strong>{switched.email}</strong>.{" "}
+          {switched.emailed ? "They've been emailed at both addresses." : "The email to them didn't go — let them know yourself."}
         </p>
       )}
 

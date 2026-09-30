@@ -13,7 +13,11 @@
 //   3. The kept copy reveals the same password that was issued.
 //   4. Nobody but a Super Admin is offered it, and the database refuses the
 //      functions to anyone else even when asked directly.
-//   5. Editing a staff member's official email moves their login with it.
+//   5. Only a Super Admin moves a staff member's sign-in email, and only on
+//      purpose: changing the official email on their profile offers the move
+//      (ticked), which moves it with their password unchanged; unticked, only
+//      the profile changes, and the Login panel then offers "Switch sign-in",
+//      which moves it and keeps their password too.
 //
 // Note: issuing mails the credentials to the fixture's official address, which
 // is on a domain that does not exist, so the mailbox the portal sends from may
@@ -133,25 +137,62 @@ try {
   const store = await asManager.rpc("store_staff_login", { p_staff_id: target.id, p_plaintext: "{}" });
   ok("...nor overwrite the kept copy", Boolean(store.error));
 
-  // ----------------------------------- the login follows the official email
-  const moved = `zztmp-credmoved-${Date.now()}@hmark-test.local`;
-  await sa.goto(`${BASE}/admin/staff`, { waitUntil: "domcontentloaded" });
-  const row = sa.locator("tr", { hasText: target.name }).first();
-  await row.locator('button[aria-label="Actions"]').click();
-  await sa.getByRole("button", { name: /Edit/ }).first().click();
-  const form = sa.locator("form", { has: sa.locator('input[name="email_official"]') }).last();
-  await form.locator('input[name="email_official"]').fill(moved);
-  await form.getByRole("button", { name: /Save changes/ }).click();
-  let loginEmail = null;
-  for (let i = 0; i < 40; i++) {
-    const { data } = await admin.auth.admin.getUserById(target.id);
-    loginEmail = data?.user?.email ?? null;
-    if (loginEmail === moved) break;
-    await sa.waitForTimeout(1000);
+  // ------------------------------ the sign-in follows the official email, on purpose
+  const loginOf = async () => (await admin.auth.admin.getUserById(target.id)).data?.user?.email ?? null;
+  async function editOfficialEmail(address, { keepTicked }) {
+    await sa.goto(`${BASE}/admin/staff`, { waitUntil: "domcontentloaded" });
+    const row = sa.locator("tr", { hasText: target.name }).first();
+    await row.locator('button[aria-label="Actions"]').click();
+    await sa.getByRole("button", { name: /Edit/ }).first().click();
+    const form = sa.locator("form", { has: sa.locator('input[name="email_official"]') }).last();
+    await form.locator('input[name="email_official"]').fill(address);
+    const offer = form.locator("[data-switch-login]");
+    const offered = await offer.waitFor({ timeout: 10_000 }).then(() => true, () => false);
+    const tickedByDefault = offered && (await offer.locator('input[name="switch_login"]').isChecked());
+    if (offered && !keepTicked) await offer.locator('input[name="switch_login"]').uncheck();
+    await form.getByRole("button", { name: /Save changes/ }).click();
+    return { offered, tickedByDefault };
   }
-  ok("editing the official email moves their login with it", loginEmail === moved, String(loginEmail));
+
+  // Ticked, as offered: the sign-in moves, and the same password works there.
+  const moved = `zztmp-credmoved-${Date.now()}@hmark-test.local`;
+  const first = await editOfficialEmail(moved, { keepTicked: true });
+  ok("changing the official email offers to move their sign-in too, ticked", first.offered && first.tickedByDefault);
+  let loginEmail = null;
+  for (let i = 0; i < 40 && loginEmail !== moved; i++) {
+    loginEmail = await loginOf();
+    if (loginEmail !== moved) await sa.waitForTimeout(1000);
+  }
+  ok("...and saving it moves their sign-in", loginEmail === moved, String(loginEmail));
   const atNewAddress = await tryLogin(browser, moved, password);
-  ok("...and they sign in at the new address", atNewAddress.landed, atNewAddress.page.url());
+  ok("...where their password still works", atNewAddress.landed, atNewAddress.page.url());
+
+  // Unticked: the profile changes, the sign-in does not.
+  const profileOnly = `zztmp-credprofile-${Date.now()}@hmark-test.local`;
+  await editOfficialEmail(profileOnly, { keepTicked: false });
+  let savedOfficial = null;
+  for (let i = 0; i < 40 && savedOfficial !== profileOnly; i++) {
+    savedOfficial = (await admin.from("staff").select("email_official").eq("id", target.id).single()).data?.email_official ?? null;
+    if (savedOfficial !== profileOnly) await sa.waitForTimeout(1000);
+  }
+  ok("unticked, only the profile's official email changes", savedOfficial === profileOnly && (await loginOf()) === moved,
+    `official=${savedOfficial} login=${await loginOf()}`);
+
+  // The Login panel sees the two differ, and switches the sign-in on its own.
+  panel = await openLoginPanel(sa, target.name);
+  const drift = panel.locator("[data-login-drift]");
+  ok("the Login panel says they sign in with another address", await drift.waitFor({ timeout: 30_000 }).then(() => true, () => false));
+  sa.once("dialog", (d) => d.accept());
+  await panel.locator("[data-switch-login-email]").click();
+  let switched = null;
+  for (let i = 0; i < 40 && switched !== profileOnly; i++) {
+    switched = await loginOf();
+    if (switched !== profileOnly) await sa.waitForTimeout(1000);
+  }
+  ok("...and Switch sign-in moves it to the official email", switched === profileOnly, String(switched));
+  ok("...saying so in the panel", await panel.locator("[data-login-switched]").waitFor({ timeout: 20_000 }).then(() => true, () => false));
+  const afterSwitch = await tryLogin(browser, profileOnly, password);
+  ok("...with their password unchanged", afterSwitch.landed, afterSwitch.page.url());
 
   await browser.close();
 } finally {

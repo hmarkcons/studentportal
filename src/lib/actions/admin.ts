@@ -264,21 +264,23 @@ export async function createStaffAccount(_prevState: unknown, formData: FormData
 }
 
 /**
- * Keeps a staff member's login email the same as their official email.
+ * Moves a staff member's login email to their official email.
  *
  * They used to be set once, at creation, and never again — so editing the
  * official email left the login on the old address, and the staff member
- * signing in with the address on their profile was refused. One account had
- * drifted that way when this was written.
+ * signing in with the address on their profile was refused. Now a Super Admin
+ * moves it deliberately: from the staff form, where a changed official email
+ * offers the move (ticked), or from the Login panel for anyone whose two
+ * addresses differ. Their password is untouched.
  *
  * Done before the staff row is saved, so an address another login already
  * uses is refused before anything changes; the returned `revert` puts the
- * login back if the save after it fails.
+ * login back if the save after it fails, and `moved` says what changed.
  */
 async function syncLoginEmail(
   staffId: string,
   officialEmail: string | null | undefined
-): Promise<{ error?: string; revert?: () => Promise<void> }> {
+): Promise<{ error?: string; revert?: () => Promise<void>; moved?: { from: string; to: string } }> {
   const next = (officialEmail ?? "").trim();
   if (!next) return {};
 
@@ -300,7 +302,62 @@ async function syncLoginEmail(
     revert: async () => {
       await admin.auth.admin.updateUserById(staffId, { email: current, email_confirm: true });
     },
+    moved: { from: current, to: next },
   };
+}
+
+/**
+ * Tells a staff member their sign-in email has moved — at the new address,
+ * which is now the one that works, and at the old one, so a change they did
+ * not expect cannot happen silently. Never fails the action that called it.
+ */
+async function mailLoginEmailMoved(staffName: string, moved: { from: string; to: string }, byName: string | null): Promise<string | null> {
+  const loginUrl = `${getSiteUrl()}/login`;
+  const first = staffName.split(" ")[0] || staffName;
+  const text = [
+    `Hi ${first},`,
+    "",
+    `Your HMARK portal sign-in email has been changed${byName ? ` by ${byName}` : ""}.`,
+    "",
+    `From now on, sign in with: ${moved.to}`,
+    `It was: ${moved.from}`,
+    "",
+    "Your password has not changed.",
+    `Sign in at: ${loginUrl}`,
+    "",
+    "If you didn't expect this, tell a Super Admin straight away.",
+  ].join("\n");
+  let failed: string | null = null;
+  for (const to of [...new Set([moved.to, moved.from].map((e) => e.trim().toLowerCase()).filter(Boolean))]) {
+    const sent = await sendEmail({ to, subject: "Your HMARK portal sign-in email has changed", text });
+    if (sent && "error" in sent && sent.error) failed = String(sent.error);
+  }
+  return failed;
+}
+
+/**
+ * Moves a staff member's sign-in email to the official email on their
+ * profile, keeping their password. For the Login panel, when the two differ
+ * — an official email changed without moving the login, or an account that
+ * drifted before the two were kept together. Super Admin only.
+ */
+export async function switchStaffLoginEmail(staffId: string): Promise<{ error: string } | { success: true; email: string; emailed: boolean }> {
+  const actor = await superAdminActor();
+  if (!actor) return { error: "Only a Super Admin can change the email someone signs in with." };
+
+  const supabase = await createClient();
+  const { data: member } = await supabase.from("staff").select("id, full_name, email_official").eq("id", staffId).maybeSingle();
+  if (!member) return { error: "That staff member no longer exists." };
+  const official = (member.email_official ?? "").trim();
+  if (!official) return { error: "Add their official email first — it's the address their sign-in moves to." };
+
+  const sync = await syncLoginEmail(staffId, official);
+  if (sync.error) return { error: sync.error.replace(" Nothing was saved.", "") };
+  if (!sync.moved) return { error: `They already sign in with ${official}.` };
+
+  const mailError = await mailLoginEmailMoved(member.full_name, sync.moved, actor.full_name);
+  revalidatePath("/admin/staff");
+  return { success: true, email: official, emailed: !mailError };
 }
 
 export async function updateStaffDetails(staffId: string, _prevState: unknown, formData: FormData) {
@@ -425,7 +482,11 @@ export async function updateStaffDetails(staffId: string, _prevState: unknown, f
     }
   }
 
-  const loginSync = editorIsSuperAdmin ? await syncLoginEmail(staffId, fields.email_official) : {};
+  // Their sign-in follows a changed official email only when the Super Admin
+  // ticked "Also make this their sign-in email" (StaffForm); unticked, only
+  // the address on the profile changes, and the Login panel offers the move.
+  const loginSync =
+    editorIsSuperAdmin && formData.get("switch_login") === "on" ? await syncLoginEmail(staffId, fields.email_official) : {};
   if (loginSync.error) return { error: loginSync.error };
 
   // Selected back because an UPDATE that RLS refuses raises nothing — it
@@ -448,6 +509,9 @@ export async function updateStaffDetails(staffId: string, _prevState: unknown, f
     const { error: roleError } = await supabase.rpc("set_staff_roles", { p_staff: staffId, p_roles: roles });
     if (roleError) return { error: roleError.message };
   }
+
+  // Told at both addresses, once the whole save has stuck.
+  if (loginSync.moved) await mailLoginEmailMoved(fields.full_name, loginSync.moved, editor?.full_name ?? null);
 
   revalidatePath("/admin/staff");
   revalidatePath("/students");

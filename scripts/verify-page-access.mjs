@@ -17,6 +17,13 @@
 //      database will not take a change to a colleague's official email from
 //      them directly (staff_write, 0274). (That a Super Admin's change moves
 //      the login is check:staffcreds.)
+//   5. An editor-only page needs its editing permission as well as its Open
+//      switch (PAGE_EDIT_PERMISSIONS): with it off, Travel & arrival guides
+//      leaves a Processing officer's menu and its address says which
+//      permission is missing; with it on, both come back. A reference page
+//      (Scholarship bodies) stays either way.
+//   6. Anyone who cannot manage staff has "My profile" where a Super Admin
+//      has "Staff Management".
 //
 // Needs 0273, 0274 and 0284 applied.
 import { BASE, apiAs, clients, fixtures, openBrowser, reporter, requireConfirmation, signIn } from "./verify-portal-lib.mjs";
@@ -54,6 +61,12 @@ try {
   // A real record, so the detail-page checks reach a page that exists — a
   // made-up path is Next's 404, which no guard is ever asked about.
   const lead = await fx.lead({ full_name: "zztmp pa-student" });
+  const proc = await fx.staff("pa-processing", ["processing"]);
+  // Payroll is an editor-only page (it also needs "Manage commissions &
+  // payroll"), which Role Permissions may have switched off for Finance —
+  // production has. Granted to this one person, so section 1 is about what
+  // the Finance pages are, not about today's switch.
+  await admin.from("staff_permission_overrides").upsert({ staff_id: finance.id, permission_key: "finance.commissions.manage", allowed: true });
 
   const browser = await openBrowser();
 
@@ -113,8 +126,40 @@ try {
     JSON.stringify(direct.error ?? direct.data)
   );
 
+  // ---------------------------------------------------- editor-only pages
+  // Set for this one person, so the check does not lean on whatever the
+  // Processing role has on Role Permissions today.
+  const setTravel = async (allowed) =>
+    admin.from("staff_permission_overrides").upsert({ staff_id: proc.id, permission_key: "settings.travel_guide", allowed });
+  await setTravel(false);
+  let pp = await signIn(browser, proc.email);
+  let procMenu = await sidebar(pp);
+  ok("processing, travel guides not editable: Travel & arrival guides is not in the menu", !procMenu.includes("/setup/travel-guide"), procMenu.join(" "));
+  ok("...while Scholarship bodies, a reference page, still is", procMenu.includes("/setup/scholarship-bodies"));
+  const typed = await opens(pp, "/setup/travel-guide");
+  const missing = await pp.locator("[data-no-page-access]").getAttribute("data-missing").catch(() => null);
+  ok("...and typing its address is refused, naming the permission it needs",
+    !typed && missing === "settings.travel_guide" && /Edit the travel/.test(await pp.locator("[data-no-page-access]").innerText()),
+    String(missing));
+  await pp.close();
+
+  await setTravel(true);
+  pp = await signIn(browser, proc.email);
+  procMenu = await sidebar(pp);
+  ok("with editing allowed, it is back in the menu", procMenu.includes("/setup/travel-guide"), procMenu.join(" "));
+  ok("...and opens", await opens(pp, "/setup/travel-guide"));
+
+  // ------------------------------------------------------------ My profile
+  const staffLinkLabel = async (page) =>
+    ((await page.locator('aside nav a[href="/admin/staff"]').first().textContent().catch(() => "")) ?? "").trim();
+  ok("someone who cannot manage staff has My profile in the menu", (await staffLinkLabel(pp)) === "My profile", await staffLinkLabel(pp));
+  await pp.close();
+
   await browser.close();
 } finally {
+  await admin.from("staff_permission_overrides").delete().in("permission_key", ["settings.travel_guide", "finance.commissions.manage"]).in("staff_id", [
+    ...(await admin.from("staff").select("id").like("full_name", "zztmp%")).data?.map((r) => r.id) ?? [],
+  ]);
   const removed = await fx.cleanup();
   process.exitCode = finish(removed) === 0 ? 0 : 1;
 }

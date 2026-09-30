@@ -100,10 +100,14 @@ export function buildStaffNav({
   const shaped = BASE_STAFF_NAV.map((item) => {
     if (item.label === "HR" && item.children) {
       // Staff Management is everyone's: the Super Admin manages every record
-      // there, and anyone else sees their own details, read-only.
+      // there, and anyone else sees their own details, read-only — so for
+      // them it says what it is, "My profile", rather than offering to manage
+      // staff they cannot manage.
       // Everyone has leave of their own; approvers also get the list to decide.
       const children = [
-        ...item.children,
+        ...item.children.map((c) =>
+          c.href === "/admin/staff" && !isSuperAdmin ? { ...c, label: "My profile" } : c
+        ),
         ...(canApproveLeave ? [{ label: "Leave", href: "/admin/leave" }] : []),
         { label: "My leave", href: "/my-leave" },
         ...(hasOwnAgreement ? [{ label: "My agreement", href: "/my-agreement" }] : []),

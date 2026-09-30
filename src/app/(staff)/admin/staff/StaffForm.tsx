@@ -195,6 +195,13 @@ export function StaffForm({
   const [state, formAction, pending] = useActionState<ActionState, FormData>(action, undefined);
   const currency = staff?.currency ?? "PKR";
   const [typeGeneral, setTypeGeneral] = useState(staff?.commission_type_general ?? "percentage");
+  // A Super Admin changing someone's official email is asked whether their
+  // sign-in should follow it (updateStaffDetails reads "switch_login").
+  const [officialEmail, setOfficialEmail] = useState(staff?.email_official ?? "");
+  const officialChanged =
+    Boolean(isEdit && canGrantSuperAdmin) &&
+    officialEmail.trim() !== "" &&
+    officialEmail.trim().toLowerCase() !== (staff?.email_official ?? "").trim().toLowerCase();
   const [typePublic, setTypePublic] = useState(staff?.commission_type_public_universities ?? "percentage");
   const [bonusEligible, setBonusEligible] = useState(staff?.bonus_eligible ?? false);
   const [statusValue, setStatusValue] = useState(
@@ -301,25 +308,36 @@ export function StaffForm({
           <Input name="email_personal" type="email" defaultValue={staff?.email_personal ?? ""} />
         </Field>
         <Field label={isEdit ? "Email (Official) — their sign-in email" : "Email (Official) — used to log in"}>
-          {/* Changing it moves their login to the new address, so only a
-              Super Admin may; everyone else sees it and cannot edit it.
+          {/* Only a Super Admin may change it — it is the address their
+              sign-in follows — and everyone else sees it and cannot edit it.
               updateStaffDetails and 0274 refuse the change too. */}
           <Input
             name="email_official"
             type="email"
             required={!isEdit}
             defaultValue={staff?.email_official ?? ""}
+            onChange={(e) => setOfficialEmail(e.target.value)}
             readOnly={isEdit && !canGrantSuperAdmin}
             aria-readonly={isEdit && !canGrantSuperAdmin}
             className={isEdit && !canGrantSuperAdmin ? "cursor-not-allowed opacity-60" : undefined}
             data-official-email-locked={isEdit && !canGrantSuperAdmin ? "" : undefined}
           />
-          {isEdit && (
+          {isEdit && !officialChanged && (
             <p className="mt-1 text-xs text-muted">
               {canGrantSuperAdmin
-                ? "Changing this also changes the email they sign in with."
+                ? "Change it and you'll be asked whether their sign-in email should move with it."
                 : "Only a Super Admin can change this, because it is the email they sign in with."}
             </p>
+          )}
+          {officialChanged && (
+            <label className="mt-2 flex items-start gap-2 rounded-md border border-info/30 bg-info-bg px-3 py-2 text-xs text-info" data-switch-login>
+              <input type="checkbox" name="switch_login" defaultChecked className="mt-0.5 shrink-0" />
+              <span>
+                <strong className="font-semibold">Also make this their sign-in email.</strong> Their password stays the same, and
+                they&apos;re emailed at both addresses. Untick to change only the address on their profile — you can move their
+                sign-in later from their Login panel.
+              </span>
+            </label>
           )}
         </Field>
         <Field label="Emergency contact number">

@@ -9,6 +9,7 @@ import { PermissionToggle } from "./PermissionToggle";
 import { StaffPermissionsPanel } from "./StaffPermissionsPanel";
 import { StaffPicker } from "./StaffPicker";
 import { TableFrame } from "@/components/ui/TableFrame";
+import { PAGE_EDIT_PERMISSIONS, PAGE_PERMISSIONS } from "@/lib/pageAccess";
 
 type PermissionDefRow = {
   key: string;
@@ -50,6 +51,24 @@ export default async function RolePermissionsPage(props: { searchParams: Promise
   for (const d of (defs ?? []) as PermissionDefRow[]) {
     if (!categories.has(d.category)) categories.set(d.category, []);
     categories.get(d.category)!.push(d);
+  }
+  // Which switches go together (PAGE_EDIT_PERMISSIONS): an editor-only page is
+  // in a role's menu only with its "Open" switch AND a permission to edit it,
+  // so each row says what it is paired with — otherwise a page vanishing from
+  // a menu when an editing switch goes off would read as a fault.
+  const labelOf = new Map((allDefs ?? []).map((d) => [d.key, d.label]));
+  const pairing = new Map<string, string>();
+  const pagesOf = new Map<string, string[]>();
+  for (const [path, editKeys] of Object.entries(PAGE_EDIT_PERMISSIONS)) {
+    const pageKey = PAGE_PERMISSIONS[path];
+    if (!pageKey) continue;
+    const edits = editKeys.map((k) => `“${labelOf.get(k) ?? k}”`).join(" or ");
+    pairing.set(pageKey, `Shown in the menu only with ${edits} as well.`);
+    const pageName = (labelOf.get(pageKey) ?? path).replace(/^Open /, "");
+    for (const k of editKeys) pagesOf.set(k, [...(pagesOf.get(k) ?? []), pageName]);
+  }
+  for (const [k, names] of pagesOf) {
+    pairing.set(k, `Also puts ${names.join(" and ")} in the menu, with ${names.length > 1 ? "their" : "its"} “Open” switch.`);
   }
   // One count down the whole matrix, through the category headings.
   const serialOf = new Map([...categories.values()].flat().map((d, i) => [d.key, i + 1]));
@@ -98,6 +117,11 @@ export default async function RolePermissionsPage(props: { searchParams: Promise
                       <td className="py-3 pr-4 align-top" data-frozen>
                         <p className="font-medium text-ink">{d.label}</p>
                         <p className="mt-0.5 text-xs text-muted">{d.description}</p>
+                        {pairing.has(d.key) && (
+                          <p className="mt-1 text-[11px] text-info" data-perm-pairing>
+                            {pairing.get(d.key)}
+                          </p>
+                        )}
                       </td>
                       {EDITABLE_ROLES.map((role) => {
                         const overrideKey = `${role}:${d.key}`;

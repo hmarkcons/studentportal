@@ -68,6 +68,68 @@ export const PAGE_PERMISSIONS: Record<string, string> = {
   "/admin/additional-services": "page.admin.additional_services",
 };
 
+/**
+ * Pages whose only job is changing something, and what changing it takes —
+ * any one of the listed permissions. On these, the "page.*" switch alone is
+ * not enough: a role that may open the page but not edit it would be shown a
+ * builder it cannot use, so the page leaves its menu and refuses its address.
+ *
+ * Switched off on 23 September for some roles (the travel guides for
+ * Processing, the visa and message settings for Management, commissions and
+ * payroll for Finance) while the pages stayed in their menus — which is what
+ * this closes.
+ *
+ * A reference page people read — Destinations, Universities, Scholarship
+ * bodies, Inventory, Referrals, University Commissions — is not listed: its
+ * "page.*" switch alone decides, and it shows read-only to anyone who cannot
+ * change it.
+ */
+export const PAGE_EDIT_PERMISSIONS: Record<string, readonly string[]> = {
+  "/setup/travel-guide": ["settings.travel_guide"],
+  "/setup/visa-messages": ["settings.visa_messages"],
+  "/setup/visa-offices": ["settings.visa_offices"],
+  "/setup/visa-page-builder": ["settings.visa_page"],
+  "/setup/reengagement-messages": ["settings.reengagement_messages"],
+  "/setup/create-doc-checklist": ["document_checklist.manage"],
+  "/setup/document-trackers": ["document_trackers.manage"],
+  "/setup/attendance-policy": ["attendance.qr_admin"],
+  "/setup/office-network": ["staff.approve_offsite_access"],
+  "/finance/staff-commission": ["finance.commissions.manage"],
+  "/finance/payroll": ["finance.commissions.manage"],
+  "/finance/invoice-generator": ["finance.invoices.manage"],
+  "/finance/refunds": ["finance.refunds.manage", "finance.refunds.review"],
+  "/marketing/broadcast": ["messages.broadcast"],
+};
+
+function longestPrefix(path: string, prefixes: readonly string[]): string | null {
+  const clean = path.split(/[?#]/)[0].replace(/\/+$/, "") || "/";
+  let best: string | null = null;
+  for (const prefix of prefixes) {
+    if ((clean === prefix || clean.startsWith(`${prefix}/`)) && (!best || prefix.length > best.length)) best = prefix;
+  }
+  return best;
+}
+
+/** What editing a path takes, when it is an editor-only page; null otherwise. */
+export function editPermissionsForPath(path: string): readonly string[] | null {
+  const best = longestPrefix(path, Object.keys(PAGE_EDIT_PERMISSIONS));
+  return best ? PAGE_EDIT_PERMISSIONS[best] : null;
+}
+
+/**
+ * Why a path is refused, as the permission keys that would open it: its
+ * "page.*" key when that is off, else the editing permissions it lacks — for
+ * the page to name them. Empty when it is not refused.
+ */
+export function missingForPath(path: string, perms: Readonly<Record<string, boolean>>, isSuperAdmin: boolean): string[] {
+  if (isSuperAdmin) return [];
+  const key = permissionForPath(path);
+  if (key !== null && perms[key] !== true) return [key];
+  const edit = editPermissionsForPath(path);
+  if (edit && !edit.some((k) => perms[k] === true)) return [...edit];
+  return [];
+}
+
 /** The permission governing a path, or null when the page is not gated this way. */
 export function permissionForPath(path: string): string | null {
   const clean = path.split(/[?#]/)[0].replace(/\/+$/, "") || "/";
@@ -79,14 +141,13 @@ export function permissionForPath(path: string): string | null {
 }
 
 /**
- * May someone with these permissions open this path?
+ * May someone with these permissions open this path? Its "page.*" switch, and
+ * on an editor-only page (PAGE_EDIT_PERMISSIONS) a permission to edit it.
  *
  * A Super Admin may open everything, whatever the table holds — the same rule
  * staff_has_permission() applies in SQL, and the one that keeps a Super Admin
  * from being locked out if a permission row were ever missing.
  */
 export function canOpenPath(path: string, perms: Readonly<Record<string, boolean>>, isSuperAdmin: boolean): boolean {
-  if (isSuperAdmin) return true;
-  const key = permissionForPath(path);
-  return key === null || perms[key] === true;
+  return missingForPath(path, perms, isSuperAdmin).length === 0;
 }
