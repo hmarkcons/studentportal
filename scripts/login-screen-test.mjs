@@ -29,7 +29,9 @@ test("what is stored is laid over the defaults, the rest kept", () => {
   const c = readLoginScreen({ headline: "Study in Europe", accentColor: "#123456" });
   assert.equal(c.headline, "Study in Europe");
   assert.equal(c.accentColor, "#123456");
-  assert.equal(c.welcomeTitle, "Welcome back");
+  assert.equal(c.welcomeText, LOGIN_SCREEN_DEFAULTS.welcomeText);
+  // The greeting is gone from the page, so nothing stored for it is read.
+  assert.ok(!("welcomeTitle" in readLoginScreen({ welcomeTitle: "Hello" })));
 });
 
 test("a stored value that breaks a rule falls back rather than reaching the page", () => {
@@ -52,7 +54,7 @@ test("links: web addresses, mail and phone links and site paths, never script", 
 test("saving keeps only what differs from the defaults, and a blank means the original", () => {
   const values = Object.fromEntries(Object.entries(LOGIN_SCREEN_DEFAULTS));
   values.headline = "Study in Europe";
-  values.welcomeTitle = "";
+  values.welcomeText = "";
   values.accentColor = "#0B7A52"; // the default, in capitals
   const parsed = parseLoginScreenForm(form(values));
   assert.deepEqual(parsed, { content: { headline: "Study in Europe" } });

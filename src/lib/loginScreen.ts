@@ -24,7 +24,6 @@ export type LoginScreenContent = {
   ctaUrl: string;
   portalLabel: string;
   portalTagline: string;
-  welcomeTitle: string;
   welcomeText: string;
   forgotUrl: string;
   signupPrompt: string;
@@ -46,7 +45,6 @@ export const LOGIN_SCREEN_DEFAULTS: LoginScreenContent = {
   ctaUrl: "https://hmarkconsultants.com",
   portalLabel: "Student Portal",
   portalTagline: "Track · Manage · Achieve",
-  welcomeTitle: "Welcome back",
   welcomeText: "Sign in to track your applications, documents and visa file.",
   forgotUrl: whatsappWith("Hi HMARK, I have forgotten my portal password. Could you reset it for me?"),
   signupPrompt: "New to HMARK?",
@@ -83,8 +81,7 @@ export const LOGIN_SCREEN_GROUPS: { title: string; fields: LoginScreenField[] }[
     fields: [
       { key: "portalLabel", label: "Portal name, top right", kind: "text", max: 30 },
       { key: "portalTagline", label: "Beside it", kind: "text", max: 60 },
-      { key: "welcomeTitle", label: "Greeting", kind: "text", max: 40 },
-      { key: "welcomeText", label: "Line under the greeting", kind: "textarea", max: 160 },
+      { key: "welcomeText", label: "Line above the form", kind: "textarea", max: 160 },
       { key: "signupPrompt", label: "Under the form", kind: "text", max: 60 },
       { key: "signupLabel", label: "…and its link", kind: "text", max: 60 },
       { key: "footerText", label: "Footer", kind: "text", max: 200, hint: "© and the year are added in front." },
@@ -102,7 +99,7 @@ export const LOGIN_SCREEN_GROUPS: { title: string; fields: LoginScreenField[] }[
     title: "Colours",
     fields: [
       { key: "accentColor", label: "Buttons, links and the line above the headline", kind: "color", max: 7 },
-      { key: "headingColor", label: "Headline and greeting", kind: "color", max: 7 },
+      { key: "headingColor", label: "Headline and the form's labels", kind: "color", max: 7 },
     ],
   },
 ];

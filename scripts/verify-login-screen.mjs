@@ -96,8 +96,12 @@ try {
     const text = await page.locator("[data-login-screen]").innerText();
     const headline = (await page.locator("[data-login-headline]").innerText()).trim();
     ok("the login page shows the headline", headline === (original.content.headline ?? "Your Future Goes Beyond Borders"), headline);
-    ok("...the greeting",
-      (await page.locator("[data-login-welcome]").innerText()).trim() === (original.content.welcomeTitle ?? "Welcome back"));
+    ok("...no greeting above the form, only its one line",
+      (await page.locator("[data-login-welcome]").count()) === 0 && !/Welcome back/.test(text)
+        && (await page.locator("[data-login-intro]").innerText()).trim() === (original.content.welcomeText ?? "Sign in to track your applications, documents and visa file."));
+    const panelWidth = await page.locator("[data-login-panel]").evaluate((el) => el.getBoundingClientRect().width);
+    const sideWidth = await page.locator('section[aria-label="Sign in"]').evaluate((el) => el.getBoundingClientRect().width);
+    ok("...a compact form, with room either side of it", panelWidth <= 341 && sideWidth - panelWidth >= 80, `${Math.round(panelWidth)} of ${Math.round(sideWidth)}`);
     ok("...and one sign-in for everyone: no tabs, one field for an email or a Student ID",
       (await page.locator('[role="tablist"], [data-login-tab]').count()) === 0
         && (await page.locator('[data-login-form] input[name="email"]').count()) === 1

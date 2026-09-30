@@ -25,14 +25,16 @@ export function LoginForm({ content, next = "", preview = false }: { content: Lo
   const [state, formAction, pending] = useActionState(signIn, undefined);
   const [showPassword, setShowPassword] = useState(false);
 
+  // Compact: the fields a size smaller than a form that fills its panel, so
+  // the white around them does the work.
   const input =
-    "mt-2 h-[52px] w-full rounded-xl border border-[#d5dfda] bg-white px-4 text-[15.5px] text-[var(--login-heading)] outline-none transition placeholder:text-[#8a94a3] focus:border-[var(--login-accent)] focus:ring-4 focus:ring-[color-mix(in_srgb,var(--login-accent)_16%,transparent)]";
+    "mt-1.5 h-11 w-full rounded-lg border border-[#d5dfda] bg-white px-3.5 text-[14.5px] text-[var(--login-heading)] outline-none transition placeholder:text-[#8a94a3] focus:border-[var(--login-accent)] focus:ring-4 focus:ring-[color-mix(in_srgb,var(--login-accent)_14%,transparent)]";
 
   return (
-    <form action={preview ? undefined : formAction} className="mt-7" data-login-form>
+    <form action={preview ? undefined : formAction} className="mt-6" data-login-form>
       <input type="hidden" name="next" value={next} />
 
-      <label htmlFor="login-identifier" className="block text-[15px] font-semibold text-[var(--login-heading)]">
+      <label htmlFor="login-identifier" className="block text-[13.5px] font-semibold text-[var(--login-heading)]">
         Email or Student ID
       </label>
       {/* Named "email" whatever it holds — password managers and the checks
@@ -51,18 +53,18 @@ export function LoginForm({ content, next = "", preview = false }: { content: Lo
         aria-describedby="login-identifier-hint"
         className={input}
       />
-      <p id="login-identifier-hint" className="mt-2 text-[13px] text-[#6b7686]" data-login-identifier-hint>
+      <p id="login-identifier-hint" className="mt-1.5 text-[12px] text-[#6b7686]" data-login-identifier-hint>
         Students can sign in with their Student ID too.
       </p>
 
-      <div className="mt-5 flex items-baseline justify-between gap-3">
-        <label htmlFor="login-password" className="text-[15px] font-semibold text-[var(--login-heading)]">
+      <div className="mt-4 flex items-baseline justify-between gap-3">
+        <label htmlFor="login-password" className="text-[13.5px] font-semibold text-[var(--login-heading)]">
           Password
         </label>
         <a
           href={content.forgotUrl}
           {...linkProps(content.forgotUrl)}
-          className="text-[14.5px] font-semibold text-[var(--login-accent)] hover:underline"
+          className="text-[13px] font-semibold text-[var(--login-accent)] hover:underline"
           data-forgot-password
         >
           Forgot password?
@@ -76,31 +78,31 @@ export function LoginForm({ content, next = "", preview = false }: { content: Lo
           required
           autoComplete="current-password"
           placeholder="Enter your password"
-          className={`${input} pr-12`}
+          className={`${input} pr-11`}
         />
         <button
           type="button"
           onClick={() => setShowPassword((v) => !v)}
           aria-label={showPassword ? "Hide password" : "Show password"}
           aria-pressed={showPassword}
-          className="absolute right-2 top-1/2 mt-1 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-[#56627a] transition hover:bg-[#f1f4f3] hover:text-[var(--login-heading)]"
+          className="absolute right-1.5 top-1/2 mt-[3px] flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-[#56627a] transition hover:bg-[#f1f4f3] hover:text-[var(--login-heading)]"
         >
-          {showPassword ? <EyeOff aria-hidden className="h-5 w-5" /> : <Eye aria-hidden className="h-5 w-5" />}
+          {showPassword ? <EyeOff aria-hidden className="h-[18px] w-[18px]" /> : <Eye aria-hidden className="h-[18px] w-[18px]" />}
         </button>
       </div>
 
-      <label className="mt-5 flex w-fit cursor-pointer items-center gap-3 text-[15.5px] text-[#3d4b63]">
+      <label className="mt-4 flex w-fit cursor-pointer items-center gap-2.5 text-[14px] text-[#3d4b63]">
         <input
           type="checkbox"
           name="remember"
-          className="h-5 w-5 cursor-pointer rounded border-[#b8c4bf] accent-[var(--login-accent)]"
+          className="h-4 w-4 cursor-pointer rounded border-[#b8c4bf] accent-[var(--login-accent)]"
           data-keep-signed-in
         />
         Keep me signed in
       </label>
 
       {state?.error && (
-        <p role="alert" className="mt-5 flex items-start gap-2 rounded-xl bg-[#fef2f2] px-3.5 py-2.5 text-sm text-[#b42318]" data-login-error>
+        <p role="alert" className="mt-4 flex items-start gap-2 rounded-lg bg-[#fef2f2] px-3 py-2 text-[13px] text-[#b42318]" data-login-error>
           <CircleAlert aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
           {state.error}
         </p>
@@ -111,7 +113,7 @@ export function LoginForm({ content, next = "", preview = false }: { content: Lo
         disabled={pending}
         aria-busy={pending || undefined}
         data-full-width
-        className="relative mt-6 flex h-[54px] w-full items-center justify-center rounded-xl bg-[var(--login-accent)] text-[17px] font-bold text-white shadow-[0_14px_28px_-14px_var(--login-accent)] transition hover:-translate-y-px hover:bg-[color-mix(in_srgb,var(--login-accent)_88%,black)] disabled:cursor-wait disabled:opacity-80"
+        className="relative mt-5 flex h-11 w-full items-center justify-center rounded-lg bg-[var(--login-accent)] text-[15px] font-bold text-white shadow-[0_12px_24px_-14px_var(--login-accent)] transition hover:-translate-y-px hover:bg-[color-mix(in_srgb,var(--login-accent)_88%,black)] disabled:cursor-wait disabled:opacity-80"
       >
         {pending ? (
           <>
@@ -123,7 +125,7 @@ export function LoginForm({ content, next = "", preview = false }: { content: Lo
         )}
       </button>
 
-      <div className="mt-7 border-t border-[#e6ebe9] pt-6 text-center text-[15px] text-[#4a5568]">
+      <div className="mt-6 border-t border-[#e6ebe9] pt-5 text-center text-[13.5px] text-[#4a5568]">
         {content.signupPrompt}{" "}
         <a href={content.signupUrl} {...linkProps(content.signupUrl)} className="font-semibold text-[var(--login-accent)] hover:underline" data-signup-link>
           {content.signupLabel}

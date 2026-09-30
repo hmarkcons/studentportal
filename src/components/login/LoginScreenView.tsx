@@ -127,12 +127,16 @@ export function LoginScreenView({
           </p>
         </div>
 
+        {/* The sign-in as a compact card-less column in the middle of the panel,
+            with room around it: no greeting to read past, one quiet line to
+            say what this is, and the form. */}
         <div className="login-rise flex flex-1 flex-col justify-center py-10 lg:py-6" style={{ animationDelay: "100ms" }}>
-          <h2 className="text-[clamp(2rem,2.75vw,2.7rem)] font-extrabold leading-tight tracking-[-0.03em] text-[var(--login-heading)]" data-login-welcome>
-            {content.welcomeTitle}
-          </h2>
-          <p className="mt-3 text-[16px] leading-relaxed text-[#4a5568]">{content.welcomeText}</p>
-          <LoginForm content={content} next={next} preview={preview} />
+          <div className="mx-auto w-full max-w-[340px]" data-login-panel>
+            <p className="text-balance text-[14px] leading-relaxed text-[#5b6577]" data-login-intro>
+              {content.welcomeText}
+            </p>
+            <LoginForm content={content} next={next} preview={preview} />
+          </div>
         </div>
 
         <div className="hidden lg:block">{footer}</div>
