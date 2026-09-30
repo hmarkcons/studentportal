@@ -26,8 +26,6 @@ export type LoginScreenContent = {
   portalTagline: string;
   welcomeTitle: string;
   welcomeText: string;
-  studentTab: string;
-  staffTab: string;
   forgotUrl: string;
   signupPrompt: string;
   signupLabel: string;
@@ -50,8 +48,6 @@ export const LOGIN_SCREEN_DEFAULTS: LoginScreenContent = {
   portalTagline: "Track · Manage · Achieve",
   welcomeTitle: "Welcome back",
   welcomeText: "Sign in to track your applications, documents and visa file.",
-  studentTab: "Student",
-  staffTab: "Counsellor",
   forgotUrl: whatsappWith("Hi HMARK, I have forgotten my portal password. Could you reset it for me?"),
   signupPrompt: "New to HMARK?",
   signupLabel: "Book a free counselling session",
@@ -89,8 +85,6 @@ export const LOGIN_SCREEN_GROUPS: { title: string; fields: LoginScreenField[] }[
       { key: "portalTagline", label: "Beside it", kind: "text", max: 60 },
       { key: "welcomeTitle", label: "Greeting", kind: "text", max: 40 },
       { key: "welcomeText", label: "Line under the greeting", kind: "textarea", max: 160 },
-      { key: "studentTab", label: "First tab", kind: "text", max: 20, hint: "Signs in with a Student ID or an email." },
-      { key: "staffTab", label: "Second tab", kind: "text", max: 20, hint: "Staff and partner universities, by email." },
       { key: "signupPrompt", label: "Under the form", kind: "text", max: 60 },
       { key: "signupLabel", label: "…and its link", kind: "text", max: 60 },
       { key: "footerText", label: "Footer", kind: "text", max: 200, hint: "© and the year are added in front." },

@@ -5,19 +5,17 @@ import { CircleAlert, Eye, EyeOff, LoaderCircle } from "lucide-react";
 import { signIn } from "@/app/login/actions";
 import type { LoginScreenContent } from "@/lib/loginScreen";
 
-type Audience = "student" | "staff";
-
 /** A link that leaves the site opens beside it, so the sign-in stays where it was. */
 function linkProps(url: string) {
   return url.startsWith("/") ? {} : { target: "_blank", rel: "noreferrer" };
 }
 
 /**
- * The sign-in: a Student tab that takes a Student ID or an email, and a
- * second tab — "Counsellor" by default — for everyone who signs in by email:
- * staff of every role, and partner universities. The tab changes what the
- * field asks for, not where it goes; the server reads an @ as an email and
- * anything else as a Student ID (actions.ts).
+ * The sign-in, one form for everyone: a student with their Student ID or
+ * email, staff of every role and partner universities with their email. There
+ * is nothing to choose first — the server reads an @ as an email and anything
+ * else as a Student ID (actions.ts), which is all the two tabs this replaced
+ * ever changed.
  *
  * `preview` is the Setup page's live copy: drawn exactly the same, submitting
  * nothing. `next` is where to go once signed in, read by the page from the
@@ -25,9 +23,7 @@ function linkProps(url: string) {
  */
 export function LoginForm({ content, next = "", preview = false }: { content: LoginScreenContent; next?: string; preview?: boolean }) {
   const [state, formAction, pending] = useActionState(signIn, undefined);
-  const [audience, setAudience] = useState<Audience>("student");
   const [showPassword, setShowPassword] = useState(false);
-  const student = audience === "student";
 
   const input =
     "mt-2 h-[52px] w-full rounded-xl border border-[#d5dfda] bg-white px-4 text-[15.5px] text-[var(--login-heading)] outline-none transition placeholder:text-[#8a94a3] focus:border-[var(--login-accent)] focus:ring-4 focus:ring-[color-mix(in_srgb,var(--login-accent)_16%,transparent)]";
@@ -36,48 +32,28 @@ export function LoginForm({ content, next = "", preview = false }: { content: Lo
     <form action={preview ? undefined : formAction} className="mt-7" data-login-form>
       <input type="hidden" name="next" value={next} />
 
-      <div role="tablist" aria-label="Who is signing in" className="grid grid-cols-2 gap-1 rounded-2xl bg-[#f1f4f3] p-1.5">
-        {(["student", "staff"] as const).map((key) => {
-          const selected = audience === key;
-          return (
-            <button
-              key={key}
-              type="button"
-              role="tab"
-              aria-selected={selected}
-              data-full-width
-              data-login-tab={key}
-              onClick={() => setAudience(key)}
-              className={`rounded-xl py-3 text-[15.5px] font-semibold transition-all duration-200 ${
-                selected
-                  ? "bg-white text-[var(--login-heading)] shadow-[0_1px_2px_rgb(16_24_40/0.06),0_4px_12px_-4px_rgb(16_24_40/0.12)]"
-                  : "text-[#56627a] hover:text-[var(--login-heading)]"
-              }`}
-            >
-              {key === "student" ? content.studentTab : content.staffTab}
-            </button>
-          );
-        })}
-      </div>
-
-      <label htmlFor="login-identifier" className="mt-6 block text-[15px] font-semibold text-[var(--login-heading)]">
-        {student ? "Student ID or email" : "Email"}
+      <label htmlFor="login-identifier" className="block text-[15px] font-semibold text-[var(--login-heading)]">
+        Email or Student ID
       </label>
       {/* Named "email" whatever it holds — password managers and the checks
-          look for that — and a text field on the Student tab, because a
-          Student ID is not an email address and the browser would refuse it. */}
+          look for that — and a text field, because a Student ID is not an
+          email address and the browser would refuse it. */}
       <input
         id="login-identifier"
         name="email"
-        type={student ? "text" : "email"}
+        type="text"
         inputMode="email"
         autoCapitalize="none"
         spellCheck={false}
         required
-        autoComplete={student ? "username" : "email"}
-        placeholder={student ? "Your student ID or email" : "Your work email"}
+        autoComplete="username"
+        placeholder="Your email or Student ID"
+        aria-describedby="login-identifier-hint"
         className={input}
       />
+      <p id="login-identifier-hint" className="mt-2 text-[13px] text-[#6b7686]" data-login-identifier-hint>
+        Students can sign in with their Student ID too.
+      </p>
 
       <div className="mt-5 flex items-baseline justify-between gap-3">
         <label htmlFor="login-password" className="text-[15px] font-semibold text-[var(--login-heading)]">

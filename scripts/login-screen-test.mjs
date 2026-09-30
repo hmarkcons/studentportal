@@ -20,7 +20,8 @@ test("nothing stored is the reference design", () => {
   assert.deepEqual(readLoginScreen({}), LOGIN_SCREEN_DEFAULTS);
   assert.deepEqual(readLoginScreen(null), LOGIN_SCREEN_DEFAULTS);
   assert.equal(LOGIN_SCREEN_DEFAULTS.headline, "Your Future Goes Beyond Borders");
-  assert.equal(LOGIN_SCREEN_DEFAULTS.staffTab, "Counsellor");
+  // One form for everyone now: there are no tabs to name.
+  assert.ok(!("staffTab" in LOGIN_SCREEN_DEFAULTS) && !("studentTab" in LOGIN_SCREEN_DEFAULTS));
   assert.equal(LOGIN_SCREEN_DEFAULTS.accentColor, "#0b7a52");
 });
 

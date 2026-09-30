@@ -96,10 +96,13 @@ try {
     const text = await page.locator("[data-login-screen]").innerText();
     const headline = (await page.locator("[data-login-headline]").innerText()).trim();
     ok("the login page shows the headline", headline === (original.content.headline ?? "Your Future Goes Beyond Borders"), headline);
-    ok("...the greeting and both tabs",
-      (await page.locator("[data-login-welcome]").innerText()).trim() === (original.content.welcomeTitle ?? "Welcome back")
-      && (await page.locator('[data-login-tab="student"]').innerText()).trim() === (original.content.studentTab ?? "Student")
-      && (await page.locator('[data-login-tab="staff"]').innerText()).trim() === (original.content.staffTab ?? "Counsellor"));
+    ok("...the greeting",
+      (await page.locator("[data-login-welcome]").innerText()).trim() === (original.content.welcomeTitle ?? "Welcome back"));
+    ok("...and one sign-in for everyone: no tabs, one field for an email or a Student ID",
+      (await page.locator('[role="tablist"], [data-login-tab]').count()) === 0
+        && (await page.locator('[data-login-form] input[name="email"]').count()) === 1
+        && (await page.locator('label[for="login-identifier"]').innerText()).trim() === "Email or Student ID"
+        && (await page.locator('input[name="email"]').getAttribute("type")) === "text");
     const pictureWidth = await page.locator("[data-login-picture]").evaluate((img) => img.decode().then(() => img.naturalWidth, () => 0));
     ok("...and the picture loads", pictureWidth > 0, String(pictureWidth));
     const forgot = await page.locator("[data-forgot-password]").getAttribute("href");
@@ -244,12 +247,11 @@ try {
   portalUserId = made.user.id;
   await admin.from("leads").update({ auth_user_id: portalUserId, portal_active: true }).eq("id", studentId);
 
-  const attempt = async ({ identifier, password = FIXTURE_PASSWORD, keep = false, tab = "student" }) => {
+  const attempt = async ({ identifier, password = FIXTURE_PASSWORD, keep = false }) => {
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const page = await context.newPage();
     await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
     await hydrated(page, 'input[name="email"]');
-    if (tab === "staff") await page.locator('[data-login-tab="staff"]').click();
     await page.fill('input[name="email"]', identifier);
     await page.fill('input[name="password"]', password);
     if (keep) await page.locator("[data-keep-signed-in]").check();
@@ -281,8 +283,8 @@ try {
     await unknown.context.close();
   }
 
-  const staffIn = await attempt({ identifier: counselor.email, tab: "staff" });
-  ok("a staff member signs in by email on the Counsellor tab", staffIn.left, staffIn.error ?? "");
+  const staffIn = await attempt({ identifier: counselor.email });
+  ok("a staff member signs in by email on the same form", staffIn.left, staffIn.error ?? "");
   await staffIn.context.close();
 } catch (e) {
   ok(`the check itself stopped: ${e?.stack ?? e}`, false);
