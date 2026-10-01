@@ -61,7 +61,8 @@ function RequestRow({ request, canManage }: { request: Request; canManage: boole
   }
 
   return (
-    <div className="py-2 text-sm">
+    // The request's own address, which Waiting on you links to (#request-<id>).
+    <div id={`request-${request.id}`} className="waiting-target py-2 text-sm">
       <div className="flex items-start justify-between gap-3">
         <span className="min-w-0">
           <span className="text-ink">

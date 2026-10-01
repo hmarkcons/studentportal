@@ -72,7 +72,8 @@ function TaskRowView({ task, revalidateTo }: { task: TaskRow; revalidateTo: stri
   }
 
   return (
-    <div>
+    // The task's own address, which Waiting on you links to (#task-<id>).
+    <div id={`task-${task.id}`} className="waiting-target">
       {/* Wraps: description + priority + due date + edit/delete exceed a
           320px row, which pushed the delete button off-screen. */}
       <div className="flex flex-wrap items-center gap-2 text-sm">

@@ -16,10 +16,11 @@ function one<T>(v: T | T[] | null) {
 
 export default async function StudentDocumentsTab(props: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ cycle?: string }>;
+  searchParams: Promise<{ cycle?: string; doc?: string }>;
 }) {
   const { id } = await props.params;
-  const { cycle: cycleParam } = await props.searchParams;
+  // doc: the document Waiting on you was opened for, picked out on the page.
+  const { cycle: cycleParam, doc: focusDocId } = await props.searchParams;
   const supabase = await createClient();
 
   // One wave for everything but the documents themselves, which are read once
@@ -152,6 +153,7 @@ export default async function StudentDocumentsTab(props: {
           sections={sections}
           canManage={canManage && !isPreviousIntake}
           guides={guides}
+          focusDocId={typeof focusDocId === "string" ? focusDocId : null}
         />
       </Card>
     </>

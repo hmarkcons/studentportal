@@ -1,123 +1,66 @@
 import Link from "next/link";
 import { AlarmClock, ArrowRight, CalendarClock, CircleCheck, CreditCard, FileSearch, FileText, Headset, MessageSquare, Package, type LucideIcon } from "lucide-react";
 import { Card } from "@/components/ui/Card";
-import type { StaffQueue, NamedStudent } from "@/lib/staffQueue";
+import type { StaffQueue } from "@/lib/staffQueue";
+import { WAITING_KINDS, countLine, sortItems, type WaitingItem, type WaitingKind } from "@/lib/waitingItems";
 
 // The work waiting on whoever is looking. Only true rows render — a dashboard
 // listing "0 tickets waiting" is a dashboard people stop reading.
 //
-// Rows that point at a specific student name them and link straight to the
-// right tab, because "3 agreements to verify" still leaves you hunting.
+// Each line names its first few items — whose, and what — and each opens
+// exactly where it is dealt with: a document on the student's Documents tab,
+// picked out; a task at its row; a ticket in its thread. "3 documents to
+// review" on its own still left the reader hunting through every student.
+// Everything is on /waiting, which each line opens at its own kind.
 
-type Row = { href: string; icon: LucideIcon; text: string; detail?: string; urgent?: boolean; students?: NamedStudent[] };
+export const KIND_ICON: Record<WaitingKind, LucideIcon> = {
+  deadline: AlarmClock,
+  agreement: FileText,
+  ticket: Headset,
+  message: MessageSquare,
+  task: CalendarClock,
+  document: FileSearch,
+  inventory: Package,
+  instalment: CreditCard,
+};
 
-function studentList(students: NamedStudent[], tab: string) {
-  // Three is enough to act on without turning the dashboard into a list page.
-  const shown = students.slice(0, 3);
+/** Shown under its line: enough to act on without turning the dashboard into the list page. */
+const SHOWN = 3;
+
+/** How an item reads in a short list: whose, then what — the student alone where "what" says nothing more. */
+export function itemLabel(item: WaitingItem): string {
+  if (item.kind === "message") return item.studentName ?? item.title;
+  if (!item.studentName) return item.title;
+  return `${item.studentName} — ${item.title}`;
+}
+
+/**
+ * A link to where an item is dealt with. A document goes through
+ * /waiting/open, a route that marks it seen before landing on it, so it is a
+ * plain link — the router would otherwise try to render the route as a page.
+ */
+export function ItemLink({ item, className, children }: { item: WaitingItem; className?: string; children: React.ReactNode }) {
+  const data = { "data-waiting-item": `${item.kind}:${item.id}` };
+  if (item.kind === "document") {
+    return (
+      <a href={item.href} className={className} {...data}>
+        {children}
+      </a>
+    );
+  }
   return (
-    <span className="mt-0.5 block text-xs text-muted">
-      {shown.map((s, i) => (
-        <span key={s.id}>
-          {i > 0 && ", "}
-          <Link prefetch={false} href={`/students/${s.id}${tab}`} className="text-primary hover:underline">
-            {s.name}
-          </Link>
-        </span>
-      ))}
-      {students.length > shown.length && ` and ${students.length - shown.length} more`}
-    </span>
+    <Link prefetch={false} href={item.href} className={className} {...data}>
+      {children}
+    </Link>
   );
 }
 
 export function StaffQueueCard({ queue }: { queue: StaffQueue }) {
-  const rows: Row[] = [];
+  const lines = WAITING_KINDS.map((k) => ({ kind: k.kind, items: sortItems(queue.items.filter((i) => i.kind === k.kind)) })).filter(
+    (l) => l.items.length > 0
+  );
 
-  // First, and marked urgent: a missed application deadline cannot be
-  // recovered by working faster tomorrow.
-  if (queue.upcomingDeadlines.length > 0) {
-    const soonest = queue.upcomingDeadlines[0];
-    rows.push({
-      href: "/calendar",
-      icon: AlarmClock,
-      text:
-        queue.upcomingDeadlines.length === 1
-          ? `${soonest.label} for ${soonest.studentName} — ${soonest.urgency}`
-          : `${queue.upcomingDeadlines.length} application deadlines in the next fortnight — next ${soonest.urgency}`,
-      detail: queue.upcomingDeadlines
-        .slice(0, 3)
-        .map((d) => `${d.studentName}: ${d.label} (${d.urgency})`)
-        .join(" · "),
-      urgent: true,
-    });
-  }
-
-  if (queue.agreementsToVerify.length > 0) {
-    rows.push({
-      href: `/students/${queue.agreementsToVerify[0].id}`,
-      icon: FileText,
-      text: `${queue.agreementsToVerify.length} agreement${queue.agreementsToVerify.length === 1 ? "" : "s"} to verify`,
-      // A student who has done their part is blocked until someone signs it
-      // off, which is why this sits at the top.
-      urgent: true,
-      students: queue.agreementsToVerify,
-    });
-  }
-
-  if (queue.ticketsWaiting > 0) {
-    rows.push({
-      href: "/support",
-      icon: Headset,
-      text: `${queue.ticketsWaiting} support ${queue.ticketsWaiting === 1 ? "ticket" : "tickets"} waiting on a reply`,
-      urgent: true,
-    });
-  }
-
-  if (queue.unreadFrom.length > 0) {
-    rows.push({
-      href: `/students/${queue.unreadFrom[0].id}/communication`,
-      icon: MessageSquare,
-      text: `${queue.unreadFrom.length} student${queue.unreadFrom.length === 1 ? "" : "s"} awaiting a reply`,
-      students: queue.unreadFrom,
-    });
-  }
-
-  if (queue.overdueTasks > 0) {
-    rows.push({
-      href: "/calendar",
-      icon: CalendarClock,
-      text: `${queue.overdueTasks} task${queue.overdueTasks === 1 ? "" : "s"} past their due date`,
-      urgent: true,
-    });
-  }
-
-  if (queue.documentsToReview > 0) {
-    rows.push({
-      href: "/students",
-      icon: FileSearch,
-      text: `${queue.documentsToReview} document${queue.documentsToReview === 1 ? "" : "s"} to review`,
-      detail: "Submitted by students and not yet accepted or sent back",
-    });
-  }
-
-  if (queue.inventoryRequestsPending > 0) {
-    rows.push({
-      href: "/inventory",
-      icon: Package,
-      text: `${queue.inventoryRequestsPending} inventory request${queue.inventoryRequestsPending === 1 ? "" : "s"} awaiting a decision`,
-      detail: "Fulfil or turn down — a rejection needs a reason the requester can act on",
-    });
-  }
-
-  if (queue.overdueInstalments > 0) {
-    rows.push({
-      href: "/finance/consultancy-fee",
-      icon: CreditCard,
-      text: `${queue.overdueInstalments} instalment${queue.overdueInstalments === 1 ? "" : "s"} overdue`,
-      urgent: true,
-    });
-  }
-
-  if (rows.length === 0) {
+  if (lines.length === 0) {
     return (
       <Card className="mb-6">
         <div data-queue-empty className="flex items-start gap-3">
@@ -138,31 +81,68 @@ export function StaffQueueCard({ queue }: { queue: StaffQueue }) {
 
   return (
     <Card className="mb-6">
-      <h3 className="mb-3 text-sm font-medium text-ink">Waiting on you</h3>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h3 className="text-sm font-medium text-ink">Waiting on you</h3>
+        <Link prefetch={false} href="/waiting" className="text-xs font-medium text-primary hover:underline" data-waiting-all>
+          See everything ({queue.items.length})
+        </Link>
+      </div>
       <div className="flex flex-col divide-y divide-border">
-        {rows.map((r) => (
-          <div key={r.text} className="py-2.5">
-            <div className="flex items-start justify-between gap-3">
-              <span className="flex min-w-0 items-start gap-2.5">
-                <r.icon aria-hidden className={`mt-0.5 h-4 w-4 shrink-0 ${r.urgent ? "text-warning" : "text-muted"}`} />
-                <span className="min-w-0">
-                  <Link
-                    prefetch={false}
-                    href={r.href}
-                    className={`block text-sm hover:underline ${r.urgent ? "font-medium text-warning" : "text-ink"}`}
-                  >
-                    {r.text}
-                  </Link>
-                  {r.detail && <span className="block text-xs text-muted">{r.detail}</span>}
-                  {r.students && studentList(r.students, r.icon === MessageSquare ? "/communication" : "")}
-                </span>
-              </span>
-              <Link prefetch={false} href={r.href} aria-hidden tabIndex={-1} className="shrink-0 text-muted hover:text-ink">
-                <ArrowRight className="h-4 w-4" />
-              </Link>
+        {lines.map(({ kind, items }) => {
+          const Icon = KIND_ICON[kind];
+          const urgent = items.some((i) => i.urgent);
+          const href = `/waiting?kind=${kind}`;
+          const shown = items.slice(0, SHOWN);
+          return (
+            <div key={kind} className="py-2.5" data-waiting-line={kind}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 flex-1 items-start gap-2.5">
+                  <Icon aria-hidden className={`mt-0.5 h-4 w-4 shrink-0 ${urgent ? "text-warning" : "text-muted"}`} />
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      prefetch={false}
+                      href={href}
+                      className={`block text-sm hover:underline ${urgent ? "font-medium text-warning" : "text-ink"}`}
+                    >
+                      {countLine(kind, items.length)}
+                    </Link>
+                    {/* One item a line — whose, what, how long — so a list of
+                        three reads as three things to do, not one paragraph. */}
+                    <ul className="mt-1 flex flex-col gap-0.5 text-xs">
+                      {shown.map((item) => (
+                        <li key={item.id} className="flex min-w-0 items-baseline gap-3">
+                          <ItemLink item={item} className="min-w-0 flex-1 truncate text-primary hover:underline">
+                            {item.studentName && item.kind !== "message" ? (
+                              <>
+                                <span className="font-medium">{item.studentName}</span> — {item.title}
+                              </>
+                            ) : (
+                              itemLabel(item)
+                            )}
+                          </ItemLink>
+                          <span className="hidden shrink-0 text-muted sm:inline">
+                            {item.opened ? `opened by ${item.opened.by}` : item.detail}
+                          </span>
+                        </li>
+                      ))}
+                      {items.length > shown.length && (
+                        <li className="text-muted">
+                          and {items.length - shown.length} more ·{" "}
+                          <Link prefetch={false} href={href} className="font-medium text-primary hover:underline">
+                            See all
+                          </Link>
+                        </li>
+                      )}
+                    </ul>
+                  </div>
+                </div>
+                <Link prefetch={false} href={href} aria-hidden tabIndex={-1} className="shrink-0 text-muted hover:text-ink">
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </Card>
   );

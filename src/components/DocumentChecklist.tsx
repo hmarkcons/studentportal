@@ -48,10 +48,13 @@ function UploadRow({
   number,
   canManage,
   guide = null,
+  focused = false,
 }: {
   doc: DocRow;
   /** The guide the student reads for it (0300) — the same words, to talk them through. */
   guide?: ResolvedGuide | null;
+  /** The document Waiting on you was opened for: picked out, and scrolled to. */
+  focused?: boolean;
   studentId: string;
   revalidateTo: string;
   /** Whether this viewer may delete the requirement (and its file). */
@@ -100,7 +103,12 @@ function UploadRow({
     // Accept/reason/Reject/delete cluster need ~600px between them, and at
     // 768px the sidebar leaves the content column narrower than it is at
     // 767px — so switching at sm overflowed exactly where room is tightest.
-    <div className="flex flex-col gap-2 py-3" data-document-row={doc.id}>
+    <div
+      id={`doc-${doc.id}`}
+      className={`waiting-target flex flex-col gap-2 py-3${focused ? " px-2" : ""}`}
+      data-document-row={doc.id}
+      data-focused={focused || undefined}
+    >
     <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
       <div className="min-w-[180px] flex-1">
         <p className="text-sm text-ink">
@@ -308,8 +316,15 @@ export function DocumentChecklist({
   sections,
   emptySections = "all",
   guides = {},
+  focusDocId = null,
 }: {
   docs: DocRow[];
+  /**
+   * The document somebody came here for — from Waiting on you, which links
+   * ?doc=<id>#doc-<id>. Its section starts open, so the row is on the page to
+   * be scrolled to, and the row is picked out.
+   */
+  focusDocId?: string | null;
   /** Each document's guide by its id (loadDocumentGuides), as the student reads it. */
   guides?: Record<string, ResolvedGuide>;
   studentId: string;
@@ -334,8 +349,18 @@ export function DocumentChecklist({
   sections?: { key: string; label: string }[];
 }) {
   // Collapsed is the default state, so this map holds only the sections
-  // somebody has opened during this visit.
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  // somebody has opened during this visit — and the one holding the document
+  // this visit is for. Worked out from props alone, so the server and the
+  // browser start from the same page.
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
+    const focus = focusDocId ? docs.find((d) => d.id === focusDocId) : null;
+    if (!focus) return {};
+    // The same rule the grouping below uses: a category no section carries is
+    // listed under "other".
+    const keys: string[] = sections && sections.length > 0 ? sections.map((s) => s.key) : CATEGORY_ORDER.map(String);
+    const section = sectionOfCategory(focus.category);
+    return { [focus.category && keys.includes(section) ? section : "other"]: true };
+  });
 
   const grouped = new Map<string, DocRow[]>();
   for (const doc of docs) {
@@ -425,6 +450,7 @@ export function DocumentChecklist({
                         number={`${n}.${j + 1}`}
                         canManage={canManage}
                         guide={guides[doc.id] ?? null}
+                        focused={doc.id === focusDocId}
                       />
                     ))}
                     {section.docs.length === 0 && (

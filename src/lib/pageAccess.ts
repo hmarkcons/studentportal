@@ -10,6 +10,9 @@
 // Not listed, deliberately:
 //   /dashboard       where everyone lands after signing in — gating it could
 //                    lock someone out of the portal altogether;
+//   /waiting         the dashboard's Waiting on you, in full: it lists only
+//                    what the viewer can see and whose job it is (RLS, then
+//                    queueScope), so a role with nothing waiting finds it empty;
 //   /my-leave        everyone's own leave;
 //   /my-agreement    their own agreement, offered only when they have one;
 //   /admin/staff     everyone's: the Super Admin manages every record there,

@@ -72,6 +72,10 @@ function generatedAgreementFilename(studentName: string | undefined | null, dest
 
 export default async function StudentDashboardPage(props: PageProps<"/students/[id]">) {
   const { id } = await props.params;
+  // ?open=agreement / ?open=invoice: a section somebody was sent to — from
+  // Waiting on you — starts open instead of folded away.
+  const { open: openParam } = await props.searchParams;
+  const openSection = typeof openParam === "string" ? openParam : null;
   const { supabase, staff: viewerStaff } = await getStaffSession();
   // A counsellor with no processing role follows a registered student's
   // progress and nothing more — before any of the work below, which builds
@@ -961,6 +965,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         id="agreement"
         title="Agreement"
         className="mt-6"
+        defaultOpen={openSection === "agreement"}
         badge={<Badge tone={agreementSummary.tone}>{agreementSummary.text}</Badge>}
       >
         {canModifyAgreement && (
@@ -1146,6 +1151,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
           id="invoice"
           title="Invoice"
           className="mt-6"
+          defaultOpen={openSection === "invoice"}
           badge={<Badge tone={invoiceSummary.tone}>{invoiceSummary.text}</Badge>}
         >
           {canManageInvoice &&

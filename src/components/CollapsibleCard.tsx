@@ -60,7 +60,9 @@ export function CollapsibleCard({
   const panelId = `section-${id}`;
 
   return (
-    <Card className={className}>
+    // card-<id> is the section's address: a link to ?open=<id>#card-<id> lands
+    // here with the section open (Waiting on you's agreements and instalments).
+    <Card id={`card-${id}`} className={`scroll-mt-24 ${className}`}>
       <div className="flex items-center gap-2">
       <button
         type="button"

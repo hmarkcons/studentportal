@@ -1076,3 +1076,17 @@ body {
     color: #000 !important;
   }
 }
+
+/* Where Waiting on you sends someone (0305): the row they came for — a
+   document, a task, an inventory request — clear of the sticky header and
+   picked out, by its #address or, for a document whose section had to be
+   opened first, by data-focused. */
+.waiting-target {
+  scroll-margin-top: 6rem;
+}
+.waiting-target:target,
+.waiting-target[data-focused] {
+  border-radius: 0.5rem;
+  background: var(--warning-bg);
+  box-shadow: 0 0 0 2px var(--warning);
+}
