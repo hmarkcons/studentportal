@@ -1204,6 +1204,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         id="portal-credentials"
         title="Portal credentials"
         className="mt-6"
+        defaultOpen={openSection === "portal-credentials"}
         badge={
           <Badge tone={existingCredentialTypes.length > 0 ? "success" : "neutral"}>
             {existingCredentialTypes.length > 0
@@ -1212,7 +1213,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
           </Badge>
         }
       >
-        <PortalCredentialsSection studentId={id} existingTypes={existingCredentialTypes} />
+        <PortalCredentialsSection studentId={id} existingTypes={existingCredentialTypes} email={student?.email ?? null} />
       </CollapsibleCard>
 
       <Card className="mt-6">

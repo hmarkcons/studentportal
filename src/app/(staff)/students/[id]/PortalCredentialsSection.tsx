@@ -4,6 +4,8 @@ import { useState } from "react";
 import { CredentialField } from "@/components/CredentialField";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { SendCredentialsBar } from "./SendCredentialsBar";
+import { credentialLabel } from "@/lib/studentCredentials";
 
 const PRESETS = [
   { label: "Gmail", credentialType: "gmail" },
@@ -21,19 +23,31 @@ function slugify(label: string) {
     .replace(/^_|_$/g, "");
 }
 
-export function PortalCredentialsSection({ studentId, existingTypes }: { studentId: string; existingTypes: string[] }) {
+export function PortalCredentialsSection({
+  studentId,
+  existingTypes,
+  email,
+}: {
+  studentId: string;
+  existingTypes: string[];
+  /** Where "Email to student" sends their logins: the address on their record. */
+  email: string | null;
+}) {
   const [extra, setExtra] = useState<{ label: string; credentialType: string }[]>([]);
   const [newLabel, setNewLabel] = useState("");
 
   const shown = new Map<string, string>();
   PRESETS.forEach((p) => shown.set(p.credentialType, p.label));
   existingTypes.forEach((t) => {
-    if (!shown.has(t)) shown.set(t, t.replace(/_/g, " "));
+    // Named as the email and the message name it, so staff see what the student will.
+    if (!shown.has(t)) shown.set(t, credentialLabel(t));
   });
   extra.forEach((e) => shown.set(e.credentialType, e.label));
 
   return (
     <div className="flex flex-col gap-3">
+      {/* Sends every login below, and this portal's own, in one go. */}
+      <SendCredentialsBar studentId={studentId} email={email} />
       {Array.from(shown.entries()).map(([credentialType, label]) => (
         <CredentialField
           key={credentialType}
