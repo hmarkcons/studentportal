@@ -31,7 +31,7 @@ export function ApplicationDetailsForm({
   applicationId: string;
   studentId: string;
   deadline: string | null;
-  application_fee: number | null;
+  application_fee: number | string | null;
   application_fee_currency?: string | null;
   /** What the catalogue says the university charges, for the hint under the fee. */
   universityFee?: FeeRow | null;
@@ -44,7 +44,7 @@ export function ApplicationDetailsForm({
   /** Which of the programme's intake rounds this application is for. */
   roundId: string | null;
   /** Every programme at this application's university, with its intake rounds. */
-  programs: { id: string; name: string; rounds?: ProgramRound[]; application_fee?: number | null; application_fee_currency?: string | null }[];
+  programs: { id: string; name: string; rounds?: ProgramRound[]; application_fee?: number | string | null; application_fee_currency?: string | null }[];
   /**
    * Rounds this student's OTHER applications already occupy, by programme.
    * One application per programme per round (0234), so offering one of these

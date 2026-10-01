@@ -102,8 +102,12 @@ function listCell(values: readonly string[] | null | undefined): string {
  */
 function moneyCell(value: number | string | null | undefined): string {
   if (value === null || value === undefined || value === "") return "";
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? String(parsed) : "";
+  if (typeof value === "number") return Number.isFinite(value) ? String(value) : "";
+  // A fee or a tuition is text (0303): a bare amount as the number it is
+  // ("45.50" as 45.5, which reads back the same), anything else exactly as
+  // stored — "€3,000 per year" keeps its words and its symbol.
+  const text = value.trim();
+  return /^\d+(\.\d+)?$/.test(text) ? String(Number(text)) : text;
 }
 
 function boolCell(value: boolean | null | undefined): string {

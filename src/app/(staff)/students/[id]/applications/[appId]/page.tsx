@@ -108,7 +108,7 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
           .eq("university_id", university.id)
           .order("name")
       : Promise.resolve({
-          data: [] as { id: string; name: string; application_fee: number | null; application_fee_currency: string | null; rounds: ProgramRound[] }[],
+          data: [] as { id: string; name: string; application_fee: number | string | null; application_fee_currency: string | null; rounds: ProgramRound[] }[],
         }),
     university?.id
       ? supabase

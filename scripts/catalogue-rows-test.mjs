@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import {
   parseBool,
   parseDay,
-  parseMoney,
   parseRoundsCell,
   programFromRow,
   resolveDestination,
@@ -14,6 +13,8 @@ import {
   universityFromRow,
   programInsertValues,
   universityInsertValues,
+  parseFeeCell,
+  parseTuitionCell,
 } from "../src/lib/catalogueRows.ts";
 
 const noProblems = () => [];
@@ -44,25 +45,27 @@ test("a word that is neither is not an instruction", () => {
 
 // -------------------------------------------------------------------- money
 
-test("a fee written for a human still parses", () => {
-  assert.equal(parseMoney("3000", noProblems(), "fee"), 3000);
-  assert.equal(parseMoney("€3,000", noProblems(), "fee"), 3000);
-  assert.equal(parseMoney("3 000", noProblems(), "fee"), 3000);
-  assert.equal(parseMoney("3000.50", noProblems(), "fee"), 3000.5);
+// Fees and tuition are text (0303): an amount written for a human is still
+// the amount, and words are words.
+test("a fee written for a human still reads as the amount", () => {
+  assert.equal(parseFeeCell("3000", noProblems(), "fee"), "3000");
+  assert.equal(parseFeeCell("€3,000", noProblems(), "fee"), "3000");
+  assert.equal(parseFeeCell("3 000", noProblems(), "fee"), "3000");
+  assert.equal(parseFeeCell("3000.50", noProblems(), "fee"), "3000.50");
 });
 
 test("an empty fee is null and silent", () => {
   const problems = [];
-  assert.equal(parseMoney("", problems, "fee"), null);
+  assert.equal(parseFeeCell("", problems, "fee"), null);
+  assert.equal(parseTuitionCell("  ", problems, "tuition_fee"), null);
   assert.deepEqual(problems, []);
 });
 
-test("a fee that is not a number is reported, not dropped", () => {
-  // Reading "on request" as nothing looks identical to nobody filling it in.
+test("a fee in words is kept, not reported", () => {
   const problems = [];
-  assert.equal(parseMoney("on request", problems, "tuition_fee"), null);
-  assert.equal(problems.length, 1);
-  assert.match(problems[0], /tuition_fee "on request" is not a number/);
+  assert.equal(parseTuitionCell("on request", problems, "tuition_fee"), "on request");
+  assert.equal(parseFeeCell("Free for EU students", problems, "fee"), "Free for EU students");
+  assert.deepEqual(problems, []);
 });
 
 // --------------------------------------------------------------------- days
@@ -166,7 +169,7 @@ test("a programme row reads its columns", () => {
   assert.equal(program.name, "Computer Science");
   assert.equal(program.level, "bachelors");
   assert.equal(program.interview_required, false);
-  assert.equal(program.tuition_fee, 3000);
+  assert.equal(program.tuition_fee, "3000");
   assert.deepEqual(program.intake_dates, ["Fall", "Spring"]);
 });
 
@@ -326,14 +329,27 @@ test("the combined sheet says whose fee it is; the single sheets need not", () =
   };
   const u = universityFromRow(row, "university_name", []);
   const p = programFromRow(row, "program_name", []);
-  assert.equal(u.application_fee, 30);
+  assert.equal(u.application_fee, "30");
   assert.equal(u.application_fee_currency, "EUR");
-  assert.equal(p.application_fee, 45);
+  assert.equal(p.application_fee, "45");
   assert.equal(p.application_fee_currency, "GBP", "the £ in the fee cell answers the blank currency");
   assert.equal(p.coordinator_email, "ds@unipv.it");
 
-  assert.equal(universityFromRow({ name: "Pavia", application_fee: "25" }, "name", []).application_fee, 25);
-  assert.equal(programFromRow({ name: "Law", level: "bachelors", application_fee: "15" }, "name", []).application_fee, 15);
+  assert.equal(universityFromRow({ name: "Pavia", application_fee: "25" }, "name", []).application_fee, "25");
+  assert.equal(programFromRow({ name: "Law", level: "bachelors", application_fee: "15" }, "name", []).application_fee, "15");
+});
+
+test("a fee or a tuition in words is imported as written, not reported (0303)", () => {
+  const problems = [];
+  const u = universityFromRow({ name: "Pavia", application_fee: "Free for EU students" }, "name", problems);
+  const p = programFromRow({ name: "Law", level: "bachelors", tuition_fee: "€3,000 per year", application_fee: "Waived" }, "name", problems);
+  assert.equal(u.application_fee, "Free for EU students");
+  assert.equal(p.tuition_fee, "€3,000 per year");
+  assert.equal(p.application_fee, "Waived");
+  assert.deepEqual(problems, []);
+  const long = [];
+  programFromRow({ name: "Law", level: "bachelors", tuition_fee: "x".repeat(121) }, "name", long);
+  assert.match(long[0] ?? "", /tuition_fee is longer than 120 characters/);
 });
 
 test("blank fee, currency, coordinator and DSU body say nothing", () => {

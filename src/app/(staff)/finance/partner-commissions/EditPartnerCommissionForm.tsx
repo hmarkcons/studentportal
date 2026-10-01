@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { Pencil } from "lucide-react";
 import { updatePartnerCommission } from "@/lib/actions/finance";
 import { suggestPartnerCommission } from "./AddPartnerCommissionForm";
+import { tuitionPhrase } from "@/lib/applicationFee";
 import { Input, Select } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { PARTNER_COMMISSION_STATUSES, PARTNER_COMMISSION_STATUS_LABELS } from "@/lib/constants";
@@ -24,7 +25,7 @@ type Row = {
   received_date: string | null;
   hmark_bank_account: string | null;
   status: string;
-  tuitionFee: number | null;
+  tuitionFee: number | string | null;
   configuredRatePercent: number | null;
   configuredFixedAmount: number | null;
   configuredRateCurrency: string | null;
@@ -124,7 +125,7 @@ export function EditPartnerCommissionForm({ row }: { row: Row }) {
       </label>
       {suggestion.amount != null && (
         <p className="col-span-full text-[10px] text-muted">
-          Configured rate: {suggestion.fixedAmount != null ? `flat ${suggestion.currency} ${suggestion.fixedAmount}` : `${suggestion.ratePercent}% of ${suggestion.currency} ${row.tuitionFee?.toFixed(2)} tuition`} (
+          Configured rate: {suggestion.fixedAmount != null ? `flat ${suggestion.currency} ${suggestion.fixedAmount}` : tuitionPhrase(suggestion.ratePercent, suggestion.currency, row.tuitionFee)} (
           {suggestion.currency} {suggestion.amount}) —{" "}
           <button type="button" onClick={applySuggestion} className="text-primary hover:underline">
             use this

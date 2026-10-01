@@ -34,7 +34,7 @@ export function AddProgramForm() {
       <Input name="core_field" placeholder="Core field" />
       <Input name="sub_field" placeholder="Sub-field" />
       <Input name="duration" placeholder="Duration" className="w-28" />
-      <Input name="tuition_fee" type="number" step="0.01" placeholder="Tuition fee" className="w-32" />
+      <Input name="tuition_fee" type="text" maxLength={120} placeholder="Tuition, e.g. €3,000 per year" aria-label="Tuition fee" className="w-44" />
       <Input name="language_requirement" placeholder="Language requirement" />
       <ProgramRoundsFields key={roundsKey} />
       <Button type="submit" pending={pending} variant="primary" status={{ state, label: "Programme added." }}>

@@ -41,7 +41,7 @@ export function AddProgramForm({ universityId, defaultCurrency = "EUR" }: { univ
       <Input name="name" placeholder="Program name" required className="min-w-[200px] flex-1" />
       <Input name="core_field" placeholder="Core field" />
       <Input name="sub_field" placeholder="Sub-field" />
-      <Input name="tuition_fee" type="number" step="0.01" placeholder="Tuition fee" className="w-32" />
+      <Input name="tuition_fee" type="text" maxLength={120} placeholder="Tuition, e.g. €3,000 per year" aria-label="Tuition fee" className="w-44" />
       {/* Left blank, the programme charges the university's fee. */}
       <FeeInput compact amount={null} currency={defaultCurrency} />
       <Input name="coordinator_email" type="email" placeholder="Coordinator email" aria-label="Coordinator email" />

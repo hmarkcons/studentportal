@@ -82,7 +82,9 @@ export function ImportCatalogueForm({ destinations }: { destinations: { id: stri
       <p className="mt-1 text-xs text-muted">
         <strong className="text-ink">Application fee:</strong> <code>university_application_fee</code> is what every
         programme there costs to apply to; <code>program_application_fee</code> only where a programme charges
-        something else. A currency left blank follows the destination (<code>€50</code> in the fee cell also says EUR).{" "}
+        something else. A currency left blank follows the destination (<code>€50</code> in the fee cell also says EUR).
+        A fee or a <code>tuition_fee</code> may be words as well as an amount — <code>Free for EU students</code>,{" "}
+        <code>€3,000 per year</code> — and is kept as written.{" "}
         <code>dsu_body</code> is a body from Setup → Scholarship bodies, by name — one that serves that destination;
         any other name is reported and left unchanged. <code>coordinator_email</code> is the programme&rsquo;s
         coordinator.

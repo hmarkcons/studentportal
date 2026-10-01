@@ -101,6 +101,15 @@ the role itself and say so, or it will report work it did not do.
 it.** Pickers use `selectableDestinations(all, keepIds)`; omit `keepIds` on an
 editing form and re-saving silently drops the country the student is going to.
 
+**A fee or a tuition is text, and may be words** (0303). `application_fee` on
+universities, programmes and applications, and `programs.tuition_fee`, hold
+"30" and "Free for EU students" alike. `Number()` of one is NaN for words, and
+NaN shows as "€NaN" or adds up to nothing without an error. Read them through
+`src/lib/applicationFee.ts` — `formatFee` to show one, `plainAmount` to ask
+whether it is only an amount, `firstAmount` for a sum made from one — and write
+them through `parseFeeText` / `parseTuitionText`, so a plain amount is always
+stored one way and a re-import does not see it as changed.
+
 **Pre-Enrolled / University Finalized is found by its key, and the key comes
 from its label.** It is set when a university is finalized and taken off when
 it is un-finalized (`src/lib/finalizedStage.ts`, 0301), keyed `pre_enrolled` /

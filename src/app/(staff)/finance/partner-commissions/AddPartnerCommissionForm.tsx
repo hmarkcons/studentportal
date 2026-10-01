@@ -5,12 +5,14 @@ import { createPartnerCommission } from "@/lib/actions/finance";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { ActionStatus } from "@/components/ActionStatus";
+import { firstAmount, tuitionPhrase } from "@/lib/applicationFee";
 
 export type PartnerApplicationOption = {
   id: string;
   student_id: string;
   universityName: string;
-  tuitionFee: number | null;
+  /** As written (0303): "3000", "€3,000 per year", "Free". */
+  tuitionFee: number | string | null;
   ratePercent: number | null;
   fixedAmount: number | null;
   rateCurrency: string | null;
@@ -26,9 +28,12 @@ export function suggestPartnerCommission(app: PartnerApplicationOption | null) {
   if (app.fixedAmount != null) {
     return { amount: app.fixedAmount, currency: app.rateCurrency, ratePercent: null as number | null, fixedAmount: app.fixedAmount };
   }
-  if (app.ratePercent != null && app.tuitionFee != null) {
+  // Tuition is text now; the rate applies to the first amount written in it,
+  // and "Free" or "On request" suggests nothing.
+  const tuition = firstAmount(app.tuitionFee);
+  if (app.ratePercent != null && tuition != null) {
     return {
-      amount: Math.round(app.tuitionFee * (app.ratePercent / 100) * 100) / 100,
+      amount: Math.round(tuition * (app.ratePercent / 100) * 100) / 100,
       currency: app.rateCurrency,
       ratePercent: app.ratePercent,
       fixedAmount: null as number | null,
@@ -181,7 +186,7 @@ export function AddPartnerCommissionForm({
       </div>
       {suggestion.amount != null && !amountEdited && (
         <p className="text-xs text-muted">
-          Suggested: {suggestion.fixedAmount != null ? `flat ${suggestion.currency} ${suggestion.fixedAmount}` : `${suggestion.ratePercent}% of ${suggestion.currency} ${selectedApplication?.tuitionFee?.toFixed(2)} tuition`} — adjust if needed.
+          Suggested: {suggestion.fixedAmount != null ? `flat ${suggestion.currency} ${suggestion.fixedAmount}` : tuitionPhrase(suggestion.ratePercent, suggestion.currency, selectedApplication?.tuitionFee ?? null)} — adjust if needed.
         </p>
       )}
       {applicationId && suggestion.amount == null && (

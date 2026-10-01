@@ -19,6 +19,11 @@
 //                   or the university's, currency and all — by a trigger, so
 //                   every path that creates one does it; a fee given is kept.
 //                   Its page shows the coordinator and the catalogue's fee.
+//   words (0303)    a fee or a tuition in words — "Free for EU students",
+//                   "€3,000 per year" — is imported, exported, shown and saved
+//                   exactly as written, through the sheet, the programme form
+//                   and the application's own form, and an application copies
+//                   it from its programme.
 //   scholarship     the student's Scholarship tab names the university's DSU
 //                   body. The names are chosen so the old name-matching guess
 //                   finds nothing: the body shows only if the field is read.
@@ -35,7 +40,7 @@ const { ok, finish } = reporter();
 
 const HEADERS = [
   "destination", "university_name", "city", "type", "university_application_fee", "university_application_fee_currency",
-  "dsu_body", "level", "program_name", "program_application_fee", "program_application_fee_currency", "coordinator_email",
+  "dsu_body", "level", "program_name", "tuition_fee", "program_application_fee", "program_application_fee_currency", "coordinator_email",
 ];
 function csv(rows) {
   const escape = (v) => {
@@ -149,6 +154,7 @@ try {
     { ...base, level: "bachelors", program_name: "zztmp Inherits", coordinator_email: "inherits@zztmp.example" },
     { ...base, level: "masters", program_name: "zztmp Own Fee", program_application_fee: "€50", coordinator_email: "own@zztmp.example" },
     { ...base, level: "masters", program_name: "zztmp Bad Email", coordinator_email: "Prof Nobody" },
+    { ...base, level: "phd", program_name: "zztmp Worded Fee", tuition_fee: "€3,000 per year", program_application_fee: "Free for EU students", coordinator_email: "worded@zztmp.example" },
   ]));
   ok("the preview reports the bad coordinator email", /coordinator_email "Prof Nobody" is not an email/.test(shown.text), shown.text.slice(0, 400));
   const applied = await apply(shown.panel);
@@ -159,7 +165,7 @@ try {
   ok("...in the destination's currency, the sheet having left it blank", uni?.application_fee_currency === "GBP", String(uni?.application_fee_currency));
   ok("the DSU body is matched by name, case aside, and stored as the body", uni?.dsu_body_id === feelandBody, String(uni?.dsu_body_id));
   const programmes = async () => {
-    const { data } = await admin.from("programs").select("id, name, application_fee, application_fee_currency, coordinator_email").eq("university_id", uni.id);
+    const { data } = await admin.from("programs").select("id, name, tuition_fee, application_fee, application_fee_currency, coordinator_email").eq("university_id", uni.id);
     return Object.fromEntries((data ?? []).map((p) => [p.name, p]));
   };
   let progs = await programmes();
@@ -168,6 +174,10 @@ try {
   ok("a programme fee of €50 is 50 in EUR, the symbol answering the blank currency",
     Number(progs["zztmp Own Fee"]?.application_fee) === 50 && progs["zztmp Own Fee"]?.application_fee_currency === "EUR", JSON.stringify(progs["zztmp Own Fee"]));
   ok("the bad email was not saved", progs["zztmp Bad Email"] && progs["zztmp Bad Email"].coordinator_email === null, JSON.stringify(progs["zztmp Bad Email"]));
+  ok("a fee and a tuition in words are imported exactly as written",
+    progs["zztmp Worded Fee"]?.application_fee === "Free for EU students" && progs["zztmp Worded Fee"]?.tuition_fee === "€3,000 per year",
+    JSON.stringify(progs["zztmp Worded Fee"]));
+  ok("...and the preview did not call either one \"not a number\"", !/not a number/.test(shown.text), shown.text.slice(0, 400));
 
   // An untouched export must change nothing, with the new columns in it.
   const exported = await page.request.get(`${BASE}/api/export/catalogue?destination=${destinationId}`);
@@ -180,6 +190,10 @@ try {
   ok("the export writes the body by name and the fee with its currency",
     exportCell(2, "dsu_body") === "zztmp DSU Feeland" && exportCell(2, "university_application_fee") === "30" && exportCell(2, "university_application_fee_currency") === "GBP",
     `${exportCell(2, "dsu_body")} ${exportCell(2, "university_application_fee")} ${exportCell(2, "university_application_fee_currency")}`);
+  const wordedExportRow = Array.from({ length: exportSheet.rowCount }, (_, i) => i + 1).find((r) => exportCell(r, "program_name") === "zztmp Worded Fee");
+  ok("...and a fee and a tuition in words exactly as they were written",
+    wordedExportRow !== undefined && exportCell(wordedExportRow, "program_application_fee") === "Free for EU students" && exportCell(wordedExportRow, "tuition_fee") === "€3,000 per year",
+    wordedExportRow === undefined ? "no row" : `${exportCell(wordedExportRow, "program_application_fee")} / ${exportCell(wordedExportRow, "tuition_fee")}`);
   shown = await preview({ name: "export.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: exportBuffer });
   ok("re-importing the untouched export is a no-op", /Nothing to add or change/.test(shown.text), shown.text.slice(0, 300));
 
@@ -262,6 +276,9 @@ try {
   const typed = await insertApp(progs["zztmp Bad Email"].id, { application_fee: 99 });
   ok("a fee given when the application is made is kept, and given a currency",
     Number(typed.application_fee) === 99 && typed.application_fee_currency === "GBP", JSON.stringify(typed));
+  const worded = await insertApp(progs["zztmp Worded Fee"].id);
+  ok("a programme whose fee is words pre-fills the words, with a currency",
+    worded.application_fee === "Free for EU students" && Boolean(worded.application_fee_currency), JSON.stringify(worded));
 
   // ------------------------------------------------------------- the page
   console.log("\n--- the university page ---");
@@ -292,6 +309,10 @@ try {
     /Application fee €35 \(the university's\)/.test(await rowText("zztmp Inherits")), await rowText("zztmp Inherits"));
   ok("a programme with its own fee shows that one", /Application fee €50(?! \()/.test(await rowText("zztmp Own Fee")), await rowText("zztmp Own Fee"));
   ok("...and its coordinator", (await rowText("zztmp Own Fee")).includes("Coordinator own@zztmp.example"));
+  // formatFee would make "€Free…" or NaN of words if it still took every fee for a number.
+  ok("a fee and a tuition in words are shown exactly as written",
+    /Application fee Free for EU students(?! \()/.test(await rowText("zztmp Worded Fee")) && (await rowText("zztmp Worded Fee")).includes("€3,000 per year"),
+    await rowText("zztmp Worded Fee"));
 
   // A programme's own fee, through its edit form.
   const inheritsRow = page.locator("div.py-2", { hasText: "zztmp Inherits" }).first();
@@ -307,6 +328,20 @@ try {
   });
   ok("a programme's edit form saves a fee of its own", Boolean(programSaved));
 
+  // ...and words, in both the fee and the tuition.
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await hydrated(page, 'button[aria-label="Edit program"]');
+  await page.locator("div.py-2", { hasText: "zztmp Worded Fee" }).first().getByRole("button", { name: "Edit program" }).click();
+  const wordedForm = page.locator("form").filter({ has: page.locator('input[name="coordinator_email"][value="worded@zztmp.example"]') }).first();
+  await wordedForm.locator('input[name="tuition_fee"]').fill("On request");
+  await wordedForm.locator('input[name="application_fee"]').fill("€30 (EU) / €50 (non-EU)");
+  await wordedForm.getByRole("button", { name: "Save" }).click();
+  const wordedSaved = await poll(async () => {
+    const p = (await programmes())["zztmp Worded Fee"];
+    return p?.tuition_fee === "On request" && p?.application_fee === "€30 (EU) / €50 (non-EU)" ? p : null;
+  });
+  ok("a programme's edit form saves a fee and a tuition in words", Boolean(wordedSaved), JSON.stringify((await programmes())["zztmp Worded Fee"]));
+
   // ------------------------------------------------------- the application
   console.log("\n--- the application page ---");
   await page.goto(`${BASE}/students/${studentId}/applications/${own.id}`, { waitUntil: "domcontentloaded" });
@@ -316,6 +351,24 @@ try {
   const hint = page.locator("[data-catalogue-fee]");
   ok("...and the catalogue's fee for its programme", (await hint.innerText()).includes("The catalogue says €50."), await hint.innerText());
   ok("...beside the fee it was given", (await page.locator('input[name="application_fee"]').inputValue()) === "50");
+
+  // The application's own fee, in words, through its form.
+  await hydrated(page, 'input[name="application_fee"]');
+  await page.locator('input[name="application_fee"]').fill("Waived for HMARK students");
+  await page.locator("form").filter({ has: page.locator('input[name="application_fee"]') }).getByRole("button", { name: "Save" }).click();
+  const appSaved = await poll(async () => {
+    const { data } = await admin.from("applications").select("application_fee").eq("id", own.id).single();
+    return data?.application_fee === "Waived for HMARK students" ? data : null;
+  });
+  ok("an application's own fee can be words too", Boolean(appSaved));
+
+  // An application whose programme's fee is words: its own fee as copied,
+  // and the catalogue's as it now reads.
+  await page.goto(`${BASE}/students/${studentId}/applications/${worded.id}`, { waitUntil: "domcontentloaded" });
+  await page.locator("[data-catalogue-fee]").waitFor({ timeout: 40000 });
+  const wordedHint = await page.locator("[data-catalogue-fee]").innerText();
+  ok("an application shows a catalogue fee in words as written", wordedHint.includes("The catalogue says €30 (EU) / €50 (non-EU)."), wordedHint);
+  ok("...beside the words it was given", (await page.locator('input[name="application_fee"]').inputValue()) === "Free for EU students");
 
   // -------------------------------------------------------- scholarship tab
   console.log("\n--- the Scholarship tab ---");

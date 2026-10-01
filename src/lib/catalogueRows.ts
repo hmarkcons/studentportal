@@ -14,7 +14,7 @@
 // empty interview_required into `false` would turn every such import into a
 // silent mass edit.
 
-import { parseEmail, parseFeeCurrency } from "./applicationFee.ts";
+import { FEE_TEXT_MAX, parseEmail, parseFeeCurrency, parseFeeText, parseTuitionText } from "./applicationFee.ts";
 
 /** An intake round as a sheet describes it, before it reaches the database. */
 export type CatalogueRound = {
@@ -50,22 +50,28 @@ export function parseBool(value: string | undefined): boolean | null {
 }
 
 /**
- * A money cell, tolerating the way people actually type one.
- *
- * "€3,000" and "3 000" are a number somebody wrote for a human. Something that
- * is not a number at all is reported rather than dropped: a tuition fee read
- * as nothing looks exactly like a tuition fee nobody filled in.
+ * An application fee cell (0303): an amount or words. A plain amount is kept
+ * as the number ("€3,000.00" and "3000" are both "3000", so re-importing an
+ * export changes nothing); words — "Free for EU students" — as written. Blank
+ * says nothing. Longer than a fee could be is reported rather than cut.
  */
-export function parseMoney(value: string | undefined, problems: RowProblem[], label: string): number | null {
-  const raw = (value ?? "").trim();
-  if (raw === "") return null;
-  const cleaned = raw.replace(/[€$£,\s]/g, "");
-  const parsed = Number(cleaned);
-  if (!Number.isFinite(parsed)) {
-    problems.push(`${label} "${raw}" is not a number — left unchanged`);
+export function parseFeeCell(value: string | undefined, problems: RowProblem[], label: string): string | null {
+  const { text } = parseFeeText(value ?? "");
+  if (text && text.length > FEE_TEXT_MAX) {
+    problems.push(`${label} is longer than ${FEE_TEXT_MAX} characters — left unchanged`);
     return null;
   }
-  return parsed;
+  return text;
+}
+
+/** A tuition cell (0303): an amount or words, a symbol kept in the words — tuition has no currency column. */
+export function parseTuitionCell(value: string | undefined, problems: RowProblem[], label: string): string | null {
+  const text = parseTuitionText(value ?? "");
+  if (text && text.length > FEE_TEXT_MAX) {
+    problems.push(`${label} is longer than ${FEE_TEXT_MAX} characters — left unchanged`);
+    return null;
+  }
+  return text;
 }
 
 const MONTH_NAMES = [
@@ -454,7 +460,8 @@ export type UniversityInput = {
   levels_offered: string[];
   fields_offered: string[];
   contact_email: string | null;
-  application_fee: number | null;
+  /** An amount or words (0303). */
+  application_fee: string | null;
   application_fee_currency: string | null;
   /** The body's name as the sheet gives it; resolveDsuBody turns it into one on file. */
   dsu_body: string | null;
@@ -492,7 +499,7 @@ export function universityFromRow(
     levels_offered: splitList(row.levels_offered),
     fields_offered: splitList(row.fields_offered),
     contact_email: parseEmail(row.contact_email, problems, "contact_email"),
-    application_fee: parseMoney(row[feeKey], problems, feeKey),
+    application_fee: parseFeeCell(row[feeKey], problems, feeKey),
     application_fee_currency: parseFeeCurrency(row[currencyKey], row[feeKey], problems, currencyKey),
     dsu_body: (row.dsu_body ?? "").trim() || null,
   };
@@ -550,10 +557,10 @@ export type ProgramInput = {
   application_portal_name: string | null;
   application_portal_link: string | null;
   intake_dates: string[];
-  tuition_fee: number | null;
+  tuition_fee: string | null;
   duration: string | null;
   language_requirement: string | null;
-  application_fee: number | null;
+  application_fee: string | null;
   application_fee_currency: string | null;
   coordinator_email: string | null;
 };
@@ -598,10 +605,10 @@ export function programFromRow(
     application_portal_name: (row.application_portal_name ?? "").trim() || null,
     application_portal_link: (row.application_portal_link ?? "").trim() || null,
     intake_dates: splitList(row.intake_dates),
-    tuition_fee: parseMoney(row.tuition_fee, problems, "tuition_fee"),
+    tuition_fee: parseTuitionCell(row.tuition_fee, problems, "tuition_fee"),
     duration: (row.duration ?? "").trim() || null,
     language_requirement: (row.language_requirement ?? "").trim() || null,
-    application_fee: parseMoney(row[feeKey], problems, feeKey),
+    application_fee: parseFeeCell(row[feeKey], problems, feeKey),
     application_fee_currency: parseFeeCurrency(row[currencyKey], row[feeKey], problems, currencyKey),
     coordinator_email: parseEmail(row.coordinator_email, problems, "coordinator_email"),
   };

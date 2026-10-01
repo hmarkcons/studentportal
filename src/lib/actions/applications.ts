@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { FEE_TEXT_MAX, parseFeeText } from "@/lib/applicationFee";
 import { clearFinalizedStages, syncStudentStages } from "@/lib/autoStagesSync";
 import { refuseFinalizedStageByHand } from "@/lib/finalizedStageGuard";
 import { ensureCurrentCycleId } from "@/lib/ensureCycle";
@@ -203,11 +204,13 @@ export async function unfinalizeApplication(applicationId: string, studentId: st
 export async function updateApplicationDetails(applicationId: string, studentId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
   const deadline = String(formData.get("deadline") ?? "") || null;
-  const application_fee = formData.get("application_fee") ? Number(formData.get("application_fee")) : null;
+  // An amount or words (0303). "€30" typed with a symbol is in euros.
+  const fee = parseFeeText(String(formData.get("application_fee") ?? ""));
+  const application_fee = fee.text;
   // Kept only beside a fee. Blank beside one is filled in by the database
   // from the programme, university or country (0287).
   const application_fee_currency =
-    application_fee === null ? null : String(formData.get("application_fee_currency") ?? "").trim().toUpperCase() || null;
+    application_fee === null ? null : fee.symbolCurrency ?? (String(formData.get("application_fee_currency") ?? "").trim().toUpperCase() || null);
   const special_requirements = String(formData.get("special_requirements") ?? "").trim() || null;
   const intake = String(formData.get("intake") ?? "").trim() || null;
   // Absent means the field was not offered (a finalised application), which is
@@ -219,8 +222,8 @@ export async function updateApplicationDetails(applicationId: string, studentId:
   const roundSubmitted = roundField !== null;
   const round_id = String(roundField ?? "") || null;
 
-  if (application_fee !== null && (!Number.isFinite(application_fee) || application_fee < 0)) {
-    return { error: "An application fee cannot be negative." };
+  if (application_fee !== null && application_fee.length > FEE_TEXT_MAX) {
+    return { error: `Keep the application fee to ${FEE_TEXT_MAX} characters.` };
   }
   if (application_fee_currency && !/^[A-Z]{3}$/.test(application_fee_currency)) {
     return { error: `${application_fee_currency} is not a currency code.` };

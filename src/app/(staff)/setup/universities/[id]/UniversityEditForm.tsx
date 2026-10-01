@@ -18,7 +18,7 @@ type University = {
   type: string;
   status: string;
   contact_email: string | null;
-  application_fee: number | null;
+  application_fee: number | string | null;
   application_fee_currency: string | null;
   dsu_body_id: string | null;
 };

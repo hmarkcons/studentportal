@@ -57,21 +57,28 @@ import {
 } from "@/lib/catalogueSheet";
 import { uploadedFile } from "@/lib/stagedUpload";
 import { importIntent as previewOrApply } from "@/lib/importIntent";
-import { FEE_CURRENCIES } from "@/lib/applicationFee";
+import { FEE_CURRENCIES, FEE_TEXT_MAX, parseFeeText, parseTuitionText } from "@/lib/applicationFee";
 
 /**
- * An application fee and its currency from an edit form. A blank amount
- * clears the fee; a currency is kept only beside an amount, and one left on
- * "the destination's" is filled in by the database (0287).
+ * An application fee and its currency from an edit form: an amount or words
+ * (0303). A blank fee clears it; a currency is kept only beside a fee, and one
+ * left on "the destination's" is filled in by the database (0287). "€30"
+ * typed with a symbol is €30 whatever the picker says.
  */
-function feeFromForm(formData: FormData): { application_fee: number | null; application_fee_currency: string | null } | { error: string } {
-  const raw = String(formData.get("application_fee") ?? "").trim();
-  if (raw === "") return { application_fee: null, application_fee_currency: null };
-  const amount = Number(raw);
-  if (!Number.isFinite(amount) || amount < 0) return { error: "The application fee must be a number, zero or more." };
-  const currency = String(formData.get("application_fee_currency") ?? "").trim().toUpperCase() || null;
+function feeFromForm(formData: FormData): { application_fee: string | null; application_fee_currency: string | null } | { error: string } {
+  const { text, symbolCurrency } = parseFeeText(String(formData.get("application_fee") ?? ""));
+  if (text === null) return { application_fee: null, application_fee_currency: null };
+  if (text.length > FEE_TEXT_MAX) return { error: `Keep the application fee to ${FEE_TEXT_MAX} characters.` };
+  const currency = symbolCurrency ?? (String(formData.get("application_fee_currency") ?? "").trim().toUpperCase() || null);
   if (currency && !(FEE_CURRENCIES as readonly string[]).includes(currency)) return { error: `${currency} is not a currency the portal knows.` };
-  return { application_fee: Math.round(amount * 100) / 100, application_fee_currency: currency };
+  return { application_fee: text, application_fee_currency: currency };
+}
+
+/** A programme's tuition from a form: an amount or words (0303); blank is none. */
+function tuitionFromForm(formData: FormData): { tuition_fee: string | null } | { error: string } {
+  const tuition_fee = parseTuitionText(String(formData.get("tuition_fee") ?? ""));
+  if (tuition_fee && tuition_fee.length > FEE_TEXT_MAX) return { error: `Keep the tuition fee to ${FEE_TEXT_MAX} characters.` };
+  return { tuition_fee };
 }
 
 /** The same rule the database holds programs.coordinator_email to (0287). */
@@ -194,7 +201,9 @@ export async function updateProgram(programId: string, universityId: string, _pr
   const name = String(formData.get("name") ?? "").trim();
   const core_field = String(formData.get("core_field") ?? "").trim() || null;
   const sub_field = String(formData.get("sub_field") ?? "").trim() || null;
-  const tuition_fee = formData.get("tuition_fee") ? Number(formData.get("tuition_fee")) : null;
+  const tuition = tuitionFromForm(formData);
+  if ("error" in tuition) return { error: tuition.error };
+  const { tuition_fee } = tuition;
   const duration = String(formData.get("duration") ?? "").trim() || null;
   const language_requirement = String(formData.get("language_requirement") ?? "").trim() || null;
   const coordinator_email = String(formData.get("coordinator_email") ?? "").trim() || null;
@@ -277,7 +286,9 @@ export async function addProgram(universityId: string, _prevState: unknown, form
   const name = String(formData.get("name") ?? "").trim();
   const core_field = String(formData.get("core_field") ?? "").trim() || null;
   const sub_field = String(formData.get("sub_field") ?? "").trim() || null;
-  const tuition_fee = formData.get("tuition_fee") ? Number(formData.get("tuition_fee")) : null;
+  const tuition = tuitionFromForm(formData);
+  if ("error" in tuition) return { error: tuition.error };
+  const { tuition_fee } = tuition;
   const coordinator_email = String(formData.get("coordinator_email") ?? "").trim() || null;
 
   if (!level || !name) return { error: "Level and name are required." };

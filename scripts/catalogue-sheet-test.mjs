@@ -131,7 +131,7 @@ test("an exported row parses back into exactly what was exported", () => {
   assert.equal(backProgram.name, programme.name);
   assert.equal(backProgram.core_field, programme.core_field);
   assert.equal(backProgram.sub_field, programme.sub_field);
-  assert.equal(backProgram.tuition_fee, 3000);
+  assert.equal(backProgram.tuition_fee, "3000");
   assert.equal(backProgram.duration, programme.duration);
   assert.equal(backProgram.language_requirement, programme.language_requirement);
   assert.deepEqual(backProgram.intake_dates, programme.intake_dates);
@@ -200,6 +200,19 @@ test("a row built without a destination leaves the cell blank for the form's fal
 
 // ------------------------------- application fee, coordinator, DSU body (0287)
 
+test("a fee and a tuition in words go out and come back as written (0303)", () => {
+  const worded = { ...university, application_fee: "Free for EU students", application_fee_currency: "EUR" };
+  const own = { ...programme, tuition_fee: "€3,000 per year", application_fee: "€30 (EU) / €50 (non-EU)", application_fee_currency: "EUR" };
+  const [row] = catalogueRowsForUniversity(worded, [{ program: own, rounds: [] }]);
+  assert.equal(row.university_application_fee, "Free for EU students");
+  assert.equal(row.tuition_fee, "€3,000 per year");
+  assert.equal(row.program_application_fee, "€30 (EU) / €50 (non-EU)");
+  assert.equal(universityFromRow(row, "university_name", []).application_fee, "Free for EU students");
+  const p = programFromRow(row, "program_name", []);
+  assert.equal(p.tuition_fee, "€3,000 per year");
+  assert.equal(p.application_fee, "€30 (EU) / €50 (non-EU)");
+});
+
 test("the new columns round-trip: an untouched export changes nothing", () => {
   const withFees = { ...university, application_fee: "30.00", application_fee_currency: "EUR", dsu_body: "EDiSU Pavia" };
   const own = { ...programme, application_fee: "45.50", application_fee_currency: "GBP", coordinator_email: "ce@unipv.it" };
@@ -212,11 +225,11 @@ test("the new columns round-trip: an untouched export changes nothing", () => {
   assert.equal(row.coordinator_email, "ce@unipv.it");
 
   const u = universityFromRow(row, "university_name", []);
-  assert.equal(u.application_fee, 30);
+  assert.equal(u.application_fee, "30");
   assert.equal(u.application_fee_currency, "EUR");
   assert.equal(u.dsu_body, "EDiSU Pavia");
   const p = programFromRow(row, "program_name", []);
-  assert.equal(p.application_fee, 45.5);
+  assert.equal(p.application_fee, "45.50");
   assert.equal(p.application_fee_currency, "GBP");
   assert.equal(p.coordinator_email, "ce@unipv.it");
 });

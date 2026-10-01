@@ -97,7 +97,7 @@ export function NewUniversityForm({ destinations, bodies }: { destinations: NewU
       <div className="flex flex-col gap-1 text-xs text-muted">
         <span>Application fee</span>
         <span className="flex items-center gap-1">
-          <Input name="application_fee" type="number" step="0.01" min="0" placeholder="None" aria-label="Application fee" className="min-w-0 flex-1" />
+          <Input name="application_fee" type="text" maxLength={120} placeholder="e.g. 30, or Free for EU students" aria-label="Application fee" className="min-w-0 flex-1" />
           <Select
             name="application_fee_currency"
             value={shownCurrency}

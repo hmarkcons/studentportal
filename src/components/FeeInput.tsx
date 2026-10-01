@@ -1,9 +1,13 @@
 import { Input, Select } from "@/components/ui/Input";
-import { FEE_CURRENCIES } from "@/lib/applicationFee";
+import { FEE_CURRENCIES, FEE_TEXT_MAX } from "@/lib/applicationFee";
 
 /**
- * An application fee: the amount, and the currency it is charged in, posted
- * as application_fee and application_fee_currency.
+ * An application fee: an amount or words, and the currency an amount is
+ * charged in, posted as application_fee and application_fee_currency.
+ *
+ * Text, not a number field (0303): "30" is shown as €30 in the currency
+ * picked; "Free for EU students" or "€30 (EU) / €50 (non-EU)" is shown exactly
+ * as typed, and the currency then says nothing.
  *
  * `currency` is what the picker starts on — the saved one, or else whatever
  * the fee would be in (the university's, the country's). A saved currency the
@@ -27,13 +31,12 @@ export function FeeInput({
     <span className="flex w-full items-center gap-1">
       <Input
         name="application_fee"
-        type="number"
-        step="0.01"
-        min="0"
+        type="text"
+        maxLength={FEE_TEXT_MAX}
         defaultValue={amount ?? ""}
         // On a programme, blank means the university's fee — and the inline
         // programme forms have no labels, so the placeholder has to say so.
-        placeholder={compact ? "Application fee — blank charges the university's" : "None"}
+        placeholder={compact ? "Application fee — blank charges the university's" : "e.g. 30, or Free for EU students"}
         aria-label="Application fee"
         className="min-w-0 flex-1"
       />

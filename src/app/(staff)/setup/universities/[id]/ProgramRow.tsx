@@ -22,10 +22,10 @@ export type ProgramRowData = {
   name: string;
   core_field: string | null;
   sub_field: string | null;
-  tuition_fee: number | null;
+  tuition_fee: number | string | null;
   duration: string | null;
   language_requirement: string | null;
-  application_fee: number | null;
+  application_fee: number | string | null;
   application_fee_currency: string | null;
   coordinator_email: string | null;
   rounds: ProgramRound[];
@@ -203,7 +203,7 @@ export function ProgramRow({
       <Input name="core_field" defaultValue={program.core_field ?? ""} placeholder="Core field" />
       <Input name="sub_field" defaultValue={program.sub_field ?? ""} placeholder="Sub-field" />
       <Input name="duration" defaultValue={program.duration ?? ""} placeholder="Duration" className="w-24" />
-      <Input name="tuition_fee" type="number" step="0.01" defaultValue={program.tuition_fee ?? ""} placeholder="Tuition fee" aria-label="Tuition fee" className="w-28" />
+      <Input name="tuition_fee" type="text" maxLength={120} defaultValue={program.tuition_fee ?? ""} placeholder="Tuition, e.g. €3,000 per year" aria-label="Tuition fee" className="w-44" />
       <Input name="language_requirement" defaultValue={program.language_requirement ?? ""} placeholder="Language req." />
       {/* Blank: the programme charges the university's fee. */}
       <FeeInput

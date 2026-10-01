@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { FEE_TEXT_MAX, parseTuitionText } from "@/lib/applicationFee";
 import { syncStagesForApplication } from "@/lib/autoStagesSync";
 import { refuseFinalizedStageByHand } from "@/lib/finalizedStageGuard";
 import { sanitizeFilename, validateDocumentFile } from "@/lib/documentUpload";
@@ -170,7 +171,9 @@ export async function partnerAddProgram(_prevState: unknown, formData: FormData)
   const name = String(formData.get("name") ?? "").trim();
   const core_field = String(formData.get("core_field") ?? "").trim() || null;
   const sub_field = String(formData.get("sub_field") ?? "").trim() || null;
-  const tuition_fee = formData.get("tuition_fee") ? Number(formData.get("tuition_fee")) : null;
+  // An amount or words ("€3,000 per year", "Free") — see parseTuitionText.
+  const tuition_fee = parseTuitionText(String(formData.get("tuition_fee") ?? ""));
+  if (tuition_fee && tuition_fee.length > FEE_TEXT_MAX) return { error: `Keep the tuition fee to ${FEE_TEXT_MAX} characters.` };
   const duration = String(formData.get("duration") ?? "").trim() || null;
   const language_requirement = String(formData.get("language_requirement") ?? "").trim() || null;
 

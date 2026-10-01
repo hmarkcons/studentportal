@@ -41,7 +41,7 @@ export default async function PartnerCommissionsPage() {
     );
   const rows = (rowsRaw ?? []).map((r) => {
     const app = one(r.application);
-    const program = app ? (one(app.program as never) as { tuition_fee: number | null; rate: unknown } | null) : null;
+    const program = app ? (one(app.program as never) as { tuition_fee: number | string | null; rate: unknown } | null) : null;
     const configuredRate = program ? (one(program.rate as never) as { rate_percent: number | null; fixed_amount: number | null; currency: string } | null) : null;
     return {
       ...r,
@@ -67,7 +67,7 @@ export default async function PartnerCommissionsPage() {
     )
     .order("created_at", { ascending: false });
   const applications = (rawApplications ?? []).map((a) => {
-    const program = one(a.program as never) as { tuition_fee: number | null; rate: unknown } | null;
+    const program = one(a.program as never) as { tuition_fee: number | string | null; rate: unknown } | null;
     const rate = program ? (one(program.rate as never) as { rate_percent: number | null; fixed_amount: number | null; currency: string } | null) : null;
     return {
       id: a.id,
