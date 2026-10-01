@@ -6,6 +6,8 @@ import { useActionState } from "react";
 import { updateApplicationLinks } from "@/lib/actions/applications";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { EmailLinks } from "@/components/EmailLinks";
+import { EMAILS_MAX, linkHref } from "@/lib/catalogueText";
 
 type Props = {
   applicationId: string;
@@ -44,16 +46,10 @@ export function LinksContactForm({
         <LinkRow label="Course page" href={pageLink} cta="View course page" />
         <LinkRow label="Requirements" href={requirementsLink} cta="View requirements" />
         <LinkRow label="Application portal" href={applicationPortalLink} cta="View application portal" />
-        <p>University email: {contactEmail ?? <span className="text-muted">—</span>}</p>
+        <p>University email: {contactEmail ? <EmailLinks value={contactEmail} /> : <span className="text-muted">—</span>}</p>
         <p data-coordinator-email>
           Programme coordinator:{" "}
-          {coordinatorEmail ? (
-            <a href={`mailto:${coordinatorEmail}`} className="text-primary hover:underline">
-              {coordinatorEmail}
-            </a>
-          ) : (
-            <span className="text-muted">—</span>
-          )}
+          {coordinatorEmail ? <EmailLinks value={coordinatorEmail} /> : <span className="text-muted">—</span>}
         </p>
         <div>
           <Button type="button" variant="outline" size="sm" onClick={() => setEditing(true)}>
@@ -74,24 +70,28 @@ export function LinksContactForm({
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1 text-xs text-muted">
             Course page link
-            <Input name="page_link" type="url" inputMode="url" defaultValue={pageLink ?? ""} placeholder="https://…" />
+            <Input name="page_link" inputMode="url" defaultValue={pageLink ?? ""} placeholder="https://… or a note" />
           </label>
           <label className="flex flex-col gap-1 text-xs text-muted">
             Requirements link
-            <Input name="requirements_link" type="url" inputMode="url" defaultValue={requirementsLink ?? ""} placeholder="https://…" />
+            <Input name="requirements_link" inputMode="url" defaultValue={requirementsLink ?? ""} placeholder="https://… or a note" />
           </label>
           <label className="flex flex-col gap-1 text-xs text-muted">
-            Programme coordinator email
-            <Input name="coordinator_email" type="email" defaultValue={coordinatorEmail ?? ""} placeholder="coordinator@university.edu" />
+            Programme coordinator email(s)
+            <Input
+              name="coordinator_email"
+              maxLength={EMAILS_MAX}
+              defaultValue={coordinatorEmail ?? ""}
+              placeholder="a@university.edu, b@university.edu"
+            />
           </label>
           <label className="col-span-full flex flex-col gap-1 text-xs text-muted">
             Application portal link
             <Input
               name="application_portal_link"
-              type="url"
               inputMode="url"
               defaultValue={applicationPortalLink ?? ""}
-              placeholder="https://…"
+              placeholder="https://… or a note"
             />
           </label>
         </div>
@@ -102,8 +102,8 @@ export function LinksContactForm({
         </p>
       )}
       <label className="flex flex-col gap-1 text-xs text-muted sm:max-w-sm">
-        University email
-        <Input name="contact_email" type="email" defaultValue={contactEmail ?? ""} placeholder="admissions@university.edu" />
+        University email(s)
+        <Input name="contact_email" maxLength={EMAILS_MAX} defaultValue={contactEmail ?? ""} placeholder="admissions@university.edu, …" />
       </label>
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
       <div className="flex flex-wrap items-center gap-2">
@@ -123,11 +123,19 @@ export function LinksContactForm({
   );
 }
 
-function LinkRow({ label, href, cta }: { label: string; href: string | null; cta: string }) {
+/**
+ * A link field as written (0304): a button when it is a real web address,
+ * the words themselves when it is not — never an href made of whatever was
+ * typed.
+ */
+function LinkRow({ label, href: value, cta }: { label: string; href: string | null; cta: string }) {
+  const href = linkHref(value);
   return (
     <div className="flex flex-wrap items-center gap-2">
       <span>{label}:</span>
-      {href ? (
+      {value && !href ? (
+        <span className="break-words">{value}</span>
+      ) : href ? (
         <a
           href={href}
           target="_blank"

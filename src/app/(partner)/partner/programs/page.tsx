@@ -16,7 +16,7 @@ export default async function PartnerProgramsPage() {
   const { data: programs } = await supabase
     .from("programs")
     .select(
-      "id, level, name, core_field, sub_field, duration, tuition_fee, language_requirement, rounds:program_intake_rounds(id, label, start_date, application_deadline, sort_order)"
+      "id, level, name, core_field, sub_field, duration, tuition_fee, language_requirement, rounds:program_intake_rounds(id, label, start_date, application_deadline, start_text, deadline_text, sort_order)"
     )
     .eq("university_id", account.university_id)
     .order("level");

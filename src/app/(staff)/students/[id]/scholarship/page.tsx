@@ -126,7 +126,7 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
       // covers is what maps a university to its body — without it the matcher
       // has nothing to match on and silently finds nothing.
       .select(
-        "id, name, region, covers, academic_year, application_deadline, apply_url, isee_threshold, ispe_threshold, call_status, call_expected_on, call_pdf_url, call_pdf_path, call_pdf_language, call_page_url, source_url, guide_sections, destinations:scholarship_body_destinations(destination_id)"
+        "id, name, region, covers, academic_year, application_deadline, apply_url, isee_threshold, ispe_threshold, call_status, call_expected_on, call_expected_text, call_pdf_url, call_pdf_path, call_pdf_language, call_page_url, source_url, guide_sections, destinations:scholarship_body_destinations(destination_id)"
       )
       .order("region")
       .order("name"),
@@ -289,6 +289,7 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
                       ispe_threshold: b.ispe_threshold ?? null,
                       call_status: b.call_status ?? "published",
                       call_expected_on: b.call_expected_on ?? null,
+                      call_expected_text: b.call_expected_text ?? null,
                       call_pdf_url: b.call_pdf_url ?? null,
                       call_pdf_signed_url: signedCalls.get(b.id) ?? null,
                       call_pdf_language: b.call_pdf_language ?? null,

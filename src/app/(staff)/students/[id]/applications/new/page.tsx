@@ -67,7 +67,7 @@ export default async function NewApplicationPage(props: PageProps<"/students/[id
       const { data, error } = await supabase
         .from("programs")
         .select(
-          "id, university_id, name, level, core_field, field_group, rounds:program_intake_rounds(id, label, start_date, application_deadline, sort_order)"
+          "id, university_id, name, level, core_field, field_group, rounds:program_intake_rounds(id, label, start_date, application_deadline, start_text, deadline_text, sort_order)"
         )
         .in("university_id", universityIds)
         .order("name")

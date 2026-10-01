@@ -60,3 +60,15 @@ test("an unpublished call says so, with the date when the region gave one", () =
 test("a published call with no link blames nobody and offers the counsellor", () => {
   assert.match(callAbsenceNote({ call_status: "published" }), /counsellor/);
 });
+
+test("a note in a link field is passed over for the next link, never linked (0304)", () => {
+  const link = callLink({ call_pdf_url: "see the regional page", call_page_url: "www.ergo.it/bandi" });
+  assert.equal(link.kind, "page");
+  assert.equal(link.url, "https://www.ergo.it/bandi");
+  assert.equal(callLink({ call_pdf_url: "javascript:alert(1)" }), null);
+});
+
+test("an expected date in words is said as written", () => {
+  assert.match(callAbsenceNote({ call_status: "awaiting", call_expected_text: "Early July", call_expected_on: null }), /expected around Early July\./);
+  assert.match(callAbsenceNote({ call_status: "awaiting", call_expected_on: "2027-07-01" }), /expected around 2027-07-01\./);
+});

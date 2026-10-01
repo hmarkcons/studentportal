@@ -24,6 +24,12 @@
 //                   exactly as written, through the sheet, the programme form
 //                   and the application's own form, and an application copies
 //                   it from its programme.
+//   anything (0304) a level of the university's own, several coordinator
+//                   emails (each its own mail link), an interview answered in
+//                   words, a link without its https:// — imported, shown and
+//                   saved as written; a "javascript:" typed as a link is kept
+//                   as text and never made a link; a deadline of "Rolling"
+//                   is saved as words and shown in place of a date.
 //   scholarship     the student's Scholarship tab names the university's DSU
 //                   body. The names are chosen so the old name-matching guess
 //                   finds nothing: the body shows only if the field is read.
@@ -40,7 +46,7 @@ const { ok, finish } = reporter();
 
 const HEADERS = [
   "destination", "university_name", "city", "type", "university_application_fee", "university_application_fee_currency",
-  "dsu_body", "level", "program_name", "tuition_fee", "program_application_fee", "program_application_fee_currency", "coordinator_email",
+  "dsu_body", "level", "program_name", "tuition_fee", "interview_required", "page_link", "program_application_fee", "program_application_fee_currency", "coordinator_email",
 ];
 function csv(rows) {
   const escape = (v) => {
@@ -155,8 +161,11 @@ try {
     { ...base, level: "masters", program_name: "zztmp Own Fee", program_application_fee: "€50", coordinator_email: "own@zztmp.example" },
     { ...base, level: "masters", program_name: "zztmp Bad Email", coordinator_email: "Prof Nobody" },
     { ...base, level: "phd", program_name: "zztmp Worded Fee", tuition_fee: "€3,000 per year", program_application_fee: "Free for EU students", coordinator_email: "worded@zztmp.example" },
+    // Anything in any field (0304).
+    { ...base, level: "Foundation", program_name: "zztmp Foundation Year", interview_required: "Only for non-EU students",
+      coordinator_email: "first@zztmp.example; second@zztmp.example", page_link: "www.zztmp.example/foundation", tuition_fee: "3000, 4500" },
   ]));
-  ok("the preview reports the bad coordinator email", /coordinator_email "Prof Nobody" is not an email/.test(shown.text), shown.text.slice(0, 400));
+  ok("a coordinator email in words is not reported (0304)", !/is not an email/.test(shown.text) && !/must be bachelors/.test(shown.text), shown.text.slice(0, 400));
   const applied = await apply(shown.panel);
   ok("the sheet applies", /Added 1 universit/.test(applied), applied.slice(0, 300));
 
@@ -165,7 +174,7 @@ try {
   ok("...in the destination's currency, the sheet having left it blank", uni?.application_fee_currency === "GBP", String(uni?.application_fee_currency));
   ok("the DSU body is matched by name, case aside, and stored as the body", uni?.dsu_body_id === feelandBody, String(uni?.dsu_body_id));
   const programmes = async () => {
-    const { data } = await admin.from("programs").select("id, name, tuition_fee, application_fee, application_fee_currency, coordinator_email").eq("university_id", uni.id);
+    const { data } = await admin.from("programs").select("id, name, level, tuition_fee, application_fee, application_fee_currency, coordinator_email, interview_required, page_link").eq("university_id", uni.id);
     return Object.fromEntries((data ?? []).map((p) => [p.name, p]));
   };
   let progs = await programmes();
@@ -173,7 +182,15 @@ try {
     JSON.stringify(progs["zztmp Inherits"]));
   ok("a programme fee of €50 is 50 in EUR, the symbol answering the blank currency",
     Number(progs["zztmp Own Fee"]?.application_fee) === 50 && progs["zztmp Own Fee"]?.application_fee_currency === "EUR", JSON.stringify(progs["zztmp Own Fee"]));
-  ok("the bad email was not saved", progs["zztmp Bad Email"] && progs["zztmp Bad Email"].coordinator_email === null, JSON.stringify(progs["zztmp Bad Email"]));
+  ok("...and is kept as written", progs["zztmp Bad Email"]?.coordinator_email === "Prof Nobody", JSON.stringify(progs["zztmp Bad Email"]));
+  const foundation = progs["zztmp Foundation Year"];
+  ok("a level of the university's own is kept as written", foundation?.level === "Foundation", JSON.stringify(foundation));
+  ok("...several emails are stored one way, an interview answered in words, a link as typed, two tuitions as two",
+    foundation?.coordinator_email === "first@zztmp.example, second@zztmp.example" &&
+      foundation?.interview_required === "Only for non-EU students" &&
+      foundation?.page_link === "www.zztmp.example/foundation" &&
+      foundation?.tuition_fee === "3000, 4500",
+    JSON.stringify(foundation));
   ok("a fee and a tuition in words are imported exactly as written",
     progs["zztmp Worded Fee"]?.application_fee === "Free for EU students" && progs["zztmp Worded Fee"]?.tuition_fee === "€3,000 per year",
     JSON.stringify(progs["zztmp Worded Fee"]));
@@ -309,6 +326,17 @@ try {
     /Application fee €35 \(the university's\)/.test(await rowText("zztmp Inherits")), await rowText("zztmp Inherits"));
   ok("a programme with its own fee shows that one", /Application fee €50(?! \()/.test(await rowText("zztmp Own Fee")), await rowText("zztmp Own Fee"));
   ok("...and its coordinator", (await rowText("zztmp Own Fee")).includes("Coordinator own@zztmp.example"));
+
+  // Anything in any field (0304), as the page shows it.
+  const foundationRow = page.locator("div.py-2", { hasText: "zztmp Foundation Year" }).first();
+  const foundationText = await rowText("zztmp Foundation Year");
+  ok("a programme of its own level shows it, and its interview in words",
+    foundationText.startsWith("Foundation · zztmp Foundation Year") && foundationText.includes("Interview: Only for non-EU students"), foundationText);
+  const mailLinks = await foundationRow.locator('a[href^="mailto:"]').evaluateAll((as) => as.map((a) => a.getAttribute("href")));
+  ok("...each of several coordinator emails is a mail link of its own",
+    JSON.stringify(mailLinks) === JSON.stringify(["mailto:first@zztmp.example", "mailto:second@zztmp.example"]), JSON.stringify(mailLinks));
+  const pageHref = await foundationRow.locator("a", { hasText: "www.zztmp.example/foundation" }).getAttribute("href").catch(() => null);
+  ok("...and a link typed without https:// links to https://, not to the portal", pageHref === "https://www.zztmp.example/foundation", String(pageHref));
   // formatFee would make "€Free…" or NaN of words if it still took every fee for a number.
   ok("a fee and a tuition in words are shown exactly as written",
     /Application fee Free for EU students(?! \()/.test(await rowText("zztmp Worded Fee")) && (await rowText("zztmp Worded Fee")).includes("€3,000 per year"),
@@ -335,12 +363,35 @@ try {
   const wordedForm = page.locator("form").filter({ has: page.locator('input[name="coordinator_email"][value="worded@zztmp.example"]') }).first();
   await wordedForm.locator('input[name="tuition_fee"]').fill("On request");
   await wordedForm.locator('input[name="application_fee"]').fill("€30 (EU) / €50 (non-EU)");
+  // Every field is on the edit form now (0304), and takes anything.
+  await wordedForm.locator('input[name="level"]').fill("Research  doctorate (PhD)");
+  await wordedForm.locator('input[name="interview_required"]').fill("Online, for non-EU students");
+  await wordedForm.locator('input[name="coordinator_email"]').fill("worded@zztmp.example, deputy@zztmp.example");
+  await wordedForm.locator('input[name="page_link"]').fill("javascript:alert(1)");
+  await wordedForm.locator('input[name="round_application_deadline"]').first().fill("Rolling");
   await wordedForm.getByRole("button", { name: "Save" }).click();
   const wordedSaved = await poll(async () => {
     const p = (await programmes())["zztmp Worded Fee"];
     return p?.tuition_fee === "On request" && p?.application_fee === "€30 (EU) / €50 (non-EU)" ? p : null;
   });
   ok("a programme's edit form saves a fee and a tuition in words", Boolean(wordedSaved), JSON.stringify((await programmes())["zztmp Worded Fee"]));
+  ok("...a level of its own, typed in the level box, as written", wordedSaved?.level === "Research doctorate (PhD)", String(wordedSaved?.level));
+  ok("...an interview in words, two emails, and a link field holding whatever was typed",
+    wordedSaved?.interview_required === "Online, for non-EU students" &&
+      wordedSaved?.coordinator_email === "worded@zztmp.example, deputy@zztmp.example" &&
+      wordedSaved?.page_link === "javascript:alert(1)",
+    JSON.stringify(wordedSaved));
+  const { data: wordedRounds } = await admin.from("program_intake_rounds").select("label, application_deadline, deadline_text").eq("program_id", wordedSaved?.id ?? "");
+  ok("...and a deadline of Rolling, as words with no date made up for it",
+    wordedRounds?.length === 1 && wordedRounds[0].deadline_text === "Rolling" && wordedRounds[0].application_deadline === null, JSON.stringify(wordedRounds));
+
+  await page.reload({ waitUntil: "domcontentloaded" });
+  const wordedRow = page.locator("div.py-2", { hasText: "zztmp Worded Fee" }).first();
+  await wordedRow.waitFor({ timeout: 40000 });
+  const wordedRowText = (await wordedRow.innerText()).replace(/\s+/g, " ");
+  ok("the page shows the round's words in place of a date", /apply: Rolling/.test(wordedRowText), wordedRowText);
+  ok("a javascript: typed as a link is shown as text and is no link at all",
+    wordedRowText.includes("Course page javascript:alert(1)") && (await page.locator('a[href^="javascript"]').count()) === 0, wordedRowText);
 
   // ------------------------------------------------------- the application
   console.log("\n--- the application page ---");
@@ -373,6 +424,10 @@ try {
   // -------------------------------------------------------- scholarship tab
   console.log("\n--- the Scholarship tab ---");
   await admin.from("applications").update({ is_finalized: true }).eq("id", own.id);
+  // A note in the body's link field (0304). The guide card made a hostname of
+  // it with new URL(), which throws on words and took the whole tab down —
+  // so the tab rendering at all is the assertion below.
+  await admin.from("scholarship_bodies").update({ source_url: "see the regional page" }).eq("id", feelandBody);
   await page.goto(`${BASE}/students/${studentId}/scholarship`, { waitUntil: "domcontentloaded" });
   const named = await poll(async () => {
     const text = (await page.locator("main").innerText().catch(() => "")).replace(/\s+/g, " ");

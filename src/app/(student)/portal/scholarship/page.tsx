@@ -24,6 +24,7 @@ import {
 } from "@/lib/scholarships";
 import { getCurrentUser } from "@/lib/auth/currentUser";
 import { documentUrls } from "@/lib/storageUrls";
+import { linkHref } from "@/lib/catalogueText";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -43,6 +44,7 @@ type Body = {
   source_url: string | null;
   call_status: string | null;
   call_expected_on: string | null;
+  call_expected_text?: string | null;
   call_pdf_path: string | null;
   call_pdf_url: string | null;
   call_page_url: string | null;
@@ -141,7 +143,7 @@ export default async function PortalScholarshipPage() {
     supabase
       .from("student_scholarships")
       .select(
-        "id, name, status, documents_status, award_amount, application_deadline, body:scholarship_bodies(name, region, academic_year, application_deadline, document_upload_deadline, courier_deadline, isee_threshold, ispe_threshold, stipend_amount, benefits, source_url, call_status, call_expected_on, call_pdf_path, call_pdf_url, call_page_url, call_pdf_language)"
+        "id, name, status, documents_status, award_amount, application_deadline, body:scholarship_bodies(name, region, academic_year, application_deadline, document_upload_deadline, courier_deadline, isee_threshold, ispe_threshold, stipend_amount, benefits, source_url, call_status, call_expected_on, call_expected_text, call_pdf_path, call_pdf_url, call_page_url, call_pdf_language)"
       )
       .eq("student_id", student.id),
   ]);
@@ -163,7 +165,7 @@ export default async function PortalScholarshipPage() {
     ? await supabase
         .from("scholarship_body_destinations")
         .select(
-          "destination_id, body:scholarship_bodies(id, name, region, covers, academic_year, application_deadline, apply_url, isee_threshold, ispe_threshold, call_status, call_expected_on, call_pdf_url, call_pdf_path, call_pdf_language, call_page_url, source_url, guide_sections)"
+          "destination_id, body:scholarship_bodies(id, name, region, covers, academic_year, application_deadline, apply_url, isee_threshold, ispe_threshold, call_status, call_expected_on, call_expected_text, call_pdf_url, call_pdf_path, call_pdf_language, call_page_url, source_url, guide_sections)"
         )
         .in("destination_id", [...countries.keys()])
     : { data: [] };
@@ -179,6 +181,7 @@ export default async function PortalScholarshipPage() {
     ispe_threshold: string | null;
     call_status: string | null;
     call_expected_on: string | null;
+    call_expected_text?: string | null;
     call_pdf_url: string | null;
     call_pdf_path: string | null;
     call_pdf_language: string | null;
@@ -334,6 +337,7 @@ export default async function PortalScholarshipPage() {
                         ispe_threshold: b.ispe_threshold,
                         call_status: b.call_status ?? "published",
                         call_expected_on: b.call_expected_on,
+                        call_expected_text: b.call_expected_text,
                         call_pdf_url: b.call_pdf_url,
                         call_pdf_signed_url: b.call_pdf_path ? (signedCalls.get(b.call_pdf_path) ?? null) : null,
                         call_pdf_language: b.call_pdf_language,
@@ -428,9 +432,9 @@ export default async function PortalScholarshipPage() {
                     explained needs to be able to read the rule themselves. */}
                 {body && <CallForApplications body={body} signed={signedCalls} />}
 
-                {body?.source_url && (
+                {body && linkHref(body.source_url) && (
                   <a
-                    href={body.source_url}
+                    href={linkHref(body.source_url)!}
                     target="_blank"
                     rel="noreferrer"
                     className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"

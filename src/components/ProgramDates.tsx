@@ -1,9 +1,4 @@
-import { formatDateOnly } from "@/lib/formatDate";
-import { ROUND_DATE_FORMAT, nextRound, roundIsClosed, sortRounds, type ProgramRound } from "@/lib/programRounds";
-
-// Shared with the round dropdowns, so a date does not read one way in a form
-// and another in the list beside it.
-const DATE_FORMAT = ROUND_DATE_FORMAT;
+import { nextRound, roundDeadlineShown, roundIsClosed, roundStartShown, sortRounds, type ProgramRound } from "@/lib/programRounds";
 
 // Built as a list and joined, rather than each piece carrying its own leading
 // separator — a round is allowed to have only one of the two dates, and a
@@ -21,12 +16,16 @@ function RoundLine({
   const closed = roundIsClosed(round, today);
   const parts: React.ReactNode[] = [];
 
+  // Words in place of a date where a round has them (0304) — "apply by
+  // Rolling" reads wrong, so words stand on their own after "apply".
+  const start = roundStartShown(round);
+  const deadline = roundDeadlineShown(round);
   if (withLabel) parts.push(<span className="font-medium">{round.label}</span>);
-  if (round.start_date) parts.push(<>starts {formatDateOnly(round.start_date, DATE_FORMAT)}</>);
-  if (round.application_deadline) {
+  if (start) parts.push(<>{round.start_text && !round.start_date ? `start: ${start}` : `starts ${start}`}</>);
+  if (deadline) {
     parts.push(
       <span className={closed ? "font-medium text-danger" : ""}>
-        {closed ? "applications closed" : "apply by"} {formatDateOnly(round.application_deadline, DATE_FORMAT)}
+        {closed ? "applications closed" : round.deadline_text && !round.application_deadline ? "apply:" : "apply by"} {deadline}
       </span>
     );
   }

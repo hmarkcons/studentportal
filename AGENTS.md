@@ -87,6 +87,25 @@ The reverse holds too: an edit form's `maxLength` must hold whatever an import
 can store, or the record cannot be edited once imported — the scholarship
 bodies' limits are shared, in `BODY_TEXT_LIMITS`.
 
+**Any catalogue or scholarship field may hold anything** (0304), so nothing
+may assume its format:
+
+- A programme's **level** is free text. Compare levels with `levelKey` /
+  `sameLevel` (`src/lib/catalogueText.ts`), never `===`: "Foundation" in a
+  sheet is the "foundation" on file. Only bachelors, masters and phd match a
+  student (`suggested_programs`, `course_interest_options`), which is why
+  `normalizeLevel` writes their usual spellings as exactly those three.
+- A **link** field can be words, or `javascript:alert(1)`. Render it through
+  `linkHref` or `<SafeLink>`, never `href={value}`, and never `new URL(value)`
+  on a stored value: that throws on words, and on the Scholarship tab it took
+  the whole page down.
+- An **email** field is a list ("a@x.it, b@x.it") or words. Render it with
+  `<EmailLinks>`; `addressesIn` gives the addresses to send to.
+- A **round's dates** may be words: `start_text` / `deadline_text` are shown
+  in place of the date, and only `start_date` / `application_deadline` drive
+  reminders, "closed" and the calendar. Read rounds for display with the two
+  text columns, or a "Rolling" round shows as a round with no dates.
+
 **An uploaded CSV is not necessarily UTF-8.** Excel on Windows saves CSV in
 Windows-1252, and `file.text()` turns each accented letter into "�" without an
 error: one import added three duplicate scholarship bodies named "Universit�

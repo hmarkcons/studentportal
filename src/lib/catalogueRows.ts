@@ -14,13 +14,33 @@
 // empty interview_required into `false` would turn every such import into a
 // silent mass edit.
 
-import { FEE_TEXT_MAX, parseEmail, parseFeeCurrency, parseFeeText, parseTuitionText } from "./applicationFee.ts";
+import { FEE_TEXT_MAX, parseFeeCurrency, parseFeeText, parseTuitionText } from "./applicationFee.ts";
+import {
+  DATE_WORDS_MAX,
+  EMAILS_MAX,
+  LEVEL_MAX,
+  STANDARD_LEVELS,
+  TYPED_SHORT_NAME_MAX,
+  YES_NO_MAX,
+  cleanLine,
+  levelKey,
+  normalizeEmails,
+  normalizeLevel,
+  parseYesNoText,
+} from "./catalogueText.ts";
 
-/** An intake round as a sheet describes it, before it reaches the database. */
+/**
+ * An intake round as a sheet describes it, before it reaches the database.
+ * Each date may come with words, or be words alone (0304): `start_text` and
+ * `deadline_text` are shown in place of the date, which stays what reminders
+ * and "closed" read.
+ */
 export type CatalogueRound = {
   label: string;
   start_date: string | null;
   application_deadline: string | null;
+  start_text: string | null;
+  deadline_text: string | null;
   sort_order: number;
 };
 
@@ -40,6 +60,9 @@ export function splitList(value: string | undefined): string[] {
  * Null rather than false is the whole point: see the note at the top. An
  * unrecognised word is also null — it is not an instruction, and guessing
  * which way somebody meant "maybe" is worse than leaving the stored value be.
+ *
+ * The programme's interview and admission-test columns no longer use this:
+ * they take words as well (0304) — see parseYesNoCell.
  */
 export function parseBool(value: string | undefined): boolean | null {
   const text = (value ?? "").trim().toLowerCase();
@@ -69,6 +92,30 @@ export function parseTuitionCell(value: string | undefined, problems: RowProblem
   const text = parseTuitionText(value ?? "");
   if (text && text.length > FEE_TEXT_MAX) {
     problems.push(`${label} is longer than ${FEE_TEXT_MAX} characters — left unchanged`);
+    return null;
+  }
+  return text;
+}
+
+/**
+ * A yes/no cell that may be words (0304): "yes" or "no" for the usual ways of
+ * saying so, the words as written for anything else ("Only for non-EU
+ * students"), null when blank. Longer than a field holds is reported.
+ */
+export function parseYesNoCell(value: string | undefined, problems: RowProblem[], label: string): string | null {
+  const text = parseYesNoText(value);
+  if (text && text.length > YES_NO_MAX) {
+    problems.push(`${label} is longer than ${YES_NO_MAX} characters — left unchanged`);
+    return null;
+  }
+  return text;
+}
+
+/** An email cell (0304): one address, several, or anything — never refused for its format. */
+export function parseEmailsCell(value: string | undefined, problems: RowProblem[], label: string): string | null {
+  const text = normalizeEmails(value);
+  if (text && text.length > EMAILS_MAX) {
+    problems.push(`${label} is longer than ${EMAILS_MAX} characters — left unchanged`);
     return null;
   }
   return text;
@@ -129,6 +176,64 @@ export function parseDay(value: string | undefined, problems: RowProblem[], labe
   return parsed;
 }
 
+/** A readable date at the very start of some text, and what follows it. */
+function leadingDay(raw: string): { day: string; rest: string } | null {
+  const patterns: [RegExp, (m: RegExpMatchArray) => string | null][] = [
+    [/^(\d{4})-(\d{1,2})-(\d{1,2})(?![\d-])/, (m) => isoDay(Number(m[1]), Number(m[2]), Number(m[3]))],
+    [/^(\d{1,2})(?:st|nd|rd|th)?[\s-]+([a-z]+)\.?,?[\s-]+(\d{4})(?!\d)/i, (m) => (monthNumber(m[2]) ? isoDay(Number(m[3]), monthNumber(m[2])!, Number(m[1])) : null)],
+    [/^([a-z]+)\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})(?!\d)/i, (m) => (monthNumber(m[1]) ? isoDay(Number(m[3]), monthNumber(m[1])!, Number(m[2])) : null)],
+  ];
+  for (const [pattern, read] of patterns) {
+    const m = raw.match(pattern);
+    if (!m) continue;
+    const day = read(m);
+    if (day) return { day, rest: raw.slice(m[0].length) };
+  }
+  return null;
+}
+
+/**
+ * A date that may be words (0304) — how every round date and a scholarship
+ * call's expected date is read, from a form or a sheet:
+ *
+ *   blank                               → nothing
+ *   a date, nothing else                → the date              "15 Mar 2027", "2027-03-15"
+ *   a date, then words without a second → the date AND the words "15 March 2027, 13:00 CET"
+ *     year in them
+ *   anything else                       → the words alone        "Rolling", "TBA March 2027",
+ *                                                                "03/04/2027"
+ *
+ * The date is what reminders, the staff queue, the calendar and "closed"
+ * read; the words are what people are shown. A date is read out of words only
+ * when the words BEGIN with it and name no other year, because guessing which
+ * of "1 March – 15 April 2027" is the deadline would put a reminder on the
+ * wrong day without anything looking wrong. All-number dates with slashes are
+ * words, as parseDay explains: 03/04/2027 is two different days.
+ */
+export function parseDayOrWords(value: string | null | undefined): { date: string | null; text: string | null } {
+  const raw = cleanLine(value);
+  if (raw === null) return { date: null, text: null };
+  const lead = leadingDay(raw);
+  if (lead && lead.rest.trim().replace(/^[,.;:]+$/, "") === "") return { date: lead.day, text: null };
+  if (lead && !/\d{4}/.test(lead.rest)) return { date: lead.day, text: raw };
+  return { date: null, text: raw };
+}
+
+/** A round's start or deadline as a cell of a sheet gives it, its words held to what the column takes. */
+function roundDateCell(value: string | undefined, problems: RowProblem[], label: string): { date: string | null; text: string | null } {
+  const read = parseDayOrWords(value);
+  if (read.text && read.text.length > DATE_WORDS_MAX) {
+    problems.push(`${label} is longer than ${DATE_WORDS_MAX} characters — ignored`);
+    return { date: null, text: null };
+  }
+  return read;
+}
+
+/** Whether a round says anything at all: a date or words for either end. */
+export function roundSaysSomething(r: { start_date: string | null; application_deadline: string | null; start_text?: string | null; deadline_text?: string | null }): boolean {
+  return Boolean(r.start_date || r.application_deadline || r.start_text || r.deadline_text);
+}
+
 /**
  * One cell holding a programme's intake rounds:
  *
@@ -143,15 +248,11 @@ export function parseRoundsCell(cell: string | undefined, problems: RowProblem[]
 
   for (const entry of splitList(cell)) {
     const [label, start, deadline] = entry.split("|").map((part) => part.trim());
-    const start_date = parseDay(start, problems, "round start");
-    const application_deadline = parseDay(deadline, problems, "round deadline");
-    if (!start_date && !application_deadline) continue;
-    rounds.push({
-      label: label || `Round ${rounds.length + 1}`,
-      start_date,
-      application_deadline,
-      sort_order: rounds.length + 1,
-    });
+    const s = roundDateCell(start, problems, "round start");
+    const d = roundDateCell(deadline, problems, "round deadline");
+    const round = { start_date: s.date, start_text: s.text, application_deadline: d.date, deadline_text: d.text };
+    if (!roundSaysSomething(round)) continue;
+    rounds.push({ label: label || `Round ${rounds.length + 1}`, ...round, sort_order: rounds.length + 1 });
   }
 
   return rounds;
@@ -169,10 +270,11 @@ export function roundsFromRow(row: Record<string, string>, problems: RowProblem[
   const rounds = parseRoundsCell(row.rounds, problems);
   if (rounds.length > 0) return rounds;
 
-  const start_date = parseDay(row.start_date, problems, "start_date");
-  const application_deadline = parseDay(row.application_deadline, problems, "application_deadline");
-  if (!start_date && !application_deadline) return [];
-  return [{ label: "Round 1", start_date, application_deadline, sort_order: 1 }];
+  const s = roundDateCell(row.start_date, problems, "start_date");
+  const d = roundDateCell(row.application_deadline, problems, "application_deadline");
+  const round = { start_date: s.date, start_text: s.text, application_deadline: d.date, deadline_text: d.text };
+  if (!roundSaysSomething(round)) return [];
+  return [{ label: "Round 1", ...round, sort_order: 1 }];
 }
 
 /**
@@ -183,13 +285,18 @@ export function roundsFromRow(row: Record<string, string>, problems: RowProblem[
  * the audit log with edits that changed nothing. Compared unordered, by what a
  * round means rather than by its id, because the sheet has no ids to offer.
  */
-export function sameRounds(
-  stored: readonly { label: string; start_date: string | null; application_deadline: string | null }[],
-  incoming: readonly CatalogueRound[]
-): boolean {
+type RoundDates = {
+  label?: string | null;
+  start_date: string | null;
+  application_deadline: string | null;
+  start_text?: string | null;
+  deadline_text?: string | null;
+};
+
+export function sameRounds(stored: readonly RoundDates[], incoming: readonly CatalogueRound[]): boolean {
   if (stored.length !== incoming.length) return false;
-  const key = (round: { label: string; start_date: string | null; application_deadline: string | null }) =>
-    `${round.label}|${round.start_date ?? ""}|${round.application_deadline ?? ""}`;
+  const key = (round: RoundDates) =>
+    `${round.label ?? ""}|${round.start_date ?? ""}|${round.application_deadline ?? ""}|${round.start_text ?? ""}|${round.deadline_text ?? ""}`;
   const left = stored.map(key).sort();
   const right = incoming.map(key).sort();
   return left.every((value, index) => value === right[index]);
@@ -215,7 +322,8 @@ export function sameRounds(
 /** One row of the Rounds sheet. */
 export type RoundSpec = {
   universityName: string;
-  level: ProgramLevel | null;
+  /** Any level (0304), compared by levelKey. */
+  level: string | null;
   programName: string | null;
   round: IncomingRound;
 };
@@ -225,6 +333,8 @@ export type IncomingRound = {
   label: string | null;
   start_date: string | null;
   application_deadline: string | null;
+  start_text: string | null;
+  deadline_text: string | null;
 };
 
 /** Null when the row names no university; the reason is in `problems` when it is unusable. */
@@ -232,17 +342,13 @@ export function roundSpecFromRow(row: Record<string, string>, problems: RowProbl
   const universityName = (row.university_name ?? "").trim();
   if (!universityName) return null;
 
-  const rawLevel = (row.level ?? "").trim().toLowerCase();
-  let level: ProgramLevel | null = null;
-  if (PROGRAM_LEVELS.includes(rawLevel as ProgramLevel)) level = rawLevel as ProgramLevel;
-  else if (rawLevel !== "") {
-    problems.push(`level "${row.level}" — must be bachelors, masters or phd, or blank for every level; round ignored`);
-    return null;
-  }
+  // Any level, as the programmes have (0304); blank is every level.
+  const level = normalizeLevel(row.level);
 
-  const start_date = parseDay(row.start_date, problems, "start_date");
-  const application_deadline = parseDay(row.application_deadline, problems, "application_deadline");
-  if (!start_date && !application_deadline) {
+  const s = roundDateCell(row.start_date, problems, "start_date");
+  const d = roundDateCell(row.application_deadline, problems, "application_deadline");
+  const dates = { start_date: s.date, start_text: s.text, application_deadline: d.date, deadline_text: d.text };
+  if (!roundSaysSomething(dates)) {
     problems.push(`a round with no start_date or application_deadline records nothing; ignored`);
     return null;
   }
@@ -251,7 +357,7 @@ export function roundSpecFromRow(row: Record<string, string>, problems: RowProbl
     universityName,
     level,
     programName: (row.program_name ?? "").trim() || null,
-    round: { label: (row.round ?? "").trim() || null, start_date, application_deadline },
+    round: { label: (row.round ?? "").trim() || null, ...dates },
   };
 }
 
@@ -261,6 +367,8 @@ export type RoundLike = {
   label: string;
   start_date: string | null;
   application_deadline: string | null;
+  start_text: string | null;
+  deadline_text: string | null;
   sort_order: number;
 };
 
@@ -277,25 +385,39 @@ const keyDate = (r: { start_date: string | null; application_deadline: string | 
  * reminder cron, the staff queue, the calendar and an application with no
  * deadline of its own all read as "the deadline" (0232, 0262). So the first
  * must be the next one still open: rounds whose date has not passed come
- * first, soonest first; closed ones follow, most recent first, kept as the
- * record of what happened. Label breaks a tie, so the order is stable.
+ * first, soonest first; then rounds given only in words ("Rolling"), which
+ * have no date to have passed (0304); closed ones last, most recent first,
+ * kept as the record of what happened. Label breaks a tie, so the order is
+ * stable.
  */
 export function orderRounds<T extends { label: string; start_date: string | null; application_deadline: string | null }>(
   rounds: readonly T[],
   today: string
 ): T[] {
-  const open = rounds.filter((r) => keyDate(r) >= today);
-  const closed = rounds.filter((r) => keyDate(r) < today);
+  const open = rounds.filter((r) => keyDate(r) !== "" && keyDate(r) >= today);
+  const worded = rounds.filter((r) => keyDate(r) === "");
+  const closed = rounds.filter((r) => keyDate(r) !== "" && keyDate(r) < today);
   const byLabel = (a: T, b: T) => a.label.localeCompare(b.label);
   open.sort((a, b) => keyDate(a).localeCompare(keyDate(b)) || byLabel(a, b));
+  worded.sort(byLabel);
   closed.sort((a, b) => keyDate(b).localeCompare(keyDate(a)) || byLabel(a, b));
-  return [...open, ...closed];
+  return [...open, ...worded, ...closed];
 }
 
-const describeRound = (r: { start_date: string | null; application_deadline: string | null }) =>
-  [r.application_deadline && `apply by ${r.application_deadline}`, r.start_date && `starts ${r.start_date}`]
+/** A round's start or deadline as a report says it: the words when there are some, else the date. */
+const shownStart = (r: RoundDates) => r.start_text ?? r.start_date;
+const shownDeadline = (r: RoundDates) => r.deadline_text ?? r.application_deadline;
+
+const describeRound = (r: RoundDates) =>
+  [shownDeadline(r) && `apply by ${shownDeadline(r)}`, shownStart(r) && `starts ${shownStart(r)}`]
     .filter(Boolean)
     .join(", ");
+
+/** The two ends of a round, each a date and its words, which a sheet's one cell sets together. */
+const ROUND_ENDS = [
+  { date: "application_deadline", text: "deadline_text", name: "deadline" },
+  { date: "start_date", text: "start_text", name: "start" },
+] as const;
 
 /**
  * What a programme's rounds become when a sheet's rounds are merged in.
@@ -334,18 +456,18 @@ export function mergeRounds(
   const given = new Map<string, IncomingRound>();
   const unnamed: IncomingRound[] = [];
 
+  // Whether an end of a round says the same as another's: its date and its words.
+  const sameEnd = (a: RoundDates, b: RoundDates, end: (typeof ROUND_ENDS)[number]) =>
+    (a[end.date] ?? null) === (b[end.date] ?? null) && (a[end.text] ?? null) === (b[end.text] ?? null);
+  // A blank end says nothing, so it matches anything.
+  const saysNothing = (r: RoundDates, end: (typeof ROUND_ENDS)[number]) => !r[end.date] && !r[end.text];
+
   for (const round of incoming) {
-    if (!round.start_date && !round.application_deadline) continue;
+    if (!roundSaysSomething(round)) continue;
 
     if (!round.label) {
-      const same = work.some(
-        (r) =>
-          (round.start_date === null || r.start_date === round.start_date) &&
-          (round.application_deadline === null || r.application_deadline === round.application_deadline)
-      );
-      const again = unnamed.some(
-        (r) => r.start_date === round.start_date && r.application_deadline === round.application_deadline
-      );
+      const same = work.some((r) => ROUND_ENDS.every((end) => saysNothing(round, end) || sameEnd(r, round, end)));
+      const again = unnamed.some((r) => ROUND_ENDS.every((end) => sameEnd(r, round, end)));
       if (!same && !again) unnamed.push(round);
       continue;
     }
@@ -353,7 +475,7 @@ export function mergeRounds(
     const key = labelKey(round.label);
     const earlier = given.get(key);
     if (earlier) {
-      if (earlier.start_date !== round.start_date || earlier.application_deadline !== round.application_deadline) {
+      if (!ROUND_ENDS.every((end) => sameEnd(earlier, round, end))) {
         conflicts.push(`round "${round.label}" is given twice with different dates — kept ${describeRound(earlier)}`);
       }
       continue;
@@ -362,17 +484,26 @@ export function mergeRounds(
 
     const target = work.find((r) => labelKey(r.label) === key);
     if (!target) {
-      work.push({ label: round.label, start_date: round.start_date, application_deadline: round.application_deadline, sort_order: 0 });
+      work.push({
+        label: round.label,
+        start_date: round.start_date,
+        application_deadline: round.application_deadline,
+        start_text: round.start_text,
+        deadline_text: round.deadline_text,
+        sort_order: 0,
+      });
       changes.push(`added round "${round.label}" (${describeRound(round)})`);
       continue;
     }
-    for (const field of ["application_deadline", "start_date"] as const) {
-      const value = round[field];
-      if (value === null || value === target[field]) continue;
-      changes.push(
-        `round "${target.label}" ${field === "start_date" ? "start" : "deadline"} ${target[field] ?? "—"} → ${value}`
-      );
-      target[field] = value;
+    // One cell set an end's date and its words together, so they change
+    // together: "2027-03-15" over a stored "Rolling" is the date and no words.
+    for (const end of ROUND_ENDS) {
+      if (saysNothing(round, end) || sameEnd(target, round, end)) continue;
+      const before = (end.name === "start" ? shownStart(target) : shownDeadline(target)) ?? "—";
+      const after = (end.name === "start" ? shownStart(round) : shownDeadline(round)) ?? "—";
+      changes.push(`round "${target.label}" ${end.name} ${before} → ${after}`);
+      target[end.date] = round[end.date];
+      target[end.text] = round[end.text];
     }
   }
 
@@ -383,7 +514,14 @@ export function mergeRounds(
     while (used.has(labelKey(`Round ${n}`))) n += 1;
     const label = `Round ${n}`;
     used.add(labelKey(label));
-    work.push({ label, start_date: round.start_date, application_deadline: round.application_deadline, sort_order: 0 });
+    work.push({
+      label,
+      start_date: round.start_date,
+      application_deadline: round.application_deadline,
+      start_text: round.start_text,
+      deadline_text: round.deadline_text,
+      sort_order: 0,
+    });
     changes.push(`added round "${label}" (${describeRound(round)})`);
   }
 
@@ -488,17 +626,19 @@ export function universityFromRow(
   // The combined sheet names it for the university, as it does the fee.
   const shortKey = nameKey === "university_name" ? "university_short_name" : "short_name";
   const short_name = (row[shortKey] ?? "").trim().replace(/\s+/g, " ") || null;
-  if (short_name && short_name.length > 32) problems.push(`${shortKey} "${short_name}" is longer than 32 characters — ignored`);
+  if (short_name && short_name.length > TYPED_SHORT_NAME_MAX) {
+    problems.push(`${shortKey} "${short_name}" is longer than ${TYPED_SHORT_NAME_MAX} characters — ignored`);
+  }
 
   return {
     name,
-    short_name: short_name && short_name.length <= 32 ? short_name : null,
+    short_name: short_name && short_name.length <= TYPED_SHORT_NAME_MAX ? short_name : null,
     city: (row.city ?? "").trim() || null,
     region: (row.region ?? "").trim() || null,
     type,
     levels_offered: splitList(row.levels_offered),
     fields_offered: splitList(row.fields_offered),
-    contact_email: parseEmail(row.contact_email, problems, "contact_email"),
+    contact_email: parseEmailsCell(row.contact_email, problems, "contact_email"),
     application_fee: parseFeeCell(row[feeKey], problems, feeKey),
     application_fee_currency: parseFeeCurrency(row[currencyKey], row[feeKey], problems, currencyKey),
     dsu_body: (row.dsu_body ?? "").trim() || null,
@@ -540,19 +680,26 @@ export function resolveDsuBody(
   return { error: `DSU body "${cell.trim()}" is not in Setup → Scholarship bodies — left unchanged` };
 }
 
-export const PROGRAM_LEVELS = ["bachelors", "masters", "phd"] as const;
+/**
+ * The three standard levels — offered as suggestions, and what students are
+ * matched by. A programme's level may be anything else as well (0304).
+ */
+export const PROGRAM_LEVELS = STANDARD_LEVELS;
 export type ProgramLevel = (typeof PROGRAM_LEVELS)[number];
 
 /** What a sheet says about a programme. Nulls mean "said nothing". */
 export type ProgramInput = {
-  level: ProgramLevel;
+  /** Any level (0304): one of the three when it is a spelling of one, otherwise as written. */
+  level: string;
   name: string;
   core_field: string | null;
   sub_field: string | null;
   page_link: string | null;
-  interview_required: boolean | null;
+  /** "yes", "no", or words (0304). */
+  interview_required: string | null;
   interview_details: string | null;
-  admission_test_required: boolean | null;
+  /** "yes", "no", or words (0304). */
+  admission_test_required: string | null;
   admission_test_type: string | null;
   application_portal_name: string | null;
   application_portal_link: string | null;
@@ -576,15 +723,21 @@ export function programFromRow(
   problems: RowProblem[]
 ): ProgramInput | null {
   const name = (row[nameKey] ?? "").trim();
-  const level = (row.level ?? "").trim().toLowerCase();
+  const level = normalizeLevel(row.level);
   if (!name && !level) return null;
 
   if (!name) {
     problems.push(`a level ("${level}") with no programme name`);
     return null;
   }
-  if (!PROGRAM_LEVELS.includes(level as ProgramLevel)) {
-    problems.push(`programme "${name}" has level "${row.level ?? ""}" — must be bachelors, masters or phd`);
+  // Any level at all (0304) — but some level: it is half of what tells two
+  // programmes of the same name apart.
+  if (!level) {
+    problems.push(`programme "${name}" has no level — write bachelors, masters, phd, or what the university calls it`);
+    return null;
+  }
+  if (level.length > LEVEL_MAX) {
+    problems.push(`programme "${name}" has a level longer than ${LEVEL_MAX} characters`);
     return null;
   }
 
@@ -593,14 +746,14 @@ export function programFromRow(
   const currencyKey = `${feeKey}_currency`;
 
   return {
-    level: level as ProgramLevel,
+    level,
     name,
     core_field: (row.core_field ?? "").trim() || null,
     sub_field: (row.sub_field ?? "").trim() || null,
     page_link: (row.page_link ?? "").trim() || null,
-    interview_required: parseBool(row.interview_required),
+    interview_required: parseYesNoCell(row.interview_required, problems, "interview_required"),
     interview_details: (row.interview_details ?? "").trim() || null,
-    admission_test_required: parseBool(row.admission_test_required),
+    admission_test_required: parseYesNoCell(row.admission_test_required, problems, "admission_test_required"),
     admission_test_type: (row.admission_test_type ?? "").trim() || null,
     application_portal_name: (row.application_portal_name ?? "").trim() || null,
     application_portal_link: (row.application_portal_link ?? "").trim() || null,
@@ -610,8 +763,13 @@ export function programFromRow(
     language_requirement: (row.language_requirement ?? "").trim() || null,
     application_fee: parseFeeCell(row[feeKey], problems, feeKey),
     application_fee_currency: parseFeeCurrency(row[currencyKey], row[feeKey], problems, currencyKey),
-    coordinator_email: parseEmail(row.coordinator_email, problems, "coordinator_email"),
+    coordinator_email: parseEmailsCell(row.coordinator_email, problems, "coordinator_email"),
   };
+}
+
+/** Whether two levels are one: "Foundation" and "foundation", "Master's" and "masters". */
+export function sameLevel(a: string | null | undefined, b: string | null | undefined): boolean {
+  return levelKey(a) === levelKey(b);
 }
 
 // ----------------------------------------------------- creating a new row
@@ -668,12 +826,11 @@ export function programInsertValues(input: ProgramInput, universityId: string) {
     core_field: input.core_field,
     sub_field: input.sub_field,
     page_link: input.page_link,
-    // `not null default false`. On a row that does not exist yet there is no
-    // stored value to preserve, so a blank cell settles as "no" — which is
-    // what the column default would have said anyway.
-    interview_required: input.interview_required ?? false,
+    // Text since 0304, and nullable: a blank cell on a new programme is "not
+    // known", not "no".
+    interview_required: input.interview_required,
     interview_details: input.interview_details,
-    admission_test_required: input.admission_test_required ?? false,
+    admission_test_required: input.admission_test_required,
     admission_test_type: input.admission_test_type,
     application_portal_name: input.application_portal_name,
     application_portal_link: input.application_portal_link,

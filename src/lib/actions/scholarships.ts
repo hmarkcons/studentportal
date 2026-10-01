@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { requirePermission } from "@/lib/auth/permissions";
 import { translateScholarshipValues } from "@/lib/translateScholarship";
 import { overLongBodyField, type LimitedBodyField } from "@/lib/scholarshipBodySheet";
+import { parseDayOrWords } from "@/lib/catalogueRows";
+import { DATE_WORDS_MAX } from "@/lib/catalogueText";
 import { isScholarshipStatus, scholarshipIdentityError, SCHOLARSHIP_STATUSES } from "@/lib/scholarships";
 
 // Everything here needs scholarships.manage, which now defaults to Super Admin
@@ -45,6 +47,9 @@ function readBodyFields(formData: FormData) {
     source_url: textField(formData, "source_url"),
     apply_url: textField(formData, "apply_url"),
     application_deadline: textField(formData, "application_deadline"),
+    // Not on the form before 0304, so a form that does not carry them leaves them alone.
+    ...(formData.has("document_upload_deadline") ? { document_upload_deadline: textField(formData, "document_upload_deadline") } : {}),
+    ...(formData.has("courier_deadline") ? { courier_deadline: textField(formData, "courier_deadline") } : {}),
     isee_threshold: textField(formData, "isee_threshold"),
     ispe_threshold: textField(formData, "ispe_threshold"),
     benefits: textField(formData, "benefits"),
@@ -58,6 +63,8 @@ function readBodyFields(formData: FormData) {
 const FORM_LABELS: Record<LimitedBodyField, string> = {
   region: "Region / state",
   application_deadline: "Application deadline",
+  document_upload_deadline: "Document upload deadline",
+  courier_deadline: "Courier deadline",
   isee_threshold: "ISEE limit",
   ispe_threshold: "ISPE limit",
   stipend_amount: "Stipend / notes",
@@ -112,12 +119,18 @@ function readCallStatus(formData: FormData) {
   if (!["published", "awaiting"].includes(status)) {
     return { error: "Choose whether this year's call is published or not out yet." };
   }
-  const expected = String(formData.get("call_expected_on") ?? "").trim() || null;
+  // A date or words (0304): "15 Jul 2027", "Early July".
+  const expected = parseDayOrWords(String(formData.get("call_expected_on") ?? ""));
+  if (expected.text && expected.text.length > DATE_WORDS_MAX) {
+    return { error: `Keep "Expected on" to ${DATE_WORDS_MAX} characters.` };
+  }
+  const awaiting = status === "awaiting";
   return {
     // A date on a published call is left over from when it was awaited, and
     // would read as a second deadline.
     call_status: status,
-    call_expected_on: status === "awaiting" ? expected : null,
+    call_expected_on: awaiting ? expected.date : null,
+    call_expected_text: awaiting ? expected.text : null,
   };
 }
 

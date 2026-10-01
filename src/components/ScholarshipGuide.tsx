@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ExternalLink, FileText, Link2 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { callLink } from "@/lib/scholarshipCallLink";
+import { linkHref } from "@/lib/catalogueText";
 
 export type GuideBody = {
   id: string;
@@ -16,6 +17,8 @@ export type GuideBody = {
   ispe_threshold: string | null;
   call_status: string;
   call_expected_on: string | null;
+  /** The expected date in words (0304), said in its place. */
+  call_expected_text?: string | null;
   call_pdf_url: string | null;
   /** The copy kept against this body, signed on the server. */
   call_pdf_signed_url: string | null;
@@ -47,6 +50,9 @@ export function ScholarshipGuide({ body, audience = "staff" }: { body: GuideBody
   const [open, setOpen] = useState(false);
   const sections = body.guide_sections ?? [];
   const call = callLink(body);
+  // Link fields take anything (0304): only a real web address is a link.
+  const applyHref = linkHref(body.apply_url);
+  const sourceHref = linkHref(body.source_url);
 
   return (
     <div className="rounded-md border border-border">
@@ -64,7 +70,7 @@ export function ScholarshipGuide({ body, audience = "staff" }: { body: GuideBody
             ))}
           {body.call_status === "awaiting" && (
             <Badge tone="info">
-              call not published{body.call_expected_on ? ` · expected ${body.call_expected_on}` : ""}
+              call not published{(body.call_expected_text ?? body.call_expected_on) ? ` · expected ${body.call_expected_text ?? body.call_expected_on}` : ""}
             </Badge>
           )}
         </div>
@@ -85,8 +91,8 @@ export function ScholarshipGuide({ body, audience = "staff" }: { body: GuideBody
             ISEE {body.isee_threshold ?? "—"} · ISPE {body.ispe_threshold ?? "—"}
           </span>
         )}
-        {body.apply_url && (
-          <a href={body.apply_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+        {applyHref && (
+          <a href={applyHref} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
             Apply portal
             <ExternalLink aria-hidden className="h-3.5 w-3.5 shrink-0" />
           </a>
@@ -105,9 +111,9 @@ export function ScholarshipGuide({ body, audience = "staff" }: { body: GuideBody
             {call.kind !== "stored" && <ExternalLink aria-hidden className="h-3.5 w-3.5 shrink-0" />}
           </a>
         )}
-        {body.source_url && (
-          <a href={body.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-muted hover:underline">
-            {new URL(body.source_url).hostname.replace(/^www\./, "")}
+        {sourceHref && (
+          <a href={sourceHref} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-muted hover:underline">
+            {new URL(sourceHref).hostname.replace(/^www\./, "")}
             <ExternalLink aria-hidden className="h-3.5 w-3.5 shrink-0" />
           </a>
         )}

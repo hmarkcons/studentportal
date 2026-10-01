@@ -85,7 +85,7 @@ test("several rounds in one cell", () => {
   const rounds = parseRoundsCell("Round 1|2026-09-01|2026-01-15; Round 2|2027-02-01|2026-09-15");
   assert.equal(rounds.length, 2);
   assert.deepEqual(rounds[0], {
-    label: "Round 1", start_date: "2026-09-01", application_deadline: "2026-01-15", sort_order: 1,
+    label: "Round 1", start_date: "2026-09-01", application_deadline: "2026-01-15", start_text: null, deadline_text: null, sort_order: 1,
   });
   assert.equal(rounds[1].label, "Round 2");
 });
@@ -168,15 +168,39 @@ test("a programme row reads its columns", () => {
   );
   assert.equal(program.name, "Computer Science");
   assert.equal(program.level, "bachelors");
-  assert.equal(program.interview_required, false);
+  assert.equal(program.interview_required, "no");
   assert.equal(program.tuition_fee, "3000");
   assert.deepEqual(program.intake_dates, ["Fall", "Spring"]);
 });
 
-test("a bad level is reported and the row withheld", () => {
+test("any level is kept, and the usual spellings of the three are the three (0304)", () => {
+  // The three are what students are matched by, so "Master's" must still be "masters".
+  const level = (l) => programFromRow({ name: "Computer Science", level: l }, "name", []).level;
+  assert.equal(level("undergrad"), "bachelors");
+  assert.equal(level("Master's"), "masters");
+  assert.equal(level("MSc"), "masters");
+  assert.equal(level("Ph.D."), "phd");
+  assert.equal(level("Foundation"), "Foundation");
+  assert.equal(level("Single-cycle  master's"), "Single-cycle master's");
+});
+
+test("a programme with no level is reported and the row withheld", () => {
+  // Level is half of what tells two programmes of the same name apart.
   const problems = [];
-  assert.equal(programFromRow({ name: "Computer Science", level: "undergrad" }, "name", problems), null);
-  assert.match(problems[0], /must be bachelors, masters or phd/);
+  assert.equal(programFromRow({ name: "Computer Science", level: " " }, "name", problems), null);
+  assert.match(problems[0], /has no level/);
+});
+
+test("yes/no columns take words as well (0304)", () => {
+  const problems = [];
+  const p = programFromRow(
+    { name: "Medicine", level: "masters", interview_required: "Only for non-EU students", admission_test_required: "Y" },
+    "name",
+    problems
+  );
+  assert.equal(p.interview_required, "Only for non-EU students");
+  assert.equal(p.admission_test_required, "yes");
+  assert.deepEqual(problems, []);
 });
 
 test("a level with no programme name is reported", () => {
@@ -225,7 +249,7 @@ test("a new university with no type takes the destination's track", () => {
   assert.equal(universityInsertValues(stated, "dest-1", "private").type, "public");
 });
 
-test("a created programme is rectangular too, and its booleans settle to no", () => {
+test("a created programme is rectangular too, and a yes/no it does not mention is not known", () => {
   const sparse = programFromRow({ name: "Economics", level: "masters" }, "name", []);
   const rich = programFromRow(
     { name: "Computer Science", level: "bachelors", interview_required: "yes", tuition_fee: "3000" },
@@ -235,10 +259,10 @@ test("a created programme is rectangular too, and its booleans settle to no", ()
   const a = programInsertValues(sparse, "uni-1");
   const b = programInsertValues(rich, "uni-1");
   assert.deepEqual(Object.keys(a).sort(), Object.keys(b).sort());
-  // not null default false — there is no stored value to preserve on a new row.
-  assert.equal(a.interview_required, false);
-  assert.equal(a.admission_test_required, false);
-  assert.equal(b.interview_required, true);
+  // Text and nullable since 0304: a blank on a new programme is "not known", not "no".
+  assert.equal(a.interview_required, null);
+  assert.equal(a.admission_test_required, null);
+  assert.equal(b.interview_required, "yes");
   assert.deepEqual(a.intake_dates, []);
   assert.equal(a.tuition_fee, null);
 });
@@ -348,8 +372,8 @@ test("a fee or a tuition in words is imported as written, not reported (0303)", 
   assert.equal(p.application_fee, "Waived");
   assert.deepEqual(problems, []);
   const long = [];
-  programFromRow({ name: "Law", level: "bachelors", tuition_fee: "x".repeat(121) }, "name", long);
-  assert.match(long[0] ?? "", /tuition_fee is longer than 120 characters/);
+  programFromRow({ name: "Law", level: "bachelors", tuition_fee: "x".repeat(501) }, "name", long);
+  assert.match(long[0] ?? "", /tuition_fee is longer than 500 characters/);
 });
 
 test("blank fee, currency, coordinator and DSU body say nothing", () => {
@@ -362,11 +386,15 @@ test("blank fee, currency, coordinator and DSU body say nothing", () => {
   assert.equal(p.coordinator_email, null);
 });
 
-test("a bad coordinator email is reported and left unchanged", () => {
+test("a coordinator email may be several, or anything, and is never refused (0304)", () => {
   const problems = [];
-  const p = programFromRow({ name: "Law", level: "bachelors", coordinator_email: "Prof. Bianchi" }, "name", problems);
-  assert.equal(p.coordinator_email, null);
-  assert.match(problems.join(), /coordinator_email "Prof. Bianchi" is not an email/);
+  const words = programFromRow({ name: "Law", level: "bachelors", coordinator_email: "Prof. Bianchi" }, "name", problems);
+  assert.equal(words.coordinator_email, "Prof. Bianchi");
+  const several = programFromRow({ name: "Law", level: "bachelors", coordinator_email: "a@unipv.it;b@unipv.it,  c@unipv.it" }, "name", problems);
+  assert.equal(several.coordinator_email, "a@unipv.it, b@unipv.it, c@unipv.it", "stored one way, so a re-import sees no change");
+  const uni = universityFromRow({ name: "Pavia", contact_email: "admissions@unipv.it, international@unipv.it" }, "name", problems);
+  assert.equal(uni.contact_email, "admissions@unipv.it, international@unipv.it");
+  assert.deepEqual(problems, []);
 });
 
 const BODIES = [

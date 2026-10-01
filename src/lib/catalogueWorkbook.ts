@@ -134,8 +134,10 @@ export function catalogueWorkbook(
     {
       column: catalogueColumnIndex("level"),
       range: listRange(CATALOGUE_LIST_SHEET, "A", CATALOGUE_LEVELS.length),
-      errorTitle: "Not a level",
-      errorMessage: "bachelors, masters or phd — or leave blank for a university with no programme on this row.",
+      errorTitle: "Another level",
+      errorMessage:
+        "Any level may be written (Foundation, Single-cycle master's). Only bachelors, masters and phd are matched to students by level.",
+      errorStyle: "information" as const,
     },
     {
       column: catalogueColumnIndex("type"),
@@ -146,14 +148,16 @@ export function catalogueWorkbook(
     {
       column: catalogueColumnIndex("interview_required"),
       range: listRange(CATALOGUE_LIST_SHEET, "C", CATALOGUE_YES_NO.length),
-      errorTitle: "yes or no",
-      errorMessage: "Leave blank to leave whatever is already recorded alone.",
+      errorTitle: "In words",
+      errorMessage: "yes, no, or words (Only for non-EU students) — kept as written. Blank leaves what is recorded alone.",
+      errorStyle: "information" as const,
     },
     {
       column: catalogueColumnIndex("admission_test_required"),
       range: listRange(CATALOGUE_LIST_SHEET, "C", CATALOGUE_YES_NO.length),
-      errorTitle: "yes or no",
-      errorMessage: "Leave blank to leave whatever is already recorded alone.",
+      errorTitle: "In words",
+      errorMessage: "yes, no, or words (TOLC-I or SAT) — kept as written. Blank leaves what is recorded alone.",
+      errorStyle: "information" as const,
     },
   ].map((d) => ({ ...d, fromRow: 2, toRow: validatedRows + 1 }));
 
@@ -171,7 +175,9 @@ export function catalogueWorkbook(
   const roundsBody = roundRows.map((row) =>
     ROUND_COLUMNS.map((c) => {
       const value = row[c.header];
-      if ((c.header === "start_date" || c.header === "application_deadline") && value) {
+      // A date as a date cell; words (0304) — "Rolling", "15 March 2027,
+      // 13:00 CET" — as text, exactly as stored.
+      if ((c.header === "start_date" || c.header === "application_deadline") && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
         return { value: new Date(`${value}T00:00:00Z`), type: Date, format: "yyyy-mm-dd", ...example };
       }
       return { value: value || undefined, type: String, ...example };
@@ -192,8 +198,9 @@ export function catalogueWorkbook(
     {
       column: roundColumnIndex("level"),
       range: listRange(CATALOGUE_LIST_SHEET, "A", CATALOGUE_LEVELS.length),
-      errorTitle: "Not a level",
-      errorMessage: "bachelors, masters or phd — or leave blank for a round at every level.",
+      errorTitle: "Another level",
+      errorMessage: "Any level the programmes have — or leave blank for a round at every level.",
+      errorStyle: "information" as const,
     },
   ].map((d) => ({ ...d, fromRow: 2, toRow: roundsValidatedTo }));
 

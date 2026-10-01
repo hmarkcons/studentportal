@@ -27,7 +27,7 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
   const { data: app, error } = await supabase
     .from("applications")
     .select(
-      "id, student_id, current_stage, intake, round_id, university:universities(name, short_name, destination:destinations(pipeline_stages)), program:programs(name, rounds:program_intake_rounds(id, label, start_date, application_deadline, sort_order)), student:leads!inner(auth_user_id)"
+      "id, student_id, current_stage, intake, round_id, university:universities(name, short_name, destination:destinations(pipeline_stages)), program:programs(name, rounds:program_intake_rounds(id, label, start_date, application_deadline, start_text, deadline_text, sort_order)), student:leads!inner(auth_user_id)"
     )
     .eq("id", id)
     .maybeSingle();

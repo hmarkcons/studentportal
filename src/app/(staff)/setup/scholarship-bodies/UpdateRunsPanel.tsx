@@ -17,6 +17,7 @@ import { Card } from "@/components/ui/Card";
 import { useButtonAction } from "@/components/useButtonAction";
 import { toast } from "@/lib/toast";
 import type { ActionResultLike } from "@/lib/actionStatus";
+import { linkHref } from "@/lib/catalogueText";
 
 export type UpdateRun = {
   id: string;
@@ -122,8 +123,8 @@ function Proposal({
           {run.academic_year && <span className="ml-2 text-xs font-normal text-muted">for {run.academic_year}</span>}
         </span>
         <span className="flex items-center gap-2">
-          {run.source_url && (
-            <a href={run.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+          {linkHref(run.source_url) && (
+            <a href={linkHref(run.source_url)!} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
               source
               <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden />
             </a>

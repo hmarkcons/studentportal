@@ -4,7 +4,6 @@ import { createHash } from "node:crypto";
 import { redirect } from "next/navigation";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { SHORT_NAME_MAX } from "@/lib/finalizedStage";
 import { parseCsvWithHeader, readCsvFile } from "@/lib/csv";
 import { requirePermission } from "@/lib/auth/permissions";
 import { MAX_UPLOAD_BYTES, fileSizeError } from "@/lib/fileSize";
@@ -26,6 +25,7 @@ import {
 } from "@/lib/importMerge";
 import {
   programFromRow,
+  sameLevel,
   resolveDestination,
   resolveDsuBody,
   roundsFromRow,
@@ -58,6 +58,17 @@ import {
 import { uploadedFile } from "@/lib/stagedUpload";
 import { importIntent as previewOrApply } from "@/lib/importIntent";
 import { FEE_CURRENCIES, FEE_TEXT_MAX, parseFeeText, parseTuitionText } from "@/lib/applicationFee";
+import {
+  EMAILS_MAX,
+  LEVEL_MAX,
+  TYPED_SHORT_NAME_MAX,
+  YES_NO_MAX,
+  levelKey,
+  normalizeEmails,
+  normalizeLevel,
+  parseYesNoText,
+  splitTypedList,
+} from "@/lib/catalogueText";
 
 /**
  * An application fee and its currency from an edit form: an amount or words
@@ -81,8 +92,20 @@ function tuitionFromForm(formData: FormData): { tuition_fee: string | null } | {
   return { tuition_fee };
 }
 
-/** The same rule the database holds programs.coordinator_email to (0287). */
-const EMAIL = /^[^@\s]+@[^@\s]+$/;
+/**
+ * An email field (0304): one address, several separated by commas, or
+ * anything — no format is refused. Stored with ", " between its parts.
+ */
+function emailsFromForm(formData: FormData, key: string, label: string): { value: string | null } | { error: string } {
+  const value = normalizeEmails(String(formData.get(key) ?? ""));
+  if (value && value.length > EMAILS_MAX) return { error: `Keep the ${label} to ${EMAILS_MAX} characters.` };
+  return { value };
+}
+
+/** A text field as typed, line breaks kept as \n; null when blank. */
+function textFromForm(formData: FormData, key: string): string | null {
+  return String(formData.get(key) ?? "").replace(/\r\n?/g, "\n").trim() || null;
+}
 
 /**
  * The short name a university is shown by under a finalized student's
@@ -91,10 +114,82 @@ const EMAIL = /^[^@\s]+@[^@\s]+$/;
  */
 function shortNameFromForm(formData: FormData): { short_name: string | null } | { error: string } {
   const short_name = String(formData.get("short_name") ?? "").trim().replace(/\s+/g, " ") || null;
-  if (short_name && short_name.length > SHORT_NAME_MAX) {
-    return { error: `Keep the short name to ${SHORT_NAME_MAX} characters — it sits under a stage, in a narrow column.` };
+  if (short_name && short_name.length > TYPED_SHORT_NAME_MAX) {
+    return { error: `Keep the short name to ${TYPED_SHORT_NAME_MAX} characters — it sits under a stage, in a narrow column.` };
   }
   return { short_name };
+}
+
+/** The lists a university offers, when the form carries them: one per line or separated by semicolons. */
+function universityListsFromForm(formData: FormData): { levels_offered?: string[]; fields_offered?: string[] } {
+  const lists: { levels_offered?: string[]; fields_offered?: string[] } = {};
+  if (formData.has("levels_offered")) lists.levels_offered = splitTypedList(String(formData.get("levels_offered") ?? ""));
+  if (formData.has("fields_offered")) lists.fields_offered = splitTypedList(String(formData.get("fields_offered") ?? ""));
+  return lists;
+}
+
+/** The programme fields that are plain text, as typed. */
+const PROGRAM_TEXT_FIELDS = [
+  "core_field",
+  "sub_field",
+  "duration",
+  "language_requirement",
+  "academic_requirement",
+  "interview_details",
+  "admission_test_type",
+  "application_portal_name",
+  "application_portal_link",
+  "page_link",
+  "requirements_link",
+] as const;
+
+/**
+ * Every programme field an edit form posts (0304) — the catalogue sheet's
+ * columns and the rest, read the way the sheets read them: any level (the
+ * usual spellings of bachelors / masters / phd stored as those, so students
+ * still match), yes/no or words, any emails, any links. Nothing is refused
+ * for its format.
+ *
+ * Only what the form posts is returned. The compact Add form carries a few
+ * fields and the edit form all of them; a field a form does not carry is left
+ * as it is rather than cleared.
+ */
+function programFieldsFromForm(formData: FormData): { fields: Record<string, unknown> } | { error: string } {
+  const level = normalizeLevel(String(formData.get("level") ?? ""));
+  const name = String(formData.get("name") ?? "").trim();
+  if (!level || !name) return { error: "Level and name are required." };
+  if (level.length > LEVEL_MAX) return { error: `Keep the level to ${LEVEL_MAX} characters.` };
+
+  const fields: Record<string, unknown> = { level, name };
+  for (const key of PROGRAM_TEXT_FIELDS) if (formData.has(key)) fields[key] = textFromForm(formData, key);
+
+  for (const [key, label] of [
+    ["interview_required", "interview"],
+    ["admission_test_required", "admission test"],
+  ] as const) {
+    if (!formData.has(key)) continue;
+    const value = parseYesNoText(String(formData.get(key) ?? ""));
+    if (value && value.length > YES_NO_MAX) return { error: `Keep the ${label} answer to ${YES_NO_MAX} characters.` };
+    fields[key] = value;
+  }
+
+  if (formData.has("coordinator_email")) {
+    const emails = emailsFromForm(formData, "coordinator_email", "coordinator email");
+    if ("error" in emails) return { error: emails.error };
+    fields.coordinator_email = emails.value;
+  }
+  if (formData.has("intake_dates")) fields.intake_dates = splitTypedList(String(formData.get("intake_dates") ?? ""));
+  if (formData.has("tuition_fee")) {
+    const tuition = tuitionFromForm(formData);
+    if ("error" in tuition) return { error: tuition.error };
+    fields.tuition_fee = tuition.tuition_fee;
+  }
+  if (formData.has("application_fee")) {
+    const fee = feeFromForm(formData);
+    if ("error" in fee) return { error: fee.error };
+    Object.assign(fields, fee);
+  }
+  return { fields };
 }
 
 export async function createUniversity(_prevState: unknown, formData: FormData) {
@@ -105,13 +200,15 @@ export async function createUniversity(_prevState: unknown, formData: FormData) 
   const city = String(formData.get("city") ?? "").trim();
   const region = String(formData.get("region") ?? "").trim() || null;
   const type = String(formData.get("type") ?? "");
-  const contact_email = String(formData.get("contact_email") ?? "").trim() || null;
   const dsu_body_id = String(formData.get("dsu_body_id") ?? "").trim() || null;
 
   if (!destination_id || !name || !city || !["public", "private"].includes(type)) {
     return { error: "Fill in all required fields — city is mandatory." };
   }
-  if (contact_email && !EMAIL.test(contact_email)) return { error: "The university email doesn't look like an email address." };
+  const emails = emailsFromForm(formData, "contact_email", "university email");
+  if ("error" in emails) return { error: emails.error };
+  const contact_email = emails.value;
+  const lists = universityListsFromForm(formData);
   const fee = feeFromForm(formData);
   if ("error" in fee) return { error: fee.error };
   const short = shortNameFromForm(formData);
@@ -128,7 +225,7 @@ export async function createUniversity(_prevState: unknown, formData: FormData) 
 
   const { data, error } = await supabase
     .from("universities")
-    .insert({ destination_id, name, city, region, type, contact_email, dsu_body_id, ...fee, ...short })
+    .insert({ destination_id, name, city, region, type, contact_email, dsu_body_id, ...lists, ...fee, ...short })
     .select("id")
     .single();
   if (error) return { error: error.message };
@@ -145,13 +242,15 @@ export async function updateUniversity(universityId: string, _prevState: unknown
   const region = String(formData.get("region") ?? "").trim() || null;
   const type = String(formData.get("type") ?? "");
   const status = String(formData.get("status") ?? "active");
-  const contact_email = String(formData.get("contact_email") ?? "").trim() || null;
   const dsu_body_id = String(formData.get("dsu_body_id") ?? "").trim() || null;
 
   if (!name || !["public", "private"].includes(type)) {
     return { error: "Name and type are required." };
   }
-  if (contact_email && !EMAIL.test(contact_email)) return { error: "The university email doesn't look like an email address." };
+  const emails = emailsFromForm(formData, "contact_email", "university email");
+  if ("error" in emails) return { error: emails.error };
+  const contact_email = emails.value;
+  const lists = universityListsFromForm(formData);
   const fee = feeFromForm(formData);
   if ("error" in fee) return { error: fee.error };
   const short = shortNameFromForm(formData);
@@ -174,7 +273,7 @@ export async function updateUniversity(universityId: string, _prevState: unknown
   // 0039) matches no rows and raises nothing.
   const { data: updated, error } = await supabase
     .from("universities")
-    .update({ name, city, region, type, status, contact_email, dsu_body_id, ...fee, ...short })
+    .update({ name, city, region, type, status, contact_email, dsu_body_id, ...lists, ...fee, ...short })
     .eq("id", universityId)
     .select("id");
   if (error) return { error: error.message };
@@ -197,21 +296,8 @@ export async function deleteUniversity(universityId: string) {
 export async function updateProgram(programId: string, universityId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
 
-  const level = String(formData.get("level") ?? "");
-  const name = String(formData.get("name") ?? "").trim();
-  const core_field = String(formData.get("core_field") ?? "").trim() || null;
-  const sub_field = String(formData.get("sub_field") ?? "").trim() || null;
-  const tuition = tuitionFromForm(formData);
-  if ("error" in tuition) return { error: tuition.error };
-  const { tuition_fee } = tuition;
-  const duration = String(formData.get("duration") ?? "").trim() || null;
-  const language_requirement = String(formData.get("language_requirement") ?? "").trim() || null;
-  const coordinator_email = String(formData.get("coordinator_email") ?? "").trim() || null;
-
-  if (!level || !name) return { error: "Level and name are required." };
-  if (coordinator_email && !EMAIL.test(coordinator_email)) return { error: "The coordinator email doesn't look like an email address." };
-  const fee = feeFromForm(formData);
-  if ("error" in fee) return { error: fee.error };
+  const read = programFieldsFromForm(formData);
+  if ("error" in read) return { error: read.error };
 
   // No check that a round's deadline falls before its start date. It usually
   // does, but rolling admission runs the other way round and a programme is
@@ -220,7 +306,7 @@ export async function updateProgram(programId: string, universityId: string, _pr
   // prevents them being typed the wrong way round.
   const { data: updated, error } = await supabase
     .from("programs")
-    .update({ level, name, core_field, sub_field, tuition_fee, duration, language_requirement, coordinator_email, ...fee })
+    .update(read.fields)
     .eq("id", programId)
     .select("id");
   if (error) return { error: error.message };
@@ -282,25 +368,14 @@ export async function deleteProgram(programId: string, universityId: string) {
 export async function addProgram(universityId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
 
-  const level = String(formData.get("level") ?? "");
-  const name = String(formData.get("name") ?? "").trim();
-  const core_field = String(formData.get("core_field") ?? "").trim() || null;
-  const sub_field = String(formData.get("sub_field") ?? "").trim() || null;
-  const tuition = tuitionFromForm(formData);
-  if ("error" in tuition) return { error: tuition.error };
-  const { tuition_fee } = tuition;
-  const coordinator_email = String(formData.get("coordinator_email") ?? "").trim() || null;
-
-  if (!level || !name) return { error: "Level and name are required." };
-  if (coordinator_email && !EMAIL.test(coordinator_email)) return { error: "The coordinator email doesn't look like an email address." };
-  const fee = feeFromForm(formData);
-  if ("error" in fee) return { error: fee.error };
+  const read = programFieldsFromForm(formData);
+  if ("error" in read) return { error: read.error };
 
   // The id comes back so the intake rounds can be attached — they are a child
   // table now, not two columns on this row.
   const { data: created, error } = await supabase
     .from("programs")
-    .insert({ university_id: universityId, level, name, core_field, sub_field, tuition_fee, coordinator_email, ...fee })
+    .insert({ university_id: universityId, ...read.fields })
     .select("id")
     .single();
   if (error) return { error: error.message };
@@ -801,9 +876,13 @@ type ProgramEntry = {
 /** A Rounds-sheet row, resolved to its university. */
 type RoundEntry = { spec: RoundSpec; universityId: string; universityLabel: string };
 
-/** Keyed by university as well as name+level: two universities may both teach "Computer Science" at bachelors. */
+/**
+ * Keyed by university as well as name+level: two universities may both teach
+ * "Computer Science" at bachelors. The level by levelKey, since any level may
+ * be written (0304) and "Foundation" in a sheet is the "foundation" on file.
+ */
 const programKey = (universityId: string, name: string, level: string) =>
-  `${universityId}::${normalizeName(name)}__${level}`;
+  `${universityId}::${normalizeName(name)}__${levelKey(level)}`;
 
 /** The columns an import may change. Name and level together are the key. */
 function programPatchFields(input: ProgramInput): Record<string, Cell> {
@@ -884,7 +963,7 @@ async function mergePrograms(run: ImportRun, entries: ProgramEntry[], roundEntri
       (chunk, from, to) =>
         supabase
           .from("program_intake_rounds")
-          .select("id, program_id, label, start_date, application_deadline, sort_order")
+          .select("id, program_id, label, start_date, application_deadline, start_text, deadline_text, sort_order")
           .in("program_id", chunk)
           .order("id")
           .range(from, to)
@@ -912,7 +991,7 @@ async function mergePrograms(run: ImportRun, entries: ProgramEntry[], roundEntri
   for (const program of stored) {
     const key = programKey(program.university_id, program.name, program.level);
     byKey.set(key, [...(byKey.get(key) ?? []), program]);
-    const scope = `${program.university_id}::${program.level}`;
+    const scope = `${program.university_id}::${levelKey(program.level)}`;
     storedNames.set(scope, [...(storedNames.get(scope) ?? []), program.name]);
   }
 
@@ -925,7 +1004,7 @@ async function mergePrograms(run: ImportRun, entries: ProgramEntry[], roundEntri
   for (const entry of entries) {
     const { input, rounds, universityId, universityLabel } = entry;
     const label = `${universityLabel} · ${input.name} (${input.level})`;
-    const scope = `${universityId}::${input.level}`;
+    const scope = `${universityId}::${levelKey(input.level)}`;
 
     let candidates = byKey.get(programKey(universityId, input.name, input.level)) ?? [];
     let similar = false;
@@ -1044,7 +1123,7 @@ async function mergePrograms(run: ImportRun, entries: ProgramEntry[], roundEntri
         .map((e, i) => ({ e, i }))
         .filter(({ e }) => e.universityId === universityId)
         .map(({ e, i }) => ({ key: `new:${i}`, name: e.input.name, level: e.input.level as string, storedId: null, newIndex: i })),
-    ].filter((p) => !spec.level || p.level === spec.level);
+    ].filter((p) => !spec.level || sameLevel(p.level, spec.level));
 
     const where = `${universityLabel}${spec.level ? ` (${spec.level})` : ""}`;
     const roundName = spec.round.label ? `"${spec.round.label}"` : "an unnamed round";
@@ -1068,7 +1147,7 @@ async function mergePrograms(run: ImportRun, entries: ProgramEntry[], roundEntri
         report.problems.push(`Rounds: ${where} has no programme called "${spec.programName}" — ${roundName} not applied`);
         continue;
       }
-      if (!spec.level && new Set(reached.map((p) => p.level)).size > 1) {
+      if (!spec.level && new Set(reached.map((p) => levelKey(p.level))).size > 1) {
         report.problems.push(
           `Rounds: ${universityLabel} teaches "${spec.programName}" at more than one level — fill in the level; ${roundName} not applied`
         );
@@ -1152,6 +1231,8 @@ async function mergePrograms(run: ImportRun, entries: ProgramEntry[], roundEntri
       label: round.label,
       start_date: round.start_date,
       application_deadline: round.application_deadline,
+      start_text: round.start_text,
+      deadline_text: round.deadline_text,
       sort_order: round.sort_order,
     }));
   });

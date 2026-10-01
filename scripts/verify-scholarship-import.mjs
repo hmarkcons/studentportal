@@ -305,9 +305,9 @@ try {
       String(LONG.length));
 
     // Past the limit, set by script so the browser lets it through: the server refuses it.
-    await stipendBox.evaluate((el) => { el.value = "x".repeat(1001); });
+    await stipendBox.evaluate((el) => { el.value = "x".repeat(4001); });
     await page.getByRole("button", { name: "Save changes" }).click();
-    const refusal = page.getByText("Stipend / notes is 1001 characters — keep it to 1000.");
+    const refusal = page.getByText("Stipend / notes is 4001 characters — keep it to 4000.");
     ok("a note past the limit is refused by the server, saying why",
       await refusal.waitFor({ timeout: 30_000 }).then(() => true, () => false));
     ok("...and nothing was written", (await bodiesLike(BODY))[0]?.stipend_amount === LONG);

@@ -41,7 +41,7 @@ export async function setRoundsForPrograms(universityId: string, _prevState: unk
 
   if (programIds.length === 0) return { error: "Choose at least one programme." };
   if (rounds.length === 0) {
-    return { error: "Add at least one round with a course start or an apply-by date." };
+    return { error: "Add at least one round with a course start or an apply-by date — a date or words." };
   }
 
   // Never trust the ids the form sent. Without this, a tampered-with or stale
@@ -124,6 +124,8 @@ export async function setRoundsForPrograms(universityId: string, _prevState: unk
         label: round.label,
         start_date: round.start_date,
         application_deadline: round.application_deadline,
+        start_text: round.start_text ?? null,
+        deadline_text: round.deadline_text ?? null,
         sort_order: replace ? round.sort_order ?? order : order,
       });
     }

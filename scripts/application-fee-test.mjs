@@ -110,3 +110,19 @@ test("an email needs an @ in the middle; anything else is reported, blank says n
   assert.equal(parseEmail("a@b@c", problems, "coordinator_email"), null);
   assert.equal(problems.length, 2);
 });
+
+test("several fees in one field, separated by a comma and a space (0304)", () => {
+  assert.equal(formatFee("30, 50", "EUR"), "€30, €50");
+  assert.equal(formatFee("30 (EU), 50 (non-EU)", "EUR"), "€30 (EU), €50 (non-EU)");
+  assert.equal(formatFee("30; Free for EU students", "GBP"), "£30; Free for EU students");
+  assert.equal(formatFee("€30, £50", "EUR"), "€30, £50", "a part with its own symbol keeps its currency");
+  // No space after the comma: a thousands separator, as it always was.
+  assert.equal(formatFee("3,000", "EUR"), "€3,000");
+  assert.equal(formatFee("30 (EU) / 50 (non-EU)", "EUR"), "30 (EU) / 50 (non-EU)", "one part that is not an amount is left alone");
+  assert.deepEqual(parseFeeText("€30, €50"), { text: "30, 50", symbolCurrency: "EUR" });
+  assert.deepEqual(parseFeeText("3,000, 4,500"), { text: "3000, 4500", symbolCurrency: null });
+  assert.deepEqual(parseFeeText("€30, £50"), { text: "€30, £50", symbolCurrency: null });
+  assert.equal(parseTuitionText("3,000, 4,500"), "3000, 4500");
+  assert.equal(parseTuitionText("€3,000, €4,500"), "€3,000, €4,500");
+  assert.equal(firstAmount("3000, 4500"), 3000, "a commission is suggested from the first");
+});

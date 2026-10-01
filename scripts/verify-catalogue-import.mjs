@@ -378,7 +378,9 @@ try {
             // A misspelt programme and an unnamed round.
             { ...at, level: "bachelors", program_name: "zztmp Computer Sciense", application_deadline: "2027-07-01" },
             { destination: alpha.display_name, university_name: "zztmp Nowhere University", round: "1st call", application_deadline: "2027-03-15" },
-            { ...at, round: "Odd", application_deadline: "03/04/2027" },
+            // 03/04/2027 is two different days: kept as the words it is (0304),
+            // never guessed into a date a reminder would fire on.
+            { ...at, level: "masters", program_name: "zztmp Data Science", round: "Odd", application_deadline: "03/04/2027" },
             { destination: alpha.display_name, university_name: "Example University (delete these rows)", round: "1st call", application_deadline: "2027-03-15" },
           ]),
         },
@@ -395,7 +397,7 @@ try {
     (
       await admin
         .from("program_intake_rounds")
-        .select("id, label, application_deadline, sort_order")
+        .select("id, label, application_deadline, deadline_text, sort_order")
         .eq("program_id", programId)
         .order("sort_order")
     ).data ?? [];
@@ -412,7 +414,9 @@ try {
     /Rounds: .*"zztmp Computer Sciense" → "zztmp Computer Science"/.test(shown.text), shown.text.slice(0, 900));
   ok("a university that is nowhere is reported, not created",
     /zztmp Nowhere University" is not a university on file/.test(shown.text), shown.text.slice(0, 900));
-  ok("an ambiguous date is refused and named", /"03\/04\/2027" is not a date/.test(shown.text), shown.text.slice(0, 900));
+  ok("an ambiguous date is kept as the words it is, not guessed into a date",
+    /zztmp Data Science \(masters\) · added round "Odd" \(apply by 03\/04\/2027\)/.test(shown.text) && !/is not a date/.test(shown.text),
+    shown.text.slice(0, 900));
   ok("the template's example row is skipped and said so", /Skipped 1 example row/.test(shown.text), shown.text.slice(0, 900));
   ok("...and the preview wrote no rounds",
     (await roundsOf(csId)).length === 0 && (await roundsOf(dsId)).length === 1);
@@ -422,8 +426,11 @@ try {
 
   const dsRounds = await roundsOf(dsId);
   ok("a programme gets its university's, its level's and its own rounds, soonest deadline first",
-    JSON.stringify(dsRounds.map((r) => r.label)) === JSON.stringify(["Main", "1st call", "2nd call"]),
+    JSON.stringify(dsRounds.map((r) => r.label)) === JSON.stringify(["Main", "1st call", "2nd call", "Odd"]),
     JSON.stringify(dsRounds));
+  const odd = dsRounds.find((r) => r.label === "Odd");
+  ok("...a round in words after the dated ones, its words kept and no date made up for it",
+    odd?.deadline_text === "03/04/2027" && odd?.application_deadline === null, JSON.stringify(odd));
   ok("...and the round on file kept its id, so an application linked to it stays linked",
     dsRounds.find((r) => r.label === "Main")?.id === mainRound.id && dsRounds[0].application_deadline === "2027-01-20",
     JSON.stringify(dsRounds));

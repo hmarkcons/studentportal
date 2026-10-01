@@ -111,6 +111,15 @@ test("it warns rather than blocks", () => {
   });
 });
 
+test("a list that is only a suggestion informs, and keeps whatever is typed (0304)", async () => {
+  // The catalogue's levels and yes/no columns take anything now.
+  const xml = sheetXml(
+    addDropdownsAndHideSheets(await baseWorkbook(), { sheet: "Students", dropdowns: [dropdown({ errorStyle: "information" })] })
+  );
+  assert.match(xml, /errorStyle="information"/);
+  assert.doesNotMatch(xml, /errorStyle="warning"/);
+});
+
 test("the block sits after sheetData, where CT_Worksheet requires it", async () => {
   const xml = sheetXml(addDropdownsAndHideSheets(await baseWorkbook(), {
     sheet: "Students",

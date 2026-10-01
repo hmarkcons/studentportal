@@ -49,13 +49,16 @@ export const GUIDE_LIMITS = { sections: 40, title: 120, text: 8000 } as const;
  * comfortably above the longest value on file when it was set.
  */
 export const BODY_TEXT_LIMITS = {
-  region: 120,
-  application_deadline: 500,
-  isee_threshold: 500,
-  ispe_threshold: 500,
-  stipend_amount: 1000,
-  benefits: 1000,
-  call_notes: 1000,
+  // Raised for anything in any field (0304): room for what a region writes.
+  region: 200,
+  application_deadline: 1000,
+  document_upload_deadline: 1000,
+  courier_deadline: 1000,
+  isee_threshold: 1000,
+  ispe_threshold: 1000,
+  stipend_amount: 4000,
+  benefits: 4000,
+  call_notes: 4000,
 } as const;
 
 export type LimitedBodyField = keyof typeof BODY_TEXT_LIMITS;
@@ -120,8 +123,8 @@ export const BODY_COLUMNS = [
   { key: "ispe_threshold", header: "ISPE threshold", width: 16, note: "e.g. ≤€58,452.06" },
   { key: "stipend_amount", header: "Stipend amount", width: 26, note: "The stipend, or a note about it." },
   { key: "benefits", header: "Benefits", width: 30, note: "e.g. free meals at university canteens." },
-  { key: "source_url", header: "Source URL", width: 30, note: "The body's own page. A full address, starting https://." },
-  { key: "apply_url", header: "Apply URL", width: 30, note: "Where the student actually submits. A full address." },
+  { key: "source_url", header: "Source URL", width: 30, note: "The body's own page — a web address, or a note. Only a web address becomes a link." },
+  { key: "apply_url", header: "Apply URL", width: 30, note: "Where the student actually submits — a web address, or a note." },
   {
     key: "call_status",
     header: "Call status",
@@ -134,9 +137,16 @@ export const BODY_COLUMNS = [
     key: "call_expected_on",
     header: "Call expected on",
     width: 16,
-    note: "When the region usually publishes — only for a call that is awaiting. An Excel date, 2027-03-15 or 15 Mar 2027.",
+    note:
+      "When the region usually publishes — only for a call that is awaiting. A date (2027-03-15, 15 Mar 2027) or words " +
+      "(Early July), kept as written.",
   },
-  { key: "call_pdf_url", header: "Call PDF URL", width: 30, note: "Link to the official call document. A full address." },
+  {
+    key: "call_pdf_url",
+    header: "Call PDF URL",
+    width: 30,
+    note: "Link to the official call document. A web address, or a note — only a web address becomes a link.",
+  },
   {
     key: "call_page_url",
     header: "Call page URL",
@@ -286,6 +296,8 @@ export type ExportBody = {
   apply_url: string | null;
   call_status: string | null;
   call_expected_on: string | null;
+  /** The expected date in words, shown in its place (0304). */
+  call_expected_text?: string | null;
   call_pdf_url: string | null;
   call_page_url: string | null;
   call_notes: string | null;
@@ -338,7 +350,8 @@ export function bodySheetRow(body: ExportBody, pairs: number): BodySheetRow {
     // Only beside a call that is awaiting. A date on a published call is left
     // over from when it was awaited; the import ignores it there (and says
     // so), so writing it would put a complaint on every clean round trip.
-    call_expected_on: body.call_status === "awaiting" ? text(body.call_expected_on) : "",
+    // The words when there are some — they begin with the date if it has one.
+    call_expected_on: body.call_status === "awaiting" ? text(body.call_expected_text ?? body.call_expected_on) : "",
     call_pdf_url: text(body.call_pdf_url),
     call_page_url: text(body.call_page_url),
     call_notes: text(body.call_notes),

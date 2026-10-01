@@ -17,6 +17,8 @@
 // Deliberately free of `@/` imports so it can be unit-tested directly under
 // Node; the dropdowns the routes add are their own business.
 
+import { levelKey, parseYesNoText } from "./catalogueText.ts";
+
 export const CATALOGUE_SHEET = "Catalogue";
 export const CATALOGUE_LIST_SHEET = "Lists";
 
@@ -110,24 +112,32 @@ function moneyCell(value: number | string | null | undefined): string {
   return /^\d+(\.\d+)?$/.test(text) ? String(Number(text)) : text;
 }
 
-function boolCell(value: boolean | null | undefined): string {
-  if (value === null || value === undefined) return "";
-  return value ? "yes" : "no";
+/** "yes", "no", or the words it holds (0304) — a boolean, from before 0304, as yes or no. */
+function yesNoCell(value: boolean | string | null | undefined): string {
+  return parseYesNoText(value ?? null) ?? "";
 }
 
 export type ExportRound = {
   label: string | null;
   start_date: string | null;
   application_deadline: string | null;
+  /** Words beside or instead of each date (0304); written in the date's cell, and read back the same. */
+  start_text?: string | null;
+  deadline_text?: string | null;
   sort_order?: number | null;
 };
+
+/** A round's start as a cell: its words when it has some — they include the date if there is one — else the date. */
+const startCell = (r: ExportRound) => r.start_text ?? r.start_date ?? "";
+const deadlineCell = (r: ExportRound) => r.deadline_text ?? r.application_deadline ?? "";
+const roundHasSomething = (r: ExportRound) => Boolean(startCell(r) || deadlineCell(r));
 
 /** "Round 1|2026-09-01|2026-01-15; Round 2|2027-02-01|2026-09-15" — the old one-cell form, still read on import. */
 export function roundsCell(rounds: readonly ExportRound[]): string {
   return [...rounds]
     .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-    .filter((r) => r.start_date || r.application_deadline)
-    .map((r) => `${r.label ?? ""}|${r.start_date ?? ""}|${r.application_deadline ?? ""}`)
+    .filter(roundHasSomething)
+    .map((r) => `${r.label ?? ""}|${startCell(r)}|${deadlineCell(r)}`)
     .join("; ");
 }
 
@@ -157,9 +167,10 @@ export type ExportProgram = {
   duration: string | null;
   language_requirement: string | null;
   intake_dates: string[] | null;
-  interview_required: boolean | null;
+  /** Text since 0304: "yes", "no" or words. */
+  interview_required: boolean | string | null;
   interview_details: string | null;
-  admission_test_required: boolean | null;
+  admission_test_required: boolean | string | null;
   admission_test_type: string | null;
   application_portal_name: string | null;
   application_portal_link: string | null;
@@ -216,9 +227,9 @@ export function catalogueRowsForUniversity(
     duration: program.duration ?? "",
     language_requirement: program.language_requirement ?? "",
     intake_dates: listCell(program.intake_dates),
-    interview_required: boolCell(program.interview_required),
+    interview_required: yesNoCell(program.interview_required),
     interview_details: program.interview_details ?? "",
-    admission_test_required: boolCell(program.admission_test_required),
+    admission_test_required: yesNoCell(program.admission_test_required),
     admission_test_type: program.admission_test_type ?? "",
     application_portal_name: program.application_portal_name ?? "",
     application_portal_link: program.application_portal_link ?? "",
@@ -230,8 +241,14 @@ export function catalogueRowsForUniversity(
 /** Ordered the way a person reads a catalogue: university, then level, then name. */
 const LEVEL_ORDER: Record<string, number> = { bachelors: 0, masters: 1, phd: 2 };
 
+/** The three in their order, then any other level (0304) alphabetically. */
+function compareLevels(a: string, b: string): number {
+  const byOrder = (LEVEL_ORDER[levelKey(a)] ?? 9) - (LEVEL_ORDER[levelKey(b)] ?? 9);
+  return byOrder !== 0 ? byOrder : levelKey(a).localeCompare(levelKey(b));
+}
+
 export function compareProgrammes(a: ExportProgram, b: ExportProgram): number {
-  const byLevel = (LEVEL_ORDER[a.level] ?? 9) - (LEVEL_ORDER[b.level] ?? 9);
+  const byLevel = compareLevels(a.level, b.level);
   return byLevel !== 0 ? byLevel : a.name.localeCompare(b.name);
 }
 
@@ -260,14 +277,12 @@ export function roundColumnIndex(header: RoundHeader): number {
 
 function roundSignature(rounds: readonly ExportRound[]): string {
   return sortedRounds(rounds)
-    .map((r) => `${r.label ?? ""}|${r.start_date ?? ""}|${r.application_deadline ?? ""}`)
+    .map((r) => `${r.label ?? ""}|${r.start_date ?? ""}|${r.application_deadline ?? ""}|${r.start_text ?? ""}|${r.deadline_text ?? ""}`)
     .join(";");
 }
 
 function sortedRounds(rounds: readonly ExportRound[]): ExportRound[] {
-  return [...rounds]
-    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-    .filter((r) => r.start_date || r.application_deadline);
+  return [...rounds].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)).filter(roundHasSomething);
 }
 
 /** True when every programme listed carries exactly the same, non-empty rounds. */
@@ -304,18 +319,17 @@ export function roundRowsForUniversity(
       level,
       program_name: programName,
       round: r.label ?? "",
-      start_date: r.start_date ?? "",
-      application_deadline: r.application_deadline ?? "",
+      start_date: startCell(r),
+      application_deadline: deadlineCell(r),
     }));
 
   if (allShare(programmes)) return rowsFor(programmes[0].rounds, "", "");
 
   const rows: RoundRow[] = [];
-  const levels = [...new Set(programmes.map((p) => p.program.level))].sort(
-    (a, b) => (LEVEL_ORDER[a] ?? 9) - (LEVEL_ORDER[b] ?? 9)
-  );
+  // One group per level, however it is capitalised (0304), named as its first programme writes it.
+  const levels = [...new Map(programmes.map((p) => [levelKey(p.program.level), p.program.level])).values()].sort(compareLevels);
   for (const level of levels) {
-    const atLevel = programmes.filter((p) => p.program.level === level);
+    const atLevel = programmes.filter((p) => levelKey(p.program.level) === levelKey(level));
     if (allShare(atLevel)) {
       rows.push(...rowsFor(atLevel[0].rounds, level, ""));
       continue;

@@ -26,6 +26,7 @@ import {
 } from "../src/lib/scholarshipBodySheet.ts";
 import { scholarshipBodyWorkbook } from "../src/lib/scholarshipBodyWorkbook.ts";
 import { parseXlsx } from "../src/lib/spreadsheet.ts";
+import { linkHref } from "../src/lib/catalogueText.ts";
 
 // What a scholarship bodies sheet does to the directory, decided from sheet
 // rows alone. The rules under test are the ones that fail without a sound:
@@ -103,14 +104,14 @@ test("a stipend in words and figures is kept exactly as written, line breaks and
 test("free text longer than the edit form allows is reported and left as it is, not cut", () => {
   const problems = [];
   const input = bodyFromRow(
-    { name: "DSU Toscana", stipend_amount: "x".repeat(1001), isee_threshold: "y".repeat(501), benefits: "z".repeat(1000) },
+    { name: "DSU Toscana", stipend_amount: "x".repeat(4001), isee_threshold: "y".repeat(1001), benefits: "z".repeat(4000) },
     problems
   );
   assert.equal(input.stipend_amount, null, "null is \"said nothing\": the stored stipend stays");
   assert.equal(input.isee_threshold, null);
-  assert.equal(input.benefits.length, 1000, "exactly at the limit is fine");
-  assert.match(problems.join("\n"), /Stipend amount is 1001 characters — at most 1000; left as it is/);
-  assert.match(problems.join("\n"), /ISEE threshold is 501 characters — at most 500; left as it is/);
+  assert.equal(input.benefits.length, 4000, "exactly at the limit is fine");
+  assert.match(problems.join("\n"), /Stipend amount is 4001 characters — at most 4000; left as it is/);
+  assert.match(problems.join("\n"), /ISEE threshold is 1001 characters — at most 1000; left as it is/);
   assert.equal(problems.length, 2);
 });
 
@@ -119,8 +120,8 @@ test("the edit form's limits hold everything on file, and a field past one is fo
   // and that body cannot be edited without cutting its text.
   const longestOnFile = { stipend_amount: 381, benefits: 666, isee_threshold: 450, ispe_threshold: 285, application_deadline: 293, call_notes: 271, region: 83 };
   for (const [field, length] of Object.entries(longestOnFile)) assert.ok(BODY_TEXT_LIMITS[field] >= length, field);
-  assert.equal(overLongBodyField({ stipend_amount: "x".repeat(1000), benefits: null }), null);
-  assert.deepEqual(overLongBodyField({ region: "ok", stipend_amount: "x".repeat(1001) }), { field: "stipend_amount", length: 1001, max: 1000 });
+  assert.equal(overLongBodyField({ stipend_amount: "x".repeat(4000), benefits: null }), null);
+  assert.deepEqual(overLongBodyField({ region: "ok", stipend_amount: "x".repeat(4001) }), { field: "stipend_amount", length: 4001, max: 4000 });
 });
 
 test("a row with no name is not a body", () => {
@@ -128,16 +129,19 @@ test("a row with no name is not a body", () => {
   assert.equal(bodyFromRow({ name: "   " }, []), null);
 });
 
-test("only a full http or https address is taken as a link", () => {
+test("a link cell is kept as written, and only a web address is ever made a link (0304)", () => {
   const problems = [];
   assert.equal(parseWebAddress("https://www.dsu.toscana.it/bando", problems, "Source URL"), "https://www.dsu.toscana.it/bando");
   assert.equal(parseWebAddress("", problems, "Source URL"), null);
+  assert.equal(parseWebAddress("www.dsu.toscana.it", problems, "Source URL"), "www.dsu.toscana.it");
+  assert.equal(parseWebAddress("see the regional page", problems, "Source URL"), "see the regional page");
   assert.deepEqual(problems, []);
-  // These become links on staff and student pages.
-  assert.equal(parseWebAddress("javascript:alert(1)", problems, "Apply URL"), null);
-  assert.equal(parseWebAddress("www.dsu.toscana.it", problems, "Source URL"), null);
-  assert.equal(problems.length, 2);
-  assert.match(problems[0], /Apply URL "javascript:alert\(1\)" is not a web address/);
+  // Kept, but these become links on staff and student pages only through
+  // linkHref, which shows a javascript: value as text.
+  assert.equal(parseWebAddress("javascript:alert(1)", problems, "Apply URL"), "javascript:alert(1)");
+  assert.equal(linkHref("javascript:alert(1)"), null);
+  assert.equal(linkHref("www.dsu.toscana.it"), "https://www.dsu.toscana.it");
+  assert.equal(linkHref("https://www.ardis.fvg.it (Servizi On Line, SPID)"), "https://www.ardis.fvg.it");
 });
 
 test("the call status is published or awaiting, and the edit form's wording for awaiting is understood", () => {
@@ -151,11 +155,18 @@ test("the call status is published or awaiting, and the edit form's wording for 
   assert.match(problems[0], /Call status "maybe" is neither published nor awaiting/);
 });
 
-test("the expected date is read like every other date in the imports", () => {
+test("the expected date is a date, words, or both (0304)", () => {
   const problems = [];
-  assert.equal(bodyFromRow({ name: "X", call_expected_on: "15 Mar 2027" }, problems).call_expected_on, "2027-03-15");
-  assert.equal(bodyFromRow({ name: "X", call_expected_on: "03/04/2027" }, problems).call_expected_on, null);
-  assert.match(problems[0], /"03\/04\/2027" is not a date/);
+  const read = (cell) => {
+    const b = bodyFromRow({ name: "X", call_expected_on: cell }, problems);
+    return [b.call_expected_on, b.call_expected_text];
+  };
+  assert.deepEqual(read("15 Mar 2027"), ["2027-03-15", null]);
+  assert.deepEqual(read("Early July"), [null, "Early July"]);
+  // An all-number date is two different days: kept as the words it is, not guessed.
+  assert.deepEqual(read("03/04/2027"), [null, "03/04/2027"]);
+  assert.deepEqual(read("1 July 2027, after the ranking"), ["2027-07-01", "1 July 2027, after the ranking"]);
+  assert.deepEqual(problems, []);
 });
 
 test("universities written with commas are still one entry, but the preview says so", () => {
@@ -530,16 +541,17 @@ test("a stored value the importer would refuse fresh is not reported when the ce
   assert.equal(result.unchanged, 1);
 });
 
-test("...but a changed value is still checked, and refused", () => {
+test("...but a changed value is still checked; a link in any form is kept (0304)", () => {
   const body = stored({ apply_url: "https://www.ardis.fvg.it (Servizi On Line, SPID)" });
   const edited = { Name: body.name, "Apply URL": "www.ardis.fvg.it", "Universities covered": "Perugia, Terni" };
   const result = plan([edited], [body]);
-  assert.ok(result.problems.some((p) => /Apply URL "www.ardis.fvg.it" is not a web address/.test(p)), result.problems.join(" | "));
+  assert.ok(!result.problems.some((p) => /Apply URL/.test(p)), result.problems.join(" | "));
   assert.ok(result.problems.some((p) => /read as ONE university/.test(p)), result.problems.join(" | "));
+  assert.ok(result.updates[0]?.lines.some((l) => /apply_url .* → www\.ardis\.fvg\.it/.test(l)), JSON.stringify(result.updates));
 });
 
 test("...and a similar name is checked in full, since it is somebody's edit", () => {
-  const body = stored({ apply_url: "https://www.ardis.fvg.it (Servizi On Line, SPID)" });
-  const result = plan([{ Name: "DSU Toscano", "Apply URL": body.apply_url }], [body]);
-  assert.ok(result.problems.some((p) => /is not a web address/.test(p)), result.problems.join(" | "));
+  const body = stored({ covers: ["Perugia, Terni"] });
+  const result = plan([{ Name: "DSU Toscano", "Universities covered": "Perugia, Terni" }], [body]);
+  assert.ok(result.problems.some((p) => /read as ONE university/.test(p)), result.problems.join(" | "));
 });

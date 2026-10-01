@@ -33,6 +33,12 @@ export type Dropdown = {
   /** Shown when the typed value is not in the list. */
   errorTitle: string;
   errorMessage: string;
+  /**
+   * "warning" (the default) asks before keeping a value that is not in the
+   * list; "information" only says something and keeps it — for a list that is
+   * a suggestion, like the catalogue's levels (0304).
+   */
+  errorStyle?: "warning" | "information";
 };
 
 /**
@@ -116,7 +122,7 @@ function dataValidationsXml(dropdowns: Dropdown[]): string {
       // A warning, not a hard stop: a country typed by hand that the importer
       // can still resolve ("UK", "Italy") must not be blocked by the
       // spreadsheet before it ever reaches the resolver.
-      ` errorStyle="warning" errorTitle="${escapeXml(d.errorTitle)}" error="${escapeXml(d.errorMessage)}"` +
+      ` errorStyle="${d.errorStyle ?? "warning"}" errorTitle="${escapeXml(d.errorTitle)}" error="${escapeXml(d.errorMessage)}"` +
       ` sqref="${letter}${d.fromRow}:${letter}${d.toRow}">` +
       `<formula1>${escapeXml(d.range)}</formula1>` +
       `</dataValidation>`

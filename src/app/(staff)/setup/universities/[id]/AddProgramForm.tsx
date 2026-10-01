@@ -1,15 +1,25 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useId, useState } from "react";
 import { addProgram } from "@/lib/actions/universities";
-import { STUDY_LEVELS } from "@/lib/constants";
+import { EMAILS_MAX, LEVEL_MAX, STANDARD_LEVELS } from "@/lib/catalogueText";
 import { Button } from "@/components/ui/Button";
-import { Input, Select } from "@/components/ui/Input";
+import { Input } from "@/components/ui/Input";
 import { ProgramRoundsFields } from "@/components/ProgramRoundsFields";
 import { FeeInput } from "@/components/FeeInput";
 
-export function AddProgramForm({ universityId, defaultCurrency = "EUR" }: { universityId: string; defaultCurrency?: string }) {
+export function AddProgramForm({
+  universityId,
+  defaultCurrency = "EUR",
+  levelOptions = STANDARD_LEVELS,
+}: {
+  universityId: string;
+  defaultCurrency?: string;
+  /** Suggested in the level box: the three, and any others this university already uses. Anything may be typed. */
+  levelOptions?: readonly string[];
+}) {
   const action = addProgram.bind(null, universityId);
+  const levelsId = useId();
   const [state, formAction, pending] = useActionState(action, undefined);
 
   // The rounds widget holds its rows in state, so React's form reset does not
@@ -31,20 +41,19 @@ export function AddProgramForm({ universityId, defaultCurrency = "EUR" }: { univ
 
   return (
     <form action={formAction} className="flex flex-wrap items-end gap-2">
-      <Select name="level" required>
-        {STUDY_LEVELS.map((l) => (
-          <option key={l} value={l}>
-            {l}
-          </option>
+      <datalist id={levelsId}>
+        {levelOptions.map((l) => (
+          <option key={l} value={l} />
         ))}
-      </Select>
+      </datalist>
+      <Input name="level" list={levelsId} required maxLength={LEVEL_MAX} placeholder="Level" aria-label="Level" className="w-36" />
       <Input name="name" placeholder="Program name" required className="min-w-[200px] flex-1" />
       <Input name="core_field" placeholder="Core field" />
       <Input name="sub_field" placeholder="Sub-field" />
-      <Input name="tuition_fee" type="text" maxLength={120} placeholder="Tuition, e.g. €3,000 per year" aria-label="Tuition fee" className="w-44" />
+      <Input name="tuition_fee" type="text" maxLength={500} placeholder="Tuition, e.g. 3000, 4500" aria-label="Tuition fee" className="w-44" />
       {/* Left blank, the programme charges the university's fee. */}
       <FeeInput compact amount={null} currency={defaultCurrency} />
-      <Input name="coordinator_email" type="email" placeholder="Coordinator email" aria-label="Coordinator email" />
+      <Input name="coordinator_email" type="text" maxLength={EMAILS_MAX} placeholder="Coordinator email(s)" aria-label="Coordinator email" />
       {/* Labelled, because bare date boxes side by side are guesswork — and a
           course start and an apply-by date are easy to enter the wrong way
           round. */}

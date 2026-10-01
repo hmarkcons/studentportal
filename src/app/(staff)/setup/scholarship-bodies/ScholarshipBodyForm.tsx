@@ -10,6 +10,7 @@ import { CallPdfButton } from "./CallPdfButton";
 import { BODY_TEXT_LIMITS } from "@/lib/scholarshipBodySheet";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { toast } from "@/lib/toast";
+import { roundDateForInput } from "@/lib/programRounds";
 
 export type ScholarshipBody = {
   id: string;
@@ -22,11 +23,15 @@ export type ScholarshipBody = {
   destinationIds: string[];
   apply_url: string | null;
   application_deadline: string | null;
+  document_upload_deadline?: string | null;
+  courier_deadline?: string | null;
   isee_threshold: string | null;
   ispe_threshold: string | null;
   benefits: string | null;
   call_status: string;
   call_expected_on: string | null;
+  /** The expected date in words (0304), shown in its place. */
+  call_expected_text?: string | null;
   call_notes: string | null;
   call_pdf_url: string | null;
   call_page_url: string | null;
@@ -145,10 +150,10 @@ export function ScholarshipBodyForm({
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Source" hint="The body's own page.">
-              <Input name="source_url" type="url" defaultValue={body?.source_url ?? ""} placeholder="https://…" />
+              <Input name="source_url" defaultValue={body?.source_url ?? ""} placeholder="https://… or a note" />
             </Field>
             <Field label="Apply portal" hint="Where the student actually submits.">
-              <Input name="apply_url" type="url" defaultValue={body?.apply_url ?? ""} placeholder="https://…" />
+              <Input name="apply_url" defaultValue={body?.apply_url ?? ""} placeholder="https://… or a note" />
             </Field>
           </div>
           <Field label="Application deadline" hint="As the call words it — many carry a time, and some carry two dates.">
@@ -160,6 +165,19 @@ export function ScholarshipBodyForm({
               placeholder="e.g. 7 September 2026, 13:00"
             />
           </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Document upload deadline" hint="As the call words it.">
+              <Textarea
+                name="document_upload_deadline"
+                defaultValue={body?.document_upload_deadline ?? ""}
+                rows={2}
+                maxLength={BODY_TEXT_LIMITS.document_upload_deadline}
+              />
+            </Field>
+            <Field label="Courier deadline" hint="Where the papers are posted as well.">
+              <Textarea name="courier_deadline" defaultValue={body?.courier_deadline ?? ""} rows={2} maxLength={BODY_TEXT_LIMITS.courier_deadline} />
+            </Field>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="ISEE limit">
               <Textarea name="isee_threshold" defaultValue={body?.isee_threshold ?? ""} rows={2} maxLength={BODY_TEXT_LIMITS.isee_threshold} placeholder="≤€26,887.93" />
@@ -185,18 +203,23 @@ export function ScholarshipBodyForm({
             </Select>
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Expected on" hint="When the region usually publishes. Only for a call that is not out.">
-              <Input name="call_expected_on" type="date" defaultValue={body?.call_expected_on ?? ""} />
+            <Field label="Expected on" hint="When the region usually publishes — a date or words (Early July). Only for a call that is not out.">
+              <Input
+                name="call_expected_on"
+                maxLength={200}
+                defaultValue={body?.call_expected_text ?? roundDateForInput(body?.call_expected_on)}
+                placeholder="15 Jul 2027, or Early July"
+              />
             </Field>
             <Field label="Official call PDF" hint="Link to the call document itself, where the region publishes one.">
-              <Input name="call_pdf_url" type="url" defaultValue={body?.call_pdf_url ?? ""} placeholder="https://…" />
+              <Input name="call_pdf_url" defaultValue={body?.call_pdf_url ?? ""} placeholder="https://… or a note" />
             </Field>
           </div>
           <Field
             label="Call page"
             hint="The page the call is published on, for the regions that put the bando up with its annexes instead of one PDF. Used when there is no PDF above — the student is taken here."
           >
-            <Input name="call_page_url" type="url" defaultValue={body?.call_page_url ?? ""} placeholder="https://…" />
+            <Input name="call_page_url" defaultValue={body?.call_page_url ?? ""} placeholder="https://… or a note" />
           </Field>
 
           {/* Only once the body exists — there is nothing to attach a file to

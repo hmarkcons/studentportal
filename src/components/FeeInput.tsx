@@ -36,7 +36,8 @@ export function FeeInput({
         defaultValue={amount ?? ""}
         // On a programme, blank means the university's fee — and the inline
         // programme forms have no labels, so the placeholder has to say so.
-        placeholder={compact ? "Application fee — blank charges the university's" : "e.g. 30, or Free for EU students"}
+        // Several fees go in one box, a comma and a space between (0304).
+        placeholder={compact ? "Application fee — blank charges the university's" : "e.g. 30, or 30, 50, or Free for EU students"}
         aria-label="Application fee"
         className="min-w-0 flex-1"
       />

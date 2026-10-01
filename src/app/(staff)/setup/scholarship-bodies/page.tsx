@@ -12,6 +12,7 @@ import { UpdateRunsPanel, type UpdateRun } from "./UpdateRunsPanel";
 import { researchConfigured } from "@/lib/scholarshipResearch";
 import { DeleteScholarshipBodyButton } from "./DeleteScholarshipBodyButton";
 import { ScholarshipBodiesHeader } from "./ScholarshipBodiesHeader";
+import { linkHref } from "@/lib/catalogueText";
 
 export default async function ScholarshipBodiesPage() {
   const { supabase } = await getStaffSession();
@@ -24,7 +25,7 @@ export default async function ScholarshipBodiesPage() {
     supabase
       .from("scholarship_bodies")
       .select(
-        "id, name, region, academic_year, covers, stipend_amount, source_url, last_updated_year, apply_url, application_deadline, isee_threshold, ispe_threshold, benefits, call_status, call_expected_on, call_notes, call_pdf_url, call_page_url, call_pdf_path, call_pdf_language, call_pdf_fetched_at, guide_sections, guide_updated_at"
+        "id, name, region, academic_year, covers, stipend_amount, source_url, last_updated_year, apply_url, application_deadline, isee_threshold, ispe_threshold, benefits, call_status, call_expected_on, call_expected_text, document_upload_deadline, courier_deadline, call_notes, call_pdf_url, call_page_url, call_pdf_path, call_pdf_language, call_pdf_fetched_at, guide_sections, guide_updated_at"
       )
       .order("name"),
     supabase
@@ -90,11 +91,14 @@ export default async function ScholarshipBodiesPage() {
         destinationIds: destIdsByBody.get(b.id) ?? [],
         apply_url: b.apply_url,
         application_deadline: b.application_deadline,
+        document_upload_deadline: b.document_upload_deadline,
+        courier_deadline: b.courier_deadline,
         isee_threshold: b.isee_threshold,
         ispe_threshold: b.ispe_threshold,
         benefits: b.benefits,
         call_status: b.call_status ?? "published",
         call_expected_on: b.call_expected_on,
+        call_expected_text: b.call_expected_text,
         call_notes: b.call_notes,
         call_pdf_url: b.call_pdf_url,
         call_page_url: b.call_page_url,
@@ -280,7 +284,7 @@ export default async function ScholarshipBodiesPage() {
               deadline:
                 r.body.call_status === "awaiting" ? (
                   <Badge tone="info">
-                    call not out{r.body.call_expected_on ? ` · expected ${r.body.call_expected_on}` : ""}
+                    call not out{(r.body.call_expected_text ?? r.body.call_expected_on) ? ` · expected ${r.body.call_expected_text ?? r.body.call_expected_on}` : ""}
                   </Badge>
                 ) : (
                   (r.body.application_deadline ?? "—")
@@ -301,16 +305,16 @@ export default async function ScholarshipBodiesPage() {
                     <FileText className="h-4 w-4 shrink-0" aria-hidden />
                     call
                   </a>
-                  {r.body.source_url && (
-                    <a href={r.body.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-muted hover:underline">
+                  {linkHref(r.body.source_url) && (
+                    <a href={linkHref(r.body.source_url)!} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-muted hover:underline">
                       site
                       <ExternalLink className="h-4 w-4 shrink-0" aria-hidden />
                     </a>
                   )}
                 </span>
-              ) : r.body.source_url ? (
+              ) : linkHref(r.body.source_url) ? (
                 <a
-                  href={r.body.source_url}
+                  href={linkHref(r.body.source_url)!}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1 text-primary hover:underline"
@@ -320,7 +324,8 @@ export default async function ScholarshipBodiesPage() {
                   View source
                 </a>
               ) : (
-                "—"
+                // A note in the source field, shown as the words it is.
+                r.body.source_url ?? "—"
               ),
               actions: canManage ? (
                 <span className="flex items-center gap-1">

@@ -128,6 +128,7 @@ export async function applyScholarshipProposal(runId: string, acceptedFields: st
   patch.guide_updated_by = user?.id ?? null;
   patch.call_status = "published";
   patch.call_expected_on = null;
+  patch.call_expected_text = null;
   if (run.call_pdf_url) patch.call_pdf_url = run.call_pdf_url;
 
   const { error: updateError } = await supabase

@@ -2,7 +2,7 @@
 // the order the rest of the app depends on, and the export's compression.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mergeRounds, orderRounds, parseDay, roundSpecFromRow } from "../src/lib/catalogueRows.ts";
+import { mergeRounds, orderRounds, parseDay, parseDayOrWords, roundSpecFromRow } from "../src/lib/catalogueRows.ts";
 import { roundRowsForUniversity } from "../src/lib/catalogueSheet.ts";
 
 // -------------------------------------------------------------------- dates
@@ -30,6 +30,36 @@ test("an impossible or ambiguous date is refused, not guessed", () => {
   assert.equal(problems.length, 4);
 });
 
+// ----------------------------------------------------- dates as words (0304)
+
+test("a date field reads a date, words, or a date followed by words", () => {
+  assert.deepEqual(parseDayOrWords("15 Mar 2027"), { date: "2027-03-15", text: null });
+  assert.deepEqual(parseDayOrWords("2027-03-15"), { date: "2027-03-15", text: null });
+  assert.deepEqual(parseDayOrWords("Mar 15, 2027"), { date: "2027-03-15", text: null });
+  assert.deepEqual(parseDayOrWords("15 March 2027."), { date: "2027-03-15", text: null });
+  assert.deepEqual(parseDayOrWords("Rolling"), { date: null, text: "Rolling" });
+  assert.deepEqual(parseDayOrWords("TBA  March 2027"), { date: null, text: "TBA March 2027" });
+  // The date the words begin with is what a reminder needs; the words are what people read.
+  assert.deepEqual(parseDayOrWords("15 March 2027, 13:00 CET"), { date: "2027-03-15", text: "15 March 2027, 13:00 CET" });
+  assert.deepEqual(parseDayOrWords("   "), { date: null, text: null });
+});
+
+test("a date is never guessed out of words", () => {
+  // 03/04/2027 is two different days; a window names two dates; a date after
+  // other words could be anything the words say about it.
+  assert.deepEqual(parseDayOrWords("03/04/2027"), { date: null, text: "03/04/2027" });
+  assert.deepEqual(parseDayOrWords("1 March 2027 – 15 April 2027"), { date: null, text: "1 March 2027 – 15 April 2027" });
+  assert.deepEqual(parseDayOrWords("Until 15 March 2027"), { date: null, text: "Until 15 March 2027" });
+  assert.deepEqual(parseDayOrWords("2027-02-30 or so"), { date: null, text: "2027-02-30 or so" });
+});
+
+test("a Rounds row may give its dates in words", () => {
+  const problems = [];
+  const spec = roundSpecFromRow({ university_name: "Sapienza", round: "Late", application_deadline: "Rolling" }, problems);
+  assert.deepEqual(problems, []);
+  assert.deepEqual(spec.round, { label: "Late", start_date: null, start_text: null, application_deadline: null, deadline_text: "Rolling" });
+});
+
 // ------------------------------------------------------ the Rounds sheet row
 
 test("a Rounds row with no programme is a round for the whole university", () => {
@@ -41,7 +71,7 @@ test("a Rounds row with no programme is a round for the whole university", () =>
   assert.deepEqual(problems, []);
   assert.equal(spec.level, null);
   assert.equal(spec.programName, null);
-  assert.deepEqual(spec.round, { label: "1st call", start_date: null, application_deadline: "2027-03-15" });
+  assert.deepEqual(spec.round, { label: "1st call", start_date: null, start_text: null, application_deadline: "2027-03-15", deadline_text: null });
 });
 
 test("a Rounds row can narrow to a level, and leave its name for numbering", () => {
@@ -51,14 +81,13 @@ test("a Rounds row can narrow to a level, and leave its name for numbering", () 
   assert.equal(spec.round.start_date, "2027-10-01");
 });
 
-test("a Rounds row with no date, or a wrong level, is reported and not used", () => {
+test("a Rounds row with no date is reported and not used; any level is a level (0304)", () => {
   const problems = [];
   assert.equal(roundSpecFromRow({ university_name: "Sapienza", round: "1st call" }, problems), null);
-  assert.equal(
-    roundSpecFromRow({ university_name: "Sapienza", level: "diploma", application_deadline: "2027-01-01" }, problems),
-    null
-  );
-  assert.equal(problems.length, 2);
+  assert.equal(problems.length, 1);
+  const diploma = roundSpecFromRow({ university_name: "Sapienza", level: "Diploma", application_deadline: "2027-01-01" }, []);
+  assert.equal(diploma.level, "Diploma");
+  assert.equal(roundSpecFromRow({ university_name: "Sapienza", level: "Master's", application_deadline: "2027-01-01" }, []).level, "masters");
 });
 
 // ------------------------------------------------------------ merging
@@ -232,4 +261,58 @@ test("exported Rounds rows read back as rounds that change nothing", () => {
   const incoming = rows.map((r) => roundSpecFromRow(r, []).round);
   const stored = italyRounds.map((r, i) => ({ ...r, id: "r" + i }));
   assert.deepEqual(mergeRounds(stored, incoming, TODAY).changes, []);
+});
+
+// ------------------------------------------------- rounds in words (0304)
+
+const NO_WORDS = { start_text: null, deadline_text: null };
+
+test("a round given in words is added, and an untouched one changes nothing", () => {
+  const added = mergeRounds(
+    [{ id: "r1", label: "Round 1", start_date: null, application_deadline: "2027-03-15", ...NO_WORDS, sort_order: 1 }],
+    [{ label: "Late", start_date: null, application_deadline: null, start_text: null, deadline_text: "Rolling" }],
+    TODAY
+  );
+  assert.deepEqual(added.changes, ['added round "Late" (apply by Rolling)']);
+  assert.equal(added.rounds.find((r) => r.label === "Late").deadline_text, "Rolling");
+
+  const again = mergeRounds(added.rounds, [{ label: "Late", start_date: null, application_deadline: null, start_text: null, deadline_text: "Rolling" }], TODAY);
+  assert.deepEqual(again.changes, []);
+});
+
+test("a date over words replaces the words, because one cell said both", () => {
+  const { rounds, changes } = mergeRounds(
+    [{ id: "r1", label: "Late", start_date: null, application_deadline: null, start_text: null, deadline_text: "Rolling", sort_order: 1 }],
+    [{ label: "Late", start_date: null, application_deadline: "2027-06-30", ...NO_WORDS }],
+    TODAY
+  );
+  assert.deepEqual(changes, ['round "Late" deadline Rolling → 2027-06-30']);
+  assert.equal(rounds[0].application_deadline, "2027-06-30");
+  assert.equal(rounds[0].deadline_text, null);
+  assert.equal(rounds[0].id, "r1", "the round keeps its id, so applications stay linked");
+});
+
+test("a round in words sorts after the open rounds and before the closed ones", () => {
+  const ordered = orderRounds(
+    [
+      { label: "Closed", start_date: null, application_deadline: "2026-01-15" },
+      { label: "Rolling", start_date: null, application_deadline: null, deadline_text: "Rolling" },
+      { label: "Open", start_date: null, application_deadline: "2027-03-15" },
+    ],
+    TODAY
+  );
+  assert.deepEqual(ordered.map((r) => r.label), ["Open", "Rolling", "Closed"]);
+});
+
+test("the export writes a round's words in its date's cell, and they read back the same", () => {
+  const rows = roundRowsForUniversity("Italy (Public)", "Sapienza", [
+    {
+      program: { level: "masters", name: "Physics" },
+      rounds: [{ label: "Late", start_date: null, application_deadline: "2027-03-15", start_text: "Late September", deadline_text: "15 March 2027, 13:00 CET", sort_order: 1 }],
+    },
+  ]);
+  assert.equal(rows[0].start_date, "Late September");
+  assert.equal(rows[0].application_deadline, "15 March 2027, 13:00 CET");
+  const back = roundSpecFromRow({ university_name: "Sapienza", ...rows[0] }, []);
+  assert.deepEqual(back.round, { label: "Late", start_date: null, start_text: "Late September", application_deadline: "2027-03-15", deadline_text: "15 March 2027, 13:00 CET" });
 });

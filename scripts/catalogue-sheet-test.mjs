@@ -135,8 +135,8 @@ test("an exported row parses back into exactly what was exported", () => {
   assert.equal(backProgram.duration, programme.duration);
   assert.equal(backProgram.language_requirement, programme.language_requirement);
   assert.deepEqual(backProgram.intake_dates, programme.intake_dates);
-  assert.equal(backProgram.interview_required, false);
-  assert.equal(backProgram.admission_test_required, true);
+  assert.equal(backProgram.interview_required, "no");
+  assert.equal(backProgram.admission_test_required, "yes");
   assert.equal(backProgram.admission_test_type, programme.admission_test_type);
   assert.equal(backProgram.page_link, programme.page_link);
 
@@ -286,4 +286,23 @@ test("a bare application_fee on the combined sheet says which fee columns it has
 
 test("every column the template writes is one the upload reads", () => {
   assert.deepEqual(unreadColumns(CATALOGUE_COLUMNS.map((c) => c.header), CATALOGUE_SHEET_READS), []);
+});
+
+test("a yes/no in words, a level of its own and several emails go out and come back as written (0304)", () => {
+  const own = {
+    ...programme,
+    level: "Single-cycle master's",
+    interview_required: "Only for non-EU students",
+    admission_test_required: "no",
+    coordinator_email: "a@unipv.it, b@unipv.it",
+  };
+  const [row] = catalogueRowsForUniversity({ ...university, contact_email: "admissions@unipv.it, see the faculty page" }, [{ program: own, rounds: [] }]);
+  assert.equal(row.level, "Single-cycle master's");
+  assert.equal(row.interview_required, "Only for non-EU students");
+  const back = programFromRow(row, "program_name", []);
+  assert.equal(back.level, "Single-cycle master's");
+  assert.equal(back.interview_required, "Only for non-EU students");
+  assert.equal(back.admission_test_required, "no");
+  assert.equal(back.coordinator_email, "a@unipv.it, b@unipv.it");
+  assert.equal(universityFromRow(row, "university_name", []).contact_email, "admissions@unipv.it, see the faculty page");
 });

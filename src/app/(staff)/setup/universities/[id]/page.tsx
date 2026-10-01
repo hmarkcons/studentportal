@@ -13,6 +13,8 @@ import { ProgramRow } from "./ProgramRow";
 import { uploadedLine } from "@/lib/activityStamp";
 import { karachiToday } from "@/lib/calendarDates";
 import { formatFee } from "@/lib/applicationFee";
+import { STANDARD_LEVELS, levelKey, levelsPresent } from "@/lib/catalogueText";
+import { EmailLinks } from "@/components/EmailLinks";
 import { getCurrentUser } from "@/lib/auth/currentUser";
 
 export default async function UniversityDetailPage(props: PageProps<"/setup/universities/[id]">) {
@@ -28,7 +30,7 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
   const { data: university, error } = await supabase
     .from("universities")
     .select(
-      "id, name, short_name, city, region, type, status, contact_email, application_fee, application_fee_currency, dsu_body_id, destination_id, destination:destinations(display_name, currency), dsu_body:scholarship_bodies(name)"
+      "id, name, short_name, city, region, type, status, contact_email, levels_offered, fields_offered, application_fee, application_fee_currency, dsu_body_id, destination_id, destination:destinations(display_name, currency), dsu_body:scholarship_bodies(name)"
     )
     .eq("id", id)
     .maybeSingle();
@@ -38,20 +40,25 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
   const { data: programsRaw } = await supabase
     .from("programs")
     .select(
-      "id, level, name, core_field, sub_field, tuition_fee, duration, language_requirement, application_fee, application_fee_currency, coordinator_email, rounds:program_intake_rounds(id, label, start_date, application_deadline, sort_order), commission_rate:program_commission_rates(rate_percent, fixed_amount, currency)"
+      "id, level, name, core_field, sub_field, tuition_fee, duration, language_requirement, application_fee, application_fee_currency, coordinator_email, page_link, intake_dates, interview_required, interview_details, admission_test_required, admission_test_type, application_portal_name, application_portal_link, requirements_link, academic_requirement, rounds:program_intake_rounds(id, label, start_date, application_deadline, start_text, deadline_text, sort_order), commission_rate:program_commission_rates(rate_percent, fixed_amount, currency)"
     )
-    .eq("university_id", id)
-    .order("level");
+    .eq("university_id", id);
 
   function one<T>(v: T | T[] | null) {
     return Array.isArray(v) ? v[0] ?? null : v;
   }
 
-  const programs = (programsRaw ?? []).map((p) => ({
-    ...p,
-    commission_rate: one(p.commission_rate),
-    rounds: p.rounds ?? [],
-  }));
+  // Any level may be written (0304), so ordered here: the three first, then
+  // the others alphabetically, then by name — not by the database's collation.
+  const levelOrder = levelsPresent([...STANDARD_LEVELS, ...(programsRaw ?? []).map((p) => p.level)]);
+  const rank = (level: string) => levelOrder.findIndex((l) => levelKey(l) === levelKey(level));
+  const programs = (programsRaw ?? [])
+    .map((p) => ({
+      ...p,
+      commission_rate: one(p.commission_rate),
+      rounds: p.rounds ?? [],
+    }))
+    .sort((a, b) => rank(a.level) - rank(b.level) || a.name.localeCompare(b.name));
 
   const destination = one(university.destination as never) as { display_name?: string; currency?: string } | null;
   const destinationCurrency = destination?.currency ?? "EUR";
@@ -126,8 +133,16 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
                   : "—"}
               </span>
               {" · "}DSU body: <span className="text-ink">{dsuBodyName ?? "—"}</span>
-              {" · "}University email: <span className="text-ink">{university.contact_email ?? "—"}</span>
+              {" · "}University email:{" "}
+              <span className="text-ink">{university.contact_email ? <EmailLinks value={university.contact_email} /> : "—"}</span>
             </p>
+            {(university.levels_offered?.length || university.fields_offered?.length) ? (
+              <p>
+                {university.levels_offered?.length ? <>Levels: <span className="text-ink">{university.levels_offered.join("; ")}</span></> : null}
+                {university.levels_offered?.length && university.fields_offered?.length ? " · " : null}
+                {university.fields_offered?.length ? <>Fields: <span className="text-ink">{university.fields_offered.join("; ")}</span></> : null}
+              </p>
+            ) : null}
             <p>Only Super Admin can edit or delete universities.</p>
           </div>
         )}
@@ -147,6 +162,7 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
               today={today}
               universityFee={universityFee}
               destinationCurrency={destinationCurrency}
+              levelOptions={levelOrder}
             />
           ))}
           {programs.length === 0 && (
@@ -155,7 +171,7 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
             </div>
           )}
         </div>
-        <AddProgramForm universityId={id} defaultCurrency={university.application_fee_currency ?? destinationCurrency} />
+        <AddProgramForm universityId={id} defaultCurrency={university.application_fee_currency ?? destinationCurrency} levelOptions={levelOrder} />
         {/* Bachelor's and master's programmes at one university usually share
             their closing dates, and typing the same pair into thirty-odd
             programmes one at a time is how they end up inconsistent. */}

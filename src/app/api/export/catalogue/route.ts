@@ -99,7 +99,7 @@ export async function GET(request: Request) {
     (chunk, from, to) =>
       supabase
         .from("program_intake_rounds")
-        .select("id, program_id, label, start_date, application_deadline, sort_order")
+        .select("id, program_id, label, start_date, application_deadline, start_text, deadline_text, sort_order")
         .in("program_id", chunk)
         .order("id")
         .range(from, to)

@@ -9,6 +9,7 @@ import { intakeConfigFor, type DestinationOption } from "@/app/(staff)/students/
 import { toast } from "@/lib/toast";
 import { ProgramDates } from "@/components/ProgramDates";
 import { roundOptionLabel, sortRounds, type ProgramRound } from "@/lib/programRounds";
+import { levelKey, levelsPresent } from "@/lib/catalogueText";
 
 type Destination = DestinationOption;
 type University = { id: string; name: string; destination_id: string };
@@ -120,7 +121,7 @@ export function NewApplicationForm({
   const filteredPrograms = useMemo(() => {
     const needle = findText.trim().toLowerCase();
     return universityPrograms.filter((p) => {
-      if (findLevel && p.level !== findLevel) return false;
+      if (findLevel && levelKey(p.level) !== findLevel) return false;
       // Any of the chosen fields, not all of them: the fields are alternatives,
       // and requiring a programme to be in several at once would return
       // nothing every time more than one was picked.
@@ -142,7 +143,7 @@ export function NewApplicationForm({
     const counts = new Map<string, number>();
     for (const p of universityPrograms) {
       if (!p.field_group) continue;
-      if (findLevel && p.level !== findLevel) continue;
+      if (findLevel && levelKey(p.level) !== findLevel) continue;
       counts.set(p.field_group, (counts.get(p.field_group) ?? 0) + 1);
     }
     return counts;
@@ -222,13 +223,13 @@ export function NewApplicationForm({
                 className="w-32"
               >
                 <option value="">Any</option>
-                {["bachelors", "masters", "phd"]
-                  .filter((l) => universityPrograms.some((p) => p.level === l))
-                  .map((l) => (
-                    <option key={l} value={l}>
-                      {l}
-                    </option>
-                  ))}
+                {/* Every level this university has, the three first — a
+                    programme may carry one of its own (0304). */}
+                {levelsPresent(universityPrograms.map((p) => p.level)).map((l) => (
+                  <option key={levelKey(l)} value={levelKey(l)}>
+                    {l}
+                  </option>
+                ))}
               </Select>
             </label>
             <label className="flex flex-1 flex-col gap-0.5 text-[11px] text-muted">

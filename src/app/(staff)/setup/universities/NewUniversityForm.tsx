@@ -5,6 +5,7 @@ import { createUniversity } from "@/lib/actions/universities";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { FEE_CURRENCIES } from "@/lib/applicationFee";
+import { EMAILS_MAX } from "@/lib/catalogueText";
 
 export type NewUniversityDestination = { id: string; display_name: string; currency: string | null; track: string | null };
 export type NewUniversityBody = { id: string; name: string; region: string | null; destinationIds: string[] };
@@ -91,13 +92,21 @@ export function NewUniversityForm({ destinations, bodies }: { destinations: NewU
       </label>
 
       <label className="flex flex-col gap-1 text-xs text-muted">
-        University email
-        <Input name="contact_email" type="email" placeholder="admissions@…" />
+        University email(s)
+        <Input name="contact_email" type="text" maxLength={EMAILS_MAX} placeholder="admissions@…, international@…" />
+      </label>
+      <label className="flex flex-col gap-1 text-xs text-muted">
+        Levels offered
+        <Input name="levels_offered" placeholder="Bachelors; Masters" />
+      </label>
+      <label className="flex flex-col gap-1 text-xs text-muted">
+        Fields offered
+        <Input name="fields_offered" placeholder="Engineering; Medicine" />
       </label>
       <div className="flex flex-col gap-1 text-xs text-muted">
         <span>Application fee</span>
         <span className="flex items-center gap-1">
-          <Input name="application_fee" type="text" maxLength={120} placeholder="e.g. 30, or Free for EU students" aria-label="Application fee" className="min-w-0 flex-1" />
+          <Input name="application_fee" type="text" maxLength={500} placeholder="e.g. 30, or 30, 50, or Free for EU students" aria-label="Application fee" className="min-w-0 flex-1" />
           <Select
             name="application_fee_currency"
             value={shownCurrency}

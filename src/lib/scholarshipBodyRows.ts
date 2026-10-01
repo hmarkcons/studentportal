@@ -25,7 +25,8 @@
 // is unit-tested from sheet rows (scripts/scholarship-body-rows-test.mjs).
 // src/lib/actions/scholarshipBodyImport.ts only sends the writes.
 
-import { parseDay, splitList, type RowProblem } from "./catalogueRows.ts";
+import { parseDayOrWords, splitList, type RowProblem } from "./catalogueRows.ts";
+import { DATE_WORDS_MAX } from "./catalogueText.ts";
 import { describeChange, isNearMiss, mergeRow, normalizeName, type Cell } from "./importMerge.ts";
 import {
   BODY_COLUMNS,
@@ -61,6 +62,8 @@ export type BodyInput = {
   apply_url: string | null;
   call_status: CallStatus | null;
   call_expected_on: string | null;
+  /** The expected date in words (0304), set with call_expected_on from the one cell. */
+  call_expected_text: string | null;
   call_pdf_url: string | null;
   call_page_url: string | null;
   call_notes: string | null;
@@ -75,29 +78,17 @@ function cleanText(value: string | undefined): string | null {
 }
 
 /**
- * A web address, or null.
+ * A link cell, as written, or null when blank.
  *
- * Only http and https. These cells become links on staff and student pages,
- * so anything else — a javascript: address above all — is refused rather than
- * stored; and "www.example.org" without its scheme would be a link to a page
- * of the portal itself.
+ * Anything is kept (0304): a web address, one without its https://, or a note
+ * in its place. These cells become links on staff and student pages, so what
+ * is clickable is decided where they are shown — catalogueText.linkHref links
+ * only http and https, puts https:// in front of a bare "www.example.org", and
+ * shows anything else, a "javascript:" value above all, as text. The server
+ * fetches a call PDF only from an http or https address (fetchCallPdf).
  */
-export function parseWebAddress(value: string | undefined, problems: RowProblem[], label: string): string | null {
-  const raw = cleanText(value);
-  if (raw === null) return null;
-  let ok = /^https?:\/\/\S+$/i.test(raw);
-  if (ok) {
-    try {
-      new URL(raw);
-    } catch {
-      ok = false;
-    }
-  }
-  if (!ok) {
-    problems.push(`${label} "${raw}" is not a web address — write it in full, starting https://; left as it is`);
-    return null;
-  }
-  return raw;
+export function parseWebAddress(value: string | undefined, _problems: RowProblem[], _label: string): string | null {
+  return cleanText(value);
 }
 
 /** published / awaiting, or null. "Not published yet" is what the edit form calls awaiting, so it is read as that. */
@@ -109,6 +100,16 @@ export function parseCallStatus(value: string | undefined, problems: RowProblem[
   if (["not published", "not published yet", "not out", "not out yet"].includes(word)) return "awaiting";
   problems.push(`Call status "${raw}" is neither published nor awaiting — left as it is`);
   return null;
+}
+
+/** The one "Call expected on" cell: a date, words, or both (0304) — set together. */
+function expectedCell(value: string | undefined, problems: RowProblem[]): { call_expected_on: string | null; call_expected_text: string | null } {
+  const read = parseDayOrWords(value);
+  if (read.text && read.text.length > DATE_WORDS_MAX) {
+    problems.push(`Call expected on is longer than ${DATE_WORDS_MAX} characters — left as it is`);
+    return { call_expected_on: null, call_expected_text: null };
+  }
+  return { call_expected_on: read.date, call_expected_text: read.text };
 }
 
 /**
@@ -189,8 +190,8 @@ export function bodyFromRow(row: Record<string, string>, problems: RowProblem[])
     covers,
     academic_year: cleanText(row.academic_year),
     application_deadline: limited("application_deadline"),
-    document_upload_deadline: cleanText(row.document_upload_deadline),
-    courier_deadline: cleanText(row.courier_deadline),
+    document_upload_deadline: limited("document_upload_deadline"),
+    courier_deadline: limited("courier_deadline"),
     isee_threshold: limited("isee_threshold"),
     ispe_threshold: limited("ispe_threshold"),
     stipend_amount: limited("stipend_amount"),
@@ -198,7 +199,7 @@ export function bodyFromRow(row: Record<string, string>, problems: RowProblem[])
     source_url: parseWebAddress(row.source_url, problems, "Source URL"),
     apply_url: parseWebAddress(row.apply_url, problems, "Apply URL"),
     call_status: parseCallStatus(row.call_status, problems),
-    call_expected_on: parseDay(row.call_expected_on, problems, "Call expected on"),
+    ...expectedCell(row.call_expected_on, problems),
     call_pdf_url: parseWebAddress(row.call_pdf_url, problems, "Call PDF URL"),
     call_page_url: parseWebAddress(row.call_page_url, problems, "Call page URL"),
     call_notes: limited("call_notes"),
@@ -379,6 +380,7 @@ export type StoredBody = {
   apply_url: string | null;
   call_status: string | null;
   call_expected_on: string | null;
+  call_expected_text: string | null;
   call_pdf_url: string | null;
   call_page_url: string | null;
   call_notes: string | null;
@@ -390,7 +392,7 @@ export type StoredBody = {
 export const STORED_BODY_COLUMNS =
   "id, name, region, covers, academic_year, application_deadline, document_upload_deadline, courier_deadline, " +
   "isee_threshold, ispe_threshold, stipend_amount, benefits, source_url, apply_url, call_status, call_expected_on, " +
-  "call_pdf_url, call_page_url, call_notes, guide_sections";
+  "call_expected_text, call_pdf_url, call_page_url, call_notes, guide_sections";
 
 /** The columns an import may change, as mergeRow compares them. Name is the key, so it is not among them. */
 export function bodyPatchFields(input: BodyInput): Record<string, Cell> {
@@ -409,6 +411,7 @@ export function bodyPatchFields(input: BodyInput): Record<string, Cell> {
     apply_url: input.apply_url,
     call_status: input.call_status,
     call_expected_on: input.call_expected_on,
+    call_expected_text: input.call_expected_text,
     call_pdf_url: input.call_pdf_url,
     call_page_url: input.call_page_url,
     call_notes: input.call_notes,
@@ -459,6 +462,7 @@ export function bodyInsertValues(input: BodyInput) {
     apply_url: input.apply_url,
     call_status,
     call_expected_on: call_status === "awaiting" ? input.call_expected_on : null,
+    call_expected_text: call_status === "awaiting" ? input.call_expected_text : null,
     call_pdf_url: input.call_pdf_url,
     call_page_url: input.call_page_url,
     call_notes: input.call_notes,
@@ -661,7 +665,7 @@ export function planBodyImport(
       refuse(`is new, and a new scholarship body needs ${missing.join(" and ")} — not added`);
       continue;
     }
-    if (input.call_expected_on && input.call_status !== "awaiting") {
+    if ((input.call_expected_on || input.call_expected_text) && input.call_status !== "awaiting") {
       say("Call expected on is only kept for a call that is awaiting — ignored");
     }
     const values = bodyInsertValues(input);
@@ -692,21 +696,35 @@ function planUpdate(
   // row's status if it gives one, else the stored one. The edit form drops it
   // silently; here it is said, since somebody typed it.
   const status = input.call_status ?? target.call_status ?? "published";
-  if (input.call_expected_on && status !== "awaiting") {
+  const expectedGiven = Boolean(input.call_expected_on || input.call_expected_text);
+  if (expectedGiven && status !== "awaiting") {
     say("Call expected on is only kept for a call that is awaiting — ignored");
     incoming.call_expected_on = null;
+    incoming.call_expected_text = null;
   }
 
   const { patch, changes } = mergeRow(storedCells(target), incoming);
   const out: Record<string, Cell | GuideSection[]> = { ...patch };
   const lines = changes.map(describeChange);
 
+  // One cell gave the date and its words together, so a date over stored
+  // words clears the words, and words alone clear a stored date (0304).
+  if (expectedGiven && status === "awaiting") {
+    for (const field of ["call_expected_on", "call_expected_text"] as const) {
+      if (incoming[field] === null && target[field]) {
+        out[field] = null;
+        lines.push(`${field} ${target[field]} → —`);
+      }
+    }
+  }
+
   // A call moved to published loses the date it was expected on, as it does
   // in the edit form (readCallStatus): left behind, it reads as a second
   // deadline. Not a blank cell wiping a field — the status cell said so.
-  if (patch.call_status === "published" && target.call_expected_on) {
+  if (patch.call_status === "published" && (target.call_expected_on || target.call_expected_text)) {
     out.call_expected_on = null;
-    lines.push(`call_expected_on ${target.call_expected_on} → — (the call is now published)`);
+    out.call_expected_text = null;
+    lines.push(`call_expected_on ${target.call_expected_text ?? target.call_expected_on} → — (the call is now published)`);
   }
 
   if (input.guide) {

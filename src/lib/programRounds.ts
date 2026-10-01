@@ -11,6 +11,7 @@
 
 import { daysUntil } from "@/lib/applicationDeadline";
 import { formatDateOnly } from "@/lib/formatDate";
+import { parseDayOrWords } from "@/lib/catalogueRows";
 
 /**
  * Named month rather than the en-US numeric default formatDateOnly falls back
@@ -27,8 +28,37 @@ export type ProgramRound = {
   label: string;
   start_date: string | null;
   application_deadline: string | null;
+  /**
+   * Each date as written, shown in its place (0304): "Rolling", "TBA March
+   * 2027", or "15 March 2027, 13:00 CET" beside the date read out of it. The
+   * date stays what "closed", reminders and the calendar read.
+   */
+  start_text?: string | null;
+  deadline_text?: string | null;
   sort_order?: number | null;
 };
+
+/** A date as the round form shows it to be edited: "15 Mar 2027", day first, as Karachi writes it. */
+export function roundDateForInput(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-GB", { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" });
+}
+
+/** What a round's form field holds: its words, or else its date written out. */
+export function roundFieldValue(text: string | null | undefined, date: string | null | undefined): string {
+  return text ?? roundDateForInput(date);
+}
+
+/** A round's start as a reader is shown it: its words, or its date. Null when it has neither. */
+export function roundStartShown(round: ProgramRound): string | null {
+  return round.start_text ?? (round.start_date ? formatDateOnly(round.start_date, ROUND_DATE_FORMAT) : null);
+}
+
+/** A round's deadline as a reader is shown it: its words, or its date. Null when it has neither. */
+export function roundDeadlineShown(round: ProgramRound): string | null {
+  return round.deadline_text ?? (round.application_deadline ? formatDateOnly(round.application_deadline, ROUND_DATE_FORMAT) : null);
+}
 
 /** What a newly added row is called, before anyone renames it. */
 export function defaultRoundLabel(index: number): string {
@@ -61,8 +91,11 @@ export function nextRound<T extends ProgramRound>(rounds: readonly T[], today?: 
     if (r.start_date) return daysUntil(r.start_date, today) >= 0;
     return false;
   });
+  // A round given only in words ("Rolling") has no date to have passed, so it
+  // leads over a round that has closed.
+  const worded = ordered.find((r) => !r.application_deadline && !r.start_date);
 
-  return stillOpen ?? ordered[ordered.length - 1];
+  return stillOpen ?? worded ?? ordered[ordered.length - 1];
 }
 
 /**
@@ -76,11 +109,10 @@ export function nextRound<T extends ProgramRound>(rounds: readonly T[], today?: 
  */
 export function roundOptionLabel(round: ProgramRound, today?: string): string {
   const parts: string[] = [];
-  if (round.start_date) parts.push(`starts ${formatDateOnly(round.start_date, ROUND_DATE_FORMAT)}`);
-  if (round.application_deadline) {
-    const when = formatDateOnly(round.application_deadline, ROUND_DATE_FORMAT);
-    parts.push(roundIsClosed(round, today) ? `closed ${when}` : `apply by ${when}`);
-  }
+  const start = roundStartShown(round);
+  const deadline = roundDeadlineShown(round);
+  if (start) parts.push(`starts ${start}`);
+  if (deadline) parts.push(roundIsClosed(round, today) ? `closed ${deadline}` : `apply by ${deadline}`);
   return parts.length > 0 ? `${round.label} — ${parts.join(", ")}` : round.label;
 }
 
@@ -116,8 +148,12 @@ export const ROUNDS_PRESENT_FIELD = "rounds_present";
  * round_label, round_start_date, round_application_deadline — so the four
  * getAll() lists line up by index.
  *
- * A row with neither date is dropped rather than rejected: it is an empty row
- * somebody added and did not fill in, and the table's
+ * Each date field takes a date or words (0304), read by parseDayOrWords:
+ * "15 Mar 2027" is the date, "Rolling" is words, "15 March 2027, 13:00 CET"
+ * is both.
+ *
+ * A row with nothing in either field is dropped rather than rejected: it is an
+ * empty row somebody added and did not fill in, and the table's
  * program_intake_rounds_has_a_date constraint would refuse it anyway. A row
  * with a date but no label gets numbered, so a blank label cannot fail the
  * save.
@@ -132,15 +168,17 @@ export function parseRoundsFromFormData(formData: FormData): ProgramRound[] {
   const rounds: ProgramRound[] = [];
 
   for (let i = 0; i < count; i++) {
-    const start_date = (starts[i] ?? "").trim() || null;
-    const application_deadline = (deadlines[i] ?? "").trim() || null;
-    if (!start_date && !application_deadline) continue;
+    const start = parseDayOrWords(starts[i]);
+    const deadline = parseDayOrWords(deadlines[i]);
+    if (!start.date && !start.text && !deadline.date && !deadline.text) continue;
 
     rounds.push({
       id: (ids[i] ?? "").trim() || null,
       label: (labels[i] ?? "").trim() || defaultRoundLabel(rounds.length),
-      start_date,
-      application_deadline,
+      start_date: start.date,
+      application_deadline: deadline.date,
+      start_text: start.text,
+      deadline_text: deadline.text,
       // Renumbered from the order they were submitted in, so removing a middle
       // row does not leave a gap and the first row is always the first round.
       sort_order: rounds.length + 1,

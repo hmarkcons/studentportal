@@ -39,7 +39,7 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
       `id, current_stage, intake, deadline, application_fee, application_fee_currency, special_requirements, program_id, round_id, is_finalized, cycle_id,
        university:universities(id, name, city, contact_email, application_fee, application_fee_currency, destination:destinations(pipeline_stages, country_code, display_name, intake_mode, intake_seasons, currency)),
        program:programs(id, name, page_link, requirements_link, application_portal_link, coordinator_email),
-       round:program_intake_rounds(id, label, start_date, application_deadline, sort_order)`
+       round:program_intake_rounds(id, label, start_date, application_deadline, start_text, deadline_text, sort_order)`
     )
     .eq("id", appId)
     .eq("student_id", id)
@@ -104,7 +104,7 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
           .from("programs")
           // The rounds come along so the Details form can offer them without a
           // second round-trip when the programme is changed.
-          .select("id, name, application_fee, application_fee_currency, rounds:program_intake_rounds(id, label, start_date, application_deadline, sort_order)")
+          .select("id, name, application_fee, application_fee_currency, rounds:program_intake_rounds(id, label, start_date, application_deadline, start_text, deadline_text, sort_order)")
           .eq("university_id", university.id)
           .order("name")
       : Promise.resolve({

@@ -84,7 +84,10 @@ export function ImportCatalogueForm({ destinations }: { destinations: { id: stri
         programme there costs to apply to; <code>program_application_fee</code> only where a programme charges
         something else. A currency left blank follows the destination (<code>€50</code> in the fee cell also says EUR).
         A fee or a <code>tuition_fee</code> may be words as well as an amount — <code>Free for EU students</code>,{" "}
-        <code>€3,000 per year</code> — and is kept as written.{" "}
+        <code>€3,000 per year</code> — or several, a comma and a space between (<code>30, 50</code>), and is kept as
+        written. Every column takes anything: a <code>level</code> of the university&rsquo;s own, several emails
+        separated by commas, yes, no or words for the yes/no columns, and a date or words (<code>Rolling</code>) on the
+        Rounds sheet — only a date sets a reminder.{" "}
         <code>dsu_body</code> is a body from Setup → Scholarship bodies, by name — one that serves that destination;
         any other name is reported and left unchanged. <code>coordinator_email</code> is the programme&rsquo;s
         coordinator.

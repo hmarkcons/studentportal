@@ -52,16 +52,17 @@ export function ImportProgramsForm({ universityId }: { universityId: string }) {
         extras={<SampleCsvButton filename="programs-sample.csv" headers={HEADERS} exampleRow={EXAMPLE} />}
       />
       <p className="mt-3 text-xs text-muted">
-        CSV columns: <code>level</code> (bachelors/masters/phd, required), <code>name</code> (required),{" "}
-        <code>core_field</code>, <code>sub_field</code>, <code>page_link</code>, <code>interview_required</code> (yes/no),{" "}
-        <code>interview_details</code>, <code>admission_test_required</code> (yes/no), <code>admission_test_type</code>,{" "}
+        CSV columns: <code>level</code> (required — bachelors, masters, phd, or what the university calls it), <code>name</code> (required),{" "}
+        <code>core_field</code>, <code>sub_field</code>, <code>page_link</code>, <code>interview_required</code> (yes, no or words),{" "}
+        <code>interview_details</code>, <code>admission_test_required</code> (yes, no or words), <code>admission_test_type</code>,{" "}
         <code>application_portal_name</code>, <code>application_portal_link</code>,{" "}
         <code>intake_dates</code> (semicolon-separated), <code>rounds</code>, <code>start_date</code> (YYYY-MM-DD,
         when the course begins), <code>application_deadline</code> (YYYY-MM-DD, when applications close),{" "}
         <code>tuition_fee</code>, <code>duration</code>, <code>language_requirement</code>,{" "}
         <code>application_fee</code> (only where it differs from the university&rsquo;s — blank charges the
         university&rsquo;s), <code>application_fee_currency</code> (blank follows the university, then the destination),{" "}
-        <code>coordinator_email</code>.
+        <code>coordinator_email</code> (several separated by commas). A date may be words instead — <code>Rolling</code>,{" "}
+        <code>TBA March 2027</code> — shown as written, but only a date sets a reminder.
       </p>
       <p className="mt-1 text-xs text-muted">
         A programme can run several intake rounds. Put them in <code>rounds</code> as{" "}

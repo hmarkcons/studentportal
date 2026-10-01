@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { FEE_TEXT_MAX, parseFeeText } from "@/lib/applicationFee";
+import { EMAILS_MAX, normalizeEmails } from "@/lib/catalogueText";
 import { clearFinalizedStages, syncStudentStages } from "@/lib/autoStagesSync";
 import { refuseFinalizedStageByHand } from "@/lib/finalizedStageGuard";
 import { ensureCurrentCycleId } from "@/lib/ensureCycle";
@@ -473,24 +474,21 @@ export async function updateApplicationLinks(
   const supabase = await createClient();
 
   const clean = (key: string) => String(formData.get(key) ?? "").trim() || null;
+  // Anything may be written in these (0304) — a link with or without its
+  // https://, a note in its place, several emails. Nothing is refused for its
+  // format: what is clickable is decided where it is shown (linkHref,
+  // EmailLinks), so "university.edu/course" becomes https://university.edu/course
+  // there rather than a link against the portal's own address.
   const page_link = clean("page_link");
   const requirements_link = clean("requirements_link");
   const application_portal_link = clean("application_portal_link");
-  const contact_email = clean("contact_email");
-  const coordinator_email = clean("coordinator_email");
-
-  // Typing "university.edu/course" and getting a link that resolves against our
-  // own domain is worse than no link at all, so require a real scheme.
+  const contact_email = normalizeEmails(clean("contact_email"));
+  const coordinator_email = normalizeEmails(clean("coordinator_email"));
   for (const [label, value] of [
-    ["Course page", page_link],
-    ["Requirements", requirements_link],
-    ["Application portal", application_portal_link],
+    ["University email", contact_email],
+    ["Programme coordinator email", coordinator_email],
   ] as const) {
-    if (value && !/^https?:\/\//i.test(value)) return { error: `${label} link must start with http:// or https://` };
-  }
-  if (contact_email && !contact_email.includes("@")) return { error: "University email doesn't look like an email address." };
-  if (coordinator_email && !/^[^@\s]+@[^@\s]+$/.test(coordinator_email)) {
-    return { error: "Programme coordinator email doesn't look like an email address." };
+    if (value && value.length > EMAILS_MAX) return { error: `Keep the ${label.toLowerCase()} to ${EMAILS_MAX} characters.` };
   }
 
   // .select() on each update so a row blocked by RLS comes back as zero rows

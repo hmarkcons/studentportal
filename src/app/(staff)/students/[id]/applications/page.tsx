@@ -47,7 +47,7 @@ export default async function StudentApplicationsTab(props: {
         `id, current_stage, intake, deadline, is_finalized, cycle_id, round_id,
        university:universities(name, short_name, destination:destinations(display_name, country_code, pipeline_stages, finalize_action_label, finalized_badge_label)),
        program:programs(name, application_deadline, rounds:program_intake_rounds(id)),
-       round:program_intake_rounds(label, start_date, application_deadline)`
+       round:program_intake_rounds(label, start_date, application_deadline, start_text, deadline_text)`
       )
       .eq("student_id", id)
       // The priority staff set, then creation order for anything that somehow
@@ -322,7 +322,7 @@ export default async function StudentApplicationsTab(props: {
                 | { name?: string; application_deadline?: string | null; rounds?: { id: string }[] }
                 | null;
               const round = one(a.round as never) as
-                | { label?: string; start_date?: string | null; application_deadline?: string | null }
+                | { label?: string; start_date?: string | null; application_deadline?: string | null; start_text?: string | null }
                 | null;
 
               // The effective deadline, and which of the three sources it came
@@ -386,7 +386,7 @@ export default async function StudentApplicationsTab(props: {
                       {round?.label ? (
                         <>
                           Round: <span className="font-medium text-ink">{round.label}</span>
-                          {round.start_date && <> · starts {formatDateOnly(round.start_date, ROUND_DATE_FORMAT)}</>}
+                          {round.start_text ? <> · start: {round.start_text}</> : round.start_date && <> · starts {formatDateOnly(round.start_date, ROUND_DATE_FORMAT)}</>}
                         </>
                       ) : (
                         <span className="text-warning">

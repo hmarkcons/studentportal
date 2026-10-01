@@ -8,6 +8,7 @@ import { useButtonAction } from "@/components/useButtonAction";
 import { Input, Select } from "@/components/ui/Input";
 import { FeeInput } from "@/components/FeeInput";
 import { autoShortName } from "@/lib/finalizedStage";
+import { EMAILS_MAX, TYPED_SHORT_NAME_MAX } from "@/lib/catalogueText";
 
 type University = {
   id: string;
@@ -18,6 +19,8 @@ type University = {
   type: string;
   status: string;
   contact_email: string | null;
+  levels_offered?: string[] | null;
+  fields_offered?: string[] | null;
   application_fee: number | string | null;
   application_fee_currency: string | null;
   dsu_body_id: string | null;
@@ -54,7 +57,7 @@ export function UniversityEditForm({
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
           Short name
-          <Input name="short_name" defaultValue={university.short_name ?? ""} maxLength={32} placeholder={autoShortName(university.name)} />
+          <Input name="short_name" defaultValue={university.short_name ?? ""} maxLength={TYPED_SHORT_NAME_MAX} placeholder={autoShortName(university.name)} />
           <span className="text-[11px]">Shown under a finalized student&apos;s Pre-Enrolled / University Finalized step. Blank shortens the name itself, as shown.</span>
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
@@ -73,8 +76,25 @@ export function UniversityEditForm({
           <Input name="region" defaultValue={university.region ?? ""} />
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
-          University email
-          <Input name="contact_email" type="email" defaultValue={university.contact_email ?? ""} placeholder="admissions@…" />
+          University email(s)
+          <Input
+            name="contact_email"
+            type="text"
+            maxLength={EMAILS_MAX}
+            defaultValue={university.contact_email ?? ""}
+            placeholder="admissions@…, international@…"
+          />
+          <span className="text-[11px]">Several separated by commas, or a note.</span>
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-muted">
+          Levels offered
+          <Input name="levels_offered" defaultValue={(university.levels_offered ?? []).join("; ")} placeholder="Bachelors; Masters" />
+          <span className="text-[11px]">Separated by semicolons.</span>
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-muted">
+          Fields offered
+          <Input name="fields_offered" defaultValue={(university.fields_offered ?? []).join("; ")} placeholder="Engineering; Medicine" />
+          <span className="text-[11px]">Separated by semicolons.</span>
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
           Status

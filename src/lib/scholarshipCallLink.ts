@@ -15,7 +15,12 @@
  *
  * Both the staff tab and the student's own portal resolve the link through
  * here, so the two can never end up showing different papers.
+ *
+ * The link fields take anything since 0304, so each is only a link when it is
+ * a real web address (linkHref); a note in one is passed over for the next.
  */
+
+import { linkHref } from "./catalogueText.ts";
 
 export type CallLinkSource = {
   /** A signed link to the copy held against the body, made on the server. */
@@ -27,6 +32,8 @@ export type CallLinkSource = {
   call_pdf_language?: string | null;
   call_status?: string | null;
   call_expected_on?: string | null;
+  /** The expected date in words, said in its place (0304). */
+  call_expected_text?: string | null;
 };
 
 export type CallLink = {
@@ -51,10 +58,10 @@ export function callLink(body: CallLinkSource): CallLink | null {
   const stored = (body.call_pdf_signed_url ?? "").trim();
   if (stored) return { url: stored, kind: "stored", label: `Call for applications${suffix}`, language: lang };
 
-  const pdf = (body.call_pdf_url ?? "").trim();
+  const pdf = linkHref(body.call_pdf_url);
   if (pdf) return { url: pdf, kind: "pdf", label: `Call for applications${suffix}`, language: lang };
 
-  const page = (body.call_page_url ?? "").trim();
+  const page = linkHref(body.call_page_url);
   // No language suffix on a page: call_pdf_language describes the PDF, and a
   // region's page is Italian whatever the PDF turned out to be.
   if (page) return { url: page, kind: "page", label: "Call for applications", language: null };
@@ -72,8 +79,9 @@ export function callLink(body: CallLinkSource): CallLink | null {
  */
 export function callAbsenceNote(body: CallLinkSource): string {
   if (body.call_status === "awaiting") {
-    return body.call_expected_on
-      ? `The region has not published this year's call yet. It is expected around ${body.call_expected_on}.`
+    const expected = body.call_expected_text ?? body.call_expected_on;
+    return expected
+      ? `The region has not published this year's call yet. It is expected around ${expected}.`
       : "The region has not published this year's call yet.";
   }
   return "The call for applications is not linked here yet — your counsellor can send it to you.";

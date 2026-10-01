@@ -41,6 +41,9 @@ export async function saveProgramRounds(
       label: round.label,
       start_date: round.start_date,
       application_deadline: round.application_deadline,
+      // Words beside or instead of each date (0304); null clears them.
+      start_text: round.start_text ?? null,
+      deadline_text: round.deadline_text ?? null,
       sort_order: round.sort_order ?? 0,
     };
 
