@@ -28,6 +28,8 @@
 import { parseDay, splitList, type RowProblem } from "./catalogueRows.ts";
 import { describeChange, isNearMiss, mergeRow, normalizeName, type Cell } from "./importMerge.ts";
 import {
+  BODY_COLUMNS,
+  BODY_TEXT_LIMITS,
   CALL_STATUSES,
   GUIDE_LIMITS,
   isExampleBodyRow,
@@ -169,26 +171,37 @@ export function bodyFromRow(row: Record<string, string>, problems: RowProblem[])
   }
   const countries = splitList(row.countries);
 
+  // Held to the edit form's limits, and refused rather than cut: a stipend
+  // note trimmed without a word has lost its last sentence.
+  const limited = (key: keyof typeof BODY_TEXT_LIMITS): string | null => {
+    const text = cleanText(row[key]);
+    const max = BODY_TEXT_LIMITS[key];
+    if (text === null || text.length <= max) return text;
+    const header = BODY_COLUMNS.find((c) => c.key === key)?.header ?? key;
+    problems.push(`${header} is ${text.length} characters — at most ${max}; left as it is`);
+    return null;
+  };
+
   return {
     name,
     countries: countries.length > 0 ? countries : null,
-    region: cleanText(row.region),
+    region: limited("region"),
     covers,
     academic_year: cleanText(row.academic_year),
-    application_deadline: cleanText(row.application_deadline),
+    application_deadline: limited("application_deadline"),
     document_upload_deadline: cleanText(row.document_upload_deadline),
     courier_deadline: cleanText(row.courier_deadline),
-    isee_threshold: cleanText(row.isee_threshold),
-    ispe_threshold: cleanText(row.ispe_threshold),
-    stipend_amount: cleanText(row.stipend_amount),
-    benefits: cleanText(row.benefits),
+    isee_threshold: limited("isee_threshold"),
+    ispe_threshold: limited("ispe_threshold"),
+    stipend_amount: limited("stipend_amount"),
+    benefits: limited("benefits"),
     source_url: parseWebAddress(row.source_url, problems, "Source URL"),
     apply_url: parseWebAddress(row.apply_url, problems, "Apply URL"),
     call_status: parseCallStatus(row.call_status, problems),
     call_expected_on: parseDay(row.call_expected_on, problems, "Call expected on"),
     call_pdf_url: parseWebAddress(row.call_pdf_url, problems, "Call PDF URL"),
     call_page_url: parseWebAddress(row.call_page_url, problems, "Call page URL"),
-    call_notes: cleanText(row.call_notes),
+    call_notes: limited("call_notes"),
     guide: guideFromRow(row, problems),
   };
 }

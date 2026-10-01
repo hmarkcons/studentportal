@@ -83,6 +83,15 @@ imports add or update, and a blank cell means "said nothing", never null — see
 `src/lib/importMerge.ts`. A parser that turns an empty yes/no cell into `false`,
 or an insert payload that sends an explicit null instead of omitting the key,
 turns every partial sheet into a silent mass edit that reports total success.
+The reverse holds too: an edit form's `maxLength` must hold whatever an import
+can store, or the record cannot be edited once imported — the scholarship
+bodies' limits are shared, in `BODY_TEXT_LIMITS`.
+
+**An uploaded CSV is not necessarily UTF-8.** Excel on Windows saves CSV in
+Windows-1252, and `file.text()` turns each accented letter into "�" without an
+error: one import added three duplicate scholarship bodies named "Universit�
+degli Studi di …" beside the real ones. Read an upload with `readCsvFile`
+(`src/lib/csv.ts`), never `file.text()`.
 
 **A multi-row insert must be rectangular.** PostgREST takes the union of the
 keys across the rows and sends NULL for every key a given row is missing, so a

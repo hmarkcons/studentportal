@@ -54,7 +54,7 @@ function Detail({ label, value }: { label: string; value: string | null }) {
   return (
     <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
       <span className="shrink-0 text-xs text-muted sm:w-44">{label}</span>
-      <span className="text-sm text-ink">{value}</span>
+      <span className="whitespace-pre-line text-sm text-ink">{value}</span>
     </div>
   );
 }

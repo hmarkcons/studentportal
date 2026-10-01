@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getStaffSession } from "@/lib/auth/session";
 import { requirePermission } from "@/lib/auth/permissions";
 import { hasRole } from "@/lib/auth/roles";
-import { parseCsvWithHeader } from "@/lib/csv";
+import { parseCsvWithHeader, readCsvFile } from "@/lib/csv";
 import { MAX_UPLOAD_BYTES, fileSizeError } from "@/lib/fileSize";
 import { uploadedFile } from "@/lib/stagedUpload";
 import { fileDigest, importIntent } from "@/lib/importIntent";
@@ -92,7 +92,7 @@ async function readBodySheet(
   const { isXlsx, parseXlsx } = await import("@/lib/spreadsheet");
   const raw = isXlsx(file)
     ? await parseXlsx(file, { sheet: BODY_SHEET, knownHeaders: BODY_KNOWN_HEADERS })
-    : parseCsvWithHeader(await file.text());
+    : parseCsvWithHeader(await readCsvFile(file));
   if (raw.length === 0) return { error: "The file has no data rows." };
 
   // Named the way the sheet spells them, before the keys are normalised, so

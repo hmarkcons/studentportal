@@ -16,6 +16,8 @@ import {
 import {
   BODY_KNOWN_HEADERS,
   BODY_SHEET,
+  BODY_TEXT_LIMITS,
+  overLongBodyField,
   EXAMPLE_BODY_ROW,
   bodySheetColumns,
   bodySheetRow,
@@ -89,6 +91,36 @@ test("a row with only a name says nothing about anything else", () => {
   for (const field of ["region", "academic_year", "stipend_amount", "call_status", "call_expected_on", "source_url", "call_notes"]) {
     assert.equal(input[field], null, field);
   }
+});
+
+test("a stipend in words and figures is kept exactly as written, line breaks and all", () => {
+  const problems = [];
+  const stipend = "Up to €7,171.11 a year living away from home\n€4,190.71 commuting · €2,890.16 at home";
+  assert.equal(bodyFromRow({ name: "DSU Toscana", stipend_amount: stipend }, problems).stipend_amount, stipend);
+  assert.deepEqual(problems, []);
+});
+
+test("free text longer than the edit form allows is reported and left as it is, not cut", () => {
+  const problems = [];
+  const input = bodyFromRow(
+    { name: "DSU Toscana", stipend_amount: "x".repeat(1001), isee_threshold: "y".repeat(501), benefits: "z".repeat(1000) },
+    problems
+  );
+  assert.equal(input.stipend_amount, null, "null is \"said nothing\": the stored stipend stays");
+  assert.equal(input.isee_threshold, null);
+  assert.equal(input.benefits.length, 1000, "exactly at the limit is fine");
+  assert.match(problems.join("\n"), /Stipend amount is 1001 characters — at most 1000; left as it is/);
+  assert.match(problems.join("\n"), /ISEE threshold is 501 characters — at most 500; left as it is/);
+  assert.equal(problems.length, 2);
+});
+
+test("the edit form's limits hold everything on file, and a field past one is found", () => {
+  // The longest values on file when the limits were set. Below any of these
+  // and that body cannot be edited without cutting its text.
+  const longestOnFile = { stipend_amount: 381, benefits: 666, isee_threshold: 450, ispe_threshold: 285, application_deadline: 293, call_notes: 271, region: 83 };
+  for (const [field, length] of Object.entries(longestOnFile)) assert.ok(BODY_TEXT_LIMITS[field] >= length, field);
+  assert.equal(overLongBodyField({ stipend_amount: "x".repeat(1000), benefits: null }), null);
+  assert.deepEqual(overLongBodyField({ region: "ok", stipend_amount: "x".repeat(1001) }), { field: "stipend_amount", length: 1001, max: 1000 });
 });
 
 test("a row with no name is not a body", () => {

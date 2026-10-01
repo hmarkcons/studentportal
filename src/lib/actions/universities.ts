@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { SHORT_NAME_MAX } from "@/lib/finalizedStage";
-import { parseCsvWithHeader } from "@/lib/csv";
+import { parseCsvWithHeader, readCsvFile } from "@/lib/csv";
 import { requirePermission } from "@/lib/auth/permissions";
 import { MAX_UPLOAD_BYTES, fileSizeError } from "@/lib/fileSize";
 import { parseRoundsFromFormData, roundsWereSubmitted } from "@/lib/programRounds";
@@ -426,7 +426,7 @@ async function readImportRows(
   let roundRows: Record<string, string>[] = [];
 
   if (!options.withRounds) {
-    rows = isXlsx(file) ? await parseXlsx(file, options) : parseCsvWithHeader(await file.text());
+    rows = isXlsx(file) ? await parseXlsx(file, options) : parseCsvWithHeader(await readCsvFile(file));
   } else if (isXlsx(file)) {
     const sheets = await parseXlsxSheets(file);
     const rounds = sheets.find((sh) => isRoundsSheet(sh.name, sh.headers));
@@ -438,7 +438,7 @@ async function readImportRows(
   } else {
     // Keys kept as typed until the unread columns are listed, so the preview
     // names a column the way the sheet spells it.
-    const parsed = parseCsvWithHeader(await file.text());
+    const parsed = parseCsvWithHeader(await readCsvFile(file));
     if (parsed.length > 0 && isRoundsSheet("", Object.keys(parsed[0]).map(normalizeHeader))) roundRows = parsed;
     else rows = parsed;
   }

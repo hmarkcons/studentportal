@@ -286,7 +286,15 @@ export default async function ScholarshipBodiesPage() {
                   (r.body.application_deadline ?? "—")
                 ),
               guide: r.sectionCount > 0 ? `${r.sectionCount} sections` : <Badge tone="warning">none yet</Badge>,
-              stipend: r.body.stipend_amount ?? "—",
+              // Line breaks as written: the form is a textarea, and a note
+              // listing three rates reads as three lines.
+              stipend: r.body.stipend_amount ? (
+                <span data-stipend className="whitespace-pre-line">
+                  {r.body.stipend_amount}
+                </span>
+              ) : (
+                "—"
+              ),
               source: r.body.call_pdf_path && r.callUrl ? (
                 <span className="flex items-center gap-2">
                   <a href={r.callUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">

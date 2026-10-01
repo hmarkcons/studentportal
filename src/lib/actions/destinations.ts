@@ -273,8 +273,8 @@ export async function importDestinations(_prevState: unknown, formData: FormData
   }
   if (!file || file.size === 0) return { error: "Choose a CSV file first." };
 
-  const { parseCsvWithHeader } = await import("@/lib/csv");
-  const text = await file.text();
+  const { parseCsvWithHeader, readCsvFile } = await import("@/lib/csv");
+  const text = await readCsvFile(file);
   const rows = parseCsvWithHeader(text);
   if (rows.length === 0) return { error: "The file has no data rows." };
 

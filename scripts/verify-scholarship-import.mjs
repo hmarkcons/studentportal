@@ -17,6 +17,10 @@
 //   5. **An unknown country is reported and creates nothing.**
 //   6. **A similar name updates the body it resembles**, keeping its name and
 //      without a duplicate.
+//      **The edit form can edit what an import stored.** Stipend / notes is
+//      words and figures, often several sentences: a long note on file can be
+//      typed onto and saved whole, with its line breaks, which the table then
+//      shows; one past the limit is refused by the server, not cut.
 //   7. **An untouched export re-imports as a no-op** — the whole directory,
 //      real bodies included, with the check's own body provably in the file.
 //   8. **Only the people the database lets write may import.** A counsellor
@@ -266,6 +270,68 @@ try {
   ok("the stored body was updated", similar.length === 1 && similar[0].region === "Bodyshire North", JSON.stringify(similar));
   ok("...kept its stored name", similar[0]?.name === BODY, String(similar[0]?.name));
   ok("...and no duplicate was created", similar.length === 1, similar.map((b) => b.name).join(", "));
+
+  // ------------------------------------------------- 6b. the edit form
+  // The form held Stipend / notes to one line of 200 characters while imports
+  // stored any length, so a body imported with a longer note — production had
+  // three — could not be edited without cutting it. The note is set long
+  // first, as the real ones are, then TYPED onto: a too-short maxLength
+  // refuses typing, not a value set by script.
+  //
+  // Plain ASCII and English throughout, here and in the ISEE limit beside it:
+  // a € or an Italian word sends the whole body to be translated on save, and
+  // what comes back is then not exactly what was typed.
+  {
+    const LONG =
+      "Up to EUR 7,171.11 a year for students living away from home, EUR 4,190.71 for commuters and " +
+      "EUR 2,890.16 for students living at home, paid in two instalments: the first by 31 December 2026 and " +
+      "the second by 30 June 2027, once 20 credits are recorded. A free meal a day at the university canteens " +
+      "is included for every winner, and a room in a residence hall is offered to those living away from home.";
+    const ADDED = "\nAs figures: 7171 / 4191 / 2890.";
+    const [stored] = await bodiesLike(BODY);
+    await admin.from("scholarship_bodies").update({ stipend_amount: LONG, isee_threshold: "Up to EUR 26,887.93" }).eq("id", stored.id);
+
+    await page.goto(`${BASE}/setup/scholarship-bodies`, { waitUntil: "domcontentloaded" });
+    await heading(page).waitFor({ timeout: 60_000 });
+    const stipendBox = page.locator('textarea[name="stipend_amount"]');
+    // Polled like openImport: a click before hydration does nothing.
+    const editButton = page.locator("tr", { hasText: BODY }).first().getByRole("button", { name: "Edit" });
+    for (let i = 0; i < 30 && !(await stipendBox.isVisible()); i++) {
+      await editButton.click();
+      await stipendBox.waitFor({ state: "visible", timeout: 2_000 }).catch(() => {});
+    }
+    ok("the edit form's Stipend / notes is a box of several lines", await stipendBox.isVisible());
+    ok("...holding the long note on file whole", (await stipendBox.inputValue().catch(() => "")) === LONG,
+      String(LONG.length));
+
+    // Past the limit, set by script so the browser lets it through: the server refuses it.
+    await stipendBox.evaluate((el) => { el.value = "x".repeat(1001); });
+    await page.getByRole("button", { name: "Save changes" }).click();
+    const refusal = page.getByText("Stipend / notes is 1001 characters — keep it to 1000.");
+    ok("a note past the limit is refused by the server, saying why",
+      await refusal.waitFor({ timeout: 30_000 }).then(() => true, () => false));
+    ok("...and nothing was written", (await bodiesLike(BODY))[0]?.stipend_amount === LONG);
+
+    await stipendBox.fill(LONG);
+    await stipendBox.focus();
+    await page.keyboard.press("Control+End");
+    await page.keyboard.type(ADDED);
+    await page.getByRole("button", { name: "Save changes" }).click();
+    let saved = null;
+    for (let i = 0; i < 45 && saved === null; i++) {
+      const value = (await bodiesLike(BODY))[0]?.stipend_amount;
+      if (value === LONG + ADDED) saved = value;
+      else await new Promise((r) => setTimeout(r, 1000));
+    }
+    ok("typing onto a long note saves every character of it, words and figures", saved !== null,
+      String((await bodiesLike(BODY))[0]?.stipend_amount?.length));
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    const cell = page.locator("[data-stipend]", { hasText: "As figures" }).first();
+    await cell.waitFor({ timeout: 60_000 }).catch(() => {});
+    const shownText = await cell.innerText().catch(() => "");
+    ok("the table shows the note with its line break", shownText.includes("away from home.\nAs figures: 7171"), JSON.stringify(shownText.slice(-60)));
+  }
 
   // -------------------------------------------------------- 7. the round trip
   {

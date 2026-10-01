@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requirePermission } from "@/lib/auth/permissions";
 import { translateScholarshipValues } from "@/lib/translateScholarship";
+import { overLongBodyField, type LimitedBodyField } from "@/lib/scholarshipBodySheet";
 import { isScholarshipStatus, scholarshipIdentityError, SCHOLARSHIP_STATUSES } from "@/lib/scholarships";
 
 // Everything here needs scholarships.manage, which now defaults to Super Admin
@@ -21,26 +22,56 @@ async function gate() {
   return denied ? denied.error : null;
 }
 
+/**
+ * A text field, trimmed, its line breaks made \n; null when blank. A browser
+ * posts a textarea's line breaks as \r\n, and the import stores \n — kept as
+ * posted, a note saved here was one character longer per line than the same
+ * note imported, and an untouched export re-imported as a change to it.
+ */
+function textField(formData: FormData, key: string): string | null {
+  return String(formData.get(key) ?? "").replace(/\r\n?/g, "\n").trim() || null;
+}
+
 function readBodyFields(formData: FormData) {
   return {
     name: String(formData.get("name") ?? "").trim(),
-    region: String(formData.get("region") ?? "").trim() || null,
+    region: textField(formData, "region"),
     academic_year: String(formData.get("academic_year") ?? "").trim(),
     covers: String(formData.get("covers") ?? "")
       .split(",")
       .map((c) => c.trim())
       .filter(Boolean),
-    stipend_amount: String(formData.get("stipend_amount") ?? "").trim() || null,
-    source_url: String(formData.get("source_url") ?? "").trim() || null,
-    apply_url: String(formData.get("apply_url") ?? "").trim() || null,
-    application_deadline: String(formData.get("application_deadline") ?? "").trim() || null,
-    isee_threshold: String(formData.get("isee_threshold") ?? "").trim() || null,
-    ispe_threshold: String(formData.get("ispe_threshold") ?? "").trim() || null,
-    benefits: String(formData.get("benefits") ?? "").trim() || null,
-    call_pdf_url: String(formData.get("call_pdf_url") ?? "").trim() || null,
-    call_page_url: String(formData.get("call_page_url") ?? "").trim() || null,
-    call_notes: String(formData.get("call_notes") ?? "").trim() || null,
+    stipend_amount: textField(formData, "stipend_amount"),
+    source_url: textField(formData, "source_url"),
+    apply_url: textField(formData, "apply_url"),
+    application_deadline: textField(formData, "application_deadline"),
+    isee_threshold: textField(formData, "isee_threshold"),
+    ispe_threshold: textField(formData, "ispe_threshold"),
+    benefits: textField(formData, "benefits"),
+    call_pdf_url: textField(formData, "call_pdf_url"),
+    call_page_url: textField(formData, "call_page_url"),
+    call_notes: textField(formData, "call_notes"),
   };
+}
+
+/** The edit form's own words for the fields BODY_TEXT_LIMITS holds, for its error. */
+const FORM_LABELS: Record<LimitedBodyField, string> = {
+  region: "Region / state",
+  application_deadline: "Application deadline",
+  isee_threshold: "ISEE limit",
+  ispe_threshold: "ISPE limit",
+  stipend_amount: "Stipend / notes",
+  benefits: "Benefits",
+  call_notes: "Notes on the call",
+};
+
+/**
+ * A field longer than the form allows. The form stops anyone typing past its
+ * limit; this is for a request that did not come through the form.
+ */
+function overLongError(fields: ReturnType<typeof readBodyFields>): string | null {
+  const long = overLongBodyField(fields);
+  return long ? `${FORM_LABELS[long.field]} is ${long.length} characters — keep it to ${long.max}.` : null;
 }
 
 /**
@@ -143,6 +174,8 @@ export async function createScholarshipBody(_prevState: unknown, formData: FormD
 
   const fields = readBodyFields(formData);
   if (!fields.name || !fields.academic_year) return { error: "Name and academic year are required." };
+  const tooLong = overLongError(fields);
+  if (tooLong) return { error: tooLong };
 
   // A body nobody can find is a body nobody can award. The directory is read
   // by country everywhere it is used, so one is the minimum.
@@ -190,6 +223,8 @@ export async function updateScholarshipBody(bodyId: string, _prevState: unknown,
 
   const fields = readBodyFields(formData);
   if (!fields.name || !fields.academic_year) return { error: "Name and academic year are required." };
+  const tooLong = overLongError(fields);
+  if (tooLong) return { error: tooLong };
 
   const destinationIds = readDestinationIds(formData);
   if (destinationIds.length === 0) return { error: "Choose at least one country this scholarship body serves." };

@@ -233,8 +233,8 @@ export async function importLeads(_prevState: unknown, formData: FormData) {
   }
   if (!file || file.size === 0) return { error: "Choose a CSV file first." };
 
-  const { parseCsvWithHeader } = await import("@/lib/csv");
-  const text = await file.text();
+  const { parseCsvWithHeader, readCsvFile } = await import("@/lib/csv");
+  const text = await readCsvFile(file);
   const rows = parseCsvWithHeader(text);
   if (rows.length === 0) return { error: "The file has no data rows." };
 
@@ -299,8 +299,8 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
   if (isXlsx(file)) {
     rows = await parseXlsx(file);
   } else {
-    const { parseCsvWithHeader } = await import("@/lib/csv");
-    rows = parseCsvWithHeader(await file.text());
+    const { parseCsvWithHeader, readCsvFile } = await import("@/lib/csv");
+    rows = parseCsvWithHeader(await readCsvFile(file));
   }
   if (rows.length === 0) return { error: "The file has no data rows." };
 

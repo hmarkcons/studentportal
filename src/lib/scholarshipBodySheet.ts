@@ -37,6 +37,41 @@ export type CallStatus = (typeof CALL_STATUSES)[number];
  */
 export const GUIDE_LIMITS = { sections: 40, title: 120, text: 8000 } as const;
 
+/**
+ * The longest each free-text field may be. The edit form, its action and the
+ * import all hold to these, so the form can always edit what an import stored.
+ *
+ * They were the form's alone, and short — 200 characters for the stipend, 60
+ * for an ISEE limit — while the import took any length. Bodies imported with a
+ * 381-character stipend note or a 450-character ISEE explanation then could
+ * not be edited: the browser refused to save the field once it was touched,
+ * until it was cut down below a limit nothing else knew about. Each limit is
+ * comfortably above the longest value on file when it was set.
+ */
+export const BODY_TEXT_LIMITS = {
+  region: 120,
+  application_deadline: 500,
+  isee_threshold: 500,
+  ispe_threshold: 500,
+  stipend_amount: 1000,
+  benefits: 1000,
+  call_notes: 1000,
+} as const;
+
+export type LimitedBodyField = keyof typeof BODY_TEXT_LIMITS;
+
+/** The first field longer than its limit, or null when every one fits. */
+export function overLongBodyField(
+  values: Partial<Record<LimitedBodyField, string | null | undefined>>
+): { field: LimitedBodyField; length: number; max: number } | null {
+  for (const field of Object.keys(BODY_TEXT_LIMITS) as LimitedBodyField[]) {
+    const value = values[field];
+    const max = BODY_TEXT_LIMITS[field];
+    if (typeof value === "string" && value.length > max) return { field, length: value.length, max };
+  }
+  return null;
+}
+
 /** Guide pairs in the blank template. The export widens to fit the longest guide on file. */
 export const TEMPLATE_GUIDE_PAIRS = 12;
 

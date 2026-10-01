@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Input, Select, Textarea } from "@/components/ui/Input";
 import { GuideSectionsEditor, type GuideSection } from "./GuideSectionsEditor";
 import { CallPdfButton } from "./CallPdfButton";
+import { BODY_TEXT_LIMITS } from "@/lib/scholarshipBodySheet";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { toast } from "@/lib/toast";
 
@@ -122,7 +123,7 @@ export function ScholarshipBodyForm({
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Region / state" hint="Italy's DSU bodies are regional. Leave blank where it means nothing.">
-              <Input name="region" defaultValue={body?.region ?? ""} maxLength={120} />
+              <Input name="region" defaultValue={body?.region ?? ""} maxLength={BODY_TEXT_LIMITS.region} />
             </Field>
             <Field label="Academic year *">
               <Input name="academic_year" defaultValue={body?.academic_year ?? ""} required placeholder="2026/2027" />
@@ -131,8 +132,16 @@ export function ScholarshipBodyForm({
           <Field label="Universities it covers" hint="Comma-separated. This is what maps a student's university to its body.">
             <Input name="covers" defaultValue={body?.covers.join(", ") ?? ""} placeholder="Perugia, Terni" />
           </Field>
+          {/* Words and figures alike, and often a sentence or two — one line
+              and 200 characters could not hold what the import had stored. */}
           <Field label="Stipend / notes">
-            <Input name="stipend_amount" defaultValue={body?.stipend_amount ?? ""} maxLength={200} />
+            <Textarea
+              name="stipend_amount"
+              defaultValue={body?.stipend_amount ?? ""}
+              rows={3}
+              maxLength={BODY_TEXT_LIMITS.stipend_amount}
+              placeholder="e.g. Up to €7,171 a year living away from home, €4,191 commuting — or a note"
+            />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Source" hint="The body's own page.">
@@ -143,23 +152,24 @@ export function ScholarshipBodyForm({
             </Field>
           </div>
           <Field label="Application deadline" hint="As the call words it — many carry a time, and some carry two dates.">
-            <Input
+            <Textarea
               name="application_deadline"
               defaultValue={body?.application_deadline ?? ""}
-              maxLength={200}
+              rows={2}
+              maxLength={BODY_TEXT_LIMITS.application_deadline}
               placeholder="e.g. 7 September 2026, 13:00"
             />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="ISEE limit">
-              <Input name="isee_threshold" defaultValue={body?.isee_threshold ?? ""} maxLength={60} placeholder="≤€26,887.93" />
+              <Textarea name="isee_threshold" defaultValue={body?.isee_threshold ?? ""} rows={2} maxLength={BODY_TEXT_LIMITS.isee_threshold} placeholder="≤€26,887.93" />
             </Field>
             <Field label="ISPE limit">
-              <Input name="ispe_threshold" defaultValue={body?.ispe_threshold ?? ""} maxLength={60} placeholder="≤€58,452.06" />
+              <Textarea name="ispe_threshold" defaultValue={body?.ispe_threshold ?? ""} rows={2} maxLength={BODY_TEXT_LIMITS.ispe_threshold} placeholder="≤€58,452.06" />
             </Field>
           </div>
           <Field label="Benefits">
-            <Input name="benefits" defaultValue={body?.benefits ?? ""} maxLength={300} placeholder="e.g. free meals at university canteens" />
+            <Textarea name="benefits" defaultValue={body?.benefits ?? ""} rows={3} maxLength={BODY_TEXT_LIMITS.benefits} placeholder="e.g. free meals at university canteens" />
           </Field>
 
           {/* Whether this year's call is even out yet. A body waiting on its
@@ -208,7 +218,7 @@ export function ScholarshipBodyForm({
             </Field>
           )}
           <Field label="Notes on the call">
-            <Textarea name="call_notes" defaultValue={body?.call_notes ?? ""} rows={2} maxLength={1000} />
+            <Textarea name="call_notes" defaultValue={body?.call_notes ?? ""} rows={2} maxLength={BODY_TEXT_LIMITS.call_notes} />
           </Field>
 
           <p className="mt-2 border-t border-border pt-3 text-xs font-semibold uppercase tracking-wide text-muted">
