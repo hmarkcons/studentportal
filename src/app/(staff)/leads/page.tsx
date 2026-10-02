@@ -8,6 +8,7 @@ import { InlineStatusCell } from "./InlineStatusCell";
 import { InlineCounselorCell } from "./InlineCounselorCell";
 import { FollowUpCell } from "./FollowUpCell";
 import { RemarkCell } from "./RemarkCell";
+import { LongTextCell } from "./LongTextCell";
 import { RowActionsMenu } from "@/components/RowActionsMenu";
 import { hasPermission } from "@/lib/auth/permissions";
 import { getCachedCounselors } from "@/lib/cachedQueries";
@@ -113,22 +114,26 @@ export default async function LeadsPage() {
     // Worked out from the inquiry date, never stored or typed.
     const monthYearLabel = monthLabel(r.date_of_inquiry);
     const level = r.level_applying_for ? (LEVEL_LABELS[r.level_applying_for] ?? r.level_applying_for) : null;
+    // A long value is cut short on its line and opens whole in a pop-up.
+    const long = (text: string | null, label: string, widthClassName?: string) => (
+      <LongTextCell text={text} label={label} leadName={r.full_name} widthClassName={widthClassName} />
+    );
     const counselorName = one(r.assigned_counselor)?.full_name;
     return {
       id: r.id,
       cells: {
         month: monthYearLabel,
         name: (
-          <Link href={`/leads/${r.id}`} prefetch={false} className="font-medium text-ink hover:underline">
+          <Link href={`/leads/${r.id}`} prefetch={false} title={r.full_name} className="block max-w-[16rem] truncate font-medium text-ink hover:underline">
             {r.full_name}
           </Link>
         ),
-        contact: r.contact_number ?? "—",
-        email: r.email ?? "—",
-        country: r.country_of_interest ?? "—",
-        qualification: r.current_qualification ?? "—",
+        contact: long(r.contact_number, "Contact number", "max-w-[10rem]"),
+        email: long(r.email, "Email", "max-w-[14rem]"),
+        country: long(r.country_of_interest, "Country"),
+        qualification: long(r.current_qualification, "Current qualification"),
         level: level ?? "—",
-        course: r.course_of_interest ?? "—",
+        course: long(r.course_of_interest, "Course of interest", "max-w-[14rem]"),
         status: <InlineStatusCell leadId={r.id} currentStatus={r.status} latestRemark={latestRemarkByLead.get(r.id)} />,
         counselor: (
           <InlineCounselorCell
@@ -149,7 +154,7 @@ export default async function LeadsPage() {
         ),
         followUp: <FollowUpCell leadId={r.id} remarkCount={followUpCountByLead.get(r.id) ?? 0} revalidateTo="/leads" />,
         date: formatDateOnly(r.date_of_inquiry),
-        source: r.platform_source ?? "—",
+        source: long(r.platform_source, "Source", "max-w-[10rem]"),
         actions: (
           <RowActionsMenu id={r.id} name={r.full_name} editHref={`/leads/${r.id}`} canDelete={canDelete} deleteLabel="Delete lead" />
         ),

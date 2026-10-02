@@ -44,6 +44,10 @@ const { ok, finish } = reporter();
 
 const karachiToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Karachi" }).format(new Date());
 const NEW_A = "zztmp Import Alpha";
+// Long enough that no column could show them on one line.
+const GERMANY = "Germany (Munich, Berlin or Hamburg, public universities only)";
+const COUNTRIES = `Italy; ${GERMANY}`;
+const LONG_COURSE = "zztmp Data Science, Artificial Intelligence or Business Analytics, preferably taught in English with an internship";
 const NEW_B = "zztmp Import Bravo";
 const EXISTING = "zztmp Import Existing";
 const HIDDEN = "zztmp Import Hidden";
@@ -155,7 +159,7 @@ try {
       Country: "Italy",
       "Current qualification": "A-Levels",
       "Applying for": "Masters",
-      "Course of interest": "Data Science",
+      "Course of interest": LONG_COURSE,
       Status: "Meeting Done",
       Counselor: counsellor.name,
       Remarks: "zztmp Met at the fair",
@@ -165,7 +169,7 @@ try {
       Source: "Education fair",
     },
     // The same person again, by email: read as one.
-    { Name: NEW_A, Email: "ZZTMP-import-alpha@hmark-test.local", Country: "Germany", Remarks: "zztmp Also asked about Germany" },
+    { Name: NEW_A, Email: "ZZTMP-import-alpha@hmark-test.local", Country: GERMANY, Remarks: "zztmp Also asked about Germany" },
     { Name: NEW_B, "Contact number": "0300-9999984", "Applying for": "Diploma", Remarks: "zztmp Bravo remark" },
     {
       Name: EXISTING,
@@ -202,10 +206,10 @@ try {
   const a = alpha[0] ?? {};
   ok("...with every column of the sheet",
     a.contact_number === "0300-9999983" && a.email === "zztmp-import-alpha@hmark-test.local" && a.current_qualification === "A-Levels" &&
-      a.level_applying_for === "masters" && a.course_of_interest === "Data Science" && a.status === "meeting_done" &&
+      a.level_applying_for === "masters" && a.course_of_interest === LONG_COURSE && a.status === "meeting_done" &&
       a.assigned_counselor_id === counsellor.id && a.date_of_inquiry === "2026-09-14" && a.platform_source === "Education fair",
     JSON.stringify(a));
-  ok("...the second row's country beside the first's", a.country_of_interest === "Italy; Germany", a.country_of_interest);
+  ok("...the second row's country beside the first's", a.country_of_interest === COUNTRIES, a.country_of_interest);
   ok("...and both rows' remarks", (await current(a.id)) === "zztmp Met at the fair\nzztmp Also asked about Germany", await current(a.id));
   const aFollow = await followUps(a.id);
   ok("...and its follow-up", aFollow.length === 1 && aFollow[0].due_date === "2026-10-20" && aFollow[0].note === "zztmp Send the Milan list", JSON.stringify(aFollow));
@@ -248,9 +252,34 @@ try {
   ok("...with Email and Source each a column of its own", headers.includes("email") && headers.includes("source"));
   const alphaRow = page.locator("tbody tr", { hasText: NEW_A });
   const alphaCells = (await alphaRow.locator("td").allInnerTexts()).map((t) => t.trim());
-  ok("...and the lead's own values in them", alphaCells[c] === "Italy; Germany" && alphaCells[c + 1] === "A-Levels" && alphaCells[c + 2] === "Masters" && alphaCells[c + 3] === "Data Science",
+  ok("...and the lead's own values in them", alphaCells[c] === COUNTRIES && alphaCells[c + 1] === "A-Levels" && alphaCells[c + 2] === "Masters" && alphaCells[c + 3] === LONG_COURSE,
     alphaCells.join(" | "));
   ok("...the Month worked out from the inquiry date", alphaCells[headers.indexOf("month")] === "Sep 2026", alphaCells.join(" | "));
+  // A long value is cut short on its line, and opens whole in a pop-up on a click.
+  const course = alphaRow.locator("td").nth(c + 3).locator("[data-long-text]");
+  ok("a long value is cut short on one line",
+    (await course.evaluate((el) => el.scrollWidth > el.clientWidth)) && (await course.getAttribute("data-cut")) !== null);
+  await course.click();
+  const longDialog = page.locator("dialog[open] [data-long-dialog]");
+  await longDialog.waitFor({ timeout: 15000 });
+  ok("...and a click opens the whole of it in a pop-up, titled with the column and the lead",
+    (await longDialog.locator("[data-long-full]").innerText()).trim() === LONG_COURSE &&
+      (await page.locator("dialog[open] h3").innerText()).trim() === `Course of interest — ${NEW_A}`,
+    await page.locator("dialog[open]").innerText());
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(() => !document.querySelector("dialog[open]"), null, { timeout: 10000 });
+  const country = alphaRow.locator("td").nth(c).locator("[data-long-text]");
+  await country.click();
+  await page.locator("dialog[open] [data-long-full] li").first().waitFor({ timeout: 15000 });
+  ok("...several values in one cell are listed one to a line",
+    JSON.stringify(await page.locator("dialog[open] [data-long-full] li").allInnerTexts()) === JSON.stringify(["Italy", GERMANY]));
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(() => !document.querySelector("dialog[open]"), null, { timeout: 10000 });
+  const source = alphaRow.locator("td").nth(headers.indexOf("source")).locator("[data-long-text]");
+  // Not a button at all, so there is nothing for a click to open.
+  ok("a value that fits is plain text, not something to click",
+    (await source.innerText()).trim() === "Education fair" && (await source.getAttribute("data-cut")) === null && (await source.getAttribute("role")) === null);
+
   ok("the export is the Excel one", (await page.locator("a[data-export-link]").getAttribute("href")) === "/api/export/leads");
 
   const bg = (loc) => loc.locator("td").nth(2).evaluate((el) => getComputedStyle(el).backgroundColor);
@@ -287,7 +316,7 @@ try {
   const row = exported.find((r) => r.cells[1] === NEW_A)?.cells ?? [];
   ok("...each piece of a lead in its own cell",
     JSON.stringify(row.slice(1)) ===
-      JSON.stringify([NEW_A, "0300-9999983", "zztmp-import-alpha@hmark-test.local", "Italy; Germany", "A-Levels", "masters", "Data Science", "Meeting Done", counsellor.name,
+      JSON.stringify([NEW_A, "0300-9999983", "zztmp-import-alpha@hmark-test.local", COUNTRIES, "A-Levels", "masters", LONG_COURSE, "Meeting Done", counsellor.name,
         "zztmp Met at the fair\nzztmp Also asked about Germany", "2026-10-20", "zztmp Send the Milan list", "2026-09-14", "Education fair"]),
     JSON.stringify(row));
   const n = exported.find((r) => r.cells[1] === NEW_A)?.n;
