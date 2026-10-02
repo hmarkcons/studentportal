@@ -13,7 +13,9 @@
 //                 remark and its history.
 //   import        a "remarks" column in the leads import becomes the new
 //                 lead's first remark, under the importer's name.
-//   who           its counsellor and Marketing (who can open any lead) may
+//   new lead      the New lead form's Remarks box does the same for a lead
+//                 added by hand, shown on its page the moment it opens.
+//   who          its counsellor and Marketing (who can open any lead) may
 //                 read and write it; a counsellor who is not its own may do
 //                 neither; the student it is about cannot read it at all — not
 //                 even through their own access to their lead; and nobody can
@@ -30,6 +32,7 @@ const { ok, finish } = reporter();
 
 const karachiToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Karachi" }).format(new Date());
 const IMPORTED = "zztmp Remarks Imported";
+const BY_FORM = "zztmp Remarks NewForm";
 const STUDENT_EMAIL = "zztmp-remarks-student@hmark-test.local";
 
 async function poll(fn, seconds = 30) {
@@ -169,6 +172,29 @@ try {
   ok("a remarks column in the import becomes the new lead's first remark, under the importer's name",
     imported?.body === "zztmp From the fair, wants Germany" && imported?.updated_by === marketing.id, JSON.stringify(imported));
 
+  // -------------------------------------------------------- the new lead form
+  console.log("\n--- the new lead form ---");
+  await page.goto(`${BASE}/leads/new`, { waitUntil: "domcontentloaded" });
+  const nameBox = page.locator('input[name="full_name"]');
+  await nameBox.waitFor({ timeout: 60000 });
+  await page.waitForFunction(() => {
+    const t = document.querySelector('textarea[name="remarks"]');
+    return Boolean(t && Object.keys(t).some((k) => k.startsWith("__reactProps")));
+  }, null, { timeout: 30000 });
+  const TYPED = "zztmp Walk-in, asked about Hungary\nWill bring transcripts Monday";
+  await nameBox.fill(BY_FORM);
+  await page.locator('textarea[name="remarks"]').fill(TYPED);
+  await page.getByRole("button", { name: "Create lead" }).click();
+  await page.waitForURL(/\/leads\/[0-9a-f-]{36}$/, { timeout: 60000 });
+  const newId = page.url().split("/").pop();
+  const newCard = page.locator(`[data-remark-editor="${newId}"]`);
+  await newCard.waitFor({ timeout: 60000 });
+  ok("a remark typed in the New lead form is on the lead's page the moment it opens, line break and all",
+    (await newCard.locator("[data-remark-full]").innerText()) === TYPED, await newCard.innerText());
+  const byForm = await current(newId);
+  ok("...kept as its first version, under whoever added the lead",
+    byForm?.updated_by === marketing.id && (await versions(newId)).length === 1, JSON.stringify(byForm));
+
   // ---------------------------------------------------------------- who
   console.log("\n--- who ---");
   const asOther = await apiAs(url, anonKey, otherCounsellor.email);
@@ -196,7 +222,7 @@ try {
   ok(`the check itself stopped: ${e?.stack ?? e}`, false);
 } finally {
   await browser?.close().catch(() => {});
-  await admin.from("leads").delete().eq("full_name", IMPORTED);
+  await admin.from("leads").delete().in("full_name", [IMPORTED, BY_FORM]);
   const removed = await fx.cleanup();
   if (studentUserId) await admin.auth.admin.deleteUser(studentUserId).catch(() => {});
   process.exitCode = finish(removed) === 0 ? 0 : 1;

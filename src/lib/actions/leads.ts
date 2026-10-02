@@ -19,7 +19,7 @@ import { MAX_UPLOAD_BYTES, fileSizeError } from "@/lib/fileSize";
 import { removeStoragePrefix } from "@/lib/storageCleanup";
 import { uploadedFile } from "@/lib/stagedUpload";
 import { getCurrentUser } from "@/lib/auth/currentUser";
-import { remarkFromRow } from "@/lib/leadRemarks";
+import { normalizeRemark, remarkError, remarkFromRow } from "@/lib/leadRemarks";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -97,10 +97,15 @@ export async function createLead(_prevState: unknown, formData: FormData) {
   const destination_names = formData.getAll("destination_names").map(String).filter(Boolean);
   const country_of_interest = destination_names.join(", ") || null;
   const assigned_counselor_id = String(formData.get("assigned_counselor_id") ?? "") || null;
+  const remark = normalizeRemark(String(formData.get("remarks") ?? ""));
 
   if (!full_name) {
     return { error: "Name is required." };
   }
+  // Before anything is written, so a remark too long to keep never leaves a
+  // lead created without it.
+  const remarkInvalid = remarkError(remark);
+  if (remarkInvalid) return { error: remarkInvalid };
 
   const phoneIssue = phoneError(contact_number);
   if (phoneIssue) return { error: phoneIssue };
@@ -135,6 +140,16 @@ export async function createLead(_prevState: unknown, formData: FormData) {
 
   if (destination_ids.length > 0) {
     await supabase.from("lead_destinations").insert(destination_ids.map((destination_id) => ({ lead_id: id, destination_id })));
+  }
+
+  // The lead's first remark, as its first version, under whoever added the lead.
+  if (remark) {
+    const user = await getCurrentUser();
+    const { error: remarkSaveError } = await supabase.from("lead_remarks").insert({ lead_id: id, body: remark, written_by: user?.id });
+    // The lead is in; saying so beats an error that invites adding it twice.
+    if (remarkSaveError) {
+      return { error: `The lead was added, but its remark was not saved (${remarkSaveError.message}) — add it from the leads list.` };
+    }
   }
 
   redirect(`/leads/${id}`);

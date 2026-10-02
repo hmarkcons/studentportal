@@ -5,7 +5,8 @@ import { createLead } from "@/lib/actions/leads";
 import { STUDY_LEVELS } from "@/lib/constants";
 import { DestinationMultiSelect } from "@/components/DestinationMultiSelect";
 import { Button } from "@/components/ui/Button";
-import { Input, Select } from "@/components/ui/Input";
+import { Input, Select, Textarea } from "@/components/ui/Input";
+import { REMARK_MAX } from "@/lib/leadRemarks";
 import { phoneBounds } from "@/lib/phoneNumber";
 import { toast } from "@/lib/toast";
 
@@ -86,6 +87,20 @@ export function NewLeadForm({
             </option>
           ))}
         </Select>
+      </div>
+      {/* The lead's first remark — the Remarks column's, every later edit kept
+          beside it (0306). */}
+      <div className="flex flex-col gap-1.5">
+        <label className={labelClass} htmlFor="new-lead-remarks">
+          Remarks
+        </label>
+        <Textarea
+          id="new-lead-remarks"
+          name="remarks"
+          rows={3}
+          maxLength={REMARK_MAX}
+          placeholder="e.g. Wants a master's in Italy, budget tight — call after Eid"
+        />
       </div>
 
       {state?.error && <p className="text-sm text-danger">{state.error}</p>}
