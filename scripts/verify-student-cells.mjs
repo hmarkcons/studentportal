@@ -1,9 +1,10 @@
-// Long values in the Registered students list, end to end against a deployed
-// portal.
+// Row colours and long values in the Registered students list, end to end
+// against a deployed portal.
 //
 //   VERIFY_AGAINST_PRODUCTION=yes npm run check:studentcells
 //
-//   Contact, Country, Backup Country and Intake each keep to one line: a value
+//   Rows are striped, the one under the pointer lit, the one clicked kept
+//   marked. Contact, Country, Backup Country and Intake each keep to one line: a value
 //   too long for its column is cut short, and a click on it opens the whole of
 //   it in a pop-up titled with the column and the student — several backup
 //   countries listed one to a line. A value that fits is plain text, not
@@ -62,6 +63,23 @@ try {
   const cell = (row, h) => row.locator("td").nth(col(h)).locator("[data-long-text]");
   ok("the list has Contact, Country, Backup Country and Intake columns",
     ["contact", "country", "backup country", "intake"].every((h) => col(h) >= 0), headers.join(" | "));
+
+  // Row colours first: a click on a cell marks its row, so the pop-ups below
+  // would leave one marked before the stripes were measured.
+  const bg = (row) => row.locator("td").nth(col("contact")).evaluate((el) => getComputedStyle(el).backgroundColor);
+  const rows = page.locator("table[data-row-highlight] > tbody > tr");
+  ok("the table is marked for row colours", (await rows.count()) >= 2, String(await rows.count()));
+  await page.mouse.move(5, 5);
+  const [first, second] = [await bg(rows.nth(0)), await bg(rows.nth(1))];
+  ok("rows are striped", first !== second, `${first} / ${second}`);
+  await rows.nth(1).locator("td").nth(col("contact")).hover();
+  const hovered = await bg(rows.nth(1));
+  ok("the row under the pointer is lit", hovered !== first && hovered !== second, hovered);
+  await rows.nth(0).locator("td").nth(col("month")).click();
+  await page.mouse.move(5, 5);
+  const clicked = await bg(rows.nth(0));
+  ok("the row clicked stays marked once the pointer has gone",
+    (await rows.nth(0).getAttribute("data-current")) !== null && clicked !== first && clicked !== second, clicked);
 
   const isCut = async (loc) => (await loc.evaluate((el) => el.scrollWidth > el.clientWidth)) && (await loc.getAttribute("data-cut")) !== null;
   const openAndRead = async (loc) => {

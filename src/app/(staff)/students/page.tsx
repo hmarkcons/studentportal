@@ -229,6 +229,7 @@ export default async function StudentsPage() {
         <div className="mt-4">
           <DataTable
             exportFilename="students"
+            rowHighlight
             label="Registered students"
             freezeColumn="name"
             rows={rows}
