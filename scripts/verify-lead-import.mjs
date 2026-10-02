@@ -255,6 +255,23 @@ try {
   ok("...and the lead's own values in them", alphaCells[c] === COUNTRIES && alphaCells[c + 1] === "A-Levels" && alphaCells[c + 2] === "Masters" && alphaCells[c + 3] === LONG_COURSE,
     alphaCells.join(" | "));
   ok("...the Month worked out from the inquiry date", alphaCells[headers.indexOf("month")] === "Sep 2026", alphaCells.join(" | "));
+  ok("the export is the Excel one", (await page.locator("a[data-export-link]").getAttribute("href")) === "/api/export/leads");
+
+  const bg = (loc) => loc.locator("td").nth(2).evaluate((el) => getComputedStyle(el).backgroundColor);
+  const rows = page.locator("table[data-row-highlight] > tbody > tr");
+  ok("the table is marked for row colours", (await rows.count()) >= 2, String(await rows.count()));
+  await page.mouse.move(5, 5);
+  const [first, second] = [await bg(rows.nth(0)), await bg(rows.nth(1))];
+  ok("rows are striped", first !== second, `${first} / ${second}`);
+  await rows.nth(1).hover();
+  const hovered = await bg(rows.nth(1));
+  ok("the row under the pointer is lit", hovered !== second && hovered !== first, hovered);
+  await rows.nth(0).locator("td").nth(2).click();
+  await page.mouse.move(5, 5);
+  const clicked = await bg(rows.nth(0));
+  ok("the row clicked stays marked once the pointer has gone", (await rows.nth(0).getAttribute("data-current")) !== null && clicked !== first && clicked !== second, clicked);
+
+  // After the row colours, which need no row marked yet: a click on a cell marks its row.
   // A long value is cut short on its line, and opens whole in a pop-up on a click.
   const course = alphaRow.locator("td").nth(c + 3).locator("[data-long-text]");
   ok("a long value is cut short on one line",
@@ -280,21 +297,6 @@ try {
   ok("a value that fits is plain text, not something to click",
     (await source.innerText()).trim() === "Education fair" && (await source.getAttribute("data-cut")) === null && (await source.getAttribute("role")) === null);
 
-  ok("the export is the Excel one", (await page.locator("a[data-export-link]").getAttribute("href")) === "/api/export/leads");
-
-  const bg = (loc) => loc.locator("td").nth(2).evaluate((el) => getComputedStyle(el).backgroundColor);
-  const rows = page.locator("table[data-row-highlight] > tbody > tr");
-  ok("the table is marked for row colours", (await rows.count()) >= 2, String(await rows.count()));
-  await page.mouse.move(5, 5);
-  const [first, second] = [await bg(rows.nth(0)), await bg(rows.nth(1))];
-  ok("rows are striped", first !== second, `${first} / ${second}`);
-  await rows.nth(1).hover();
-  const hovered = await bg(rows.nth(1));
-  ok("the row under the pointer is lit", hovered !== second && hovered !== first, hovered);
-  await rows.nth(0).locator("td").nth(2).click();
-  await page.mouse.move(5, 5);
-  const clicked = await bg(rows.nth(0));
-  ok("the row clicked stays marked once the pointer has gone", (await rows.nth(0).getAttribute("data-current")) !== null && clicked !== first && clicked !== second, clicked);
 
   // ------------------------------------------------------------- export
   console.log("\n--- export ---");
