@@ -7,6 +7,7 @@ import { ImportLeadsForm } from "./ImportLeadsForm";
 import { InlineStatusCell } from "./InlineStatusCell";
 import { InlineCounselorCell } from "./InlineCounselorCell";
 import { FollowUpCell } from "./FollowUpCell";
+import { RemarkCell } from "./RemarkCell";
 import { RowActionsMenu } from "@/components/RowActionsMenu";
 import { hasPermission } from "@/lib/auth/permissions";
 import { getCachedCounselors } from "@/lib/cachedQueries";
@@ -21,7 +22,11 @@ type LeadRow = {
   date_of_inquiry: string;
   assigned_counselor_id: string | null;
   assigned_counselor: { full_name: string } | { full_name: string }[] | null;
+  /** The current remark: its newest version, staff-only (0306, 0307). */
+  current_remark: CurrentRemark | CurrentRemark[] | null;
 };
+
+type CurrentRemark = { body: string | null; updated_at: string; editor: { full_name: string } | { full_name: string }[] | null };
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -36,7 +41,7 @@ export default async function LeadsPage() {
     supabase
       .from("leads")
       .select(
-        "id, full_name, contact_number, email, country_of_interest, status, date_of_inquiry, assigned_counselor_id, assigned_counselor:staff!assigned_counselor_id(full_name)"
+        "id, full_name, contact_number, email, country_of_interest, status, date_of_inquiry, assigned_counselor_id, assigned_counselor:staff!assigned_counselor_id(full_name), current_remark:lead_remark_current(body, updated_at, editor:staff!lead_remark_current_updated_by_fkey(full_name))"
       )
       .order("date_of_inquiry", { ascending: false })
       .returns<LeadRow[]>(),
@@ -73,7 +78,8 @@ export default async function LeadsPage() {
   // Everything on one line, with the table scrolling sideways — a name, a
   // number and a country each wrapping onto two lines made a row three deep
   // and the list impossible to scan. Status and Follow-up keep wrapping: both
-  // hold an inline editor that needs the room.
+  // hold an inline editor that needs the room. Remarks stays on one line, cut
+  // short where it is long, and opens whole in a pop-up (RemarkCell).
   const columns = [
     { key: "month", header: "Month" },
     { key: "name", header: "Name" },
@@ -81,12 +87,14 @@ export default async function LeadsPage() {
     { key: "country", header: "Country" },
     { key: "status", header: "Status", wrap: true },
     { key: "counselor", header: "Counselor", align: "center" as const },
+    { key: "remarks", header: "Remarks" },
     { key: "followUp", header: "Follow-up", wrap: true },
     { key: "date", header: "Inquiry date" },
     { key: "actions", header: "", align: "right" as const, exportable: false },
   ];
 
   const rows = (leads ?? []).map((r) => {
+    const remark = one(r.current_remark);
     const inquiryDate = new Date(r.date_of_inquiry);
     const monthYearLabel = inquiryDate.toLocaleString("en-US", { month: "short", year: "numeric" });
     const counselorName = one(r.assigned_counselor)?.full_name;
@@ -110,6 +118,15 @@ export default async function LeadsPage() {
             counselors={counselors}
           />
         ),
+        remarks: (
+          <RemarkCell
+            leadId={r.id}
+            leadName={r.full_name}
+            remark={remark?.body ?? null}
+            updatedAt={remark?.updated_at ?? null}
+            updatedBy={one(remark?.editor ?? null)?.full_name ?? null}
+          />
+        ),
         followUp: <FollowUpCell leadId={r.id} remarkCount={followUpCountByLead.get(r.id) ?? 0} revalidateTo="/leads" />,
         date: formatDateOnly(r.date_of_inquiry),
         actions: (
@@ -122,6 +139,8 @@ export default async function LeadsPage() {
         country: r.country_of_interest ?? "",
         status: LEAD_STATUS_LABELS[r.status as keyof typeof LEAD_STATUS_LABELS] ?? r.status,
         counselor: counselorName ?? "",
+        // In the export, and in what the search box looks through.
+        remarks: remark?.body ?? "",
         followUp: String(followUpCountByLead.get(r.id) ?? 0),
         date: r.date_of_inquiry,
         month: monthYearLabel,
@@ -159,7 +178,7 @@ export default async function LeadsPage() {
             rows={rows}
             columns={columns}
             searchable
-            searchPlaceholder="Search name, contact…"
+            searchPlaceholder="Search name, contact, remarks…"
             oneLine
             minTableWidthClassName="min-w-[640px] lg:min-w-[950px]"
             pageSize={25}

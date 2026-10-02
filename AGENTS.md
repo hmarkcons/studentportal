@@ -106,6 +106,13 @@ may assume its format:
   reminders, "closed" and the calendar. Read rounds for display with the two
   text columns, or a "Rolling" round shows as a round with no dates.
 
+**A student can read their own `leads` row** (`leads_select_self`, 0022), so a
+column added to `leads` is readable from the student's own session, through
+the API, whatever the student pages show. Anything internal — a counsellor's
+note — goes in a table of its own with a staff-only policy: the lead's remark
+was first mirrored onto `leads` (0306) and moved to `lead_remark_current`
+(0307) for exactly this.
+
 **An uploaded CSV is not necessarily UTF-8.** Excel on Windows saves CSV in
 Windows-1252, and `file.text()` turns each accented letter into "�" without an
 error: one import added three duplicate scholarship bodies named "Universit�

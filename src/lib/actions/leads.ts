@@ -18,6 +18,8 @@ import { phoneError, phoneChangeError } from "@/lib/phoneNumber";
 import { MAX_UPLOAD_BYTES, fileSizeError } from "@/lib/fileSize";
 import { removeStoragePrefix } from "@/lib/storageCleanup";
 import { uploadedFile } from "@/lib/stagedUpload";
+import { getCurrentUser } from "@/lib/auth/currentUser";
+import { remarkFromRow } from "@/lib/leadRemarks";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -223,7 +225,9 @@ export async function updateLeadDestinations(leadId: string, _prevState: unknown
 // Bulk import — CSV columns (header row required): full_name (required),
 // contact_number, email, platform_source, current_qualification,
 // level_applying_for (bachelors/masters/phd), course_of_interest,
-// country_of_interest.
+// country_of_interest, remarks (0306: the lead's first remark, kept as a
+// version under the importer's name — a column headed remark, notes or
+// comments is read the same way).
 export async function importLeads(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
   const file = await uploadedFile(formData, "file");
@@ -241,6 +245,9 @@ export async function importLeads(_prevState: unknown, formData: FormData) {
   const records = rows
     .filter((r) => r.full_name)
     .map((r) => ({
+      // Chosen here, so a remark can be attached without reading the new rows
+      // back — which a counsellor importing leads not assigned to them cannot.
+      id: crypto.randomUUID(),
       full_name: r.full_name,
       contact_number: phoneError(r.contact_number) ? null : r.contact_number || null,
       email: r.email || null,
@@ -255,8 +262,22 @@ export async function importLeads(_prevState: unknown, formData: FormData) {
     return { error: "No valid rows found — the full_name column is required." };
   }
 
+  const remarks = rows.filter((r) => r.full_name).map(remarkFromRow);
   const { error } = await supabase.from("leads").insert(records);
   if (error) return { error: error.message };
+
+  // Each remark as the first version of its lead's, written by whoever imported it.
+  const user = await getCurrentUser();
+  const remarkRows = records.flatMap((lead, i) => (remarks[i] ? [{ lead_id: lead.id, body: remarks[i], written_by: user?.id }] : []));
+  if (remarkRows.length > 0) {
+    const { error: remarkError } = await supabase.from("lead_remarks").insert(remarkRows);
+    if (remarkError) {
+      revalidatePath("/leads");
+      return {
+        error: `The ${records.length} leads were imported, but their remarks were not (${remarkError.message}) — a remark can be added only to a lead you can see.`,
+      };
+    }
+  }
 
   revalidatePath("/leads");
   return { success: true, count: records.length };

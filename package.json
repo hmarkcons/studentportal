@@ -19,6 +19,7 @@
     "check:studentdashboard": "node scripts/verify-student-dashboard.mjs",
     "check:waiting": "node scripts/verify-waiting.mjs",
     "check:sendcredentials": "node scripts/verify-send-credentials.mjs",
+    "check:leadremarks": "node scripts/verify-lead-remarks.mjs",
     "check:pay": "node scripts/verify-pay-split.mjs",
     "check:roles": "node scripts/verify-multi-role.mjs",
     "check:speed": "node scripts/check-speed.mjs",

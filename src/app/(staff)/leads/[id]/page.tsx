@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LEAD_STATUS_LABELS, LEAD_STATUS_TONE } from "@/lib/constants";
 import { CallLogForm } from "./CallLogForm";
+import { LeadRemarkEditor } from "../LeadRemarkEditor";
 import { RegisterLeadButton } from "./RegisterLeadButton";
 import { LeadEditForm } from "@/components/LeadEditForm";
 import { DeleteStudentButton } from "../../students/[id]/DeleteStudentButton";
@@ -30,12 +31,17 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
   const { data: lead, error } = await supabase
     .from("leads")
     .select(
-      "id, full_name, contact_number, email, current_qualification, level_applying_for, course_of_interest, country_of_interest, status, date_of_inquiry, platform_source, registered_at"
+      "id, full_name, contact_number, email, current_qualification, level_applying_for, course_of_interest, country_of_interest, status, date_of_inquiry, platform_source, registered_at, current_remark:lead_remark_current(body, updated_at, editor:staff!lead_remark_current_updated_by_fkey(full_name))"
     )
     .eq("id", id)
     .maybeSingle();
 
   if (error || !lead) notFound();
+  // Staff-only, beside the lead rather than on it (0307).
+  const currentRemark = (Array.isArray(lead.current_remark) ? lead.current_remark[0] : lead.current_remark) as
+    | { body: string | null; updated_at: string; editor: { full_name: string } | { full_name: string }[] | null }
+    | null
+    | undefined;
 
   const { data: logs } = await supabase
     .from("lead_call_logs")
@@ -127,6 +133,18 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
           <CallLogForm leadId={id} currentStatus={lead.status} />
         </Card>
       </div>
+
+      {/* The counsellor's own note on the lead, every version kept (0306) —
+          the same remark as the Remarks column in the leads list. */}
+      <Card className="mt-6">
+        <h3 className="mb-3 text-sm font-medium text-ink">Remarks</h3>
+        <LeadRemarkEditor
+          leadId={id}
+          remark={currentRemark?.body ?? null}
+          updatedAt={currentRemark?.updated_at ?? null}
+          updatedBy={(Array.isArray(currentRemark?.editor) ? currentRemark?.editor[0] : currentRemark?.editor)?.full_name ?? null}
+        />
+      </Card>
 
       <Card className="mt-6">
         <h3 className="mb-3 text-sm font-medium text-ink">Call history</h3>

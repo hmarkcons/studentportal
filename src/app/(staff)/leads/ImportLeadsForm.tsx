@@ -15,8 +15,10 @@ const HEADERS = [
   "level_applying_for",
   "course_of_interest",
   "country_of_interest",
+  // The lead's first remark (0306).
+  "remarks",
 ];
-const EXAMPLE = ["Jane Doe", "+92 300 1234567", "jane@example.com", "Referral", "A-Levels", "bachelors", "Computer Science", "Italy"];
+const EXAMPLE = ["Jane Doe", "+92 300 1234567", "jane@example.com", "Referral", "A-Levels", "bachelors", "Computer Science", "Italy", "Wants a masters in Italy, call after 5 pm"];
 
 export function ImportLeadsForm() {
   const [state, formAction, pending] = useActionState(importLeads, undefined);
