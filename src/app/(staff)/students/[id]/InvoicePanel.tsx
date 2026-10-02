@@ -1,6 +1,8 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { PaymentReceiptsButton } from "@/components/PaymentReceipts";
+import { receiptCount } from "@/lib/paymentReceipts";
 import { Eye, Mail, Pencil, Trash2 } from "lucide-react";
 import {
   generateInvoice,
@@ -729,6 +731,7 @@ export function InvoiceCard({
   feeProducts = [],
   studentId,
   studentName,
+  payerName,
   pdfUrl,
   revalidateTo,
   canManage = false,
@@ -771,6 +774,8 @@ export function InvoiceCard({
     carried_paid_date?: string | null;
     /** The part of this instalment that is added items plus their tax. */
     extras_amount?: number | string | null;
+    /** `receipts:payment_receipts(count)` — its payment receipts (0308). */
+    receipts?: unknown;
   }[];
   lineItems?: { id: string; name: string; description?: string | null; amount: number }[];
   /** Per-country administrative charges. Empty on an invoice raised before
@@ -779,6 +784,8 @@ export function InvoiceCard({
   feeProducts?: { id: string; name: string; default_amount: number | null; default_currency: string }[];
   studentId: string;
   studentName?: string;
+  /** Who paid, for naming a payment's receipts where the card does not show the name itself. */
+  payerName?: string;
   pdfUrl?: string | null;
   revalidateTo: string;
   canManage?: boolean;
@@ -971,6 +978,18 @@ export function InvoiceCard({
                   <MarkPaidForm installmentId={i.id} studentId={studentId} />
                 ) : (
                   <Badge tone="warning">{i.status}</Badge>
+                )}
+                {/* Proof of what the student paid against this instalment.
+                    Its own control, apart from Paid: a receipt never marks
+                    an instalment paid, and a paid one needs none. */}
+                {canManage && (
+                  <PaymentReceiptsButton
+                    kind="installment"
+                    paymentId={i.id}
+                    count={receiptCount(i.receipts)}
+                    title={`Instalment ${i.installment_no}${(payerName ?? studentName) ? ` — ${payerName ?? studentName}` : ""}`}
+                    revalidateTo={revalidateTo}
+                  />
                 )}
                 {canManage && (
                   <button

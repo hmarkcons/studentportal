@@ -65,7 +65,7 @@ export default async function ConsultancyFeePage() {
 
   const invoiceIds = (invoices ?? []).map((i) => i.id);
   const [{ data: installments }, { data: lineItems }, { data: adminCharges }, pdfByPath] = await Promise.all([
-    invoiceIds.length ? supabase.from("invoice_installments").select("*").in("invoice_id", invoiceIds) : Promise.resolve({ data: [] }),
+    invoiceIds.length ? supabase.from("invoice_installments").select("*, receipts:payment_receipts(count)").in("invoice_id", invoiceIds) : Promise.resolve({ data: [] }),
     invoiceIds.length
       ? supabase.from("invoice_line_items").select("id, invoice_id, name, description, amount").in("invoice_id", invoiceIds)
       : Promise.resolve({ data: [] }),

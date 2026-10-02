@@ -533,7 +533,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     // back an instalment it has just updated wherever it now lies, and the
     // schedule read "Installment 2, 1, 3" after the first one was paid.
     invoiceIds.length
-      ? supabase.from("invoice_installments").select("*").in("invoice_id", invoiceIds).order("installment_no", { ascending: true })
+      ? supabase.from("invoice_installments").select("*, receipts:payment_receipts(count)").in("invoice_id", invoiceIds).order("installment_no", { ascending: true })
       : Promise.resolve({ data: [] }),
     // Every document's URL in one request rather than one per file. A student
     // with thirty documents was thirty round trips to Storage before this page
@@ -1192,6 +1192,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                 adminCharges={(allAdminCharges ?? []).filter((c) => c.invoice_id === inv.id)}
                 feeProducts={feeProducts ?? []}
                 studentId={id}
+                payerName={student?.full_name ?? undefined}
                 pdfUrl={invoicePdfUrls.get(inv.id)}
                 revalidateTo={`/students/${id}`}
                 canManage={canManageInvoice}

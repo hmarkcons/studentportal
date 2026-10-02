@@ -6,6 +6,9 @@ import { NewRefundForm } from "./NewRefundForm";
 import { RefundEligibilityForm } from "./RefundEligibilityForm";
 import { syncVisaRefusalRefunds } from "@/lib/actions/finance";
 import { getCurrentUser } from "@/lib/auth/currentUser";
+import { hasPermission } from "@/lib/auth/permissions";
+import { PaymentReceiptsButton } from "@/components/PaymentReceipts";
+import { receiptCount } from "@/lib/paymentReceipts";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -40,6 +43,8 @@ export default async function RefundsPage() {
   const user = await getCurrentUser();
   const { data: staffRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
   const isSuperAdmin = hasRole(staffRow, "super_admin");
+  // Whoever processes a refund may attach proof of paying it (0308).
+  const canReceipts = await hasPermission("finance.refunds.review");
   const canManage = hasRole(staffRow, "finance") || hasRole(staffRow, "management") || hasRole(staffRow, "super_admin");
 
   const { errors: syncErrors } = await syncVisaRefusalRefunds();
@@ -47,7 +52,7 @@ export default async function RefundsPage() {
   const { data: refunds } = await supabase
     .from("refund_requests")
     .select(
-      "id, reason, amount, currency, status, requested_at, trigger_type, refund_percent, refusal_notice_date, eligibility_status, next_intake_note, next_intake_country_id, next_intake_country:destinations!refund_requests_next_intake_country_id_fkey(country, display_name), student:leads(full_name)"
+      "id, reason, amount, currency, status, requested_at, trigger_type, refund_percent, refusal_notice_date, eligibility_status, next_intake_note, next_intake_country_id, next_intake_country:destinations!refund_requests_next_intake_country_id_fkey(country, display_name), student:leads(full_name), receipts:payment_receipts(count)"
     )
     .order("requested_at", { ascending: false });
 
@@ -106,6 +111,15 @@ export default async function RefundsPage() {
                   <Badge tone={TONE[r.status] ?? "neutral"}>{r.status}</Badge>
                   {ineligible && <Badge tone="danger">Ineligible — reapplying</Badge>}
                   <RefundActions id={r.id} status={r.status} canManage={canManage} isSuperAdmin={isSuperAdmin} ineligible={ineligible} />
+                  {canReceipts && (
+                    <PaymentReceiptsButton
+                      kind="refund"
+                      paymentId={r.id}
+                      count={receiptCount(r.receipts)}
+                      title={`Refund — ${one(r.student)?.full_name ?? "student"}`}
+                      revalidateTo="/finance/refunds"
+                    />
+                  )}
                 </div>
               </div>
 

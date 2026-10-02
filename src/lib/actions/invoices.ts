@@ -600,6 +600,10 @@ export async function deleteInvoice(invoiceId: string, studentId: string, revali
   if (denied) return { error: denied.error };
 
   const { data: invoice } = await supabase.from("invoices").select("pdf_path").eq("id", invoiceId).maybeSingle();
+  // The instalments' payment receipts go with them (0308); their files are
+  // read now and removed once the rows are gone.
+  const { receiptFilesForInvoice, removeReceiptFiles } = await import("@/lib/paymentReceiptFiles");
+  const receiptFiles = await receiptFilesForInvoice(invoiceId);
 
   const { error: instError } = await supabase.from("invoice_installments").delete().eq("invoice_id", invoiceId);
   if (instError) return { error: instError.message };
@@ -612,6 +616,7 @@ export async function deleteInvoice(invoiceId: string, studentId: string, revali
   if (invoice?.pdf_path) {
     await supabase.storage.from("documents").remove([invoice.pdf_path]);
   }
+  await removeReceiptFiles(receiptFiles);
 
   revalidatePath(revalidateTo);
   return { success: true };

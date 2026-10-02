@@ -1183,6 +1183,11 @@ export async function deleteStudent(studentId: string) {
     await supabase.rpc("delete_owned_credentials", { p_owner_type: "application", p_owner_id: appId });
   }
 
+  // Receipts on their payments are kept outside their folder (0308), so are
+  // read before the delete cascades the rows that point at them.
+  const { receiptFilesForStudent, removeReceiptFiles } = await import("@/lib/paymentReceiptFiles");
+  const receiptFiles = await receiptFilesForStudent(studentId);
+
   const { error } = await supabase.from("leads").delete().eq("id", studentId);
   if (error) return { error: error.message };
 
@@ -1207,6 +1212,7 @@ export async function deleteStudent(studentId: string) {
   // owns is stored under their id as a prefix, so clearing the prefix catches
   // all of it without having to remember each feature's path column.
   await removeStoragePrefix(supabase, studentId);
+  await removeReceiptFiles(receiptFiles);
 
   revalidatePath("/students");
   revalidatePath("/leads");

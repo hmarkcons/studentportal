@@ -159,8 +159,11 @@ export async function deleteStaffCommission(id: string, revalidateTo: string) {
   const supabase = await createClient();
   const denied = await requirePermission("finance.commissions.manage", "Only Finance/Super Admin can delete commission records."); if (denied) return { error: denied.error };
 
+  const { receiptFilesFor, removeReceiptFiles } = await import("@/lib/paymentReceiptFiles");
+  const receiptFiles = await receiptFilesFor("staff_commission", [id]);
   const { error } = await supabase.from("staff_commissions").delete().eq("id", id);
   if (error) return { error: error.message };
+  await removeReceiptFiles(receiptFiles);
 
   revalidatePath(revalidateTo);
   return { success: true };
@@ -225,8 +228,11 @@ export async function deleteRefundRequest(id: string) {
   const supabase = await createClient();
   const denied = await requirePermission("finance.refunds.manage", "Only Super Admin can delete refund records."); if (denied) return { error: denied.error };
 
+  const { receiptFilesFor, removeReceiptFiles } = await import("@/lib/paymentReceiptFiles");
+  const receiptFiles = await receiptFilesFor("refund", [id]);
   const { error } = await supabase.from("refund_requests").delete().eq("id", id);
   if (error) return { error: error.message };
+  await removeReceiptFiles(receiptFiles);
 
   revalidatePath("/finance/refunds");
   return { success: true };
@@ -280,29 +286,13 @@ export async function deletePartnerCommission(id: string, revalidateTo: string) 
   return { success: true };
 }
 
-export async function markStaffCommissionPaid(id: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
+export async function markStaffCommissionPaid(id: string, revalidateTo: string, _prevState: unknown, _formData: FormData) {
   const supabase = await createClient();
   const denied = await requirePermission("finance.commissions.manage", "Only Finance/Super Admin can mark commissions paid."); if (denied) return { error: denied.error };
 
-  const file = await uploadedFile(formData, "file");
-  let payment_proof_path: string | undefined;
-
-  if (file && file.size > 0) {
-    const tooLarge = validateDocumentFile(file, "file");
-    if (tooLarge) return { error: tooLarge };
-    const path = `${id}/proof-${file.name}`;
-    const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: true });
-    if (uploadError) return { error: uploadError.message };
-    payment_proof_path = path;
-  }
-
-  const { error } = await supabase
-    .from("staff_commissions")
-    .update({
-      status: "paid",
-      ...(payment_proof_path ? { payment_proof_path, payment_proof_uploaded_at: new Date().toISOString() } : {}),
-    })
-    .eq("id", id);
+  // Proof of the payment is a payment receipt of its own (0308), added from
+  // the row's Receipts button — never a condition of marking it paid.
+  const { error } = await supabase.from("staff_commissions").update({ status: "paid" }).eq("id", id);
 
   if (error) return { error: error.message };
   revalidatePath(revalidateTo);
@@ -378,29 +368,6 @@ export async function updateStaffCommission(id: string, revalidateTo: string, _p
   const { error } = await supabase
     .from("staff_commissions")
     .update({ amount, currency, registration_date, status, payment_method })
-    .eq("id", id);
-  if (error) return { error: error.message };
-
-  revalidatePath(revalidateTo);
-  return { success: true };
-}
-
-export async function uploadStaffCommissionProof(id: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
-  const supabase = await createClient();
-  const denied = await requirePermission("finance.commissions.manage", "Only Finance/Super Admin can upload proof."); if (denied) return { error: denied.error };
-
-  const file = await uploadedFile(formData, "file");
-  if (!file || file.size === 0) return { error: "Choose a file to upload." };
-  const tooLarge = validateDocumentFile(file, "file");
-  if (tooLarge) return { error: tooLarge };
-
-  const path = `${id}/proof-${Date.now()}-${file.name}`;
-  const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: true });
-  if (uploadError) return { error: uploadError.message };
-
-  const { error } = await supabase
-    .from("staff_commissions")
-    .update({ payment_proof_path: path, payment_proof_uploaded_at: new Date().toISOString() })
     .eq("id", id);
   if (error) return { error: error.message };
 

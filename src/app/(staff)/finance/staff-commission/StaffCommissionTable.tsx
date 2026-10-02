@@ -7,7 +7,7 @@ import { useActionState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
-import { ProofFileCell } from "@/components/ProofFileCell";
+import { PaymentReceiptsButton } from "@/components/PaymentReceipts";
 import { useButtonAction } from "@/components/useButtonAction";
 import { toast } from "@/lib/toast";
 import { toPKR } from "@/lib/constants";
@@ -16,7 +16,6 @@ import {
   updateStaffCommission,
   deleteStaffCommission,
   markStaffCommissionPaid,
-  uploadStaffCommissionProof,
   carryForwardCommissionCredit,
 } from "@/lib/actions/finance";
 import { type InvoiceStatus } from "@/lib/invoiceStatus";
@@ -32,7 +31,8 @@ export type CommissionRow = {
   status: string;
   payment_method: string | null;
   registration_date: string | null;
-  payment_proof_path: string | null;
+  /** Its payment receipts on file (0308). */
+  receiptCount: number;
   staffId: string;
   staffName: string;
   studentName: string;
@@ -403,14 +403,12 @@ export function StaffCommissionTable({
   rows,
   staffList,
   students,
-  proofUrls,
   availableCredits,
   studentCommissionBasis,
 }: {
   rows: CommissionRow[];
   staffList: CommissionStaffOption[];
   students: { id: string; full_name: string; assigned_counselor_id: string | null }[];
-  proofUrls: Record<string, string>;
   availableCredits: AvailableCredit[];
   studentCommissionBasis: Record<string, StudentCommissionBasis>;
 }) {
@@ -569,7 +567,7 @@ export function StaffCommissionTable({
               <th className="whitespace-nowrap px-4 py-3">Reg. Status</th>
               <th className="whitespace-nowrap px-4 py-3 text-right">Commission</th>
               <th className="whitespace-nowrap px-4 py-3">Comm. Status</th>
-              <th className="whitespace-nowrap px-4 py-3">Proof</th>
+              <th className="whitespace-nowrap px-4 py-3">Receipts</th>
               <th className="whitespace-nowrap px-4 py-3">Action</th>
             </tr>
           </thead>
@@ -610,7 +608,13 @@ export function StaffCommissionTable({
                       {r.payment_method && <span className="ml-2 text-xs text-muted">{r.payment_method}</span>}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
-                      <ProofFileCell viewUrl={proofUrls[r.id]} uploadAction={uploadStaffCommissionProof.bind(null, r.id, REVALIDATE_TO)} />
+                      <PaymentReceiptsButton
+                        kind="staff_commission"
+                        paymentId={r.id}
+                        count={r.receiptCount}
+                        title={`Commission — ${r.staffName}, for ${r.studentName}`}
+                        revalidateTo={REVALIDATE_TO}
+                      />
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
                       <div className="flex items-center gap-2">

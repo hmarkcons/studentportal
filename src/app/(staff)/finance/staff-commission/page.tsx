@@ -1,5 +1,5 @@
 import { hasRole } from "@/lib/auth/roles";
-import { documentUrls } from "@/lib/storageUrls";
+import { receiptCount } from "@/lib/paymentReceipts";
 import { COMPENSATION_EMBED, withCompensationAll } from "@/lib/staffCompensation";
 import { createClient } from "@/lib/supabase/server";
 import { agreementDestination } from "@/lib/agreementCountry";
@@ -35,7 +35,7 @@ export default async function StaffCommissionPage() {
   const { data: commissions } = await supabase
     .from("staff_commissions")
     .select(
-      "id, amount, currency, status, payment_method, registration_date, payment_proof_path, payment_proof_uploaded_at, staff_id, student_id, shared_with_staff_id, staff:staff!staff_id(full_name), student:leads(full_name, email, registered_at, registration_status), shared_with:staff!staff_commissions_shared_with_staff_id_fkey(full_name)"
+      "id, amount, currency, status, payment_method, registration_date, receipts:payment_receipts(count), staff_id, student_id, shared_with_staff_id, staff:staff!staff_id(full_name), student:leads(full_name, email, registered_at, registration_status), shared_with:staff!staff_commissions_shared_with_staff_id_fkey(full_name)"
     )
     .order("registration_date", { ascending: false });
 
@@ -55,12 +55,6 @@ export default async function StaffCommissionPage() {
     .select("id, staff_id, amount, currency")
     .eq("status", "available");
 
-  const proofByPath = await documentUrls(supabase, (commissions ?? []).map((c) => c.payment_proof_path));
-  const proofUrls: Record<string, string> = {};
-  for (const c of commissions ?? []) {
-    const url = c.payment_proof_path ? proofByPath.get(c.payment_proof_path) : undefined;
-    if (url) proofUrls[c.id] = url;
-  }
 
   const studentIds = Array.from(new Set((commissions ?? []).map((c) => c.student_id)));
   const { data: invoices } = studentIds.length
@@ -140,8 +134,7 @@ export default async function StaffCommissionPage() {
       status: c.status,
       payment_method: c.payment_method,
       registration_date: c.registration_date,
-      payment_proof_path: c.payment_proof_path,
-      payment_proof_uploaded_at: c.payment_proof_uploaded_at,
+      receiptCount: receiptCount(c.receipts),
       staffId: c.staff_id,
       staffName: one(c.staff)?.full_name ?? "Unknown",
       studentName: student?.full_name ?? "Unknown",
@@ -206,7 +199,6 @@ export default async function StaffCommissionPage() {
         rows={rows}
         staffList={staffList ?? []}
         students={students ?? []}
-        proofUrls={proofUrls}
         availableCredits={availableCredits ?? []}
         studentCommissionBasis={studentCommissionBasis}
       />

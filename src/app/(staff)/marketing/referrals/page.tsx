@@ -14,6 +14,8 @@ import { IncentiveAmountInput } from "./IncentiveAmountInput";
 import { LogReferralForm } from "./LogReferralForm";
 import { ReferralPartyForm, type ReferralParty } from "./ReferralPartyForm";
 import { ReferralPaymentCell } from "./ReferralPaymentCell";
+import { PaymentReceiptsButton } from "@/components/PaymentReceipts";
+import { receiptCount } from "@/lib/paymentReceipts";
 import { getCurrentUser } from "@/lib/auth/currentUser";
 
 export const dynamic = "force-dynamic";
@@ -49,7 +51,7 @@ export default async function ReferralsPage() {
     supabase
       .from("referrals")
       .select(
-        "id, referrer_name, referral_party_id, incentive_owed, incentive_status, currency, paid_on, payment_method, payment_reference, notes, created_at, lead_id"
+        "id, referrer_name, referral_party_id, incentive_owed, incentive_status, currency, paid_on, payment_method, payment_reference, notes, created_at, lead_id, receipts:payment_receipts(count)"
       )
       .order("created_at", { ascending: false }),
   ]);
@@ -144,6 +146,8 @@ export default async function ReferralsPage() {
               { key: "paid_on", header: "Paid on" },
               { key: "method", header: "Method" },
               { key: "reference", header: "Reference" },
+              // Proof of paying the party, for whoever may mark it paid (0308).
+              ...(canSetIncentives ? [{ key: "receipts", header: "Receipts" }] : []),
               { key: "action", header: "", exportable: false, wrap: true },
             ]}
             rows={rows.map((r) => {
@@ -177,6 +181,15 @@ export default async function ReferralsPage() {
                   paid_on: r.paid_on ?? "—",
                   method: r.payment_method ?? "—",
                   reference: r.payment_reference ?? "—",
+                  receipts: canSetIncentives ? (
+                    <PaymentReceiptsButton
+                      kind="referral"
+                      paymentId={r.id}
+                      count={receiptCount(r.receipts)}
+                      title={`Referral commission — ${party?.full_name ?? r.referrer_name}, for ${student?.full_name ?? "a student"}`}
+                      revalidateTo="/marketing/referrals"
+                    />
+                  ) : null,
                   action: canSetIncentives ? (
                     <ReferralPaymentCell
                       id={r.id}
@@ -196,6 +209,7 @@ export default async function ReferralsPage() {
                   paid_on: r.paid_on ?? "",
                   method: r.payment_method ?? "",
                   reference: r.payment_reference ?? "",
+                  receipts: String(receiptCount(r.receipts)),
                 },
               };
             })}

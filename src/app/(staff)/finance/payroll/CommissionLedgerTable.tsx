@@ -1,18 +1,17 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Eye, Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input, Select } from "@/components/ui/Input";
-import { ProofFileCell } from "@/components/ProofFileCell";
+import { PaymentReceiptsButton } from "@/components/PaymentReceipts";
 import {
   createStaffCommission,
   deleteStaffCommission,
   markStaffCommissionPaid,
   updateStaffCommission,
-  uploadStaffCommissionProof,
 } from "@/lib/actions/finance";
 import { suggestCommission, type CommissionStaffOption } from "@/app/(staff)/finance/staff-commission/StaffCommissionTable";
 import { useButtonAction } from "@/components/useButtonAction";
@@ -24,8 +23,8 @@ export type CommissionRecord = {
   currency: string;
   status: string;
   registration_date: string | null;
-  payment_proof_path: string | null;
-  payment_proof_uploaded_at: string | null;
+  /** Its payment receipts on file (0308). */
+  receipt_count: number;
   student_name: string;
   shared_with_name: string | null;
 };
@@ -236,7 +235,6 @@ export function CommissionLedgerTable({
   shareableStaff,
   records,
   students,
-  proofUrls,
   defaultDate,
   revalidateTo,
   canManage,
@@ -246,7 +244,6 @@ export function CommissionLedgerTable({
   shareableStaff: CommissionStaffOption[];
   records: CommissionRecord[];
   students: { id: string; full_name: string }[];
-  proofUrls: Record<string, string>;
   defaultDate: string;
   revalidateTo: string;
   canManage: boolean;
@@ -281,28 +278,18 @@ export function CommissionLedgerTable({
                 <Badge tone={r.status === "paid" ? "success" : "warning"}>{r.status}</Badge>
                 {canManage ? (
                   <>
-                    <ProofFileCell
-                      viewUrl={proofUrls[r.id]}
-                      uploadedAt={r.payment_proof_uploaded_at}
-                      uploadAction={uploadStaffCommissionProof.bind(null, r.id, revalidateTo)}
+                    <PaymentReceiptsButton
+                      kind="staff_commission"
+                      paymentId={r.id}
+                      count={r.receipt_count}
+                      title={`Commission — ${currentStaff.full_name}, for ${r.student_name}`}
+                      revalidateTo={revalidateTo}
                     />
                     {r.status !== "paid" && <MarkPaidForm id={r.id} revalidateTo={revalidateTo} />}
                     <EditCommissionForm record={r} revalidateTo={revalidateTo} />
                     <DeleteCommissionButton id={r.id} revalidateTo={revalidateTo} />
                   </>
-                ) : (
-                  proofUrls[r.id] && (
-                    <a
-                      href={proofUrls[r.id]}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
-                    >
-                      <Eye className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                      View proof
-                    </a>
-                  )
-                )}
+                ) : null}
               </div>
             </div>
           ))}

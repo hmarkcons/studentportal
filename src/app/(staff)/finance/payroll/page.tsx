@@ -1,6 +1,8 @@
 import { Award, Check } from "lucide-react";
 import { hasRole } from "@/lib/auth/roles";
-import { documentUrls } from "@/lib/storageUrls";
+import { receiptCount } from "@/lib/paymentReceipts";
+import { hasPermission } from "@/lib/auth/permissions";
+import { PaymentReceiptsButton } from "@/components/PaymentReceipts";
 import { COMPENSATION_EMBED, withCompensation, withCompensationAll } from "@/lib/staffCompensation";
 import { createClient } from "@/lib/supabase/server";
 import { agreementDestination } from "@/lib/agreementCountry";
@@ -46,6 +48,8 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
   const user = await getCurrentUser();
   const { data: viewerRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
   const canManage = hasRole(viewerRow, "finance") || hasRole(viewerRow, "super_admin");
+  // Whoever may mark a salary paid may attach its receipts (0308).
+  const canReceipts = await hasPermission("finance.commissions.manage");
 
   const now = new Date();
   const month = monthParam || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -99,7 +103,7 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
 
       const { data: existingPayroll } = await supabase
         .from("staff_payroll")
-        .select("*")
+        .select("*, receipts:payment_receipts(count)")
         .eq("staff_id", staffId)
         .eq("payroll_month", monthStart)
         .maybeSingle();
@@ -110,19 +114,12 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
       const { data: rawCommissions } = await supabase
         .from("staff_commissions")
         .select(
-          "id, amount, currency, status, registration_date, payment_proof_path, payment_proof_uploaded_at, student:leads(full_name), shared_with:staff!staff_commissions_shared_with_staff_id_fkey(full_name)"
+          "id, amount, currency, status, registration_date, receipts:payment_receipts(count), student:leads(full_name), shared_with:staff!staff_commissions_shared_with_staff_id_fkey(full_name)"
         )
         .eq("staff_id", staffId)
         .gte("registration_date", monthStart)
         .lt("registration_date", nextMonthStart)
         .order("registration_date", { ascending: false });
-
-      const proofByPath = await documentUrls(supabase, (rawCommissions ?? []).map((c) => c.payment_proof_path));
-      const proofUrls: Record<string, string> = {};
-      for (const c of rawCommissions ?? []) {
-        const url = c.payment_proof_path ? proofByPath.get(c.payment_proof_path) : undefined;
-        if (url) proofUrls[c.id] = url;
-      }
 
       const commissionRecords: CommissionRecord[] = (rawCommissions ?? []).map((c) => ({
         id: c.id,
@@ -130,8 +127,7 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
         currency: c.currency,
         status: c.status,
         registration_date: c.registration_date,
-        payment_proof_path: c.payment_proof_path,
-        payment_proof_uploaded_at: c.payment_proof_uploaded_at,
+        receipt_count: receiptCount(c.receipts),
         student_name: (one(c.student as never) as { full_name?: string } | null)?.full_name ?? "Unknown",
         shared_with_name: (one(c.shared_with as never) as { full_name?: string } | null)?.full_name ?? null,
       }));
@@ -337,7 +333,6 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
               shareableStaff={shareableStaffOptions}
               records={commissionRecords}
               students={allStudents ?? []}
-              proofUrls={proofUrls}
               defaultDate={monthStart}
               revalidateTo={revalidateTo}
               canManage={canManage}
@@ -398,6 +393,25 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
                   overtimeLabel: formatDuration(attendanceSummary.overtimeMinutes),
                 }}
               />
+              {/* Proof the month's salary was paid. On the saved payslip, so
+                  there is a payment to attach it to; it never changes the
+                  payment status above. */}
+              {canReceipts && (
+                <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-3 text-sm" data-payroll-receipts>
+                  <span className="font-medium text-ink">Salary payment receipts</span>
+                  {existingPayroll ? (
+                    <PaymentReceiptsButton
+                      kind="payroll"
+                      paymentId={existingPayroll.id}
+                      count={receiptCount(existingPayroll.receipts)}
+                      title={`Salary for ${new Date(Date.UTC(y, m - 1, 1)).toLocaleString("en-US", { timeZone: "UTC", month: "long", year: "numeric" })} — ${staff.full_name}`}
+                      revalidateTo={revalidateTo}
+                    />
+                  ) : (
+                    <span className="text-xs text-muted">Save this payslip first, then attach the receipt for the salary paid.</span>
+                  )}
+                </div>
+              )}
             </Card>
 
             <Card>
