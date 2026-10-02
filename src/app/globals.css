@@ -1090,3 +1090,27 @@ body {
   background: var(--warning-bg);
   box-shadow: 0 0 0 2px var(--warning);
 }
+
+/* Rows easy to follow (DataTable rowHighlight): every other row shaded, the
+   one under the pointer brighter, the one last clicked held — across the
+   frozen name too, which paints itself with --frame-bg. */
+table[data-row-highlight] > tbody > tr {
+  --row-bg: var(--card);
+  --frame-bg: var(--row-bg);
+  cursor: default;
+}
+table[data-row-highlight] > tbody > tr:nth-child(even) {
+  --row-bg: color-mix(in srgb, var(--primary) 6%, var(--card));
+}
+table[data-row-highlight] > tbody > tr:hover {
+  --row-bg: color-mix(in srgb, var(--primary) 14%, var(--card));
+}
+table[data-row-highlight] > tbody > tr[data-current] {
+  --row-bg: color-mix(in srgb, var(--primary) 24%, var(--card));
+}
+table[data-row-highlight] > tbody > tr > td {
+  background-color: var(--row-bg);
+}
+table[data-row-highlight] > tbody > tr[data-current] > td:first-child {
+  box-shadow: inset 4px 0 0 var(--primary);
+}

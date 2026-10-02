@@ -1,0 +1,189 @@
+// The leads workbook (src/lib/leadSheet.ts): its columns, how a row is read,
+// and what an import does to a lead already on file — adds, never overwrites.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import {
+  LEAD_COLUMNS,
+  isExampleLead,
+  leadColumnIndex,
+  leadFromRow,
+  leadHeaderKey,
+  leadSheetRow,
+  mergeIntoLead,
+  monthLabel,
+  parseLeadStatus,
+  phoneKey,
+} from "../src/lib/leadSheet.ts";
+
+test("the columns are the list's, with the qualification, level and course right after the country", () => {
+  const headers = LEAD_COLUMNS.map((c) => c.header);
+  assert.equal(headers[0], "Month");
+  const country = headers.indexOf("Country");
+  assert.deepEqual(headers.slice(country, country + 4), ["Country", "Current qualification", "Applying for", "Course of interest"]);
+  assert.equal(leadColumnIndex("date_of_inquiry"), 14, "the Month formula points at column N");
+});
+
+test("the month is worked out from the inquiry date", () => {
+  assert.equal(monthLabel("2026-10-02"), "Oct 2026");
+  assert.equal(monthLabel("2027-01-31T23:30:00+05:00"), "Jan 2027");
+  assert.equal(monthLabel(null), "");
+});
+
+test("a heading is read however it was retyped", () => {
+  assert.equal(leadHeaderKey("Contact number"), "contact_number");
+  assert.equal(leadHeaderKey("contact_number"), "contact_number");
+  assert.equal(leadHeaderKey("Name"), "full_name");
+  assert.equal(leadHeaderKey(" Applying For "), "level_applying_for");
+  assert.equal(leadHeaderKey("Counsellor"), "counselor");
+  assert.equal(leadHeaderKey("Inquiry date"), "date_of_inquiry");
+  assert.equal(leadHeaderKey("Something else"), null);
+});
+
+test("a status is read by its label or its key; Registered is never imported", () => {
+  assert.equal(parseLeadStatus("Potential"), "potential");
+  assert.equal(parseLeadStatus("meeting_done"), "meeting_done");
+  const problems = [];
+  const lead = leadFromRow({ name: "Ali", status: "Registered" }, problems);
+  assert.equal(lead.status, null);
+  assert.match(problems[0], /Ali: Registered is set by registering/);
+});
+
+test("a row is read into a lead, and what cannot be used is said and left out", () => {
+  const problems = [];
+  const lead = leadFromRow(
+    {
+      name: " Ali  Khan ",
+      email: "ALI@Example.com",
+      "applying for": "Masters",
+      "inquiry date": "2026-09-14",
+      "follow-up date": "next week",
+      remarks: " Wants Italy ",
+    },
+    problems
+  );
+  assert.equal(lead.full_name, "Ali Khan");
+  assert.equal(lead.email, "ali@example.com");
+  assert.equal(lead.level_applying_for, "masters");
+  assert.equal(lead.date_of_inquiry, "2026-09-14");
+  assert.equal(lead.follow_up_date, null);
+  assert.equal(lead.remarks, "Wants Italy");
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /Follow-up date "next week"/);
+
+  assert.equal(leadFromRow({ email: "x@y.z" }, []), null, "a row with no name is not a lead");
+  const p2 = [];
+  assert.equal(leadFromRow({ name: "B", level: "Diploma" }, p2).level_applying_for, null);
+  assert.match(p2[0], /not bachelors, masters or phd/);
+});
+
+test("the template's example row is recognised", () => {
+  assert.equal(isExampleLead("Example Student (delete this row)"), true);
+  assert.equal(isExampleLead("Ali"), false);
+});
+
+test("phone numbers match with or without the country code", () => {
+  assert.equal(phoneKey("+92 300 1234567"), phoneKey("0300-1234567"));
+  assert.notEqual(phoneKey("0300-1234567"), phoneKey("0300-7654321"));
+});
+
+const stored = {
+  id: "l1",
+  full_name: "Ali Khan",
+  contact_number: "0300-1234567",
+  email: null,
+  country_of_interest: "Italy",
+  current_qualification: null,
+  level_applying_for: "bachelors",
+  course_of_interest: "Computer Science",
+  status: "potential",
+  counselorName: "Sara",
+  date_of_inquiry: "2026-09-01",
+  platform_source: "Facebook",
+  remark: "Call after 5",
+  followUpDates: ["2026-10-10"],
+};
+const input = (over) => ({
+  full_name: "Ali Khan",
+  contact_number: null,
+  email: null,
+  country_of_interest: null,
+  current_qualification: null,
+  level_applying_for: null,
+  course_of_interest: null,
+  status: null,
+  counselor: null,
+  remarks: null,
+  follow_up_date: null,
+  follow_up_note: null,
+  date_of_inquiry: null,
+  platform_source: null,
+  ...over,
+});
+
+test("a lead on file has its empty fields filled in", () => {
+  const m = mergeIntoLead(stored, input({ email: "ali@example.com", current_qualification: "A-Levels" }));
+  assert.deepEqual(m.patch, { email: "ali@example.com", current_qualification: "A-Levels" });
+  assert.deepEqual(m.kept, []);
+});
+
+test("a lead on file keeps what holds one value, and the sheet's is reported", () => {
+  const m = mergeIntoLead(
+    stored,
+    input({ full_name: "Ali K.", contact_number: "+92 300 1234567", level_applying_for: "masters", status: "meeting_done", counselor: "Omar", date_of_inquiry: "2026-09-20" })
+  );
+  assert.deepEqual(m.patch, {}, "nothing that holds one value is overwritten");
+  assert.equal(m.status, null);
+  assert.equal(m.counselor, null);
+  assert.equal(m.kept.length, 5, "the same phone number written another way is not a difference");
+  assert.ok(m.kept.some((k) => /^applying for bachelors \(the sheet says masters\)/.test(k)));
+  assert.ok(m.kept.some((k) => /^name Ali Khan \(the sheet says Ali K\.\)/.test(k)));
+});
+
+test("a different country, course or source is added beside the one there; the same one is not", () => {
+  const m = mergeIntoLead(stored, input({ country_of_interest: "Germany", course_of_interest: "computer science", platform_source: "Instagram" }));
+  assert.equal(m.patch.country_of_interest, "Italy; Germany");
+  assert.equal(m.patch.platform_source, "Facebook; Instagram");
+  assert.equal("course_of_interest" in m.patch, false, "the same course in another case is not added again");
+  const again = mergeIntoLead({ ...stored, country_of_interest: "Italy; Germany" }, input({ country_of_interest: "germany" }));
+  assert.equal("country_of_interest" in again.patch, false);
+});
+
+test("a new remark is added to the one on file; one already in it is not", () => {
+  assert.equal(mergeIntoLead(stored, input({ remarks: "Budget tight" })).remark, "Call after 5\nBudget tight");
+  assert.equal(mergeIntoLead(stored, input({ remarks: "call after 5" })).remark, null);
+  assert.equal(mergeIntoLead({ ...stored, remark: null }, input({ remarks: "First" })).remark, "First");
+});
+
+test("a follow-up is added unless the lead already has one that day", () => {
+  assert.deepEqual(mergeIntoLead(stored, input({ follow_up_date: "2026-10-12", follow_up_note: "Send list" })).followUp, { date: "2026-10-12", note: "Send list" });
+  assert.equal(mergeIntoLead(stored, input({ follow_up_date: "2026-10-10" })).followUp, null);
+});
+
+test("a lead with no counsellor or status takes the sheet's", () => {
+  const m = mergeIntoLead({ ...stored, counselorName: null, status: null }, input({ counselor: "Omar", status: "meeting_done" }));
+  assert.equal(m.counselor, "Omar");
+  assert.equal(m.status, "meeting_done");
+});
+
+test("an exported row has every piece of the lead in its own cell", () => {
+  const row = leadSheetRow({
+    full_name: "Ali Khan",
+    contact_number: "0300-1234567",
+    email: "ali@example.com",
+    country_of_interest: "Italy",
+    current_qualification: "A-Levels",
+    level_applying_for: "bachelors",
+    course_of_interest: "CS",
+    status: "meeting_done",
+    counselorName: "Sara",
+    remark: "Call after 5",
+    nextFollowUp: { date: "2026-10-10", note: "Send list" },
+    date_of_inquiry: "2026-09-01",
+    platform_source: "Facebook",
+  });
+  assert.deepEqual(Object.keys(row), LEAD_COLUMNS.map((c) => c.key));
+  assert.equal(row.month, "Sep 2026");
+  assert.equal(row.status, "Meeting Done");
+  assert.equal(row.follow_up_date, "2026-10-10");
+  assert.equal(row.counselor, "Sara");
+});

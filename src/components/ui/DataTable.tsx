@@ -57,6 +57,8 @@ export function DataTable({
   freezeColumn,
   label,
   serial = true,
+  exportHref,
+  rowHighlight = false,
 }: {
   columns: Column[];
   rows: Row[];
@@ -93,11 +95,23 @@ export function DataTable({
    * the same thing to two people looking at the same list. On by default.
    */
   serial?: boolean;
+  /**
+   * A file to download for Export instead of the CSV made from the rows shown
+   * — the leads list's Excel workbook, which the import reads back.
+   */
+  exportHref?: string;
+  /**
+   * Rows easy to follow across a wide table: every other one shaded, the one
+   * under the pointer brighter, and the one last clicked held until another
+   * is (globals.css, data-row-highlight).
+   */
+  rowHighlight?: boolean;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [filterValues, setFilterValues] = useState<Record<string, string>>({});
   const [page, setPage] = useState(1);
+  const [currentRow, setCurrentRow] = useState<string | null>(null);
 
   const visibleRows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -170,7 +184,7 @@ export function DataTable({
     URL.revokeObjectURL(url);
   }
 
-  const showToolbar = exportFilename || searchable || filters.length > 0;
+  const showToolbar = exportFilename || exportHref || searchable || filters.length > 0;
   const frozenKey = freezeColumn ?? columns[0]?.key;
 
   return (
@@ -210,15 +224,21 @@ export function DataTable({
               </button>
             )}
           </div>
-          {exportFilename && (
-            <button onClick={exportCsv} className="text-xs font-medium text-primary hover:underline">
-              Export
-            </button>
+          {exportHref ? (
+            <a href={exportHref} className="text-xs font-medium text-primary hover:underline" data-export-link>
+              Export (Excel)
+            </a>
+          ) : (
+            exportFilename && (
+              <button onClick={exportCsv} className="text-xs font-medium text-primary hover:underline">
+                Export
+              </button>
+            )
           )}
         </div>
       )}
       <TableFrame label={label ?? exportFilename?.replace(/[-_]/g, " ") ?? "Table"} freezeFirstColumn={false}>
-        <table className={`w-full ${minTableWidthClassName} text-sm`}>
+        <table className={`w-full ${minTableWidthClassName} text-sm`} data-row-highlight={rowHighlight || undefined}>
           <thead>
             <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-muted">
               {selectable && (
@@ -252,7 +272,12 @@ export function DataTable({
           </thead>
           <tbody>
             {pagedRows.map((row, i) => (
-              <tr key={row.id} className="border-b border-border last:border-0 hover:bg-bg/60">
+              <tr
+                key={row.id}
+                className="border-b border-border last:border-0 hover:bg-bg/60"
+                data-current={(rowHighlight && currentRow === row.id) || undefined}
+                onClick={rowHighlight ? () => setCurrentRow(row.id) : undefined}
+              >
                 {selectable && (
                   <td className="px-4 py-3">
                     <input type="checkbox" checked={selected.has(row.id)} onChange={() => toggle(row.id)} />

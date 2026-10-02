@@ -11,6 +11,9 @@ import { RemarkCell } from "./RemarkCell";
 import { RowActionsMenu } from "@/components/RowActionsMenu";
 import { hasPermission } from "@/lib/auth/permissions";
 import { getCachedCounselors } from "@/lib/cachedQueries";
+import { monthLabel } from "@/lib/leadSheet";
+
+const LEVEL_LABELS: Record<string, string> = { bachelors: "Bachelors", masters: "Masters", phd: "PhD" };
 
 type LeadRow = {
   id: string;
@@ -18,6 +21,10 @@ type LeadRow = {
   contact_number: string | null;
   email: string | null;
   country_of_interest: string | null;
+  current_qualification: string | null;
+  level_applying_for: string | null;
+  course_of_interest: string | null;
+  platform_source: string | null;
   status: string;
   date_of_inquiry: string;
   assigned_counselor_id: string | null;
@@ -41,7 +48,7 @@ export default async function LeadsPage() {
     supabase
       .from("leads")
       .select(
-        "id, full_name, contact_number, email, country_of_interest, status, date_of_inquiry, assigned_counselor_id, assigned_counselor:staff!assigned_counselor_id(full_name), current_remark:lead_remark_current(body, updated_at, editor:staff!lead_remark_current_updated_by_fkey(full_name))"
+        "id, full_name, contact_number, email, country_of_interest, current_qualification, level_applying_for, course_of_interest, platform_source, status, date_of_inquiry, assigned_counselor_id, assigned_counselor:staff!assigned_counselor_id(full_name), current_remark:lead_remark_current(body, updated_at, editor:staff!lead_remark_current_updated_by_fkey(full_name))"
       )
       .order("date_of_inquiry", { ascending: false })
       .returns<LeadRow[]>(),
@@ -80,23 +87,32 @@ export default async function LeadsPage() {
   // and the list impossible to scan. Status and Follow-up keep wrapping: both
   // hold an inline editor that needs the room. Remarks stays on one line, cut
   // short where it is long, and opens whole in a pop-up (RemarkCell).
+  //
+  // The columns are the leads workbook's (src/lib/leadSheet.ts), in its order,
+  // so what is on screen is what the export and the import hold.
   const columns = [
     { key: "month", header: "Month" },
     { key: "name", header: "Name" },
-    { key: "contact", header: "Contact" },
+    { key: "contact", header: "Contact number" },
+    { key: "email", header: "Email" },
     { key: "country", header: "Country" },
+    { key: "qualification", header: "Current qualification" },
+    { key: "level", header: "Applying for" },
+    { key: "course", header: "Course of interest" },
     { key: "status", header: "Status", wrap: true },
     { key: "counselor", header: "Counselor", align: "center" as const },
     { key: "remarks", header: "Remarks" },
     { key: "followUp", header: "Follow-up", wrap: true },
     { key: "date", header: "Inquiry date" },
+    { key: "source", header: "Source" },
     { key: "actions", header: "", align: "right" as const, exportable: false },
   ];
 
   const rows = (leads ?? []).map((r) => {
     const remark = one(r.current_remark);
-    const inquiryDate = new Date(r.date_of_inquiry);
-    const monthYearLabel = inquiryDate.toLocaleString("en-US", { month: "short", year: "numeric" });
+    // Worked out from the inquiry date, never stored or typed.
+    const monthYearLabel = monthLabel(r.date_of_inquiry);
+    const level = r.level_applying_for ? (LEVEL_LABELS[r.level_applying_for] ?? r.level_applying_for) : null;
     const counselorName = one(r.assigned_counselor)?.full_name;
     return {
       id: r.id,
@@ -107,8 +123,12 @@ export default async function LeadsPage() {
             {r.full_name}
           </Link>
         ),
-        contact: r.contact_number ?? r.email ?? "—",
+        contact: r.contact_number ?? "—",
+        email: r.email ?? "—",
         country: r.country_of_interest ?? "—",
+        qualification: r.current_qualification ?? "—",
+        level: level ?? "—",
+        course: r.course_of_interest ?? "—",
         status: <InlineStatusCell leadId={r.id} currentStatus={r.status} latestRemark={latestRemarkByLead.get(r.id)} />,
         counselor: (
           <InlineCounselorCell
@@ -129,14 +149,20 @@ export default async function LeadsPage() {
         ),
         followUp: <FollowUpCell leadId={r.id} remarkCount={followUpCountByLead.get(r.id) ?? 0} revalidateTo="/leads" />,
         date: formatDateOnly(r.date_of_inquiry),
+        source: r.platform_source ?? "—",
         actions: (
           <RowActionsMenu id={r.id} name={r.full_name} editHref={`/leads/${r.id}`} canDelete={canDelete} deleteLabel="Delete lead" />
         ),
       },
       csv: {
         name: r.full_name,
-        contact: r.contact_number ?? r.email ?? "",
+        contact: r.contact_number ?? "",
+        email: r.email ?? "",
         country: r.country_of_interest ?? "",
+        qualification: r.current_qualification ?? "",
+        level: level ?? "",
+        course: r.course_of_interest ?? "",
+        source: r.platform_source ?? "",
         status: LEAD_STATUS_LABELS[r.status as keyof typeof LEAD_STATUS_LABELS] ?? r.status,
         counselor: counselorName ?? "",
         // In the export, and in what the search box looks through.
@@ -173,18 +199,21 @@ export default async function LeadsPage() {
         <div className="mt-4">
           <DataTable
             exportFilename="leads"
+            exportHref="/api/export/leads"
+            rowHighlight
             label="Leads"
             freezeColumn="name"
             rows={rows}
             columns={columns}
             searchable
-            searchPlaceholder="Search name, contact, remarks…"
+            searchPlaceholder="Search name, contact, course, remarks…"
             oneLine
-            minTableWidthClassName="min-w-[640px] lg:min-w-[950px]"
+            minTableWidthClassName="min-w-[1400px]"
             pageSize={25}
             filters={[
               { key: "status", label: "Status", options: Object.values(LEAD_STATUS_LABELS) },
               { key: "country", label: "Country", options: countryOptions },
+              { key: "level", label: "Applying for", options: Object.values(LEVEL_LABELS) },
               { key: "counselor", label: "Counselor", options: counselorOptions },
             ]}
           />

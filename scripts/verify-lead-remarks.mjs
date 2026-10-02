@@ -80,10 +80,10 @@ try {
   console.log("\n--- the column ---");
   const openList = async (query) => {
     await page.goto(`${BASE}/leads`, { waitUntil: "domcontentloaded" });
-    const search = page.getByPlaceholder("Search name, contact, remarks…");
+    const search = page.getByPlaceholder("Search name, contact, course, remarks…");
     await search.waitFor({ timeout: 60000 });
     await page.waitForFunction(() => {
-      const i = document.querySelector('input[placeholder="Search name, contact, remarks…"]');
+      const i = document.querySelector('input[placeholder="Search name, contact, course, remarks…"]');
       return Boolean(i && Object.keys(i).some((k) => k.startsWith("__reactProps")));
     }, null, { timeout: 30000 });
     await search.fill(query);
@@ -152,7 +152,7 @@ try {
   await page.close();
   page = await signIn(browser, marketing.email);
   await page.goto(`${BASE}/leads`, { waitUntil: "domcontentloaded" });
-  const importPanel = page.locator("details", { hasText: "Import leads from CSV" });
+  const importPanel = page.locator("details", { hasText: "Import leads from Excel" });
   await importPanel.waitFor({ timeout: 60000 });
   await importPanel.locator("summary").click();
   // The Import button wakes only once React has seen the file chosen.

@@ -12,14 +12,18 @@ import { getStaffSession } from "@/lib/auth/session";
 import { syncStudentFollowUpTask } from "@/lib/actions/studentFollowUp";
 import { createClient } from "@/lib/supabase/server";
 import { syncStudentStages } from "@/lib/autoStagesSync";
-import { LEAD_STATUSES } from "@/lib/constants";
+import { LEAD_STATUSES, LEAD_STATUS_LABELS, type LeadStatus } from "@/lib/constants";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { readAll, readAllIn } from "@/lib/catalogueReads";
+import * as sheet from "@/lib/leadSheet";
+import type { LeadInput, StoredLead } from "@/lib/leadSheet";
 import { dateOfBirthError } from "@/lib/dateOfBirth";
 import { phoneError, phoneChangeError } from "@/lib/phoneNumber";
 import { MAX_UPLOAD_BYTES, fileSizeError } from "@/lib/fileSize";
 import { removeStoragePrefix } from "@/lib/storageCleanup";
 import { uploadedFile } from "@/lib/stagedUpload";
 import { getCurrentUser } from "@/lib/auth/currentUser";
-import { normalizeRemark, remarkError, remarkFromRow } from "@/lib/leadRemarks";
+import { normalizeRemark, remarkError } from "@/lib/leadRemarks";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -237,65 +241,335 @@ export async function updateLeadDestinations(leadId: string, _prevState: unknown
   return { success: true };
 }
 
-// Bulk import — CSV columns (header row required): full_name (required),
-// contact_number, email, platform_source, current_qualification,
-// level_applying_for (bachelors/masters/phd), course_of_interest,
-// country_of_interest, remarks (0306: the lead's first remark, kept as a
-// version under the importer's name — a column headed remark, notes or
-// comments is read the same way).
-export async function importLeads(_prevState: unknown, formData: FormData) {
-  const supabase = await createClient();
+export type LeadImportResult =
+  | { error: string }
+  | { success: true; added: number; updated: number; unchanged: number; notes: string[] };
+
+type MatchLead = {
+  id: string;
+  full_name: string;
+  contact_number: string | null;
+  email: string | null;
+  country_of_interest: string | null;
+  current_qualification: string | null;
+  level_applying_for: string | null;
+  course_of_interest: string | null;
+  status: string | null;
+  assigned_counselor_id: string | null;
+  date_of_inquiry: string | null;
+  platform_source: string | null;
+};
+
+/** The notes shown under an import; past this many the rest are counted, not listed. */
+const IMPORT_NOTES_SHOWN = 60;
+
+/**
+ * Bulk import from the leads workbook (/api/samples/leads, or an export of the
+ * list edited and brought back) or a CSV with the same headings. The columns,
+ * and what happens to a lead already on file, are in src/lib/leadSheet.ts:
+ * a lead found by its email or phone number is added to and never
+ * overwritten, and two rows in the file for one person are read as one.
+ *
+ * Leads already on file are found through the admin client, so a lead the
+ * importer cannot open is still recognised — and left alone, said so, rather
+ * than filed a second time. Everything written goes through the importer's own
+ * session, so RLS decides what they may change; an update RLS refuses matches
+ * no rows and raises nothing, so each one is read back and reported.
+ */
+export async function importLeads(_prevState: unknown, formData: FormData): Promise<LeadImportResult> {
+  const { supabase, staff } = await getStaffSession();
+  if (!staff) return { error: "You are signed out — reload the page." };
   const file = await uploadedFile(formData, "file");
   if (file) {
     const tooLarge = fileSizeError(file.size, MAX_UPLOAD_BYTES, "file");
     if (tooLarge) return { error: `${tooLarge} A spreadsheet this large is usually a mistake — split it and import in batches.` };
   }
-  if (!file || file.size === 0) return { error: "Choose a CSV file first." };
+  if (!file || file.size === 0) return { error: "Choose an Excel (.xlsx) or CSV file first." };
 
-  const { parseCsvWithHeader, readCsvFile } = await import("@/lib/csv");
-  const text = await readCsvFile(file);
-  const rows = parseCsvWithHeader(text);
-  if (rows.length === 0) return { error: "The file has no data rows." };
-
-  const records = rows
-    .filter((r) => r.full_name)
-    .map((r) => ({
-      // Chosen here, so a remark can be attached without reading the new rows
-      // back — which a counsellor importing leads not assigned to them cannot.
-      id: crypto.randomUUID(),
-      full_name: r.full_name,
-      contact_number: phoneError(r.contact_number) ? null : r.contact_number || null,
-      email: r.email || null,
-      platform_source: r.platform_source || null,
-      current_qualification: r.current_qualification || null,
-      level_applying_for: ["bachelors", "masters", "phd"].includes(r.level_applying_for) ? r.level_applying_for : null,
-      course_of_interest: r.course_of_interest || null,
-      country_of_interest: r.country_of_interest || null,
-    }));
-
-  if (records.length === 0) {
-    return { error: "No valid rows found — the full_name column is required." };
+  let raw: Record<string, string>[];
+  try {
+    const { isXlsx, parseXlsx } = await import("@/lib/spreadsheet");
+    if (isXlsx(file)) {
+      raw = await parseXlsx(file, { sheet: sheet.LEAD_SHEET, knownHeaders: ["name", "full_name", "email", "contact number", "contact_number"] });
+    } else {
+      const { parseCsvWithHeader, readCsvFile } = await import("@/lib/csv");
+      raw = parseCsvWithHeader(await readCsvFile(file));
+    }
+  } catch {
+    return { error: "That file could not be read. Save it as .xlsx or .csv and try again." };
+  }
+  if (raw.length === 0) return { error: "The file has no data rows." };
+  if (!Object.keys(raw[0]).some((h) => sheet.leadHeaderKey(h) === "full_name")) {
+    return { error: "The file has no Name column. Start from the template (Download template) or an export of the list." };
   }
 
-  const remarks = rows.filter((r) => r.full_name).map(remarkFromRow);
-  const { error } = await supabase.from("leads").insert(records);
-  if (error) return { error: error.message };
+  const notes: string[] = [];
+  const say = (name: string, message: string) => notes.push(`${name}: ${message}`);
 
-  // Each remark as the first version of its lead's, written by whoever imported it.
-  const user = await getCurrentUser();
-  const remarkRows = records.flatMap((lead, i) => (remarks[i] ? [{ lead_id: lead.id, body: remarks[i], written_by: user?.id }] : []));
-  if (remarkRows.length > 0) {
-    const { error: remarkError } = await supabase.from("lead_remarks").insert(remarkRows);
-    if (remarkError) {
-      revalidatePath("/leads");
-      return {
-        error: `The ${records.length} leads were imported, but their remarks were not (${remarkError.message}) — a remark can be added only to a lead you can see.`,
+  // ------------------------------------------------------- the rows, as leads
+  const inputs: LeadInput[] = [];
+  for (const row of raw) {
+    const lead = sheet.leadFromRow(row, notes);
+    if (!lead || sheet.isExampleLead(lead.full_name)) continue;
+    const badPhone = phoneError(lead.contact_number);
+    if (badPhone) {
+      say(lead.full_name, `${badPhone} Left out.`);
+      lead.contact_number = null;
+    }
+    inputs.push(lead);
+  }
+  if (inputs.length === 0) return { error: "No leads found — every row needs a Name." };
+
+  // Read fresh rather than from the five-minute cache the dropdowns use: a
+  // counsellor added a minute ago is one a sheet may name.
+  const admin = createAdminClient();
+  const { data: counselorRows } = await admin.from("staff").select("id, full_name").contains("roles", ["counselor"]).eq("status", "active");
+  const counselors = counselorRows ?? [];
+  const counselorId = (name: string | null, lead: string) => {
+    if (!name) return null;
+    const found = counselors.find((c) => c.full_name.trim().toLowerCase() === name.trim().toLowerCase());
+    if (!found) say(lead, `counselor "${name}" is not an active counsellor — left unassigned.`);
+    return found?.id ?? null;
+  };
+
+  // --------------------------------------------- the leads already on file
+  const onFile = await readAll<MatchLead>((from, to) =>
+    admin
+      .from("leads")
+      .select(
+        "id, full_name, contact_number, email, country_of_interest, current_qualification, level_applying_for, course_of_interest, status, assigned_counselor_id, date_of_inquiry, platform_source"
+      )
+      .order("id")
+      .range(from, to)
+      .returns<MatchLead[]>()
+  );
+  const byEmail = new Map<string, MatchLead>();
+  const byPhone = new Map<string, MatchLead>();
+  for (const l of onFile) {
+    if (l.email) byEmail.set(l.email.trim().toLowerCase(), l);
+    const p = sheet.phoneKey(l.contact_number);
+    if (p.length >= 7) byPhone.set(p, l);
+  }
+  const findOnFile = (input: LeadInput) =>
+    (input.email && byEmail.get(input.email)) || (sheet.phoneKey(input.contact_number).length >= 7 && byPhone.get(sheet.phoneKey(input.contact_number))) || null;
+
+  // ------------------------------------- the file's rows, one per person
+  // A person on file collects every row that names them; a new person's
+  // rows are folded into their first one by the same rules.
+  type NewLead = { stored: StoredLead; status: LeadStatus | null; counselor: string | null; remark: string | null; followUps: { date: string; note: string | null }[] };
+  const fresh: NewLead[] = [];
+  const freshByEmail = new Map<string, NewLead>();
+  const freshByPhone = new Map<string, NewLead>();
+  const existing = new Map<string, LeadInput[]>();
+
+  for (const input of inputs) {
+    const known = findOnFile(input);
+    if (known) {
+      existing.set(known.id, [...(existing.get(known.id) ?? []), input]);
+      continue;
+    }
+    const phone = sheet.phoneKey(input.contact_number);
+    const twin = (input.email && freshByEmail.get(input.email)) || (phone.length >= 7 && freshByPhone.get(phone)) || null;
+    if (twin) {
+      const merge = sheet.mergeIntoLead(twin.stored, input);
+      Object.assign(twin.stored, merge.patch);
+      twin.status ??= merge.status;
+      if (merge.counselor && !twin.counselor) twin.counselor = twin.stored.counselorName = merge.counselor;
+      if (merge.remark) twin.remark = twin.stored.remark = merge.remark;
+      if (merge.followUp) {
+        twin.followUps.push(merge.followUp);
+        twin.stored.followUpDates.push(merge.followUp.date);
+      }
+      if (merge.kept.length > 0) say(twin.stored.full_name, `in the file more than once; kept the first row's ${merge.kept.join("; ")}.`);
+    } else {
+      const entry: NewLead = {
+        stored: {
+          id: crypto.randomUUID(),
+          full_name: input.full_name,
+          contact_number: input.contact_number,
+          email: input.email,
+          country_of_interest: input.country_of_interest,
+          current_qualification: input.current_qualification,
+          level_applying_for: input.level_applying_for,
+          course_of_interest: input.course_of_interest,
+          status: input.status,
+          counselorName: input.counselor,
+          date_of_inquiry: input.date_of_inquiry,
+          platform_source: input.platform_source,
+          remark: input.remarks,
+          followUpDates: input.follow_up_date ? [input.follow_up_date] : [],
+        },
+        status: input.status,
+        counselor: input.counselor,
+        remark: input.remarks,
+        followUps: input.follow_up_date ? [{ date: input.follow_up_date, note: input.follow_up_note }] : [],
       };
+      fresh.push(entry);
+      if (input.email) freshByEmail.set(input.email, entry);
+      if (phone.length >= 7) freshByPhone.set(phone, entry);
+    }
+  }
+
+  const followUpNote = (note: string | null) => note || "Follow up (from the leads import)";
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Karachi" }).format(new Date());
+
+  // ---------------------------------------------------------- new leads
+  // One rectangular insert: every row names every column, so a default never
+  // depends on which cells a row happened to fill.
+  if (fresh.length > 0) {
+    const rows = fresh.map(({ stored: s, status, counselor }) => ({
+      id: s.id,
+      full_name: s.full_name,
+      contact_number: s.contact_number,
+      email: s.email,
+      country_of_interest: s.country_of_interest,
+      current_qualification: s.current_qualification,
+      level_applying_for: s.level_applying_for,
+      course_of_interest: s.course_of_interest,
+      platform_source: s.platform_source,
+      status: status ?? "potential",
+      assigned_counselor_id: counselorId(counselor, s.full_name),
+      date_of_inquiry: s.date_of_inquiry ?? today,
+    }));
+    const { error } = await supabase.from("leads").insert(rows);
+    if (error) return { error: `No leads were imported: ${error.message}` };
+
+    // A remark or follow-up can be added only to a lead the importer can open,
+    // and one refused row fails the whole insert — so a lead filed for a
+    // counsellor whose leads they cannot see goes in without its own.
+    const wanted = fresh.filter((f) => f.remark || f.followUps.length > 0).map((f) => f.stored.id);
+    const opens = new Set(
+      wanted.length === 0
+        ? []
+        : (await readAllIn(wanted, (chunk, from, to) => supabase.from("leads").select("id").in("id", chunk).order("id").range(from, to).returns<{ id: string }[]>())).map((r) => r.id)
+    );
+    for (const f of fresh) {
+      if (wanted.includes(f.stored.id) && !opens.has(f.stored.id)) {
+        say(f.stored.full_name, "imported, but its remark and follow-up were not — it is assigned to a counsellor whose leads you cannot open.");
+      }
+    }
+    const reachable = fresh.filter((f) => opens.has(f.stored.id));
+    const remarks = reachable.flatMap(({ stored, remark }) => (remark ? [{ lead_id: stored.id, body: remark, written_by: staff.id }] : []));
+    if (remarks.length > 0) {
+      const { error: e } = await supabase.from("lead_remarks").insert(remarks);
+      if (e) notes.push(`The new leads' remarks were not saved (${e.message}).`);
+    }
+    const followUps = reachable.flatMap(({ stored, followUps: list }) =>
+      list.map((f) => ({ student_id: stored.id, type: "follow_up", due_date: f.date, due_time: null, note: followUpNote(f.note), created_by: staff.id }))
+    );
+    if (followUps.length > 0) {
+      const { error: e } = await supabase.from("reminders").insert(followUps);
+      if (e) notes.push(`The new leads' follow-ups were not saved (${e.message}).`);
+    }
+  }
+
+  // ------------------------------------------------- leads already on file
+  let updated = 0;
+  let unchanged = 0;
+  if (existing.size > 0) {
+    const ids = [...existing.keys()];
+    const [visible, remarkRows, pending] = await Promise.all([
+      readAllIn(ids, (chunk, from, to) => supabase.from("leads").select("id").in("id", chunk).order("id").range(from, to).returns<{ id: string }[]>()),
+      readAllIn(ids, (chunk, from, to) =>
+        supabase.from("lead_remark_current").select("lead_id, body").in("lead_id", chunk).order("lead_id").range(from, to).returns<{ lead_id: string; body: string | null }[]>()
+      ),
+      readAllIn(ids, (chunk, from, to) =>
+        supabase
+          .from("reminders")
+          .select("id, student_id, due_date")
+          .eq("type", "follow_up")
+          .eq("resolved", false)
+          .in("student_id", chunk)
+          .order("id")
+          .range(from, to)
+          .returns<{ id: string; student_id: string; due_date: string }[]>()
+      ),
+    ]);
+    const canOpen = new Set(visible.map((v) => v.id));
+    const remarkOf = new Map(remarkRows.map((r) => [r.lead_id, r.body]));
+    const onFileById = new Map(onFile.map((l) => [l.id, l]));
+    // Whoever each is assigned to, counsellor or not, so the sheet's
+    // counsellor is compared with a name rather than an id.
+    const assignedIds = [...new Set(ids.map((id) => onFileById.get(id)?.assigned_counselor_id).filter((v): v is string => Boolean(v)))];
+    const { data: assigned } = assignedIds.length > 0 ? await admin.from("staff").select("id, full_name").in("id", assignedIds) : { data: [] };
+    const nameOf = new Map((assigned ?? []).map((c) => [c.id as string, c.full_name as string]));
+
+    for (const [id, rows] of existing) {
+      const lead = onFileById.get(id)!;
+      if (!canOpen.has(id)) {
+        say(rows[0].full_name, "already on file as a lead you cannot open, so it was left as it is. Ask its counsellor or a manager to add to it.");
+        unchanged++;
+        continue;
+      }
+      const stored: StoredLead = {
+        ...lead,
+        counselorName: lead.assigned_counselor_id ? (nameOf.get(lead.assigned_counselor_id) ?? "someone no longer on staff") : null,
+        remark: remarkOf.get(id) ?? null,
+        followUpDates: pending.filter((p) => p.student_id === id).map((p) => p.due_date),
+      };
+      const patch: Record<string, string | null> = {};
+      const added: string[] = [];
+      const kept = new Set<string>();
+      let remark: string | null = null;
+      const followUps: { date: string; note: string | null }[] = [];
+      for (const input of rows) {
+        const merge = sheet.mergeIntoLead(stored, input);
+        Object.assign(patch, merge.patch);
+        Object.assign(stored, merge.patch);
+        if (merge.status) {
+          patch.status = stored.status = merge.status;
+          added.push(`status ${LEAD_STATUS_LABELS[merge.status]}`);
+        }
+        if (merge.counselor) {
+          const cid = counselorId(merge.counselor, stored.full_name);
+          if (cid) {
+            patch.assigned_counselor_id = cid;
+            stored.counselorName = merge.counselor;
+          }
+        }
+        if (merge.remark) remark = stored.remark = merge.remark;
+        if (merge.followUp) {
+          followUps.push(merge.followUp);
+          stored.followUpDates.push(merge.followUp.date);
+        }
+        added.push(...merge.added);
+        merge.kept.forEach((k) => kept.add(k));
+      }
+      if (patch.assigned_counselor_id) added.push(`counselor ${stored.counselorName}`);
+
+      let failed = false;
+      if (Object.keys(patch).length > 0) {
+        const { data, error } = await supabase.from("leads").update(patch).eq("id", id).select("id");
+        if (error || !data?.length) {
+          say(stored.full_name, error ? `not updated (${error.message}).` : "already on file, but not a lead you can edit, so nothing was added.");
+          failed = true;
+        }
+      }
+      if (!failed && remark) {
+        const { error } = await supabase.from("lead_remarks").insert({ lead_id: id, body: remark, written_by: staff.id });
+        if (error) say(stored.full_name, `the remark was not saved (${error.message}).`);
+      }
+      if (!failed && followUps.length > 0) {
+        const { error } = await supabase
+          .from("reminders")
+          .insert(followUps.map((f) => ({ student_id: id, type: "follow_up", due_date: f.date, due_time: null, note: followUpNote(f.note), created_by: staff.id })));
+        if (error) say(stored.full_name, `the follow-up was not saved (${error.message}).`);
+      }
+
+      if (failed) unchanged++;
+      else if (added.length > 0) {
+        updated++;
+        say(stored.full_name, `already on file — added ${added.join(", ")}.`);
+      } else unchanged++;
+      if (!failed && kept.size > 0) say(stored.full_name, `kept the lead's own ${[...kept].join("; ")}.`);
     }
   }
 
   revalidatePath("/leads");
-  return { success: true, count: records.length };
+  if (fresh.some((f) => f.followUps.length > 0) || updated > 0) revalidatePath("/calendar");
+  const shown = notes.slice(0, IMPORT_NOTES_SHOWN);
+  if (notes.length > shown.length) shown.push(`…and ${notes.length - shown.length} more.`);
+  return { success: true, added: fresh.length, updated, unchanged, notes: shown };
 }
 
 // Bulk import for already-registered students — same columns as leads, plus
