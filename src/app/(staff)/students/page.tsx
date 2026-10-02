@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { DataTable } from "@/components/ui/DataTable";
 import { Badge } from "@/components/ui/Badge";
+import { LongTextCell } from "@/components/ui/LongTextCell";
 import { ImportRegisteredStudentsForm } from "./ImportRegisteredStudentsForm";
 import { InlineRegistrationStatusCell } from "./InlineRegistrationStatusCell";
 import { RowActionsMenu } from "@/components/RowActionsMenu";
@@ -101,6 +102,11 @@ export default async function StudentsPage() {
     const month = MONTH_NAMES[registeredDate.getMonth()];
     const year = String(registeredDate.getFullYear());
     const monthYearLabel = registeredDate.toLocaleString("en-US", { month: "short", year: "numeric" });
+    const backups = backupNamesByLead.get(r.id) ?? [];
+    // A long value is cut short on its line and opens whole in a pop-up.
+    const long = (text: string | null, label: string, widthClassName?: string, items?: string[]) => (
+      <LongTextCell text={text} items={items} label={label} rowName={r.full_name} widthClassName={widthClassName} />
+    );
     return {
       id: r.id,
       cells: {
@@ -123,13 +129,13 @@ export default async function StudentsPage() {
           </span>
         ),
         name: (
-          <Link href={`/students/${r.id}`} prefetch={false} className="font-medium text-ink hover:underline">
+          <Link href={`/students/${r.id}`} prefetch={false} title={r.full_name} className="block max-w-[16rem] truncate font-medium text-ink hover:underline">
             {r.full_name}
           </Link>
         ),
-        contact: r.contact_number ?? r.email ?? "—",
-        country: r.country_of_interest ?? "—",
-        backupCountry: (backupNamesByLead.get(r.id) ?? []).join(", ") || "—",
+        contact: long(r.contact_number ?? r.email, "Contact", "max-w-[14rem]"),
+        country: long(r.country_of_interest, "Country"),
+        backupCountry: long(backups.join(", ") || null, "Backup Country", "max-w-[12rem]", backups),
         counselor: one(r.assigned_counselor)?.full_name ? (
           <span
             title={one(r.assigned_counselor)!.full_name}
@@ -155,7 +161,7 @@ export default async function StudentsPage() {
             none
           </span>
         ),
-        intake: r.intake ?? "—",
+        intake: long(r.intake, "Intake", "max-w-[10rem]"),
         regStatus: <InlineRegistrationStatusCell studentId={r.id} status={r.registration_status} stacked />,
         portal: <Badge tone={r.portal_active ? "success" : "neutral"}>{r.portal_active ? "Active" : "Inactive"}</Badge>,
         date: registeredDate.toLocaleDateString(),

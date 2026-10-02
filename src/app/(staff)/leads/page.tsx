@@ -8,7 +8,7 @@ import { InlineStatusCell } from "./InlineStatusCell";
 import { InlineCounselorCell } from "./InlineCounselorCell";
 import { FollowUpCell } from "./FollowUpCell";
 import { RemarkCell } from "./RemarkCell";
-import { LongTextCell } from "./LongTextCell";
+import { LongTextCell } from "@/components/ui/LongTextCell";
 import { RowActionsMenu } from "@/components/RowActionsMenu";
 import { hasPermission } from "@/lib/auth/permissions";
 import { getCachedCounselors } from "@/lib/cachedQueries";
@@ -116,7 +116,7 @@ export default async function LeadsPage() {
     const level = r.level_applying_for ? (LEVEL_LABELS[r.level_applying_for] ?? r.level_applying_for) : null;
     // A long value is cut short on its line and opens whole in a pop-up.
     const long = (text: string | null, label: string, widthClassName?: string) => (
-      <LongTextCell text={text} label={label} leadName={r.full_name} widthClassName={widthClassName} />
+      <LongTextCell text={text} label={label} rowName={r.full_name} widthClassName={widthClassName} />
     );
     const counselorName = one(r.assigned_counselor)?.full_name;
     return {

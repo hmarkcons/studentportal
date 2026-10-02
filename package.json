@@ -21,6 +21,7 @@
     "check:sendcredentials": "node scripts/verify-send-credentials.mjs",
     "check:leadremarks": "node scripts/verify-lead-remarks.mjs",
     "check:leadimport": "node scripts/verify-lead-import.mjs",
+    "check:studentcells": "node scripts/verify-student-cells.mjs",
     "check:pay": "node scripts/verify-pay-split.mjs",
     "check:roles": "node scripts/verify-multi-role.mjs",
     "check:speed": "node scripts/check-speed.mjs",

@@ -4,24 +4,29 @@ import { useEffect, useRef, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 
 /**
- * A leads-list cell that keeps to one line: what fits is shown, the rest is
- * cut short with an ellipsis, and a click on a cut-short value opens the whole
- * of it in a pop-up. A value that fits is plain text — there is nothing more
- * to show, so it does not pretend to be a button.
+ * A table cell that keeps to one line: what fits is shown, the rest is cut
+ * short with an ellipsis, and a click on a cut-short value opens the whole of
+ * it in a pop-up. A value that fits is plain text — there is nothing more to
+ * show, so it does not pretend to be a button.
  *
- * Several values joined by semicolons — the countries or courses an import
- * has added beside one another — are listed one to a line in the pop-up.
+ * Several values — the countries or courses an import has added beside one
+ * another, joined by semicolons, or a list passed as `items` — are listed one
+ * to a line in the pop-up.
  */
 export function LongTextCell({
   text,
+  items,
   label,
-  leadName,
+  rowName,
   widthClassName = "max-w-[12rem]",
 }: {
   text: string | null;
+  /** The values `text` was made from, when they are a list joined some other way. */
+  items?: string[];
   /** The column, for the pop-up's title. */
   label: string;
-  leadName: string;
+  /** Whose row it is — the lead or the student — for the pop-up's title. */
+  rowName: string;
   widthClassName?: string;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
@@ -41,7 +46,7 @@ export function LongTextCell({
   }, [text]);
 
   if (!text) return <span className="text-muted">—</span>;
-  const parts = text.split(/\s*;\s*/).filter(Boolean);
+  const parts = items ?? text.split(/\s*;\s*/).filter(Boolean);
 
   return (
     <>
@@ -60,7 +65,7 @@ export function LongTextCell({
               }
             : undefined
         }
-        aria-label={cut ? `${label} for ${leadName}: ${text} — open to read in full` : undefined}
+        aria-label={cut ? `${label} for ${rowName}: ${text} — open to read in full` : undefined}
         title={cut ? "Click to see it all" : undefined}
         className={`block truncate ${widthClassName} ${cut ? "cursor-pointer text-ink decoration-dotted underline-offset-2 hover:text-primary hover:underline" : ""}`}
         data-long-text
@@ -68,7 +73,7 @@ export function LongTextCell({
       >
         {text}
       </span>
-      <Modal open={open} onClose={() => setOpen(false)} title={`${label} — ${leadName}`}>
+      <Modal open={open} onClose={() => setOpen(false)} title={`${label} — ${rowName}`}>
         <div data-long-dialog>
           {parts.length > 1 ? (
             <ul className="list-disc space-y-1 pl-5 text-sm text-ink" data-long-full>
