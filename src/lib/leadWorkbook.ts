@@ -1,7 +1,7 @@
 import writeXlsxFile from "write-excel-file/node";
 import { addDropdownsAndHideSheets, columnLetter, listRange, type Dropdown } from "@/lib/xlsxDropdowns";
 import { LEAD_STATUSES, LEAD_STATUS_LABELS } from "@/lib/constants";
-import { EXAMPLE_LEAD, LEAD_COLUMNS, LEAD_LEVELS, LEAD_LIST_SHEET, LEAD_SHEET, leadColumnIndex, type LeadSheetRow } from "@/lib/leadSheet";
+import { DEFAULT_IMPORT_COUNSELOR, EXAMPLE_LEAD, LEAD_COLUMNS, LEAD_LEVELS, LEAD_LIST_SHEET, LEAD_SHEET, leadColumnIndex, type LeadSheetRow } from "@/lib/leadSheet";
 
 /** Rows the dropdowns and the Month formula reach below the data. */
 const HEADROOM = 300;
@@ -49,7 +49,7 @@ export async function leadWorkbook(rows: LeadSheetRow[], { counselors, example =
         level_applying_for: "bachelors",
         course_of_interest: "Computer Science",
         status: "Potential",
-        counselor: counselors[0]?.full_name ?? "",
+        counselor: DEFAULT_IMPORT_COUNSELOR,
         remarks: "Wants a bachelor's in Italy, call after 5 pm",
         follow_up_date: new Date().toISOString().slice(0, 10),
         follow_up_note: "Send the course list",

@@ -325,11 +325,14 @@ export async function importLeads(_prevState: unknown, formData: FormData): Prom
   const admin = createAdminClient();
   const { data: counselorRows } = await admin.from("staff").select("id, full_name").contains("roles", ["counselor"]).eq("status", "active");
   const counselors = counselorRows ?? [];
-  const counselorId = (name: string | null, lead: string) => {
+  // A new lead whose row names nobody, or nobody who is an active
+  // counsellor, goes to the default one.
+  const defaultCounselor = counselors.find((c) => c.full_name.trim().toLowerCase() === sheet.DEFAULT_IMPORT_COUNSELOR.toLowerCase()) ?? null;
+  const counselorId = (name: string | null, lead: string, fallback: { id: string; full_name: string } | null = null) => {
     if (!name) return null;
     const found = counselors.find((c) => c.full_name.trim().toLowerCase() === name.trim().toLowerCase());
-    if (!found) say(lead, `counselor "${name}" is not an active counsellor — left unassigned.`);
-    return found?.id ?? null;
+    if (!found) say(lead, `counselor "${name}" is not an active counsellor — ${fallback ? `given to ${fallback.full_name} instead` : "left as it was"}.`);
+    return found?.id ?? fallback?.id ?? null;
   };
 
   // --------------------------------------------- the leads already on file
@@ -417,6 +420,9 @@ export async function importLeads(_prevState: unknown, formData: FormData): Prom
   // One rectangular insert: every row names every column, so a default never
   // depends on which cells a row happened to fill.
   if (fresh.length > 0) {
+    if (!defaultCounselor && fresh.some((f) => !f.counselor)) {
+      notes.push(`${sheet.DEFAULT_IMPORT_COUNSELOR} is not an active counsellor, so the new leads with no Counselor were left unassigned.`);
+    }
     const rows = fresh.map(({ stored: s, status, counselor }) => ({
       id: s.id,
       full_name: s.full_name,
@@ -428,37 +434,27 @@ export async function importLeads(_prevState: unknown, formData: FormData): Prom
       course_of_interest: s.course_of_interest,
       platform_source: s.platform_source,
       status: status ?? "potential",
-      assigned_counselor_id: counselorId(counselor, s.full_name),
+      assigned_counselor_id: counselor ? counselorId(counselor, s.full_name, defaultCounselor) : (defaultCounselor?.id ?? null),
       date_of_inquiry: s.date_of_inquiry ?? today,
     }));
     const { error } = await supabase.from("leads").insert(rows);
     if (error) return { error: `No leads were imported: ${error.message}` };
 
-    // A remark or follow-up can be added only to a lead the importer can open,
-    // and one refused row fails the whole insert — so a lead filed for a
-    // counsellor whose leads they cannot see goes in without its own.
-    const wanted = fresh.filter((f) => f.remark || f.followUps.length > 0).map((f) => f.stored.id);
-    const opens = new Set(
-      wanted.length === 0
-        ? []
-        : (await readAllIn(wanted, (chunk, from, to) => supabase.from("leads").select("id").in("id", chunk).order("id").range(from, to).returns<{ id: string }[]>())).map((r) => r.id)
-    );
-    for (const f of fresh) {
-      if (wanted.includes(f.stored.id) && !opens.has(f.stored.id)) {
-        say(f.stored.full_name, "imported, but its remark and follow-up were not — it is assigned to a counsellor whose leads you cannot open.");
-      }
-    }
-    const reachable = fresh.filter((f) => opens.has(f.stored.id));
-    const remarks = reachable.flatMap(({ stored, remark }) => (remark ? [{ lead_id: stored.id, body: remark, written_by: staff.id }] : []));
+    // Their remarks and follow-ups are written through the admin client, under
+    // the importer's name. They are part of the leads the importer has just
+    // created, but RLS lets a remark or follow-up onto only a lead the writer
+    // can open — and a counsellor cannot open one filed for another
+    // counsellor, as every lead with no Counselor now is.
+    const remarks = fresh.flatMap(({ stored, remark }) => (remark ? [{ lead_id: stored.id, body: remark, written_by: staff.id }] : []));
     if (remarks.length > 0) {
-      const { error: e } = await supabase.from("lead_remarks").insert(remarks);
+      const { error: e } = await admin.from("lead_remarks").insert(remarks);
       if (e) notes.push(`The new leads' remarks were not saved (${e.message}).`);
     }
-    const followUps = reachable.flatMap(({ stored, followUps: list }) =>
+    const followUps = fresh.flatMap(({ stored, followUps: list }) =>
       list.map((f) => ({ student_id: stored.id, type: "follow_up", due_date: f.date, due_time: null, note: followUpNote(f.note), created_by: staff.id }))
     );
     if (followUps.length > 0) {
-      const { error: e } = await supabase.from("reminders").insert(followUps);
+      const { error: e } = await admin.from("reminders").insert(followUps);
       if (e) notes.push(`The new leads' follow-ups were not saved (${e.message}).`);
     }
   }

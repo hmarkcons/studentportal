@@ -12,6 +12,8 @@
 //                 dropdowns from a hidden Lists sheet.
 //   import        an .xlsx: a new lead is filed with every column; two rows
 //                 for one person are read as one; the example row is skipped;
+//                 a new lead with no Counselor goes to Muhammad Usman, with
+//                 its remark, though the importer cannot open it;
 //                 a lead already on file (matched by its phone written another
 //                 way) is added to and never overwritten — an empty email
 //                 filled, a new country added beside the old, a remark added
@@ -49,15 +51,6 @@ const HEADERS = [
   "Month", "Name", "Contact number", "Email", "Country", "Current qualification", "Applying for", "Course of interest",
   "Status", "Counselor", "Remarks", "Follow-up date", "Follow-up note", "Inquiry date", "Source",
 ];
-
-async function poll(fn, seconds = 30) {
-  for (let i = 0; i < seconds; i++) {
-    const v = await fn();
-    if (v) return v;
-    await new Promise((r) => setTimeout(r, 1000));
-  }
-  return null;
-}
 
 const cellText = (v) => {
   if (v === null || v === undefined) return "";
@@ -118,7 +111,7 @@ try {
     assigned_counselor_id: counsellor.id,
   });
   await admin.from("lead_remarks").insert({ lead_id: existingId, body: "zztmp Old remark", written_by: counsellor.id });
-  const hiddenId = await fx.lead({
+  await fx.lead({
     full_name: HIDDEN,
     contact_number: "0300-9999982",
     status: "potential",
@@ -173,7 +166,7 @@ try {
     },
     // The same person again, by email: read as one.
     { Name: NEW_A, Email: "ZZTMP-import-alpha@hmark-test.local", Country: "Germany", Remarks: "zztmp Also asked about Germany" },
-    { Name: NEW_B, "Contact number": "0300-9999984", "Applying for": "Diploma" },
+    { Name: NEW_B, "Contact number": "0300-9999984", "Applying for": "Diploma", Remarks: "zztmp Bravo remark" },
     {
       Name: EXISTING,
       "Contact number": "+92 300 9999981",
@@ -220,6 +213,9 @@ try {
   const b = (await leadByName(NEW_B))[0] ?? {};
   ok("a lead with no status or inquiry date takes Potential and today", b.status === "potential" && b.date_of_inquiry === karachiToday(), JSON.stringify(b));
   ok("...and a level it cannot use is left out", b.level_applying_for === null);
+  const { data: usman } = await admin.from("staff").select("id").eq("full_name", "Muhammad Usman").contains("roles", ["counselor"]).eq("status", "active").maybeSingle();
+  ok("a new lead with no Counselor goes to Muhammad Usman", Boolean(usman) && b.assigned_counselor_id === usman.id, b.assigned_counselor_id);
+  ok("...with its remark, though the importer cannot open it", (await current(b.id)) === "zztmp Bravo remark", await current(b.id));
   ok("the template's example row is not filed", (await leadByName("Example Student (delete this row)")).every((l) => l.email !== "zztmp-example@hmark-test.local"));
 
   const e = (await leadByName(EXISTING))[0] ?? {};

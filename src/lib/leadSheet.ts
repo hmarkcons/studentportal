@@ -44,6 +44,13 @@ export type LeadSheetRow = Record<LeadColumnKey, string>;
 
 export const LEAD_LEVELS = ["bachelors", "masters", "phd"] as const;
 
+/**
+ * Who a new lead goes to when its row names no counsellor. Matched by name
+ * against the active counsellors when the import runs; if nobody by this name
+ * is one any more, the lead is left unassigned and the import says so.
+ */
+export const DEFAULT_IMPORT_COUNSELOR = "Muhammad Usman";
+
 /** The template's example row, by a name the import skips rather than file as a lead. */
 export const EXAMPLE_LEAD = "Example Student (delete this row)";
 

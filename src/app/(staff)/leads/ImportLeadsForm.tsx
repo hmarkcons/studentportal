@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { importLeads } from "@/lib/actions/leads";
 import { Button } from "@/components/ui/Button";
 import { FileField } from "@/components/FileField";
+import { DEFAULT_IMPORT_COUNSELOR } from "@/lib/leadSheet";
 
 /**
  * The leads import: the Excel template (or an export of the list, edited)
@@ -33,7 +34,8 @@ export function ImportLeadsForm() {
         </a>
       </form>
       <p className="mt-2 text-xs text-muted">
-        The same columns as the list: Name is the only one needed. Month is worked out from the Inquiry date. A lead already
+        The same columns as the list: Name is the only one needed. Month is worked out from the Inquiry date, and a new lead
+        with no Counselor goes to {DEFAULT_IMPORT_COUNSELOR}. A lead already
         on file, found by its email or phone number, is added to and never overwritten — an empty field is filled in, a new
         country, qualification, course or source is added beside the old one, a remark is added to the one there, and a
         follow-up is added.
