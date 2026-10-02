@@ -5,15 +5,11 @@ import { CredentialField } from "@/components/CredentialField";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { SendCredentialsBar } from "./SendCredentialsBar";
-import { credentialLabel } from "@/lib/studentCredentials";
+import { SECTION_PRESETS, credentialLabel, inCredentialsSection } from "@/lib/studentCredentials";
 
-const PRESETS = [
-  { label: "Gmail", credentialType: "gmail" },
-  { label: "University portal", credentialType: "university_portal" },
-  // Shown to the student on their own Visa tab, so the name has to be the
-  // same one that page looks for.
-  { label: "Visa appointment portal", credentialType: "visa_appointment_portal" },
-];
+// visa_appointment_portal is shown to the student on their own Visa tab, so
+// its name has to be the one that page looks for.
+const PRESETS = SECTION_PRESETS.map((credentialType) => ({ label: credentialLabel(credentialType), credentialType }));
 
 function slugify(label: string) {
   return label
@@ -30,7 +26,7 @@ export function PortalCredentialsSection({
 }: {
   studentId: string;
   existingTypes: string[];
-  /** Where "Email to student" sends their logins: the address on their record. */
+  /** Where "Send to student" emails the logins ticked: the address on their record. */
   email: string | null;
 }) {
   const [extra, setExtra] = useState<{ label: string; credentialType: string }[]>([]);
@@ -38,7 +34,10 @@ export function PortalCredentialsSection({
 
   const shown = new Map<string, string>();
   PRESETS.forEach((p) => shown.set(p.credentialType, p.label));
-  existingTypes.forEach((t) => {
+  // Every login saved but this portal's own, which Registration & Portal
+  // Access manages and sends — saving over its copy here changed the copy and
+  // not the password.
+  existingTypes.filter(inCredentialsSection).forEach((t) => {
     // Named as the email and the message name it, so staff see what the student will.
     if (!shown.has(t)) shown.set(t, credentialLabel(t));
   });
@@ -46,8 +45,8 @@ export function PortalCredentialsSection({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Sends every login below, and this portal's own, in one go. */}
-      <SendCredentialsBar studentId={studentId} email={email} />
+      {/* Sends the logins below that are ticked — none to begin with. */}
+      <SendCredentialsBar studentId={studentId} email={email} scope="section" />
       {Array.from(shown.entries()).map(([credentialType, label]) => (
         <CredentialField
           key={credentialType}

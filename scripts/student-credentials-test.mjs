@@ -83,3 +83,18 @@ test("the note on the timeline names what went — never a password", () => {
     assert.ok(!emailed.includes(secret) && !copied.includes(secret));
   }
 });
+
+test("Portal credentials holds every login but this portal's own, which is sent from Registration & Portal Access", async () => {
+  const { SECTION_PRESETS, inCredentialsSection } = await import("../src/lib/studentCredentials.ts");
+  assert.deepEqual([...SECTION_PRESETS], ["gmail", "university_portal", "visa_appointment_portal"]);
+  assert.equal(inCredentialsSection("portal_login"), false);
+  assert.equal(inCredentialsSection("gmail"), true);
+  assert.equal(inCredentialsSection("scholarship_portal:EDiSU"), true);
+});
+
+test("the subject says what the email carries", async () => {
+  const { credentialsEmailSubject } = await import("../src/lib/studentCredentials.ts");
+  assert.equal(credentialsEmailSubject([login("portal_login", "ali@example.com", "p")]), "Your HMARK Student Portal login");
+  assert.equal(credentialsEmailSubject([login("gmail", "a", "b")]), "Your login details from HMARK Consultants");
+  assert.equal(credentialsEmailSubject([login("portal_login", "a", "b"), login("gmail", "a", "b")]), "Your login details from HMARK Consultants");
+});

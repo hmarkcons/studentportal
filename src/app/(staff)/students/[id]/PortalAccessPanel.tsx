@@ -9,6 +9,7 @@ import {
   deleteStudentPortalAccess,
 } from "@/lib/actions/portal";
 import { SetPasswordForm } from "@/components/SetPasswordForm";
+import { SendCredentialsBar } from "./SendCredentialsBar";
 import { readCredentialAction } from "@/lib/actions/countryTracker";
 import { Button } from "@/components/ui/Button";
 import { useButtonAction } from "@/components/useButtonAction";
@@ -136,6 +137,14 @@ export function PortalAccessPanel({
           )}
         </div>
       </div>
+
+      {/* Their login for this portal, and nothing else, by email or as a
+          WhatsApp message (studentCredentials). */}
+      {enabled && (
+        <div className="mt-3">
+          <SendCredentialsBar studentId={studentId} email={email} scope="portal" />
+        </div>
+      )}
 
       {enabled && isSuperAdmin && (
         <div className="mt-3" data-student-set-password>

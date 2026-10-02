@@ -49,6 +49,7 @@ import { CollapsibleCard } from "@/components/CollapsibleCard";
 import { TrackerCountryTabs } from "@/components/TrackerCountryTabs";
 import { uploadedLine } from "@/lib/activityStamp";
 import { trackerValueFilled } from "@/lib/trackerValue";
+import { inCredentialsSection } from "@/lib/studentCredentials";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -800,6 +801,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     }))
     .sort((a, b) => a.rank - b.rank || a.section.entry.displayName.localeCompare(b.section.entry.displayName));
 
+  const sectionCredentialCount = existingCredentialTypes.filter(inCredentialsSection).length;
   return (
     <div>
       {/* Above everything, because a refused or ghosted student is not a
@@ -841,6 +843,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       <CollapsibleCard
         id="registration-portal-access"
         title="Registration & Portal Access"
+        defaultOpen={openSection === "registration-portal-access"}
         badge={
           <Badge tone={student?.portal_active ? "success" : "neutral"}>
             {student?.portal_active ? "Portal active" : "Portal off"}
@@ -1200,15 +1203,16 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       )}
 
 
+      {/* This portal's own login is counted, and sent, in Registration & Portal Access. */}
       <CollapsibleCard
         id="portal-credentials"
         title="Portal credentials"
         className="mt-6"
         defaultOpen={openSection === "portal-credentials"}
         badge={
-          <Badge tone={existingCredentialTypes.length > 0 ? "success" : "neutral"}>
-            {existingCredentialTypes.length > 0
-              ? `${existingCredentialTypes.length} on file`
+          <Badge tone={sectionCredentialCount > 0 ? "success" : "neutral"}>
+            {sectionCredentialCount > 0
+              ? `${sectionCredentialCount} on file`
               : "None saved"}
           </Badge>
         }

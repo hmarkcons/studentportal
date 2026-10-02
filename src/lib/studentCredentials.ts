@@ -1,12 +1,17 @@
 // A student's logins, sent to them: by email, or as a message to paste into
 // WhatsApp.
 //
-// "Portal credentials" on a student's page holds the logins the office keeps
-// for them — this portal's own, Gmail, the university and visa portals, the
-// scholarship portals — each encrypted, revealable one at a time. Sending them
-// meant revealing each and retyping it into a chat. Now one button emails
-// every login on file to the student, and another copies the same thing as one
-// message. Both are built here, from one list, so the email and the message
+// Two places on a student's page send them, each its own:
+//
+//   Registration & Portal Access   this portal's own login — the email or
+//                                  Student ID, the password and where to sign
+//                                  in — and nothing else;
+//   Portal credentials             the logins the office keeps for them on
+//                                  other sites (Gmail, the university and visa
+//                                  portals, the scholarship portals): only the
+//                                  ones ticked, none to begin with.
+//
+// The email and the copied message are built here from one list, so they
 // never say different things.
 //
 // Pure, no imports, so the unit tests read it under plain Node.
@@ -33,6 +38,19 @@ const NAMED: Record<string, string> = {
   visa_appointment_portal: "Visa appointment portal",
 };
 const ORDER = [PORTAL_LOGIN, "gmail", "university_portal", "visa_appointment_portal"];
+
+/**
+ * The logins Portal credentials always offers, saved or not. This portal's
+ * own is not among them: it is managed — and sent — from Registration &
+ * Portal Access, where its password is actually set. Saving over its copy in
+ * Portal credentials changed the copy and not the password.
+ */
+export const SECTION_PRESETS = ["gmail", "university_portal", "visa_appointment_portal"] as const;
+
+/** Whether a stored login belongs in Portal credentials: every one but this portal's own. */
+export function inCredentialsSection(credentialType: string): boolean {
+  return credentialType !== PORTAL_LOGIN;
+}
 
 /** What a login is called to the student. */
 export function credentialLabel(credentialType: string, university?: string | null): string {
@@ -116,8 +134,11 @@ export function credentialsWhatsapp(input: CredentialsMessageInput): string {
   return parts.join("\n");
 }
 
-export function credentialsEmailSubject(): string {
-  return "Your HMARK login details";
+/** "Your HMARK Student Portal login" when that is all it carries, else what it is. */
+export function credentialsEmailSubject(logins: readonly StudentLogin[] = []): string {
+  const sent = logins.filter(hasSomething);
+  if (sent.length === 1 && sent[0].credentialType === PORTAL_LOGIN) return "Your HMARK Student Portal login";
+  return "Your login details from HMARK Consultants";
 }
 
 /** The email's plain text: the same as the message, without WhatsApp's asterisks. */
