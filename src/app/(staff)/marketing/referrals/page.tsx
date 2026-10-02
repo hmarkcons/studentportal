@@ -53,6 +53,7 @@ export default async function ReferralsPage() {
       .select(
         "id, referrer_name, referral_party_id, incentive_owed, incentive_status, currency, paid_on, payment_method, payment_reference, notes, created_at, lead_id, receipts:payment_receipts(count)"
       )
+      .eq("receipts.is_current", true)
       .order("created_at", { ascending: false }),
   ]);
 

@@ -10,6 +10,7 @@ import { StatCard } from "@/components/ui/StatCard";
 import { Select } from "@/components/ui/Input";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TableFrame } from "@/components/ui/TableFrame";
+import { ReceiptCell, type CellReceipt } from "@/components/PaymentReceipts";
 
 export type FeeStatus = "paid_in_full" | "partially_paid" | "payment_pending" | "withdrawn";
 
@@ -26,6 +27,8 @@ export type FeeRow = {
   outstanding: number;
   installmentsPaid: number;
   installmentsTotal: number;
+  /** The latest invoice's instalments in order, each with its current receipts (0308, 0309). */
+  instalments: FeeInstalment[];
   adminCharge: number;
   adminFeePaid: boolean;
   nextDueDate: string | null;
@@ -33,6 +36,18 @@ export type FeeRow = {
   overdue: boolean;
   status: FeeStatus;
   hasInvoice: boolean;
+};
+
+export type FeeInstalment = {
+  id: string;
+  no: number;
+  amount: number;
+  amountPaid: number;
+  status: string;
+  dueDate: string | null;
+  paidDate: string | null;
+  /** Empty for a viewer who may not handle instalment receipts. */
+  receipts: CellReceipt[];
 };
 
 const STATUS_TONE: Record<FeeStatus, "success" | "warning" | "neutral" | "danger"> = {
@@ -52,12 +67,15 @@ function uniq(values: (string | null)[]): string[] {
   return [...new Set(values.filter((v): v is string => Boolean(v)))].sort();
 }
 
-export function ConsultancyFeeOverview({ rows, canManage }: { rows: FeeRow[]; canManage: boolean }) {
+export function ConsultancyFeeOverview({ rows, canManage, isSuperAdmin = false }: { rows: FeeRow[]; canManage: boolean; isSuperAdmin?: boolean }) {
   const [country, setCountry] = useState("");
   const [intake, setIntake] = useState("");
   const [level, setLevel] = useState("");
   const [counselor, setCounselor] = useState("");
   const [status, setStatus] = useState("");
+  // The row last clicked, kept marked so it is easy to find again across a
+  // table this wide (globals.css, table[data-row-highlight]).
+  const [currentRow, setCurrentRow] = useState<string | null>(null);
 
   const options = useMemo(
     () => ({
@@ -114,6 +132,10 @@ export function ConsultancyFeeOverview({ rows, canManage }: { rows: FeeRow[]; ca
         : { label: "Outstanding", value: "Mixed currencies", tone: "default" };
 
   const anyFilter = Boolean(country || intake || level || counselor || status);
+
+  // One column per instalment, as many as the longest schedule shown has.
+  const instalmentColumns = useMemo(() => Math.max(0, ...filtered.map((r) => r.instalments.length)), [filtered]);
+  const today = new Date().toISOString().slice(0, 10);
 
   return (
     <div className="mb-8">
@@ -176,7 +198,7 @@ export function ConsultancyFeeOverview({ rows, canManage }: { rows: FeeRow[]; ca
         <EmptyState>No registered students match these filters.</EmptyState>
       ) : (
         <TableFrame label="Consultancy fees" className="rounded-lg border border-border" freezeFirstColumn={false}>
-          <table className="w-full text-sm">
+          <table className="w-full text-sm" data-row-highlight>
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase text-muted">
                 <th scope="col" className="w-12 px-3 py-2 text-right font-medium" data-serial>
@@ -190,9 +212,12 @@ export function ConsultancyFeeOverview({ rows, canManage }: { rows: FeeRow[]; ca
                 <Th>Level</Th>
                 <Th>Counselor</Th>
                 <Th right>Total</Th>
+                <Th>Instalments</Th>
+                {Array.from({ length: instalmentColumns }, (_, n) => (
+                  <Th key={n}>Instalment {n + 1}</Th>
+                ))}
                 <Th right>Paid</Th>
                 <Th right>Pending</Th>
-                <Th>Installments</Th>
                 <Th>Admin charge</Th>
                 <Th>Next deadline</Th>
                 <Th>Status</Th>
@@ -200,7 +225,12 @@ export function ConsultancyFeeOverview({ rows, canManage }: { rows: FeeRow[]; ca
             </thead>
             <tbody>
               {filtered.map((r, i) => (
-                <tr key={r.studentId} className="border-b border-border last:border-0">
+                <tr
+                  key={r.studentId}
+                  className="border-b border-border last:border-0"
+                  data-current={currentRow === r.studentId || undefined}
+                  onClick={() => setCurrentRow(r.studentId)}
+                >
                   <td className="w-12 px-3 py-2 text-right text-xs tabular-nums text-muted" data-serial>
                     {i + 1}
                   </td>
@@ -214,6 +244,55 @@ export function ConsultancyFeeOverview({ rows, canManage }: { rows: FeeRow[]; ca
                   <Td muted>{r.level ? LEVEL_LABELS[r.level] ?? r.level : "—"}</Td>
                   <Td muted>{r.counselor ?? "Unassigned"}</Td>
                   <Td right>{r.hasInvoice ? money(r.currency, r.total) : "—"}</Td>
+                  <Td muted>
+                    {r.hasInvoice ? (
+                      <span className="flex flex-col" data-instalment-count>
+                        <span className="text-sm font-medium tabular-nums text-ink">{r.installmentsTotal}</span>
+                        <span className="text-xs">
+                          {r.installmentsPaid} paid
+                          {r.installmentsTotal - r.installmentsPaid > 0 && (
+                            <span className="text-warning"> · {r.installmentsTotal - r.installmentsPaid} left</span>
+                          )}
+                        </span>
+                      </span>
+                    ) : (
+                      "no invoice"
+                    )}
+                  </Td>
+                  {Array.from({ length: instalmentColumns }, (_, n) => {
+                    const inst = r.instalments[n];
+                    if (!inst) return <Td key={n} muted>—</Td>;
+                    const overdue = inst.status !== "paid" && Boolean(inst.dueDate) && inst.dueDate! < today;
+                    return (
+                      <td key={n} className="whitespace-nowrap px-3 py-2 align-top" data-instalment-cell={inst.id}>
+                        <div className="font-mono text-xs text-ink">{money(r.currency, inst.amount)}</div>
+                        <div className="mb-1 text-xs">
+                          {inst.status === "paid" ? (
+                            <span className="text-success">Paid{inst.paidDate ? ` · ${formatDateOnly(inst.paidDate)}` : ""}</span>
+                          ) : inst.status === "partial" ? (
+                            <span className="text-warning">Part paid · {money(r.currency, inst.amountPaid)}</span>
+                          ) : inst.dueDate ? (
+                            <span className={overdue ? "text-danger" : "text-muted"}>
+                              Due {formatDateOnly(inst.dueDate)}
+                              {overdue ? " · overdue" : ""}
+                            </span>
+                          ) : (
+                            <span className="text-muted">No due date</span>
+                          )}
+                        </div>
+                        {canManage && (
+                          <ReceiptCell
+                            kind="installment"
+                            paymentId={inst.id}
+                            receipts={inst.receipts}
+                            canDelete={isSuperAdmin}
+                            title={`Instalment ${inst.no} — ${r.studentName}`}
+                            revalidateTo="/finance/consultancy-fee"
+                          />
+                        )}
+                      </td>
+                    );
+                  })}
                   <Td right>{r.hasInvoice ? money(r.currency, r.paid) : "—"}</Td>
                   <Td right>
                     {r.hasInvoice ? (
@@ -222,18 +301,6 @@ export function ConsultancyFeeOverview({ rows, canManage }: { rows: FeeRow[]; ca
                       </span>
                     ) : (
                       "—"
-                    )}
-                  </Td>
-                  <Td muted>
-                    {r.hasInvoice ? (
-                      <>
-                        {r.installmentsPaid}/{r.installmentsTotal} paid
-                        {r.installmentsTotal - r.installmentsPaid > 0 && (
-                          <span className="text-warning"> · {r.installmentsTotal - r.installmentsPaid} left</span>
-                        )}
-                      </>
-                    ) : (
-                      "no invoice"
                     )}
                   </Td>
                   <Td>

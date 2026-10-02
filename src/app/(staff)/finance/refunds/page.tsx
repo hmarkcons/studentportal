@@ -54,6 +54,7 @@ export default async function RefundsPage() {
     .select(
       "id, reason, amount, currency, status, requested_at, trigger_type, refund_percent, refusal_notice_date, eligibility_status, next_intake_note, next_intake_country_id, next_intake_country:destinations!refund_requests_next_intake_country_id_fkey(country, display_name), student:leads(full_name), receipts:payment_receipts(count)"
     )
+    .eq("receipts.is_current", true)
     .order("requested_at", { ascending: false });
 
   const { data: students } = await supabase.from("students").select("id, full_name").order("full_name");

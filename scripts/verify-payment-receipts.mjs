@@ -8,8 +8,16 @@
 //                commission (Referrals) each have a Receipts button; a Super
 //                Admin uploads a receipt there, sees it listed with their
 //                name, and opens the file itself through its link.
-//   several      a payment takes more than one receipt, and one attached by
-//                mistake is removed — its record and its file.
+//   fee table    on Consultancy Fee, the instalment count and then a column
+//                per instalment come before Paid, each showing its amount,
+//                status and receipt; the rows are coloured. Replace there
+//                puts a new file in the old one's place and keeps the old as
+//                an earlier version, with who replaced it.
+//   several      a payment takes more than one receipt, and counts only the
+//                current ones. A Super Admin deletes any receipt, record and
+//                file; deleting a replacement makes the one it replaced
+//                current again. Anyone else who handles the receipts can
+//                replace but not delete, and is offered no Delete.
 //   status       no upload changes any payment's status.
 //   who          each kind's receipts are open to exactly whoever holds the
 //                permission that marks it paid, as Role Permissions has it
@@ -156,24 +164,101 @@ try {
     ok("...and the button now says so", (await page.locator(r.button).innerText()).trim() === "Receipts (1)");
   }
 
-  // -------------------------------------------------------- several
-  console.log("\n--- several ---");
+  // ------------------------------------------------ consultancy fee table
+  console.log("\n--- consultancy fee table ---");
+  await page.goto(`${BASE}/finance/consultancy-fee`, { waitUntil: "domcontentloaded" });
+  const cell = page.locator(`[data-instalment-cell="${made.installment}"]`);
+  await cell.waitFor({ timeout: 60000 });
+  const headers = (await page.locator("table[data-row-highlight] thead th").allInnerTexts()).map((t) => t.trim().toLowerCase());
+  const at = (h) => headers.indexOf(h);
+  ok("the instalment count, then a column per instalment, come before Paid",
+    at("total") >= 0 && at("instalments") === at("total") + 1 && at("instalment 1") === at("instalments") + 1 && at("paid") > at("instalment 1") &&
+      headers.slice(at("instalment 1"), at("paid")).every((h) => /^instalment \d+$/.test(h)),
+    headers.join(" | "));
+  const feeRow = page.locator("table[data-row-highlight] > tbody > tr", { has: cell });
+  ok("...the count saying how many and how many are paid",
+    (await feeRow.locator("[data-instalment-count]").innerText()).replace(/\s+/g, " ").trim() === "1 0 paid · 1 left",
+    await feeRow.locator("[data-instalment-count]").innerText());
+  ok("...and the instalment's own column its amount, status and receipt",
+    /PKR 1,000\.00/.test(await cell.innerText()) && /Due /.test(await cell.innerText()) &&
+      (await cell.locator("[data-receipt-link]").innerText()).trim() === "zztmp installment slip.pdf",
+    await cell.innerText());
+  ok("...which opens", Boolean((await page.request.get(await cell.locator("[data-receipt-link]").getAttribute("href"))).ok()));
+  await page.locator("table[data-row-highlight] > tbody > tr").first().locator("td").nth(2).click();
+  ok("the table's rows are coloured, and the one clicked stays marked",
+    (await page.locator("table[data-row-highlight] > tbody > tr[data-current]").count()) === 1);
+
+  // Replaced from the cell: the old file stays, as an earlier version.
+  const original = (await admin.from("payment_receipts").select("id").eq("installment_id", made.installment).single()).data?.id;
+  await hydrated(page, `[data-instalment-cell="${made.installment}"] [data-cell-replace]`);
+  await cell.locator("[data-cell-replace]").click();
+  const dialog = page.locator(`[data-receipts-dialog="${made.installment}"]`);
+  const replaceForm = dialog.locator(`[data-replace-form="${original}"]`);
+  await replaceForm.waitFor({ timeout: 30000 });
+  await hydrated(page, `[data-replace-form="${original}"] input[type="file"]`);
+  await replaceForm.locator('input[type="file"]').setInputFiles({ name: "zztmp replacement slip.pdf", mimeType: "application/pdf", buffer: pdf("replacement") });
+  const replaceButton = replaceForm.getByRole("button", { name: "Upload replacement" });
+  await poll(() => replaceButton.isEnabled(), 60);
+  await replaceButton.click();
+  const versions = await poll(async () => {
+    const { data } = await admin.from("payment_receipts").select("id, file_name, is_current, replaces").eq("installment_id", made.installment).order("uploaded_at");
+    return data?.length === 2 ? data : null;
+  }, 60);
+  ok("Replace puts the new file in the old one's place, keeping the old one",
+    versions?.[0].id === original && versions[0].is_current === false && versions[1].file_name === "zztmp replacement slip.pdf" && versions[1].is_current && versions[1].replaces === original,
+    JSON.stringify(versions));
+  await dialog.locator(`[data-receipt-earlier="${original}"]`).waitFor({ timeout: 30000 });
+  ok("...listed beneath it as an earlier version, with who replaced it",
+    /Replaced .+ by zztmp rcptadmin/.test(await dialog.locator(`[data-receipt-earlier="${original}"] [data-receipt-replaced]`).innerText()));
+  await closeDialog(page);
+  await poll(async () => (await cell.locator("[data-receipt-link]").innerText().catch(() => "")).trim() === "zztmp replacement slip.pdf", 30);
+  ok("...and the instalment's column shows the replacement", (await cell.locator("[data-receipt-link]").innerText()).trim() === "zztmp replacement slip.pdf");
+
+  // ------------------------------------------------- several, and deleting
+  console.log("\n--- several, and deleting ---");
   await page.goto(`${BASE}/students/${studentId}?open=invoice`, { waitUntil: "domcontentloaded" });
+  await page.locator(`[data-receipts-button="${made.installment}"]`).waitFor({ timeout: 60000 });
+  ok("a count is of current receipts, not earlier versions", (await page.locator(`[data-receipts-button="${made.installment}"]`).getAttribute("data-receipts-count")) === "1");
   const second = await uploadReceipt(page, made.installment, "zztmp second slip.pdf");
   ok("a payment takes a second receipt beside the first", second.count === 2, String(second.count));
-  const firstPath = (await admin.from("payment_receipts").select("path").eq("installment_id", made.installment).order("uploaded_at").limit(1).single()).data?.path;
-  const first = second.dialog.locator("[data-receipt]").first();
-  await first.getByRole("button", { name: /Remove zztmp installment slip\.pdf/ }).click();
-  await first.getByRole("button", { name: "Remove", exact: true }).click();
+
+  // A Super Admin deletes — any receipt, its record and its file.
+  const secondRow = (await admin.from("payment_receipts").select("id, path").eq("installment_id", made.installment).eq("file_name", "zztmp second slip.pdf").single()).data;
+  page.once("dialog", (d) => d.accept());
+  await second.dialog.getByRole("button", { name: "Delete zztmp second slip.pdf" }).click();
   await poll(async () => (await second.dialog.locator("[data-receipt]").count()) === 1, 30);
-  ok("one attached by mistake is removed from the list", (await second.dialog.locator("[data-receipt]").count()) === 1);
-  const remaining = (await admin.from("payment_receipts").select("file_name").eq("installment_id", made.installment)).data ?? [];
-  ok("...and from the record", remaining.length === 1 && remaining[0].file_name === "zztmp second slip.pdf", JSON.stringify(remaining));
   const folder = `payment-receipts/installment/${made.installment}`;
-  const { data: left } = await admin.storage.from("documents").list(folder);
-  ok("...and its file from storage", Boolean(firstPath) && !(left ?? []).some((o) => `${folder}/${o.name}` === firstPath) && (left ?? []).length === 1,
-    JSON.stringify((left ?? []).map((o) => o.name)));
+  const listed = async () => ((await admin.storage.from("documents").list(folder)).data ?? []).map((o) => `${folder}/${o.name}`);
+  ok("a Super Admin deletes a receipt: its record and its file",
+    !(await admin.from("payment_receipts").select("id").eq("id", secondRow.id).maybeSingle()).data && !(await listed()).includes(secondRow.path));
+  const replacement = versions?.[1];
+  page.once("dialog", (d) => d.accept());
+  await second.dialog.getByRole("button", { name: "Delete zztmp replacement slip.pdf" }).click();
+  const restored = await poll(async () => {
+    const { data } = await admin.from("payment_receipts").select("id, is_current").eq("installment_id", made.installment);
+    return data?.length === 1 ? data[0] : null;
+  }, 30);
+  ok("...and deleting a replacement makes the receipt it replaced current again",
+    Boolean(replacement) && restored?.id === original && restored.is_current === true, JSON.stringify(restored));
+  await second.dialog.locator(`[data-receipt="${original}"]`).waitFor({ timeout: 15000 });
   await closeDialog(page);
+
+  // Anyone else who handles the receipts uploads and replaces, but cannot delete.
+  const asFinance = await apiAs(url, anonKey, finance.email);
+  const { data: canFinance } = await asFinance.rpc("staff_has_permission", { p_key: "finance.invoices.manage" });
+  const originalPath = (await admin.from("payment_receipts").select("path").eq("id", original).single()).data?.path;
+  const { data: financeDeleted } = await asFinance.from("payment_receipts").delete().eq("id", original).select("id");
+  await asFinance.storage.from("documents").remove([originalPath]);
+  ok("someone who handles instalment receipts but is not a Super Admin can delete neither a record nor a file",
+    Boolean(canFinance) && (financeDeleted ?? []).length === 0 &&
+      Boolean((await admin.from("payment_receipts").select("id").eq("id", original).maybeSingle()).data) && (await listed()).includes(originalPath),
+    JSON.stringify({ canFinance, deleted: financeDeleted?.length }));
+  const financePage = await signIn(browser, finance.email);
+  await financePage.goto(`${BASE}/finance/consultancy-fee`, { waitUntil: "domcontentloaded" });
+  const financeCell = financePage.locator(`[data-instalment-cell="${made.installment}"]`);
+  await financeCell.locator("[data-cell-replace]").waitFor({ timeout: 60000 });
+  ok("...and is offered Replace in the table, but no Delete", (await financeCell.locator("[data-cell-delete]").count()) === 0);
+  await financePage.close();
 
   // ---------------------------------------------------------- status
   console.log("\n--- status ---");

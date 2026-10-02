@@ -37,6 +37,7 @@ export default async function StaffCommissionPage() {
     .select(
       "id, amount, currency, status, payment_method, registration_date, receipts:payment_receipts(count), staff_id, student_id, shared_with_staff_id, staff:staff!staff_id(full_name), student:leads(full_name, email, registered_at, registration_status), shared_with:staff!staff_commissions_shared_with_staff_id_fkey(full_name)"
     )
+    .eq("receipts.is_current", true)
     .order("registration_date", { ascending: false });
 
   // Which paid commissions have already been carried forward as a credit —

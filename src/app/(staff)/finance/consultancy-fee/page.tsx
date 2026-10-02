@@ -1,5 +1,7 @@
 import { CircleCheck, Hourglass, TriangleAlert } from "lucide-react";
 import { documentUrls } from "@/lib/storageUrls";
+import { readAllIn } from "@/lib/catalogueReads";
+import type { CellReceipt } from "@/components/PaymentReceipts";
 import { StatCard } from "@/components/ui/StatCard";
 import { computeInvoiceStatus } from "@/lib/invoiceStatus";
 import { computeInvoiceMath, computePaymentProgress, sumLineItems } from "@/lib/invoiceMath";
@@ -65,7 +67,7 @@ export default async function ConsultancyFeePage() {
 
   const invoiceIds = (invoices ?? []).map((i) => i.id);
   const [{ data: installments }, { data: lineItems }, { data: adminCharges }, pdfByPath] = await Promise.all([
-    invoiceIds.length ? supabase.from("invoice_installments").select("*, receipts:payment_receipts(count)").in("invoice_id", invoiceIds) : Promise.resolve({ data: [] }),
+    invoiceIds.length ? supabase.from("invoice_installments").select("*, receipts:payment_receipts(count)").eq("receipts.is_current", true).in("invoice_id", invoiceIds) : Promise.resolve({ data: [] }),
     invoiceIds.length
       ? supabase.from("invoice_line_items").select("id, invoice_id, name, description, amount").in("invoice_id", invoiceIds)
       : Promise.resolve({ data: [] }),
@@ -101,6 +103,33 @@ export default async function ConsultancyFeePage() {
   });
 
   const counselorName = new Map((counselors ?? []).map((c) => [c.id, c.full_name]));
+
+  // Each instalment's current receipts, for its column in the overview — read
+  // only for someone who may handle them, whom RLS would refuse anyway, and
+  // signed in one request.
+  type ReceiptRow = { id: string; installment_id: string; file_name: string; path: string };
+  const instalmentIds = (installments ?? []).map((i) => i.id as string);
+  const currentReceipts =
+    canManage && instalmentIds.length > 0
+      ? await readAllIn(instalmentIds, (chunk, from, to) =>
+          supabase
+            .from("payment_receipts")
+            .select("id, installment_id, file_name, path")
+            .eq("is_current", true)
+            .in("installment_id", chunk)
+            .order("uploaded_at")
+            .order("id")
+            .range(from, to)
+            .returns<ReceiptRow[]>()
+        )
+      : [];
+  const receiptUrls = await documentUrls(supabase, currentReceipts.map((r) => r.path));
+  const receiptsByInstalment = new Map<string, CellReceipt[]>();
+  for (const r of currentReceipts) {
+    const list = receiptsByInstalment.get(r.installment_id) ?? [];
+    list.push({ id: r.id, fileName: r.file_name, url: receiptUrls.get(r.path) ?? null });
+    receiptsByInstalment.set(r.installment_id, list);
+  }
 
   const invoiceByStudent = new Map<string, (typeof rows)[number]>();
   for (const r of rows) if (!invoiceByStudent.has(r.studentId)) invoiceByStudent.set(r.studentId, r);
@@ -148,6 +177,18 @@ export default async function ConsultancyFeePage() {
       outstanding: inv ? progress.outstanding : 0,
       installmentsPaid: progress.installmentsPaid,
       installmentsTotal: progress.installmentsTotal,
+      instalments: [...insts]
+        .sort((a, b) => a.installment_no - b.installment_no)
+        .map((i) => ({
+          id: i.id as string,
+          no: i.installment_no as number,
+          amount: Number(i.amount ?? 0),
+          amountPaid: Number(i.amount_paid ?? 0),
+          status: i.status as string,
+          dueDate: (i.due_date as string | null) ?? null,
+          paidDate: (i.paid_date as string | null) ?? null,
+          receipts: receiptsByInstalment.get(i.id as string) ?? [],
+        })),
       adminCharge,
       adminFeePaid,
       nextDueDate: progress.nextDueDate,
@@ -170,7 +211,7 @@ export default async function ConsultancyFeePage() {
         Consultancy fee and administrative fee payments across every registered student — installments, payment mode, status, and invoicing.
       </p>
 
-      <ConsultancyFeeOverview rows={feeRows} canManage={canManage} />
+      <ConsultancyFeeOverview rows={feeRows} canManage={canManage} isSuperAdmin={isSuperAdmin} />
 
       {/* Per-invoice management kept behind a disclosure: the overview above is
           what this page is for, and the invoice-by-invoice controls are only

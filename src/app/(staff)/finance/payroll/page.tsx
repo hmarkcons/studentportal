@@ -104,6 +104,7 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
       const { data: existingPayroll } = await supabase
         .from("staff_payroll")
         .select("*, receipts:payment_receipts(count)")
+        .eq("receipts.is_current", true)
         .eq("staff_id", staffId)
         .eq("payroll_month", monthStart)
         .maybeSingle();
@@ -116,6 +117,7 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
         .select(
           "id, amount, currency, status, registration_date, receipts:payment_receipts(count), student:leads(full_name), shared_with:staff!staff_commissions_shared_with_staff_id_fkey(full_name)"
         )
+        .eq("receipts.is_current", true)
         .eq("staff_id", staffId)
         .gte("registration_date", monthStart)
         .lt("registration_date", nextMonthStart)
