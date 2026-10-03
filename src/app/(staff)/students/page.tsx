@@ -44,32 +44,75 @@ function initials(name: string) {
     .join("");
 }
 
-export default async function StudentsPage() {
-  const supabase = await createClient();
+/** A thousand students to a page, read by the server one page at a time. */
+const PAGE_SIZE = 1000;
 
+const STUDENT_SELECT =
+  "id, student_code, student_seq, full_name, email, contact_number, country_of_interest, registered_at, registration_status, portal_active, intake, assigned_counselor:staff!assigned_counselor_id(full_name), processing_officer:staff!processing_officer_id(full_name)";
+
+/** What the search box looks through on the student; counsellors, officers and statuses are matched besides. */
+const SEARCHED_COLUMNS = ["full_name", "email", "contact_number", "student_code", "country_of_interest", "intake"];
+
+type OptionRow = {
+  country_of_interest: string | null;
+  intake: string | null;
+  registered_at: string;
+  student_code: string | null;
+  assigned_counselor_id: string | null;
+  processing_officer_id: string | null;
+  assigned_counselor: { full_name: string } | { full_name: string }[] | null;
+  processing_officer: { full_name: string } | { full_name: string }[] | null;
+};
+
+/** The first instant of a month, UTC — the clock the Month column is read on. */
+const monthStart = (year: number, monthIndex: number) => new Date(Date.UTC(year, monthIndex, 1)).toISOString();
+
+export default async function StudentsPage(props: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  // Server-side paging, as on the leads list: only the page shown is read and
+  // sent, and the search, the filters and the page are in the address
+  // (?q=, ?f_<key>=, ?page=), answered by the database.
+  const params = await props.searchParams;
+  const param = (k: string) => {
+    const v = params[k];
+    return (Array.isArray(v) ? v[0] : (v ?? "")).trim();
+  };
+  const page = Math.max(1, Math.floor(Number(param("page")) || 1));
+  const search = param("q").slice(0, 100);
+  const filters = {
+    regStatus: param("f_regStatus"),
+    idStatus: param("f_idStatus"),
+    portal: param("f_portal"),
+    country: param("f_country"),
+    counselor: param("f_counselor"),
+    officer: param("f_officer"),
+    intake: param("f_intake"),
+    month: param("f_month"),
+    year: param("f_year"),
+  };
+  // The search as an ilike pattern, without what PostgREST's filter syntax
+  // would read as structure — commas, brackets, quotes — or as wildcards.
+  const term = search.replace(/[%_,()*\\"']/g, " ").replace(/\s+/g, " ").trim();
+  const like = `%${term}%`;
+
+  const supabase = await createClient();
   const user = await getCurrentUser();
-  // Both at once: the list does not wait on the viewer's own row.
-  // Every student, a thousand at a time — PostgREST stops at 1000 rows to a
-  // request without saying so — and their backup countries beside them, by
-  // what RLS lets this viewer see rather than by a list of ids too long for a
-  // URL once there are thousands.
+  // First, what does not depend on the page, beside each other: the filter
+  // choices and the total from every student — a few columns, a thousand rows
+  // at a time, since PostgREST stops at 1000 to a request without saying so —
+  // and the backup countries, by what RLS lets this viewer see.
   type BackupRow = { lead_id: string; destination: { display_name: string } | { display_name: string }[] | null };
-  const [{ data: staffRow }, { data: students, error }, backupRows] = await Promise.all([
+  const [{ data: staffRow }, optionRows, backupRows] = await Promise.all([
     supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle(),
-    readAll<StudentRow>((from, to) =>
+    readAll<OptionRow>((from, to) =>
       supabase
         .from("students")
         .select(
-          "id, student_code, student_seq, full_name, email, contact_number, country_of_interest, registered_at, registration_status, portal_active, intake, assigned_counselor:staff!assigned_counselor_id(full_name), processing_officer:staff!processing_officer_id(full_name)"
+          "country_of_interest, intake, registered_at, student_code, assigned_counselor_id, processing_officer_id, assigned_counselor:staff!assigned_counselor_id(full_name), processing_officer:staff!processing_officer_id(full_name)"
         )
-        .order("registered_at", { ascending: false })
         .order("id")
         .range(from, to)
-        .returns<StudentRow[]>()
-    ).then(
-      (rows) => ({ data: rows, error: null }),
-      (e: Error) => ({ data: null, error: { message: e.message } })
-    ),
+        .returns<OptionRow[]>()
+    ).catch(() => [] as OptionRow[]),
     readAll<BackupRow>((from, to) =>
       supabase
         .from("lead_destinations")
@@ -83,6 +126,83 @@ export default async function StudentsPage() {
   ]);
   const canDelete = hasRole(staffRow, "super_admin") || hasRole(staffRow, "processing");
 
+  // The filter choices, from every student rather than the page shown.
+  const counselorIdByName = new Map<string, string>();
+  const officerIdByName = new Map<string, string>();
+  for (const r of optionRows) {
+    const c = one(r.assigned_counselor)?.full_name;
+    if (c && r.assigned_counselor_id) counselorIdByName.set(c, r.assigned_counselor_id);
+    const o = one(r.processing_officer)?.full_name;
+    if (o && r.processing_officer_id) officerIdByName.set(o, r.processing_officer_id);
+  }
+  const countryOptions = Array.from(new Set(optionRows.map((r) => r.country_of_interest).filter(Boolean))).sort() as string[];
+  const counselorOptions = Array.from(counselorIdByName.keys()).sort();
+  // "none" is a real choice here: it is the one people will filter for.
+  const officerOptions = [...Array.from(officerIdByName.keys()).sort(), ...(optionRows.some((r) => !r.processing_officer_id) ? ["none"] : [])];
+  const intakeOptions = Array.from(new Set(optionRows.map((r) => r.intake).filter(Boolean))).sort() as string[];
+  const registered = optionRows.map((r) => new Date(r.registered_at));
+  const monthOptions = MONTH_NAMES.filter((_, i) => registered.some((d) => d.getUTCMonth() === i));
+  const yearOptions = Array.from(new Set(registered.map((d) => String(d.getUTCFullYear())))).sort((a, b) => Number(b) - Number(a));
+  const idStatusOf = (r: { student_code: string | null; intake: string | null }) => (r.student_code ? "issued" : r.intake ? "no country" : "no intake");
+  const idStatusOptions = ["issued", "no intake", "no country"].filter((o) => optionRows.some((r) => idStatusOf(r) === o));
+  const totalStudents = optionRows.length;
+
+  // Then the page itself: searched and filtered by the database, counted in all.
+  let query = supabase.from("students").select(STUDENT_SELECT, { count: "exact" });
+  if (filters.regStatus) query = query.eq("registration_status", filters.regStatus);
+  if (filters.idStatus === "issued") query = query.not("student_code", "is", null);
+  if (filters.idStatus === "no country") query = query.is("student_code", null).not("intake", "is", null);
+  if (filters.idStatus === "no intake") query = query.is("student_code", null).is("intake", null);
+  if (filters.portal) query = query.eq("portal_active", filters.portal === "active");
+  if (filters.country) query = query.eq("country_of_interest", filters.country);
+  if (filters.counselor) query = query.eq("assigned_counselor_id", counselorIdByName.get(filters.counselor) ?? "00000000-0000-0000-0000-000000000000");
+  if (filters.officer === "none") query = query.is("processing_officer_id", null);
+  else if (filters.officer) query = query.eq("processing_officer_id", officerIdByName.get(filters.officer) ?? "00000000-0000-0000-0000-000000000000");
+  if (filters.intake) query = query.eq("intake", filters.intake);
+
+  // Each condition that is itself an either/or, joined as one: PostgREST takes
+  // one "or" to a request, so two are nested inside an "and".
+  const eitherOr: string[] = [];
+  const monthIndex = MONTH_NAMES.indexOf(filters.month);
+  const year = Number(filters.year) || null;
+  if (year && monthIndex >= 0) {
+    query = query.gte("registered_at", monthStart(year, monthIndex)).lt("registered_at", monthStart(year, monthIndex + 1));
+  } else if (year) {
+    query = query.gte("registered_at", monthStart(year, 0)).lt("registered_at", monthStart(year + 1, 0));
+  } else if (monthIndex >= 0) {
+    // A month in any year: that month in each year students registered in.
+    const years = yearOptions.map(Number);
+    eitherOr.push(
+      years.length
+        ? years.map((y) => `and(registered_at.gte.${monthStart(y, monthIndex)},registered_at.lt.${monthStart(y, monthIndex + 1)})`).join(",")
+        : "id.is.null"
+    );
+  }
+  if (term) {
+    const lower = term.toLowerCase();
+    const ors = SEARCHED_COLUMNS.map((c) => `${c}.ilike."${like}"`);
+    const byName = (map: Map<string, string>, column: string) => {
+      const ids = Array.from(map.entries())
+        .filter(([name]) => name.toLowerCase().includes(lower))
+        .map(([, id]) => id);
+      if (ids.length) ors.push(`${column}.in.(${ids.join(",")})`);
+    };
+    byName(counselorIdByName, "assigned_counselor_id");
+    byName(officerIdByName, "processing_officer_id");
+    const statuses = ["registered", "withdrawn", "ghost"].filter((st) => st.includes(lower));
+    if (statuses.length) ors.push(`registration_status.in.(${statuses.join(",")})`);
+    eitherOr.push(ors.join(","));
+  }
+  if (eitherOr.length === 1) query = query.or(eitherOr[0]);
+  else if (eitherOr.length > 1) query = query.or(`and(${eitherOr.map((g) => `or(${g})`).join(",")})`);
+
+  const { data: students, error, count } = await query
+    .order("registered_at", { ascending: false })
+    .order("id")
+    .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1)
+    .returns<StudentRow[]>();
+  const matching = count ?? students?.length ?? 0;
+
   const backupNamesByLead = new Map<string, string[]>();
   for (const row of backupRows ?? []) {
     const dest = one(row.destination);
@@ -91,6 +211,8 @@ export default async function StudentsPage() {
     list.push(dest.display_name);
     backupNamesByLead.set(row.lead_id, list);
   }
+  // By name, so a student's backups read the same way every time.
+  for (const list of backupNamesByLead.values()) list.sort((x, y) => x.localeCompare(y));
 
   const columns = [
     { key: "month", header: "Month" },
@@ -113,8 +235,8 @@ export default async function StudentsPage() {
 
   const rows = (students ?? []).map((r) => {
     const registeredDate = new Date(r.registered_at);
-    const month = MONTH_NAMES[registeredDate.getMonth()];
-    const year = String(registeredDate.getFullYear());
+    const month = MONTH_NAMES[registeredDate.getUTCMonth()];
+    const year = String(registeredDate.getUTCFullYear());
     const monthYearLabel = registeredDate.toLocaleString("en-US", { month: "short", year: "numeric" });
     const backups = backupNamesByLead.get(r.id) ?? [];
     // A long value is cut short on its line and opens whole in a pop-up.
@@ -210,25 +332,13 @@ export default async function StudentsPage() {
     };
   });
 
-  const countryOptions = Array.from(new Set((students ?? []).map((r) => r.country_of_interest).filter(Boolean))).sort() as string[];
-  const counselorOptions = Array.from(
-    new Set((students ?? []).map((r) => one(r.assigned_counselor)?.full_name).filter(Boolean))
-  ).sort() as string[];
-  // "none" is a real choice here: it is the one people will filter for.
-  const officerOptions = [
-    ...Array.from(new Set((students ?? []).map((r) => one(r.processing_officer)?.full_name).filter(Boolean))).sort(),
-    ...((students ?? []).some((r) => !one(r.processing_officer)) ? ["none"] : []),
-  ] as string[];
-  const intakeOptions = Array.from(new Set((students ?? []).map((r) => r.intake).filter(Boolean))).sort() as string[];
-  const monthOptions = MONTH_NAMES.filter((m) => rows.some((r) => r.csv.month === m));
-  const yearOptions = Array.from(new Set(rows.map((r) => r.csv.year))).sort((a, b) => Number(b) - Number(a));
 
   return (
     <div className="w-full">
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-ink">Registered Students</h2>
-          <p className="text-sm text-muted">{students?.length ?? 0} students</p>
+          <p className="text-sm text-muted">{totalStudents} students</p>
         </div>
         <Link prefetch={false} href="/students/new" className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink">
           + Register student manually
@@ -252,23 +362,14 @@ export default async function StudentsPage() {
             searchPlaceholder="Search name, contact…"
             oneLine
             minTableWidthClassName="min-w-[640px] lg:min-w-[1250px]"
-            pageSize={1000}
+            pageSize={PAGE_SIZE}
+            server={{ page, total: matching, search, filters }}
             filters={[
               { key: "regStatus", label: "Registration", options: ["registered", "withdrawn", "ghost"] },
               // Only offered once there is something to find. "no intake" is
               // a worklist: every one of those students is shut out of the
               // portal until somebody acts on it.
-              ...(rows.some((r) => r.csv.idStatus !== "issued")
-                ? [
-                    {
-                      key: "idStatus",
-                      label: "Student ID",
-                      options: ["issued", "no intake", "no country"].filter((o) =>
-                        rows.some((r) => r.csv.idStatus === o)
-                      ),
-                    },
-                  ]
-                : []),
+              ...(idStatusOptions.some((o) => o !== "issued") ? [{ key: "idStatus", label: "Student ID", options: idStatusOptions }] : []),
               { key: "portal", label: "Portal", options: ["active", "inactive"] },
               { key: "country", label: "Country", options: countryOptions },
               { key: "counselor", label: "Counselor", options: counselorOptions },

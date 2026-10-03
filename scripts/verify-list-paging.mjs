@@ -55,6 +55,35 @@ try {
       ok("Next shows the next thousand", /Showing 1001–\d+ of /.test(await top.innerText()), await top.innerText());
     }
   }
+  // ------------------------------------- searched and filtered by the server
+  console.log("\n--- students: search and filters ---");
+  const { data: sample } = await admin
+    .from("students")
+    .select("id, full_name, student_code, registered_at, registration_status")
+    .not("student_code", "is", null)
+    .order("registered_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (sample) {
+    const rowsAt = async (query) => {
+      await page.goto(`${BASE}/students${query}`, { waitUntil: "domcontentloaded" });
+      await page.locator("table").first().waitFor({ timeout: 120000 });
+      return page.locator("table tbody tr").evaluateAll((trs) => trs.map((tr) => tr.textContent ?? ""));
+    };
+    const byCode = await rowsAt(`?q=${encodeURIComponent(sample.student_code)}`);
+    ok("a search by Student ID finds that student, by the server", byCode.length >= 1 && byCode.every((t) => t.includes(sample.student_code)), `${byCode.length} rows`);
+    const when = new Date(sample.registered_at);
+    const monthName = when.toLocaleString("en-US", { month: "long", timeZone: "UTC" });
+    const inMonth = await rowsAt(`?f_month=${monthName}&f_year=${when.getUTCFullYear()}`);
+    const start = new Date(Date.UTC(when.getUTCFullYear(), when.getUTCMonth(), 1)).toISOString();
+    const end = new Date(Date.UTC(when.getUTCFullYear(), when.getUTCMonth() + 1, 1)).toISOString();
+    const { count: monthCount } = await admin.from("students").select("id", { count: "exact", head: true }).gte("registered_at", start).lt("registered_at", end);
+    ok("the month and year filters hold that month's students, all of them", inMonth.length === monthCount && inMonth.some((t) => t.includes(sample.full_name)),
+      `${inMonth.length} shown, ${monthCount} on file`);
+    const { count: statusCount } = await admin.from("students").select("id", { count: "exact", head: true }).eq("registration_status", sample.registration_status);
+    const byStatus = await rowsAt(`?f_regStatus=${sample.registration_status}`);
+    ok("the registration filter holds every student with that status", byStatus.length === Math.min(1000, statusCount ?? 0), `${byStatus.length} shown, ${statusCount} on file`);
+  }
 } catch (e) {
   ok(`the check itself stopped: ${e?.stack ?? e}`, false);
 } finally {
