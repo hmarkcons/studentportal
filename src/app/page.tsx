@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { BrandLogo } from "@/components/BrandLogo";
 import { createClient } from "@/lib/supabase/server";
 import { SignOutButton } from "@/components/SignOutButton";
 import { CalendarClock, FileSignature, type LucideIcon } from "lucide-react";
@@ -19,8 +20,9 @@ function StudentWaiting({ icon: Icon, title, children }: { icon: LucideIcon; tit
     >
       <div className="relative w-full max-w-md overflow-hidden rounded-3xl border border-border bg-card p-8 text-center shadow-[var(--lift-hover)]">
         <span aria-hidden className="bg-hero absolute inset-x-0 top-0 h-1.5" />
-        {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset */}
-        <img src="/hmark-logo.png" alt="HMARK Consultants" className="mx-auto h-10 w-auto" />
+        <div className="flex justify-center">
+          <BrandLogo surface="page" imgClassName="h-10 w-auto" />
+        </div>
         <span aria-hidden className="bg-hero mx-auto mt-6 flex h-16 w-16 items-center justify-center rounded-2xl text-white shadow-lg shadow-primary/25">
           <Icon className="h-8 w-8" strokeWidth={1.9} />
         </span>

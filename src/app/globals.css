@@ -1114,3 +1114,17 @@ table[data-row-highlight] > tbody > tr > td {
 table[data-row-highlight] > tbody > tr[data-current] > td:first-child {
   box-shadow: inset 4px 0 0 var(--primary);
 }
+
+/* The HMARK logo (BrandLogo): transparent, and lettered light on a dark
+   surface — the sidebar in the dark and semi-dark themes, a page in dark. */
+[data-brand-logo] .brand-logo-on-dark {
+  display: none;
+}
+:root[data-theme="dark"] [data-brand-logo] .brand-logo-on-light,
+:root[data-theme="semi-dark"] [data-brand-logo="sidebar"] .brand-logo-on-light {
+  display: none;
+}
+:root[data-theme="dark"] [data-brand-logo] .brand-logo-on-dark,
+:root[data-theme="semi-dark"] [data-brand-logo="sidebar"] .brand-logo-on-dark {
+  display: block;
+}
