@@ -187,6 +187,39 @@ export function DataTable({
   const showToolbar = exportFilename || exportHref || searchable || filters.length > 0;
   const frozenKey = freezeColumn ?? columns[0]?.key;
 
+  const pager = (where: "top" | "bottom") =>
+    pageSize ? (
+      <div
+        className={`flex items-center justify-between bg-bg px-3 py-2 text-xs text-muted ${where === "top" ? "border-b" : "border-t"} border-border`}
+        data-pager={where}
+      >
+        <span>
+          Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, visibleRows.length)} of {visibleRows.length}
+        </span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={currentPage <= 1}
+            className="rounded-md border border-border px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Previous
+          </button>
+          <span>
+            Page {currentPage} of {pageCount}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+            disabled={currentPage >= pageCount}
+            className="rounded-md border border-border px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    ) : null;
+
   return (
     // The rounded border is the card; the table scrolls in a window inside it
     // (TableFrame), with the search, filters and pager outside the window so
@@ -237,6 +270,9 @@ export function DataTable({
           )}
         </div>
       )}
+      {/* Above the table as well as below it: a page can be a thousand rows
+          long, and nobody should scroll past all of them to reach Next. */}
+      {pageSize && pageCount > 1 && pager("top")}
       <TableFrame label={label ?? exportFilename?.replace(/[-_]/g, " ") ?? "Table"} freezeFirstColumn={false}>
         <table className={`w-full ${minTableWidthClassName} text-sm`} data-row-highlight={rowHighlight || undefined}>
           <thead>
@@ -319,32 +355,7 @@ export function DataTable({
           </tbody>
         </table>
       </TableFrame>
-      {pageSize && pageCount > 1 && (
-        <div className="flex items-center justify-between border-t border-border bg-bg px-3 py-2 text-xs text-muted">
-          <span>
-            Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, visibleRows.length)} of {visibleRows.length}
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage <= 1}
-              className="rounded-md border border-border px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Previous
-            </button>
-            <span>
-              Page {currentPage} of {pageCount}
-            </span>
-            <button
-              onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-              disabled={currentPage >= pageCount}
-              className="rounded-md border border-border px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      )}
+      {pageSize && pageCount > 1 && pager("bottom")}
     </div>
   );
 }

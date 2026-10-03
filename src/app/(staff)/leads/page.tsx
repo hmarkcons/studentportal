@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { readAll } from "@/lib/catalogueReads";
 import { createClient } from "@/lib/supabase/server";
 import { formatDateOnly } from "@/lib/formatDate";
 import { DataTable } from "@/components/ui/DataTable";
@@ -68,39 +69,53 @@ export default async function LeadsPage() {
   const supabase = await createClient();
   // Two waves where there were five: the list with what needs nothing, then
   // the two things that need the list.
-  const [canDelete, { data: leads, error }, counselors, { staff }, { data: savedOrder }] = await Promise.all([
+  // Every lead, a thousand at a time: PostgREST returns at most 1000 rows to
+  // one request and says nothing about the rest, which is how a list of 2,803
+  // showed 1,000. The follow-ups and call logs are read the same way, beside
+  // it rather than after it — by the leads RLS lets this viewer see, not by a
+  // list of ids, which at this size would not fit in a URL.
+  const [canDelete, { data: leads, error }, counselors, { staff }, { data: savedOrder }, followUps, callLogs] = await Promise.all([
     hasPermission("leads.delete"),
-    supabase
-      .from("leads")
-      .select(
-        "id, full_name, contact_number, email, city, country_of_interest, current_qualification, level_applying_for, course_of_interest, platform_source, status, date_of_inquiry, assigned_counselor_id, assigned_counselor:staff!assigned_counselor_id(full_name), current_remark:lead_remark_current(body, updated_at, editor:staff!lead_remark_current_updated_by_fkey(full_name))"
-      )
-      .order("date_of_inquiry", { ascending: false })
-      .returns<LeadRow[]>(),
+    readAll<LeadRow>((from, to) =>
+      supabase
+        .from("leads")
+        .select(
+          "id, full_name, contact_number, email, city, country_of_interest, current_qualification, level_applying_for, course_of_interest, platform_source, status, date_of_inquiry, assigned_counselor_id, assigned_counselor:staff!assigned_counselor_id(full_name), current_remark:lead_remark_current(body, updated_at, editor:staff!lead_remark_current_updated_by_fkey(full_name))"
+        )
+        .order("date_of_inquiry", { ascending: false })
+        .order("id")
+        .range(from, to)
+        .returns<LeadRow[]>()
+    ).then(
+      (rows) => ({ data: rows, error: null }),
+      (e: Error) => ({ data: null, error: { message: e.message } })
+    ),
     getCachedCounselors(),
     getStaffSession(),
     // The order a Super Admin arranged the columns in (0313), for everyone.
     supabase.from("list_column_orders").select("column_keys").eq("list_key", "leads").maybeSingle(),
-  ]);
-  const canArrange = hasRole(staff, "super_admin");
-
-  const leadIds = (leads ?? []).map((r) => r.id);
-
-  const [{ data: followUps }, { data: callLogs }] = await Promise.all([
     // Powers the Follow-up column's "View (N)" count — every follow_up remark
     // ever logged for the lead (see addLeadFollowUpRemark), resolved or not.
     // The Calendar page reads the same rows directly, so adding one here
     // surfaces it there automatically.
-    leadIds.length > 0
-      ? supabase.from("reminders").select("student_id").eq("type", "follow_up").in("student_id", leadIds)
-      : Promise.resolve({ data: [] as { student_id: string }[] }),
+    readAll<{ student_id: string }>((from, to) =>
+      supabase.from("reminders").select("student_id").eq("type", "follow_up").order("id").range(from, to).returns<{ student_id: string }[]>()
+    ).catch(() => [] as { student_id: string }[]),
     // Powers the status button's hover tooltip — the most recent call-log
-    // remark per lead (see update_lead_status). Ordered newest-first so the
-    // first row seen per lead_id is already the latest one.
-    leadIds.length > 0
-      ? supabase.from("lead_call_logs").select("lead_id, remark").in("lead_id", leadIds).order("created_at", { ascending: false })
-      : Promise.resolve({ data: [] as { lead_id: string; remark: string }[] }),
+    // remark per lead (see update_lead_status), newest first so the first row
+    // seen per lead is already the latest one.
+    readAll<{ lead_id: string; remark: string }>((from, to) =>
+      supabase
+        .from("lead_call_logs")
+        .select("lead_id, remark")
+        .order("created_at", { ascending: false })
+        .order("id")
+        .range(from, to)
+        .returns<{ lead_id: string; remark: string }[]>()
+    ).catch(() => [] as { lead_id: string; remark: string }[]),
   ]);
+  const canArrange = hasRole(staff, "super_admin");
+
   const followUpCountByLead = new Map<string, number>();
   for (const f of followUps ?? []) {
     followUpCountByLead.set(f.student_id, (followUpCountByLead.get(f.student_id) ?? 0) + 1);
@@ -254,7 +269,7 @@ export default async function LeadsPage() {
             searchPlaceholder="Search name, contact, course, remarks…"
             oneLine
             minTableWidthClassName="min-w-[1500px]"
-            pageSize={25}
+            pageSize={1000}
             filters={[
               { key: "status", label: "Status", options: Object.values(LEAD_STATUS_LABELS) },
               { key: "country", label: "Country", options: countryOptions },

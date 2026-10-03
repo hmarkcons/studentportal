@@ -1,4 +1,5 @@
 import { hasRole } from "@/lib/auth/roles";
+import { readAll } from "@/lib/catalogueReads";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { DataTable } from "@/components/ui/DataTable";
@@ -48,27 +49,40 @@ export default async function StudentsPage() {
 
   const user = await getCurrentUser();
   // Both at once: the list does not wait on the viewer's own row.
-  const [{ data: staffRow }, { data: students, error }] = await Promise.all([
+  // Every student, a thousand at a time — PostgREST stops at 1000 rows to a
+  // request without saying so — and their backup countries beside them, by
+  // what RLS lets this viewer see rather than by a list of ids too long for a
+  // URL once there are thousands.
+  type BackupRow = { lead_id: string; destination: { display_name: string } | { display_name: string }[] | null };
+  const [{ data: staffRow }, { data: students, error }, backupRows] = await Promise.all([
     supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle(),
-    supabase
-      .from("students")
-      .select(
-        "id, student_code, student_seq, full_name, email, contact_number, country_of_interest, registered_at, registration_status, portal_active, intake, assigned_counselor:staff!assigned_counselor_id(full_name), processing_officer:staff!processing_officer_id(full_name)"
-      )
-      .order("registered_at", { ascending: false })
-      .returns<StudentRow[]>(),
+    readAll<StudentRow>((from, to) =>
+      supabase
+        .from("students")
+        .select(
+          "id, student_code, student_seq, full_name, email, contact_number, country_of_interest, registered_at, registration_status, portal_active, intake, assigned_counselor:staff!assigned_counselor_id(full_name), processing_officer:staff!processing_officer_id(full_name)"
+        )
+        .order("registered_at", { ascending: false })
+        .order("id")
+        .range(from, to)
+        .returns<StudentRow[]>()
+    ).then(
+      (rows) => ({ data: rows, error: null }),
+      (e: Error) => ({ data: null, error: { message: e.message } })
+    ),
+    readAll<BackupRow>((from, to) =>
+      supabase
+        .from("lead_destinations")
+        .select("lead_id, destination:destinations(display_name)")
+        .eq("is_backup", true)
+        .order("lead_id")
+        .order("destination_id")
+        .range(from, to)
+        .returns<BackupRow[]>()
+    ).catch(() => [] as BackupRow[]),
   ]);
   const canDelete = hasRole(staffRow, "super_admin") || hasRole(staffRow, "processing");
 
-  const studentIds = (students ?? []).map((r) => r.id);
-  const { data: backupRows } =
-    studentIds.length > 0
-      ? await supabase
-          .from("lead_destinations")
-          .select("lead_id, destination:destinations(display_name)")
-          .eq("is_backup", true)
-          .in("lead_id", studentIds)
-      : { data: [] as { lead_id: string; destination: { display_name: string } | { display_name: string }[] | null }[] };
   const backupNamesByLead = new Map<string, string[]>();
   for (const row of backupRows ?? []) {
     const dest = one(row.destination);
@@ -238,7 +252,7 @@ export default async function StudentsPage() {
             searchPlaceholder="Search name, contact…"
             oneLine
             minTableWidthClassName="min-w-[640px] lg:min-w-[1250px]"
-            pageSize={25}
+            pageSize={1000}
             filters={[
               { key: "regStatus", label: "Registration", options: ["registered", "withdrawn", "ghost"] },
               // Only offered once there is something to find. "no intake" is
