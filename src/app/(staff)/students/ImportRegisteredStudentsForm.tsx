@@ -4,10 +4,14 @@ import { useActionState, useState } from "react";
 import { importRegisteredStudents } from "@/lib/actions/leads";
 import { Button } from "@/components/ui/Button";
 import { FileField } from "@/components/FileField";
+import { ImportPreview } from "@/components/ImportPreview";
 
 export function ImportRegisteredStudentsForm() {
   const [state, formAction, pending] = useActionState(importRegisteredStudents, undefined);
   const [ready, setReady] = useState(false);
+  // Which button was pressed, so only that one spins.
+  const [intent, setIntent] = useState<"preview" | "import">("import");
+  const previewed = state && "preview" in state && state.preview ? state : null;
 
   return (
     <details className="mt-3 rounded-md border border-border p-3">
@@ -21,7 +25,27 @@ export function ImportRegisteredStudentsForm() {
           inputClassName="text-sm"
           onChange={(s) => setReady(Boolean(s.file))}
         />
-        <Button type="submit" variant="primary" pending={pending} disabled={!ready}>
+        {/* Preview runs the same import and writes nothing (it says who would be registered, and who not and why). */}
+        <Button
+          type="submit"
+          name="intent"
+          value="preview"
+          pending={pending && intent === "preview"}
+          disabled={!ready || pending}
+          onClick={() => setIntent("preview")}
+          data-import-preview-button
+        >
+          Preview
+        </Button>
+        <Button
+          type="submit"
+          name="intent"
+          value="import"
+          variant="primary"
+          pending={pending && intent === "import"}
+          disabled={!ready || pending}
+          onClick={() => setIntent("import")}
+        >
           Import
         </Button>
         {/* A plain link, not the CSV sample button the other imports use: the
@@ -62,7 +86,18 @@ export function ImportRegisteredStudentsForm() {
 
       {state?.error && <p className="mt-2 text-xs text-danger">{state.error}</p>}
 
-      {state?.success && (
+      {previewed && (
+        <ImportPreview
+          rows={previewed.rows}
+          notes={[
+            ...(previewed.exampleRows ? ["The template's example row is ignored."] : []),
+            ...(previewed.unknownCounselor ?? []).map((c) => `Counsellor not found, so imported unassigned — ${c}`),
+            ...(previewed.ambiguousCounselor ?? []).map((c) => `More than one active counsellor is called ${c}, so imported unassigned.`),
+          ]}
+        />
+      )}
+
+      {state?.success && !previewed && (
         <div className="mt-2 flex flex-col gap-1 text-xs">
           <p className="text-success">
             Imported {state.count} student{state.count === 1 ? "" : "s"}

@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { importLeads } from "@/lib/actions/leads";
 import { Button } from "@/components/ui/Button";
 import { FileField } from "@/components/FileField";
+import { ImportPreview } from "@/components/ImportPreview";
 import { DEFAULT_IMPORT_COUNSELOR } from "@/lib/leadSheet";
 
 /**
@@ -15,14 +16,38 @@ import { DEFAULT_IMPORT_COUNSELOR } from "@/lib/leadSheet";
 export function ImportLeadsForm() {
   const [state, formAction, pending] = useActionState(importLeads, undefined);
   const [ready, setReady] = useState(false);
-  const done = state && "success" in state ? state : null;
+  // Which button was pressed, so only that one spins.
+  const [intent, setIntent] = useState<"preview" | "import">("import");
+  const previewed = state && "success" in state && state.preview ? state : null;
+  const done = state && "success" in state && !state.preview ? state : null;
 
   return (
     <details className="mt-3 rounded-md border border-border p-3">
       <summary className="cursor-pointer text-sm font-medium text-ink">Import leads from Excel</summary>
       <form action={formAction} className="mt-3 flex flex-wrap items-end gap-2">
         <FileField accept=".xlsx,.csv" required hint="Excel or CSV" inputClassName="text-sm" onChange={(s) => setReady(Boolean(s.file))} />
-        <Button type="submit" variant="primary" pending={pending} disabled={!ready} status={{ state, label: "Imported." }}>
+        {/* Preview runs the same import and writes nothing (it says what each row would do). */}
+        <Button
+          type="submit"
+          name="intent"
+          value="preview"
+          pending={pending && intent === "preview"}
+          disabled={!ready || pending}
+          onClick={() => setIntent("preview")}
+          data-import-preview-button
+        >
+          Preview
+        </Button>
+        <Button
+          type="submit"
+          name="intent"
+          value="import"
+          variant="primary"
+          pending={pending && intent === "import"}
+          disabled={!ready || pending}
+          onClick={() => setIntent("import")}
+          status={{ state: done ? state : state && "error" in state ? state : undefined, label: "Imported." }}
+        >
           Import
         </Button>
         <a
@@ -41,6 +66,7 @@ export function ImportLeadsForm() {
         follow-up is added.
       </p>
       {state && "error" in state && <p className="mt-2 text-xs text-danger">{state.error}</p>}
+      {previewed && <ImportPreview rows={previewed.rows} notes={previewed.notes} />}
       {done && (
         <div className="mt-2 text-xs text-ink" data-import-summary>
           <p className="font-medium">

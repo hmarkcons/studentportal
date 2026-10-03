@@ -96,6 +96,35 @@ async function bookOf(rows) {
   return Buffer.from(await book.xlsx.writeBuffer());
 }
 
+/**
+ * Chooses a file in an import panel and presses Preview; what the preview
+ * says each row would do, counted by outcome. Nothing is written by it.
+ */
+async function previewIn(page, path, panelText, name, buffer) {
+  await page.goto(`${BASE}${path}`, { waitUntil: "domcontentloaded" });
+  const panel = page.locator("details", { hasText: panelText });
+  await panel.waitFor({ timeout: 60000 });
+  await panel.locator("summary").click();
+  await page.waitForFunction((text) => {
+    const box = [...document.querySelectorAll("details")].find((d) => d.textContent?.includes(text));
+    const input = box?.querySelector('input[type="file"]');
+    return Boolean(input && Object.keys(input).some((k) => k.startsWith("__reactProps")));
+  }, panelText, { timeout: 30000 });
+  await panel.locator('input[type="file"]').setInputFiles({
+    name,
+    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    buffer,
+  });
+  const button = panel.locator("[data-import-preview-button]");
+  await poll(() => button.isEnabled(), 60);
+  await button.click();
+  const box = panel.locator("[data-import-preview]");
+  await box.waitFor({ timeout: 90000 });
+  const outcomes = await box.locator("[data-preview-row]").evaluateAll((rows) => rows.map((r) => r.getAttribute("data-preview-row")));
+  const count = (o) => outcomes.filter((x) => x === o).length;
+  return { new: count("new"), update: count("update"), unchanged: count("unchanged"), skipped: count("skipped"), text: (await box.innerText()).replace(/\s+/g, " ") };
+}
+
 async function importFile(page, name, buffer) {
   await page.goto(`${BASE}/leads`, { waitUntil: "domcontentloaded" });
   const panel = page.locator("details", { hasText: "Import leads from Excel" });
@@ -204,6 +233,15 @@ try {
     },
     { Name: HIDDEN, "Contact number": "03009999982", Country: "Spain" },
   ]);
+  // Preview first: the same file, what it would do, and nothing written.
+  const previewed = await previewIn(page, "/leads", "Import leads from Excel", "leads.xlsx", sheet);
+  ok("Preview shows what each row would do, before anything is imported",
+    previewed.new === 2 && previewed.update === 1 && previewed.skipped === 1 && /adds email zztmp-import-existing/.test(previewed.text),
+    JSON.stringify({ ...previewed, text: previewed.text.slice(0, 400) }));
+  const { data: afterPreview } = await admin.from("leads").select("id").in("full_name", [NEW_A, NEW_B]);
+  const { data: existingAfterPreview } = await admin.from("leads").select("email").eq("id", existingId).single();
+  ok("...and writes nothing", (afterPreview ?? []).length === 0 && existingAfterPreview?.email === null, JSON.stringify({ afterPreview, existingAfterPreview }));
+
   const summary = await importFile(page, "leads.xlsx", sheet);
   ok("the import says what it did", /2 new leads added · 1 already on file and added to · 1 already on file with nothing new/.test(summary), summary);
   ok("...and why, lead by lead",
@@ -356,6 +394,25 @@ try {
   ok("...and adds no second remark or follow-up",
     (await current(a.id)) === "zztmp Met at the fair\nzztmp Also asked about Germany" && (await followUps(a.id)).length === 1 && (await followUps(existingId)).length === 1);
 
+  // ------------------------------------------- registered students: preview
+  console.log("\n--- registered students: preview ---");
+  {
+    const book = new ExcelJS.Workbook();
+    const ws = book.addWorksheet("Students");
+    ws.addRow(["full_name", "email", "country_of_interest", "registration_date"]);
+    ws.addRow(["zztmp Preview Student One", "zztmp-preview-one@hmark-test.local", "Italy", "2026-09-01"]);
+    ws.addRow(["zztmp Preview Student Two", "zztmp-preview-two@hmark-test.local", "Atlantis", "2026-09-02"]);
+    const buffer = Buffer.from(await book.xlsx.writeBuffer());
+    const sp = await signIn(browser, (await fx.staff("leadimportprev", ["super_admin"])).email);
+    const studentsPreview = await previewIn(sp, "/students", "Import registered students", "students.xlsx", buffer);
+    ok("the registered-students import previews too: who would be registered, and who not and why",
+      studentsPreview.new === 1 && studentsPreview.skipped === 1 && /Italy \(Public\)/.test(studentsPreview.text) && /country not recognised/.test(studentsPreview.text),
+      studentsPreview.text.slice(0, 400));
+    const { data: registered } = await admin.from("leads").select("id").ilike("full_name", "zztmp Preview Student%");
+    ok("...and registers nobody", (registered ?? []).length === 0, String(registered?.length));
+    await sp.close();
+  }
+
   // ------------------------------------------------------- arranging (0313)
   console.log("\n--- arranging the columns ---");
   const asCounsellor = await apiAs(url, anonKey, counsellor.email);
@@ -411,6 +468,7 @@ try {
   if (savedOrder?.column_keys) await admin.from("list_column_orders").upsert({ list_key: "leads", column_keys: savedOrder.column_keys });
   else await admin.from("list_column_orders").delete().eq("list_key", "leads");
   await admin.from("leads").delete().in("full_name", [NEW_A, NEW_B]);
+  await admin.from("leads").delete().ilike("full_name", "zztmp Preview Student%");
   const removed = await fx.cleanup();
   process.exitCode = finish(removed) === 0 ? 0 : 1;
 }

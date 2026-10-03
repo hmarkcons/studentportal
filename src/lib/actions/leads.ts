@@ -245,9 +245,13 @@ export async function updateLeadDestinations(leadId: string, _prevState: unknown
   return { success: true };
 }
 
+/** One row of an import preview: what importing would do to it. Nothing is written. */
+export type ImportPreviewRow = { name: string; outcome: "new" | "update" | "unchanged" | "skipped"; detail: string };
+
 export type LeadImportResult =
   | { error: string }
-  | { success: true; added: number; updated: number; unchanged: number; notes: string[] };
+  | { success: true; preview?: false; added: number; updated: number; unchanged: number; notes: string[] }
+  | { success: true; preview: true; added: number; updated: number; unchanged: number; notes: string[]; rows: ImportPreviewRow[] };
 
 type MatchLead = {
   id: string;
@@ -290,6 +294,10 @@ export async function importLeads(_prevState: unknown, formData: FormData): Prom
     if (tooLarge) return { error: `${tooLarge} A spreadsheet this large is usually a mistake — split it and import in batches.` };
   }
   if (!file || file.size === 0) return { error: "Choose an Excel (.xlsx) or CSV file first." };
+  // Preview: everything the import would do, worked out the same way and
+  // shown row by row — and nothing written.
+  const preview = formData.get("intent") === "preview";
+  const previewRows: ImportPreviewRow[] = [];
 
   let raw: Record<string, string>[];
   try {
@@ -444,7 +452,26 @@ export async function importLeads(_prevState: unknown, formData: FormData): Prom
       assigned_counselor_id: counselor ? counselorId(counselor, s.full_name, defaultCounselor) : (defaultCounselor?.id ?? null),
       date_of_inquiry: s.date_of_inquiry ?? today,
     }));
-    const { error } = await supabase.from("leads").insert(rows);
+    if (preview) {
+      const counselorName = new Map(counselors.map((c) => [c.id, c.full_name]));
+      fresh.forEach((f, i) => {
+        const row = rows[i];
+        previewRows.push({
+          name: f.stored.full_name,
+          outcome: "new",
+          detail: [
+            row.assigned_counselor_id ? `for ${counselorName.get(row.assigned_counselor_id) ?? "a counsellor"}` : "unassigned",
+            LEAD_STATUS_LABELS[row.status as LeadStatus] ?? row.status,
+            `inquiry ${row.date_of_inquiry}`,
+            f.remark ? "with a remark" : "",
+            f.followUps.length ? `follow-up ${f.followUps.map((x) => x.date).join(", ")}` : "",
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        });
+      });
+    }
+    const { error } = preview ? { error: null } : await supabase.from("leads").insert(rows);
     if (error) return { error: `No leads were imported: ${error.message}` };
 
     // Their remarks and follow-ups are written through the admin client, under
@@ -453,14 +480,14 @@ export async function importLeads(_prevState: unknown, formData: FormData): Prom
     // can open — and a counsellor cannot open one filed for another
     // counsellor, as every lead with no Counselor now is.
     const remarks = fresh.flatMap(({ stored, remark }) => (remark ? [{ lead_id: stored.id, body: remark, written_by: staff.id }] : []));
-    if (remarks.length > 0) {
+    if (remarks.length > 0 && !preview) {
       const { error: e } = await admin.from("lead_remarks").insert(remarks);
       if (e) notes.push(`The new leads' remarks were not saved (${e.message}).`);
     }
     const followUps = fresh.flatMap(({ stored, followUps: list }) =>
       list.map((f) => ({ student_id: stored.id, type: "follow_up", due_date: f.date, due_time: null, note: followUpNote(f.note), created_by: staff.id }))
     );
-    if (followUps.length > 0) {
+    if (followUps.length > 0 && !preview) {
       const { error: e } = await admin.from("reminders").insert(followUps);
       if (e) notes.push(`The new leads' follow-ups were not saved (${e.message}).`);
     }
@@ -502,6 +529,7 @@ export async function importLeads(_prevState: unknown, formData: FormData): Prom
       if (!canOpen.has(id)) {
         say(rows[0].full_name, "already on file as a lead you cannot open, so it was left as it is. Ask its counsellor or a manager to add to it.");
         unchanged++;
+        if (preview) previewRows.push({ name: rows[0].full_name, outcome: "skipped", detail: "already on file as a lead you cannot open — left as it is" });
         continue;
       }
       const stored: StoredLead = {
@@ -540,6 +568,22 @@ export async function importLeads(_prevState: unknown, formData: FormData): Prom
       }
       if (patch.assigned_counselor_id) added.push(`counselor ${stored.counselorName}`);
 
+      if (preview) {
+        if (added.length > 0) updated++;
+        else unchanged++;
+        previewRows.push({
+          name: stored.full_name,
+          outcome: added.length > 0 ? "update" : "unchanged",
+          detail: [
+            added.length > 0 ? `already on file — adds ${added.join(", ")}` : "already on file — nothing new",
+            kept.size > 0 ? `keeps its own ${[...kept].join("; ")}` : "",
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        });
+        continue;
+      }
+
       let failed = false;
       if (Object.keys(patch).length > 0) {
         const { data, error } = await supabase.from("leads").update(patch).eq("id", id).select("id");
@@ -568,10 +612,12 @@ export async function importLeads(_prevState: unknown, formData: FormData): Prom
     }
   }
 
-  revalidatePath("/leads");
-  if (fresh.some((f) => f.followUps.length > 0) || updated > 0) revalidatePath("/calendar");
   const shown = notes.slice(0, IMPORT_NOTES_SHOWN);
   if (notes.length > shown.length) shown.push(`…and ${notes.length - shown.length} more.`);
+  if (preview) return { success: true, preview: true, added: fresh.length, updated, unchanged, notes: shown, rows: previewRows };
+
+  revalidatePath("/leads");
+  if (fresh.some((f) => f.followUps.length > 0) || updated > 0) revalidatePath("/calendar");
   return { success: true, added: fresh.length, updated, unchanged, notes: shown };
 }
 
@@ -606,6 +652,8 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
     if (tooLarge) return { error: `${tooLarge} A spreadsheet this large is usually a mistake — split it and import in batches.` };
   }
   if (!file || file.size === 0) return { error: "Choose the filled-in template, or a CSV." };
+  // Preview: who would be registered, who would not and why — nothing written.
+  const preview = formData.get("intent") === "preview";
 
   const { isXlsx, parseXlsx, isTemplateExampleRow } = await import("@/lib/spreadsheet");
   let rows: Record<string, string>[];
@@ -792,10 +840,12 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
   const seenInFile = new Set<string>();
   const toInsert: Prepared[] = [];
   let duplicates = 0;
+  const duplicateNames: string[] = [];
   for (const p of prepared) {
     const email = (p.lead.email as string | null)?.toLowerCase() ?? null;
     if (email && (existingEmails.has(email) || seenInFile.has(email))) {
       duplicates += 1;
+      duplicateNames.push(p.lead.full_name as string);
       continue;
     }
     if (email) seenInFile.add(email);
@@ -812,6 +862,43 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
   // in whatever order the files came to hand would otherwise hand out Student
   // IDs in that order rather than by registration date.
   const ordered = byRegistrationDate(toInsert, (p) => p.day);
+
+  if (preview) {
+    const destName = new Map(allDestinations.map((d) => [d.id as string, (d.display_name || d.country) as string]));
+    const counselorName = new Map((counselors ?? []).map((c) => [c.id as string, c.full_name as string]));
+    // "Name: what was wrong", as the lists above hold them, split for the table.
+    const named = (entry: string, why: string): ImportPreviewRow => {
+      const at = entry.indexOf(": ");
+      return { name: at > 0 ? entry.slice(0, at) : entry, outcome: "skipped", detail: at > 0 ? `${why}: ${entry.slice(at + 2)}` : why };
+    };
+    const rows: ImportPreviewRow[] = [
+      ...ordered.map((p): ImportPreviewRow => ({
+        name: p.lead.full_name as string,
+        outcome: "new",
+        detail: [
+          `${destName.get(p.primary) ?? "country"}${p.backups.length ? ` + backup ${p.backups.map((id) => destName.get(id)).join(", ")}` : ""}`,
+          `registered ${p.day}`,
+          p.lead.intake ? `intake ${p.lead.intake} — Student ID issued on import` : "no intake — no Student ID until one is set",
+          p.lead.assigned_counselor_id ? `counsellor ${counselorName.get(p.lead.assigned_counselor_id as string)}` : "no counsellor",
+        ].join(" · "),
+      })),
+      ...duplicateNames.map((name): ImportPreviewRow => ({ name, outcome: "skipped", detail: "email already matches an existing student" })),
+      ...badDate.map((e) => named(e, "registration date could not be read")),
+      ...noCountry.map((name): ImportPreviewRow => ({ name, outcome: "skipped", detail: "no country given" })),
+      ...badCountry.map((e) => named(e, "country not recognised")),
+      ...pausedCountry.map((e) => named(e, "country paused")),
+    ];
+    return {
+      success: true,
+      preview: true as const,
+      count: toInsert.length,
+      skipped: duplicates,
+      rows,
+      exampleRows,
+      unknownCounselor,
+      ambiguousCounselor: [...new Set(ambiguousCounselor)],
+    };
+  }
 
   const { data: inserted, error } = await supabase
     .from("leads")
