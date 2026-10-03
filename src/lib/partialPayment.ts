@@ -17,6 +17,12 @@ export const BALANCE_DUE_AFTER_DAYS = 7;
  * daylight-saving change, and a due date that moves by a day is a due date
  * somebody misses.
  */
+/**
+ * How an instalment was paid — one list, so the Invoice Generator and the
+ * student's invoice record a payment in the same words.
+ */
+export const INSTALMENT_PAYMENT_METHODS = ["Cash", "Bank transfer", "Card", "Cheque", "Online", "Other"] as const;
+
 export function balanceDueDate(paidDate: string, days = BALANCE_DUE_AFTER_DAYS): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((paidDate ?? "").trim());
   if (!m) return "";

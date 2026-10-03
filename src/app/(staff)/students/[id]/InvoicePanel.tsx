@@ -18,7 +18,8 @@ import { addLineItem, deleteLineItem } from "@/lib/actions/consultancyFee";
 import { computeInvoiceStatus, INVOICE_STATUS_LABELS } from "@/lib/invoiceStatus";
 import { computeInvoiceMath, computePaymentProgress, installmentNote, sumLineItems, type TaxBase } from "@/lib/invoiceMath";
 import { formatDateOnly } from "@/lib/formatDate";
-import { balanceDueDate, carriedFromNote } from "@/lib/partialPayment";
+import { balanceDueDate, carriedFromNote, INSTALMENT_PAYMENT_METHODS } from "@/lib/partialPayment";
+import { UndoPaymentButton } from "@/components/UndoPaymentButton";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { useButtonAction } from "@/components/useButtonAction";
@@ -230,11 +231,19 @@ export function GenerateInvoiceForm({
   );
 }
 
-function EditInvoiceForm({
+/**
+ * An invoice, edited as fully as it was raised (0311): every fee, the
+ * discount, the number of instalments from the same dropdown, when the first
+ * unpaid one falls due, the dates, number, intake, plan and terms. Instalments
+ * already paid are never altered; the outstanding balance is re-spread over
+ * the rest.
+ */
+export function EditInvoiceForm({
   invoice,
   adminCharges,
   installmentCount,
   paidCount,
+  firstOpenDueDate = null,
   studentId,
   revalidateTo,
   onDone,
@@ -258,11 +267,16 @@ function EditInvoiceForm({
   /** How many instalments the schedule currently has, and how many are settled. */
   installmentCount: number;
   paidCount: number;
+  /** The first unpaid instalment's due date; null when every one is paid, or none has a date. */
+  firstOpenDueDate?: string | null;
   studentId: string;
   revalidateTo: string;
   onDone: () => void;
 }) {
   const action = updateInvoice.bind(null, invoice.id, studentId, revalidateTo);
+  // The same choices as raising one, and never fewer than are already paid.
+  const countChoices = Array.from({ length: Math.max(12, installmentCount) }, (_, i) => i + 1).filter((n) => n >= Math.max(1, paidCount));
+  const allPaid = paidCount >= installmentCount && installmentCount > 0;
   const [state, formAction, pending] = useActionState(action, undefined);
   // A visa-only invoice (0279) has the visa service fee and nothing else.
   const isVisaOnly = invoice.service_type === "visa_only";
@@ -297,7 +311,10 @@ function EditInvoiceForm({
       )}
       <div className="flex flex-wrap items-end gap-2">
         {!isVisaOnly && adminCharges.length === 0 && (
-          <Input name="admin_charge" type="number" step="0.01" defaultValue={invoice.admin_charge} required className="w-32" />
+          <label className="flex flex-col gap-0.5 text-xs text-muted">
+            Admin charge
+            <Input name="admin_charge" type="number" step="0.01" defaultValue={invoice.admin_charge} required className="w-32" />
+          </label>
         )}
         {isVisaOnly ? (
           <label className="flex flex-col gap-0.5 text-xs text-muted">
@@ -305,13 +322,35 @@ function EditInvoiceForm({
             <Input name="consultancy_fee" type="number" step="0.01" min="0.01" defaultValue={invoice.consultancy_fee} required className="w-44" />
           </label>
         ) : (
-          <Input name="consultancy_fee" type="number" step="0.01" defaultValue={invoice.consultancy_fee} required className="w-36" />
+          <label className="flex flex-col gap-0.5 text-xs text-muted">
+            Consultancy fee
+            <Input name="consultancy_fee" type="number" step="0.01" defaultValue={invoice.consultancy_fee} required className="w-36" />
+          </label>
         )}
-        <Select name="currency" defaultValue={invoice.currency}>
-          <option value="EUR">EUR</option>
-          <option value="PKR">PKR</option>
-          <option value="USD">USD</option>
-        </Select>
+        <label className="flex flex-col gap-0.5 text-xs text-muted">
+          Currency
+          <Select name="currency" defaultValue={invoice.currency}>
+            <option value="EUR">EUR</option>
+            <option value="PKR">PKR</option>
+            <option value="USD">USD</option>
+          </Select>
+        </label>
+        <label className="flex flex-col gap-0.5 text-xs text-muted">
+          Instalments
+          <Select name="installment_count" defaultValue={String(installmentCount)} data-installment-count>
+            {countChoices.map((n) => (
+              <option key={n} value={n}>
+                {n} {n === 1 ? "installment" : "installments"}
+              </option>
+            ))}
+          </Select>
+        </label>
+        {!allPaid && (
+          <label className="flex flex-col gap-0.5 text-xs text-muted">
+            {paidCount > 0 ? "First unpaid installment due" : "First installment due date"}
+            <Input name="first_due_date" type="date" defaultValue={firstOpenDueDate ?? ""} required={Boolean(firstOpenDueDate)} />
+          </label>
+        )}
       </div>
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-0.5 text-xs text-muted">
@@ -323,20 +362,28 @@ function EditInvoiceForm({
           <Input name="discount_reason" defaultValue={invoice.discount_reason ?? ""} placeholder="e.g. Early registration" className="w-48" />
         </label>
         <label className="flex flex-col gap-0.5 text-xs text-muted">
-          Instalments
-          <Input name="installment_count" type="number" min={Math.max(1, paidCount)} max="24" defaultValue={installmentCount} className="w-24" />
-        </label>
-        <label className="flex flex-col gap-0.5 text-xs text-muted">
           Invoice date
           <Input name="issued_on" type="date" defaultValue={invoice.issued_on ?? ""} />
         </label>
       </div>
       <div className="flex flex-wrap items-end gap-2">
-        <Input name="invoice_number" defaultValue={invoice.invoice_number ?? ""} placeholder="Invoice #" className="w-56" />
-        <Input name="intake" defaultValue={invoice.intake ?? ""} placeholder="Intake" className="w-44" />
-        <Input name="installment_plan" defaultValue={invoice.installment_plan ?? ""} placeholder="Installment plan" className="w-44" />
+        <label className="flex flex-col gap-0.5 text-xs text-muted">
+          Invoice number
+          <Input name="invoice_number" defaultValue={invoice.invoice_number ?? ""} placeholder="Invoice #" className="w-56" />
+        </label>
+        <label className="flex flex-col gap-0.5 text-xs text-muted">
+          Intake
+          <Input name="intake" defaultValue={invoice.intake ?? ""} placeholder="e.g. Winter 2026" className="w-44" />
+        </label>
+        <label className="flex flex-col gap-0.5 text-xs text-muted">
+          Installment plan
+          <Input name="installment_plan" defaultValue={invoice.installment_plan ?? ""} placeholder="e.g. 2 installments" className="w-44" />
+        </label>
       </div>
-      <Textarea name="terms" defaultValue={invoice.terms ?? (isVisaOnly ? VISA_INVOICE_TERMS : DEFAULT_TERMS)} rows={2} className="w-full" />
+      <label className="flex flex-col gap-0.5 text-xs text-muted">
+        Terms
+        <Textarea name="terms" defaultValue={invoice.terms ?? (isVisaOnly ? VISA_INVOICE_TERMS : DEFAULT_TERMS)} rows={2} className="w-full" />
+      </label>
       <div className="flex items-center gap-2">
         <Button type="submit" variant="primary" pending={pending} status={{ state, label: "Saved." }}>
           Save invoice
@@ -391,10 +438,11 @@ function MarkPaidForm({ installmentId, studentId }: { installmentId: string; stu
   return (
     <form action={formAction} className="flex flex-wrap items-center gap-1">
       <Select name="payment_method">
-        <option value="Cash">Cash</option>
-        <option value="Bank transfer">Bank transfer</option>
-        <option value="Card">Card</option>
-        <option value="Other">Other</option>
+        {INSTALMENT_PAYMENT_METHODS.map((m) => (
+          <option key={m} value={m}>
+            {m}
+          </option>
+        ))}
       </Select>
       <Button type="submit" variant="success" size="sm" pending={pending} status={{ state, label: "Marked as paid." }}>
         Mark paid
@@ -463,10 +511,14 @@ function EditInstallmentForm({
       />
       <Select name="payment_method" defaultValue={installment.payment_method ?? ""}>
         <option value="">Method…</option>
-        <option value="Cash">Cash</option>
-        <option value="Bank transfer">Bank transfer</option>
-        <option value="Card">Card</option>
-        <option value="Other">Other</option>
+        {INSTALMENT_PAYMENT_METHODS.map((m) => (
+          <option key={m} value={m}>
+            {m}
+          </option>
+        ))}
+        {installment.payment_method && !(INSTALMENT_PAYMENT_METHODS as readonly string[]).includes(installment.payment_method) && (
+          <option value={installment.payment_method}>{installment.payment_method}</option>
+        )}
       </Select>
       <Input name="paid_date" type="date" value={paidDate} onChange={(e) => choosePaidDate(e.target.value)} />
 
@@ -874,6 +926,7 @@ export function InvoiceCard({
           adminCharges={adminCharges}
           installmentCount={installments.length}
           paidCount={installments.filter((i) => i.status === "paid" || Number(i.amount_paid ?? 0) > 0).length}
+          firstOpenDueDate={installments.find((i) => !(i.status === "paid" || Number(i.amount_paid ?? 0) > 0))?.due_date ?? null}
           studentId={studentId}
           revalidateTo={revalidateTo}
           onDone={() => setEditingInvoice(false)}
@@ -973,7 +1026,10 @@ export function InvoiceCard({
               </span>
               <div className="flex items-center gap-1">
                 {i.status === "paid" ? (
-                  <Badge tone="success">Paid</Badge>
+                  <>
+                    <Badge tone="success">Paid</Badge>
+                    {canManage && <UndoPaymentButton installmentId={i.id} studentId={studentId} label={`instalment ${i.installment_no}`} />}
+                  </>
                 ) : canManage ? (
                   <MarkPaidForm installmentId={i.id} studentId={studentId} />
                 ) : (

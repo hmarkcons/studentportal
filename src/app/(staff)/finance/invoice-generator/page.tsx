@@ -6,12 +6,12 @@ import { getInvoiceBankSettings } from "@/lib/actions/invoiceSettings";
 import { bankFromSettings, hasBankDetails } from "@/lib/invoiceIssuer";
 import { resolveInvoiceDefaults } from "@/lib/invoiceDefaults";
 import { computeInvoiceMath, computePaymentProgress, sumLineItems } from "@/lib/invoiceMath";
-import { hasRole } from "@/lib/auth/roles";
+import { hasPermission } from "@/lib/auth/permissions";
+import type { AdminChargeRow } from "@/app/(staff)/students/[id]/InvoicePanel";
 import { readAll } from "@/lib/catalogueReads";
 import { serviceOf } from "@/lib/serviceType";
 import { InvoiceGenerator, type StudentOption } from "./InvoiceGenerator";
 import { GeneratedInvoiceList, type GeneratedInvoice } from "./GeneratedInvoiceList";
-import { getCurrentUser } from "@/lib/auth/currentUser";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -19,24 +19,20 @@ function one<T>(v: T | T[] | null) {
 
 export default async function InvoiceGeneratorPage() {
   const supabase = await createClient();
-  const user = await getCurrentUser();
-  // The bank details beside the viewer's own row rather than after it.
-  const [{ data: staffRow }, bank] = await Promise.all([
-    supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle(),
+  // The permissions, as Role Permissions has them set — the same ones the
+  // actions check and, since 0311, the database too — beside the bank details.
+  const [canManage, canDelete, bank] = await Promise.all([
+    hasPermission("finance.invoices.manage"),
+    hasPermission("finance.invoices.delete"),
     getInvoiceBankSettings(),
   ]);
-  // Every role they hold, not the primary one: a counsellor who also holds
-  // Finance was turned away here, and a Super Admin whose primary role is
-  // another was not offered Delete.
-  const canManage = hasRole(staffRow, "super_admin", "finance");
-  const canDelete = hasRole(staffRow, "super_admin");
 
   if (!canManage) {
     return (
       <div className="mx-auto max-w-3xl">
         <h2 className="mb-2 text-lg font-semibold text-ink">Invoice Generator</h2>
         <Card>
-          <p className="text-sm text-muted">Only Super Admin and Finance can issue invoices.</p>
+          <p className="text-sm text-muted">Only staff who can manage invoices can issue them.</p>
         </Card>
       </div>
     );
@@ -78,7 +74,7 @@ export default async function InvoiceGeneratorPage() {
       .from("invoices")
       .select(
         `id, student_id, invoice_number, intake, currency, admin_charge, consultancy_fee,
-         discount_amount, discount_reason, tax_rate, tax_amount, tax_base, issued_on,
+         discount_amount, discount_reason, tax_rate, tax_amount, tax_base, issued_on, terms, installment_plan,
          admin_fee_status, sent_status, sent_at, pdf_path, created_at, service_type,
          student:leads(full_name, email)`
       )
@@ -153,7 +149,7 @@ export default async function InvoiceGeneratorPage() {
   });
 
   const invoiceIds = (invoices ?? []).map((i) => i.id);
-  const [{ data: installments }, { data: lineItems }] = invoiceIds.length
+  const [{ data: installments }, { data: lineItems }, { data: adminCharges }] = invoiceIds.length
     ? await Promise.all([
         supabase
           .from("invoice_installments")
@@ -161,8 +157,14 @@ export default async function InvoiceGeneratorPage() {
           .in("invoice_id", invoiceIds)
           .order("installment_no", { ascending: true }),
         supabase.from("invoice_line_items").select("id, invoice_id, name, amount").in("invoice_id", invoiceIds),
+        // The per-country administrative charges, which the full edit form edits one by one.
+        supabase
+          .from("invoice_admin_charges")
+          .select("id, invoice_id, destination_id, country_label, amount, is_backup")
+          .in("invoice_id", invoiceIds)
+          .order("sort_order", { ascending: true }),
       ])
-    : [{ data: [] }, { data: [] }];
+    : [{ data: [] }, { data: [] }, { data: [] }];
 
   type InstallmentRow = {
     id: string; invoice_id: string; installment_no: number; amount: number | string;
@@ -189,6 +191,7 @@ export default async function InvoiceGeneratorPage() {
     });
     const progress = computePaymentProgress(mine);
     const student = one(inv.student as never) as { full_name?: string; email?: string | null } | null;
+    const settledRow = (i: InstallmentRow) => i.status === "paid" || Number(i.amount_paid ?? 0) > 0;
     return {
       id: inv.id,
       serviceType: serviceOf(inv.service_type),
@@ -219,6 +222,27 @@ export default async function InvoiceGeneratorPage() {
         paidDate: i.paid_date,
         paymentMethod: i.payment_method,
       })),
+      // Everything the full edit form needs — the same form as on the student's page.
+      edit: {
+        invoice: {
+          id: inv.id,
+          admin_charge: Number(inv.admin_charge ?? 0),
+          consultancy_fee: Number(inv.consultancy_fee ?? 0),
+          currency: inv.currency,
+          invoice_number: inv.invoice_number,
+          intake: inv.intake,
+          terms: inv.terms,
+          installment_plan: inv.installment_plan,
+          discount_amount: inv.discount_amount,
+          discount_reason: inv.discount_reason,
+          issued_on: inv.issued_on,
+          service_type: inv.service_type,
+        },
+        adminCharges: ((adminCharges ?? []) as (AdminChargeRow & { invoice_id: string })[]).filter((c) => c.invoice_id === inv.id),
+        installmentCount: mine.length,
+        paidCount: mine.filter(settledRow).length,
+        firstOpenDueDate: mine.find((i) => !settledRow(i))?.due_date ?? null,
+      },
     };
   });
 

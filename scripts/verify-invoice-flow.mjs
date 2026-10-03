@@ -607,30 +607,47 @@ try {
       // (finance, super_admin); the RPCs that create and send an invoice raise
       // 'Only Finance/Super Admin'; and since 0255 the policies agree.
       //
-      // Processing is the one worth naming. Five policies used to grant it
-      // write access while no invoice control anywhere was reachable by it, so
-      // it could not raise or send an invoice but could PATCH the rows
-      // directly — change an amount, or mark money received.
+      // Since 0311 the policies follow Role Permissions rather than naming
+      // roles: a role may write an invoice exactly when it holds
+      // finance.invoices.manage. Processing is the one worth naming — the
+      // office has granted it, and before 0311 it saw every invoice control
+      // while the database refused its writes without a word. Whatever a role
+      // is allowed is asked of the database as that person, and a write the
+      // check expected to succeed is put back so the rest runs on the fixture.
       console.log("\n--- who may write to an invoice ---");
       const target = (await installmentsOf(invoice.id))[2];
       for (const role of ["counselor", "processing"]) {
         const who = await fx.staff(`invno${role.slice(0, 4)}`, [role]);
         const asThem = await apiAs(url, anonKey, who.email);
+        const { data: allowed } = await asThem.rpc("staff_has_permission", { p_key: "finance.invoices.manage" });
 
         const settle = await asThem.from("invoice_installments")
           .update({ status: "paid", amount_paid: target.amount }).eq("id", target.id).select("id");
         const afterSettle = (await installmentsOf(invoice.id))[2];
-        ok(`a ${role} cannot settle an installment through the API`,
-          afterSettle.status !== "paid" && (settle.data?.length ?? 0) === 0,
-          `rows=${settle.data?.length ?? 0} status=${afterSettle.status}`);
+        if (allowed) {
+          ok(`a ${role}, whom Role Permissions lets manage invoices, can settle an installment`,
+            afterSettle.status === "paid" && (settle.data?.length ?? 0) === 1,
+            `rows=${settle.data?.length ?? 0} status=${afterSettle.status}`);
+          await admin.from("invoice_installments")
+            .update({ status: target.status, amount_paid: target.amount_paid ?? 0 }).eq("id", target.id);
+        } else {
+          ok(`a ${role} cannot settle an installment through the API`,
+            afterSettle.status !== "paid" && (settle.data?.length ?? 0) === 0,
+            `rows=${settle.data?.length ?? 0} status=${afterSettle.status}`);
+        }
 
         const repriced = await asThem.from("invoices")
           .update({ consultancy_fee: 1 }).eq("id", invoice.id).select("id");
         const { data: afterReprice } = await admin.from("invoices")
           .select("consultancy_fee").eq("id", invoice.id).single();
-        ok(`...nor change what the student owes`,
-          Number(afterReprice.consultancy_fee) === FEE && (repriced.data?.length ?? 0) === 0,
-          `fee=${afterReprice.consultancy_fee} rows=${repriced.data?.length ?? 0}`);
+        if (allowed) {
+          ok(`...and change what the student owes`, (repriced.data?.length ?? 0) === 1, `rows=${repriced.data?.length ?? 0}`);
+          await admin.from("invoices").update({ consultancy_fee: FEE }).eq("id", invoice.id);
+        } else {
+          ok(`...nor change what the student owes`,
+            Number(afterReprice.consultancy_fee) === FEE && (repriced.data?.length ?? 0) === 0,
+            `fee=${afterReprice.consultancy_fee} rows=${repriced.data?.length ?? 0}`);
+        }
 
         // Reading is untouched on purpose, and worth proving for processing:
         // 0255 must not read as locking the processing team out of the

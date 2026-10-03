@@ -8,9 +8,11 @@ import {
   deleteInvoice,
   generateInvoicePdf,
   markInstallmentPaid,
-  updateInvoice,
   sendInvoiceToStudent,
 } from "@/lib/actions/invoices";
+import { EditInvoiceForm, type AdminChargeRow } from "@/app/(staff)/students/[id]/InvoicePanel";
+import { UndoPaymentButton } from "@/components/UndoPaymentButton";
+import { INSTALMENT_PAYMENT_METHODS } from "@/lib/partialPayment";
 import { PAYMENT_STATUS_LABELS, type InvoiceMath } from "@/lib/invoiceMath";
 import { formatDateOnly } from "@/lib/formatDate";
 import { Badge } from "@/components/ui/Badge";
@@ -65,6 +67,14 @@ export type GeneratedInvoice = {
     paidDate: string | null;
     paymentMethod: string | null;
   }[];
+  /** What the full edit form starts from (0311). */
+  edit: {
+    invoice: React.ComponentProps<typeof EditInvoiceForm>["invoice"];
+    adminCharges: AdminChargeRow[];
+    installmentCount: number;
+    paidCount: number;
+    firstOpenDueDate: string | null;
+  };
 };
 
 // created_at / sent_at are timestamptz, so they must not go through
@@ -224,34 +234,20 @@ function InvoiceRow({ inv, canDelete }: { inv: GeneratedInvoice; canDelete: bool
 
       {error && <p className="mt-2 text-xs text-danger">{error}</p>}
 
+      {/* Every part of the invoice, as when it was raised — the same form as on the student's page. */}
       {editing && (
-        <form
-          action={async (fd: FormData) => {
-            setError(null);
-            const r = await updateInvoice(inv.id, inv.studentId, REVALIDATE_TO, undefined, fd);
-            if (r?.error) setError(r.error);
-            else {
-              // The form closes on success, taking its button with it.
-              setEditing(false);
-              toast("Invoice updated.");
-            }
-          }}
-          className="mt-3 grid grid-cols-1 gap-2 border-t border-border pt-3 sm:grid-cols-2"
-        >
-          <label className="flex flex-col gap-1 text-xs text-muted">
-            Invoice number
-            <Input name="invoice_number" defaultValue={inv.invoiceNumber ?? ""} />
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-muted">
-            Intake
-            <Input name="intake" defaultValue={inv.intake ?? ""} />
-          </label>
-          <div className="sm:col-span-2">
-            <SubmitButton variant="primary" size="sm">
-              Save changes
-            </SubmitButton>
-          </div>
-        </form>
+        <div className="mt-3 border-t border-border pt-1" data-invoice-edit={inv.id}>
+          <EditInvoiceForm
+            invoice={inv.edit.invoice}
+            adminCharges={inv.edit.adminCharges}
+            installmentCount={inv.edit.installmentCount}
+            paidCount={inv.edit.paidCount}
+            firstOpenDueDate={inv.edit.firstOpenDueDate}
+            studentId={inv.studentId}
+            revalidateTo={REVALIDATE_TO}
+            onDone={() => setEditing(false)}
+          />
+        </div>
       )}
 
       {open && (
@@ -303,8 +299,9 @@ function InstallmentRow({ inv, inst }: { inv: GeneratedInvoice; inst: GeneratedI
         const r = await markInstallmentPaid(inst.id, inv.studentId, undefined, fd);
         if (r?.error) setError(r.error);
         // A payment that settles the installment replaces this button with
-        // the Paid badge, so the confirmation is a toast either way.
-        else toast("Payment recorded.");
+        // the Paid badge, so the confirmation is a toast either way. Less
+        // than the instalment is a part payment: the balance becomes one of its own.
+        else toast(Number(fd.get("amount_paid") ?? inst.amount) < inst.amount ? "Part payment recorded — the balance is due in a week." : "Payment recorded.");
       }}
       className="flex flex-wrap items-end gap-2 rounded-md bg-bg px-2 py-2 text-xs"
     >
@@ -316,10 +313,14 @@ function InstallmentRow({ inv, inst }: { inv: GeneratedInvoice; inst: GeneratedI
         {inst.amountPaid > 0 && !settled ? ` · paid ${fmt(inv.currency, inst.amountPaid)}` : ""}
       </span>
       {settled ? (
-        <Badge tone="success">
-          Paid{inst.paidDate ? ` ${formatDateOnly(inst.paidDate)}` : ""}
-          {inst.paymentMethod ? ` · ${inst.paymentMethod}` : ""}
-        </Badge>
+        <>
+          <Badge tone="success">
+            Paid{inst.paidDate ? ` ${formatDateOnly(inst.paidDate)}` : ""}
+            {inst.paymentMethod ? ` · ${inst.paymentMethod}` : ""}
+          </Badge>
+          {/* A payment recorded by mistake is undone here (0311). */}
+          <UndoPaymentButton installmentId={inst.id} studentId={inv.studentId} label={`instalment ${inst.no}`} />
+        </>
       ) : (
         <>
           <label className="flex flex-col gap-0.5 text-muted">
@@ -327,18 +328,18 @@ function InstallmentRow({ inv, inst }: { inv: GeneratedInvoice; inst: GeneratedI
             <Input name="amount_paid" type="number" step="0.01" defaultValue={String(inst.amount)} className="h-7 w-28 py-0 text-xs" />
           </label>
           <label className="flex flex-col gap-0.5 text-muted">
-            Date
+            Date <span className="text-[10px]">(blank = today)</span>
             <Input name="paid_date" type="date" className="h-7 w-36 py-0 text-xs" />
           </label>
           <label className="flex flex-col gap-0.5 text-muted">
             Method
             <Select name="payment_method" className="h-7 py-0 text-xs">
               <option value="">Method…</option>
-              <option value="bank_transfer">Bank transfer</option>
-              <option value="cash">Cash</option>
-              <option value="cheque">Cheque</option>
-              <option value="card">Card</option>
-              <option value="online">Online</option>
+              {INSTALMENT_PAYMENT_METHODS.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
             </Select>
           </label>
           <SubmitButton variant="outline-primary" size="sm">

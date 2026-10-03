@@ -276,42 +276,58 @@ export async function generateInvoice(studentId: string, agreementId: string, _p
     due_condition: duePlan[i]?.condition ?? null,
   }));
 
-  // Staff may type their own reference; otherwise take the next HMC number for
-  // this intake. Claimed before the invoice is written so a failed generation
-  // burns a number rather than risking two invoices sharing one.
+  // Staff may type their own reference; otherwise the lowest HMC number in
+  // this intake's run that no invoice holds (0311) — so a deleted invoice's
+  // number is the next one given out, and none is skipped. Numbers are
+  // unique: two invoices raised at the same moment can be offered the same
+  // one, and the second then asks again.
+  const NUMBER_TAKEN = /invoices_invoice_number_unique/;
   let invoice_number = typedInvoiceNumber;
-  if (!invoice_number) {
-    const { data: minted, error: numberError } = await supabase.rpc("next_invoice_number", { p_intake: intake });
-    if (numberError) return { error: `Couldn't allocate a receipt number: ${numberError.message}` };
-    invoice_number = minted as string;
-  }
+  let newInvoiceId: unknown = null;
+  for (let attempt = 0; ; attempt++) {
+    if (!typedInvoiceNumber) {
+      const { data: minted, error: numberError } = await supabase.rpc("next_invoice_number", { p_intake: intake });
+      if (numberError) return { error: `Couldn't allocate an invoice number: ${numberError.message}` };
+      invoice_number = minted as string;
+    }
 
-  // Single security-definer RPC — the invoice, its installments and the
-  // per-country administrative charges commit or fail together (migrations
-  // 0090 and 0257), rather than as separate writes that could leave a
-  // zero-installment invoice, or one whose breakdown is missing, behind.
-  const { data: newInvoiceId, error } = await supabase.rpc("generate_invoice", {
-    p_student_id: studentId,
-    p_agreement_id: agreement_id,
-    p_admin_charge: admin_charge,
-    p_consultancy_fee: consultancy_fee,
-    p_currency: currency,
-    p_intake: intake,
-    p_terms: terms,
-    p_invoice_number: invoice_number,
-    p_installment_plan: installment_plan,
-    p_installments: installments,
-    p_discount_amount: math.discountAmount,
-    p_discount_reason: discount_reason,
-    p_tax_rate: math.taxRate,
-    p_tax_amount: math.taxAmount,
-    // Only when there is something to say: a student with one country and a
-    // single charge needs no breakdown to explain it.
-    p_admin_charges: (adminCharges ?? []).filter((c) => c.amount > 0),
-    p_tax_base: math.taxBase,
-    p_issued_on: issued_on,
-  });
-  if (error) return { error: error.message };
+    // Single security-definer RPC — the invoice, its installments and the
+    // per-country administrative charges commit or fail together (migrations
+    // 0090 and 0257), rather than as separate writes that could leave a
+    // zero-installment invoice, or one whose breakdown is missing, behind.
+    const { data, error } = await supabase.rpc("generate_invoice", {
+      p_student_id: studentId,
+      p_agreement_id: agreement_id,
+      p_admin_charge: admin_charge,
+      p_consultancy_fee: consultancy_fee,
+      p_currency: currency,
+      p_intake: intake,
+      p_terms: terms,
+      p_invoice_number: invoice_number,
+      p_installment_plan: installment_plan,
+      p_installments: installments,
+      p_discount_amount: math.discountAmount,
+      p_discount_reason: discount_reason,
+      p_tax_rate: math.taxRate,
+      p_tax_amount: math.taxAmount,
+      // Only when there is something to say: a student with one country and a
+      // single charge needs no breakdown to explain it.
+      p_admin_charges: (adminCharges ?? []).filter((c) => c.amount > 0),
+      p_tax_base: math.taxBase,
+      p_issued_on: issued_on,
+    });
+    if (!error) {
+      newInvoiceId = data;
+      break;
+    }
+    if (error.code === "23505" && NUMBER_TAKEN.test(error.message)) {
+      if (typedInvoiceNumber) {
+        return { error: `Invoice number ${typedInvoiceNumber} is already used by another invoice. Choose another, or leave it blank for the next free one.` };
+      }
+      if (attempt < 3) continue;
+    }
+    return { error: error.message };
+  }
 
   revalidatePath(`/students/${studentId}`);
   revalidatePath("/finance/invoice-generator");
@@ -455,6 +471,26 @@ export async function updateInvoice(invoiceId: string, studentId: string, revali
       : Math.max(1, Math.floor(Number(rawCount) || schedule.length));
   const countChanged = schedule.length > 0 && desiredCount !== schedule.length;
 
+  // When the unpaid instalments fall due (0311). The form gives the first
+  // unpaid one's date; the rest follow monthly, as when the invoice was
+  // raised, and the office's rule still decides which wait on the admission
+  // instead of a date. Paid ones keep theirs. Absent from the form, or left
+  // as it was, the dates are not touched unless the count changes.
+  const isSettled = (i: { status: string | null; amount_paid: number | string | null }) =>
+    i.status === "paid" || Number(i.amount_paid ?? 0) > 0;
+  const openRows = schedule.filter((i) => !isSettled(i));
+  const currentFirstOpen = (openRows[0]?.due_date as string | null | undefined) ?? null;
+  const rawFirstDue = formData.get("first_due_date");
+  const firstDue = rawFirstDue === null ? null : String(rawFirstDue).trim() || null;
+  const datesChanged = openRows.length > 0 && firstDue !== null && firstDue !== currentFirstOpen;
+  const dateBase = firstDue ?? currentFirstOpen;
+  const track = countChanged || datesChanged ? await agreementTrack(supabase, (current?.agreement_id as string | null) ?? null) : null;
+  /** Each slot's date for a schedule of `count`: the settled first ones keep theirs, the rest run monthly from the base. */
+  const slotDates = (count: number) =>
+    Array.from({ length: count }, (_, i) =>
+      i < settled.length ? ((schedule[i]?.due_date as string | null) ?? null) : dateBase ? addMonthsClampedUTC(dateBase, i - settled.length) : null
+    );
+
   // Settled instalments are kept exactly as they are and the outstanding
   // balance is re-spread over what is left, so the number can be changed
   // without falsifying a record of money that has already come in.
@@ -478,9 +514,9 @@ export async function updateInvoice(invoiceId: string, studentId: string, revali
     // The office's own rule decides which of the new instalments fall on a
     // date and which wait on the admission — the same rule that shaped the
     // schedule when the invoice was raised.
-    const track = await agreementTrack(supabase, (current?.agreement_id as string | null) ?? null);
-    const existingDates = schedule.map((i) => i.due_date as string | null);
-    const duePlan = installmentDuePlan(desiredCount, track, existingDates, { visaOnly });
+    const duePlan = installmentDuePlan(desiredCount, track, dateBase ? slotDates(desiredCount) : schedule.map((i) => i.due_date as string | null), {
+      visaOnly,
+    });
     const stillNeeded = missingDueDates(duePlan.slice(settled.length));
     if (stillNeeded.length > 0) {
       return { error: `Instalment ${stillNeeded.join(" and ")} needs a due date before the schedule can be changed.` };
@@ -505,6 +541,35 @@ export async function updateInvoice(invoiceId: string, studentId: string, revali
       .eq("invoice_id", invoiceId)
       .order("installment_no", { ascending: true });
     schedule = resized ?? [];
+  }
+
+  // Only the first due date changed: the unpaid instalments are re-dated in
+  // place, each read back — an update RLS refuses matches nothing and says nothing.
+  if (!countChanged && datesChanged) {
+    const plan = installmentDuePlan(
+      schedule.length,
+      track,
+      (() => {
+        let k = 0;
+        return schedule.map((i) => (isSettled(i) ? ((i.due_date as string | null) ?? null) : addMonthsClampedUTC(firstDue!, k++)));
+      })(),
+      { visaOnly }
+    );
+    const stillNeeded = missingDueDates(plan.filter((_, idx) => !isSettled(schedule[idx])));
+    if (stillNeeded.length > 0) {
+      return { error: `Instalment ${stillNeeded.join(" and ")} needs a due date.` };
+    }
+    for (const [idx, row] of schedule.entries()) {
+      if (isSettled(row)) continue;
+      const { data: moved, error: dateError } = await supabase
+        .from("invoice_installments")
+        .update({ due_date: plan[idx]?.date ?? null, due_condition: plan[idx]?.condition ?? null })
+        .eq("id", row.id)
+        .select("id");
+      if (dateError || !moved?.length) {
+        return { error: `Instalment ${row.installment_no}'s due date was not saved${dateError ? ` (${dateError.message})` : " — you may not edit this invoice"}.` };
+      }
+    }
   }
 
   const scheduleTotal = Math.round(schedule.reduce((s, i) => s + Number(i.amount ?? 0), 0) * 100) / 100;
@@ -544,6 +609,9 @@ export async function updateInvoice(invoiceId: string, studentId: string, revali
       ...(issuedOn === undefined ? {} : { issued_on: issuedOn }),
     })
     .eq("id", invoiceId);
+  if (error?.code === "23505" && /invoices_invoice_number_unique/.test(error.message)) {
+    return { error: `Invoice number ${invoice_number} is already used by another invoice. Choose another.` };
+  }
   if (error) return { error: error.message };
 
   // The per-country amounts, written after the sum they have to agree with.
@@ -618,7 +686,9 @@ export async function deleteInvoice(invoiceId: string, studentId: string, revali
   }
   await removeReceiptFiles(receiptFiles);
 
+  // Its number is free again: the next invoice in its run is given it (0311).
   revalidatePath(revalidateTo);
+  revalidateInvoicePages(studentId);
   return { success: true };
 }
 
@@ -700,20 +770,94 @@ export async function markInstallmentPaid(installmentId: string, studentId: stri
   // writes the identical fields by another route.
   const denied = await requirePermission("finance.invoices.manage", "Only Finance/Super Admin can record a payment.");
   if (denied) return { error: denied.error };
-  const paid_date = String(formData.get("paid_date") ?? new Date().toISOString().slice(0, 10));
+  // A blank date is today, in Karachi. A form posts "" for an empty date, not
+  // nothing, so a fallback on null alone never fired.
+  const paid_date = String(formData.get("paid_date") ?? "").trim() || karachiToday();
   const payment_method = String(formData.get("payment_method") ?? "").trim() || null;
 
-  const { data: installment } = await supabase.from("invoice_installments").select("amount").eq("id", installmentId).maybeSingle();
-
-  const { error } = await supabase
+  const { data: installment } = await supabase
     .from("invoice_installments")
-    .update({ status: "paid", paid_date, payment_method, amount_paid: installment?.amount ?? 0 })
-    .eq("id", installmentId);
+    .select("amount, status")
+    .eq("id", installmentId)
+    .maybeSingle();
+  if (!installment) return { error: "That instalment no longer exists, or you can't record payments on it." };
+  if (installment.status === "paid") return { error: "This instalment is already marked paid." };
+  const amount = Math.round(Number(installment.amount ?? 0) * 100) / 100;
 
+  // The amount received, where the form asks for it. Less than the instalment
+  // is a part payment: what came in is closed off and the balance becomes an
+  // instalment of its own, due a week later (0183). More is refused, rather
+  // than recorded as a payment of the instalment alone.
+  const rawReceived = formData.get("amount_paid");
+  const received =
+    rawReceived === null || String(rawReceived).trim() === "" ? amount : Math.round(Number(rawReceived) * 100) / 100;
+  if (!Number.isFinite(received) || received <= 0) return { error: "Enter how much was received." };
+  if (received > amount + 0.005) {
+    return { error: `That is more than the ${amount.toFixed(2)} due on this instalment. Record this one in full, and the rest against the next.` };
+  }
+
+  if (received < amount - 0.005) {
+    const balanceDue = balanceDueDate(paid_date);
+    const check = checkPartialSplit(amount, received, balanceDue);
+    if (!check.ok) return { error: check.error };
+    const { error: splitError } = await supabase.rpc("split_partial_installment", {
+      p_installment_id: installmentId,
+      p_amount_paid: received,
+      p_paid_date: paid_date,
+      p_balance_due_date: balanceDue,
+      p_payment_method: payment_method,
+    });
+    if (splitError) return { error: splitError.message };
+  } else {
+    // An update RLS refuses matches nothing and raises nothing — it is read
+    // back, so a refusal is said rather than reported as a payment.
+    const { data: saved, error } = await supabase
+      .from("invoice_installments")
+      .update({ status: "paid", paid_date, payment_method, amount_paid: amount })
+      .eq("id", installmentId)
+      .select("id");
+    if (error) return { error: error.message };
+    if (!saved?.length) return { error: "The payment was not saved — you may not record payments on this invoice." };
+  }
+
+  revalidateInvoicePages(studentId);
+  return { success: true };
+}
+
+/**
+ * Undoes a payment recorded by mistake (0311): the instalment is unpaid again,
+ * its amount, date and method cleared. A part payment is merged back with
+ * its balance into the one instalment it was. Its payment receipts stay on
+ * file — a receipt is proof, not the payment.
+ */
+export async function undoInstallmentPayment(installmentId: string, studentId: string): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient();
+  const denied = await requirePermission("finance.invoices.manage", "Only those who can record a payment can undo one.");
+  if (denied) return { error: denied.error };
+
+  const { error } = await supabase.rpc("undo_installment_payment", { p_installment_id: installmentId });
   if (error) return { error: error.message };
 
-  revalidatePath(`/students/${studentId}`);
+  // Read back: the function runs as the caller, so a refused write would leave the payment standing.
+  const { data: after } = await supabase.from("invoice_installments").select("status, amount_paid").eq("id", installmentId).maybeSingle();
+  if (after && (after.status === "paid" || Number(after.amount_paid ?? 0) > 0)) {
+    return { error: "The payment was not undone — you may not edit this invoice." };
+  }
+
+  revalidateInvoicePages(studentId);
   return { success: true };
+}
+
+/** Every page that shows an invoice's payments. */
+function revalidateInvoicePages(studentId: string) {
+  revalidatePath(`/students/${studentId}`);
+  revalidatePath("/finance/invoice-generator");
+  revalidatePath("/finance/consultancy-fee");
+  revalidatePath("/portal/payments");
+}
+
+function karachiToday() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Karachi" }).format(new Date());
 }
 
 /**
