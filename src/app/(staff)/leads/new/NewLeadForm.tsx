@@ -47,6 +47,10 @@ export function NewLeadForm({
           <label className={labelClass}>Email</label>
           <Input name="email" type="email" />
         </div>
+        <div className="flex flex-col gap-1.5">
+          <label className={labelClass}>City</label>
+          <Input name="city" maxLength={120} placeholder="e.g. Karachi" />
+        </div>
       </div>
       <div className="flex flex-col gap-1.5">
         <label className={labelClass}>Platform / source</label>

@@ -15,6 +15,7 @@ export type LeadEditable = {
   full_name: string;
   contact_number: string | null;
   email: string | null;
+  city?: string | null;
   platform_source: string | null;
   current_qualification: string | null;
   level_applying_for: string | null;
@@ -65,6 +66,10 @@ export function LeadEditForm({
       <label className="flex flex-col gap-1 text-xs text-muted">
         Email
         <Input name="email" type="email" defaultValue={lead.email ?? ""} />
+      </label>
+      <label className="flex flex-col gap-1 text-xs text-muted">
+        City
+        <Input name="city" maxLength={120} defaultValue={lead.city ?? ""} />
       </label>
       <label className="flex flex-col gap-1 text-xs text-muted">
         Platform / source

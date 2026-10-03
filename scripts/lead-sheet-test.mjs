@@ -20,7 +20,8 @@ test("the columns are the list's, with the qualification, level and course right
   assert.equal(headers[0], "Month");
   const country = headers.indexOf("Country");
   assert.deepEqual(headers.slice(country, country + 4), ["Country", "Current qualification", "Applying for", "Course of interest"]);
-  assert.equal(leadColumnIndex("date_of_inquiry"), 14, "the Month formula points at column N");
+  assert.equal(leadColumnIndex("date_of_inquiry"), 15, "the Month formula points at column O");
+  assert.equal(headers[headers.indexOf("Email") + 1], "City");
 });
 
 test("the month is worked out from the inquiry date", () => {

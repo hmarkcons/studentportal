@@ -97,6 +97,7 @@ export async function createLead(_prevState: unknown, formData: FormData) {
   const current_qualification = String(formData.get("current_qualification") ?? "").trim() || null;
   const level_applying_for = String(formData.get("level_applying_for") ?? "") || null;
   const course_of_interest = String(formData.get("course_of_interest") ?? "").trim() || null;
+  const city = String(formData.get("city") ?? "").trim().slice(0, 120) || null;
   const destination_ids = formData.getAll("destination_ids").map(String).filter(Boolean);
   const destination_names = formData.getAll("destination_names").map(String).filter(Boolean);
   const country_of_interest = destination_names.join(", ") || null;
@@ -137,6 +138,7 @@ export async function createLead(_prevState: unknown, formData: FormData) {
     level_applying_for,
     course_of_interest,
     country_of_interest,
+    city,
     assigned_counselor_id,
   });
 
@@ -208,6 +210,8 @@ export async function updateLead(leadId: string, revalidateTo: string, _prevStat
       date_of_birth,
       address,
       home_phone,
+      // Only when the form carried it, so a form without the field cannot blank it.
+      ...(formData.get("city") === null ? {} : { city: String(formData.get("city")).trim().slice(0, 120) || null }),
     })
     .eq("id", leadId);
 
@@ -250,6 +254,7 @@ type MatchLead = {
   full_name: string;
   contact_number: string | null;
   email: string | null;
+  city: string | null;
   country_of_interest: string | null;
   current_qualification: string | null;
   level_applying_for: string | null;
@@ -340,7 +345,7 @@ export async function importLeads(_prevState: unknown, formData: FormData): Prom
     admin
       .from("leads")
       .select(
-        "id, full_name, contact_number, email, country_of_interest, current_qualification, level_applying_for, course_of_interest, status, assigned_counselor_id, date_of_inquiry, platform_source"
+        "id, full_name, contact_number, email, city, country_of_interest, current_qualification, level_applying_for, course_of_interest, status, assigned_counselor_id, date_of_inquiry, platform_source"
       )
       .order("id")
       .range(from, to)
@@ -391,6 +396,7 @@ export async function importLeads(_prevState: unknown, formData: FormData): Prom
           full_name: input.full_name,
           contact_number: input.contact_number,
           email: input.email,
+          city: input.city,
           country_of_interest: input.country_of_interest,
           current_qualification: input.current_qualification,
           level_applying_for: input.level_applying_for,
@@ -428,6 +434,7 @@ export async function importLeads(_prevState: unknown, formData: FormData): Prom
       full_name: s.full_name,
       contact_number: s.contact_number,
       email: s.email,
+      city: s.city ?? null,
       country_of_interest: s.country_of_interest,
       current_qualification: s.current_qualification,
       level_applying_for: s.level_applying_for,

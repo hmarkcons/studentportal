@@ -13,6 +13,7 @@ type Row = {
   full_name: string;
   contact_number: string | null;
   email: string | null;
+  city: string | null;
   country_of_interest: string | null;
   current_qualification: string | null;
   level_applying_for: string | null;
@@ -41,7 +42,7 @@ export async function GET() {
     supabase
       .from("leads")
       .select(
-        "id, full_name, contact_number, email, country_of_interest, current_qualification, level_applying_for, course_of_interest, status, date_of_inquiry, platform_source, counselor:staff!assigned_counselor_id(full_name), current_remark:lead_remark_current(body)"
+        "id, full_name, contact_number, email, city, country_of_interest, current_qualification, level_applying_for, course_of_interest, status, date_of_inquiry, platform_source, counselor:staff!assigned_counselor_id(full_name), current_remark:lead_remark_current(body)"
       )
       .order("date_of_inquiry", { ascending: false })
       .order("id")

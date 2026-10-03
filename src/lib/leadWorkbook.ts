@@ -44,6 +44,7 @@ export async function leadWorkbook(rows: LeadSheetRow[], { counselors, example =
         full_name: EXAMPLE_LEAD,
         contact_number: "0300-1234567",
         email: "student@example.com",
+        city: "Karachi",
         country_of_interest: "Italy",
         current_qualification: "A-Levels",
         level_applying_for: "bachelors",

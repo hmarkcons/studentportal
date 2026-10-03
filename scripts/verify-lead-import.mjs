@@ -52,7 +52,7 @@ const NEW_B = "zztmp Import Bravo";
 const EXISTING = "zztmp Import Existing";
 const HIDDEN = "zztmp Import Hidden";
 const HEADERS = [
-  "Month", "Name", "Contact number", "Email", "Country", "Current qualification", "Applying for", "Course of interest",
+  "Month", "Name", "Contact number", "Email", "City", "Country", "Current qualification", "Applying for", "Course of interest",
   "Status", "Counselor", "Remarks", "Follow-up date", "Follow-up note", "Inquiry date", "Source",
 ];
 
@@ -135,7 +135,7 @@ try {
   const tplHeaders = (tplSheet.getRow(1).values ?? []).slice(1).map(cellText);
   ok("...with the list's columns, in its order", JSON.stringify(tplHeaders) === JSON.stringify(HEADERS), tplHeaders.join(" | "));
   ok("...Month a formula on the Inquiry date, in the example row and the blank ones below",
-    /^=IF\(N2="","",TEXT\(N2,"mmm yyyy"\)\)$/.test(cellText(tplSheet.getCell("A2").value)) && /N50/.test(cellText(tplSheet.getCell("A50").value)),
+    /^=IF\(O2="","",TEXT\(O2,"mmm yyyy"\)\)$/.test(cellText(tplSheet.getCell("A2").value)) && /O50/.test(cellText(tplSheet.getCell("A50").value)),
     cellText(tplSheet.getCell("A2").value));
   ok("...an example row the import will skip", cellText(tplSheet.getCell("B2").value).startsWith("Example Student"));
   const lists = tplBook.getWorksheet("Lists");
@@ -156,6 +156,7 @@ try {
       Name: NEW_A,
       "Contact number": "0300-9999983",
       Email: "zztmp-import-alpha@hmark-test.local",
+      City: "Karachi",
       Country: "Italy",
       "Current qualification": "A-Levels",
       "Applying for": "Masters",
@@ -207,7 +208,7 @@ try {
   ok("...with every column of the sheet",
     a.contact_number === "0300-9999983" && a.email === "zztmp-import-alpha@hmark-test.local" && a.current_qualification === "A-Levels" &&
       a.level_applying_for === "masters" && a.course_of_interest === LONG_COURSE && a.status === "meeting_done" &&
-      a.assigned_counselor_id === counsellor.id && a.date_of_inquiry === "2026-09-14" && a.platform_source === "Education fair",
+      a.assigned_counselor_id === counsellor.id && a.date_of_inquiry === "2026-09-14" && a.platform_source === "Education fair" && a.city === "Karachi",
     JSON.stringify(a));
   ok("...the second row's country beside the first's", a.country_of_interest === COUNTRIES, a.country_of_interest);
   ok("...and both rows' remarks", (await current(a.id)) === "zztmp Met at the fair\nzztmp Also asked about Germany", await current(a.id));
@@ -249,7 +250,7 @@ try {
   const c = headers.indexOf("country");
   ok("Current qualification, Applying for and Course of interest come right after Country",
     c > 0 && headers[c + 1] === "current qualification" && headers[c + 2] === "applying for" && headers[c + 3] === "course of interest", headers.join(" | "));
-  ok("...with Email and Source each a column of its own", headers.includes("email") && headers.includes("source"));
+  ok("...with Email, City and Source each a column of its own", headers.includes("email") && headers.includes("city") && headers.includes("source"));
   const alphaRow = page.locator("tbody tr", { hasText: NEW_A });
   const alphaCells = (await alphaRow.locator("td").allInnerTexts()).map((t) => t.trim());
   ok("...and the lead's own values in them", alphaCells[c] === COUNTRIES && alphaCells[c + 1] === "A-Levels" && alphaCells[c + 2] === "Masters" && alphaCells[c + 3] === LONG_COURSE,
@@ -318,11 +319,11 @@ try {
   const row = exported.find((r) => r.cells[1] === NEW_A)?.cells ?? [];
   ok("...each piece of a lead in its own cell",
     JSON.stringify(row.slice(1)) ===
-      JSON.stringify([NEW_A, "0300-9999983", "zztmp-import-alpha@hmark-test.local", COUNTRIES, "A-Levels", "masters", LONG_COURSE, "Meeting Done", counsellor.name,
+      JSON.stringify([NEW_A, "0300-9999983", "zztmp-import-alpha@hmark-test.local", "Karachi", COUNTRIES, "A-Levels", "masters", LONG_COURSE, "Meeting Done", counsellor.name,
         "zztmp Met at the fair\nzztmp Also asked about Germany", "2026-10-20", "zztmp Send the Milan list", "2026-09-14", "Education fair"]),
     JSON.stringify(row));
   const n = exported.find((r) => r.cells[1] === NEW_A)?.n;
-  ok("...the Month a formula on that row's Inquiry date", row[0] === `=IF(N${n}="","",TEXT(N${n},"mmm yyyy"))`, row[0]);
+  ok("...the Month a formula on that row's Inquiry date", row[0] === `=IF(O${n}="","",TEXT(O${n},"mmm yyyy"))`, row[0]);
 
   const back = await importFile(page, "leads-export.xlsx", expBuffer);
   ok("the export imported straight back changes nothing", /^0 new leads added · 0 already on file and added to · \d+ already on file with nothing new/.test(back), back);

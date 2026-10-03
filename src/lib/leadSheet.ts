@@ -26,6 +26,7 @@ export const LEAD_COLUMNS = [
   { key: "full_name", header: "Name", width: 26 },
   { key: "contact_number", header: "Contact number", width: 18 },
   { key: "email", header: "Email", width: 28 },
+  { key: "city", header: "City", width: 16 },
   { key: "country_of_interest", header: "Country", width: 22 },
   { key: "current_qualification", header: "Current qualification", width: 22 },
   { key: "level_applying_for", header: "Applying for", width: 14 },
@@ -79,6 +80,7 @@ const ALIASES: Record<string, LeadColumnKey> = {
   name: "full_name", full_name: "full_name", student: "full_name", student_name: "full_name",
   contact: "contact_number", contact_number: "contact_number", phone: "contact_number", mobile: "contact_number", phone_number: "contact_number",
   email: "email", email_address: "email",
+  city: "city", town: "city", city_name: "city", home_city: "city",
   country: "country_of_interest", country_of_interest: "country_of_interest", countries: "country_of_interest",
   current_qualification: "current_qualification", qualification: "current_qualification",
   applying_for: "level_applying_for", level_applying_for: "level_applying_for", level: "level_applying_for",
@@ -114,6 +116,7 @@ export type LeadInput = {
   full_name: string;
   contact_number: string | null;
   email: string | null;
+  city: string | null;
   country_of_interest: string | null;
   current_qualification: string | null;
   level_applying_for: (typeof LEAD_LEVELS)[number] | null;
@@ -169,6 +172,7 @@ export function leadFromRow(raw: Record<string, string>, problems: string[]): Le
     full_name,
     contact_number: text(row.contact_number),
     email: text(row.email)?.toLowerCase() ?? null,
+    city: text(row.city),
     country_of_interest: text(row.country_of_interest),
     current_qualification: text(row.current_qualification),
     level_applying_for,
@@ -198,6 +202,7 @@ export type StoredLead = {
   full_name: string;
   contact_number: string | null;
   email: string | null;
+  city?: string | null;
   country_of_interest: string | null;
   current_qualification: string | null;
   level_applying_for: string | null;
@@ -213,7 +218,7 @@ export type StoredLead = {
 
 export type LeadMerge = {
   /** Columns to write on the lead: only ones it had nothing in, or added to. */
-  patch: Partial<Record<"contact_number" | "email" | "country_of_interest" | "current_qualification" | "level_applying_for" | "course_of_interest" | "date_of_inquiry" | "platform_source", string>>;
+  patch: Partial<Record<"contact_number" | "email" | "city" | "country_of_interest" | "current_qualification" | "level_applying_for" | "course_of_interest" | "date_of_inquiry" | "platform_source", string>>;
   /** A counsellor for a lead that has none, by name. */
   counselor: string | null;
   /** A status for a lead that has none. */
@@ -242,13 +247,14 @@ export function mergeIntoLead(stored: StoredLead, input: LeadInput): LeadMerge {
   const single = [
     ["contact_number", "contact number"],
     ["email", "email"],
+    ["city", "city"],
     ["level_applying_for", "applying for"],
     ["date_of_inquiry", "inquiry date"],
   ] as const;
   for (const [field, label] of single) {
     const value = input[field];
     if (!value) continue;
-    const old = stored[field];
+    const old = stored[field] ?? null;
     if (!old) {
       merge.patch[field] = value;
       merge.added.push(`${label} ${value}`);
@@ -312,6 +318,7 @@ export type ExportLead = {
   full_name: string;
   contact_number: string | null;
   email: string | null;
+  city?: string | null;
   country_of_interest: string | null;
   current_qualification: string | null;
   level_applying_for: string | null;
@@ -331,6 +338,7 @@ export function leadSheetRow(lead: ExportLead): LeadSheetRow {
     full_name: lead.full_name,
     contact_number: lead.contact_number ?? "",
     email: lead.email ?? "",
+    city: lead.city ?? "",
     country_of_interest: lead.country_of_interest ?? "",
     current_qualification: lead.current_qualification ?? "",
     level_applying_for: lead.level_applying_for ?? "",

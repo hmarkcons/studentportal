@@ -21,6 +21,7 @@ type LeadRow = {
   full_name: string;
   contact_number: string | null;
   email: string | null;
+  city: string | null;
   country_of_interest: string | null;
   current_qualification: string | null;
   level_applying_for: string | null;
@@ -49,7 +50,7 @@ export default async function LeadsPage() {
     supabase
       .from("leads")
       .select(
-        "id, full_name, contact_number, email, country_of_interest, current_qualification, level_applying_for, course_of_interest, platform_source, status, date_of_inquiry, assigned_counselor_id, assigned_counselor:staff!assigned_counselor_id(full_name), current_remark:lead_remark_current(body, updated_at, editor:staff!lead_remark_current_updated_by_fkey(full_name))"
+        "id, full_name, contact_number, email, city, country_of_interest, current_qualification, level_applying_for, course_of_interest, platform_source, status, date_of_inquiry, assigned_counselor_id, assigned_counselor:staff!assigned_counselor_id(full_name), current_remark:lead_remark_current(body, updated_at, editor:staff!lead_remark_current_updated_by_fkey(full_name))"
       )
       .order("date_of_inquiry", { ascending: false })
       .returns<LeadRow[]>(),
@@ -96,6 +97,7 @@ export default async function LeadsPage() {
     { key: "name", header: "Name" },
     { key: "contact", header: "Contact number" },
     { key: "email", header: "Email" },
+    { key: "city", header: "City" },
     { key: "country", header: "Country" },
     { key: "qualification", header: "Current qualification" },
     { key: "level", header: "Applying for" },
@@ -130,6 +132,7 @@ export default async function LeadsPage() {
         ),
         contact: long(r.contact_number, "Contact number", "max-w-[10rem]"),
         email: long(r.email, "Email", "max-w-[14rem]"),
+        city: long(r.city, "City", "max-w-[10rem]"),
         country: long(r.country_of_interest, "Country"),
         qualification: long(r.current_qualification, "Current qualification"),
         level: level ?? "—",
@@ -163,6 +166,7 @@ export default async function LeadsPage() {
         name: r.full_name,
         contact: r.contact_number ?? "",
         email: r.email ?? "",
+        city: r.city ?? "",
         country: r.country_of_interest ?? "",
         qualification: r.current_qualification ?? "",
         level: level ?? "",
@@ -180,6 +184,7 @@ export default async function LeadsPage() {
   });
 
   const countryOptions = Array.from(new Set((leads ?? []).map((r) => r.country_of_interest).filter(Boolean))).sort() as string[];
+  const cityOptions = Array.from(new Set((leads ?? []).map((r) => r.city?.trim()).filter(Boolean))).sort() as string[];
   const counselorOptions = Array.from(
     new Set((leads ?? []).map((r) => one(r.assigned_counselor)?.full_name).filter(Boolean))
   ).sort() as string[];
@@ -213,11 +218,12 @@ export default async function LeadsPage() {
             searchable
             searchPlaceholder="Search name, contact, course, remarks…"
             oneLine
-            minTableWidthClassName="min-w-[1400px]"
+            minTableWidthClassName="min-w-[1500px]"
             pageSize={25}
             filters={[
               { key: "status", label: "Status", options: Object.values(LEAD_STATUS_LABELS) },
               { key: "country", label: "Country", options: countryOptions },
+              { key: "city", label: "City", options: cityOptions },
               { key: "level", label: "Applying for", options: Object.values(LEVEL_LABELS) },
               { key: "counselor", label: "Counselor", options: counselorOptions },
             ]}
