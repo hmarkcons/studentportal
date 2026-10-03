@@ -23,6 +23,7 @@
     "check:leadimport": "node scripts/verify-lead-import.mjs",
     "check:studentcells": "node scripts/verify-student-cells.mjs",
     "check:receipts": "node scripts/verify-payment-receipts.mjs",
+    "check:agreementdate": "node scripts/verify-agreement-date.mjs",
     "check:pay": "node scripts/verify-pay-split.mjs",
     "check:roles": "node scripts/verify-multi-role.mjs",
     "check:speed": "node scripts/check-speed.mjs",

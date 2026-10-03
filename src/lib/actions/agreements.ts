@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { agreementToday, readAgreementDate } from "@/lib/agreementDate";
 import { createClient } from "@/lib/supabase/server";
 import { renderStudentAgreementPdf, type AgreementDestination } from "@/lib/pdf/studentAgreementPdf";
 import { readAgreementCompany } from "@/lib/agreementCompanyRead";
@@ -125,6 +126,9 @@ async function templateCountryError(
 export async function generateAgreement(studentId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
   const fields = parseAgreementFields(formData);
+  // The date printed on it (0310): today in Karachi unless staff chose another.
+  const dated = readAgreementDate(formData.get("agreement_date"), agreementToday());
+  if ("error" in dated) return { error: dated.error };
 
   if (!["paper", "e_signature"].includes(fields.signing_method)) {
     return { error: "Choose a signing method." };
@@ -154,6 +158,7 @@ export async function generateAgreement(studentId: string, _prevState: unknown, 
     ...fields,
     service_type: service.service_type,
     is_backup,
+    agreement_date: dated.date,
     generated_by: user?.id,
     status: "pending_signature",
   });
@@ -176,10 +181,12 @@ export async function updateAgreement(agreementId: string, studentId: string, _p
   const denied = await requirePermission("agreements.edit_delete", "Only Super Admin can edit an agreement.");
   if (denied) return { error: denied.error };
 
-  const { data: existing } = await supabase.from("agreements").select("status").eq("id", agreementId).maybeSingle();
+  const { data: existing } = await supabase.from("agreements").select("status, agreement_date").eq("id", agreementId).maybeSingle();
   if (existing?.status === "signed") return { error: "This agreement is already signed and can no longer be edited." };
 
   const fields = parseAgreementFields(formData);
+  const dated = readAgreementDate(formData.get("agreement_date"), (existing?.agreement_date as string | undefined) ?? agreementToday());
+  if ("error" in dated) return { error: dated.error };
   if (!["paper", "e_signature"].includes(fields.signing_method)) {
     return { error: "Choose a signing method." };
   }
@@ -202,7 +209,10 @@ export async function updateAgreement(agreementId: string, studentId: string, _p
     fields.installment_count = 1;
   }
 
-  const { error } = await supabase.from("agreements").update({ ...fields, service_type: service.service_type, is_backup }).eq("id", agreementId);
+  const { error } = await supabase
+    .from("agreements")
+    .update({ ...fields, service_type: service.service_type, is_backup, agreement_date: dated.date })
+    .eq("id", agreementId);
   if (error) return { error: error.message };
 
   revalidatePath(`/students/${studentId}`);
@@ -221,7 +231,7 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
 
   const { data: agreement, error: agreementError } = await supabase
     .from("agreements")
-    .select("id, template_id, destination_id, admin_charge_override, consultancy_fee_override, discount_amount, installment_count, is_backup, created_at, service_type, visa_service_fee_override")
+    .select("id, template_id, destination_id, admin_charge_override, consultancy_fee_override, discount_amount, installment_count, is_backup, created_at, agreement_date, service_type, visa_service_fee_override")
     .eq("id", agreementId)
     .single();
   if (agreementError || !agreement) return { error: agreementError?.message ?? "Agreement not found." };
@@ -299,6 +309,45 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
 
   revalidatePath(revalidateTo);
   return { success: true };
+}
+
+/**
+ * Changes the date printed on a student's agreement (0310) — at any time,
+ * signed or not, as the office decided — and rebuilds its generated PDF so
+ * the document says the same. A copy the student already signed and returned
+ * is a file of its own and keeps the date it was signed with.
+ */
+export async function setAgreementDate(
+  agreementId: string,
+  studentId: string,
+  rawDate: string
+): Promise<{ success: true; message: string } | { error: string }> {
+  const supabase = await createClient();
+  const denied = await requirePermission("agreements.process", "Only Super Admin or Processing can change an agreement's date.");
+  if (denied) return { error: denied.error };
+
+  const { data: current } = await supabase.from("agreements").select("agreement_date, pdf_path, status").eq("id", agreementId).maybeSingle();
+  if (!current) return { error: "That agreement no longer exists." };
+  const dated = readAgreementDate(rawDate, current.agreement_date as string);
+  if ("error" in dated) return { error: dated.error };
+  if (dated.date === current.agreement_date) return { success: true, message: "That is already its date." };
+
+  // An update RLS refuses matches nothing and raises nothing, so it is read back.
+  const { data: saved, error } = await supabase.from("agreements").update({ agreement_date: dated.date }).eq("id", agreementId).select("id");
+  if (error) return { error: error.message };
+  if (!saved?.length) return { error: "The date was not saved — you may not edit this agreement." };
+
+  const signedNote = current.status === "signed" ? " The signed copy keeps the date it was signed with." : "";
+  if (current.pdf_path) {
+    const rebuilt = await generateAgreementPdf(agreementId, studentId, `/students/${studentId}`);
+    if ("error" in rebuilt && rebuilt.error) {
+      revalidatePath(`/students/${studentId}`);
+      return { success: true, message: `Date saved, but the PDF could not be rebuilt: ${rebuilt.error}` };
+    }
+    return { success: true, message: `Date saved, and the PDF rebuilt with it.${signedNote}` };
+  }
+  revalidatePath(`/students/${studentId}`);
+  return { success: true, message: "Date saved. It will be printed on the PDF when it is generated." };
 }
 
 export async function deleteAgreement(agreementId: string, studentId: string) {

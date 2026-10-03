@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePermission } from "@/lib/auth/permissions";
 import { getStaffSession } from "@/lib/auth/session";
+import { agreementToday, readAgreementDate, staffAgreementDateText } from "@/lib/agreementDate";
 import { staffRoles } from "@/lib/auth/roles";
 import { STAFF_ROLE_LABELS, type StaffRole } from "@/lib/constants";
 import { COMPENSATION_COLUMNS } from "@/lib/staffCompensation";
@@ -50,10 +51,6 @@ type Result = { error: string; success?: undefined } | { success: true; error?: 
 const PATHS = ["/setup/agreement-templates", "/setup/agreement-generator", "/admin/staff", "/my-agreement"];
 function refresh() {
   for (const p of PATHS) revalidatePath(p);
-}
-
-function agreementDate(d: Date) {
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Karachi" });
 }
 
 async function mail(to: string | null | undefined, message: StaffAgreementMail): Promise<boolean> {
@@ -226,7 +223,8 @@ type TemplateRow = { id: string; name: string; signatory_name: string; wording: 
  * Refuses rather than rendering a contract with a gap in it: every
  * placeholder the wording uses must have a value on their record.
  */
-async function renderStaffAgreementPdf(agreementId: string, staffId: string, template: TemplateRow, createdAt: Date) {
+/** `agreementDate` is the day it carries (0310), YYYY-MM-DD. */
+async function renderStaffAgreementPdf(agreementId: string, staffId: string, template: TemplateRow, agreementDate: string) {
   // The permission was checked by the caller. Their pay is read with the
   // service role because staff_compensation is Super Admin/Finance only, and
   // whoever holds staff_agreements.manage has been trusted to issue contracts
@@ -252,7 +250,7 @@ async function renderStaffAgreementPdf(agreementId: string, staffId: string, tem
   ]);
   if (!staff) return { error: "That staff member no longer exists." };
 
-  const dateText = agreementDate(createdAt);
+  const dateText = staffAgreementDateText(agreementDate);
   const company = await readAgreementCompany(admin);
   const missingCompany = missingCompanyFields(template.wording, company);
   if (missingCompany.length > 0) {
@@ -319,6 +317,9 @@ export async function generateStaffAgreement(staffId: string, _prev: unknown, fo
 
   const templateId = String(formData.get("template_id") ?? "");
   if (!templateId) return { error: "Choose a template." };
+  // The date printed on it (0310): today in Karachi unless another was chosen.
+  const dated = readAgreementDate(formData.get("agreement_date"), agreementToday());
+  if ("error" in dated) return { error: dated.error };
 
   const supabase = await createClient();
   const { data: template } = await supabase
@@ -331,12 +332,12 @@ export async function generateStaffAgreement(staffId: string, _prev: unknown, fo
   const { staff: actor } = await getStaffSession();
   const { data: created, error } = await supabase
     .from("staff_agreements")
-    .insert({ staff_id: staffId, template_id: template.id, title: template.name, generated_by: actor?.id ?? null })
-    .select("id, created_at")
+    .insert({ staff_id: staffId, template_id: template.id, title: template.name, generated_by: actor?.id ?? null, agreement_date: dated.date })
+    .select("id, agreement_date")
     .single();
   if (error || !created) return { error: error?.message ?? "Could not create the agreement." };
 
-  const rendered = await renderStaffAgreementPdf(created.id, staffId, template, new Date(created.created_at));
+  const rendered = await renderStaffAgreementPdf(created.id, staffId, template, created.agreement_date as string);
   if ("error" in rendered && rendered.error) {
     // Nothing half-made is left behind: a draft with no PDF is not an agreement.
     await supabase.from("staff_agreements").delete().eq("id", created.id);
@@ -356,7 +357,7 @@ export async function regenerateStaffAgreementPdf(agreementId: string): Promise<
   const supabase = await createClient();
   const { data: agreement } = await supabase
     .from("staff_agreements")
-    .select("id, staff_id, status, created_at, template:staff_agreement_templates(id, name, signatory_name, wording, design)")
+    .select("id, staff_id, status, agreement_date, template:staff_agreement_templates(id, name, signatory_name, wording, design)")
     .eq("id", agreementId)
     .maybeSingle();
   if (!agreement) return { error: "That agreement no longer exists." };
@@ -366,12 +367,55 @@ export async function regenerateStaffAgreementPdf(agreementId: string): Promise<
   const template = (Array.isArray(agreement.template) ? agreement.template[0] : agreement.template) as TemplateRow | null;
   if (!template) return { error: "Its template has been deleted, so it can't be regenerated." };
 
-  const rendered = await renderStaffAgreementPdf(agreement.id, agreement.staff_id, template, new Date(agreement.created_at));
+  const rendered = await renderStaffAgreementPdf(agreement.id, agreement.staff_id, template, agreement.agreement_date as string);
   if ("error" in rendered && rendered.error) return { error: rendered.error };
   await supabase.from("staff_agreements").update({ pdf_path: rendered.path }).eq("id", agreementId);
 
   refresh();
   return { success: true };
+}
+
+/**
+ * Changes the date printed on a staff agreement (0310) — at any time, signed
+ * or not, as the office decided — and rebuilds its generated PDF so the
+ * document says the same. The copy a staff member signed and returned is a
+ * file of its own and keeps the date it was signed with; an agreement that
+ * was uploaded already signed has no generated PDF to rebuild.
+ */
+export async function setStaffAgreementDate(agreementId: string, rawDate: string): Promise<Result> {
+  const denied = await requirePermission(MANAGE, "You don't have access to staff agreements.");
+  if (denied) return denied;
+
+  const supabase = await createClient();
+  const { data: agreement } = await supabase
+    .from("staff_agreements")
+    .select("id, staff_id, status, source, agreement_date, template:staff_agreement_templates(id, name, signatory_name, wording, design)")
+    .eq("id", agreementId)
+    .maybeSingle();
+  if (!agreement) return { error: "That agreement no longer exists." };
+  const dated = readAgreementDate(rawDate, agreement.agreement_date as string);
+  if ("error" in dated) return { error: dated.error };
+  if (dated.date === agreement.agreement_date) return { success: true, message: "That is already its date." };
+
+  // An update RLS refuses matches nothing and raises nothing, so it is read back.
+  const { data: saved, error } = await supabase
+    .from("staff_agreements")
+    .update({ agreement_date: dated.date })
+    .eq("id", agreementId)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!saved?.length) return { error: "The date was not saved — you may not edit this agreement." };
+
+  refresh();
+  if (agreement.source === "uploaded") return { success: true, message: "Date saved." };
+  const template = (Array.isArray(agreement.template) ? agreement.template[0] : agreement.template) as TemplateRow | null;
+  if (!template) return { success: true, message: "Date saved. Its template has been deleted, so the PDF could not be rebuilt." };
+  const rendered = await renderStaffAgreementPdf(agreement.id, agreement.staff_id, template, dated.date);
+  if ("error" in rendered && rendered.error) return { success: true, message: `Date saved, but the PDF could not be rebuilt: ${rendered.error}` };
+  await supabase.from("staff_agreements").update({ pdf_path: rendered.path }).eq("id", agreementId);
+  refresh();
+  const signedNote = agreement.status === "submitted" || agreement.status === "signed" ? " The signed copy keeps the date it was signed with." : "";
+  return { success: true, message: `Date saved, and the PDF rebuilt with it.${signedNote}` };
 }
 
 /** Shows a draft to its staff member and mails them to sign it. */
@@ -608,6 +652,8 @@ export type StaffAgreementView = {
   source: "generated" | "uploaded";
   hasTemplate: boolean;
   createdAt: string;
+  /** The date it carries (0310), YYYY-MM-DD. */
+  agreementDate: string;
   sentAt: string | null;
   submittedAt: string | null;
   verifiedAt: string | null;
@@ -623,6 +669,7 @@ type AgreementRow = {
   source: StaffAgreementView["source"];
   template_id: string | null;
   created_at: string;
+  agreement_date: string;
   sent_at: string | null;
   submitted_at: string | null;
   verified_at: string | null;
@@ -632,7 +679,7 @@ type AgreementRow = {
 };
 
 const AGREEMENT_COLUMNS =
-  "id, title, status, source, template_id, created_at, sent_at, submitted_at, verified_at, rejection_note, pdf_path, signed_file_path";
+  "id, title, status, source, template_id, created_at, agreement_date, sent_at, submitted_at, verified_at, rejection_note, pdf_path, signed_file_path";
 
 async function withLinks(supabase: Awaited<ReturnType<typeof createClient>>, rows: AgreementRow[]): Promise<StaffAgreementView[]> {
   const link = async (path: string | null) =>
@@ -645,6 +692,7 @@ async function withLinks(supabase: Awaited<ReturnType<typeof createClient>>, row
       source: a.source,
       hasTemplate: Boolean(a.template_id),
       createdAt: a.created_at,
+      agreementDate: a.agreement_date,
       sentAt: a.sent_at,
       submittedAt: a.submitted_at,
       verifiedAt: a.verified_at,

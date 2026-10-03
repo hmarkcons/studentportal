@@ -7,6 +7,7 @@ import {
   generateStaffAgreement,
   loadStaffAgreementPanel,
   regenerateStaffAgreementPdf,
+  setStaffAgreementDate,
   sendBackStaffAgreement,
   sendStaffAgreementForSigning,
   uploadSignedStaffAgreement,
@@ -19,6 +20,8 @@ import { Input, Select } from "@/components/ui/Input";
 import { FileField } from "@/components/FileField";
 import { useButtonAction } from "@/components/useButtonAction";
 import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
+import { AgreementDateEditor } from "@/components/AgreementDateEditor";
+import { AGREEMENT_DATE_MAX, AGREEMENT_DATE_MIN, agreementToday } from "@/lib/agreementDate";
 
 export const STATUS_LABEL: Record<StaffAgreementView["status"], string> = {
   draft: "Draft",
@@ -93,6 +96,18 @@ function AgreementRow({ staffId, agreement, reload }: { staffId: string; agreeme
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-medium text-ink">{a.title}</span>
         <Badge tone={STATUS_TONE[a.status]}>{STATUS_LABEL[a.status]}</Badge>
+        {/* The date printed on it (0310), changeable at any time — signed or not. */}
+        <span className="text-xs text-muted">
+          <AgreementDateEditor
+            date={a.agreementDate}
+            canEdit
+            save={async (date) => {
+              const result = await setStaffAgreementDate(a.id, date);
+              if (result.success) reload();
+              return result.success ? { success: true, message: result.message } : { error: result.error };
+            }}
+          />
+        </span>
         <span className="text-xs text-muted">
           {a.source === "uploaded" ? "Uploaded" : "Generated"} {when(a.createdAt)}
           {a.sentAt ? ` · sent ${when(a.sentAt)}` : ""}
@@ -294,6 +309,19 @@ export function StaffAgreementsPanel({ staffId, staffName }: { staffId: string; 
                 </option>
               ))}
             </Select>
+            <label className="flex flex-col gap-0.5 text-xs text-muted">
+              Agreement date
+              <Input
+                name="agreement_date"
+                type="date"
+                required
+                defaultValue={agreementToday()}
+                min={AGREEMENT_DATE_MIN}
+                max={AGREEMENT_DATE_MAX}
+                className="w-40"
+                title="The date printed on the agreement"
+              />
+            </label>
             <Button
               type="submit"
               variant="primary"

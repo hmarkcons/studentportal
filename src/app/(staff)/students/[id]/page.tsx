@@ -1,4 +1,7 @@
 import { hasRole } from "@/lib/auth/roles";
+import { AgreementDateEditor } from "@/components/AgreementDateEditor";
+import { agreementToday } from "@/lib/agreementDate";
+import { setAgreementDate } from "@/lib/actions/agreements";
 import { loadDocumentHistory } from "@/lib/documentHistory";
 import Link from "next/link";
 import { getStaffSession } from "@/lib/auth/session";
@@ -143,7 +146,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       supabase
         .from("agreements")
         .select(
-          "id, status, version, signing_method, signed_file_path, video_recording_path, signed_file_uploaded_at, video_uploaded_at, approval_undone_at, approval_undo_note, undone_by:staff!agreements_approval_undone_by_fkey(full_name), pdf_path, email_verified, document_status, video_status, document_review_note, video_review_note, discount_amount, created_at, template_id, admin_charge_override, consultancy_fee_override, installment_count, service_type, visa_service_fee_override, destination_id, destination:destinations(country, track), template:agreement_templates(file_path, destination_id, destination:destinations(country, track))"
+          "id, status, version, signing_method, signed_file_path, video_recording_path, signed_file_uploaded_at, video_uploaded_at, approval_undone_at, approval_undo_note, undone_by:staff!agreements_approval_undone_by_fkey(full_name), pdf_path, email_verified, document_status, video_status, document_review_note, video_review_note, discount_amount, created_at, agreement_date, template_id, admin_charge_override, consultancy_fee_override, installment_count, service_type, visa_service_fee_override, destination_id, destination:destinations(country, track), template:agreement_templates(file_path, destination_id, destination:destinations(country, track))"
         )
         .eq("student_id", id)
         .order("created_at", { ascending: false }),
@@ -982,6 +985,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
             service={studentService}
             visaFees={visaFees}
             countries={orderedCountries}
+            today={agreementToday()}
           />
         )}
         {agreements && agreements.length > 0 && (
@@ -994,7 +998,8 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                     <span className="text-ink">
                       <span className="font-medium">{agreementCountry(a) ?? "No country"}</span> · v{a.version} ·{" "}
                       {a.signing_method === "e_signature" ? "e-signature" : (a.signing_method ?? "—")} ·{" "}
-                      {new Date(a.created_at).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Karachi" })}
+                      {/* The date printed on it (0310), changeable at any time — signed or not. */}
+                      <AgreementDateEditor date={a.agreement_date} canEdit={canModifyAgreement} save={setAgreementDate.bind(null, a.id, id)} />
                       {a.discount_amount != null && ` · discount ${a.discount_amount}`}
                     </span>
                     <div className="flex flex-wrap items-center justify-end gap-2">

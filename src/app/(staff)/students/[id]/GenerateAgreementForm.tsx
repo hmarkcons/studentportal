@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { AGREEMENT_DATE_MAX, AGREEMENT_DATE_MIN } from "@/lib/agreementDate";
 import { generateAgreement, updateAgreement, uploadSignedAgreement, deleteAgreement } from "@/lib/actions/agreements";
 import { Button } from "@/components/ui/Button";
 import { useButtonAction } from "@/components/useButtonAction";
@@ -115,6 +116,25 @@ function VisaFeeFields({
 // so once staff picks such a template the consultancy/discount/installment
 // fields would just be silently ignored server-side — hiding them here
 // instead of letting staff fill in values that go nowhere.
+/** The date printed on the agreement (0310): today unless another day is chosen, past or future. */
+function AgreementDateField({ defaultValue, wide = false }: { defaultValue: string; wide?: boolean }) {
+  return (
+    <label className={`flex flex-col gap-0.5 text-xs text-muted ${wide ? "w-full" : ""}`}>
+      Agreement date
+      <Input
+        name="agreement_date"
+        type="date"
+        required
+        defaultValue={defaultValue}
+        min={AGREEMENT_DATE_MIN}
+        max={AGREEMENT_DATE_MAX}
+        className={wide ? "w-full" : "w-40"}
+        title="The date printed on the agreement"
+      />
+    </label>
+  );
+}
+
 export function GenerateAgreementForm({
   studentId,
   templates,
@@ -125,8 +145,11 @@ export function GenerateAgreementForm({
   service = "full",
   visaFees = {},
   countries = [],
+  today,
 }: {
   studentId: string;
+  /** Today in Karachi, read on the server: the agreement's date unless another is chosen (0310). */
+  today: string;
   /** Already narrowed to this student's own countries and service — see agreementTemplateChoices and templatesForService. */
   templates: AgreementTemplateOption[];
   /** The student's countries, primary first — offered with a general template. */
@@ -203,6 +226,7 @@ export function GenerateAgreementForm({
         <option value="paper">Paper (Karachi)</option>
         <option value="e_signature">E-signature (outside Karachi)</option>
       </Select>
+      <AgreementDateField defaultValue={today} />
       {isVisaOnly && (
         <VisaFeeFields
           countryFee={chosenDest ? visaFees[chosenDest.id] : undefined}
@@ -271,6 +295,8 @@ export function EditAgreementForm({
     visa_service_fee_override?: number | null;
     /** Its own country (0298). */
     destination_id?: string | null;
+    /** The date printed on it (0310). */
+    agreement_date?: string | null;
   };
   studentId: string;
   templates: AgreementTemplateOption[];
@@ -305,6 +331,7 @@ export function EditAgreementForm({
         ))}
       </Select>
       {general && <CountryFor countries={countries} value={countryId} onChange={setCountryId} wide />}
+      {agreement.agreement_date && <AgreementDateField defaultValue={agreement.agreement_date} wide />}
       <Select name="signing_method" defaultValue={agreement.signing_method ?? "paper"} required className="w-full">
         <option value="paper">Paper (Karachi)</option>
         <option value="e_signature">E-signature (outside Karachi)</option>

@@ -17,6 +17,9 @@ import { getEffectivePermissions } from "@/lib/auth/permissions";
 import { StaffAgreementGenerator } from "./StaffAgreementGenerator";
 import { getCurrentUser } from "@/lib/auth/currentUser";
 import { hasRole } from "@/lib/auth/roles";
+import { AgreementDateEditor } from "@/components/AgreementDateEditor";
+import { agreementToday } from "@/lib/agreementDate";
+import { setAgreementDate } from "@/lib/actions/agreements";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -103,7 +106,7 @@ export default async function AgreementGeneratorPage(props: {
     const { data: agreements } = await supabase
       .from("agreements")
       .select(
-        "id, status, version, signing_method, signed_file_path, pdf_path, email_verified, discount_amount, created_at, destination:destinations(country), template:agreement_templates(file_path, destination:destinations(country))"
+        "id, status, version, signing_method, signed_file_path, pdf_path, email_verified, discount_amount, created_at, agreement_date, destination:destinations(country), template:agreement_templates(file_path, destination:destinations(country))"
       )
       .eq("student_id", selected.id)
       .order("created_at", { ascending: false });
@@ -149,6 +152,7 @@ export default async function AgreementGeneratorPage(props: {
             hasCountry={templateChoices.hasCountry}
             service={service}
             countries={orderedCountries}
+            today={agreementToday()}
           />
         )}
         {agreements && agreements.length > 0 && (
@@ -161,7 +165,7 @@ export default async function AgreementGeneratorPage(props: {
                     {agreementCountry(a) ?? "No country"} · v{a.version} ·{" "}
                     {a.status === "signed" ? "signed" : "pending signature"} ·{" "}
                     {a.signing_method === "e_signature" ? "e-signature" : (a.signing_method ?? "—")} ·{" "}
-                    {new Date(a.created_at).toLocaleDateString()}
+                    <AgreementDateEditor date={a.agreement_date} canEdit={canModifyAgreement} save={setAgreementDate.bind(null, a.id, selected.id)} />
                     {a.discount_amount != null && ` · discount ${a.discount_amount}`}
                   </span>
                   <div className="flex flex-wrap items-center gap-2">

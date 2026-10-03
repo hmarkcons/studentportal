@@ -8,6 +8,7 @@ import { useAnchoredMenu } from "@/components/useAnchoredMenu";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { EditAgreementForm } from "./GenerateAgreementForm";
 import type { ServiceType } from "@/lib/serviceType";
+import { agreementDateShort } from "@/lib/agreementDate";
 
 type AgreementTemplateOption = {
   id: string;
@@ -26,6 +27,8 @@ type AgreementRecord = {
   discount_amount: number | null;
   installment_count: number | null;
   created_at: string;
+  /** The date printed on it (0310). */
+  agreement_date?: string | null;
   service_type?: string | null;
   visa_service_fee_override?: number | null;
   destination_id?: string | null;
@@ -136,6 +139,7 @@ export function AgreementActionsMenu({
         <div className="flex flex-col">
           <Row label="Status" value={agreement.status} />
           <Row label="Signing method" value={agreement.signing_method} />
+          <Row label="Agreement date" value={agreement.agreement_date ? agreementDateShort(agreement.agreement_date) : null} />
           <Row label="Created" value={new Date(agreement.created_at).toLocaleDateString("en-US")} />
           {agreement.service_type === "visa_only" ? (
             <>

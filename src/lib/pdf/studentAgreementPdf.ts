@@ -6,6 +6,7 @@ import { wordingToBlocks } from "@/lib/pdf/templateWording";
 import { companyMergeVars, missingCompanyFields, officeLine, DEFAULT_AGREEMENT_COMPANY, type AgreementCompany } from "@/lib/agreementCompany";
 import { formatAmount, normalizeTheme } from "@/lib/pdf/agreementTheme";
 import { serviceOf } from "@/lib/serviceType";
+import { studentAgreementDateText } from "@/lib/agreementDate";
 
 // A student's agreement as a PDF, from its template and the student: shared
 // by "Generate PDF" on a student (generateAgreementPdf) and the template
@@ -32,6 +33,8 @@ export type StudentAgreementInput = {
     installment_count: number | null;
     is_backup: boolean | null;
     created_at: string;
+    /** The date chosen for it (0310); absent — a preview — it is the day it was made. */
+    agreement_date?: string | null;
     service_type: string | null;
     visa_service_fee_override: number | null;
   };
@@ -93,7 +96,9 @@ export async function renderStudentAgreementPdf(input: StudentAgreementInput): P
   const discountAmount = isBackup ? 0 : (agreement.discount_amount ?? 0);
   const currencySymbol = CURRENCY_SYMBOLS[destination.consultancy_fee_currency ?? "EUR"] ?? destination.consultancy_fee_currency ?? "€";
   const totalFee = adminCharge + consultancyFee - discountAmount;
-  const agreementDateStr = formatAgreementDate(new Date(agreement.created_at));
+  const agreementDateStr = agreement.agreement_date
+    ? studentAgreementDateText(agreement.agreement_date)
+    : formatAgreementDate(new Date(agreement.created_at));
 
   // Split the discounted consultancy fee (the discount only ever applies to
   // the consultancy fee, never the non-refundable admin charge) into equal
