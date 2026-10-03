@@ -1177,7 +1177,7 @@ try {
         if (await edit.count()) {
           await edit.click();
           const form = page.locator("form").filter({ has: page.getByRole("button", { name: "Save invoice" }) }).first();
-          await form.locator('input[name="installment_count"]').fill("2");
+          await form.locator('select[name="installment_count"]').selectOption("2");
           await form.locator('input[name="issued_on"]').fill("2026-08-01");
           await form.locator('input[name="discount_amount"]').fill("100");
           await form.locator('input[name="discount_reason"]').fill("zztmp edited discount");
