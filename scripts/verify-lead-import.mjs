@@ -141,9 +141,11 @@ try {
   const lists = tplBook.getWorksheet("Lists");
   ok("...the dropdown lists on a hidden sheet", lists?.state === "veryHidden", lists?.state);
   const dv = (addr) => tplSheet.getCell(addr).dataValidation;
+  // Found by heading, so a column added before them does not move the check.
+  const colOf = (h) => String.fromCharCode(65 + HEADERS.indexOf(h));
   ok("...Applying for, Status and Counselor with dropdowns",
-    dv("G2")?.type === "list" && dv("I2")?.type === "list" && dv("J2")?.type === "list",
-    JSON.stringify({ G: dv("G2")?.formulae, I: dv("I2")?.formulae, J: dv("J2")?.formulae }));
+    ["Applying for", "Status", "Counselor"].every((h) => dv(`${colOf(h)}2`)?.type === "list"),
+    JSON.stringify(Object.fromEntries(["Applying for", "Status", "Counselor"].map((h) => [h, dv(`${colOf(h)}2`)?.formulae]))));
   const statusList = [];
   for (let r = 2; r <= 30; r++) if (lists?.getCell(`B${r}`).value) statusList.push(cellText(lists.getCell(`B${r}`).value));
   ok("...the statuses being the list's, less Registered", statusList.includes("Potential") && !statusList.includes("Registered"), statusList.join(", "));
@@ -196,7 +198,7 @@ try {
     (
       await admin
         .from("leads")
-        .select("id, full_name, contact_number, email, country_of_interest, current_qualification, level_applying_for, course_of_interest, status, assigned_counselor_id, date_of_inquiry, platform_source")
+        .select("id, full_name, contact_number, email, city, country_of_interest, current_qualification, level_applying_for, course_of_interest, status, assigned_counselor_id, date_of_inquiry, platform_source")
         .eq("full_name", name)
     ).data ?? [];
   const current = async (id) => (await admin.from("lead_remark_current").select("body").eq("lead_id", id).maybeSingle()).data?.body ?? null;
