@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { TableFrame } from "@/components/ui/TableFrame";
 
 // Server Component pages build `cells`/`csv` for every row up front (calling
@@ -59,6 +60,7 @@ export function DataTable({
   serial = true,
   exportHref,
   rowHighlight = false,
+  server,
 }: {
   columns: Column[];
   rows: Row[];
@@ -106,14 +108,37 @@ export function DataTable({
    * is (globals.css, data-row-highlight).
    */
   rowHighlight?: boolean;
+  /**
+   * Server-side paging: `rows` is one page, already searched and filtered by
+   * the server, and `total` how many match in all. Search (after a pause),
+   * a filter or a page then changes the address — ?q=, ?f_<key>=, ?page= — and
+   * the server sends that page. For a list too long to send whole: the leads.
+   */
+  server?: { page: number; total: number; search: string; filters: Record<string, string> };
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [search, setSearch] = useState("");
-  const [filterValues, setFilterValues] = useState<Record<string, string>>({});
+  const [search, setSearch] = useState(server?.search ?? "");
+  const [filterValues, setFilterValues] = useState<Record<string, string>>(server?.filters ?? {});
   const [page, setPage] = useState(1);
   const [currentRow, setCurrentRow] = useState<string | null>(null);
+  const router = useRouter();
+  const [navigating, startNavigating] = useTransition();
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** Server mode: the same address with these parameters changed — empty removes one. */
+  function go(changes: Record<string, string | null>, { scroll = false }: { scroll?: boolean } = {}) {
+    const params = new URLSearchParams(window.location.search);
+    for (const [k, v] of Object.entries(changes)) {
+      if (v) params.set(k, v);
+      else params.delete(k);
+    }
+    const qs = params.toString();
+    startNavigating(() => router.push(`${window.location.pathname}${qs ? `?${qs}` : ""}`, { scroll }));
+  }
 
   const visibleRows = useMemo(() => {
+    // The server has already searched and filtered what it sent.
+    if (server) return rows;
     const q = search.trim().toLowerCase();
     return rows.filter((row) => {
       if (q) {
@@ -129,29 +154,43 @@ export function DataTable({
       }
       return true;
     });
-  }, [rows, search, filterValues, filters]);
+  }, [rows, search, filterValues, filters, server]);
 
-  const pageCount = pageSize ? Math.max(1, Math.ceil(visibleRows.length / pageSize)) : 1;
+  /** How many match in all — the server's count, or what is held here. */
+  const matchCount = server ? server.total : visibleRows.length;
+  const pageCount = pageSize ? Math.max(1, Math.ceil(matchCount / pageSize)) : 1;
   // Search/filter changes can shrink the result set below the current page
   // (or the underlying data can too) — clamp rather than strand the user on
   // a blank page they'd otherwise have to manually back out of.
-  const currentPage = Math.min(page, pageCount);
-  const pagedRows = pageSize ? visibleRows.slice((currentPage - 1) * pageSize, currentPage * pageSize) : visibleRows;
+  const currentPage = Math.min(server ? server.page : page, pageCount);
+  const pagedRows = server || !pageSize ? visibleRows : visibleRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   function updateSearch(value: string) {
     setSearch(value);
     setPage(1);
+    if (server) {
+      // Asked of the server once typing pauses, not at every key.
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+      searchTimer.current = setTimeout(() => go({ q: value.trim() || null, page: null }), 400);
+    }
   }
 
   function updateFilter(key: string, value: string) {
     setFilterValues((prev) => ({ ...prev, [key]: value }));
     setPage(1);
+    if (server) go({ [`f_${key}`]: value || null, page: null });
   }
 
   function clearSearchAndFilters() {
     setSearch("");
     setFilterValues({});
     setPage(1);
+    if (server) go({ q: null, page: null, ...Object.fromEntries(filters.map((f) => [`f_${f.key}`, null])) });
+  }
+
+  function toPage(n: number, where: "top" | "bottom") {
+    if (server) go({ page: n > 1 ? String(n) : null }, { scroll: where === "bottom" });
+    else setPage(n);
   }
 
   function toggle(id: string) {
@@ -194,13 +233,14 @@ export function DataTable({
         data-pager={where}
       >
         <span>
-          Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, visibleRows.length)} of {visibleRows.length}
+          Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, matchCount)} of {matchCount}
+          {navigating && <span className="ml-2 text-primary">Loading…</span>}
         </span>
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={currentPage <= 1}
+            onClick={() => toPage(Math.max(1, currentPage - 1), where)}
+            disabled={currentPage <= 1 || navigating}
             className="rounded-md border border-border px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Previous
@@ -210,8 +250,8 @@ export function DataTable({
           </span>
           <button
             type="button"
-            onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-            disabled={currentPage >= pageCount}
+            onClick={() => toPage(Math.min(pageCount, currentPage + 1), where)}
+            disabled={currentPage >= pageCount || navigating}
             className="rounded-md border border-border px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Next
@@ -273,6 +313,8 @@ export function DataTable({
       {/* Above the table as well as below it: a page can be a thousand rows
           long, and nobody should scroll past all of them to reach Next. */}
       {pageSize && pageCount > 1 && pager("top")}
+      {server && navigating && pageCount <= 1 && <p className="border-b border-border bg-bg px-3 py-1 text-xs text-primary">Loading…</p>}
+      <div className={navigating ? "opacity-60 transition-opacity" : undefined} aria-busy={navigating || undefined}>
       <TableFrame label={label ?? exportFilename?.replace(/[-_]/g, " ") ?? "Table"} freezeFirstColumn={false}>
         <table className={`w-full ${minTableWidthClassName} text-sm`} data-row-highlight={rowHighlight || undefined}>
           <thead>
@@ -355,6 +397,7 @@ export function DataTable({
           </tbody>
         </table>
       </TableFrame>
+      </div>
       {pageSize && pageCount > 1 && pager("bottom")}
     </div>
   );

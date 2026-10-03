@@ -87,6 +87,10 @@ try {
       return Boolean(i && Object.keys(i).some((k) => k.startsWith("__reactProps")));
     }, null, { timeout: 30000 });
     await search.fill(query);
+    // The list is searched by the server: wait for the search to reach the
+    // address, and the page it asked for to arrive, before reading the rows.
+    await page.waitForURL((u) => u.searchParams.get("q") === query, { timeout: 30000 });
+    await page.waitForFunction(() => !document.querySelector("[aria-busy]"), null, { timeout: 30000 });
   };
   await openList("zztmp Remarks");
   const longCell = page.locator(`[data-remark-cell="${longId}"]`);

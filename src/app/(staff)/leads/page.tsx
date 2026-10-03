@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { readAll, readAllParallel } from "@/lib/catalogueReads";
+import { readAll } from "@/lib/catalogueReads";
 import { createClient } from "@/lib/supabase/server";
 import { formatDateOnly } from "@/lib/formatDate";
 import { DataTable } from "@/components/ui/DataTable";
@@ -65,36 +65,85 @@ function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
 }
 
-export default async function LeadsPage() {
+/** A thousand leads to a page, read by the server one page at a time. */
+const PAGE_SIZE = 1000;
+
+/** What the search box looks through on the lead itself; remarks, counsellors and statuses are matched besides. */
+const SEARCHED_COLUMNS = [
+  "full_name",
+  "contact_number",
+  "email",
+  "city",
+  "country_of_interest",
+  "course_of_interest",
+  "current_qualification",
+  "platform_source",
+];
+
+const LEAD_SELECT =
+  "id, full_name, contact_number, email, city, country_of_interest, current_qualification, level_applying_for, course_of_interest, platform_source, status, date_of_inquiry, assigned_counselor_id, assigned_counselor:staff!assigned_counselor_id(full_name), current_remark:lead_remark_current(body, updated_at, editor:staff!lead_remark_current_updated_by_fkey(full_name))";
+
+type OptionRow = {
+  country_of_interest: string | null;
+  city: string | null;
+  assigned_counselor_id: string | null;
+  assigned_counselor: { full_name: string } | { full_name: string }[] | null;
+};
+
+export default async function LeadsPage(props: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  // Server-side paging: only the page shown is read and sent. The search,
+  // the filters and the page are in the address (?q=, ?f_<key>=, ?page=), so
+  // the server answers them — a list of 2,803 sent whole took four seconds and
+  // a megabyte to open.
+  const params = await props.searchParams;
+  const param = (k: string) => {
+    const v = params[k];
+    return (Array.isArray(v) ? v[0] : (v ?? "")).trim();
+  };
+  const page = Math.max(1, Math.floor(Number(param("page")) || 1));
+  const search = param("q").slice(0, 100);
+  const filters = {
+    status: param("f_status"),
+    country: param("f_country"),
+    city: param("f_city"),
+    level: param("f_level"),
+    counselor: param("f_counselor"),
+  };
+  // The search as an ilike pattern, without what PostgREST's filter syntax
+  // would read as structure — commas, brackets, quotes — or as wildcards.
+  const term = search.replace(/[%_,()*\\"']/g, " ").replace(/\s+/g, " ").trim();
+  const like = `%${term}%`;
+
   const supabase = await createClient();
-  // Two waves where there were five: the list with what needs nothing, then
-  // the two things that need the list.
-  // Every lead, a thousand at a time: PostgREST returns at most 1000 rows to
-  // one request and says nothing about the rest, which is how a list of 2,803
-  // showed 1,000. The follow-ups and call logs are read the same way, beside
-  // it rather than after it — by the leads RLS lets this viewer see, not by a
-  // list of ids, which at this size would not fit in a URL.
-  const [canDelete, { data: leads, error }, counselors, { staff }, { data: savedOrder }, followUps, callLogs] = await Promise.all([
+  // First, everything that does not depend on which leads are on the page —
+  // read beside each other. The filter choices and the total come from every
+  // lead, light: three columns, a thousand rows at a time (PostgREST stops at
+  // 1000 to a request without saying so). The follow-ups and call logs are
+  // read the same way, by what RLS lets this viewer see.
+  const [canDelete, counselors, { staff }, { data: savedOrder }, optionRows, remarkHits, followUps, callLogs] = await Promise.all([
     hasPermission("leads.delete"),
-    readAllParallel<LeadRow>((from, to, withCount) =>
-      supabase
-        .from("leads")
-        .select(
-          "id, full_name, contact_number, email, city, country_of_interest, current_qualification, level_applying_for, course_of_interest, platform_source, status, date_of_inquiry, assigned_counselor_id, assigned_counselor:staff!assigned_counselor_id(full_name), current_remark:lead_remark_current(body, updated_at, editor:staff!lead_remark_current_updated_by_fkey(full_name))",
-          withCount ? { count: "exact" } : undefined
-        )
-        .order("date_of_inquiry", { ascending: false })
-        .order("id")
-        .range(from, to)
-        .returns<LeadRow[]>()
-    ).then(
-      (rows) => ({ data: rows, error: null }),
-      (e: Error) => ({ data: null, error: { message: e.message } })
-    ),
     getCachedCounselors(),
     getStaffSession(),
     // The order a Super Admin arranged the columns in (0313), for everyone.
     supabase.from("list_column_orders").select("column_keys").eq("list_key", "leads").maybeSingle(),
+    readAll<OptionRow>((from, to) =>
+      supabase
+        .from("leads")
+        .select("country_of_interest, city, assigned_counselor_id, assigned_counselor:staff!assigned_counselor_id(full_name)")
+        .order("id")
+        .range(from, to)
+        .returns<OptionRow[]>()
+    ).catch(() => [] as OptionRow[]),
+    // Leads whose remark says what was searched for. A hundred at most: they
+    // go into the request by id, and more would not fit in its address.
+    term
+      ? supabase
+          .from("lead_remark_current")
+          .select("lead_id")
+          .ilike("body", like)
+          .limit(100)
+          .then((r) => (r.data ?? []) as { lead_id: string }[])
+      : Promise.resolve([] as { lead_id: string }[]),
     // Powers the Follow-up column's "View (N)" count — every follow_up remark
     // ever logged for the lead (see addLeadFollowUpRemark), resolved or not.
     // The Calendar page reads the same rows directly, so adding one here
@@ -116,6 +165,47 @@ export default async function LeadsPage() {
     ).catch(() => [] as { lead_id: string; remark: string }[]),
   ]);
   const canArrange = hasRole(staff, "super_admin");
+
+  // The filter choices, from every lead rather than the page shown.
+  const counselorIdByName = new Map<string, string>();
+  for (const r of optionRows) {
+    const name = one(r.assigned_counselor)?.full_name;
+    if (name && r.assigned_counselor_id) counselorIdByName.set(name, r.assigned_counselor_id);
+  }
+  const countryOptions = Array.from(new Set(optionRows.map((r) => r.country_of_interest).filter(Boolean))).sort() as string[];
+  const cityOptions = Array.from(new Set(optionRows.map((r) => r.city?.trim()).filter(Boolean))).sort() as string[];
+  const counselorOptions = Array.from(counselorIdByName.keys()).sort();
+  const totalLeads = optionRows.length;
+
+  // Then the page itself: searched and filtered by the database, counted in all.
+  let query = supabase.from("leads").select(LEAD_SELECT, { count: "exact" });
+  const statusKey = Object.entries(LEAD_STATUS_LABELS).find(([, label]) => label === filters.status)?.[0];
+  if (filters.status) query = query.eq("status", statusKey ?? "-");
+  if (filters.country) query = query.eq("country_of_interest", filters.country);
+  if (filters.city) query = query.eq("city", filters.city);
+  const levelKey = Object.entries(LEVEL_LABELS).find(([, label]) => label === filters.level)?.[0];
+  if (filters.level) query = query.eq("level_applying_for", levelKey ?? "-");
+  if (filters.counselor) query = query.eq("assigned_counselor_id", counselorIdByName.get(filters.counselor) ?? "00000000-0000-0000-0000-000000000000");
+  if (term) {
+    const lower = term.toLowerCase();
+    const ors = SEARCHED_COLUMNS.map((c) => `${c}.ilike."${like}"`);
+    if (remarkHits.length) ors.push(`id.in.(${remarkHits.map((r) => r.lead_id).join(",")})`);
+    const counselorIds = Array.from(counselorIdByName.entries())
+      .filter(([name]) => name.toLowerCase().includes(lower))
+      .map(([, id]) => id);
+    if (counselorIds.length) ors.push(`assigned_counselor_id.in.(${counselorIds.join(",")})`);
+    const statusKeys = Object.entries(LEAD_STATUS_LABELS)
+      .filter(([, label]) => label.toLowerCase().includes(lower))
+      .map(([key]) => key);
+    if (statusKeys.length) ors.push(`status.in.(${statusKeys.join(",")})`);
+    query = query.or(ors.join(","));
+  }
+  const { data: leads, error, count } = await query
+    .order("date_of_inquiry", { ascending: false })
+    .order("id")
+    .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1)
+    .returns<LeadRow[]>();
+  const matching = count ?? leads?.length ?? 0;
 
   const followUpCountByLead = new Map<string, number>();
   for (const f of followUps ?? []) {
@@ -231,18 +321,13 @@ export default async function LeadsPage() {
     };
   });
 
-  const countryOptions = Array.from(new Set((leads ?? []).map((r) => r.country_of_interest).filter(Boolean))).sort() as string[];
-  const cityOptions = Array.from(new Set((leads ?? []).map((r) => r.city?.trim()).filter(Boolean))).sort() as string[];
-  const counselorOptions = Array.from(
-    new Set((leads ?? []).map((r) => one(r.assigned_counselor)?.full_name).filter(Boolean))
-  ).sort() as string[];
 
   return (
     <div className="w-full">
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-ink">Leads</h2>
-          <p className="text-sm text-muted">{leads?.length ?? 0} in the pipeline</p>
+          <p className="text-sm text-muted">{totalLeads} in the pipeline</p>
         </div>
         <div className="flex items-center gap-2">
           {canArrange && <ArrangeLeadColumns columns={arranged.map((c) => ({ key: c.sheetKey, header: c.def.header }))} />}
@@ -270,7 +355,8 @@ export default async function LeadsPage() {
             searchPlaceholder="Search name, contact, course, remarks…"
             oneLine
             minTableWidthClassName="min-w-[1500px]"
-            pageSize={1000}
+            pageSize={PAGE_SIZE}
+            server={{ page, total: matching, search, filters }}
             filters={[
               { key: "status", label: "Status", options: Object.values(LEAD_STATUS_LABELS) },
               { key: "country", label: "Country", options: countryOptions },
