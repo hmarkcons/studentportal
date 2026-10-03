@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { readAll } from "@/lib/catalogueReads";
+import { readAll, readAllParallel } from "@/lib/catalogueReads";
 import { createClient } from "@/lib/supabase/server";
 import { formatDateOnly } from "@/lib/formatDate";
 import { DataTable } from "@/components/ui/DataTable";
@@ -76,11 +76,12 @@ export default async function LeadsPage() {
   // list of ids, which at this size would not fit in a URL.
   const [canDelete, { data: leads, error }, counselors, { staff }, { data: savedOrder }, followUps, callLogs] = await Promise.all([
     hasPermission("leads.delete"),
-    readAll<LeadRow>((from, to) =>
+    readAllParallel<LeadRow>((from, to, withCount) =>
       supabase
         .from("leads")
         .select(
-          "id, full_name, contact_number, email, city, country_of_interest, current_qualification, level_applying_for, course_of_interest, platform_source, status, date_of_inquiry, assigned_counselor_id, assigned_counselor:staff!assigned_counselor_id(full_name), current_remark:lead_remark_current(body, updated_at, editor:staff!lead_remark_current_updated_by_fkey(full_name))"
+          "id, full_name, contact_number, email, city, country_of_interest, current_qualification, level_applying_for, course_of_interest, platform_source, status, date_of_inquiry, assigned_counselor_id, assigned_counselor:staff!assigned_counselor_id(full_name), current_remark:lead_remark_current(body, updated_at, editor:staff!lead_remark_current_updated_by_fkey(full_name))",
+          withCount ? { count: "exact" } : undefined
         )
         .order("date_of_inquiry", { ascending: false })
         .order("id")

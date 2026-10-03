@@ -32,6 +32,35 @@ export async function readAll<T>(run: (from: number, to: number) => Page<T>): Pr
 }
 
 /** readAll, for a query filtered by a list of ids that may be long. */
+type CountedPage<T> = PromiseLike<{ data: T[] | null; error: { message: string } | null; count: number | null }>;
+
+/**
+ * readAll, but the pages after the first are fetched together rather than one
+ * after another: the first asks for the total as well (count: "exact"), and the
+ * rest go out at once. For a list a page waits on, where three round trips in
+ * a row were most of the wait. `run` is called with `withCount` true for the
+ * first page only, which must then ask for the count.
+ */
+export async function readAllParallel<T>(run: (from: number, to: number, withCount: boolean) => CountedPage<T>): Promise<T[]> {
+  const first = await run(0, PAGE_SIZE - 1, true);
+  if (first.error) throw new Error(first.error.message);
+  const rows = first.data ?? [];
+  const total = first.count ?? rows.length;
+  if (rows.length < PAGE_SIZE || total <= PAGE_SIZE) return rows;
+  const rest = await Promise.all(
+    Array.from({ length: Math.ceil(total / PAGE_SIZE) - 1 }, (_, i) => run((i + 1) * PAGE_SIZE, (i + 2) * PAGE_SIZE - 1, false))
+  );
+  for (const page of rest) {
+    if (page.error) throw new Error(page.error.message);
+    rows.push(...(page.data ?? []));
+  }
+  // Rows added between the count and the reads land past the last page: read on.
+  if (rows.length >= Math.ceil(total / PAGE_SIZE) * PAGE_SIZE) {
+    rows.push(...(await readAll((from, to) => run(from + rows.length, to + rows.length, false))));
+  }
+  return rows;
+}
+
 export async function readAllIn<T>(
   ids: readonly string[],
   run: (chunk: string[], from: number, to: number) => Page<T>
