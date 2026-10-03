@@ -65,8 +65,12 @@ function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
 }
 
-/** A thousand leads to a page, read by the server one page at a time. */
-const PAGE_SIZE = 1000;
+/**
+ * 250 leads to a page, read by the server one page at a time — the office's
+ * choice. A page of a thousand, each row with its own status, counsellor and
+ * remark controls, was the slower part of opening the list.
+ */
+const PAGE_SIZE = 250;
 
 /** What the search box looks through on the lead itself; remarks, counsellors and statuses are matched besides. */
 const SEARCHED_COLUMNS = [

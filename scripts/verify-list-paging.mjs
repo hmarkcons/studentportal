@@ -1,5 +1,5 @@
-// The leads and registered-students lists hold every record, a thousand to a
-// page — end to end against a deployed portal.
+// The leads and registered-students lists hold every record, a page at a time
+// (250 leads, 1000 students) — end to end against a deployed portal.
 //
 //   VERIFY_AGAINST_PRODUCTION=yes npm run check:paging
 //
@@ -29,9 +29,9 @@ try {
   const page = await signIn(browser, sup.email);
   await page.setViewportSize({ width: 1400, height: 900 });
 
-  for (const [path, label, total, unit] of [
-    ["/leads", "Leads", leadCount, "in the pipeline"],
-    ["/students", "Registered students", studentCount, "students"],
+  for (const [path, label, total, unit, size] of [
+    ["/leads", "Leads", leadCount, "in the pipeline", 250],
+    ["/students", "Registered students", studentCount, "students", 1000],
   ]) {
     console.log(`\n--- ${label} ---`);
     const started = Date.now();
@@ -41,18 +41,18 @@ try {
     const said = (await page.locator("p", { hasText: unit }).first().innerText()).trim();
     ok(`the list holds every one of the ${total} on file`, said.startsWith(`${total} `), `${said} (loaded in ${seconds}s)`);
     const rows = await page.locator("table tbody tr").count();
-    ok("...a thousand to a page at most", rows === Math.min(1000, total), String(rows));
-    if (total > 1000) {
+    ok(`...${size} to a page at most`, rows === Math.min(size, total), String(rows));
+    if (total > size) {
       const top = page.locator('[data-pager="top"]');
       ok("...with the page controls above the table as well as below", (await top.count()) === 1 && (await page.locator('[data-pager="bottom"]').count()) === 1);
-      ok("...saying where the page is", /Showing 1–1000 of /.test(await top.innerText()), await top.innerText());
+      ok("...saying where the page is", new RegExp(`Showing 1–${size} of `).test(await top.innerText()), await top.innerText());
       await page.waitForFunction(() => {
         const b = [...document.querySelectorAll('[data-pager="top"] button')].find((x) => x.textContent?.trim() === "Next");
         return Boolean(b && Object.keys(b).some((k) => k.startsWith("__reactProps")));
       }, null, { timeout: 30000 });
       await top.getByRole("button", { name: "Next" }).click();
-      await page.waitForFunction(() => /Showing 1001–/.test(document.querySelector('[data-pager="top"]')?.textContent ?? ""), null, { timeout: 15000 });
-      ok("Next shows the next thousand", /Showing 1001–\d+ of /.test(await top.innerText()), await top.innerText());
+      await page.waitForFunction((next) => (document.querySelector('[data-pager="top"]')?.textContent ?? "").includes(`Showing ${next}–`), size + 1, { timeout: 30000 });
+      ok(`Next shows the next ${size}`, new RegExp(`Showing ${size + 1}–\\d+ of `).test(await top.innerText()), await top.innerText());
     }
   }
   // ------------------------------------- searched and filtered by the server
