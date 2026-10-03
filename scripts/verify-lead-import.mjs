@@ -25,7 +25,8 @@
 //
 // Everything is named zztmp and removed in a finally.
 import { createRequire } from "node:module";
-import { BASE, clients, fixtures, openBrowser, reporter, requireConfirmation, signIn } from "./verify-portal-lib.mjs";
+import { BASE, apiAs, clients, fixtures, openBrowser, reporter, requireConfirmation, signIn } from "./verify-portal-lib.mjs";
+import { LEAD_COLUMNS, orderedLeadColumns } from "../src/lib/leadSheet.ts";
 
 requireConfirmation("check:leadimport");
 
@@ -38,7 +39,7 @@ try {
   process.exit(1);
 }
 
-const { admin } = clients();
+const { admin, url, anonKey } = clients();
 const fx = fixtures(admin);
 const { ok, finish } = reporter();
 
@@ -51,10 +52,17 @@ const LONG_COURSE = "zztmp Data Science, Artificial Intelligence or Business Ana
 const NEW_B = "zztmp Import Bravo";
 const EXISTING = "zztmp Import Existing";
 const HIDDEN = "zztmp Import Hidden";
-const HEADERS = [
-  "Month", "Name", "Contact number", "Email", "City", "Country", "Current qualification", "Applying for", "Course of interest",
-  "Status", "Counselor", "Remarks", "Follow-up date", "Follow-up note", "Inquiry date", "Source",
-];
+// The columns in the order a Super Admin has arranged them (0313) — the order
+// the list, the template and the export all follow.
+const { data: savedOrder } = await admin.from("list_column_orders").select("column_keys").eq("list_key", "leads").maybeSingle();
+const HEADERS = orderedLeadColumns(savedOrder?.column_keys).map((col) => col.header);
+/** A column's letter in the workbook, by its heading. */
+const letter = (h) => String.fromCharCode(65 + HEADERS.indexOf(h));
+/** What the list heads each column, in the same order: Follow-up for the date and its note. */
+const listHeaders = (order) =>
+  orderedLeadColumns(order)
+    .filter((col) => col.key !== "follow_up_note")
+    .map((col) => (col.key === "follow_up_date" ? "follow-up" : col.header.toLowerCase()));
 
 const cellText = (v) => {
   if (v === null || v === undefined) return "";
@@ -135,9 +143,10 @@ try {
   const tplHeaders = (tplSheet.getRow(1).values ?? []).slice(1).map(cellText);
   ok("...with the list's columns, in its order", JSON.stringify(tplHeaders) === JSON.stringify(HEADERS), tplHeaders.join(" | "));
   ok("...Month a formula on the Inquiry date, in the example row and the blank ones below",
-    /^=IF\(O2="","",TEXT\(O2,"mmm yyyy"\)\)$/.test(cellText(tplSheet.getCell("A2").value)) && /O50/.test(cellText(tplSheet.getCell("A50").value)),
+    cellText(tplSheet.getCell(`${letter("Month")}2`).value) === `=IF(${letter("Inquiry date")}2="","",TEXT(${letter("Inquiry date")}2,"mmm yyyy"))` &&
+      cellText(tplSheet.getCell(`${letter("Month")}50`).value).includes(`${letter("Inquiry date")}50`),
     cellText(tplSheet.getCell("A2").value));
-  ok("...an example row the import will skip", cellText(tplSheet.getCell("B2").value).startsWith("Example Student"));
+  ok("...an example row the import will skip", cellText(tplSheet.getCell(`${String.fromCharCode(65 + HEADERS.indexOf("Name"))}2`).value).startsWith("Example Student"));
   const lists = tplBook.getWorksheet("Lists");
   ok("...the dropdown lists on a hidden sheet", lists?.state === "veryHidden", lists?.state);
   const dv = (addr) => tplSheet.getCell(addr).dataValidation;
@@ -250,9 +259,9 @@ try {
   await page.locator("tbody tr", { hasText: NEW_A }).waitFor({ timeout: 30000 });
   const headers = (await page.locator("thead th").allInnerTexts()).map((t) => t.trim().toLowerCase());
   const c = headers.indexOf("country");
-  ok("Current qualification, Applying for and Course of interest come right after Country",
-    c > 0 && headers[c + 1] === "current qualification" && headers[c + 2] === "applying for" && headers[c + 3] === "course of interest", headers.join(" | "));
-  ok("...with Email, City and Source each a column of its own", headers.includes("email") && headers.includes("city") && headers.includes("source"));
+  const shown = headers.filter((h) => h && h !== "#");
+  ok("the list has every column, each lead's in its own, in the arranged order",
+    JSON.stringify(shown) === JSON.stringify(listHeaders(savedOrder?.column_keys)), shown.join(" | "));
   const alphaRow = page.locator("tbody tr", { hasText: NEW_A });
   const alphaCells = (await alphaRow.locator("td").allInnerTexts()).map((t) => t.trim());
   ok("...and the lead's own values in them", alphaCells[c] === COUNTRIES && alphaCells[c + 1] === "A-Levels" && alphaCells[c + 2] === "Masters" && alphaCells[c + 3] === LONG_COURSE,
@@ -309,32 +318,89 @@ try {
   const expSheet = (await readBook(expBuffer)).getWorksheet("Leads");
   const expHeaders = (expSheet.getRow(1).values ?? []).slice(1).map(cellText);
   ok("...with the template's columns", JSON.stringify(expHeaders) === JSON.stringify(HEADERS), expHeaders.join(" | "));
+  const NAME = HEADERS.indexOf("Name");
   const exported = [];
   expSheet.eachRow((row, n) => {
     if (n === 1) return;
     const cells = HEADERS.map((_, i) => cellText(row.getCell(i + 1).value));
-    if (cells[1]) exported.push({ n, cells });
+    if (cells[NAME]) exported.push({ n, cells });
   });
-  const names = exported.map((r) => r.cells[1]);
+  const names = exported.map((r) => r.cells[NAME]);
   ok("...every lead the viewer can see and none they cannot",
     names.includes(NEW_A) && names.includes(EXISTING) && !names.includes(HIDDEN), names.join(", "));
-  const row = exported.find((r) => r.cells[1] === NEW_A)?.cells ?? [];
-  ok("...each piece of a lead in its own cell",
-    JSON.stringify(row.slice(1)) ===
-      JSON.stringify([NEW_A, "0300-9999983", "zztmp-import-alpha@hmark-test.local", "Karachi", COUNTRIES, "A-Levels", "masters", LONG_COURSE, "Meeting Done", counsellor.name,
-        "zztmp Met at the fair\nzztmp Also asked about Germany", "2026-10-20", "zztmp Send the Milan list", "2026-09-14", "Education fair"]),
-    JSON.stringify(row));
-  const n = exported.find((r) => r.cells[1] === NEW_A)?.n;
-  ok("...the Month a formula on that row's Inquiry date", row[0] === `=IF(O${n}="","",TEXT(O${n},"mmm yyyy"))`, row[0]);
+  const row = exported.find((r) => r.cells[NAME] === NEW_A)?.cells ?? [];
+  const expectedCells = {
+    City: "Karachi", Name: NEW_A, "Contact number": "0300-9999983", Email: "zztmp-import-alpha@hmark-test.local", Country: COUNTRIES,
+    "Current qualification": "A-Levels", "Applying for": "masters", "Course of interest": LONG_COURSE, Status: "Meeting Done",
+    Counselor: counsellor.name, Remarks: "zztmp Met at the fair\nzztmp Also asked about Germany", "Follow-up date": "2026-10-20",
+    "Follow-up note": "zztmp Send the Milan list", "Inquiry date": "2026-09-14", Source: "Education fair",
+  };
+  const wrongCells = Object.entries(expectedCells).filter(([h, v]) => row[HEADERS.indexOf(h)] !== v).map(([h]) => h);
+  ok("...each piece of a lead in its own cell", wrongCells.length === 0, `wrong: ${wrongCells.join(", ")} — ${JSON.stringify(row)}`);
+  const n = exported.find((r) => r.cells[NAME] === NEW_A)?.n;
+  const dateLetter = letter("Inquiry date");
+  ok("...the Month a formula on that row's Inquiry date",
+    row[HEADERS.indexOf("Month")] === `=IF(${dateLetter}${n}="","",TEXT(${dateLetter}${n},"mmm yyyy"))`, row[HEADERS.indexOf("Month")]);
 
   const back = await importFile(page, "leads-export.xlsx", expBuffer);
   ok("the export imported straight back changes nothing", /^0 new leads added · 0 already on file and added to · \d+ already on file with nothing new/.test(back), back);
   ok("...and adds no second remark or follow-up",
     (await current(a.id)) === "zztmp Met at the fair\nzztmp Also asked about Germany" && (await followUps(a.id)).length === 1 && (await followUps(existingId)).length === 1);
+
+  // ------------------------------------------------------- arranging (0313)
+  console.log("\n--- arranging the columns ---");
+  const asCounsellor = await apiAs(url, anonKey, counsellor.email);
+  const { error: counsellorWrite } = await asCounsellor.from("list_column_orders").upsert({ list_key: "leads", column_keys: ["email"] });
+  ok("only a Super Admin may arrange the columns", Boolean(counsellorWrite), counsellorWrite?.message);
+
+  const sup = await fx.staff("leadimportsa", ["super_admin"]);
+  const supPage = await signIn(browser, sup.email);
+  await supPage.goto(`${BASE}/leads`, { waitUntil: "domcontentloaded" });
+  const arrange = supPage.locator("[data-arrange-columns]");
+  await arrange.waitFor({ timeout: 60000 });
+  await supPage.waitForFunction(() => {
+    const b = document.querySelector("[data-arrange-columns]");
+    return Boolean(b && Object.keys(b).some((k) => k.startsWith("__reactProps")));
+  }, null, { timeout: 30000 });
+  await arrange.click();
+  const dialog = supPage.locator("[data-arrange-dialog]");
+  await dialog.waitFor({ timeout: 15000 });
+  // Source, wherever it is, to the very top.
+  const items = async () => dialog.locator("[data-arrange-item]").evaluateAll((els) => els.map((e) => e.getAttribute("data-arrange-item")));
+  for (let i = 0; i < LEAD_COLUMNS.length && (await items())[0] !== "platform_source"; i++) {
+    await dialog.getByRole("button", { name: "Move Source up" }).click();
+  }
+  const wanted = await items();
+  await dialog.getByRole("button", { name: "Save order" }).click();
+  const saved = await poll(async () => {
+    const { data } = await admin.from("list_column_orders").select("column_keys").eq("list_key", "leads").maybeSingle();
+    return data?.column_keys?.[0] === "platform_source" ? data.column_keys : null;
+  });
+  ok("a Super Admin moves a column, and the order is saved", JSON.stringify(saved) === JSON.stringify(wanted), JSON.stringify(saved));
+  await supPage.goto(`${BASE}/leads`, { waitUntil: "domcontentloaded" });
+  await supPage.locator("thead th").first().waitFor({ timeout: 60000 });
+  const arrangedHeaders = (await supPage.locator("thead th").allInnerTexts()).map((t) => t.trim().toLowerCase()).filter((h) => h && h !== "#");
+  ok("...the list shows it, for everyone", JSON.stringify(arrangedHeaders) === JSON.stringify(listHeaders(saved)), arrangedHeaders.join(" | "));
+  const arrangedExport = (await readBook(await (await supPage.request.get(`${BASE}/api/export/leads`)).body())).getWorksheet("Leads");
+  const exportHeaders = (arrangedExport.getRow(1).values ?? []).slice(1).map(cellText);
+  ok("...and the export follows it, Month still worked out from the Inquiry date",
+    exportHeaders[0] === "Source" && JSON.stringify(exportHeaders) === JSON.stringify(orderedLeadColumns(saved).map((col) => col.header)) &&
+      new RegExp(`^=IF\\(${String.fromCharCode(65 + exportHeaders.indexOf("Inquiry date"))}2=`).test(cellText(arrangedExport.getCell(`${String.fromCharCode(65 + exportHeaders.indexOf("Month"))}2`).value)),
+    exportHeaders.join(" | "));
+
+  await arrange.click();
+  await dialog.waitFor({ timeout: 15000 });
+  await dialog.getByRole("button", { name: "Reset to default" }).click();
+  const reset = await poll(async () => !(await admin.from("list_column_orders").select("list_key").eq("list_key", "leads").maybeSingle()).data);
+  ok("...and Reset to default puts every column back", Boolean(reset));
+  await supPage.close();
 } catch (e) {
   ok(`the check itself stopped: ${e?.stack ?? e}`, false);
 } finally {
   await browser?.close().catch(() => {});
+  // The office's own arrangement, as it was before the check.
+  if (savedOrder?.column_keys) await admin.from("list_column_orders").upsert({ list_key: "leads", column_keys: savedOrder.column_keys });
+  else await admin.from("list_column_orders").delete().eq("list_key", "leads");
   await admin.from("leads").delete().in("full_name", [NEW_A, NEW_B]);
   const removed = await fx.cleanup();
   process.exitCode = finish(removed) === 0 ? 0 : 1;

@@ -23,10 +23,10 @@ export const LEAD_LIST_SHEET = "Lists";
 
 export const LEAD_COLUMNS = [
   { key: "month", header: "Month", width: 11 },
+  { key: "city", header: "City", width: 16 },
   { key: "full_name", header: "Name", width: 26 },
   { key: "contact_number", header: "Contact number", width: 18 },
   { key: "email", header: "Email", width: 28 },
-  { key: "city", header: "City", width: 16 },
   { key: "country_of_interest", header: "Country", width: 22 },
   { key: "current_qualification", header: "Current qualification", width: 22 },
   { key: "level_applying_for", header: "Applying for", width: 14 },
@@ -59,9 +59,49 @@ export function isExampleLead(name: string | null | undefined): boolean {
   return (name ?? "").trim().toLowerCase().startsWith("example student");
 }
 
-/** 1-based, as a spreadsheet counts. */
-export function leadColumnIndex(key: LeadColumnKey): number {
-  return LEAD_COLUMNS.findIndex((c) => c.key === key) + 1;
+export type LeadColumn = (typeof LEAD_COLUMNS)[number];
+
+/** 1-based, as a spreadsheet counts — in the given order, the default one unless told. */
+export function leadColumnIndex(key: LeadColumnKey, columns: readonly LeadColumn[] = LEAD_COLUMNS): number {
+  return columns.findIndex((c) => c.key === key) + 1;
+}
+
+// ---------------------------------------------------------- arranging (0313)
+//
+// A Super Admin arranges the leads columns for everyone: the list, and the
+// template and export, which mirror it. The order is stored as these keys.
+// The follow-up note is not arranged on its own — it rides beside the
+// follow-up date, the one column the list shows for both.
+
+export const ARRANGEABLE_LEAD_COLUMNS: readonly LeadColumn[] = LEAD_COLUMNS.filter((c) => c.key !== "follow_up_note");
+
+/** A stored order, kept to the keys that exist, each once; null when there is nothing usable. */
+export function readLeadColumnOrder(raw: unknown): LeadColumnKey[] | null {
+  if (!Array.isArray(raw)) return null;
+  const known = new Set<string>(ARRANGEABLE_LEAD_COLUMNS.map((c) => c.key));
+  const seen = new Set<string>();
+  const keys = raw.filter((k): k is LeadColumnKey => typeof k === "string" && known.has(k) && !seen.has(k) && Boolean(seen.add(k)));
+  return keys.length > 0 ? keys : null;
+}
+
+/**
+ * Every column, in the arranged order. A column the stored order does not
+ * name — one added since it was saved — takes its default place after the
+ * column it follows by default, so a new column is never lost off the end.
+ */
+export function orderedLeadColumns(saved: unknown): LeadColumn[] {
+  const order = readLeadColumnOrder(saved) ?? ARRANGEABLE_LEAD_COLUMNS.map((c) => c.key);
+  const result: LeadColumnKey[] = [...order];
+  ARRANGEABLE_LEAD_COLUMNS.forEach((c, i) => {
+    if (result.includes(c.key)) return;
+    const before = i > 0 ? result.indexOf(ARRANGEABLE_LEAD_COLUMNS[i - 1].key) : -1;
+    result.splice(before + 1, 0, c.key);
+  });
+  const byKey = new Map(LEAD_COLUMNS.map((c) => [c.key, c] as const));
+  const columns = result.map((k) => byKey.get(k)!);
+  const date = columns.findIndex((c) => c.key === "follow_up_date");
+  columns.splice(date + 1, 0, byKey.get("follow_up_note")!);
+  return columns;
 }
 
 /** "Oct 2026" for 2026-10-02 — the list's Month column, worked out from the inquiry date. */

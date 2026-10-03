@@ -1,7 +1,7 @@
 import writeXlsxFile from "write-excel-file/node";
 import { addDropdownsAndHideSheets, columnLetter, listRange, type Dropdown } from "@/lib/xlsxDropdowns";
 import { LEAD_STATUSES, LEAD_STATUS_LABELS } from "@/lib/constants";
-import { DEFAULT_IMPORT_COUNSELOR, EXAMPLE_LEAD, LEAD_COLUMNS, LEAD_LEVELS, LEAD_LIST_SHEET, LEAD_SHEET, leadColumnIndex, type LeadSheetRow } from "@/lib/leadSheet";
+import { DEFAULT_IMPORT_COUNSELOR, EXAMPLE_LEAD, LEAD_COLUMNS, LEAD_LEVELS, LEAD_LIST_SHEET, LEAD_SHEET, leadColumnIndex, type LeadColumn, type LeadSheetRow } from "@/lib/leadSheet";
 
 /** Rows the dropdowns and the Month formula reach below the data. */
 const HEADROOM = 300;
@@ -19,12 +19,24 @@ const DATE_COLUMNS = new Set(["date_of_inquiry", "follow_up_date"]);
  * the portal has, on a hidden Lists sheet; a value not in the list is warned
  * about, not refused, since the import reports it either way.
  */
-export async function leadWorkbook(rows: LeadSheetRow[], { counselors, example = false }: { counselors: { full_name: string }[]; example?: boolean }) {
-  const dateCol = columnLetter(leadColumnIndex("date_of_inquiry"));
-  const header = LEAD_COLUMNS.map((c) => ({ value: c.header, type: String, fontWeight: "bold" as const, backgroundColor: "#E6F4EE" }));
+export async function leadWorkbook(
+  rows: LeadSheetRow[],
+  {
+    counselors,
+    example = false,
+    columns = LEAD_COLUMNS,
+  }: {
+    counselors: { full_name: string }[];
+    example?: boolean;
+    /** The columns in the order a Super Admin arranged them (0313); the default order unless given. */
+    columns?: readonly LeadColumn[];
+  }
+) {
+  const dateCol = columnLetter(leadColumnIndex("date_of_inquiry", columns));
+  const header = columns.map((c) => ({ value: c.header, type: String, fontWeight: "bold" as const, backgroundColor: "#E6F4EE" }));
 
   const cellsOf = (row: LeadSheetRow | null, rowNumber: number, italic: boolean) =>
-    LEAD_COLUMNS.map((c) => {
+    columns.map((c) => {
       const style = italic ? { fontStyle: "italic" as const, color: "#888888" } : {};
       if (c.key === "month") {
         // No leading "=": write-excel-file puts the value into <f> as it is,
@@ -83,7 +95,7 @@ export async function leadWorkbook(rows: LeadSheetRow[], { counselors, example =
 
   const written = await writeXlsxFile(
     [
-      { data: data as never, sheet: LEAD_SHEET, columns: LEAD_COLUMNS.map((c) => ({ width: c.width })), stickyRowsCount: 1 },
+      { data: data as never, sheet: LEAD_SHEET, columns: columns.map((c) => ({ width: c.width })), stickyRowsCount: 1 },
       { data: lists, sheet: LEAD_LIST_SHEET },
     ],
     { fontFamily: "Calibri", fontSize: 11 }
@@ -92,13 +104,13 @@ export async function leadWorkbook(rows: LeadSheetRow[], { counselors, example =
   const toRow = body.length + 1 + HEADROOM;
   const dropdowns: Dropdown[] = [
     {
-      column: leadColumnIndex("level_applying_for"),
+      column: leadColumnIndex("level_applying_for", columns),
       range: listRange(LEAD_LIST_SHEET, "A", LEAD_LEVELS.length),
       errorTitle: "Not a level",
       errorMessage: "bachelors, masters or phd.",
     },
     {
-      column: leadColumnIndex("status"),
+      column: leadColumnIndex("status", columns),
       range: listRange(LEAD_LIST_SHEET, "B", statuses.length),
       errorTitle: "Not a status",
       errorMessage: "Choose one from the list. Registered is set by registering the student.",
@@ -106,7 +118,7 @@ export async function leadWorkbook(rows: LeadSheetRow[], { counselors, example =
     ...(counselors.length > 0
       ? [
           {
-            column: leadColumnIndex("counselor"),
+            column: leadColumnIndex("counselor", columns),
             range: listRange(LEAD_LIST_SHEET, "C", counselors.length),
             errorTitle: "Not an active counsellor",
             errorMessage: "Choose from the list, or leave blank for unassigned.",

@@ -4,6 +4,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   LEAD_COLUMNS,
+  orderedLeadColumns,
+  readLeadColumnOrder,
   isExampleLead,
   leadColumnIndex,
   leadFromRow,
@@ -21,7 +23,7 @@ test("the columns are the list's, with the qualification, level and course right
   const country = headers.indexOf("Country");
   assert.deepEqual(headers.slice(country, country + 4), ["Country", "Current qualification", "Applying for", "Course of interest"]);
   assert.equal(leadColumnIndex("date_of_inquiry"), 15, "the Month formula points at column O");
-  assert.equal(headers[headers.indexOf("Email") + 1], "City");
+  assert.deepEqual(headers.slice(0, 3), ["Month", "City", "Name"], "City between Month and Name");
 });
 
 test("the month is worked out from the inquiry date", () => {
@@ -182,9 +184,29 @@ test("an exported row has every piece of the lead in its own cell", () => {
     date_of_inquiry: "2026-09-01",
     platform_source: "Facebook",
   });
-  assert.deepEqual(Object.keys(row), LEAD_COLUMNS.map((c) => c.key));
+  assert.deepEqual(Object.keys(row).sort(), LEAD_COLUMNS.map((c) => c.key).sort());
   assert.equal(row.month, "Sep 2026");
   assert.equal(row.status, "Meeting Done");
   assert.equal(row.follow_up_date, "2026-10-10");
   assert.equal(row.counselor, "Sara");
+});
+
+test("a Super Admin's order is followed, the follow-up note always beside its date", () => {
+  // Source moved to the front, Follow-up to second.
+  const arranged = LEAD_COLUMNS.map((c) => c.key).filter((k) => !["platform_source", "follow_up_date", "follow_up_note"].includes(k));
+  const keys = orderedLeadColumns(["platform_source", "follow_up_date", ...arranged]).map((c) => c.key);
+  assert.deepEqual(keys.slice(0, 4), ["platform_source", "follow_up_date", "follow_up_note", "month"]);
+  assert.equal(keys.length, LEAD_COLUMNS.length, "every column is still there");
+});
+
+test("a column the stored order does not name takes its default place", () => {
+  // Saved before City existed: City lands after Month, where it is by default.
+  const keys = orderedLeadColumns(["month", "full_name", "email"]).map((c) => c.key);
+  assert.deepEqual(keys.slice(0, 5), ["month", "city", "full_name", "contact_number", "email"]);
+});
+
+test("nothing usable stored is the default order", () => {
+  assert.deepEqual(orderedLeadColumns(null).map((c) => c.key), LEAD_COLUMNS.map((c) => c.key));
+  assert.equal(readLeadColumnOrder(["nonsense", 3]), null);
+  assert.deepEqual(readLeadColumnOrder(["email", "email", "month"]), ["email", "month"]);
 });

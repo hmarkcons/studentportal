@@ -12,7 +12,30 @@ import { LongTextCell } from "@/components/ui/LongTextCell";
 import { RowActionsMenu } from "@/components/RowActionsMenu";
 import { hasPermission } from "@/lib/auth/permissions";
 import { getCachedCounselors } from "@/lib/cachedQueries";
-import { monthLabel } from "@/lib/leadSheet";
+import { monthLabel, orderedLeadColumns, type LeadColumnKey } from "@/lib/leadSheet";
+import { getStaffSession } from "@/lib/auth/session";
+import { hasRole } from "@/lib/auth/roles";
+import { ArrangeLeadColumns } from "./ArrangeLeadColumns";
+
+/** Each list column, by the leads workbook column it shows. The follow-up note has none of its own: it is in Follow-up. */
+const TABLE_KEY: Record<LeadColumnKey, string | null> = {
+  month: "month",
+  city: "city",
+  full_name: "name",
+  contact_number: "contact",
+  email: "email",
+  country_of_interest: "country",
+  current_qualification: "qualification",
+  level_applying_for: "level",
+  course_of_interest: "course",
+  status: "status",
+  counselor: "counselor",
+  remarks: "remarks",
+  follow_up_date: "followUp",
+  follow_up_note: null,
+  date_of_inquiry: "date",
+  platform_source: "source",
+};
 
 const LEVEL_LABELS: Record<string, string> = { bachelors: "Bachelors", masters: "Masters", phd: "PhD" };
 
@@ -45,7 +68,7 @@ export default async function LeadsPage() {
   const supabase = await createClient();
   // Two waves where there were five: the list with what needs nothing, then
   // the two things that need the list.
-  const [canDelete, { data: leads, error }, counselors] = await Promise.all([
+  const [canDelete, { data: leads, error }, counselors, { staff }, { data: savedOrder }] = await Promise.all([
     hasPermission("leads.delete"),
     supabase
       .from("leads")
@@ -55,7 +78,11 @@ export default async function LeadsPage() {
       .order("date_of_inquiry", { ascending: false })
       .returns<LeadRow[]>(),
     getCachedCounselors(),
+    getStaffSession(),
+    // The order a Super Admin arranged the columns in (0313), for everyone.
+    supabase.from("list_column_orders").select("column_keys").eq("list_key", "leads").maybeSingle(),
   ]);
+  const canArrange = hasRole(staff, "super_admin");
 
   const leadIds = (leads ?? []).map((r) => r.id);
 
@@ -90,14 +117,15 @@ export default async function LeadsPage() {
   // hold an inline editor that needs the room. Remarks stays on one line, cut
   // short where it is long, and opens whole in a pop-up (RemarkCell).
   //
-  // The columns are the leads workbook's (src/lib/leadSheet.ts), in its order,
-  // so what is on screen is what the export and the import hold.
-  const columns = [
+  // The columns are the leads workbook's (src/lib/leadSheet.ts), in the order a
+  // Super Admin arranged them (0313) — the same order as the export and the
+  // template, so what is on screen is what they hold.
+  const columnDefs = [
     { key: "month", header: "Month" },
+    { key: "city", header: "City" },
     { key: "name", header: "Name" },
     { key: "contact", header: "Contact number" },
     { key: "email", header: "Email" },
-    { key: "city", header: "City" },
     { key: "country", header: "Country" },
     { key: "qualification", header: "Current qualification" },
     { key: "level", header: "Applying for" },
@@ -108,8 +136,12 @@ export default async function LeadsPage() {
     { key: "followUp", header: "Follow-up", wrap: true },
     { key: "date", header: "Inquiry date" },
     { key: "source", header: "Source" },
-    { key: "actions", header: "", align: "right" as const, exportable: false },
   ];
+  const defByKey = new Map(columnDefs.map((c) => [c.key, c]));
+  const arranged = orderedLeadColumns(savedOrder?.column_keys)
+    .map((c) => ({ sheetKey: c.key, def: TABLE_KEY[c.key] ? defByKey.get(TABLE_KEY[c.key]!) : undefined }))
+    .filter((c): c is { sheetKey: LeadColumnKey; def: (typeof columnDefs)[number] } => Boolean(c.def));
+  const columns = [...arranged.map((c) => c.def), { key: "actions", header: "", align: "right" as const, exportable: false }];
 
   const rows = (leads ?? []).map((r) => {
     const remark = one(r.current_remark);
@@ -196,9 +228,12 @@ export default async function LeadsPage() {
           <h2 className="text-lg font-semibold text-ink">Leads</h2>
           <p className="text-sm text-muted">{leads?.length ?? 0} in the pipeline</p>
         </div>
-        <Link prefetch={false} href="/leads/new" className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink">
-          + New lead
-        </Link>
+        <div className="flex items-center gap-2">
+          {canArrange && <ArrangeLeadColumns columns={arranged.map((c) => ({ key: c.sheetKey, header: c.def.header }))} />}
+          <Link prefetch={false} href="/leads/new" className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink">
+            + New lead
+          </Link>
+        </div>
       </div>
 
       <ImportLeadsForm />

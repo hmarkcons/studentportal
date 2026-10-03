@@ -1,7 +1,7 @@
 import { getStaffSession } from "@/lib/auth/session";
 import { getCachedCounselors } from "@/lib/cachedQueries";
 import { readAll, readAllIn } from "@/lib/catalogueReads";
-import { leadSheetRow, type ExportLead } from "@/lib/leadSheet";
+import { leadSheetRow, orderedLeadColumns, type ExportLead } from "@/lib/leadSheet";
 import { XLSX, leadWorkbook } from "@/lib/leadWorkbook";
 
 function one<T>(v: T | T[] | null) {
@@ -74,7 +74,9 @@ export async function GET() {
       nextFollowUp: nextFollowUp.get(l.id) ?? null,
     } satisfies ExportLead)
   );
-  const buffer = await leadWorkbook(rows, { counselors: await getCachedCounselors() });
+  // In the order a Super Admin arranged the list (0313).
+  const { data: savedOrder } = await supabase.from("list_column_orders").select("column_keys").eq("list_key", "leads").maybeSingle();
+  const buffer = await leadWorkbook(rows, { counselors: await getCachedCounselors(), columns: orderedLeadColumns(savedOrder?.column_keys) });
   const stamp = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Karachi" }).format(new Date());
   return new Response(buffer as unknown as ArrayBuffer, {
     headers: {
