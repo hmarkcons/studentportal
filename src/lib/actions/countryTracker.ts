@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { syncStagesForApplication } from "@/lib/autoStagesSync";
 import type { TrackerFieldDef, TrackerFieldType } from "@/lib/countryTrackers";
 import { requirePermission } from "@/lib/auth/permissions";
+import { trackerTestField, trackerTestFieldType } from "@/lib/trackerTests";
+import { TEST_TYPE_LABELS, type TestType } from "@/lib/testScores";
 
 type TrackerDefinitionRow = {
   id: string;
@@ -355,10 +357,74 @@ export async function saveTrackerFields(
 
   if (error) return { error: error.message };
 
+  // A ticked test's date and score: the student's own Test scores.
+  const testError = await saveTrackerTestScores(supabase, applicationId, formData);
+  if (testError) return { error: testError };
+
   // An appointment booked, a visa filed, a decision in: the country's steps follow.
   await syncStagesForApplication(applicationId);
   revalidatePath(revalidateTo);
   return { success: true };
+}
+
+/**
+ * The dates and scores the tracker posts for its ticked tests, written to the
+ * student's Test scores (student_test_scores) — the one place a score lives,
+ * also on their Profile and in their portal.
+ *
+ * Each test's latest row is updated, or one added when there is none and a
+ * date or score was given. Nothing is deleted: unticking a test hides its
+ * fields here and leaves its record alone. Returns a message when a value
+ * could not be saved.
+ */
+async function saveTrackerTestScores(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  applicationId: string,
+  formData: FormData
+): Promise<string | null> {
+  const types = new Set<TestType>();
+  for (const key of formData.keys()) {
+    const t = trackerTestFieldType(key);
+    if (t) types.add(t);
+  }
+  if (types.size === 0) return null;
+
+  const { data: app } = await supabase.from("applications").select("student_id").eq("id", applicationId).maybeSingle();
+  if (!app?.student_id) return "The tracker was saved, but its test scores were not — the application could not be found.";
+  const { data: rows } = await supabase
+    .from("student_test_scores")
+    .select("id, test_type, score, test_date, custom_test_name")
+    .eq("student_id", app.student_id)
+    .order("created_at", { ascending: false });
+
+  for (const type of types) {
+    const label = TEST_TYPE_LABELS[type];
+    const score = String(formData.get(trackerTestField.score(type)) ?? "").trim().slice(0, 50) || null;
+    const rawDate = String(formData.get(trackerTestField.date(type)) ?? "").trim();
+    if (rawDate && !/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) return `The ${label} test date is not a date.`;
+    const test_date = rawDate || null;
+    const name = type === "other" ? String(formData.get(trackerTestField.otherName) ?? "").trim().slice(0, 80) || null : null;
+
+    const existing = (rows ?? []).find((r) => r.test_type === type);
+    if (existing) {
+      const nameChanged = type === "other" && name !== null && name !== existing.custom_test_name;
+      if (score === existing.score && test_date === existing.test_date && !nameChanged) continue;
+      const { data: saved, error } = await supabase
+        .from("student_test_scores")
+        .update({ score, test_date, ...(nameChanged ? { custom_test_name: name } : {}) })
+        .eq("id", existing.id)
+        .select("id");
+      if (error || !saved?.length) return `The ${label} date and score were not saved${error ? ` (${error.message})` : ""}.`;
+    } else if (score || test_date) {
+      if (type === "other" && !name) return "Give the other test's name, so its date and score can be kept.";
+      const { error } = await supabase
+        .from("student_test_scores")
+        .insert({ student_id: app.student_id, test_type: type, score, test_date, custom_test_name: name });
+      if (error) return `The ${label} date and score were not saved (${error.message}).`;
+    }
+  }
+  revalidatePath(`/students/${app.student_id}/profile`);
+  return null;
 }
 
 export async function storeCredentialAction(

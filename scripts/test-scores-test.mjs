@@ -12,7 +12,7 @@ import { TEST_TYPES, testScoreHint } from "../src/lib/testScores.ts";
 test("the test types match the database CHECK constraint", () => {
   assert.deepEqual(
     [...TEST_TYPES],
-    ["ielts", "toefl", "pte", "duolingo", "langcert", "ib", "moi", "gre", "gmat", "sat", "cent_s", "other"],
+    ["ielts", "toefl", "pte", "duolingo", "langcert", "ib", "moi", "gre", "gmat", "sat", "cent_s", "imat", "tolc", "other"],
     "add a migration widening student_test_scores_test_type_check before changing this"
   );
 });

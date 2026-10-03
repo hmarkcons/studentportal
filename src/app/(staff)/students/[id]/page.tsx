@@ -15,6 +15,7 @@ import type { DocRow } from "@/components/DocumentChecklist";
 import { CATEGORY_LABELS, CATEGORY_ORDER } from "@/lib/documentCategories";
 import { CountryTrackerForm } from "@/components/CountryTrackerForm";
 import { loadTrackerPrefillSource } from "@/lib/trackerPrefillSource";
+import { admissionTestPreTick, isTestOptionList, type TrackerTestScore } from "@/lib/trackerTests";
 import { trackerSuggestions } from "@/lib/trackerPrefill";
 import { listTrackerDefinitions } from "@/lib/actions/countryTracker";
 import { DestinationPipelineCard } from "@/components/DestinationPipelineCard";
@@ -138,7 +139,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         .select("auth_user_id, full_name, email, portal_active")
         .eq("id", id)
         .maybeSingle(),
-      supabase.from("leads").select("assigned_counselor_id, processing_officer_id, intake, discount_amount, discount_reason, service_type, registered_at").eq("id", id).maybeSingle(),
+      supabase.from("leads").select("assigned_counselor_id, processing_officer_id, intake, discount_amount, discount_reason, service_type, registered_at, level_applying_for").eq("id", id).maybeSingle(),
       supabase
         .from("lead_destinations")
         .select("destination_id, is_backup, created_at, dashboard_stage_values, destination:destinations(display_name, country, admin_charge, country_code, dashboard_pipeline_stages, finalize_action_label, visa_service_fee)")
@@ -498,6 +499,8 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     { data: trackerExtras },
     { data: scholarshipBodies },
     prefillSourceIfTracked,
+    { data: trackerTestRows },
+    { data: highSchool },
   ] = await Promise.all([
     // The template and the signed scan are ordinary links, so they batch. The
     // generated PDF carries a per-agreement download filename, which the batch
@@ -632,7 +635,27 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       ? supabase.from("scholarship_bodies").select("region, covers")
       : Promise.resolve({ data: null as { region: string; covers: string[] | null }[] | null }),
     primaryApps.length ? loadTrackerPrefillSource(id, rawDocs ?? []) : Promise.resolve(null),
+    // A ticked test's date and score in the tracker are the student's own
+    // Test scores, newest first so the latest of each test is the one shown.
+    primaryApps.length
+      ? supabase
+          .from("student_test_scores")
+          .select("test_type, score, test_date, custom_test_name, created_at")
+          .eq("student_id", id)
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] as { test_type: string; score: string | null; test_date: string | null; custom_test_name: string | null }[] }),
+    // The high-school mark, which decides whether an Italy bachelors student
+    // sits CEnT-S or SAT.
+    primaryAppByCountry.has("IT")
+      ? supabase.from("student_qualifications").select("grade_percentage").eq("student_id", id).eq("qualification_type", "high_school").maybeSingle()
+      : Promise.resolve({ data: null as { grade_percentage: string | null } | null }),
   ]);
+  const trackerTestScores: Record<string, TrackerTestScore> = {};
+  for (const t of trackerTestRows ?? []) {
+    if (!trackerTestScores[t.test_type]) {
+      trackerTestScores[t.test_type] = { score: t.score, date: t.test_date, name: t.custom_test_name };
+    }
+  }
 
   // Header summary for the Invoice section, which also opens collapsed. Counted
   // across every invoice on the student rather than summed, because the amounts
@@ -960,6 +983,20 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                         )
                       : {}
                   }
+                  testScores={trackerTestScores}
+                  preTick={(() => {
+                    const pre = admissionTestPreTick({
+                      countryCode: section.entry.countryCode,
+                      level: leadRegistration?.level_applying_for,
+                      highSchool: highSchool?.grade_percentage,
+                    });
+                    if (!pre) return {};
+                    return Object.fromEntries(
+                      section.fields
+                        .filter((f) => f.type === "multi_select" && isTestOptionList(f.options ?? []) && pre.options.every((o) => (f.options ?? []).includes(o)))
+                        .map((f) => [f.key, pre])
+                    );
+                  })()}
                 />
               ),
             }))}

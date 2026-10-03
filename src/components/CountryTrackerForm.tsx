@@ -10,6 +10,8 @@ import type { TrackerFieldDef } from "@/lib/countryTrackers";
 import { parseMultiValue } from "@/lib/trackerValue";
 import { ActionStatus } from "@/components/ActionStatus";
 import type { Suggestion } from "@/lib/trackerPrefill";
+import { isTestOptionList, testTypeForOption, trackerTestField, type TrackerTestScore } from "@/lib/trackerTests";
+import { testScoreHint } from "@/lib/testScores";
 
 /**
  * What the record already knows, offered beside an empty field.
@@ -51,6 +53,8 @@ export function CountryTrackerForm({
   studentId,
   finalizeActionLabel = "Finalize for visa",
   suggestions = {},
+  testScores,
+  preTick = {},
 }: {
   applicationId: string;
   fields: TrackerFieldDef[];
@@ -74,6 +78,11 @@ export function CountryTrackerForm({
   /** Resolved on the server: what the rest of the record already says about
    *  the fields that are still empty. Offered, never applied. */
   suggestions?: Record<string, Suggestion>;
+  /** The student's test scores by type. Given, a ticked test opens its date
+   *  and score here, saved to those same scores; absent, it does not. */
+  testScores?: Record<string, TrackerTestScore>;
+  /** Tests a field starts with ticked, and why, while nothing is ticked yet. */
+  preTick?: Record<string, { options: string[]; reason: string }>;
 }) {
   // Portal logins live in their own section on the student dashboard, so the
   // tracker no longer carries credential fields at all.
@@ -166,6 +175,8 @@ export function CountryTrackerForm({
                   options={multiOptions}
                   initial={values[f.key]}
                   suggestion={suggestions[f.key]}
+                  tests={testScores}
+                  preTick={preTick[f.key]}
                 />
               ) : f.type === "multi_text" ? (
                 <MultiTextField fieldKey={f.key} initial={values[f.key]} />
@@ -223,17 +234,25 @@ function MultiSelectField({
   options,
   initial,
   suggestion,
+  tests,
+  preTick,
 }: {
   fieldKey: string;
   options: string[];
   initial?: string;
   suggestion?: Suggestion;
+  tests?: Record<string, TrackerTestScore>;
+  preTick?: { options: string[]; reason: string };
 }) {
+  // Ticked to start with, and said why, only while nothing is ticked yet.
+  const preset = preTick && parseMultiValue(initial).length === 0 ? { ...preTick, options: preTick.options.filter((o) => options.includes(o)) } : null;
   // parseMultiValue, not parseJsonArray: a field that used to be a single
   // select stores its old answers unquoted ("CEnT-S", not ["CEnT-S"]), and
   // reading those as nothing would drop a student's recorded test from the
   // form and then overwrite it on the next save.
-  const [selected, setSelected] = useState<string[]>(() => parseMultiValue(initial));
+  const [selected, setSelected] = useState<string[]>(() => (preset?.options.length ? preset.options : parseMultiValue(initial)));
+  // A ticked test's date and score, kept with the student's Test scores.
+  const testField = Boolean(tests) && isTestOptionList(options);
 
   function toggle(o: string) {
     setSelected((prev) => (prev.includes(o) ? prev.filter((v) => v !== o) : [...prev, o]));
@@ -256,6 +275,39 @@ function MultiSelectField({
           display={parseMultiValue(suggestion.value).join(", ")}
           onUse={() => setSelected(parseMultiValue(suggestion.value))}
         />
+      )}
+      {preset && preset.options.length > 0 && (
+        <p className="rounded bg-info-bg px-2 py-1 text-[11px] leading-snug text-info" data-pretick-note>
+          {preset.reason} Save to keep it.
+        </p>
+      )}
+      {testField &&
+        selected.map((o) => {
+          const type = testTypeForOption(o);
+          if (!type) return null;
+          const known = tests?.[type];
+          return (
+            <div key={o} className="mt-1 grid grid-cols-1 gap-2 rounded-md bg-bg p-2 sm:grid-cols-2" data-test-fields={type}>
+              <p className="text-xs font-medium text-ink sm:col-span-2">{o}</p>
+              {type === "other" && (
+                <label className="flex flex-col gap-0.5 text-[11px] text-muted sm:col-span-2">
+                  Test name
+                  <Input name={trackerTestField.otherName} defaultValue={known?.name ?? ""} placeholder="e.g. TIL" maxLength={80} />
+                </label>
+              )}
+              <label className="flex flex-col gap-0.5 text-[11px] text-muted">
+                Test date
+                <Input type="date" name={trackerTestField.date(type)} defaultValue={known?.date ?? ""} />
+              </label>
+              <label className="flex flex-col gap-0.5 text-[11px] text-muted">
+                Score
+                <Input name={trackerTestField.score(type)} defaultValue={known?.score ?? ""} placeholder={testScoreHint(type)} maxLength={50} />
+              </label>
+            </div>
+          );
+        })}
+      {testField && selected.some((o) => testTypeForOption(o)) && (
+        <p className="text-[11px] text-muted">Dates and scores are kept in the student&apos;s Test scores, on their Profile.</p>
       )}
       <input type="hidden" name={fieldKey} value={JSON.stringify(selected)} />
     </div>

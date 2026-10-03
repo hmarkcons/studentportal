@@ -17,6 +17,8 @@ export const TEST_TYPES = [
   "gmat",
   "sat",
   "cent_s",
+  "imat",
+  "tolc",
   "other",
 ] as const;
 
@@ -34,6 +36,8 @@ export const TEST_TYPE_LABELS: Record<TestType, string> = {
   gmat: "GMAT",
   sat: "SAT",
   cent_s: "CEnT-S",
+  imat: "IMAT",
+  tolc: "TOLC",
   other: "Other",
 };
 
@@ -68,6 +72,10 @@ export const TEST_SCORE_HINTS: Record<TestType, string> = {
   gmat: "e.g. 650",
   sat: "e.g. 1350 (400–1600)",
   cent_s: "e.g. 42 (0–55)",
+  // IMAT is marked out of 90; a TOLC's ceiling depends on which TOLC it is,
+  // so it asks for the result as printed rather than guess a range.
+  imat: "e.g. 45 (up to 90)",
+  tolc: "e.g. 32, as the result states it",
   other: "Score as the certificate states it",
 };
 
