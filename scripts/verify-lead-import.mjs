@@ -72,6 +72,15 @@ const cellText = (v) => {
   return String(v);
 };
 
+async function poll(fn, seconds = 30) {
+  for (let i = 0; i < seconds; i++) {
+    const v = await fn();
+    if (v) return v;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  return null;
+}
+
 async function readBook(buffer) {
   const book = new ExcelJS.Workbook();
   await book.xlsx.load(buffer);
