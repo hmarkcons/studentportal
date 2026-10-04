@@ -1,5 +1,5 @@
 // The leads and registered-students lists hold every record, a page at a time
-// (250 leads, 1000 students) — end to end against a deployed portal.
+// (a thousand of each) — end to end against a deployed portal.
 //
 //   VERIFY_AGAINST_PRODUCTION=yes npm run check:paging
 //
@@ -30,7 +30,7 @@ try {
   await page.setViewportSize({ width: 1400, height: 900 });
 
   for (const [path, label, total, unit, size] of [
-    ["/leads", "Leads", leadCount, "in the pipeline", 250],
+    ["/leads", "Leads", leadCount, "in the pipeline", 1000],
     ["/students", "Registered students", studentCount, "students", 1000],
   ]) {
     console.log(`\n--- ${label} ---`);

@@ -70,11 +70,11 @@ function one<T>(v: T | T[] | null) {
 }
 
 /**
- * 250 leads to a page, read by the server one page at a time — the office's
- * choice. A page of a thousand, each row with its own status, counsellor and
- * remark controls, was the slower part of opening the list.
+ * A thousand leads to a page, read by the server one page at a time — the
+ * office's choice. (250 was tried; a thousand on screen at once is what they
+ * work from.)
  */
-const PAGE_SIZE = 250;
+const PAGE_SIZE = 1000;
 
 /** What the search box looks through on the lead itself; remarks, counsellors and statuses are matched besides. */
 const SEARCHED_COLUMNS = [
