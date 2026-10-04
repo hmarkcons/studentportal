@@ -24,6 +24,7 @@ import { removeStoragePrefix } from "@/lib/storageCleanup";
 import { uploadedFile } from "@/lib/stagedUpload";
 import { getCurrentUser } from "@/lib/auth/currentUser";
 import { normalizeRemark, remarkError } from "@/lib/leadRemarks";
+import { readRegistrationPersonal, type RegistrationPersonal } from "@/lib/registrationPersonal";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -161,7 +162,14 @@ export async function createLead(_prevState: unknown, formData: FormData) {
   redirect(`/leads/${id}`);
 }
 
-export async function updateLead(leadId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
+/**
+ * Saves a lead's details. Answers as soon as they are written, without the
+ * page: the form reads the page again behind its "Saved." (LeadEditForm). A
+ * revalidatePath here would have the server render the whole page into the
+ * answer first — Next does that after any revalidation, whichever path it
+ * names — and the person saving would wait for it.
+ */
+export async function updateLead(leadId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
 
   const full_name = String(formData.get("full_name") ?? "").trim();
@@ -216,8 +224,6 @@ export async function updateLead(leadId: string, revalidateTo: string, _prevStat
     .eq("id", leadId);
 
   if (error) return { error: error.message };
-
-  revalidatePath(revalidateTo);
   return { success: true };
 }
 
@@ -448,7 +454,8 @@ export async function importLeads(_prevState: unknown, formData: FormData): Prom
       level_applying_for: s.level_applying_for,
       course_of_interest: s.course_of_interest,
       platform_source: s.platform_source,
-      status: status ?? "potential",
+      // A blank Status is a lead nobody has worked yet (0316).
+      status: status ?? "unattended",
       assigned_counselor_id: counselor ? counselorId(counselor, s.full_name, defaultCounselor) : (defaultCounselor?.id ?? null),
       date_of_inquiry: s.date_of_inquiry ?? today,
     }));
@@ -692,6 +699,8 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
 
   type Prepared = {
     lead: Record<string, unknown>;
+    /** Saved to student_profiles once the student exists. */
+    personal: RegistrationPersonal;
     primary: string;
     backups: string[];
     /** The registration day, kept out of `lead` so the batch can be ordered by it. */
@@ -710,12 +719,22 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
   // from a typo, and a different fix, so it is reported separately.
   const pausedCountry: string[] = [];
   const noCountry: string[] = [];
+  // Date of birth, address and the emergency contact are required, as on the
+  // form: a row missing any, or with one that does not read, is left out and
+  // named with what is wrong.
+  const badPersonal: string[] = [];
   const unknownCounselor: string[] = [];
   const ambiguousCounselor: string[] = [];
 
   for (const r of rows) {
     const full_name = (r.full_name ?? "").trim();
     if (!full_name) continue;
+
+    const personal = readRegistrationPersonal((k) => r[k]);
+    if ("error" in personal) {
+      badPersonal.push(`${full_name}: ${personal.missing.length ? `no ${personal.missing.join(", ")}` : personal.error}`);
+      continue;
+    }
 
     // Checked before anything else because it is the one field that cannot be
     // corrected afterwards. The date decides where the student falls in their
@@ -783,6 +802,7 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
     }
 
     prepared.push({
+      personal: personal.values,
       primary: primary.id,
       backups,
       day,
@@ -800,10 +820,9 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
         country_of_interest: primary.display_name,
         intake: (r.intake ?? "").trim() || null,
         assigned_counselor_id,
-        // A bad DOB in a spreadsheet is dropped rather than failing the whole
-        // import — the row still carries a name and contact details worth having.
-        date_of_birth: dateOfBirthError(r.date_of_birth) ? null : r.date_of_birth || null,
-        address: r.address || null,
+        // Checked above with the rest of the five: a row reaching here has both.
+        date_of_birth: personal.values.date_of_birth,
+        address: personal.values.address,
         home_phone: phoneError(r.home_phone) ? null : r.home_phone || null,
         status: "registered" as const,
         // See registerStudentManually's comment — handle_lead_registration()
@@ -825,10 +844,12 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
       pausedCountry.length ? `${pausedCountry.length} for a country we have paused` : "",
       noCountry.length ? `${noCountry.length} with no country` : "",
       badDate.length ? `${badDate.length} with a registration date that could not be read` : "",
+      badPersonal.length ? `${badPersonal.length} without a date of birth, address and emergency contact that read` : "",
     ].filter(Boolean).join(", ");
     return {
-      error: `No rows could be imported${reasons ? ` — ${reasons}` : ""}. full_name and country_of_interest are both required.`,
+      error: `No rows could be imported${reasons ? ` — ${reasons}` : ""}. full_name, country_of_interest, date_of_birth, address and the emergency contact's name, relation and number are all required.`,
       badDate,
+      badPersonal,
     };
   }
 
@@ -885,6 +906,7 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
       ...duplicateNames.map((name): ImportPreviewRow => ({ name, outcome: "skipped", detail: "email already matches an existing student" })),
       ...badDate.map((e) => named(e, "registration date could not be read")),
       ...noCountry.map((name): ImportPreviewRow => ({ name, outcome: "skipped", detail: "no country given" })),
+      ...badPersonal.map((e) => named(e, "personal details")),
       ...badCountry.map((e) => named(e, "country not recognised")),
       ...pausedCountry.map((e) => named(e, "country paused")),
     ];
@@ -905,6 +927,10 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
     .insert(ordered.map((p) => p.lead))
     .select("id, full_name, email");
   if (error) return { error: error.message };
+
+  // The emergency contacts, on the profiles of the students just created.
+  const personalById = new Map((inserted ?? []).map((r, i) => [r.id as string, ordered[i]?.personal]));
+  const emergencyError = await saveEmergencyContact([...personalById.keys()], (id) => personalById.get(id));
 
   // Destinations, which is what makes the student code get stamped.
   //
@@ -967,10 +993,42 @@ export async function importRegisteredStudents(_prevState: unknown, formData: Fo
     badCountry,
     pausedCountry,
     noCountry,
+    badPersonal,
     unknownCounselor,
     ambiguousCounselor: [...new Set(ambiguousCounselor)],
-    destinationWarning,
+    destinationWarning: [destinationWarning, emergencyError ? `their emergency contacts could not be saved (${emergencyError})` : null]
+      .filter(Boolean)
+      .join("; ") || null,
   };
+}
+
+/**
+ * The emergency contact a student is registered with, on student_profiles —
+ * where the Profile tab and the student's portal read it. Only the three
+ * columns, so a profile already on file keeps everything else.
+ *
+ * Through the service role, and only ever for a student the same request has
+ * just registered, which RLS allowed: a counsellor registering a student for a
+ * colleague may not be able to write that student's profile themselves, and
+ * the registration would otherwise half-succeed.
+ */
+async function saveEmergencyContact(studentIds: string[], byId: (id: string) => RegistrationPersonal | undefined) {
+  const rows = studentIds.flatMap((student_id) => {
+    const v = byId(student_id);
+    return v
+      ? [
+          {
+            student_id,
+            emergency_contact_name: v.emergency_contact_name,
+            emergency_contact_relation: v.emergency_contact_relation,
+            emergency_contact_number: v.emergency_contact_number,
+          },
+        ]
+      : [];
+  });
+  if (rows.length === 0) return null;
+  const { error } = await createAdminClient().from("student_profiles").upsert(rows, { onConflict: "student_id" });
+  return error?.message ?? null;
 }
 
 export async function registerStudentManually(_prevState: unknown, formData: FormData) {
@@ -978,6 +1036,9 @@ export async function registerStudentManually(_prevState: unknown, formData: For
 
   const full_name = String(formData.get("full_name") ?? "").trim();
   if (!full_name) return { error: "Name is required." };
+  // Date of birth, address and the emergency contact: all required (src/lib/registrationPersonal.ts).
+  const personal = readRegistrationPersonal((k) => formData.get(k));
+  if ("error" in personal) return { error: personal.error };
 
   const contact_number = String(formData.get("contact_number") ?? "").trim() || null;
   const email = String(formData.get("email") ?? "").trim() || null;
@@ -1037,6 +1098,8 @@ export async function registerStudentManually(_prevState: unknown, formData: For
     country_of_interest: selection.primaryDestinationName,
     assigned_counselor_id,
     intake,
+    date_of_birth: personal.values.date_of_birth,
+    address: personal.values.address,
     // Only when it is not the default, so a form without the field — and a
     // role the trigger would refuse it from — writes exactly what it did.
     ...(service_type === "full" ? {} : { service_type }),
@@ -1054,6 +1117,7 @@ export async function registerStudentManually(_prevState: unknown, formData: For
   if (destinationRows.length > 0) {
     await supabase.from("lead_destinations").insert(destinationRows);
   }
+  const emergencyError = await saveEmergencyContact([id], () => personal.values);
 
   // A visa-only client already has their admission: its stages are done.
   if (service_type === "visa_only") await applyVisaOnlyStages(id);
@@ -1065,10 +1129,11 @@ export async function registerStudentManually(_prevState: unknown, formData: For
   await notifyAssignedStaff(id);
 
   revalidatePath("/students");
-  // Same reasoning as registerLead: this form only captures a handful of
-  // lead-level fields, none of the registration-specific ones (DOB,
-  // address, home phone, emergency contact, ...) — send staff straight to
-  // the Profile tab to finish the rest.
+  if (emergencyError) {
+    return { error: `The student is registered, but their emergency contact was not saved (${emergencyError}). Add it on their Profile tab.` };
+  }
+  // The rest of what a registered student needs — passport, home phone,
+  // documents — is on the Profile tab: straight there.
   redirect(`/students/${id}/profile`);
 }
 
@@ -1114,19 +1179,23 @@ export async function updateLeadStatus(leadId: string, _prevState: unknown, form
   if (!LEAD_STATUSES.includes(status as never)) {
     return { error: "Choose a valid status." };
   }
-  if (!remark) {
-    return { error: "A remark is required for every status update (call log)." };
+  // A remark is welcome and no longer required (0316): the change is logged
+  // either way. With neither a new status nor a remark there is nothing to log.
+  if (!remark && formData.get("current_status") === status) {
+    return { error: "Choose a different status, or write a remark to log the call." };
   }
 
   // Single security-definer RPC — the call log entry and the status change
   // commit or fail together (see migration 0089), rather than as two
   // separate client-side writes that could disagree if the second one failed.
-  const { error } = await supabase.rpc("update_lead_status", { p_lead_id: leadId, p_status: status, p_remark: remark });
+  const { error } = await supabase.rpc("update_lead_status", { p_lead_id: leadId, p_status: status, p_remark: remark || null });
   if (error) return { error: error.message };
 
-  revalidatePath(`/leads/${leadId}`);
-  revalidatePath("/leads");
-  return { success: true };
+  // No revalidatePath: the leads list's cell shows the new status itself, and
+  // the lead's own page reads itself again behind the answer (CallLogForm).
+  // Revalidating would have the server render the whole page into the answer
+  // first — 250 leads, nearly two seconds — for every status anyone changed.
+  return { success: true, status: status as LeadStatus, remark: remark || null };
 }
 
 export async function reassignLead(leadId: string, _prevState: unknown, formData: FormData) {
@@ -1140,9 +1209,9 @@ export async function reassignLead(leadId: string, _prevState: unknown, formData
   // not registered, and nothing twice for a person already told about them.
   await notifyAssignedStaff(leadId);
 
-  revalidatePath(`/leads/${leadId}`);
-  revalidatePath("/leads");
-  return { success: true };
+  // The cell shows the new counsellor itself — see updateLeadStatus on why
+  // nothing is revalidated.
+  return { success: true, counselorId: assigned_counselor_id };
 }
 
 export async function updateRegistrationDetails(studentId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
@@ -1313,11 +1382,26 @@ export async function deleteStudent(studentId: string) {
   return { success: true };
 }
 
-export async function registerLead(leadId: string, _formData: FormData) {
+/**
+ * Registers a lead — "Register this lead" on the lead's page — with the date
+ * of birth, address and emergency contact the form asks for, all required.
+ */
+export async function registerLead(leadId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
+  const personal = readRegistrationPersonal((k) => formData.get(k));
+  if ("error" in personal) return { error: personal.error };
 
-  const { error } = await supabase.from("leads").update({ status: "registered" }).eq("id", leadId);
-  if (error) throw new Error(error.message);
+  const { error } = await supabase
+    .from("leads")
+    .update({ status: "registered", date_of_birth: personal.values.date_of_birth, address: personal.values.address })
+    .eq("id", leadId);
+  if (error) return { error: error.message };
+  // An update RLS refuses matches nothing and says nothing: read it back.
+  const { data: after } = await supabase.from("leads").select("status").eq("id", leadId).maybeSingle();
+  if (after?.status !== "registered") {
+    return { error: "This lead was not registered — only its counsellor, Management or a Super Admin may register it." };
+  }
+  const emergencyError = await saveEmergencyContact([leadId], () => personal.values);
 
   // Registration is what earns the assigned counselor their commission.
   // After the update, not before: registered_at is stamped by
@@ -1329,11 +1413,11 @@ export async function registerLead(leadId: string, _formData: FormData) {
   revalidatePath(`/leads/${leadId}`);
   revalidatePath("/leads");
   revalidatePath("/students");
-  // Straight to the Profile tab, not the Dashboard — registration only
-  // flips status; none of date of birth/address/home phone/emergency
-  // contact/passport/etc. get captured by this one-click action, so land
-  // staff exactly where those need to be filled in next, not on a
-  // Dashboard that still looks empty.
+  if (emergencyError) {
+    return { error: `Registered, but the emergency contact was not saved (${emergencyError}). Add it on the student's Profile tab.` };
+  }
+  // Straight to the Profile tab, not the Dashboard: the passport, home phone
+  // and documents are what is filled in next.
   redirect(`/students/${leadId}/profile`);
 }
 
@@ -1349,7 +1433,6 @@ export async function registerLead(leadId: string, _formData: FormData) {
 // as its own reminder (see calendar/page.tsx and ReminderRow.tsx).
 export async function addLeadFollowUpRemark(
   leadId: string,
-  revalidateTo: string,
   dueDate: string,
   dueTime: string | null,
   note: string
@@ -1373,8 +1456,8 @@ export async function addLeadFollowUpRemark(
   });
   if (error) return { error: error.message };
 
-  revalidatePath(revalidateTo);
-  revalidatePath("/calendar");
+  // The cell counts it itself, and the Calendar is read fresh when opened —
+  // see updateLeadStatus on why nothing is revalidated.
   return { success: true };
 }
 

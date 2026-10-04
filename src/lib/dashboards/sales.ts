@@ -8,6 +8,7 @@ import { addDays, daysBetween, karachiDay, karachiMonth } from "./dates.ts";
 
 /** Still being worked: a counsellor owes each of these a next contact. */
 export const OPEN_STATUSES: LeadStatus[] = [
+  "unattended",
   "potential",
   "meeting_done",
   "in_discussion",
@@ -17,6 +18,8 @@ export const OPEN_STATUSES: LeadStatus[] = [
   "powered_off",
   "repeated_reschedules",
 ];
+/** What a lead may still say when nobody has spoken to them: today's default, and the old one. */
+const UNTOUCHED_STATUSES: LeadStatus[] = ["unattended", "potential"];
 /** A meeting has been held, or the lead has gone past one. */
 const MET_STATUSES: LeadStatus[] = ["meeting_done", "in_discussion", "repeated_reschedules", "next_intake", "registered"];
 
@@ -139,7 +142,9 @@ export function summarizeSales({
       if (l.registered_at) receivedRegistered++;
       const hasMet = Boolean(l.registered_at) || MET_STATUSES.includes(status as LeadStatus);
       if (hasMet) met++;
-      if (hasMet || lastContact.has(l.id) || (status && status !== "potential")) contacted++;
+      // Unattended is where a new lead starts, and Potential was before 0316,
+      // so neither says on its own that anybody has spoken to them.
+      if (hasMet || lastContact.has(l.id) || (status && !UNTOUCHED_STATUSES.includes(status as LeadStatus))) contacted++;
       const source = (l.platform_source ?? "").trim() || "Not recorded";
       const s = sources.get(source) ?? { leads: 0, registered: 0 };
       s.leads++;

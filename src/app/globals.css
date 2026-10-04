@@ -89,6 +89,17 @@
   --lift-hover: 0 2px 4px rgb(0 0 0 / 0.35), 0 18px 36px -16px rgb(0 0 0 / 0.65);
 }
 
+/* The browser's own controls — a <select>'s open list, a date picker, a
+   scrollbar — follow the theme. Without this they stayed light in the dark
+   theme while their text took the theme's light ink: the leads list's status
+   dropdown opened as white words on a white list. */
+:root {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-card: var(--card);
@@ -1127,4 +1138,41 @@ table[data-row-highlight] > tbody > tr[data-current] > td:first-child {
 :root[data-theme="dark"] [data-brand-logo] .brand-logo-on-dark,
 :root[data-theme="semi-dark"] [data-brand-logo="sidebar"] .brand-logo-on-dark {
   display: block;
+}
+
+/* Shallow rows (DataTable dense): a control in a cell — the row's menu, the
+   follow-up date — sits on the middle of the line rather than its baseline,
+   which would add the text's descent beneath it and make every row deeper. */
+table[data-dense] > tbody > tr > td > * {
+  vertical-align: middle;
+}
+
+/* A table opened over the whole window (DataTable expandable): the toolbar
+   and pager keep their places and the rows fill the rest, scrolling in their
+   window as they do on the page. Above the sidebar (z-40), below a pop-up
+   (the top layer) and the toasts (z-60). */
+[data-table-expanded] {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--card);
+}
+[data-table-expanded] > [data-table-body] {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+[data-table-expanded] > [data-table-body] > .table-frame-reserve {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+[data-table-expanded] .table-frame {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
 }

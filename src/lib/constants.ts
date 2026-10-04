@@ -1,4 +1,6 @@
 export const LEAD_STATUSES = [
+  // Nobody has worked the lead yet: what a new lead starts as (0315, 0316).
+  "unattended",
   "potential",
   "meeting_done",
   "repeated_reschedules",
@@ -15,6 +17,7 @@ export const LEAD_STATUSES = [
 export type LeadStatus = (typeof LEAD_STATUSES)[number];
 
 export const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
+  unattended: "Unattended",
   potential: "Potential",
   meeting_done: "Meeting Done",
   repeated_reschedules: "Repeated Reschedules",
@@ -30,6 +33,7 @@ export const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
 };
 
 export const LEAD_STATUS_TONE: Record<LeadStatus, "success" | "warning" | "danger" | "neutral" | "info"> = {
+  unattended: "neutral",
   potential: "info",
   meeting_done: "info",
   repeated_reschedules: "warning",

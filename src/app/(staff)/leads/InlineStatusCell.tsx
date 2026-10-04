@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useActionState } from "react";
 import { ActionStatus } from "@/components/ActionStatus";
+import { markListsStale } from "@/components/RefreshIfStale";
 import { updateLeadStatus } from "@/lib/actions/leads";
 import { LEAD_STATUSES, LEAD_STATUS_LABELS } from "@/lib/constants";
 
@@ -18,6 +19,9 @@ export function InlineStatusCell({
   const [open, setOpen] = useState(false);
   const action = updateLeadStatus.bind(null, leadId);
   const [state, formAction, pending] = useActionState(action, undefined);
+  // What was saved here, shown at once: the answer no longer carries the page
+  // (updateLeadStatus), so the list is not read again to learn it.
+  const [saved, setSaved] = useState<{ status: string; remark: string | null } | null>(null);
 
   // Close the panel the moment a submit succeeds — adjusted during render
   // (React's documented pattern for reacting to a changed value) rather than
@@ -25,21 +29,34 @@ export function InlineStatusCell({
   const [prevState, setPrevState] = useState(state);
   if (state !== prevState) {
     setPrevState(state);
-    if (state?.success) setOpen(false);
+    if (state && "status" in state && state.status) {
+      setOpen(false);
+      setSaved({ status: state.status, remark: state.remark ?? null });
+    }
   }
+  // A fresh read of the list knows better than what was saved here.
+  const [prevStatus, setPrevStatus] = useState(currentStatus);
+  if (currentStatus !== prevStatus) {
+    setPrevStatus(currentStatus);
+    setSaved(null);
+  }
+
+  const status = saved?.status ?? currentStatus;
+  const remark = saved ? (saved.remark ?? latestRemark) : latestRemark;
 
   if (!open) {
     // The panel closes on success, taking its Save button with it, so the
     // confirmation sits beside the control that reopens it — kept to one
     // short word so the row does not reflow.
     return (
-      <span className="inline-flex items-center gap-1">
+      <span className="inline-flex items-center gap-1 whitespace-nowrap">
         <button
           onClick={() => setOpen(true)}
-          title={latestRemark ?? undefined}
-          className="rounded-full border border-border px-2 py-0.5 text-xs text-ink hover:border-primary"
+          title={remark ?? undefined}
+          className="rounded-full border border-border px-2 py-0.5 text-xs leading-4 text-ink hover:border-primary"
+          data-lead-status={status}
         >
-          {LEAD_STATUS_LABELS[currentStatus as never] ?? currentStatus} · change
+          {LEAD_STATUS_LABELS[status as never] ?? status} · change
         </button>
         <ActionStatus state={state} label="Saved." />
       </span>
@@ -47,15 +64,22 @@ export function InlineStatusCell({
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-1 rounded-md border border-border bg-card p-2" onClick={(e) => e.stopPropagation()}>
-      <select name="status" defaultValue={currentStatus} className="rounded border border-border px-1 py-0.5 text-xs">
+    <form
+      action={formAction}
+      // The list held for Back no longer shows this lead as it is.
+      onSubmit={() => markListsStale()}
+      className="flex flex-col gap-1 rounded-md border border-border bg-card p-2"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <input type="hidden" name="current_status" value={status} />
+      <select name="status" defaultValue={status} className="rounded border border-border bg-card px-1 py-0.5 text-xs text-ink">
         {LEAD_STATUSES.map((s) => (
           <option key={s} value={s}>
             {LEAD_STATUS_LABELS[s]}
           </option>
         ))}
       </select>
-      <input name="remark" required placeholder="Remark (required)" className="rounded border border-border px-1 py-0.5 text-xs" />
+      <input name="remark" placeholder="Remark (optional)" className="rounded border border-border bg-card px-1 py-0.5 text-xs text-ink" />
       <div className="flex gap-1">
         <button type="submit" disabled={pending} className="w-fit rounded bg-primary px-2 py-0.5 text-xs text-primary-ink disabled:opacity-50">
           {pending ? "Saving…" : "Save"}

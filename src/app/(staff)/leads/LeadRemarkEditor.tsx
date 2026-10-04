@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { markListsStale } from "@/components/RefreshIfStale";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Input";
 import { listLeadRemarks, saveLeadRemark, type RemarkVersion } from "@/lib/actions/leadRemarks";
@@ -32,7 +32,6 @@ export function LeadRemarkEditor({
   startEditing?: boolean;
   onSaved?: (remark: string | null, at: string | null, by: string | null) => void;
 }) {
-  const router = useRouter();
   const [remark, setRemark] = useState(initialRemark);
   const [meta, setMeta] = useState<{ at: string | null; by: string | null }>({ at: updatedAt, by: updatedBy });
   const [editing, setEditing] = useState(startEditing);
@@ -67,8 +66,9 @@ export function LeadRemarkEditor({
       setVersions((current) => [version, ...(current ?? [])]);
     }
     onSaved?.(result.remark, result.version?.createdAt ?? meta.at, result.version ? result.version.writtenBy : meta.by);
-    // The list's search and export read the remark from the page.
-    router.refresh();
+    // The list held for Back no longer shows this remark. The list on screen
+    // shows it already (RemarkCell), and its search and export ask the server.
+    markListsStale();
   }
 
   // The newest version is the remark above; the rest is the history.

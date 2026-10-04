@@ -168,6 +168,18 @@ test("a lead with no counsellor or status takes the sheet's", () => {
   assert.equal(m.status, "meeting_done");
 });
 
+test("an Unattended lead takes the sheet's status: nobody has said where it stands yet (0316)", () => {
+  assert.equal(mergeIntoLead({ ...stored, status: "unattended" }, input({ status: "meeting_done" })).status, "meeting_done");
+  assert.equal(mergeIntoLead({ ...stored, status: "unattended" }, input({ status: "unattended" })).status, null, "the same says nothing new");
+  assert.equal(mergeIntoLead({ ...stored, status: "in_discussion" }, input({ status: "unattended" })).status, null, "a worked lead is not put back");
+});
+
+test("Unattended is read from a sheet by its label", () => {
+  const problems = [];
+  assert.equal(leadFromRow({ name: "Ali", status: "Unattended" }, problems).status, "unattended");
+  assert.deepEqual(problems, []);
+});
+
 test("an exported row has every piece of the lead in its own cell", () => {
   const row = leadSheetRow({
     full_name: "Ali Khan",

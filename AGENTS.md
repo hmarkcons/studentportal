@@ -160,6 +160,21 @@ a tag, and the writer revalidates it.
 **A read straight after a write returns the pre-write response**, because Next
 memoises fetches within a request. Use the writer's return value.
 
+**A `revalidatePath` in a server action makes the person wait for the whole
+page they are on.** After any revalidation, Next renders the current page into
+the action's answer, whatever path was named: an inline status change on the
+250-lead list took 2.6 seconds, 1.8 of them the list. An inline edit answers
+without it, shows what it saved itself, and calls `markListsStale()` so a copy
+of the list held for Back is read again (`src/components/RefreshIfStale.tsx`).
+
+**An RLS policy that calls a function on every row is slow for whoever fails
+it.** `has_role()`, `staff_can_view_student()` and `auth.uid()` are queries or
+lookups; written bare in a policy they run once per row, so a counsellor
+counting 2,804 leads took 2.5 seconds while a Super Admin, who passes early,
+took 0.3. Write them as `(select has_role(…))` and `(select auth.uid())` and
+Postgres works each out once per query (0317 proves the swap changed nobody's
+access before committing it).
+
 ## Migrations
 
 Numbered files in `supabase/migrations/`, applied by hand — there is no CLI

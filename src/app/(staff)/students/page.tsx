@@ -264,11 +264,7 @@ export default async function StudentsPage(props: { searchParams: Promise<Record
             {r.intake ? "no country" : "no intake"}
           </span>
         ),
-        name: (
-          <Link href={`/students/${r.id}`} prefetch={false} title={r.full_name} className="block max-w-[16rem] truncate font-medium text-ink hover:underline">
-            {r.full_name}
-          </Link>
-        ),
+        name: <LongTextCell text={r.full_name} label="Name" rowName={r.full_name} href={`/students/${r.id}`} widthClassName="max-w-[16rem]" />,
         contact: long(r.contact_number ?? r.email, "Contact", "max-w-[14rem]"),
         country: long(r.country_of_interest, "Country"),
         backupCountry: long(backups.join(", ") || null, "Backup Country", "max-w-[12rem]", backups),
@@ -354,6 +350,8 @@ export default async function StudentsPage(props: { searchParams: Promise<Record
           <DataTable
             exportFilename="students"
             rowHighlight
+            dense
+            expandable
             label="Registered students"
             freezeColumn="name"
             rows={rows}

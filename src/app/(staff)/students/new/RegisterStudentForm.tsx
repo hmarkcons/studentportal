@@ -7,6 +7,7 @@ import { SERVICE_LABELS, SERVICE_TYPES } from "@/lib/serviceType";
 import { isIntakeMode } from "@/lib/intake";
 import { STUDY_LEVELS, QUALIFICATION_LEVELS } from "@/lib/constants";
 import { PrimaryBackupDestinationSelect } from "@/components/PrimaryBackupDestinationSelect";
+import { RegistrationPersonalFields } from "@/components/RegistrationPersonalFields";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { phoneBounds } from "@/lib/phoneNumber";
@@ -67,7 +68,8 @@ export function RegisterStudentForm({
   const intakeConfig = intakeConfigFor(destinations, primaryId);
 
   return (
-    <form action={formAction} className="flex flex-col gap-4">
+    // Kept as typed when the server refuses it: React clears a form after its action.
+    <form action={formAction} onReset={(e) => e.preventDefault()} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <label className={labelClass}>Name</label>
         <Input name="full_name" required />
@@ -82,6 +84,7 @@ export function RegisterStudentForm({
           <Input name="email" type="email" />
         </div>
       </div>
+      <RegistrationPersonalFields />
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-1.5">
           <label className={labelClass}>Current qualification</label>

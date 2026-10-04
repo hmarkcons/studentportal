@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { getStaffSession } from "@/lib/auth/session";
 import { normalizeRemark, remarkChanged, remarkError } from "@/lib/leadRemarks";
 
@@ -64,8 +63,8 @@ export async function saveLeadRemark(
     .single();
   if (error || !saved) return { error: error?.message ?? "The remark was not saved." };
 
-  revalidatePath("/leads");
-  revalidatePath(`/leads/${leadId}`);
+  // Nothing revalidated: the editor shows what it saved, and Next would
+  // otherwise render the whole leads list into this answer before sending it.
   return {
     success: true,
     remark: body || null,

@@ -27,6 +27,7 @@
     "check:invoiceedit": "node scripts/verify-invoice-editing.mjs",
     "check:trackertests": "node scripts/verify-tracker-tests.mjs",
     "check:paging": "node scripts/verify-list-paging.mjs",
+    "check:leadswork": "node scripts/verify-leads-workflow.mjs",
     "check:pay": "node scripts/verify-pay-split.mjs",
     "check:roles": "node scripts/verify-multi-role.mjs",
     "check:speed": "node scripts/check-speed.mjs",

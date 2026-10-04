@@ -23,6 +23,7 @@
 //
 // Everything is named zztmp and removed in a finally.
 import { BASE, apiAs, clients, fixtures, FIXTURE_PASSWORD, openBrowser, reporter, requireConfirmation, signIn } from "./verify-portal-lib.mjs";
+import { orderedLeadColumns } from "../src/lib/leadSheet.ts";
 
 requireConfirmation("check:leadremarks");
 
@@ -97,7 +98,16 @@ try {
   await longCell.waitFor({ timeout: 30000 });
   // Upper-cased by the stylesheet, so compared without case.
   const headers = (await page.locator("thead th").allInnerTexts()).map((h) => h.trim().toLowerCase());
-  ok("Remarks sits right before Follow-up", headers.indexOf("remarks") !== -1 && headers.indexOf("remarks") === headers.indexOf("follow-up") - 1, headers.join(" | "));
+  // Where it sits is a Super Admin's to arrange (0313), so the list is held to
+  // the arranged order rather than to one place.
+  const { data: savedOrder } = await admin.from("list_column_orders").select("column_keys").eq("list_key", "leads").maybeSingle();
+  const arranged = orderedLeadColumns(savedOrder?.column_keys).map((c) => c.key);
+  const remarksBeforeFollowUp = arranged.indexOf("remarks") < arranged.indexOf("follow_up_date");
+  ok(
+    "Remarks is a column of the list, where the arranged order puts it",
+    headers.indexOf("remarks") !== -1 && headers.indexOf("remarks") < headers.indexOf("follow-up") === remarksBeforeFollowUp,
+    headers.join(" | ")
+  );
   const shortened = await longCell.locator("[data-remark-text]").evaluate((el) => el.scrollWidth > el.clientWidth);
   ok("a long remark is cut short on one line", shortened);
 

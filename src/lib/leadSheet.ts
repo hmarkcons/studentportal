@@ -328,7 +328,9 @@ export function mergeIntoLead(stored: StoredLead, input: LeadInput): LeadMerge {
   }
 
   if (input.status) {
-    if (!stored.status) merge.status = input.status;
+    // Unattended says nobody has worked the lead yet, so a sheet that says
+    // where it stands is taken, as it would be for a lead with no status.
+    if (!stored.status || (stored.status === "unattended" && input.status !== "unattended")) merge.status = input.status;
     else if (stored.status !== input.status) {
       merge.kept.push(`status ${LEAD_STATUS_LABELS[stored.status as LeadStatus] ?? stored.status} (the sheet says ${LEAD_STATUS_LABELS[input.status]})`);
     }

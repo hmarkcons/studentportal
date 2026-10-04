@@ -5,11 +5,12 @@ import { addLeadFollowUpRemark, listLeadFollowUpRemarks } from "@/lib/actions/le
 import { formatDateOnly } from "@/lib/formatDate";
 import { Input } from "@/components/ui/Input";
 import { ActionStatus } from "@/components/ActionStatus";
+import { markListsStale } from "@/components/RefreshIfStale";
 import type { ActionResultLike } from "@/lib/actionStatus";
 
 type Remark = { id: string; due_date: string; due_time: string | null; note: string | null; resolved: boolean };
 
-export function FollowUpCell({ leadId, remarkCount, revalidateTo }: { leadId: string; remarkCount: number; revalidateTo: string }) {
+export function FollowUpCell({ leadId, remarkCount }: { leadId: string; remarkCount: number }) {
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [note, setNote] = useState("");
@@ -22,6 +23,9 @@ export function FollowUpCell({ leadId, remarkCount, revalidateTo }: { leadId: st
   const [viewOpen, setViewOpen] = useState(false);
   const [viewLoading, setViewLoading] = useState(false);
   const [remarks, setRemarks] = useState<Remark[] | null>(null);
+  // Added here since the list was read: the answer no longer carries the page.
+  const [added, setAdded] = useState(0);
+  const count = remarkCount + added;
 
   async function openView() {
     if (viewOpen) {
@@ -40,7 +44,7 @@ export function FollowUpCell({ leadId, remarkCount, revalidateTo }: { leadId: st
     setError(null);
     setDone(undefined);
     startTransition(async () => {
-      const result = await addLeadFollowUpRemark(leadId, revalidateTo, date, time || null, note);
+      const result = await addLeadFollowUpRemark(leadId, date, time || null, note);
       if (result?.error) {
         setError(result.error);
       } else {
@@ -48,6 +52,8 @@ export function FollowUpCell({ leadId, remarkCount, revalidateTo }: { leadId: st
         setTime("");
         setNote("");
         setDone({ success: true });
+        setAdded((n) => n + 1);
+        markListsStale();
         if (viewOpen) {
           const refreshed = await listLeadFollowUpRemarks(leadId);
           setRemarks(refreshed.remarks as Remark[]);
@@ -58,13 +64,13 @@ export function FollowUpCell({ leadId, remarkCount, revalidateTo }: { leadId: st
 
   return (
     <div onClick={(e) => e.stopPropagation()} className="flex flex-col gap-1">
-      <button type="button" onClick={openView} className="self-start text-xs text-primary hover:underline">
-        View{remarkCount > 0 ? ` (${remarkCount})` : ""}
-      </button>
-
-      {/* The remark's fields fold away once it is saved, leaving only the
-          date, so the confirmation sits beside that. */}
-      <span className="inline-flex items-center gap-1">
+      {/* View and the date on one line, so the row stays one line deep. The
+          remark's fields fold away once it is saved, leaving only the date,
+          so the confirmation sits beside that. */}
+      <span className="inline-flex items-center gap-2 whitespace-nowrap">
+        <button type="button" onClick={openView} className="text-xs text-primary hover:underline">
+          View{count > 0 ? ` (${count})` : ""}
+        </button>
         <Input
           type="date"
           value={date}
@@ -73,7 +79,8 @@ export function FollowUpCell({ leadId, remarkCount, revalidateTo }: { leadId: st
             setDate(e.target.value);
             setDone(undefined);
           }}
-          className="w-36 text-xs"
+          aria-label="Follow-up date"
+          className="h-7 w-32 px-1.5 py-0 text-xs"
         />
         <ActionStatus state={done} pending={pending} label="Added." />
       </span>
@@ -84,7 +91,7 @@ export function FollowUpCell({ leadId, remarkCount, revalidateTo }: { leadId: st
             value={time}
             disabled={pending}
             onChange={(e) => setTime(e.target.value)}
-            className="w-36 text-xs"
+            className="h-7 w-32 px-1.5 py-0 text-xs"
           />
           <Input
             type="text"
@@ -98,7 +105,7 @@ export function FollowUpCell({ leadId, remarkCount, revalidateTo }: { leadId: st
                 submit();
               }
             }}
-            className="w-36 text-xs"
+            className="h-7 w-44 px-1.5 py-0 text-xs"
           />
         </>
       )}

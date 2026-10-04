@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { readAll } from "@/lib/catalogueReads";
 import { createClient } from "@/lib/supabase/server";
 import { formatDateOnly } from "@/lib/formatDate";
 import { DataTable } from "@/components/ui/DataTable";
@@ -17,6 +16,7 @@ import { monthLabel, orderedLeadColumns, type LeadColumnKey } from "@/lib/leadSh
 import { getStaffSession } from "@/lib/auth/session";
 import { hasRole } from "@/lib/auth/roles";
 import { ArrangeLeadColumns } from "./ArrangeLeadColumns";
+import { RefreshIfStale } from "@/components/RefreshIfStale";
 
 /** Each list column, by the leads workbook column it shows. The follow-up note has none of its own: it is in Follow-up. */
 const TABLE_KEY: Record<LeadColumnKey, string | null> = {
@@ -57,6 +57,10 @@ type LeadRow = {
   assigned_counselor: { full_name: string } | { full_name: string }[] | null;
   /** The current remark: its newest version, staff-only (0306, 0307). */
   current_remark: CurrentRemark | CurrentRemark[] | null;
+  /** The newest call-log remark, for the status button's tooltip — one row at most. */
+  latest_log: { remark: string | null }[] | null;
+  /** How many follow-ups have been logged for the lead, resolved or not. */
+  follow_ups: { count: number }[] | null;
 };
 
 type CurrentRemark = { body: string | null; updated_at: string; editor: { full_name: string } | { full_name: string }[] | null };
@@ -85,14 +89,10 @@ const SEARCHED_COLUMNS = [
 ];
 
 const LEAD_SELECT =
-  "id, full_name, contact_number, email, city, country_of_interest, current_qualification, level_applying_for, course_of_interest, platform_source, status, date_of_inquiry, assigned_counselor_id, assigned_counselor:staff!assigned_counselor_id(full_name), current_remark:lead_remark_current(body, updated_at, editor:staff!lead_remark_current_updated_by_fkey(full_name))";
+  "id, full_name, contact_number, email, city, country_of_interest, current_qualification, level_applying_for, course_of_interest, platform_source, status, date_of_inquiry, assigned_counselor_id, assigned_counselor:staff!assigned_counselor_id(full_name), current_remark:lead_remark_current(body, updated_at, editor:staff!lead_remark_current_updated_by_fkey(full_name)), latest_log:lead_call_logs(remark, created_at), follow_ups:reminders(count)";
 
-type OptionRow = {
-  country_of_interest: string | null;
-  city: string | null;
-  assigned_counselor_id: string | null;
-  assigned_counselor: { full_name: string } | { full_name: string }[] | null;
-};
+/** What the filters offer and how many leads there are, from every lead the viewer may see (0316). */
+type ListOptions = { total: number; countries: string[]; cities: string[]; counselors: { id: string; name: string }[] };
 
 export default async function LeadsPage(props: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   // Server-side paging: only the page shown is read and sent. The search,
@@ -121,23 +121,16 @@ export default async function LeadsPage(props: { searchParams: Promise<Record<st
   const supabase = await createClient();
   // First, everything that does not depend on which leads are on the page —
   // read beside each other. The filter choices and the total come from every
-  // lead, light: three columns, a thousand rows at a time (PostgREST stops at
-  // 1000 to a request without saying so). The follow-ups and call logs are
-  // read the same way, by what RLS lets this viewer see.
-  const [canDelete, counselors, { staff }, { data: savedOrder }, optionRows, remarkHits, followUps, callLogs] = await Promise.all([
+  // lead, worked out by the database in one request (lead_list_options, 0316):
+  // reading every lead here to work them out, a thousand at a time and one
+  // request after another, was most of the time the list took to open.
+  const [canDelete, counselors, { staff }, { data: savedOrder }, { data: listOptions }, remarkHits] = await Promise.all([
     hasPermission("leads.delete"),
     getCachedCounselors(),
     getStaffSession(),
     // The order a Super Admin arranged the columns in (0313), for everyone.
     supabase.from("list_column_orders").select("column_keys").eq("list_key", "leads").maybeSingle(),
-    readAll<OptionRow>((from, to) =>
-      supabase
-        .from("leads")
-        .select("country_of_interest, city, assigned_counselor_id, assigned_counselor:staff!assigned_counselor_id(full_name)")
-        .order("id")
-        .range(from, to)
-        .returns<OptionRow[]>()
-    ).catch(() => [] as OptionRow[]),
+    supabase.rpc("lead_list_options").then((r) => ({ data: r.data as ListOptions | null })),
     // Leads whose remark says what was searched for. A hundred at most: they
     // go into the request by id, and more would not fit in its address.
     term
@@ -148,38 +141,16 @@ export default async function LeadsPage(props: { searchParams: Promise<Record<st
           .limit(100)
           .then((r) => (r.data ?? []) as { lead_id: string }[])
       : Promise.resolve([] as { lead_id: string }[]),
-    // Powers the Follow-up column's "View (N)" count — every follow_up remark
-    // ever logged for the lead (see addLeadFollowUpRemark), resolved or not.
-    // The Calendar page reads the same rows directly, so adding one here
-    // surfaces it there automatically.
-    readAll<{ student_id: string }>((from, to) =>
-      supabase.from("reminders").select("student_id").eq("type", "follow_up").order("id").range(from, to).returns<{ student_id: string }[]>()
-    ).catch(() => [] as { student_id: string }[]),
-    // Powers the status button's hover tooltip — the most recent call-log
-    // remark per lead (see update_lead_status), newest first so the first row
-    // seen per lead is already the latest one.
-    readAll<{ lead_id: string; remark: string }>((from, to) =>
-      supabase
-        .from("lead_call_logs")
-        .select("lead_id, remark")
-        .order("created_at", { ascending: false })
-        .order("id")
-        .range(from, to)
-        .returns<{ lead_id: string; remark: string }[]>()
-    ).catch(() => [] as { lead_id: string; remark: string }[]),
   ]);
   const canArrange = hasRole(staff, "super_admin");
 
   // The filter choices, from every lead rather than the page shown.
   const counselorIdByName = new Map<string, string>();
-  for (const r of optionRows) {
-    const name = one(r.assigned_counselor)?.full_name;
-    if (name && r.assigned_counselor_id) counselorIdByName.set(name, r.assigned_counselor_id);
-  }
-  const countryOptions = Array.from(new Set(optionRows.map((r) => r.country_of_interest).filter(Boolean))).sort() as string[];
-  const cityOptions = Array.from(new Set(optionRows.map((r) => r.city?.trim()).filter(Boolean))).sort() as string[];
+  for (const c of listOptions?.counselors ?? []) counselorIdByName.set(c.name, c.id);
+  const countryOptions = [...(listOptions?.countries ?? [])].sort();
+  const cityOptions = [...(listOptions?.cities ?? [])].sort();
   const counselorOptions = Array.from(counselorIdByName.keys()).sort();
-  const totalLeads = optionRows.length;
+  const totalLeads = listOptions?.total ?? 0;
 
   // Then the page itself: searched and filtered by the database, counted in all.
   let query = supabase.from("leads").select(LEAD_SELECT, { count: "exact" });
@@ -204,22 +175,18 @@ export default async function LeadsPage(props: { searchParams: Promise<Record<st
     if (statusKeys.length) ors.push(`status.in.(${statusKeys.join(",")})`);
     query = query.or(ors.join(","));
   }
+  // Each lead's newest call-log remark and its follow-up count come with it,
+  // rather than every call log and follow-up on file being read to find them.
   const { data: leads, error, count } = await query
+    .not("latest_log.remark", "is", null)
+    .order("created_at", { referencedTable: "latest_log", ascending: false })
+    .limit(1, { referencedTable: "latest_log" })
+    .eq("follow_ups.type", "follow_up")
     .order("date_of_inquiry", { ascending: false })
     .order("id")
     .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1)
     .returns<LeadRow[]>();
   const matching = count ?? leads?.length ?? 0;
-
-  const followUpCountByLead = new Map<string, number>();
-  for (const f of followUps ?? []) {
-    followUpCountByLead.set(f.student_id, (followUpCountByLead.get(f.student_id) ?? 0) + 1);
-  }
-
-  const latestRemarkByLead = new Map<string, string>();
-  for (const log of callLogs ?? []) {
-    if (!latestRemarkByLead.has(log.lead_id)) latestRemarkByLead.set(log.lead_id, log.remark);
-  }
 
   // Everything on one line, with the table scrolling sideways — a name, a
   // number and a country each wrapping onto two lines made a row three deep
@@ -263,15 +230,12 @@ export default async function LeadsPage(props: { searchParams: Promise<Record<st
       <LongTextCell text={text} label={label} rowName={r.full_name} widthClassName={widthClassName} />
     );
     const counselorName = one(r.assigned_counselor)?.full_name;
+    const followUps = r.follow_ups?.[0]?.count ?? 0;
     return {
       id: r.id,
       cells: {
         month: monthYearLabel,
-        name: (
-          <Link href={`/leads/${r.id}`} prefetch={false} title={r.full_name} className="block max-w-[16rem] truncate font-medium text-ink hover:underline">
-            {r.full_name}
-          </Link>
-        ),
+        name: <LongTextCell text={r.full_name} label="Name" rowName={r.full_name} href={`/leads/${r.id}`} widthClassName="max-w-[16rem]" />,
         contact: long(r.contact_number, "Contact number", "max-w-[10rem]"),
         email: long(r.email, "Email", "max-w-[14rem]"),
         city: long(r.city, "City", "max-w-[10rem]"),
@@ -279,7 +243,7 @@ export default async function LeadsPage(props: { searchParams: Promise<Record<st
         qualification: long(r.current_qualification, "Current qualification"),
         level: level ?? "—",
         course: long(r.course_of_interest, "Course of interest", "max-w-[14rem]"),
-        status: <InlineStatusCell leadId={r.id} currentStatus={r.status} latestRemark={latestRemarkByLead.get(r.id)} />,
+        status: <InlineStatusCell leadId={r.id} currentStatus={r.status} latestRemark={r.latest_log?.[0]?.remark ?? null} />,
         counselor: (
           <InlineCounselorCell
             leadId={r.id}
@@ -297,7 +261,7 @@ export default async function LeadsPage(props: { searchParams: Promise<Record<st
             updatedBy={one(remark?.editor ?? null)?.full_name ?? null}
           />
         ),
-        followUp: <FollowUpCell leadId={r.id} remarkCount={followUpCountByLead.get(r.id) ?? 0} revalidateTo="/leads" />,
+        followUp: <FollowUpCell leadId={r.id} remarkCount={followUps} />,
         date: formatDateOnly(r.date_of_inquiry),
         source: long(r.platform_source, "Source", "max-w-[10rem]"),
         actions: (
@@ -318,7 +282,7 @@ export default async function LeadsPage(props: { searchParams: Promise<Record<st
         counselor: counselorName ?? "",
         // In the export, and in what the search box looks through.
         remarks: remark?.body ?? "",
-        followUp: String(followUpCountByLead.get(r.id) ?? 0),
+        followUp: String(followUps),
         date: r.date_of_inquiry,
         month: monthYearLabel,
       },
@@ -328,6 +292,7 @@ export default async function LeadsPage(props: { searchParams: Promise<Record<st
 
   return (
     <div className="w-full">
+      <RefreshIfStale renderKey={crypto.randomUUID()} />
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-ink">Leads</h2>
@@ -351,6 +316,8 @@ export default async function LeadsPage(props: { searchParams: Promise<Record<st
             exportFilename="leads"
             exportHref="/api/export/leads"
             rowHighlight
+            dense
+            expandable
             label="Leads"
             freezeColumn="name"
             rows={rows}

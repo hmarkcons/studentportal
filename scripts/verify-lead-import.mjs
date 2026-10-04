@@ -274,7 +274,7 @@ try {
   ok("...and its follow-up", aFollow.length === 1 && aFollow[0].due_date === "2026-10-20" && aFollow[0].note === "zztmp Send the Milan list", JSON.stringify(aFollow));
 
   const b = (await leadByName(NEW_B))[0] ?? {};
-  ok("a lead with no status or inquiry date takes Potential and today", b.status === "potential" && b.date_of_inquiry === karachiToday(), JSON.stringify(b));
+  ok("a lead with no status or inquiry date takes Unattended and today", b.status === "unattended" && b.date_of_inquiry === karachiToday(), JSON.stringify(b));
   ok("...and a level it cannot use is left out", b.level_applying_for === null);
   const { data: usman } = await admin.from("staff").select("id").eq("full_name", "Muhammad Usman").contains("roles", ["counselor"]).eq("status", "active").maybeSingle();
   ok("a new lead with no Counselor goes to Muhammad Usman", Boolean(usman) && b.assigned_counselor_id === usman.id, b.assigned_counselor_id);
@@ -399,14 +399,22 @@ try {
   {
     const book = new ExcelJS.Workbook();
     const ws = book.addWorksheet("Students");
-    ws.addRow(["full_name", "email", "country_of_interest", "registration_date"]);
-    ws.addRow(["zztmp Preview Student One", "zztmp-preview-one@hmark-test.local", "Italy", "2026-09-01"]);
-    ws.addRow(["zztmp Preview Student Two", "zztmp-preview-two@hmark-test.local", "Atlantis", "2026-09-02"]);
+    // Date of birth, address and the emergency contact are required to
+    // register a student; the third row leaves them out.
+    const personal = ["2003-05-14", "12 Garden Road, Karachi", "zztmp Parent", "Father", "+92 300 7654321"];
+    ws.addRow(["full_name", "email", "country_of_interest", "registration_date", "date_of_birth", "address", "emergency_contact_name", "emergency_contact_relation", "emergency_contact_number"]);
+    ws.addRow(["zztmp Preview Student One", "zztmp-preview-one@hmark-test.local", "Italy", "2026-09-01", ...personal]);
+    ws.addRow(["zztmp Preview Student Two", "zztmp-preview-two@hmark-test.local", "Atlantis", "2026-09-02", ...personal]);
+    ws.addRow(["zztmp Preview Student Three", "zztmp-preview-three@hmark-test.local", "Italy", "2026-09-03"]);
     const buffer = Buffer.from(await book.xlsx.writeBuffer());
     const sp = await signIn(browser, (await fx.staff("leadimportprev", ["super_admin"])).email);
     const studentsPreview = await previewIn(sp, "/students", "Import registered students", "students.xlsx", buffer);
     ok("the registered-students import previews too: who would be registered, and who not and why",
-      studentsPreview.new === 1 && studentsPreview.skipped === 1 && /Italy \(Public\)/.test(studentsPreview.text) && /country not recognised/.test(studentsPreview.text),
+      studentsPreview.new === 1 &&
+        studentsPreview.skipped === 2 &&
+        /Italy \(Public\)/.test(studentsPreview.text) &&
+        /country not recognised/.test(studentsPreview.text) &&
+        /no date of birth, address, emergency contact name, emergency contact relation, emergency contact number/.test(studentsPreview.text),
       studentsPreview.text.slice(0, 400));
     const { data: registered } = await admin.from("leads").select("id").ilike("full_name", "zztmp Preview Student%");
     ok("...and registers nobody", (registered ?? []).length === 0, String(registered?.length));

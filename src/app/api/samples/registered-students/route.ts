@@ -47,6 +47,10 @@ const COLUMNS = [
   { header: "date_of_birth", width: 14 },
   { header: "address", width: 30 },
   { header: "home_phone", width: 18 },
+  // Required with date_of_birth and address, as on the Register student form.
+  { header: "emergency_contact_name", width: 24 },
+  { header: "emergency_contact_relation", width: 18 },
+  { header: "emergency_contact_number", width: 20 },
 ] as const;
 
 type Header = (typeof COLUMNS)[number]["header"];
@@ -98,6 +102,9 @@ export async function GET() {
     date_of_birth: "2003-05-14",
     address: "123 Main St, Lahore",
     home_phone: "+92 42 1234567",
+    emergency_contact_name: "John Doe",
+    emergency_contact_relation: "Father",
+    emergency_contact_number: "+92 300 7654321",
   };
   const example = COLUMNS.map((c) => ({
     value: exampleValues[c.header],

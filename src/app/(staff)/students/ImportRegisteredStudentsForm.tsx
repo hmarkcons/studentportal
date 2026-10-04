@@ -65,8 +65,11 @@ export function ImportRegisteredStudentsForm() {
         The template has dropdowns for <strong className="text-ink">assigned_counselor</strong> (only counsellors
         currently active on payroll), <strong className="text-ink">country_of_interest</strong>,{" "}
         <strong className="text-ink">backup_country</strong> and <strong className="text-ink">level_applying_for</strong>,
-        so those cannot be mistyped. <code>full_name</code> and <code>country_of_interest</code> are required; everything
-        else is optional.
+        so those cannot be mistyped. Required: <code>full_name</code>, <code>country_of_interest</code>,{" "}
+        <code>date_of_birth</code>, <code>address</code> and the emergency contact&rsquo;s{" "}
+        <code>emergency_contact_name</code>, <code>emergency_contact_relation</code> and{" "}
+        <code>emergency_contact_number</code> — a row missing any of them is left out and named. Everything else is
+        optional.
       </p>
       <p className="mt-1 text-xs text-muted">
         <strong className="text-ink">registration_date</strong> is the day the student actually registered, written as{" "}
@@ -138,6 +141,11 @@ export function ImportRegisteredStudentsForm() {
           {(state.noCountry?.length ?? 0) > 0 && (
             <p className="text-warning">
               Not imported — no country given: {state.noCountry!.join(", ")}.
+            </p>
+          )}
+          {(state.badPersonal?.length ?? 0) > 0 && (
+            <p className="text-warning">
+              Not imported — date of birth, address or emergency contact missing or unreadable: {state.badPersonal!.join("; ")}.
             </p>
           )}
           {(state.badCountry?.length ?? 0) > 0 && (

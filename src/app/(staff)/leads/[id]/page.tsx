@@ -12,9 +12,9 @@ import { LeadRemarkEditor } from "../LeadRemarkEditor";
 import { RegisterLeadButton } from "./RegisterLeadButton";
 import { LeadEditForm } from "@/components/LeadEditForm";
 import { DeleteStudentButton } from "../../students/[id]/DeleteStudentButton";
-import { getCurrentUser } from "@/lib/auth/currentUser";
+import { getStaffSession } from "@/lib/auth/session";
 
-type CallLog = { id: string; status_at_time: string; remark: string; created_at: string; counselor: { full_name: string } | { full_name: string }[] | null };
+type CallLog = { id: string; status_at_time: string; remark: string | null; created_at: string; counselor: { full_name: string } | { full_name: string }[] | null };
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -24,17 +24,27 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
   const { id } = await props.params;
   const supabase = await createClient();
 
-  const user = await getCurrentUser();
-  const { data: staffRow } = await supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle();
+  // Everything at once: the page is read again after every save on it.
+  const [{ staff: staffRow }, { data: lead, error }, { data: logs }] = await Promise.all([
+    getStaffSession(),
+    supabase
+      .from("leads")
+      .select(
+        "id, full_name, contact_number, email, city, current_qualification, level_applying_for, course_of_interest, country_of_interest, status, date_of_inquiry, platform_source, registered_at, date_of_birth, address, current_remark:lead_remark_current(body, updated_at, editor:staff!lead_remark_current_updated_by_fkey(full_name)), profile:student_profiles(emergency_contact_name, emergency_contact_relation, emergency_contact_number)"
+      )
+      .eq("id", id)
+      .maybeSingle(),
+    supabase
+      .from("lead_call_logs")
+      .select("id, status_at_time, remark, created_at, counselor:staff(full_name)")
+      .eq("lead_id", id)
+      .order("created_at", { ascending: false })
+      .returns<CallLog[]>(),
+  ]);
   const canDeleteLead = hasRole(staffRow, "super_admin") || hasRole(staffRow, "processing");
-
-  const { data: lead, error } = await supabase
-    .from("leads")
-    .select(
-      "id, full_name, contact_number, email, city, current_qualification, level_applying_for, course_of_interest, country_of_interest, status, date_of_inquiry, platform_source, registered_at, current_remark:lead_remark_current(body, updated_at, editor:staff!lead_remark_current_updated_by_fkey(full_name))"
-    )
-    .eq("id", id)
-    .maybeSingle();
+  // Whatever is already on file, to start the registration form from.
+  type Emergency = { emergency_contact_name: string | null; emergency_contact_relation: string | null; emergency_contact_number: string | null };
+  const profile = lead ? one(lead.profile as Emergency | Emergency[] | null) : null;
 
   if (error || !lead) notFound();
   // Staff-only, beside the lead rather than on it (0307).
@@ -43,12 +53,6 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
     | null
     | undefined;
 
-  const { data: logs } = await supabase
-    .from("lead_call_logs")
-    .select("id, status_at_time, remark, created_at, counselor:staff(full_name)")
-    .eq("lead_id", id)
-    .order("created_at", { ascending: false })
-    .returns<CallLog[]>();
 
   return (
     <div className="w-full">
@@ -88,7 +92,17 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
             Converts this lead into a Registered Student and hands ownership to the Processing Team.
           </p>
           <div className="mt-3">
-            <RegisterLeadButton leadId={id} />
+            <RegisterLeadButton
+              leadId={id}
+              leadName={lead.full_name}
+              defaults={{
+                date_of_birth: lead.date_of_birth,
+                address: lead.address,
+                emergency_contact_name: profile?.emergency_contact_name,
+                emergency_contact_relation: profile?.emergency_contact_relation,
+                emergency_contact_number: profile?.emergency_contact_number,
+              }}
+            />
           </div>
           <p className="mt-2 text-xs text-muted">Discount can be set anytime after registration from the student&apos;s dashboard.</p>
         </Card>
@@ -98,7 +112,7 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
         <Card>
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-medium text-ink">Details</h3>
-            <LeadEditForm lead={lead} revalidateTo={`/leads/${id}`} />
+            <LeadEditForm lead={lead} />
           </div>
           <dl className="flex flex-col gap-2 text-sm">
             <div className="flex justify-between">
@@ -155,7 +169,9 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
             {logs.map((log) => (
               <li key={log.id} className="border-l-2 border-border pl-3">
                 <p className="text-sm text-ink">
-                  {LEAD_STATUS_LABELS[log.status_at_time as never] ?? log.status_at_time} — {log.remark}
+                  {LEAD_STATUS_LABELS[log.status_at_time as never] ?? log.status_at_time}
+                  {/* A status change may be made without a remark (0316). */}
+                  {log.remark ? <> — {log.remark}</> : <span className="text-muted"> — no remark</span>}
                 </p>
                 <p className="text-xs text-muted">
                   {one(log.counselor)?.full_name ?? "Unknown"} · {new Date(log.created_at).toLocaleString()}

@@ -35,7 +35,7 @@ export function InlineRegistrationStatusCell({
           defaultValue={status}
           disabled={pending}
           onChange={(e) => e.currentTarget.form?.requestSubmit()}
-          className="rounded border border-border bg-card px-1 py-0.5 text-xs"
+          className="rounded border border-border bg-card px-1 py-0.5 text-xs text-ink"
         >
           <option value="registered">Registered</option>
           <option value="withdrawn">Withdrawn</option>

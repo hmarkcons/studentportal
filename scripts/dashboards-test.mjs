@@ -87,6 +87,25 @@ test("an open lead nobody has spoken to lately is due a call; one called yesterd
   );
 });
 
+test("an Unattended lead is open, due a call, and not counted as contacted (0316)", () => {
+  const s = summarizeSales({
+    leads: [
+      lead({ id: "fresh", status: "unattended", created_at: "2026-09-01T10:00:00Z" }),
+      lead({ id: "worked", status: "busy", created_at: "2026-09-01T10:00:00Z" }),
+    ],
+    calls: [],
+    months: MONTHS,
+    today: TODAY,
+  });
+  assert.equal(s.openLeads, 2);
+  assert.ok(s.followUps.some((f) => f.id === "fresh"));
+  assert.deepEqual(
+    s.funnel.map((f) => f.value),
+    [2, 1, 0, 0],
+    "received both; only the worked one counts as contacted"
+  );
+});
+
 test("conversion is measured over the last 90 days' leads, and small sources fold into Other", () => {
   const leads = [
     ...["Facebook", "Facebook", "Instagram", "Walk-in", "Referral", "Google", "TikTok", "Email"].map((src, i) =>

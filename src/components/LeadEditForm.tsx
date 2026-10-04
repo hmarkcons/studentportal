@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Pencil } from "lucide-react";
 import { updateLead } from "@/lib/actions/leads";
 import { STUDY_LEVELS, QUALIFICATION_LEVELS } from "@/lib/constants";
@@ -9,6 +10,7 @@ import { Input, Select } from "@/components/ui/Input";
 import { dobBounds } from "@/lib/dateOfBirth";
 import { phoneBounds } from "@/lib/phoneNumber";
 import { ActionStatus } from "@/components/ActionStatus";
+import { markListsStale } from "@/components/RefreshIfStale";
 
 export type LeadEditable = {
   id: string;
@@ -27,12 +29,10 @@ export type LeadEditable = {
 
 export function LeadEditForm({
   lead,
-  revalidateTo,
   showRegistrationFields = false,
   alwaysEditing = false,
 }: {
   lead: LeadEditable;
-  revalidateTo: string;
   showRegistrationFields?: boolean;
   // The Profile tab treats these fields as a permanent, always-visible part
   // of "Personal details" (same as every other field group there) rather
@@ -41,8 +41,19 @@ export function LeadEditForm({
   alwaysEditing?: boolean;
 }) {
   const [editing, setEditing] = useState(alwaysEditing);
-  const action = updateLead.bind(null, lead.id, revalidateTo);
+  const action = updateLead.bind(null, lead.id);
   const [state, formAction, pending] = useActionState(action, undefined);
+  const router = useRouter();
+
+  // "Saved." as soon as the details are written (updateLead); the page they
+  // are shown on is read again behind it, and the leads list held for Back is
+  // told it is out of date.
+  useEffect(() => {
+    if (state?.success) {
+      markListsStale();
+      router.refresh();
+    }
+  }, [state, router]);
 
   if (!editing) {
     return (

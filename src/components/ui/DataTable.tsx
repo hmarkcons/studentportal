@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Maximize2, Minimize2 } from "lucide-react";
 import { TableFrame } from "@/components/ui/TableFrame";
 
 // Server Component pages build `cells`/`csv` for every row up front (calling
@@ -61,6 +62,8 @@ export function DataTable({
   exportHref,
   rowHighlight = false,
   server,
+  dense = false,
+  expandable = false,
 }: {
   columns: Column[];
   rows: Row[];
@@ -115,6 +118,17 @@ export function DataTable({
    * the server sends that page. For a list too long to send whole: the leads.
    */
   server?: { page: number; total: number; search: string; filters: Record<string, string> };
+  /**
+   * Rows as shallow as their contents allow, so more of a long list is on the
+   * screen at once: the leads and registered students, read row after row.
+   */
+  dense?: boolean;
+  /**
+   * An Expand button that opens the table over the whole window — no sidebar,
+   * no page heading — with its search, filters and pages kept. Escape, or the
+   * button again, puts it back.
+   */
+  expandable?: boolean;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState(server?.search ?? "");
@@ -124,6 +138,28 @@ export function DataTable({
   const router = useRouter();
   const [navigating, startNavigating] = useTransition();
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [expanded, setExpanded] = useState(false);
+
+  // Open over the whole window: the page behind does not scroll, and Escape
+  // closes it — unless a pop-up opened from a cell is what Escape is for.
+  useEffect(() => {
+    if (!expanded) return;
+    const root = document.documentElement;
+    const before = root.style.overflow;
+    root.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !document.querySelector("dialog[open]")) setExpanded(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      root.style.overflow = before;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [expanded]);
+
+  // Cell padding: the usual, or shallow rows (dense).
+  const cellPad = dense ? "px-3 py-1" : "px-4 py-3";
+  const headPad = dense ? "px-3 py-2" : "px-4 py-3";
 
   /** Server mode: the same address with these parameters changed — empty removes one. */
   function go(changes: Record<string, string | null>, { scroll = false }: { scroll?: boolean } = {}) {
@@ -223,7 +259,7 @@ export function DataTable({
     URL.revokeObjectURL(url);
   }
 
-  const showToolbar = exportFilename || exportHref || searchable || filters.length > 0;
+  const showToolbar = exportFilename || exportHref || searchable || filters.length > 0 || expandable;
   const frozenKey = freezeColumn ?? columns[0]?.key;
 
   const pager = (where: "top" | "bottom") =>
@@ -264,7 +300,13 @@ export function DataTable({
     // The rounded border is the card; the table scrolls in a window inside it
     // (TableFrame), with the search, filters and pager outside the window so
     // they stay where they are while the rows move.
-    <div className="overflow-hidden rounded-lg border border-border">
+    <div
+      className={expanded ? "overflow-hidden" : "overflow-hidden rounded-lg border border-border"}
+      data-table-expanded={expanded || undefined}
+      role={expanded ? "dialog" : undefined}
+      aria-modal={expanded || undefined}
+      aria-label={expanded ? `${label ?? exportFilename ?? "Table"}, full screen` : undefined}
+    >
       {showToolbar && (
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-bg px-3 py-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -281,7 +323,9 @@ export function DataTable({
                 key={f.key}
                 value={filterValues[f.key] ?? ""}
                 onChange={(e) => updateFilter(f.key, e.target.value)}
-                className="rounded-md border border-border bg-card px-2 py-1 text-xs"
+                // Capped: a list is as wide as its longest choice, and one long
+                // city name pushed the toolbar onto three lines.
+                className="max-w-[12rem] rounded-md border border-border bg-card px-2 py-1 text-xs"
               >
                 <option value="">{f.label}: all</option>
                 {f.options.map((o) => (
@@ -297,30 +341,49 @@ export function DataTable({
               </button>
             )}
           </div>
-          {exportHref ? (
-            <a href={exportHref} className="text-xs font-medium text-primary hover:underline" data-export-link>
-              Export (Excel)
-            </a>
-          ) : (
-            exportFilename && (
-              <button onClick={exportCsv} className="text-xs font-medium text-primary hover:underline">
-                Export
+          <div className="flex items-center gap-3">
+            {exportHref ? (
+              <a href={exportHref} className="text-xs font-medium text-primary hover:underline" data-export-link>
+                Export (Excel)
+              </a>
+            ) : (
+              exportFilename && (
+                <button onClick={exportCsv} className="text-xs font-medium text-primary hover:underline">
+                  Export
+                </button>
+              )
+            )}
+            {expandable && (
+              <button
+                type="button"
+                onClick={() => setExpanded((v) => !v)}
+                aria-pressed={expanded}
+                title={expanded ? "Back to the page (Esc)" : "Open the table over the whole screen"}
+                className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2 py-1 text-xs font-medium text-ink hover:border-primary"
+                data-expand-table
+              >
+                {expanded ? <Minimize2 aria-hidden className="h-3.5 w-3.5" /> : <Maximize2 aria-hidden className="h-3.5 w-3.5" />}
+                {expanded ? "Exit full screen" : "Expand"}
               </button>
-            )
-          )}
+            )}
+          </div>
         </div>
       )}
       {/* Above the table as well as below it: a page can be a thousand rows
           long, and nobody should scroll past all of them to reach Next. */}
       {pageSize && pageCount > 1 && pager("top")}
       {server && navigating && pageCount <= 1 && <p className="border-b border-border bg-bg px-3 py-1 text-xs text-primary">Loading…</p>}
-      <div className={navigating ? "opacity-60 transition-opacity" : undefined} aria-busy={navigating || undefined}>
+      <div className={navigating ? "opacity-60 transition-opacity" : undefined} aria-busy={navigating || undefined} data-table-body>
       <TableFrame label={label ?? exportFilename?.replace(/[-_]/g, " ") ?? "Table"} freezeFirstColumn={false}>
-        <table className={`w-full ${minTableWidthClassName} text-sm`} data-row-highlight={rowHighlight || undefined}>
+        <table
+          className={`w-full ${minTableWidthClassName} text-sm`}
+          data-row-highlight={rowHighlight || undefined}
+          data-dense={dense || undefined}
+        >
           <thead>
             <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-muted">
               {selectable && (
-                <th className="px-4 py-3">
+                <th className={headPad}>
                   <input
                     type="checkbox"
                     checked={selected.size === visibleRows.length && visibleRows.length > 0}
@@ -329,7 +392,7 @@ export function DataTable({
                 </th>
               )}
               {serial && (
-                <th scope="col" className="w-12 px-3 py-3 text-right font-medium" data-serial>
+                <th scope="col" className={`w-12 ${dense ? "px-2 py-2" : "px-3 py-3"} text-right font-medium`} data-serial>
                   <abbr title="Serial number" className="no-underline">
                     #
                   </abbr>
@@ -339,7 +402,7 @@ export function DataTable({
                 <th
                   key={c.key}
                   data-frozen={c.key === frozenKey || undefined}
-                  className={`px-4 py-3 font-medium ${oneLine && !c.wrap ? "whitespace-nowrap" : ""} ${
+                  className={`${headPad} font-medium ${oneLine && !c.wrap ? "whitespace-nowrap" : ""} ${
                     c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : ""
                   }`}
                 >
@@ -357,12 +420,12 @@ export function DataTable({
                 onClick={rowHighlight ? () => setCurrentRow(row.id) : undefined}
               >
                 {selectable && (
-                  <td className="px-4 py-3">
+                  <td className={cellPad}>
                     <input type="checkbox" checked={selected.has(row.id)} onChange={() => toggle(row.id)} />
                   </td>
                 )}
                 {serial && (
-                  <td className="w-12 px-3 py-3 text-right text-xs tabular-nums text-muted" data-serial>
+                  <td className={`w-12 ${dense ? "px-2 py-1" : "px-3 py-3"} text-right text-xs tabular-nums text-muted`} data-serial>
                     {(pageSize ? (currentPage - 1) * pageSize : 0) + i + 1}
                   </td>
                 )}
@@ -370,7 +433,7 @@ export function DataTable({
                   <td
                     key={c.key}
                     data-frozen={c.key === frozenKey || undefined}
-                    className={`px-4 py-3 ${oneLine && !c.wrap ? "whitespace-nowrap" : ""} ${
+                    className={`${cellPad} ${oneLine && !c.wrap ? "whitespace-nowrap" : ""} ${
                       c.align === "right" ? "text-right tabular-nums" : c.align === "center" ? "text-center" : ""
                     }`}
                   >
