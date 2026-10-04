@@ -18,6 +18,7 @@ import { DocumentSectionShell, ExpandAllToggle } from "@/components/DocumentSect
 import { FileField } from "@/components/FileField";
 import { DocumentGuidePanel, DocumentGuideToggle, guideHasMore } from "@/components/DocumentGuide";
 import type { ResolvedGuide } from "@/lib/documentGuides";
+import { DownloadAllDocuments } from "@/components/DownloadAllDocuments";
 
 export type DocRow = {
   id: string;
@@ -30,6 +31,11 @@ export type DocRow = {
   rejected_reason: string | null;
   fileUrl?: string | null;
   name?: string | null;
+  /**
+   * The checklist name the file is saved under by "Download all" — the name
+   * without what the page adds to it ("carried over from intake 1").
+   */
+  fileLabel?: string | null;
   /** When the file arrived, and from which side. Recorded all along; never shown. */
   uploaded_at?: string | null;
   uploaded_by_role?: UploaderRole | null;
@@ -317,8 +323,14 @@ export function DocumentChecklist({
   emptySections = "all",
   guides = {},
   focusDocId = null,
+  downloadAll,
 }: {
   docs: DocRow[];
+  /**
+   * Shows "Download all": every uploaded document in the sections listed, as
+   * one ZIP under this name. The student's Documents tab, for staff.
+   */
+  downloadAll?: { zipName: string };
   /**
    * The document somebody came here for — from Waiting on you, which links
    * ?doc=<id>#doc-<id>. Its section starts open, so the row is on the page to
@@ -415,12 +427,29 @@ export function DocumentChecklist({
         <EmptyState>{emptyMessage}</EmptyState>
       ) : (
         <>
-          <ExpandAllToggle
-            allExpanded={allExpanded}
-            onToggle={() =>
-              setOpenSections(allExpanded ? {} : Object.fromEntries(visibleSections.map((s) => [s.key, true])))
-            }
-          />
+          {(() => {
+            const toggle = (
+              <ExpandAllToggle
+                allExpanded={allExpanded}
+                onToggle={() =>
+                  setOpenSections(allExpanded ? {} : Object.fromEntries(visibleSections.map((s) => [s.key, true])))
+                }
+              />
+            );
+            if (!downloadAll) return toggle;
+            // The same sections, numbered the same way, as the folders of the ZIP.
+            const zipSections = visibleSections.map((s, i) => ({
+              number: i + 1,
+              label: s.label,
+              docs: s.docs.filter((d) => d.file_path).map((d) => ({ id: d.id, name: d.fileLabel ?? d.name ?? "Document" })),
+            }));
+            return (
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <DownloadAllDocuments studentId={studentId} zipName={downloadAll.zipName} sections={zipSections} />
+                {toggle}
+              </div>
+            );
+          })()}
 
           {/* Sections are numbered by the order they actually appear, not by
               their position in CATEGORY_ORDER — a student with no attestation

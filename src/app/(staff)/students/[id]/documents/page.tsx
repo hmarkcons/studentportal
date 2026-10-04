@@ -9,6 +9,7 @@ import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
 import { loadStudentChecklistSections } from "@/lib/studentChecklistSections";
 import { hasPermission } from "@/lib/auth/permissions";
 import { orderCycles, cycleTabLabel, resolveCycleDocuments, type Cycle } from "@/lib/intakeCycle";
+import { zipFileName } from "@/lib/documentZip";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -25,13 +26,15 @@ export default async function StudentDocumentsTab(props: {
 
   // One wave for everything but the documents themselves, which are read once
   // the checklist is up to date. These were three waves of their own.
-  const [, sections, canManage, { data: applications }, { data: cycleRows }, { data: renewTemplates }] = await Promise.all([
+  const [, sections, canManage, { data: applications }, { data: cycleRows }, { data: renewTemplates }, { data: student }] = await Promise.all([
     ensureStudentDocumentRequirements(id),
     loadStudentChecklistSections(supabase, id),
     hasPermission("documents.manage_requirements"),
     supabase.from("applications").select("id, university:universities(name)").eq("student_id", id),
     supabase.from("student_cycles").select("id, sequence, intake, is_current").eq("student_id", id).order("sequence"),
     supabase.from("document_templates").select("id").eq("renew_each_intake", true),
+    // For the name of the "Download all" ZIP.
+    supabase.from("leads").select("full_name, student_code").eq("id", id).maybeSingle(),
   ]);
 
   const { data: rawDocs } = await supabase
@@ -108,10 +111,11 @@ export default async function StudentDocumentsTab(props: {
       // Said in the name, because a document approved last year sitting in
       // this year's checklist with no explanation looks like a mistake.
       const carried = inheritedFrom ? ` — carried over from intake ${inheritedFrom}` : "";
-      const name = `${base}${uni?.name ? ` — ${uni.name}` : ""}${carried}`;
+      const fileLabel = `${base}${uni?.name ? ` — ${uni.name}` : ""}`;
+      const name = `${fileLabel}${carried}`;
       const past = history.get(d.id) ?? [];
-      if (!d.file_path) return { ...d, name, history: past };
-      return { ...d, name, history: past, fileUrl: docUrls.get(d.file_path) ?? null };
+      if (!d.file_path) return { ...d, name, fileLabel, history: past };
+      return { ...d, name, fileLabel, history: past, fileUrl: docUrls.get(d.file_path) ?? null };
   });
 
   return (
@@ -154,6 +158,13 @@ export default async function StudentDocumentsTab(props: {
           canManage={canManage && !isPreviousIntake}
           guides={guides}
           focusDocId={typeof focusDocId === "string" ? focusDocId : null}
+          downloadAll={{
+            zipName: zipFileName(
+              (student?.full_name as string | undefined) ?? "Student",
+              (student?.student_code as string | null | undefined) ?? null,
+              showCycleTabs ? (activeCycle?.intake ?? null) : null
+            ),
+          }}
         />
       </Card>
     </>

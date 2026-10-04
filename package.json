@@ -28,6 +28,7 @@
     "check:trackertests": "node scripts/verify-tracker-tests.mjs",
     "check:paging": "node scripts/verify-list-paging.mjs",
     "check:leadswork": "node scripts/verify-leads-workflow.mjs",
+    "check:docszip": "node scripts/verify-documents-zip.mjs",
     "check:pay": "node scripts/verify-pay-split.mjs",
     "check:roles": "node scripts/verify-multi-role.mjs",
     "check:speed": "node scripts/check-speed.mjs",
