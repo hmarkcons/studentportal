@@ -238,7 +238,8 @@ export default async function LeadsPage(props: { searchParams: Promise<Record<st
         name: <LongTextCell text={r.full_name} label="Name" rowName={r.full_name} href={`/leads/${r.id}`} widthClassName="max-w-[16rem]" />,
         contact: long(r.contact_number, "Contact number", "max-w-[10rem]"),
         email: long(r.email, "Email", "max-w-[14rem]"),
-        city: long(r.city, "City", "max-w-[10rem]"),
+        // Narrow: a city is a word or two, and a longer one shows whole on hover.
+        city: long(r.city, "City", "max-w-[6rem]"),
         country: long(r.country_of_interest, "Country"),
         qualification: long(r.current_qualification, "Current qualification"),
         level: level ?? "—",
