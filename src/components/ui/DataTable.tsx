@@ -36,6 +36,13 @@ type Row = {
   csv?: Record<string, string>;
 };
 
+/** A page longer than this is drawn a window at a time (virtualRowHeight). */
+const VIRTUAL_MIN_ROWS = 120;
+/** Rows drawn above and below what is on screen, so a scroll does not outrun them. */
+const OVERSCAN = 30;
+/** Rows drawn before the browser has measured anything: the first screenful and some. */
+const FIRST_WINDOW = 60;
+
 type FilterDef = {
   key: string;
   label: string;
@@ -64,6 +71,7 @@ export function DataTable({
   server,
   dense = false,
   expandable = false,
+  virtualRowHeight,
 }: {
   columns: Column[];
   rows: Row[];
@@ -129,6 +137,18 @@ export function DataTable({
    * button again, puts it back.
    */
   expandable?: boolean;
+  /**
+   * Draws a long page a window at a time: the rows on screen, and a screenful
+   * either side, with the rest stood in for by empty space of the same
+   * height — so the scrollbar covers every row and a scroll brings the next
+   * ones in. The number is a row's expected height in pixels; the rows drawn
+   * are measured, and that is used once there are some.
+   *
+   * For the leads list's thousand rows, each with its own status, counsellor,
+   * remark and follow-up controls: drawing all of them took longer than
+   * fetching them. A page of VIRTUAL_MIN_ROWS rows or fewer is drawn whole.
+   */
+  virtualRowHeight?: number;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState(server?.search ?? "");
@@ -139,6 +159,8 @@ export function DataTable({
   const [navigating, startNavigating] = useTransition();
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const tableRef = useRef<HTMLTableElement>(null);
+  const [rowWindow, setRowWindow] = useState({ start: 0, end: FIRST_WINDOW, rowHeight: virtualRowHeight ?? 0 });
 
   // Open over the whole window: the page behind does not scroll, and Escape
   // closes it — unless a pop-up opened from a cell is what Escape is for.
@@ -200,6 +222,72 @@ export function DataTable({
   // a blank page they'd otherwise have to manually back out of.
   const currentPage = Math.min(server ? server.page : page, pageCount);
   const pagedRows = server || !pageSize ? visibleRows : visibleRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  const virtual = Boolean(virtualRowHeight) && pagedRows.length > VIRTUAL_MIN_ROWS;
+  const rowCount = pagedRows.length;
+
+  // Which rows to draw: worked out from where the table's window is scrolled
+  // to (TableFrame's frame is what scrolls), again as it scrolls and as it
+  // changes size — the page scrolling it up, Expand. In steps of ten rows, so
+  // a scroll redraws a few rows at a time rather than on every pixel.
+  useEffect(() => {
+    if (!virtual) return;
+    const table = tableRef.current;
+    const frame = table?.closest<HTMLElement>("[data-table-frame]");
+    if (!table || !frame) return;
+    let raf = 0;
+    const measure = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        // The rows drawn, measured: what a row really takes on this screen.
+        const drawn = table.tBodies[0]?.querySelectorAll<HTMLElement>("tr[data-row]") ?? [];
+        let height = virtualRowHeight ?? 37;
+        if (drawn.length > 10) {
+          const first = drawn[0].getBoundingClientRect();
+          const last = drawn[drawn.length - 1].getBoundingClientRect();
+          height = (last.bottom - first.top) / drawn.length;
+        }
+        const top = Math.max(0, frame.scrollTop - (table.tHead?.offsetHeight ?? 0));
+        const start = Math.max(0, Math.floor(top / height / 10) * 10 - OVERSCAN);
+        const end = Math.min(rowCount, Math.ceil((top + frame.clientHeight) / height / 10) * 10 + OVERSCAN);
+        setRowWindow((w) =>
+          w.start === start && w.end === end && Math.abs(w.rowHeight - height) < 0.5 ? w : { start, end, rowHeight: height }
+        );
+      });
+    };
+    measure();
+    frame.addEventListener("scroll", measure, { passive: true });
+    const observer = new ResizeObserver(measure);
+    observer.observe(frame);
+    return () => {
+      cancelAnimationFrame(raf);
+      frame.removeEventListener("scroll", measure);
+      observer.disconnect();
+    };
+  }, [virtual, virtualRowHeight, rowCount]);
+
+  // A new page, search or filter starts at the top of its rows — when it
+  // changes, not when the table first appears, or a scroll begun while the
+  // page was still loading would be thrown back to the top.
+  const listKey = server ? `${server.page}|${server.search}|${JSON.stringify(server.filters)}` : "";
+  const shownKey = useRef(listKey);
+  useEffect(() => {
+    if (shownKey.current === listKey) return;
+    shownKey.current = listKey;
+    const frame = tableRef.current?.closest<HTMLElement>("[data-table-frame]");
+    if (frame && virtual) frame.scrollTop = 0;
+  }, [listKey, virtual]);
+
+  const drawStart = virtual ? Math.min(rowWindow.start, rowCount) : 0;
+  const drawEnd = virtual ? Math.min(rowWindow.end, rowCount) : rowCount;
+  const drawnRows = virtual ? pagedRows.slice(drawStart, drawEnd) : pagedRows;
+  const columnCount = columns.length + (selectable ? 1 : 0) + (serial ? 1 : 0);
+  const spacer = (rows: number, where: string) =>
+    rows > 0 ? (
+      <tr aria-hidden data-spacer={where} style={{ height: rows * rowWindow.rowHeight }}>
+        <td colSpan={columnCount} className="p-0" />
+      </tr>
+    ) : null;
 
   function updateSearch(value: string) {
     setSearch(value);
@@ -376,9 +464,13 @@ export function DataTable({
       <div className={navigating ? "opacity-60 transition-opacity" : undefined} aria-busy={navigating || undefined} data-table-body>
       <TableFrame label={label ?? exportFilename?.replace(/[-_]/g, " ") ?? "Table"} freezeFirstColumn={false}>
         <table
+          ref={tableRef}
           className={`w-full ${minTableWidthClassName} text-sm`}
           data-row-highlight={rowHighlight || undefined}
           data-dense={dense || undefined}
+          data-virtual={virtual || undefined}
+          data-row-count={rowCount}
+          aria-rowcount={virtual ? rowCount + 1 : undefined}
         >
           <thead>
             <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-muted">
@@ -412,10 +504,17 @@ export function DataTable({
             </tr>
           </thead>
           <tbody>
-            {pagedRows.map((row, i) => (
+            {virtual && spacer(drawStart, "above")}
+            {drawnRows.map((row, j) => {
+              // Its place among all the rows, drawn or not.
+              const i = drawStart + j;
+              return (
               <tr
                 key={row.id}
                 className="border-b border-border last:border-0 hover:bg-bg/60"
+                data-row
+                data-alt={i % 2 === 1 || undefined}
+                aria-rowindex={virtual ? i + 2 : undefined}
                 data-current={(rowHighlight && currentRow === row.id) || undefined}
                 onClick={rowHighlight ? () => setCurrentRow(row.id) : undefined}
               >
@@ -449,7 +548,9 @@ export function DataTable({
                   </td>
                 ))}
               </tr>
-            ))}
+              );
+            })}
+            {virtual && spacer(rowCount - drawEnd, "below")}
             {visibleRows.length === 0 && (
               <tr>
                 <td colSpan={columns.length + (selectable ? 1 : 0) + (serial ? 1 : 0)} className="px-4 py-10 text-center text-muted">

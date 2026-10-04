@@ -10,7 +10,16 @@ import type { ActionResultLike } from "@/lib/actionStatus";
 
 type Remark = { id: string; due_date: string; due_time: string | null; note: string | null; resolved: boolean };
 
-export function FollowUpCell({ leadId, remarkCount }: { leadId: string; remarkCount: number }) {
+export function FollowUpCell({
+  leadId,
+  remarkCount,
+  onAdded,
+}: {
+  leadId: string;
+  remarkCount: number;
+  /** Told of each one added, so a list that draws only the rows in view keeps the count when this row is drawn again. */
+  onAdded?: () => void;
+}) {
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [note, setNote] = useState("");
@@ -24,7 +33,14 @@ export function FollowUpCell({ leadId, remarkCount }: { leadId: string; remarkCo
   const [viewLoading, setViewLoading] = useState(false);
   const [remarks, setRemarks] = useState<Remark[] | null>(null);
   // Added here since the list was read: the answer no longer carries the page.
+  // Once the count passed in has moved — the list read again, or told of the
+  // addition — it already holds them.
   const [added, setAdded] = useState(0);
+  const [prevCount, setPrevCount] = useState(remarkCount);
+  if (remarkCount !== prevCount) {
+    setPrevCount(remarkCount);
+    setAdded(0);
+  }
   const count = remarkCount + added;
 
   async function openView() {
@@ -53,6 +69,7 @@ export function FollowUpCell({ leadId, remarkCount }: { leadId: string; remarkCo
         setNote("");
         setDone({ success: true });
         setAdded((n) => n + 1);
+        onAdded?.();
         markListsStale();
         if (viewOpen) {
           const refreshed = await listLeadFollowUpRemarks(leadId);

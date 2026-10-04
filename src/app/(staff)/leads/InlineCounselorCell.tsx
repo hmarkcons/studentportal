@@ -20,15 +20,21 @@ export function InlineCounselorCell({
   currentCounselorId,
   currentCounselorName,
   counselors,
+  onSaved,
 }: {
   leadId: string;
   currentCounselorId: string | null;
   currentCounselorName: string | null;
   counselors: { id: string; full_name: string }[];
+  /** Told who was saved, so a list that draws only the rows in view keeps it when this row is drawn again. */
+  onSaved?: (counselorId: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const action = reassignLead.bind(null, leadId);
-  const [state, formAction, pending] = useActionState(action, undefined);
+  const [state, formAction, pending] = useActionState(async (prev: unknown, formData: FormData) => {
+    const result = await reassignLead(leadId, prev, formData);
+    if (result && "counselorId" in result) onSaved?.(result.counselorId ?? null);
+    return result;
+  }, undefined);
 
   // Close the panel the moment a submit succeeds — adjusted during render
   // (React's documented pattern for reacting to a changed value) rather than

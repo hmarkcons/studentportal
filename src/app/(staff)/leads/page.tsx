@@ -1,15 +1,9 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatDateOnly } from "@/lib/formatDate";
-import { DataTable } from "@/components/ui/DataTable";
 import { LEAD_STATUS_LABELS } from "@/lib/constants";
 import { ImportLeadsForm } from "./ImportLeadsForm";
-import { InlineStatusCell } from "./InlineStatusCell";
-import { InlineCounselorCell } from "./InlineCounselorCell";
-import { FollowUpCell } from "./FollowUpCell";
-import { RemarkCell } from "./RemarkCell";
-import { LongTextCell } from "@/components/ui/LongTextCell";
-import { RowActionsMenu } from "@/components/RowActionsMenu";
+import { LeadsTable, type LeadListRow } from "./LeadsTable";
 import { hasPermission } from "@/lib/auth/permissions";
 import { getCachedCounselors } from "@/lib/cachedQueries";
 import { monthLabel, orderedLeadColumns, type LeadColumnKey } from "@/lib/leadSheet";
@@ -220,76 +214,35 @@ export default async function LeadsPage(props: { searchParams: Promise<Record<st
     .filter((c): c is { sheetKey: LeadColumnKey; def: (typeof columnDefs)[number] } => Boolean(c.def));
   const columns = [...arranged.map((c) => c.def), { key: "actions", header: "", align: "right" as const, exportable: false }];
 
-  const rows = (leads ?? []).map((r) => {
+  // Plain values, one lead to a row: the browser makes the cells, and only
+  // for the rows in view (LeadsTable). The server making every cell of a
+  // thousand rows came to six megabytes of page.
+  const rows: LeadListRow[] = (leads ?? []).map((r) => {
     const remark = one(r.current_remark);
-    // Worked out from the inquiry date, never stored or typed.
-    const monthYearLabel = monthLabel(r.date_of_inquiry);
-    const level = r.level_applying_for ? (LEVEL_LABELS[r.level_applying_for] ?? r.level_applying_for) : null;
-    // A long value is cut short on its line and opens whole in a pop-up.
-    const long = (text: string | null, label: string, widthClassName?: string) => (
-      <LongTextCell text={text} label={label} rowName={r.full_name} widthClassName={widthClassName} />
-    );
-    const counselorName = one(r.assigned_counselor)?.full_name;
-    const followUps = r.follow_ups?.[0]?.count ?? 0;
     return {
       id: r.id,
-      cells: {
-        month: monthYearLabel,
-        name: <LongTextCell text={r.full_name} label="Name" rowName={r.full_name} href={`/leads/${r.id}`} widthClassName="max-w-[16rem]" />,
-        contact: long(r.contact_number, "Contact number", "max-w-[10rem]"),
-        email: long(r.email, "Email", "max-w-[14rem]"),
-        // Narrow: a city is a word or two, and a longer one shows whole on hover.
-        city: long(r.city, "City", "max-w-[6rem]"),
-        country: long(r.country_of_interest, "Country"),
-        qualification: long(r.current_qualification, "Current qualification"),
-        level: level ?? "—",
-        course: long(r.course_of_interest, "Course of interest", "max-w-[14rem]"),
-        status: <InlineStatusCell leadId={r.id} currentStatus={r.status} latestRemark={r.latest_log?.[0]?.remark ?? null} />,
-        counselor: (
-          <InlineCounselorCell
-            leadId={r.id}
-            currentCounselorId={r.assigned_counselor_id}
-            currentCounselorName={counselorName ?? null}
-            counselors={counselors}
-          />
-        ),
-        remarks: (
-          <RemarkCell
-            leadId={r.id}
-            leadName={r.full_name}
-            remark={remark?.body ?? null}
-            updatedAt={remark?.updated_at ?? null}
-            updatedBy={one(remark?.editor ?? null)?.full_name ?? null}
-          />
-        ),
-        followUp: <FollowUpCell leadId={r.id} remarkCount={followUps} />,
-        date: formatDateOnly(r.date_of_inquiry),
-        source: long(r.platform_source, "Source", "max-w-[10rem]"),
-        actions: (
-          <RowActionsMenu id={r.id} name={r.full_name} editHref={`/leads/${r.id}`} canDelete={canDelete} deleteLabel="Delete lead" />
-        ),
-      },
-      csv: {
-        name: r.full_name,
-        contact: r.contact_number ?? "",
-        email: r.email ?? "",
-        city: r.city ?? "",
-        country: r.country_of_interest ?? "",
-        qualification: r.current_qualification ?? "",
-        level: level ?? "",
-        course: r.course_of_interest ?? "",
-        source: r.platform_source ?? "",
-        status: LEAD_STATUS_LABELS[r.status as keyof typeof LEAD_STATUS_LABELS] ?? r.status,
-        counselor: counselorName ?? "",
-        // In the export, and in what the search box looks through.
-        remarks: remark?.body ?? "",
-        followUp: String(followUps),
-        date: r.date_of_inquiry,
-        month: monthYearLabel,
-      },
+      name: r.full_name,
+      contact: r.contact_number,
+      email: r.email,
+      city: r.city,
+      country: r.country_of_interest,
+      qualification: r.current_qualification,
+      level: r.level_applying_for ? (LEVEL_LABELS[r.level_applying_for] ?? r.level_applying_for) : null,
+      course: r.course_of_interest,
+      source: r.platform_source,
+      status: r.status,
+      // Worked out from the inquiry date, never stored or typed.
+      month: monthLabel(r.date_of_inquiry),
+      date: formatDateOnly(r.date_of_inquiry),
+      counselorId: r.assigned_counselor_id,
+      counselorName: one(r.assigned_counselor)?.full_name ?? null,
+      remark: remark?.body ?? null,
+      remarkAt: remark?.updated_at ?? null,
+      remarkBy: one(remark?.editor ?? null)?.full_name ?? null,
+      lastCallRemark: r.latest_log?.[0]?.remark ?? null,
+      followUps: r.follow_ups?.[0]?.count ?? 0,
     };
   });
-
 
   return (
     <div className="w-full">
@@ -313,7 +266,11 @@ export default async function LeadsPage(props: { searchParams: Promise<Record<st
 
       {!error && (
         <div className="mt-4">
-          <DataTable
+          <LeadsTable
+            leads={rows}
+            counselors={counselors}
+            canDelete={canDelete}
+            virtualRowHeight={37}
             exportFilename="leads"
             exportHref="/api/export/leads"
             rowHighlight
@@ -321,7 +278,6 @@ export default async function LeadsPage(props: { searchParams: Promise<Record<st
             expandable
             label="Leads"
             freezeColumn="name"
-            rows={rows}
             columns={columns}
             searchable
             searchPlaceholder="Search name, contact, course, remarks…"

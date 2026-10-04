@@ -18,12 +18,15 @@ export function RemarkCell({
   remark,
   updatedAt,
   updatedBy,
+  onSaved,
 }: {
   leadId: string;
   leadName: string;
   remark: string | null;
   updatedAt: string | null;
   updatedBy: string | null;
+  /** Told what was saved, so a list that draws only the rows in view keeps it when this row is drawn again. */
+  onSaved?: (remark: string | null, at: string | null, by: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
   // Built the first time it is asked for, not with the row (see LongTextCell).
@@ -81,6 +84,7 @@ export function RemarkCell({
               onSaved={(next, at, by) => {
                 setShown(next);
                 setMeta({ at, by });
+                onSaved?.(next, at, by);
               }}
             />
           </div>

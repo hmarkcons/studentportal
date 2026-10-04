@@ -116,8 +116,14 @@ try {
   }
 
   const name = longRow.locator(`a[href="/students/${longId}"]`);
-  ok("a long name is cut short, with the whole of it on hover",
-    (await name.evaluate((el) => el.scrollWidth > el.clientWidth)) && (await name.getAttribute("title")) === NAME);
+  // The whole name shows beside it while the pointer rests on it (LongTextCell).
+  const nameCut = await name.evaluate((el) => el.scrollWidth > el.clientWidth);
+  await name.hover();
+  const preview = page.locator("[data-hover-preview]");
+  await preview.waitFor({ timeout: 10000 }).catch(() => {});
+  const previewText = (await preview.count()) ? (await preview.innerText()).trim() : null;
+  ok("a long name is cut short, with the whole of it on hover", nameCut && previewText === NAME, String(previewText));
+  await page.mouse.move(5, 5);
   await name.click();
   await page.waitForURL(new RegExp(`/students/${longId}`), { timeout: 60000 });
   ok("...and still opens the student", page.url().includes(`/students/${longId}`));

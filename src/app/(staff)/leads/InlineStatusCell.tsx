@@ -11,14 +11,20 @@ export function InlineStatusCell({
   leadId,
   currentStatus,
   latestRemark,
+  onSaved,
 }: {
   leadId: string;
   currentStatus: string;
   latestRemark?: string | null;
+  /** Told what was saved, so a list that draws only the rows in view keeps it when this row is drawn again. */
+  onSaved?: (status: string, remark: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const action = updateLeadStatus.bind(null, leadId);
-  const [state, formAction, pending] = useActionState(action, undefined);
+  const [state, formAction, pending] = useActionState(async (prev: unknown, formData: FormData) => {
+    const result = await updateLeadStatus(leadId, prev, formData);
+    if (result && "status" in result && result.status) onSaved?.(result.status, result.remark ?? null);
+    return result;
+  }, undefined);
   // What was saved here, shown at once: the answer no longer carries the page
   // (updateLeadStatus), so the list is not read again to learn it.
   const [saved, setSaved] = useState<{ status: string; remark: string | null } | null>(null);

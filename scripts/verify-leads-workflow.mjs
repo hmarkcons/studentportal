@@ -152,6 +152,22 @@ try {
   const { data: logs } = await admin.from("lead_call_logs").select("status_at_time, remark").eq("lead_id", leadId);
   ok("...and the database has it, logged with no remark", afterInline?.status === "busy" && logs?.length === 1 && logs[0].remark === null, JSON.stringify({ afterInline, logs }));
 
+  // Drawn a window at a time: the rows in view and a screenful either side,
+  // and a saved change kept by the list for when its row is drawn again.
+  const held = Number(await page.locator("table[data-row-count]").first().getAttribute("data-row-count"));
+  const drawn = await page.locator("tbody tr[data-row]").count();
+  ok("a long page draws only the rows in view, a screenful either side", held > 120 && drawn < held && drawn >= 20, `${drawn} of ${held} drawn`);
+  const frame = page.locator("[data-table-frame]").first();
+  await frame.evaluate((f) => {
+    f.scrollTop = f.scrollHeight;
+  });
+  const gone = await poll(async () => (await row.count()) === 0, 10);
+  await frame.evaluate((f) => {
+    f.scrollTop = 0;
+  });
+  const redrawn = await poll(async () => (await row.count()) === 1 && (await statusButton.getAttribute("data-lead-status")) === "busy", 10);
+  ok("...and a status saved in a row still shows when the row is scrolled away and back", Boolean(gone) && Boolean(redrawn), JSON.stringify({ gone, redrawn }));
+
   // Back to a list the browser held from before the change.
   await row.locator(`a[href="/leads/${leadId}"]`).click();
   await page.waitForURL(`**/leads/${leadId}`, { timeout: 60000 });

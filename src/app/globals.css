@@ -1110,7 +1110,12 @@ table[data-row-highlight] > tbody > tr {
   --frame-bg: var(--row-bg);
   cursor: default;
 }
-table[data-row-highlight] > tbody > tr:nth-child(even) {
+/* Shaded by place: every other child, or — where only some rows are drawn
+   (DataTable virtualRowHeight) and children no longer line up with places —
+   by the row's own mark. :where keeps both as weak as the plain row rule, so
+   the hovered and the clicked row still win. */
+table[data-row-highlight]:where(:not([data-virtual])) > tbody > tr:nth-child(even),
+table[data-row-highlight] > tbody > tr:where([data-alt]) {
   --row-bg: color-mix(in srgb, var(--primary) 6%, var(--card));
 }
 table[data-row-highlight] > tbody > tr:hover {

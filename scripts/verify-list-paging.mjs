@@ -12,6 +12,16 @@
 // Read-only. Its one fixture, the Super Admin it signs in as, is removed.
 import { BASE, clients, fixtures, openBrowser, reporter, requireConfirmation, signIn } from "./verify-portal-lib.mjs";
 
+/** Polls until `fn` returns something truthy, or gives up after `seconds`. */
+async function poll(fn, seconds = 20) {
+  const until = Date.now() + seconds * 1000;
+  for (;;) {
+    const v = await fn().catch(() => null);
+    if (v || Date.now() > until) return v;
+    await new Promise((r) => setTimeout(r, 300));
+  }
+}
+
 requireConfirmation("check:paging");
 
 const { admin } = clients();
@@ -40,8 +50,23 @@ try {
     const seconds = ((Date.now() - started) / 1000).toFixed(1);
     const said = (await page.locator("p", { hasText: unit }).first().innerText()).trim();
     ok(`the list holds every one of the ${total} on file`, said.startsWith(`${total} `), `${said} (loaded in ${seconds}s)`);
-    const rows = await page.locator("table tbody tr").count();
+    // A long page is drawn a window at a time (DataTable virtualRowHeight), so
+    // the rows are counted by what the table holds, and the last one is
+    // reached by scrolling to it.
+    const rows = Number(await page.locator("table[data-row-count]").first().getAttribute("data-row-count"));
     ok(`...${size} to a page at most`, rows === Math.min(size, total), String(rows));
+    await page.locator("[data-table-frame]").first().evaluate((frame) => {
+      frame.scrollTop = frame.scrollHeight;
+    });
+    const lastSerial = await poll(async () => {
+      const serials = await page.locator("tbody tr[data-row] td[data-serial]").allInnerTexts();
+      const last = Number(serials.at(-1));
+      return last === rows ? last : null;
+    });
+    ok("...and scrolling to the end of the table reaches the last of them", lastSerial === rows, String(lastSerial));
+    await page.locator("[data-table-frame]").first().evaluate((frame) => {
+      frame.scrollTop = 0;
+    });
     if (total > size) {
       const top = page.locator('[data-pager="top"]');
       ok("...with the page controls above the table as well as below", (await top.count()) === 1 && (await page.locator('[data-pager="bottom"]').count()) === 1);
