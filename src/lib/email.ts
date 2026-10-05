@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { emailErrorMessage } from "./emailError.ts";
 
 // SMTP send helper (Gmail / Google Workspace or any standard SMTP account).
 // Configure via env vars: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM.
@@ -61,6 +62,8 @@ export async function sendEmail({
     });
     return { success: true as const };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Failed to send email." };
+    // Said as what happened and what to do, not the mail server's reply verbatim.
+    console.error("sendEmail failed:", err instanceof Error ? err.message : err);
+    return { error: emailErrorMessage(err) };
   }
 }
