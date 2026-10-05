@@ -38,7 +38,7 @@ export function RecordLeaveForm({ staff }: { staff: { id: string; full_name: str
       <Input name="reason" placeholder="Reason (optional)" />
       <div className="flex flex-col gap-1">
         <span className="text-xs text-muted">Medical certificate — without one, sick and emergency leave is recorded as unpaid.</span>
-        <FileField name="certificate" accept={ACCEPTED_DOCUMENT_ACCEPT} noun="certificate" inputClassName="text-sm" />
+        <FileField multiple name="certificate" accept={ACCEPTED_DOCUMENT_ACCEPT} noun="certificate" inputClassName="text-sm" />
       </div>
       <div>
         <Button

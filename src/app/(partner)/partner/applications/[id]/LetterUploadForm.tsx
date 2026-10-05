@@ -22,6 +22,7 @@ export function LetterUploadForm({
   // by them, and reissuing one leaves the first on the record.
   return (
     <ConfirmedUploadForm
+      multiple
       action={action}
       accept={ACCEPTED_DOCUMENT_ACCEPT}
       hint="PDF, Word or image"

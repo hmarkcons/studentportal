@@ -70,7 +70,7 @@ function UploadSigned({
   return (
     <form action={formAction} className="flex flex-wrap items-end gap-2">
       {!agreementId && <Input name="title" placeholder="Title, e.g. Employment Agreement 2026" required className="min-w-[220px] flex-1" />}
-      <FileField accept={ACCEPTED_DOCUMENT_ACCEPT} required noun="agreement" inputClassName="text-xs" />
+      <FileField multiple accept={ACCEPTED_DOCUMENT_ACCEPT} required noun="agreement" inputClassName="text-xs" />
       <Button type="submit" size="sm" pending={pending} status={{ state, label: "Uploaded.", showError: true }}>
         {agreementId ? "Upload signed copy" : "Upload"}
       </Button>

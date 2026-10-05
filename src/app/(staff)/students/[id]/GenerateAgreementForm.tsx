@@ -457,7 +457,7 @@ export function UploadSignedAgreementForm({
       {replace && <p className="text-xs text-muted">Replaces the signed copy on file. The previous scan is deleted.</p>}
       {/* File input sits directly next to the button it feeds. */}
       <div className="flex flex-wrap items-start gap-2">
-        <FileField required noun="agreement" hint="Scan or photo of the signed copy" onChange={(s) => setReady(Boolean(s.file))} />
+        <FileField multiple required noun="agreement" hint="Scan or photo of the signed copy" onChange={(s) => setReady(Boolean(s.file))} />
         <Button
           type="submit"
           variant="outline-primary"

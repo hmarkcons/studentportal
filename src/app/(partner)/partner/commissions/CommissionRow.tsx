@@ -49,7 +49,7 @@ export function CommissionRow({
           {commission.status.replace(/_/g, " ")}
         </Badge>
         <form action={formAction} className="flex items-start gap-1">
-          <FileField hint="PDF or image" className="w-40" onChange={(s) => setBlocked(Boolean(s.error) || s.busy)} />
+          <FileField multiple hint="PDF or image" className="w-40" onChange={(s) => setBlocked(Boolean(s.error) || s.busy)} />
           <Button type="submit" pending={pending} size="sm" disabled={blocked} status={{ state, label: "Proof uploaded." }}>
             {commission.payment_proof_uploaded_at ? "Replace proof" : "Upload proof"}
           </Button>

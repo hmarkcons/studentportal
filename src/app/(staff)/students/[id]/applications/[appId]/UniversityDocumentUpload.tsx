@@ -72,7 +72,7 @@ export function UniversityDocumentUpload({
             ))}
           </datalist>
         </label>
-        <FileField required accept={ACCEPTED_DOCUMENT_ACCEPT} hint="PDF, Word or photo" noun="document" onChange={(s) => setReady(Boolean(s.file) && !s.busy)} />
+        <FileField multiple required accept={ACCEPTED_DOCUMENT_ACCEPT} hint="PDF, Word or photo" noun="document" onChange={(s) => setReady(Boolean(s.file) && !s.busy)} />
         <Button type="submit" variant="primary" size="sm" pending={pending} disabled={!ready} status={{ state, label: "Filed under Acceptance Letters.", showError: true }}>
           <FileUp aria-hidden className="h-3.5 w-3.5 shrink-0" />
           Upload

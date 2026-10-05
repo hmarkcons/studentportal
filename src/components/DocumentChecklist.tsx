@@ -176,7 +176,7 @@ function UploadRow({
 
       {showUploadForm ? (
         <form action={formAction} className="flex flex-wrap items-start gap-2">
-          <FileField accept={ACCEPTED_DOCUMENT_ACCEPT} hint="PDF, Word or image" onChange={(s) => setReady(Boolean(s.file))} />
+          <FileField multiple accept={ACCEPTED_DOCUMENT_ACCEPT} hint="PDF, Word or image" onChange={(s) => setReady(Boolean(s.file))} />
           <Button
             type="submit"
             pending={pending}

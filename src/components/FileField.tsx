@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { MAX_UPLOAD_BYTES, fileSizeError, formatFileSize, isShrinkableImage, limitHint, reduceHint, shrunkNote } from "@/lib/fileSize";
 import { stageFile } from "@/lib/stageFile";
 import { shrinkImageToFit } from "./shrinkImage";
+import { JoinedFilesList, useJoinedFiles, type JoinedResult } from "./JoinedFiles";
 
 export type FileFieldState = {
   /** The chosen file once it is uploaded and ready to submit. Null otherwise. */
@@ -43,6 +44,7 @@ export function FileField({
   inputClassName = "text-xs",
   onChange,
   disabled,
+  multiple = false,
 }: {
   name?: string;
   accept?: string;
@@ -58,6 +60,13 @@ export function FileField({
   /** Told whenever the usable file changes, so a parent can gate its submit. */
   onChange?: (state: FileFieldState) => void;
   disabled?: boolean;
+  /**
+   * Several files may be chosen for this one document — a passport's two
+   * sides, pages photographed one at a time — and are joined into one PDF, in
+   * an order that can be changed, before it is uploaded (src/lib/combinePdf.ts).
+   * One file chosen is used as it is, as without this.
+   */
+  multiple?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +85,35 @@ export function FileField({
   // A submit pressed mid-upload, sent as soon as the upload lands. Undefined
   // when none is waiting; null when it came from something other than a button.
   const heldSubmit = useRef<HTMLElement | null | undefined>(undefined);
+  // A pick that adds to the files already chosen, rather than replacing them.
+  const addingMore = useRef(false);
+  const joined = useJoinedFiles({
+    limitBytes,
+    onResult: (result: JoinedResult) => {
+      if (result.kind === "none") return void handle(null);
+      if (result.kind === "single") return void handle(result.file);
+      const pick = ++pickRef.current;
+      setStaged(null);
+      setShrinkable(null);
+      setRetry(null);
+      if (result.kind === "error") return report({ file: null, error: result.error, note: null, busy: false });
+      void upload(result.file, pick, result.note);
+    },
+    onBusy: (isBusy, busyNote) => {
+      if (!isBusy) return;
+      ++pickRef.current;
+      setStaged(null);
+      setShrinkable(null);
+      setRetry(null);
+      report({ file: null, error: null, note: busyNote, busy: true });
+    },
+  });
+  // The form's reset clears the list too; read through a ref, since the
+  // listener below is added once.
+  const clearJoined = useRef(joined.clear);
+  useEffect(() => {
+    clearJoined.current = joined.clear;
+  });
 
   function report(state: FileFieldState) {
     setError(state.error);
@@ -102,6 +140,7 @@ export function FileField({
     // A reset form must not keep posting the file it has already sent.
     function cleared() {
       heldSubmit.current = undefined;
+      clearJoined.current();
       setStaged(null);
       setShrinkable(null);
       setRetry(null);
@@ -199,16 +238,38 @@ export function FileField({
         type="file"
         accept={accept}
         capture={capture}
-        required={required}
+        multiple={multiple || undefined}
+        // Not required once a file is in storage: what the form posts is the
+        // reference below, and a pick that adds to a list empties this input.
+        required={required && !staged}
         disabled={disabled || busy}
-        onChange={(e) => void handle(e.target.files?.[0] ?? null)}
+        onChange={(e) => {
+          if (!multiple) return void handle(e.target.files?.[0] ?? null);
+          const picked = Array.from(e.target.files ?? []);
+          const add = addingMore.current;
+          addingMore.current = false;
+          if (picked.length === 0 && add) return;
+          joined.choose(picked, { add });
+        }}
         className={`max-w-full ${inputClassName}`}
         data-staged={staged ? "" : undefined}
+        data-multiple={multiple || undefined}
       />
+      {multiple && (
+        <JoinedFilesList
+          joined={joined}
+          disabled={disabled || busy}
+          onAddMore={() => {
+            addingMore.current = true;
+            inputRef.current?.click();
+          }}
+        />
+      )}
       <input type="hidden" name={name} value={staged ?? ""} />
       {/* Said before a file is chosen, not only after one is refused. */}
       <p className="text-[11px] text-muted" data-upload-limit>
         {hint ? `${hint} · ` : ""}
+        {multiple ? "Several files are joined into one PDF · " : ""}
         <span className="font-semibold text-ink">{limitHint(limitBytes)}</span>
       </p>
       {note && (

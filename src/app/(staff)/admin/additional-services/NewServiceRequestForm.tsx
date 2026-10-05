@@ -63,7 +63,7 @@ export function NewServiceRequestForm({ students }: { students: { id: string; fu
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
           Proof of payment
-          <FileField name="proof_of_payment" hint="PDF or image" onChange={(s) => setBlocked(Boolean(s.error) || s.busy)} />
+          <FileField multiple name="proof_of_payment" hint="PDF or image" onChange={(s) => setBlocked(Boolean(s.error) || s.busy)} />
         </label>
       </div>
 

@@ -67,7 +67,7 @@ export function RecordAdmissionForm({
 
       <div className="flex flex-col gap-1 text-xs text-muted">
         Admission letter
-        <FileField accept={ACCEPTED_DOCUMENT_ACCEPT} required noun="admission letter" hint="PDF or photo" onChange={(s) => setLetterReady(Boolean(s.file))} />
+        <FileField multiple accept={ACCEPTED_DOCUMENT_ACCEPT} required noun="admission letter" hint="PDF or photo" onChange={(s) => setLetterReady(Boolean(s.file))} />
       </div>
 
       <Button type="submit" variant="primary" pending={pending} disabled={!universityId || !letterReady} status={{ state, label: "Recorded.", showError: true }}>

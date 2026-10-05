@@ -176,6 +176,7 @@ export function PortalDocumentRow({
           rejected version. */}
       {doc.status !== "verified" && !readOnly && (
         <ConfirmedUploadForm
+          multiple
           action={action}
           accept={ACCEPTED_DOCUMENT_ACCEPT}
           capture="environment"

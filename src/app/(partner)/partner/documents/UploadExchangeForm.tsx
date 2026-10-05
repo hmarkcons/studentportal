@@ -15,7 +15,7 @@ export function UploadExchangeForm({ universityId }: { universityId: string }) {
     <form action={formAction} className="flex flex-wrap items-end gap-2">
       {/* max-w-full: a native file input has an intrinsic minimum width that
           overflows the page at 320px otherwise. */}
-      <FileField required hint="PDF, Word or image" inputClassName="text-sm" onChange={(s) => setReady(Boolean(s.file))} />
+      <FileField multiple required hint="PDF, Word or image" inputClassName="text-sm" onChange={(s) => setReady(Boolean(s.file))} />
       <Input name="description" placeholder="Description" />
       <Button type="submit" pending={pending} variant="primary" disabled={!ready} status={{ state, label: "Uploaded." }}>
         Upload

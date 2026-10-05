@@ -28,6 +28,7 @@ export function ConfirmedUploadForm({
   limitBytes,
   noun = "document",
   hint,
+  multiple = false,
 }: {
   action: (prevState: unknown, formData: FormData) => Promise<{ error?: string; success?: boolean } | void>;
   accept?: string;
@@ -37,6 +38,8 @@ export function ConfirmedUploadForm({
   noun?: string;
   /** What is accepted, in words, shown alongside the limit. */
   hint?: string;
+  /** Several files may be chosen, joined into one PDF (FileField). */
+  multiple?: boolean;
   /** What the button says before a file is chosen — "Upload", "Replace". */
   submitLabel: string;
   /** True when this replaces something already sent, which is worth saying. */
@@ -73,6 +76,7 @@ export function ConfirmedUploadForm({
           key={fieldKey}
           accept={accept}
           capture={capture}
+          multiple={multiple}
           required
           limitBytes={limitBytes}
           noun={noun}

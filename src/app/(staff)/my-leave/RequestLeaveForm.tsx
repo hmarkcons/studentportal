@@ -38,7 +38,7 @@ export function RequestLeaveForm() {
           <span className="text-xs text-muted">
             Medical certificate — sick and emergency leave is paid only with one; without it the days are unpaid.
           </span>
-          <FileField name="certificate" accept={ACCEPTED_DOCUMENT_ACCEPT} noun="certificate" inputClassName="text-sm" />
+          <FileField multiple name="certificate" accept={ACCEPTED_DOCUMENT_ACCEPT} noun="certificate" inputClassName="text-sm" />
         </div>
       )}
       <div>

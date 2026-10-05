@@ -41,7 +41,7 @@ export function ProofFileCell({
         <span className="text-xs text-muted">{addedLine(uploadedAt, "Uploaded")}</span>
       )}
       <form action={formAction} className="flex items-start gap-1">
-        <FileField hint="PDF or image" className="w-40" onChange={(s) => setBlocked(Boolean(s.error) || s.busy)} />
+        <FileField multiple hint="PDF or image" className="w-40" onChange={(s) => setBlocked(Boolean(s.error) || s.busy)} />
         <Button type="submit" size="sm" pending={pending} disabled={blocked}>
           {viewUrl ? "Replace" : "Upload"}
         </Button>

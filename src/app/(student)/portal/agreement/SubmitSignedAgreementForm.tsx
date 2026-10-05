@@ -10,6 +10,7 @@ import { shrinkImageToFit } from "@/components/shrinkImage";
 import { stageFile } from "@/lib/stageFile";
 import { toast } from "@/lib/toast";
 import { ConsentVideoRecorder } from "./ConsentVideoRecorder";
+import { JoinedFilesList, useJoinedFiles } from "@/components/JoinedFiles";
 
 function WhyVideoDialog({ onClose }: { onClose: () => void }) {
   return (
@@ -88,8 +89,41 @@ export function SubmitSignedAgreementForm({
   const documentPick = useRef(0);
   const videoPick = useRef(0);
   const both = needsDocument && needsVideo;
+  // A signed agreement photographed page by page: the pages are chosen
+  // together, put in order, and joined into one PDF before it is uploaded.
+  const documentInput = useRef<HTMLInputElement>(null);
+  const addingMore = useRef(false);
+  const [joining, setJoining] = useState(false);
+  const joinedDocument = useJoinedFiles({
+    limitBytes: MAX_UPLOAD_BYTES,
+    onResult: (result) => {
+      if (result.kind === "none") return void chooseDocument(null);
+      if (result.kind === "single") return void chooseDocument(result.file);
+      const pick = ++documentPick.current;
+      setDocumentShrinkable(null);
+      setDocumentRef(null);
+      setDocumentName(null);
+      if (result.kind === "error") {
+        setDocumentNote(null);
+        setDocumentError(result.error);
+        return;
+      }
+      setDocumentError(null);
+      void stageDocument(result.file, pick, result.note);
+    },
+    onBusy: (busy, note) => {
+      setJoining(busy);
+      if (!busy) return;
+      ++documentPick.current;
+      setDocumentRef(null);
+      setDocumentName(null);
+      setDocumentError(null);
+      setDocumentShrinkable(null);
+      setDocumentNote(note);
+    },
+  });
   // Only what is being asked for can block the button, and only once it is uploaded.
-  const ready = uploading === 0 && (!needsVideo || Boolean(videoRef)) && (!needsDocument || Boolean(documentRef));
+  const ready = uploading === 0 && !joining && (!needsVideo || Boolean(videoRef)) && (!needsDocument || Boolean(documentRef));
 
   async function stageDocument(file: File, pick: number, doneNote: string | null) {
     setUploading((n) => n + 1);
@@ -246,13 +280,24 @@ export function SubmitSignedAgreementForm({
       <div className="flex flex-wrap items-center gap-2">
         {needsDocument && (
           <label className="cursor-pointer whitespace-nowrap rounded-md border border-border px-2 py-1 text-xs text-ink hover:bg-bg">
-            {documentName ? "Change file" : "Choose file"}
+            {documentName ? "Change file" : "Choose file(s)"}
             <input
+              ref={documentInput}
               type="file"
+              multiple
               accept={ACCEPTED_DOCUMENT_ACCEPT}
               className="sr-only"
-              disabled={pending}
-              onChange={(e) => void chooseDocument(e.target.files?.[0] ?? null)}
+              disabled={pending || joining}
+              onChange={(e) => {
+                const picked = Array.from(e.target.files ?? []);
+                // Emptied so the same file can be chosen again, or added to.
+                e.target.value = "";
+                const add = addingMore.current;
+                addingMore.current = false;
+                if (picked.length === 0 && add) return;
+                joinedDocument.choose(picked, { add });
+              }}
+              data-agreement-document-input
             />
           </label>
         )}
@@ -267,8 +312,17 @@ export function SubmitSignedAgreementForm({
       {needsDocument && (
         <>
           <p className="truncate text-xs text-muted">
-            {documentName ?? "No file chosen"} · <span className="font-semibold text-ink">{limitHint()}</span>
+            {documentName ?? "No file chosen"} · Several pages are joined into one PDF ·{" "}
+            <span className="font-semibold text-ink">{limitHint()}</span>
           </p>
+          <JoinedFilesList
+            joined={joinedDocument}
+            disabled={pending || joining}
+            onAddMore={() => {
+              addingMore.current = true;
+              documentInput.current?.click();
+            }}
+          />
           {documentNote && <p className="text-xs text-muted">{documentNote}</p>}
           {documentError && (
             <div role="alert" className="flex flex-col gap-1.5 rounded-md border border-danger bg-danger-bg px-2 py-1.5 text-xs font-medium text-danger">
