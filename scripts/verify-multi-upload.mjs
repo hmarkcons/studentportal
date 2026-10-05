@@ -15,7 +15,7 @@
 //
 // Fixtures are named zztmp; their rows, files and the student's login are
 // removed in a finally.
-import { BASE, FIXTURE_PASSWORD, clients, fixtures, openBrowser, reporter, requireConfirmation, signIn } from "./verify-portal-lib.mjs";
+import { BASE, FIXTURE_PASSWORD, clients, fixtures, openBrowser, removeStagedFiles, reporter, requireConfirmation, signIn } from "./verify-portal-lib.mjs";
 
 requireConfirmation("check:multiupload");
 
@@ -230,8 +230,15 @@ try {
       if (files.length) await admin.storage.from("documents").remove(files.map((f) => `${folder}/${f.name}`));
     }
   }
-  const { data: listed } = await admin.auth.admin.listUsers({ perPage: 1000 });
-  for (const u of listed?.users ?? []) if (u.email === STUDENT_EMAIL) await admin.auth.admin.deleteUser(u.id).catch(() => {});
   const removed = await fx.cleanup();
+  // The student's login last, once nothing of theirs is left — their staged
+  // uploads included — and said if it stays, rather than left behind unseen.
+  const { data: listed } = await admin.auth.admin.listUsers({ perPage: 1000 });
+  for (const u of listed?.users ?? []) {
+    if (u.email !== STUDENT_EMAIL) continue;
+    await removeStagedFiles(admin, u.id);
+    const { error } = await admin.auth.admin.deleteUser(u.id);
+    ok("the student's login is removed", !error, error?.message ?? "");
+  }
   process.exitCode = finish(removed) === 0 ? 0 : 1;
 }
