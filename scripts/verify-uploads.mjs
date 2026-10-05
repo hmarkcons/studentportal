@@ -86,6 +86,12 @@ try {
   async function openForm() {
     await page.goto(`${BASE}/my-leave`, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: "My leave" }).waitFor({ timeout: 60_000 });
+    // Chosen before React has taken the select over, "sick" changes the page's
+    // markup but not the form's state, and the certificate field never appears.
+    await page.waitForFunction(() => {
+      const s = document.querySelector('select[name="kind"]');
+      return Boolean(s && Object.keys(s).some((k) => k.startsWith("__reactProps")));
+    }, null, { timeout: 60_000 });
     await page.locator('select[name="kind"]').selectOption("sick");
     const form = page.locator("form", { has: page.getByRole("button", { name: "Request leave" }) });
     await form.locator('input[type="file"]').waitFor({ timeout: 30_000 });

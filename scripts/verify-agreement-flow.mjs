@@ -406,6 +406,8 @@ try {
     await studentPage.goto(`${BASE}/portal/agreement`, { waitUntil: "domcontentloaded" });
 
     const submit = studentPage.getByRole("button", { name: /Submit signed agreement/i });
+    // Waited for: the page streams in, and counting on arrival read only its header.
+    await submit.first().waitFor({ timeout: 60_000 }).catch(() => {});
     ok("the student is asked to submit their signed agreement", (await submit.count()) > 0,
       (await studentPage.locator("body").innerText()).replace(/\s+/g, " ").slice(0, 300));
 
