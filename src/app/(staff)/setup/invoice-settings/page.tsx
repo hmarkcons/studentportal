@@ -5,6 +5,7 @@ import { getInvoiceBankSettings } from "@/lib/actions/invoiceSettings";
 import { bankFromSettings, hasBankDetails } from "@/lib/invoiceIssuer";
 import { InvoiceSettingsForm } from "./InvoiceSettingsForm";
 import { getCurrentUser } from "@/lib/auth/currentUser";
+import { loadRecentPkrRates } from "@/lib/pkrRates";
 
 export default async function InvoiceSettingsPage() {
   const supabase = await createClient();
@@ -13,9 +14,11 @@ export default async function InvoiceSettingsPage() {
   // Fixed rather than a Role Permissions switch, and the database agrees (0286).
   const canEdit = hasRole(staffRow, "super_admin", "finance");
 
-  const [settings, { count: pdfCount }] = await Promise.all([
+  const [settings, { count: pdfCount }, recentRates] = await Promise.all([
     getInvoiceBankSettings(),
     supabase.from("invoices").select("id", { count: "exact", head: true }).not("pdf_path", "is", null),
+    // Every rupee rate given lately, for invoices, payments and here (0318).
+    loadRecentPkrRates(supabase, 10),
   ]);
   const bankSet = hasBankDetails(bankFromSettings(settings));
 
@@ -38,7 +41,7 @@ export default async function InvoiceSettingsPage() {
       )}
 
       <Card>
-        <InvoiceSettingsForm settings={settings} canEdit={canEdit} pdfCount={pdfCount ?? 0} />
+        <InvoiceSettingsForm settings={settings} canEdit={canEdit} pdfCount={pdfCount ?? 0} recentRates={recentRates} />
       </Card>
     </div>
   );

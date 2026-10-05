@@ -12,6 +12,7 @@ import { readAll } from "@/lib/catalogueReads";
 import { serviceOf } from "@/lib/serviceType";
 import { InvoiceGenerator, type StudentOption } from "./InvoiceGenerator";
 import { GeneratedInvoiceList, type GeneratedInvoice } from "./GeneratedInvoiceList";
+import { loadLatestPkrRate } from "@/lib/pkrRates";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -39,6 +40,8 @@ export default async function InvoiceGeneratorPage() {
   }
 
   const bankConfigured = hasBankDetails(bankFromSettings(bank));
+  // The rupee rate last given, offered on the next invoice and payment (0318).
+  const latestPkrRate = await loadLatestPkrRate(supabase);
 
   // Registered students, the country they registered for, and their agreement
   // — everything the picker needs to pre-fill an invoice.
@@ -75,7 +78,7 @@ export default async function InvoiceGeneratorPage() {
       .select(
         `id, student_id, invoice_number, intake, currency, admin_charge, consultancy_fee,
          discount_amount, discount_reason, tax_rate, tax_amount, tax_base, issued_on, terms, installment_plan,
-         admin_fee_status, sent_status, sent_at, pdf_path, created_at, service_type,
+         admin_fee_status, sent_status, sent_at, pdf_path, created_at, service_type, pkr_per_eur,
          student:leads(full_name, email)`
       )
       .order("created_at", { ascending: false })
@@ -153,7 +156,7 @@ export default async function InvoiceGeneratorPage() {
     ? await Promise.all([
         supabase
           .from("invoice_installments")
-          .select("id, invoice_id, installment_no, amount, amount_paid, status, due_date, paid_date, payment_method, carried_from_installment_no, carried_part_paid, carried_paid_date")
+          .select("id, invoice_id, installment_no, amount, amount_paid, status, due_date, paid_date, payment_method, carried_from_installment_no, carried_part_paid, carried_paid_date, pkr_per_eur")
           .in("invoice_id", invoiceIds)
           .order("installment_no", { ascending: true }),
         supabase.from("invoice_line_items").select("id, invoice_id, name, amount").in("invoice_id", invoiceIds),
@@ -169,7 +172,7 @@ export default async function InvoiceGeneratorPage() {
   type InstallmentRow = {
     id: string; invoice_id: string; installment_no: number; amount: number | string;
     amount_paid: number | string | null; status: string; due_date: string | null;
-    paid_date: string | null; payment_method: string | null;
+    paid_date: string | null; payment_method: string | null; pkr_per_eur: number | string | null;
   };
   const byInvoice = new Map<string, InstallmentRow[]>();
   for (const i of (installments ?? []) as InstallmentRow[]) {
@@ -200,6 +203,7 @@ export default async function InvoiceGeneratorPage() {
       studentEmail: student?.email ?? null,
       invoiceNumber: inv.invoice_number,
       currency: inv.currency,
+      pkrPerEur: inv.currency === "EUR" && inv.pkr_per_eur != null ? Number(inv.pkr_per_eur) : null,
       intake: inv.intake,
       createdAt: inv.created_at,
       sentStatus: inv.sent_status,
@@ -221,6 +225,7 @@ export default async function InvoiceGeneratorPage() {
         dueDate: i.due_date,
         paidDate: i.paid_date,
         paymentMethod: i.payment_method,
+        pkrRate: i.pkr_per_eur == null ? null : Number(i.pkr_per_eur),
       })),
       // Everything the full edit form needs — the same form as on the student's page.
       edit: {
@@ -270,12 +275,12 @@ export default async function InvoiceGeneratorPage() {
         {options.length === 0 ? (
           <EmptyState>No registered students yet.</EmptyState>
         ) : (
-          <InvoiceGenerator students={options} bank={bank} />
+          <InvoiceGenerator students={options} bank={bank} latestPkrRate={latestPkrRate} />
         )}
       </Card>
 
       <h3 className="mb-3 text-sm font-medium text-ink">Issued invoices</h3>
-      <GeneratedInvoiceList invoices={rows} canDelete={canDelete} />
+      <GeneratedInvoiceList invoices={rows} canDelete={canDelete} latestPkrRate={latestPkrRate} />
     </div>
   );
 }

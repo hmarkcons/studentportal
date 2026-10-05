@@ -22,6 +22,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Input, Select } from "@/components/ui/Input";
 import { toast } from "@/lib/toast";
 import type { ActionResultLike } from "@/lib/actionStatus";
+import { PkrRateField, type LatestPkrRate } from "@/components/PkrRateField";
 
 const REVALIDATE_TO = "/finance/invoice-generator";
 
@@ -44,6 +45,8 @@ export type GeneratedInvoice = {
   studentEmail: string | null;
   invoiceNumber: string | null;
   currency: string;
+  /** The rupee rate it was issued at, on a euro invoice (0318). */
+  pkrPerEur: number | null;
   intake: string | null;
   createdAt: string;
   sentStatus: string;
@@ -66,6 +69,8 @@ export type GeneratedInvoice = {
     dueDate: string | null;
     paidDate: string | null;
     paymentMethod: string | null;
+    /** The rupee rate the payment was received at (0318). */
+    pkrRate: number | null;
   }[];
   /** What the full edit form starts from (0311). */
   edit: {
@@ -101,21 +106,30 @@ const TONE: Record<GeneratedInvoice["status"], "success" | "warning" | "neutral"
   payment_pending: "neutral",
 };
 
-export function GeneratedInvoiceList({ invoices, canDelete }: { invoices: GeneratedInvoice[]; canDelete: boolean }) {
+export function GeneratedInvoiceList({
+  invoices,
+  canDelete,
+  latestPkrRate = null,
+}: {
+  invoices: GeneratedInvoice[];
+  canDelete: boolean;
+  /** The rupee rate last given, offered when a payment is recorded (0318). */
+  latestPkrRate?: LatestPkrRate | null;
+}) {
   if (invoices.length === 0) return <EmptyState>No invoices issued yet.</EmptyState>;
   return (
     <div className="flex flex-col gap-3">
       {/* Card passes on only its className, so the row is marked here. */}
       {invoices.map((inv) => (
         <div key={inv.id} data-invoice-row={inv.id}>
-          <InvoiceRow inv={inv} canDelete={canDelete} />
+          <InvoiceRow inv={inv} canDelete={canDelete} latestPkrRate={latestPkrRate} />
         </div>
       ))}
     </div>
   );
 }
 
-function InvoiceRow({ inv, canDelete }: { inv: GeneratedInvoice; canDelete: boolean }) {
+function InvoiceRow({ inv, canDelete, latestPkrRate }: { inv: GeneratedInvoice; canDelete: boolean; latestPkrRate: LatestPkrRate | null }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -156,6 +170,7 @@ function InvoiceRow({ inv, canDelete }: { inv: GeneratedInvoice; canDelete: bool
           </p>
           <p className="text-xs text-muted">
             {inv.intake ? `${inv.intake} · ` : ""}issued {fmtTimestamp(inv.createdAt)}
+            {inv.pkrPerEur != null ? ` at PKR ${inv.pkrPerEur} per €1` : ""}
             {inv.sentStatus === "sent" && inv.sentAt ? ` · emailed ${fmtTimestamp(inv.sentAt)}` : ""}
           </p>
         </div>
@@ -271,7 +286,7 @@ function InvoiceRow({ inv, canDelete }: { inv: GeneratedInvoice; canDelete: bool
           <h5 className="mb-2 text-xs font-medium uppercase text-muted">Installments</h5>
           <div className="flex flex-col gap-2">
             {inv.installments.map((i) => (
-              <InstallmentRow key={i.id} inv={inv} inst={i} />
+              <InstallmentRow key={i.id} inv={inv} inst={i} latestPkrRate={latestPkrRate} />
             ))}
           </div>
 
@@ -288,7 +303,15 @@ function InvoiceRow({ inv, canDelete }: { inv: GeneratedInvoice; canDelete: bool
   );
 }
 
-function InstallmentRow({ inv, inst }: { inv: GeneratedInvoice; inst: GeneratedInvoice["installments"][number] }) {
+function InstallmentRow({
+  inv,
+  inst,
+  latestPkrRate,
+}: {
+  inv: GeneratedInvoice;
+  inst: GeneratedInvoice["installments"][number];
+  latestPkrRate: LatestPkrRate | null;
+}) {
   const [error, setError] = useState<string | null>(null);
   const settled = inst.status === "paid";
 
@@ -317,6 +340,7 @@ function InstallmentRow({ inv, inst }: { inv: GeneratedInvoice; inst: GeneratedI
           <Badge tone="success">
             Paid{inst.paidDate ? ` ${formatDateOnly(inst.paidDate)}` : ""}
             {inst.paymentMethod ? ` · ${inst.paymentMethod}` : ""}
+            {inv.currency === "EUR" && inst.pkrRate != null ? ` · PKR ${inst.pkrRate}/€1` : ""}
           </Badge>
           {/* A payment recorded by mistake is undone here (0311). */}
           <UndoPaymentButton installmentId={inst.id} studentId={inv.studentId} label={`instalment ${inst.no}`} />
@@ -331,6 +355,8 @@ function InstallmentRow({ inv, inst }: { inv: GeneratedInvoice; inst: GeneratedI
             Date <span className="text-[10px]">(blank = today)</span>
             <Input name="paid_date" type="date" className="h-7 w-36 py-0 text-xs" />
           </label>
+          {/* The rate it was received at, on a euro invoice (0318). */}
+          <PkrRateField latest={latestPkrRate} currency={inv.currency} label="PKR per €1 that day" compact />
           <label className="flex flex-col gap-0.5 text-muted">
             Method
             <Select name="payment_method" className="h-7 py-0 text-xs">

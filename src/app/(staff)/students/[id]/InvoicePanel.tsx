@@ -26,6 +26,7 @@ import { useButtonAction } from "@/components/useButtonAction";
 import { toast } from "@/lib/toast";
 import { Input, Select, Textarea } from "@/components/ui/Input";
 import { VISA_INVOICE_TERMS, type ServiceType } from "@/lib/serviceType";
+import { PkrRateField, type LatestPkrRate } from "@/components/PkrRateField";
 
 /** Karachi's day, not the browser's — the office books payments by its own date. */
 function today(): string {
@@ -54,6 +55,7 @@ export function GenerateInvoiceForm({
   defaultDiscountReason,
   countries = [],
   service = "full",
+  latestPkrRate = null,
 }: {
   studentId: string;
   agreementId: string;
@@ -74,6 +76,8 @@ export function GenerateInvoiceForm({
   /** Which service they are registered for (0279). A visa-only invoice is the
    *  visa documentation and application fee alone. */
   service?: ServiceType;
+  /** The rupee rate last given, offered for this invoice (0318). */
+  latestPkrRate?: LatestPkrRate | null;
 }) {
   const action = generateInvoice.bind(null, studentId, agreementId);
   const [state, formAction, pending] = useActionState(action, undefined);
@@ -164,6 +168,8 @@ export function GenerateInvoiceForm({
           <option value="2">2 installments</option>
           <option value="3">3 installments</option>
         </Select>
+        {/* Today's rate, for a euro invoice: the one it is issued at and keeps (0318). */}
+        <PkrRateField latest={latestPkrRate ?? null} />
       </div>
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-0.5 text-xs text-muted">
@@ -423,7 +429,17 @@ function DeleteInvoiceButton({ invoiceId, studentId, revalidateTo }: { invoiceId
   );
 }
 
-function MarkPaidForm({ installmentId, studentId }: { installmentId: string; studentId: string }) {
+function MarkPaidForm({
+  installmentId,
+  studentId,
+  currency,
+  latestPkrRate,
+}: {
+  installmentId: string;
+  studentId: string;
+  currency: string;
+  latestPkrRate: LatestPkrRate | null;
+}) {
   const markPaid = markInstallmentPaid.bind(null, installmentId, studentId);
   // A paid row shows a Paid badge in place of this form, so the success is
   // confirmed with a toast — there is no button left to sit beside.
@@ -437,6 +453,8 @@ function MarkPaidForm({ installmentId, studentId }: { installmentId: string; stu
   const [state, formAction, pending] = useActionState(action, undefined);
   return (
     <form action={formAction} className="flex flex-wrap items-center gap-1">
+      {/* The rate it was received at, on a euro invoice (0318). */}
+      <PkrRateField latest={latestPkrRate} currency={currency} label="PKR per €1 today" compact />
       <Select name="payment_method">
         {INSTALMENT_PAYMENT_METHODS.map((m) => (
           <option key={m} value={m}>
@@ -457,6 +475,8 @@ function EditInstallmentForm({
   studentId,
   revalidateTo,
   onDone,
+  currency,
+  latestPkrRate,
 }: {
   installment: {
     id: string;
@@ -471,6 +491,8 @@ function EditInstallmentForm({
   studentId: string;
   revalidateTo: string;
   onDone: () => void;
+  currency: string;
+  latestPkrRate: LatestPkrRate | null;
 }) {
   const action = updateInstallment.bind(null, installment.id, studentId, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
@@ -521,6 +543,14 @@ function EditInstallmentForm({
         )}
       </Select>
       <Input name="paid_date" type="date" value={paidDate} onChange={(e) => choosePaidDate(e.target.value)} />
+      {/* A payment being recorded here carries the rate it was received at
+          (0318); one already recorded keeps its own. */}
+      <PkrRateField
+        latest={latestPkrRate}
+        currency={(status === "paid" || status === "partial") && installment.status !== "paid" ? currency : null}
+        label="PKR per €1 that day"
+        compact
+      />
 
       {/* A part payment splits this installment: what was paid is closed off
           at that amount, and the rest becomes an installment of its own. It
@@ -788,9 +818,12 @@ export function InvoiceCard({
   revalidateTo,
   canManage = false,
   isSuperAdmin = false,
+  latestPkrRate = null,
 }: {
   invoice: {
     id: string;
+    /** The rupee rate it was issued at, on a euro invoice (0318). */
+    pkr_per_eur?: number | null;
     admin_charge: number;
     consultancy_fee: number;
     currency: string;
@@ -828,6 +861,8 @@ export function InvoiceCard({
     extras_amount?: number | string | null;
     /** `receipts:payment_receipts(count)` — its payment receipts (0308). */
     receipts?: unknown;
+    /** The rupee rate this payment was received at (0318). */
+    pkr_per_eur?: number | null;
   }[];
   lineItems?: { id: string; name: string; description?: string | null; amount: number }[];
   /** Per-country administrative charges. Empty on an invoice raised before
@@ -842,6 +877,8 @@ export function InvoiceCard({
   revalidateTo: string;
   canManage?: boolean;
   isSuperAdmin?: boolean;
+  /** The rupee rate last given, offered when a payment is recorded (0318). */
+  latestPkrRate?: LatestPkrRate | null;
 }) {
   const [editingInvoice, setEditingInvoice] = useState(false);
   const [editingInstallmentId, setEditingInstallmentId] = useState<string | null>(null);
@@ -890,6 +927,11 @@ export function InvoiceCard({
           {invoice.invoice_number && <span className="mr-2 font-mono text-xs text-muted">{invoice.invoice_number}</span>}
           {invoice.currency} {total.toFixed(2)}
           {invoice.installment_plan && <span className="ml-2 text-xs font-normal text-muted">· {invoice.installment_plan}</span>}
+          {invoice.currency === "EUR" && invoice.pkr_per_eur != null && (
+            <span className="ml-2 text-xs font-normal text-muted" data-invoice-pkr-rate>
+              · issued at PKR {Number(invoice.pkr_per_eur)} per €1
+            </span>
+          )}
         </p>
         <div className="flex flex-wrap items-center gap-2">
           {invoice.service_type === "visa_only" && (
@@ -993,7 +1035,15 @@ export function InvoiceCard({
       <div className="mt-2 flex flex-col gap-1 border-t border-border pt-2">
         {installments.map((i) =>
           editingInstallmentId === i.id && canManage ? (
-            <EditInstallmentForm key={i.id} installment={i} studentId={studentId} revalidateTo={revalidateTo} onDone={() => setEditingInstallmentId(null)} />
+            <EditInstallmentForm
+              key={i.id}
+              installment={i}
+              studentId={studentId}
+              revalidateTo={revalidateTo}
+              onDone={() => setEditingInstallmentId(null)}
+              currency={invoice.currency}
+              latestPkrRate={latestPkrRate}
+            />
           ) : (
             <div key={i.id} className="flex items-start justify-between text-xs text-muted">
               <span>
@@ -1004,6 +1054,9 @@ export function InvoiceCard({
                 {installmentNote(i, math, fmt) && <span> ({installmentNote(i, math, fmt)})</span>}
                 {i.due_date && ` · due ${formatDateOnly(i.due_date)}`}
                 {i.status === "partial" && ` · paid ${invoice.currency} ${(i.amount_paid ?? 0).toFixed(2)}`}
+                {i.status === "paid" && invoice.currency === "EUR" && i.pkr_per_eur != null && (
+                  <span data-installment-pkr-rate> · received at PKR {Number(i.pkr_per_eur)} per €1</span>
+                )}
                 {/* Where a balance installment came from, so a schedule with
                     more installments than the agreement explains itself. */}
                 {carriedFromNote(
@@ -1031,7 +1084,7 @@ export function InvoiceCard({
                     {canManage && <UndoPaymentButton installmentId={i.id} studentId={studentId} label={`instalment ${i.installment_no}`} />}
                   </>
                 ) : canManage ? (
-                  <MarkPaidForm installmentId={i.id} studentId={studentId} />
+                  <MarkPaidForm installmentId={i.id} studentId={studentId} currency={invoice.currency} latestPkrRate={latestPkrRate} />
                 ) : (
                   <Badge tone="warning">{i.status}</Badge>
                 )}

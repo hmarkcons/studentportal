@@ -8,6 +8,7 @@ import { bankFromSettings, hasPaymentInstructions } from "@/lib/invoiceIssuer";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { SERVICE_FEE_NAME, type ServiceType } from "@/lib/serviceType";
+import { PkrRateField, type LatestPkrRate } from "@/components/PkrRateField";
 
 export type StudentCountry = {
   destinationId: string;
@@ -51,7 +52,16 @@ function fmt(currency: string, n: number) {
   return `${currency} ${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-export function InvoiceGenerator({ students, bank }: { students: StudentOption[]; bank: InvoiceBankSettings | null }) {
+export function InvoiceGenerator({
+  students,
+  bank,
+  latestPkrRate = null,
+}: {
+  students: StudentOption[];
+  bank: InvoiceBankSettings | null;
+  /** The rupee rate last given, offered for this invoice (0318). */
+  latestPkrRate?: LatestPkrRate | null;
+}) {
   const [studentId, setStudentId] = useState("");
   const student = students.find((s) => s.id === studentId) ?? null;
 
@@ -206,6 +216,8 @@ export function InvoiceGenerator({ students, bank }: { students: StudentOption[]
               Invoice date <span className="text-[10px]">(optional — today if blank)</span>
               <Input name="issued_on" type="date" />
             </label>
+            {/* Today's rate, for a euro invoice: the one it is issued at and keeps for good (0318). */}
+            <PkrRateField latest={latestPkrRate} currency={currency} label="Rupees per €1 (today's rate)" />
             <label className="flex flex-col gap-1 text-xs text-muted">
               Installment plan label
               <Input name="installment_plan" placeholder="e.g. 3 monthly installments" />

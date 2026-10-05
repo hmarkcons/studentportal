@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
 import { ActionStatus } from "@/components/ActionStatus";
 import { DEFAULT_PKR_PER_EUR } from "@/lib/receiptPkr";
+import type { PkrRateEntry } from "@/lib/pkrRates";
+import { formatDateOnly } from "@/lib/formatDate";
 
 type TextKey = Exclude<keyof InvoiceSettings, "pkr_per_eur">;
 type Field = { name: TextKey; label: string; placeholder?: string; hint?: string; required?: boolean; wide?: boolean; rows?: number };
@@ -102,7 +104,18 @@ function Section({ title, intro, fields, settings, canEdit }: { title: string; i
   );
 }
 
-export function InvoiceSettingsForm({ settings, canEdit, pdfCount }: { settings: InvoiceSettings | null; canEdit: boolean; pdfCount: number }) {
+export function InvoiceSettingsForm({
+  settings,
+  canEdit,
+  pdfCount,
+  recentRates = [],
+}: {
+  settings: InvoiceSettings | null;
+  canEdit: boolean;
+  pdfCount: number;
+  /** The rupee rates given lately, newest first (0318). */
+  recentRates?: PkrRateEntry[];
+}) {
   // Whether the form holds changes the saved settings do not — the PDFs are
   // rebuilt from what is saved, so regenerating before saving would quietly
   // print the old details again.
@@ -176,7 +189,7 @@ export function InvoiceSettingsForm({ settings, canEdit, pdfCount }: { settings:
         />
 
         <fieldset className="flex flex-col gap-1 border-t border-border pt-4 sm:col-span-2">
-          <legend className="float-left mb-1 w-full text-sm font-semibold text-ink">Rupees per euro</legend>
+          <legend className="float-left mb-1 w-full text-sm font-semibold text-ink">Rupees per euro — the latest rate</legend>
           <Input
             name="pkr_per_eur"
             type="number"
@@ -189,9 +202,34 @@ export function InvoiceSettingsForm({ settings, canEdit, pdfCount }: { settings:
             className="sm:max-w-[12rem]"
           />
           <span className="text-[11px] text-muted">
-            Shown beside every euro total on a receipt. Each receipt keeps the rate it was issued at, so changing this
+            The euro moves daily, so whoever issues an invoice gives that day&rsquo;s rate, and whoever records a payment
+            gives the rate it was received at. This is the rate they are offered: the last one given, here or there.
+            An invoice keeps the rate it was issued at and a payment the rate it was received at, so changing this
             never restates one already in a student&rsquo;s hands.
           </span>
+          {recentRates.length > 0 && (
+            <div className="mt-2 overflow-x-auto" data-recent-pkr-rates>
+              <p className="mb-1 text-xs font-medium text-ink">Recent rates</p>
+              <table className="w-full max-w-xl text-xs">
+                <tbody>
+                  {recentRates.map((r, i) => (
+                    <tr key={i} className="border-t border-border">
+                      <td className="py-1 pr-3 text-muted">{r.setAt ? formatDateOnly(r.setAt.slice(0, 10)) : "—"}</td>
+                      <td className="py-1 pr-3 font-medium tabular-nums text-ink">PKR {r.rate}</td>
+                      <td className="py-1 pr-3 text-muted">
+                        {r.usedFor === "invoice"
+                          ? `invoice ${r.invoiceNumber ?? ""}`.trim()
+                          : r.usedFor === "payment"
+                            ? `payment${r.invoiceNumber ? ` on ${r.invoiceNumber}` : ""}`
+                            : "set here"}
+                      </td>
+                      <td className="py-1 text-muted">{r.setBy ?? ""}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </fieldset>
 
         {canEdit ? (

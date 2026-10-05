@@ -3,6 +3,8 @@
 import { createElement } from "react";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { PKR_RATE_MAX, PKR_RATE_MIN, latestInvoiceRate, parsePkrRate, pkrReceived, type PaidAtRate } from "@/lib/receiptPkr";
+import { loadLatestPkrRate } from "@/lib/pkrRates";
 import { agreementDestination } from "@/lib/agreementCountry";
 import { formatDateOnly } from "@/lib/formatDate";
 import { requirePermission } from "@/lib/auth/permissions";
@@ -53,6 +55,22 @@ import { balanceDueDate, checkPartialSplit } from "@/lib/partialPayment";
 import { buildInvoiceEmail } from "@/lib/invoiceEmail";
 import { sendEmail, accountsFrom } from "@/lib/email";
 import { getSiteUrl } from "@/lib/siteUrl";
+
+/**
+ * The rupees-per-euro rate a payment is recorded at (0318): the one the form
+ * gives, on a euro invoice only. A form from before the field existed gives
+ * none, and the latest one given is used.
+ */
+async function paymentRate(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  formData: FormData,
+  currency: string | null | undefined
+): Promise<{ rate: number | null } | { error: string }> {
+  if (currency !== "EUR") return { rate: null };
+  if (!formData.has("pkr_per_eur")) return { rate: (await loadLatestPkrRate(supabase)).rate };
+  const rate = parsePkrRate(formData.get("pkr_per_eur"));
+  return rate === null ? { error: `Give the rupees-per-euro rate this payment was received at, between ${PKR_RATE_MIN} and ${PKR_RATE_MAX.toLocaleString("en-US")}.` } : { rate };
+}
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -217,6 +235,16 @@ export async function generateInvoice(studentId: string, agreementId: string, _p
   const requestedCurrency = String(formData.get("currency") ?? "EUR");
   const track = await agreementTrack(supabase, agreement_id);
   const currency = track === "public" ? "EUR" : requestedCurrency;
+  // Rupees per euro for this invoice (0318), given by whoever raises it, and
+  // kept by it for good. A form from before the field existed gives none, and
+  // generate_invoice uses the latest given.
+  let pkr_per_eur: number | null = null;
+  if (currency === "EUR" && formData.has("pkr_per_eur")) {
+    pkr_per_eur = parsePkrRate(formData.get("pkr_per_eur"));
+    if (pkr_per_eur === null) {
+      return { error: `Give the rupees-per-euro rate for this invoice, between ${PKR_RATE_MIN} and ${PKR_RATE_MAX.toLocaleString("en-US")}.` };
+    }
+  }
   const firstDueDate = String(formData.get("first_due_date") ?? "") || null;
   const installment_plan = String(formData.get("installment_plan") ?? "").trim() || null;
 
@@ -315,6 +343,7 @@ export async function generateInvoice(studentId: string, agreementId: string, _p
       p_admin_charges: (adminCharges ?? []).filter((c) => c.amount > 0),
       p_tax_base: math.taxBase,
       p_issued_on: issued_on,
+      p_pkr_per_eur: pkr_per_eur,
     });
     if (!error) {
       newInvoiceId = data;
@@ -709,6 +738,21 @@ export async function updateInstallment(installmentId: string, studentId: string
   // daily reminder cron, permanently, with no error shown anywhere.
   if (!due_date) return { error: "Due date is required." };
 
+  // A payment being recorded here carries the rate it was received at (0318);
+  // one already recorded keeps its own.
+  const { data: current } = await supabase
+    .from("invoice_installments")
+    .select("status, invoice:invoices(currency)")
+    .eq("id", installmentId)
+    .maybeSingle();
+  const becomingPaid = (status === "paid" || status === "partial") && current?.status !== "paid";
+  let pkr_per_eur: number | null = null;
+  if (becomingPaid) {
+    const read = await paymentRate(supabase, formData, (one(current?.invoice as never) as { currency?: string } | null)?.currency);
+    if ("error" in read) return { error: read.error };
+    pkr_per_eur = read.rate;
+  }
+
   // A part payment splits the installment rather than sitting on it.
   //
   // Left as 'partial', the balance had no due date of its own — so nothing
@@ -738,6 +782,8 @@ export async function updateInstallment(installmentId: string, studentId: string
       p_payment_method: payment_method,
     });
     if (splitError) return { error: splitError.message };
+    const rateError = await ratePaidPart(supabase, installmentId, pkr_per_eur);
+    if (rateError) return { error: rateError };
 
     revalidatePath(revalidateTo);
     revalidatePath(`/students/${studentId}`);
@@ -754,6 +800,7 @@ export async function updateInstallment(installmentId: string, studentId: string
       payment_method,
       amount_paid,
       paid_date: status === "paid" ? paid_date ?? new Date().toISOString().slice(0, 10) : paid_date,
+      ...(becomingPaid && pkr_per_eur !== null ? { pkr_per_eur } : {}),
     })
     .eq("id", installmentId);
   if (error) return { error: error.message };
@@ -777,11 +824,15 @@ export async function markInstallmentPaid(installmentId: string, studentId: stri
 
   const { data: installment } = await supabase
     .from("invoice_installments")
-    .select("amount, status")
+    .select("amount, status, invoice:invoices(currency)")
     .eq("id", installmentId)
     .maybeSingle();
   if (!installment) return { error: "That instalment no longer exists, or you can't record payments on it." };
   if (installment.status === "paid") return { error: "This instalment is already marked paid." };
+  // The rate it was received at, on a euro invoice (0318).
+  const rateRead = await paymentRate(supabase, formData, (one(installment.invoice as never) as { currency?: string } | null)?.currency);
+  if ("error" in rateRead) return { error: rateRead.error };
+  const pkr_per_eur = rateRead.rate;
   const amount = Math.round(Number(installment.amount ?? 0) * 100) / 100;
 
   // The amount received, where the form asks for it. Less than the instalment
@@ -808,12 +859,14 @@ export async function markInstallmentPaid(installmentId: string, studentId: stri
       p_payment_method: payment_method,
     });
     if (splitError) return { error: splitError.message };
+    const rateError = await ratePaidPart(supabase, installmentId, pkr_per_eur);
+    if (rateError) return { error: rateError };
   } else {
     // An update RLS refuses matches nothing and raises nothing — it is read
     // back, so a refusal is said rather than reported as a payment.
     const { data: saved, error } = await supabase
       .from("invoice_installments")
-      .update({ status: "paid", paid_date, payment_method, amount_paid: amount })
+      .update({ status: "paid", paid_date, payment_method, amount_paid: amount, ...(pkr_per_eur !== null ? { pkr_per_eur } : {}) })
       .eq("id", installmentId)
       .select("id");
     if (error) return { error: error.message };
@@ -822,6 +875,22 @@ export async function markInstallmentPaid(installmentId: string, studentId: stri
 
   revalidateInvoicePages(studentId);
   return { success: true };
+}
+
+/**
+ * The rate on the part of a split instalment that was paid — the instalment
+ * itself, closed off at what came in (split_partial_installment, 0183). A
+ * second write, read back, because the split cannot be told the rate.
+ */
+async function ratePaidPart(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  installmentId: string,
+  rate: number | null
+): Promise<string | null> {
+  if (rate === null) return null;
+  const { data, error } = await supabase.from("invoice_installments").update({ pkr_per_eur: rate }).eq("id", installmentId).select("id");
+  if (error || !data?.length) return `The payment was recorded, but its rupee rate was not saved${error ? ` (${error.message})` : ""}. Undo it and record it again.`;
+  return null;
 }
 
 /**
@@ -1085,7 +1154,7 @@ export async function buildAndStoreInvoicePdf(
   const [{ data: installments }, { data: lineItems }, { data: adminRows }] = await Promise.all([
     supabase
       .from("invoice_installments")
-      .select("installment_no, amount, amount_paid, status, due_date, due_condition, paid_date, payment_method, extras_amount")
+      .select("installment_no, amount, amount_paid, status, due_date, due_condition, paid_date, payment_method, extras_amount, pkr_per_eur")
       .eq("invoice_id", invoiceId)
       .order("installment_no", { ascending: true }),
     // Added items — a product from the catalog or a custom charge. They print
@@ -1152,6 +1221,7 @@ export async function buildAndStoreInvoicePdf(
     method: i.payment_method,
     amount: Number(i.amount ?? 0),
     status: (i.status === "paid" ? "paid" : "unpaid") as "paid" | "unpaid",
+    pkrRate: null as number | null,
     // The first installment carries the whole administrative charge, and an
     // added item lands on whichever instalment was next to be paid, so either
     // can be larger than the others by design. Same sentence as the card, the
@@ -1160,6 +1230,21 @@ export async function buildAndStoreInvoicePdf(
   }));
 
   const nextDue = (installments ?? []).find((i) => i.status !== "paid")?.due_date ?? null;
+
+  // Rupees (0318), on a euro invoice only: the total at the rate the invoice
+  // was issued at, each payment at the rate it was received at, and what is
+  // still owed at the latest of those.
+  const issueRate = invoice.currency === "EUR" && invoice.pkr_per_eur != null ? Number(invoice.pkr_per_eur) : null;
+  const paidAtRates: PaidAtRate[] = (installments ?? []).map((i) => ({
+    amountPaid: Number(i.amount_paid ?? 0),
+    rate: i.pkr_per_eur == null ? null : Number(i.pkr_per_eur),
+    paidDate: i.paid_date ?? null,
+    installmentNo: Number(i.installment_no),
+  }));
+  const dueRate = latestInvoiceRate(issueRate, paidAtRates);
+  (installments ?? []).forEach((i, n) => {
+    payments[n].pkrRate = i.status === "paid" ? (paidAtRates[n].rate ?? issueRate) : dueRate;
+  });
 
   // Read through the client we were handed, not the session-scoped helper:
   // the overdue-invoices cron calls this with a service-role client and has no
@@ -1224,7 +1309,10 @@ export async function buildAndStoreInvoicePdf(
       issuer: issuerFromSettings(bankRow as IssuerRow | null),
       // The rate stamped on this invoice, never today's: a receipt already
       // in a student's hands must not restate itself.
-      pkrPerEur: invoice.pkr_per_eur == null ? null : Number(invoice.pkr_per_eur),
+      pkrPerEur: issueRate,
+      pkrDueRate: balanceDue > 0 ? dueRate : null,
+      pkrReceived: pkrReceived(issueRate, paidAtRates),
+      pkrPaymentRates: paidAtRates.filter((p) => p.amountPaid > 0).map((p) => p.rate ?? issueRate),
     },
   });
 

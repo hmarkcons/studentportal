@@ -23,11 +23,14 @@ export function ConsultancyFeeList({
   feeProducts,
   canManage,
   isSuperAdmin,
+  latestPkrRate = null,
 }: {
   rows: Row[];
   feeProducts: Parameters<typeof InvoiceCard>[0]["feeProducts"];
   canManage: boolean;
   isSuperAdmin: boolean;
+  /** The rupee rate last given, offered when a payment is recorded (0318). */
+  latestPkrRate?: Parameters<typeof InvoiceCard>[0]["latestPkrRate"];
 }) {
   const [nameInput, setNameInput] = useState("");
   const [statusInput, setStatusInput] = useState("all");
@@ -95,6 +98,7 @@ export function ConsultancyFeeList({
               revalidateTo="/finance/consultancy-fee"
               canManage={canManage}
               isSuperAdmin={isSuperAdmin}
+              latestPkrRate={latestPkrRate}
             />
           </div>
         ))}

@@ -1,6 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { pkrFromEur, formatPkr, pkrLine, pkrRateNote, DEFAULT_PKR_PER_EUR } from "../src/lib/receiptPkr.ts";
+import {
+  pkrFromEur,
+  formatPkr,
+  pkrLine,
+  pkrRateNote,
+  DEFAULT_PKR_PER_EUR,
+  parsePkrRate,
+  rateLooksOff,
+  latestInvoiceRate,
+  pkrReceived,
+  pkrRatesNote,
+} from "../src/lib/receiptPkr.ts";
 import {
   admissionCondition,
   installmentDuePlan,
@@ -99,4 +110,55 @@ test("the receipt prints the date when there is one and the condition when there
   const fmt = (iso) => `[${iso}]`;
   assert.equal(dueLabel(plan[0], fmt), "[2026-10-01]");
   assert.equal(dueLabel(plan[1], fmt), "On admission approval from your first public university");
+});
+
+// ------------------------------------------- a rate per invoice and payment (0318)
+test("a rate is read as typed, to two decimals, and a typo out of all reason is refused", () => {
+  assert.equal(parsePkrRate("335"), 335);
+  assert.equal(parsePkrRate(" 337.456 "), 337.46);
+  assert.equal(parsePkrRate("1,335"), 1335, "a thousands comma is a typing habit, not a decimal point");
+  assert.equal(parsePkrRate(""), null);
+  assert.equal(parsePkrRate("0"), null);
+  assert.equal(parsePkrRate("-335"), null);
+  assert.equal(parsePkrRate("33500"), null, "more than 10,000 rupees to the euro is a slipped finger");
+  assert.equal(parsePkrRate("abc"), null);
+});
+
+test("a rate far from the latest is flagged for a second look, not refused", () => {
+  assert.equal(rateLooksOff(340, 335), false);
+  assert.equal(rateLooksOff(3350, 335), true);
+  assert.equal(rateLooksOff(33.5, 335), true);
+  assert.equal(rateLooksOff(340, null), false);
+});
+
+const paid = (amountPaid, rate, paidDate, installmentNo) => ({ amountPaid, rate, paidDate, installmentNo });
+
+test("what is still owed is said at the latest payment's rate, or the invoice's before any", () => {
+  assert.equal(latestInvoiceRate(335, [paid(0, null, null, 1), paid(0, null, null, 2)]), 335);
+  assert.equal(latestInvoiceRate(335, [paid(500, 340, "2026-10-01", 1), paid(0, null, null, 2)]), 340);
+  assert.equal(
+    latestInvoiceRate(335, [paid(500, 342, "2026-10-09", 2), paid(500, 340, "2026-10-01", 1)]),
+    342,
+    "by the date received, not the order listed"
+  );
+  assert.equal(latestInvoiceRate(335, [paid(500, null, "2026-09-01", 1)]), 335, "a payment from before 0318 counts at the invoice's rate");
+  assert.equal(latestInvoiceRate(null, [paid(500, 340, "2026-10-01", 1)]), null, "a rupee invoice has no rate at all");
+});
+
+test("rupees received are each payment at its own rate", () => {
+  // 500 at 340 and 250 at 345, against an invoice issued at 335.
+  assert.equal(pkrReceived(335, [paid(500, 340, "2026-10-01", 1), paid(250, 345, "2026-10-08", 2), paid(0, null, null, 3)]), 170000 + 86250);
+  assert.equal(pkrReceived(335, [paid(500, null, "2026-09-01", 1)]), 167500);
+  assert.equal(pkrReceived(null, [paid(500, 340, "2026-10-01", 1)]), null);
+});
+
+test("the note names every rate the rupee figures were struck at", () => {
+  assert.equal(pkrRatesNote(335, 335, [335]), pkrRateNote(335), "all at the invoice's rate: the one sentence, as before");
+  assert.equal(pkrRatesNote(335, null, []), pkrRateNote(335));
+  const mixed = pkrRatesNote(335, 345, [340, 345]);
+  assert.match(mixed, /the total at PKR 335 per €1, the rate on the date this was issued/);
+  assert.match(mixed, /each payment at the rate on the day it was received \(PKR 340, 345 per €1\)/);
+  assert.match(mixed, /what is still due at PKR 345 per €1, the latest rate/);
+  assert.match(pkrRatesNote(335, null, [340]), /the payment at PKR 340 per €1, the rate on the day it was received/);
+  assert.equal(pkrRatesNote(null, 340, [340]), null);
 });

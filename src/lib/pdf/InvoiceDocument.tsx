@@ -1,6 +1,6 @@
 import { Document, Page, Text, View, Image, StyleSheet, Font } from "@react-pdf/renderer";
 import { BRAND_LOGO_DATA_URI, BRAND_LOGO_RATIO } from "./brandLogo";
-import { pkrLine, pkrRateNote } from "../receiptPkr";
+import { formatPkr, pkrLine, pkrRatesNote } from "../receiptPkr";
 import { feeLineLabel, type AdminChargeLine } from "../invoiceMath";
 import { hasPaymentInstructions, type InvoiceBank, type InvoiceIssuer } from "../invoiceIssuer";
 
@@ -139,6 +139,8 @@ export type InvoicePdfData = {
     status: "paid" | "unpaid";
     /** e.g. "incl. admin fee" on the first installment, which carries it. */
     note?: string | null;
+    /** The rupee rate for this row: received at its own, still due at the latest (0318). */
+    pkrRate?: number | null;
   }[];
   subtotal: number;
   amountPaid: number;
@@ -158,6 +160,12 @@ export type InvoicePdfData = {
    * only rather than restating themselves at a rate nobody quoted.
    */
   pkrPerEur?: number | null;
+  /** What is still owed is said at the latest rate on the invoice — its last payment's, or its own (0318). */
+  pkrDueRate?: number | null;
+  /** Rupees received: each payment at the rate it was received at. */
+  pkrReceived?: number | null;
+  /** The rate of each payment received, for the note at the foot. */
+  pkrPaymentRates?: (number | null)[];
 };
 
 function money(symbol: string, n: number) {
@@ -170,8 +178,9 @@ function money(symbol: string, n: number) {
  * Renders nothing when the invoice carries no rate — an invoice issued before
  * the rate existed was never quoted in rupees.
  */
-function Pkr({ amount, rate, bold = false }: { amount: number; rate: number | null | undefined; bold?: boolean }) {
-  const line = pkrLine(amount, rate);
+function Pkr({ amount, rate, rupees, bold = false }: { amount: number; rate: number | null | undefined; rupees?: number | null; bold?: boolean }) {
+  // A figure already in rupees — payments, each at its own rate — or one to convert.
+  const line = rupees != null && rate != null ? formatPkr(rupees) : pkrLine(amount, rate);
   if (!line) return null;
   return (
     <View style={styles.pkrRowWrap}>
@@ -380,12 +389,12 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
               </Text>
             </View>
           )}
-          {data.amountPaid > 0 && <Pkr amount={data.amountPaid} rate={data.pkrPerEur} />}
+          {data.amountPaid > 0 && <Pkr amount={data.amountPaid} rate={data.pkrPerEur} rupees={data.pkrReceived} />}
           <View style={[styles.totalsRow, styles.totalsRule]}>
             <Text style={[styles.totalsKey, styles.totalsKeyBold]}>Amount Due ({data.currencyCode}):</Text>
             <Text style={[styles.totalsNum, styles.totalsNumBold]}>{money(data.currencySymbol, data.balanceDue)}</Text>
           </View>
-          <Pkr amount={data.balanceDue} rate={data.pkrPerEur} bold />
+          <Pkr amount={data.balanceDue} rate={data.pkrPerEur == null ? null : (data.pkrDueRate ?? data.pkrPerEur)} bold />
         </View>
 
         {/* Side by side so a routine invoice — fee, schedule and where to pay —
@@ -439,8 +448,11 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
                   <Text style={{ flex: 1.5, fontSize: 8.5, color: GREY }}>{p.method ?? "—"}</Text>
                   <View style={{ flex: 1.2 }}>
                     <Text style={{ fontSize: 8.5, textAlign: "right" }}>{money(data.currencySymbol, p.amount)}</Text>
-                    {pkrLine(p.amount, data.pkrPerEur) && (
-                      <Text style={{ fontSize: 7.5, textAlign: "right", color: GREY }}>{pkrLine(p.amount, data.pkrPerEur)}</Text>
+                    {/* Received at its own rate; still due at the latest one (0318). */}
+                    {pkrLine(p.amount, data.pkrPerEur == null ? null : (p.pkrRate ?? data.pkrPerEur)) && (
+                      <Text style={{ fontSize: 7.5, textAlign: "right", color: GREY }}>
+                        {pkrLine(p.amount, data.pkrPerEur == null ? null : (p.pkrRate ?? data.pkrPerEur))}
+                      </Text>
                     )}
                   </View>
                   <Text style={{ flex: 1, fontSize: 8.5, textAlign: "right", color: p.status === "paid" ? INK_STRONG : GREY }}>
@@ -454,9 +466,9 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
 
         {/* Said once, at the foot, so the rupee figures above are checkable
             and it is clear which rate they were struck at. */}
-        {pkrRateNote(data.pkrPerEur) && (
+        {pkrRatesNote(data.pkrPerEur ?? null, data.pkrDueRate ?? null, data.pkrPaymentRates ?? []) && (
           <View style={styles.note}>
-            <Text>{pkrRateNote(data.pkrPerEur)}</Text>
+            <Text>{pkrRatesNote(data.pkrPerEur ?? null, data.pkrDueRate ?? null, data.pkrPaymentRates ?? [])}</Text>
           </View>
         )}
 

@@ -54,6 +54,7 @@ import { TrackerCountryTabs } from "@/components/TrackerCountryTabs";
 import { uploadedLine } from "@/lib/activityStamp";
 import { trackerValueFilled } from "@/lib/trackerValue";
 import { inCredentialsSection } from "@/lib/studentCredentials";
+import { loadLatestPkrRate } from "@/lib/pkrRates";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -158,7 +159,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
           // card prices the invoice with computeInvoiceMath, and without the
           // rule it was raised under it silently falls back to the old one and
           // shows a total nothing else agrees with.
-          "id, admin_charge, consultancy_fee, currency, sent_status, agreement_id, pdf_path, invoice_number, intake, terms, installment_plan, discount_amount, discount_reason, tax_rate, tax_base, issued_on, admin_fee_status, admin_fee_paid_date, admin_fee_payment_method, service_type"
+          "id, admin_charge, consultancy_fee, currency, sent_status, agreement_id, pdf_path, invoice_number, intake, terms, installment_plan, discount_amount, discount_reason, tax_rate, tax_base, issued_on, admin_fee_status, admin_fee_paid_date, admin_fee_payment_method, service_type, pkr_per_eur"
         )
         .eq("student_id", id),
       supabase
@@ -184,6 +185,8 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   const isSuperAdmin = perms["agreements.edit_delete"] === true;
   const canModifyAgreement = perms["agreements.process"] === true;
   const canManageInvoice = perms["finance.invoices.manage"] === true;
+  // The rupee rate last given, offered on the next invoice and payment (0318).
+  const latestPkrRate = canManageInvoice ? await loadLatestPkrRate(supabase) : null;
   const canDeleteInvoice = perms["finance.invoices.delete"] === true;
   const rawDocs = requirementsChanged ? (await readDocs(true)).data : docsBeforeTopUp;
 
@@ -1217,6 +1220,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                 defaultDiscount={signedAgreement?.discount_amount ?? leadRegistration?.discount_amount ?? null}
                 defaultDiscountReason={leadRegistration?.discount_reason ?? null}
                 countries={invoiceCountries}
+                latestPkrRate={latestPkrRate}
               />
             ) : (
               <p className="rounded-md bg-warning-bg p-3 text-sm text-warning">
@@ -1239,6 +1243,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                 revalidateTo={`/students/${id}`}
                 canManage={canManageInvoice}
                 isSuperAdmin={canDeleteInvoice}
+                latestPkrRate={latestPkrRate}
               />
             ))}
           </div>

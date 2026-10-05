@@ -11,6 +11,7 @@ import { getStaffSession } from "@/lib/auth/session";
 import { FeeProductCatalog } from "./FeeProductCatalog";
 import { ConsultancyFeeList } from "./ConsultancyFeeList";
 import { ConsultancyFeeOverview, type FeeRow, type FeeStatus } from "./ConsultancyFeeOverview";
+import { loadLatestPkrRate } from "@/lib/pkrRates";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -49,7 +50,7 @@ export default async function ConsultancyFeePage() {
       .select(
         `id, student_id, admin_charge, consultancy_fee, currency, sent_status, pdf_path, invoice_number, intake, terms,
          discount_amount, discount_reason, tax_rate, tax_amount, tax_base, issued_on,
-         admin_fee_status, admin_fee_paid_date, admin_fee_payment_method, service_type,
+         admin_fee_status, admin_fee_paid_date, admin_fee_payment_method, service_type, pkr_per_eur,
          student:leads(full_name, registered_at)`
       )
       .order("created_at", { ascending: false }),
@@ -227,7 +228,13 @@ export default async function ConsultancyFeePage() {
             <StatCard label="Invoices overdue" value={counts.overdue} tone="danger" icon={TriangleAlert} />
           </div>
           <FeeProductCatalog products={feeProducts ?? []} canManage={canManage} />
-          <ConsultancyFeeList rows={rows} feeProducts={feeProducts ?? []} canManage={canManage} isSuperAdmin={isSuperAdmin} />
+          <ConsultancyFeeList
+            rows={rows}
+            feeProducts={feeProducts ?? []}
+            canManage={canManage}
+            isSuperAdmin={isSuperAdmin}
+            latestPkrRate={canManage ? await loadLatestPkrRate(supabase) : null}
+          />
         </div>
       </details>
     </div>
