@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import { emailErrorMessage } from "./emailError.ts";
+import { isUndeliverableAddress } from "./emailRecipients.ts";
 
 // SMTP send helper (Gmail / Google Workspace or any standard SMTP account).
 // Configure via env vars: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM.
@@ -40,6 +41,10 @@ export async function sendEmail({
   if (!isEmailConfigured()) {
     return { error: "Email isn't configured yet — set SMTP_HOST, SMTP_USER, and SMTP_PASS in the environment." };
   }
+
+  // A test address under a reserved domain: never sent, so it cannot bounce
+  // back on the office's mailbox (src/lib/emailRecipients.ts).
+  if (isUndeliverableAddress(to)) return { success: true as const };
 
   const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
