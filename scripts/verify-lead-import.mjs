@@ -15,10 +15,11 @@
 //                 a new lead with no Counselor goes to Muhammad Usman, with
 //                 its remark, though the importer cannot open it;
 //                 a lead already on file (matched by its phone written another
-//                 way) is added to and never overwritten — an empty email
-//                 filled, a new country added beside the old, a remark added
-//                 to the one there as a new version, a follow-up added, its
-//                 level and status kept and said so; a lead the importer
+//                 way) is updated to what the sheet says — its empty email
+//                 filled, its country, level and status replaced, its remark
+//                 replaced as a new version, a follow-up added, the same phone
+//                 written another way left as it was; the same person twice
+//                 in the file takes the later row; a lead the importer
 //                 cannot open is left alone and said so.
 //   export        the same columns, every lead the viewer can see and none
 //                 they cannot; imported straight back it changes nothing.
@@ -236,16 +237,16 @@ try {
   // Preview first: the same file, what it would do, and nothing written.
   const previewed = await previewIn(page, "/leads", "Import leads from Excel", "leads.xlsx", sheet);
   ok("Preview shows what each row would do, before anything is imported",
-    previewed.new === 2 && previewed.update === 1 && previewed.skipped === 1 && /adds email zztmp-import-existing/.test(previewed.text),
+    previewed.new === 2 && previewed.update === 1 && previewed.skipped === 1 && /updates email zztmp-import-existing/.test(previewed.text),
     JSON.stringify({ ...previewed, text: previewed.text.slice(0, 400) }));
   const { data: afterPreview } = await admin.from("leads").select("id").in("full_name", [NEW_A, NEW_B]);
   const { data: existingAfterPreview } = await admin.from("leads").select("email").eq("id", existingId).single();
   ok("...and writes nothing", (afterPreview ?? []).length === 0 && existingAfterPreview?.email === null, JSON.stringify({ afterPreview, existingAfterPreview }));
 
   const summary = await importFile(page, "leads.xlsx", sheet);
-  ok("the import says what it did", /2 new leads added · 1 already on file and added to · 1 already on file with nothing new/.test(summary), summary);
+  ok("the import says what it did", /2 new leads added · 1 already on file and updated · 1 already on file with nothing new/.test(summary), summary);
   ok("...and why, lead by lead",
-    /kept the lead's own applying for bachelors \(the sheet says masters\)/.test(summary) &&
+    /already on file — updated [^.]*applying for bachelors → masters/.test(summary) &&
       /zztmp Import Hidden: already on file as a lead you cannot open/.test(summary) &&
       /Diploma is not bachelors, masters or phd/.test(summary),
     summary);
@@ -268,8 +269,9 @@ try {
       a.level_applying_for === "masters" && a.course_of_interest === LONG_COURSE && a.status === "meeting_done" &&
       a.assigned_counselor_id === counsellor.id && a.date_of_inquiry === "2026-09-14" && a.platform_source === "Education fair" && a.city === "Karachi",
     JSON.stringify(a));
-  ok("...the second row's country beside the first's", a.country_of_interest === COUNTRIES, a.country_of_interest);
-  ok("...and both rows' remarks", (await current(a.id)) === "zztmp Met at the fair\nzztmp Also asked about Germany", await current(a.id));
+  // The same person twice in the file: the later row is the newer word.
+  ok("...the later row's country in place of the earlier's", a.country_of_interest === GERMANY, a.country_of_interest);
+  ok("...and the later row's remark", (await current(a.id)) === "zztmp Also asked about Germany", await current(a.id));
   const aFollow = await followUps(a.id);
   ok("...and its follow-up", aFollow.length === 1 && aFollow[0].due_date === "2026-10-20" && aFollow[0].note === "zztmp Send the Milan list", JSON.stringify(aFollow));
 
@@ -283,10 +285,11 @@ try {
 
   const e = (await leadByName(EXISTING))[0] ?? {};
   ok("a lead on file has its empty email filled in", e.email === "zztmp-import-existing@hmark-test.local", e.email);
-  ok("...a new country added beside the old", e.country_of_interest === "Italy; Hungary", e.country_of_interest);
-  ok("...its level, status and phone kept", e.level_applying_for === "bachelors" && e.status === "potential" && e.contact_number === "0300-9999981", JSON.stringify(e));
+  ok("...its country replaced by the sheet's", e.country_of_interest === "Hungary", e.country_of_interest);
+  ok("...its level and status too, and the same phone written another way left as it was",
+    e.level_applying_for === "masters" && e.status === "meeting_done" && e.contact_number === "0300-9999981", JSON.stringify(e));
   const versions = (await admin.from("lead_remarks").select("body").eq("lead_id", existingId).order("created_at")).data ?? [];
-  ok("...the remark added to the one there, as a new version", versions.length === 2 && versions[1].body === "zztmp Old remark\nzztmp New remark", JSON.stringify(versions));
+  ok("...the remark replaced, the old wording kept as an earlier version", versions.length === 2 && versions[0].body === "zztmp Old remark" && versions[1].body === "zztmp New remark", JSON.stringify(versions));
   const eFollow = await followUps(existingId);
   ok("...and a follow-up added", eFollow.length === 1 && eFollow[0].due_date === "2026-10-25", JSON.stringify(eFollow));
 
@@ -390,7 +393,7 @@ try {
     row[HEADERS.indexOf("Month")] === `=IF(${dateLetter}${n}="","",TEXT(${dateLetter}${n},"mmm yyyy"))`, row[HEADERS.indexOf("Month")]);
 
   const back = await importFile(page, "leads-export.xlsx", expBuffer);
-  ok("the export imported straight back changes nothing", /^0 new leads added · 0 already on file and added to · \d+ already on file with nothing new/.test(back), back);
+  ok("the export imported straight back changes nothing", /^0 new leads added · 0 already on file and updated · \d+ already on file with nothing new/.test(back), back);
   ok("...and adds no second remark or follow-up",
     (await current(a.id)) === "zztmp Met at the fair\nzztmp Also asked about Germany" && (await followUps(a.id)).length === 1 && (await followUps(existingId)).length === 1);
 

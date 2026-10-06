@@ -129,32 +129,45 @@ test("a lead on file has its empty fields filled in", () => {
   assert.deepEqual(m.kept, []);
 });
 
-test("a lead on file keeps what holds one value, and the sheet's is reported", () => {
+test("every value the sheet gives replaces the one on file", () => {
   const m = mergeIntoLead(
     stored,
     input({ full_name: "Ali K.", contact_number: "+92 300 1234567", level_applying_for: "masters", status: "meeting_done", counselor: "Omar", date_of_inquiry: "2026-09-20" })
   );
-  assert.deepEqual(m.patch, {}, "nothing that holds one value is overwritten");
+  assert.deepEqual(m.patch, { full_name: "Ali K.", level_applying_for: "masters", date_of_inquiry: "2026-09-20" }, "the same phone number written another way is not a change");
+  assert.equal(m.status, "meeting_done");
+  assert.equal(m.counselor, "Omar");
+  assert.deepEqual(m.kept, []);
+  assert.ok(m.added.includes("applying for bachelors → masters"));
+  assert.ok(m.added.includes("name Ali Khan → Ali K."));
+});
+
+test("a country, course or source is replaced, not added beside; the same one changes nothing", () => {
+  const m = mergeIntoLead(stored, input({ country_of_interest: "Germany", course_of_interest: "computer science", platform_source: "Instagram" }));
+  assert.equal(m.patch.country_of_interest, "Germany");
+  assert.equal(m.patch.platform_source, "Instagram");
+  assert.equal("course_of_interest" in m.patch, false, "the same course in another case is not a change");
+});
+
+test("a blank cell changes nothing", () => {
+  const m = mergeIntoLead(stored, input({}));
+  assert.deepEqual(m.patch, {});
   assert.equal(m.status, null);
   assert.equal(m.counselor, null);
-  assert.equal(m.kept.length, 5, "the same phone number written another way is not a difference");
-  assert.ok(m.kept.some((k) => /^applying for bachelors \(the sheet says masters\)/.test(k)));
-  assert.ok(m.kept.some((k) => /^name Ali Khan \(the sheet says Ali K\.\)/.test(k)));
+  assert.equal(m.remark, null);
+  assert.deepEqual(m.added, []);
 });
 
-test("a different country, course or source is added beside the one there; the same one is not", () => {
-  const m = mergeIntoLead(stored, input({ country_of_interest: "Germany", course_of_interest: "computer science", platform_source: "Instagram" }));
-  assert.equal(m.patch.country_of_interest, "Italy; Germany");
-  assert.equal(m.patch.platform_source, "Facebook; Instagram");
-  assert.equal("course_of_interest" in m.patch, false, "the same course in another case is not added again");
-  const again = mergeIntoLead({ ...stored, country_of_interest: "Italy; Germany" }, input({ country_of_interest: "germany" }));
-  assert.equal("country_of_interest" in again.patch, false);
-});
-
-test("a new remark is added to the one on file; one already in it is not", () => {
-  assert.equal(mergeIntoLead(stored, input({ remarks: "Budget tight" })).remark, "Call after 5\nBudget tight");
+test("a remark is replaced by the sheet's; the same one is not saved again", () => {
+  assert.equal(mergeIntoLead(stored, input({ remarks: "Budget tight" })).remark, "Budget tight");
   assert.equal(mergeIntoLead(stored, input({ remarks: "call after 5" })).remark, null);
   assert.equal(mergeIntoLead({ ...stored, remark: null }, input({ remarks: "First" })).remark, "First");
+});
+
+test("a registered student's status is not changed by a sheet", () => {
+  const m = mergeIntoLead({ ...stored, status: "registered" }, input({ status: "in_discussion" }));
+  assert.equal(m.status, null);
+  assert.match(m.kept[0], /^status Registered \(the sheet says In Discussion/);
 });
 
 test("a follow-up is added unless the lead already has one that day", () => {
@@ -171,7 +184,7 @@ test("a lead with no counsellor or status takes the sheet's", () => {
 test("an Unattended lead takes the sheet's status: nobody has said where it stands yet (0316)", () => {
   assert.equal(mergeIntoLead({ ...stored, status: "unattended" }, input({ status: "meeting_done" })).status, "meeting_done");
   assert.equal(mergeIntoLead({ ...stored, status: "unattended" }, input({ status: "unattended" })).status, null, "the same says nothing new");
-  assert.equal(mergeIntoLead({ ...stored, status: "in_discussion" }, input({ status: "unattended" })).status, null, "a worked lead is not put back");
+  assert.equal(mergeIntoLead({ ...stored, status: "in_discussion" }, input({ status: "unattended" })).status, "unattended", "the sheet's word, whatever it is");
 });
 
 test("Unattended is read from a sheet by its label", () => {

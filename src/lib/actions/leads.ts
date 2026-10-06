@@ -393,16 +393,18 @@ export async function importLeads(_prevState: unknown, formData: FormData): Prom
     const phone = sheet.phoneKey(input.contact_number);
     const twin = (input.email && freshByEmail.get(input.email)) || (phone.length >= 7 && freshByPhone.get(phone)) || null;
     if (twin) {
+      // The same person twice in the file: the later row is the newer word, as
+      // it would be over a lead already on file.
       const merge = sheet.mergeIntoLead(twin.stored, input);
       Object.assign(twin.stored, merge.patch);
-      twin.status ??= merge.status;
-      if (merge.counselor && !twin.counselor) twin.counselor = twin.stored.counselorName = merge.counselor;
+      if (merge.status) twin.status = twin.stored.status = merge.status;
+      if (merge.counselor) twin.counselor = twin.stored.counselorName = merge.counselor;
       if (merge.remark) twin.remark = twin.stored.remark = merge.remark;
       if (merge.followUp) {
         twin.followUps.push(merge.followUp);
         twin.stored.followUpDates.push(merge.followUp.date);
       }
-      if (merge.kept.length > 0) say(twin.stored.full_name, `in the file more than once; kept the first row's ${merge.kept.join("; ")}.`);
+      if (merge.kept.length > 0) say(twin.stored.full_name, `in the file more than once; kept ${merge.kept.join("; ")}.`);
     } else {
       const entry: NewLead = {
         stored: {
@@ -555,8 +557,9 @@ export async function importLeads(_prevState: unknown, formData: FormData): Prom
         Object.assign(patch, merge.patch);
         Object.assign(stored, merge.patch);
         if (merge.status) {
+          const was = stored.status ? (LEAD_STATUS_LABELS[stored.status as LeadStatus] ?? stored.status) : null;
           patch.status = stored.status = merge.status;
-          added.push(`status ${LEAD_STATUS_LABELS[merge.status]}`);
+          added.push(was ? `status ${was} → ${LEAD_STATUS_LABELS[merge.status]}` : `status ${LEAD_STATUS_LABELS[merge.status]}`);
         }
         if (merge.counselor) {
           const cid = counselorId(merge.counselor, stored.full_name);
@@ -582,7 +585,7 @@ export async function importLeads(_prevState: unknown, formData: FormData): Prom
           name: stored.full_name,
           outcome: added.length > 0 ? "update" : "unchanged",
           detail: [
-            added.length > 0 ? `already on file — adds ${added.join(", ")}` : "already on file — nothing new",
+            added.length > 0 ? `already on file — updates ${added.join(", ")}` : "already on file — nothing new",
             kept.size > 0 ? `keeps its own ${[...kept].join("; ")}` : "",
           ]
             .filter(Boolean)
@@ -595,7 +598,7 @@ export async function importLeads(_prevState: unknown, formData: FormData): Prom
       if (Object.keys(patch).length > 0) {
         const { data, error } = await supabase.from("leads").update(patch).eq("id", id).select("id");
         if (error || !data?.length) {
-          say(stored.full_name, error ? `not updated (${error.message}).` : "already on file, but not a lead you can edit, so nothing was added.");
+          say(stored.full_name, error ? `not updated (${error.message}).` : "already on file, but not a lead you can edit, so nothing was changed.");
           failed = true;
         }
       }
@@ -613,9 +616,9 @@ export async function importLeads(_prevState: unknown, formData: FormData): Prom
       if (failed) unchanged++;
       else if (added.length > 0) {
         updated++;
-        say(stored.full_name, `already on file — added ${added.join(", ")}.`);
+        say(stored.full_name, `already on file — updated ${added.join(", ")}.`);
       } else unchanged++;
-      if (!failed && kept.size > 0) say(stored.full_name, `kept the lead's own ${[...kept].join("; ")}.`);
+      if (!failed && kept.size > 0) say(stored.full_name, `kept ${[...kept].join("; ")}.`);
     }
   }
 

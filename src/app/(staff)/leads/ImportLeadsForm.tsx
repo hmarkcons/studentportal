@@ -10,7 +10,7 @@ import { DEFAULT_IMPORT_COUNSELOR } from "@/lib/leadSheet";
 /**
  * The leads import: the Excel template (or an export of the list, edited)
  * or a CSV with the same headings. A lead already on file — the same email or
- * phone number — is added to, never overwritten; what the import did to each
+ * phone number — is updated to what the sheet says (a blank cell changes nothing); what the import did to each
  * is listed under it.
  */
 export function ImportLeadsForm() {
@@ -60,17 +60,17 @@ export function ImportLeadsForm() {
       </form>
       <p className="mt-2 text-xs text-muted">
         The same columns as the list: Name is the only one needed. Month is worked out from the Inquiry date, and a new lead
-        with no Counselor goes to {DEFAULT_IMPORT_COUNSELOR}. A lead already
-        on file, found by its email or phone number, is added to and never overwritten — an empty field is filled in, a new
-        country, qualification, course or source is added beside the old one, a remark is added to the one there, and a
-        follow-up is added.
+        with no Counselor goes to {DEFAULT_IMPORT_COUNSELOR}. A lead already on file, found by its email or phone number, is
+        updated to what the sheet says: every filled-in cell replaces what is on file, the remark included (its earlier
+        wording is kept in its history), and a follow-up is added. An empty cell changes nothing, and a registered
+        student&rsquo;s status is changed on their record, not by the sheet.
       </p>
       {state && "error" in state && <p className="mt-2 text-xs text-danger">{state.error}</p>}
       {previewed && <ImportPreview rows={previewed.rows} notes={previewed.notes} />}
       {done && (
         <div className="mt-2 text-xs text-ink" data-import-summary>
           <p className="font-medium">
-            {done.added} new {done.added === 1 ? "lead" : "leads"} added · {done.updated} already on file and added to ·{" "}
+            {done.added} new {done.added === 1 ? "lead" : "leads"} added · {done.updated} already on file and updated ·{" "}
             {done.unchanged} already on file with nothing new
           </p>
           {done.notes.length > 0 && (

@@ -257,13 +257,13 @@ export type StoredLead = {
 };
 
 export type LeadMerge = {
-  /** Columns to write on the lead: only ones it had nothing in, or added to. */
-  patch: Partial<Record<"contact_number" | "email" | "city" | "country_of_interest" | "current_qualification" | "level_applying_for" | "course_of_interest" | "date_of_inquiry" | "platform_source", string>>;
-  /** A counsellor for a lead that has none, by name. */
+  /** Columns to write on the lead: each one the sheet gives a different value for. */
+  patch: Partial<Record<"full_name" | "contact_number" | "email" | "city" | "country_of_interest" | "current_qualification" | "level_applying_for" | "course_of_interest" | "date_of_inquiry" | "platform_source", string>>;
+  /** The counsellor the sheet names, by name, when it is not the one on file. */
   counselor: string | null;
-  /** A status for a lead that has none. */
+  /** The status the sheet gives, when it is not the one on file. */
   status: LeadStatus | null;
-  /** The remark to save as its next version, already joined to the one on file. */
+  /** The remark the sheet gives, saved as the remark's next version. */
   remark: string | null;
   followUp: { date: string; note: string | null } | null;
   /** Each change in words, for the import's report. */
@@ -274,24 +274,35 @@ export type LeadMerge = {
 
 const sameText = (a: string | null | undefined, b: string | null | undefined) => (a ?? "").trim().toLowerCase() === (b ?? "").trim().toLowerCase();
 
-/** "Italy; Germany" — the new value beside the old, unless the old already says it. */
-function joined(old: string, add: string): string | null {
-  const parts = old.split(/\s*[;,]\s*/).map((p) => p.toLowerCase());
-  return parts.includes(add.trim().toLowerCase()) || old.toLowerCase().includes(add.trim().toLowerCase()) ? null : `${old}; ${add}`;
-}
-
+/**
+ * What a sheet's row changes on a lead already on file (or on an earlier row
+ * of the same file for the same person).
+ *
+ * The sheet is the newer word, the office's choice: every value it gives
+ * replaces the one on file — name, contact, email, city, country,
+ * qualification, level, course, inquiry date, source, status, counsellor and
+ * remark. A blank cell says nothing and changes nothing (AGENTS.md: an import
+ * that writes an empty cell wipes a column). Two things are not replaced:
+ * a registered student's status, which moving off Registered would leave
+ * disagreeing with their student record; and follow-ups, a dated log that a
+ * new one is added to.
+ */
 export function mergeIntoLead(stored: StoredLead, input: LeadInput): LeadMerge {
   const merge: LeadMerge = { patch: {}, counselor: null, status: null, remark: null, followUp: null, added: [], kept: [] };
 
-  // Held only once: filled where empty, otherwise the lead keeps its own.
-  const single = [
+  const fields = [
+    ["full_name", "name"],
     ["contact_number", "contact number"],
     ["email", "email"],
     ["city", "city"],
+    ["country_of_interest", "country"],
+    ["current_qualification", "qualification"],
     ["level_applying_for", "applying for"],
+    ["course_of_interest", "course"],
     ["date_of_inquiry", "inquiry date"],
+    ["platform_source", "source"],
   ] as const;
-  for (const [field, label] of single) {
+  for (const [field, label] of fields) {
     const value = input[field];
     if (!value) continue;
     const old = stored[field] ?? null;
@@ -299,52 +310,26 @@ export function mergeIntoLead(stored: StoredLead, input: LeadInput): LeadMerge {
       merge.patch[field] = value;
       merge.added.push(`${label} ${value}`);
     } else if (!(field === "contact_number" ? phoneKey(old) === phoneKey(value) : sameText(old, value))) {
-      merge.kept.push(`${label} ${old} (the sheet says ${value})`);
-    }
-  }
-  if (!sameText(stored.full_name, input.full_name)) merge.kept.push(`name ${stored.full_name} (the sheet says ${input.full_name})`);
-
-  // Can hold more than one: added beside what is there.
-  const lists = [
-    ["country_of_interest", "country"],
-    ["current_qualification", "qualification"],
-    ["course_of_interest", "course"],
-    ["platform_source", "source"],
-  ] as const;
-  for (const [field, label] of lists) {
-    const value = input[field];
-    if (!value) continue;
-    const old = stored[field];
-    if (!old) {
       merge.patch[field] = value;
-      merge.added.push(`${label} ${value}`);
-    } else {
-      const both = joined(old, value);
-      if (both) {
-        merge.patch[field] = both;
-        merge.added.push(`${label} ${value} beside ${old}`);
-      }
+      merge.added.push(`${label} ${old} → ${value}`);
     }
   }
 
-  if (input.status) {
-    // Unattended says nobody has worked the lead yet, so a sheet that says
-    // where it stands is taken, as it would be for a lead with no status.
-    if (!stored.status || (stored.status === "unattended" && input.status !== "unattended")) merge.status = input.status;
-    else if (stored.status !== input.status) {
-      merge.kept.push(`status ${LEAD_STATUS_LABELS[stored.status as LeadStatus] ?? stored.status} (the sheet says ${LEAD_STATUS_LABELS[input.status]})`);
+  if (input.status && input.status !== stored.status) {
+    if (stored.status === "registered") {
+      merge.kept.push(`status Registered (the sheet says ${LEAD_STATUS_LABELS[input.status]} — a registered student's status is changed on their record)`);
+    } else {
+      merge.status = input.status;
     }
   }
-  if (input.counselor) {
-    if (!stored.counselorName) merge.counselor = input.counselor;
-    else if (!sameText(stored.counselorName, input.counselor)) merge.kept.push(`counselor ${stored.counselorName} (the sheet says ${input.counselor})`);
-  }
+  if (input.counselor && !sameText(stored.counselorName, input.counselor)) merge.counselor = input.counselor;
 
   if (input.remarks) {
     const old = normalizeRemark(stored.remark);
-    if (!old) merge.remark = input.remarks;
-    else if (!old.toLowerCase().includes(input.remarks.toLowerCase())) merge.remark = `${old}\n${input.remarks}`.slice(0, REMARK_MAX);
-    if (merge.remark) merge.added.push(old ? "remark added to the one on file" : "remark");
+    if (!sameText(old, input.remarks)) {
+      merge.remark = input.remarks.slice(0, REMARK_MAX);
+      merge.added.push(old ? "remark replaced" : "remark");
+    }
   }
 
   if (input.follow_up_date && !stored.followUpDates.includes(input.follow_up_date)) {
