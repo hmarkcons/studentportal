@@ -207,7 +207,7 @@ try {
       "Contact number": "0300-9999983",
       Email: "zztmp-import-alpha@hmark-test.local",
       City: "Karachi",
-      Country: "Italy",
+      Country: "Spain",
       "Current qualification": "A-Levels",
       "Applying for": "Masters",
       "Course of interest": LONG_COURSE,
@@ -220,7 +220,7 @@ try {
       Source: "Education fair",
     },
     // The same person again, by email: read as one.
-    { Name: NEW_A, Email: "ZZTMP-import-alpha@hmark-test.local", Country: GERMANY, Remarks: "zztmp Also asked about Germany" },
+    { Name: NEW_A, Email: "ZZTMP-import-alpha@hmark-test.local", Country: COUNTRIES, Remarks: "zztmp Also asked about Germany" },
     { Name: NEW_B, "Contact number": "0300-9999984", "Applying for": "Diploma", Remarks: "zztmp Bravo remark" },
     {
       Name: EXISTING,
@@ -237,7 +237,7 @@ try {
   // Preview first: the same file, what it would do, and nothing written.
   const previewed = await previewIn(page, "/leads", "Import leads from Excel", "leads.xlsx", sheet);
   ok("Preview shows what each row would do, before anything is imported",
-    previewed.new === 2 && previewed.update === 1 && previewed.skipped === 1 && /updates email zztmp-import-existing/.test(previewed.text),
+    previewed.new === 2 && previewed.update === 1 && previewed.skipped === 1 && /updates [^·]*email zztmp-import-existing/.test(previewed.text),
     JSON.stringify({ ...previewed, text: previewed.text.slice(0, 400) }));
   const { data: afterPreview } = await admin.from("leads").select("id").in("full_name", [NEW_A, NEW_B]);
   const { data: existingAfterPreview } = await admin.from("leads").select("email").eq("id", existingId).single();
@@ -246,7 +246,7 @@ try {
   const summary = await importFile(page, "leads.xlsx", sheet);
   ok("the import says what it did", /2 new leads added · 1 already on file and updated · 1 already on file with nothing new/.test(summary), summary);
   ok("...and why, lead by lead",
-    /already on file — updated [^.]*applying for bachelors → masters/.test(summary) &&
+    /already on file — updated .*applying for bachelors → masters/.test(summary) &&
       /zztmp Import Hidden: already on file as a lead you cannot open/.test(summary) &&
       /Diploma is not bachelors, masters or phd/.test(summary),
     summary);
@@ -270,7 +270,8 @@ try {
       a.assigned_counselor_id === counsellor.id && a.date_of_inquiry === "2026-09-14" && a.platform_source === "Education fair" && a.city === "Karachi",
     JSON.stringify(a));
   // The same person twice in the file: the later row is the newer word.
-  ok("...the later row's country in place of the earlier's", a.country_of_interest === GERMANY, a.country_of_interest);
+  // Spain, then "Italy; Germany …": replaced, not added beside ("Spain; Italy; …").
+  ok("...the later row's countries in place of the earlier's", a.country_of_interest === COUNTRIES, a.country_of_interest);
   ok("...and the later row's remark", (await current(a.id)) === "zztmp Also asked about Germany", await current(a.id));
   const aFollow = await followUps(a.id);
   ok("...and its follow-up", aFollow.length === 1 && aFollow[0].due_date === "2026-10-20" && aFollow[0].note === "zztmp Send the Milan list", JSON.stringify(aFollow));

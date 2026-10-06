@@ -6,7 +6,7 @@ import type { ImportPreviewRow } from "@/lib/actions/leads";
 
 const OUTCOME: Record<ImportPreviewRow["outcome"], { label: string; tone: "success" | "info" | "neutral" | "warning" }> = {
   new: { label: "New", tone: "success" },
-  update: { label: "Adds to existing", tone: "info" },
+  update: { label: "Updates existing", tone: "info" },
   unchanged: { label: "Nothing new", tone: "neutral" },
   skipped: { label: "Not imported", tone: "warning" },
 };
