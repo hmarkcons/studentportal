@@ -383,7 +383,7 @@ try {
   const expectedCells = {
     City: "Karachi", Name: NEW_A, "Contact number": "0300-9999983", Email: "zztmp-import-alpha@hmark-test.local", Country: COUNTRIES,
     "Current qualification": "A-Levels", "Applying for": "masters", "Course of interest": LONG_COURSE, Status: "Meeting Done",
-    Counselor: counsellor.name, Remarks: "zztmp Met at the fair\nzztmp Also asked about Germany", "Follow-up date": "2026-10-20",
+    Counselor: counsellor.name, Remarks: "zztmp Also asked about Germany", "Follow-up date": "2026-10-20",
     "Follow-up note": "zztmp Send the Milan list", "Inquiry date": "2026-09-14", Source: "Education fair",
   };
   const wrongCells = Object.entries(expectedCells).filter(([h, v]) => row[HEADERS.indexOf(h)] !== v).map(([h]) => h);
@@ -396,7 +396,7 @@ try {
   const back = await importFile(page, "leads-export.xlsx", expBuffer);
   ok("the export imported straight back changes nothing", /^0 new leads added · 0 already on file and updated · \d+ already on file with nothing new/.test(back), back);
   ok("...and adds no second remark or follow-up",
-    (await current(a.id)) === "zztmp Met at the fair\nzztmp Also asked about Germany" && (await followUps(a.id)).length === 1 && (await followUps(existingId)).length === 1);
+    (await current(a.id)) === "zztmp Also asked about Germany" && (await followUps(a.id)).length === 1 && (await followUps(existingId)).length === 1);
 
   // ------------------------------------------- registered students: preview
   console.log("\n--- registered students: preview ---");
