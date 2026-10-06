@@ -1198,6 +1198,29 @@ table[data-dense] > tbody > tr > td > * {
   vertical-align: middle;
 }
 
+/* Ruled like a spreadsheet (DataTable gridLines): a line between every column
+   and every row. The lines are the cells' own — separate borders, not the
+   table's collapsed ones — because a collapsed border belongs to the table and
+   scrolls away from a frozen (sticky) cell, leaving the name column unruled. A
+   shade deeper than the card's border, so the grid reads in both themes. */
+table[data-grid] {
+  border-collapse: separate;
+  border-spacing: 0;
+  --grid-line: color-mix(in srgb, var(--border) 70%, var(--muted));
+}
+table[data-grid] > thead > tr > th,
+table[data-grid] > tbody > tr:not([data-spacer]) > td {
+  border-right: 1px solid var(--grid-line);
+  border-bottom: 1px solid var(--grid-line);
+}
+table[data-grid] > thead > tr > th:last-child,
+table[data-grid] > tbody > tr > td:last-child {
+  border-right: 0;
+}
+table[data-grid] > tbody > tr:last-child > td {
+  border-bottom: 0;
+}
+
 /* A table opened over the whole window (DataTable expandable): the toolbar
    and pager keep their places and the rows fill the rest, scrolling in their
    window as they do on the page. Above the sidebar (z-40), below a pop-up

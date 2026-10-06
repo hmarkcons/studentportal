@@ -77,6 +77,8 @@ export function DataTable({
   dense = false,
   expandable = false,
   virtualRowHeight,
+  expandedHeading,
+  gridLines = false,
 }: {
   columns: Column[];
   rows: Row[];
@@ -154,6 +156,18 @@ export function DataTable({
    * fetching them. A page of VIRTUAL_MIN_ROWS rows or fewer is drawn whole.
    */
   virtualRowHeight?: number;
+  /**
+   * What the table is, said above it once it is expanded over the whole
+   * window, where the page's own heading — whose applications these are — is
+   * no longer on screen.
+   */
+  expandedHeading?: React.ReactNode;
+  /**
+   * Ruled like a spreadsheet: a line between every column as well as every
+   * row (globals.css, data-grid) — the applications table, wide enough that
+   * an eye following a row across it wanted the columns marked.
+   */
+  gridLines?: boolean;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState(server?.search ?? "");
@@ -400,6 +414,11 @@ export function DataTable({
       aria-modal={expanded || undefined}
       aria-label={expanded ? `${label ?? exportFilename ?? "Table"}, full screen` : undefined}
     >
+      {expanded && expandedHeading && (
+        <div className="border-b border-border bg-card px-4 py-2.5" data-expanded-heading>
+          {expandedHeading}
+        </div>
+      )}
       {showToolbar && (
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-bg px-3 py-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -473,6 +492,7 @@ export function DataTable({
           className={`w-full ${minTableWidthClassName} text-sm`}
           data-row-highlight={rowHighlight || undefined}
           data-dense={dense || undefined}
+          data-grid={gridLines || undefined}
           data-virtual={virtual || undefined}
           data-row-count={rowCount}
           aria-rowcount={virtual ? rowCount + 1 : undefined}

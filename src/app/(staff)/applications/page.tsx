@@ -53,6 +53,7 @@ export default async function ApplicationsPage() {
         canDelete={isSuperAdmin || hasRole(staff, "management")}
         exportHref="/api/export/applications"
         label="Applications"
+        heading={{ title: "All applications", detail: `${rows.length} applications · ${studentCount} students` }}
       />
     </div>
   );

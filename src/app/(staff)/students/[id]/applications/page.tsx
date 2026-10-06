@@ -27,7 +27,7 @@ export default async function StudentApplicationsTab(props: {
   const canDelete = isSuperAdmin || hasRole(staffRow, "management");
   // A visa-only client (0279) already holds their admission: the way in is to
   // record it, not to apply for one.
-  const { data: serviceRow } = await supabase.from("leads").select("service_type").eq("id", id).maybeSingle();
+  const { data: serviceRow } = await supabase.from("leads").select("service_type, full_name, student_code").eq("id", id).maybeSingle();
   const visaOnly = serviceOf(serviceRow?.service_type) === "visa_only";
 
   const [
@@ -231,7 +231,14 @@ export default async function StudentApplicationsTab(props: {
           canDelete={canDelete}
           readOnly={isPreviousIntake}
           exportHref={`/api/export/applications?student=${id}${showCycleTabs && activeCycleId ? `&cycle=${activeCycleId}` : ""}`}
-          label="Applications"
+          label={`Applications — ${serviceRow?.full_name ?? "student"}`}
+          // Expanded, the student's name and ID are no longer on screen: said above the table.
+          heading={{
+            title: `${serviceRow?.full_name ?? "Student"} — Applications`,
+            detail: [serviceRow?.student_code, activeCycle ? intakeLabel(activeCycle.intake) : null, `${rows.length} applications`]
+              .filter(Boolean)
+              .join(" · "),
+          }}
         />
       )}
     </div>

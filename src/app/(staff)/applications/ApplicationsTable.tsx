@@ -81,6 +81,7 @@ export function ApplicationsTable({
   readOnly = false,
   exportHref,
   label,
+  heading,
 }: {
   rows: ApplicationRow[];
   programsByUniversity: Record<string, ProgramOption[]>;
@@ -96,6 +97,8 @@ export function ApplicationsTable({
   readOnly?: boolean;
   exportHref: string;
   label: string;
+  /** Said above the table when it is expanded: whose applications these are. */
+  heading: { title: string; detail?: string | null };
 }) {
   const router = useRouter();
   const [, startRefresh] = useTransition();
@@ -516,6 +519,13 @@ export function ApplicationsTable({
         rowHighlight
         expandable
         virtualRowHeight={38}
+        gridLines
+        expandedHeading={
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+            <h2 className="text-base font-semibold text-ink">{heading.title}</h2>
+            {heading.detail && <span className="text-xs text-muted">{heading.detail}</span>}
+          </div>
+        }
       />
     </div>
   );

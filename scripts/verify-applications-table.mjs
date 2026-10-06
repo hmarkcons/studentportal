@@ -136,6 +136,22 @@ try {
   const reviewPill = await bg(rowOf(page, app.review).locator("[data-stage-cell] button"));
   ok("...painted, not only named", offerPill !== reviewPill && offerPill !== "rgba(0, 0, 0, 0)", `${offerPill} / ${reviewPill}`);
   ok("an application with no programme asks for one", (await rowOf(page, app.docs).getByText("Choose a programme").count()) === 1);
+  // Expanded over the whole window, the student's name above the page is gone: the table says it.
+  await page.locator("[data-expand-table]").click();
+  const heading = page.locator("[data-table-expanded] [data-expanded-heading]");
+  const said = await heading.waitFor({ timeout: 10000 }).then(() => heading.innerText(), () => "");
+  ok("expanded, the table is headed with the student's name and ID", said.includes(STUDENT) && /HMC-/.test(said), said);
+  await shot(page, "1b-expanded");
+  await page.keyboard.press("Escape");
+  ok("...and the heading goes with it", await heading.waitFor({ state: "detached", timeout: 10000 }).then(() => true, () => false));
+  const rule = (td) => {
+    const s = getComputedStyle(td);
+    return { right: s.borderRightWidth, bottom: s.borderBottomWidth, style: s.borderRightStyle };
+  };
+  const ruled = await page.locator("[data-applications-table='student'] tbody tr[data-row]").first().locator("td").nth(3).evaluate(rule);
+  const frozen = await page.locator("[data-applications-table='student'] tbody tr[data-row]").first().locator("td[data-frozen]").evaluate(rule);
+  ok("the table is ruled: a line between every column and every row", ruled.right === "1px" && ruled.bottom === "1px" && ruled.style === "solid", JSON.stringify(ruled));
+  ok("...the frozen column too", frozen.right === "1px" && frozen.bottom === "1px", JSON.stringify(frozen));
 
   // ------------------------------------------------------------ priority
   console.log("\n--- priority ---");
