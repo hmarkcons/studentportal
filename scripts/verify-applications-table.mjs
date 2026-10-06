@@ -152,6 +152,21 @@ try {
   const frozen = await page.locator("[data-applications-table='student'] tbody tr[data-row]").first().locator("td[data-frozen]").evaluate(rule);
   ok("the table is ruled: a line between every column and every row", ruled.right === "1px" && ruled.bottom === "1px" && ruled.style === "solid", JSON.stringify(ruled));
   ok("...the frozen column too", frozen.right === "1px" && frozen.bottom === "1px", JSON.stringify(frozen));
+  // Scrolled as far right as it goes: the number and the university still at the left, side by side.
+  const pinned = await page.locator("[data-applications-table='student'] [data-table-frame]").evaluate(async (frame) => {
+    frame.scrollLeft = frame.scrollWidth;
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const tr = frame.querySelector("tbody tr[data-row]");
+    const number = tr.querySelector("td[data-serial]").getBoundingClientRect();
+    const university = tr.querySelector("td[data-frozen]").getBoundingClientRect();
+    const edge = frame.getBoundingClientRect().left + frame.clientLeft;
+    const out = { scrolled: frame.scrollLeft, edge, numberLeft: number.left, numberRight: number.right, universityLeft: university.left };
+    frame.scrollLeft = 0;
+    return out;
+  });
+  ok("scrolled sideways, the number stays at the left edge",
+    pinned.scrolled > 200 && Math.abs(pinned.numberLeft - pinned.edge) <= 1.5, JSON.stringify(pinned));
+  ok("...with the university right beside it", Math.abs(pinned.universityLeft - pinned.numberRight) <= 1, JSON.stringify(pinned));
 
   // ------------------------------------------------------------ priority
   console.log("\n--- priority ---");
@@ -299,6 +314,23 @@ try {
   await page.goto(tab, { waitUntil: "domcontentloaded" });
   await page.locator("[data-applications-table='student'] thead th").nth(1).waitFor({ timeout: 60000 });
   ok("...and so does the student's tab", (await page.locator("[data-applications-table='student'] thead th").nth(1).innerText()).trim().toLowerCase() === "stage");
+
+  // ------------------------------------------------------------ a long value
+  console.log("\n--- a long value ---");
+  const LONG = "zztmp Apptable Programme D, Business Administration with a specialisation in International Finance and Accounting, taught in English";
+  await admin.from("programs").update({ name: LONG }).eq("id", prog.D);
+  await page.goto(tab, { waitUntil: "domcontentloaded" });
+  const longCell = rowOf(page, app.submitted).locator('[data-choice-cell="Programme"]');
+  await longCell.waitFor({ timeout: 60000 });
+  await hydrated(page, '[data-choice-cell="Programme"]');
+  const cutShort = await poll(async () => ((await longCell.getAttribute("data-cut")) !== null ? true : null), 10);
+  const longBox = await longCell.boundingBox();
+  ok("a long programme name is cut short on its line", cutShort === true && longBox.width <= 16 * 16 + 2, JSON.stringify(longBox));
+  await longCell.hover();
+  const preview = page.locator("[data-hover-preview]");
+  ok("...and shown whole on hover",
+    await preview.waitFor({ timeout: 5000 }).then(async () => (await preview.innerText()).includes("taught in English"), () => false));
+  await page.mouse.move(0, 0);
 
   // ------------------------------------------------------------ export
   console.log("\n--- the Excel export ---");

@@ -79,6 +79,7 @@ export function DataTable({
   virtualRowHeight,
   expandedHeading,
   gridLines = false,
+  freezeSerial = false,
 }: {
   columns: Column[];
   rows: Row[];
@@ -168,6 +169,12 @@ export function DataTable({
    * an eye following a row across it wanted the columns marked.
    */
   gridLines?: boolean;
+  /**
+   * The serial number frozen at the left as well, with the frozen column
+   * held just after it (globals.css, data-frozen-lead): a student's
+   * applications, read across by number and university.
+   */
+  freezeSerial?: boolean;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState(server?.search ?? "");
@@ -368,6 +375,7 @@ export function DataTable({
 
   const showToolbar = exportFilename || exportHref || searchable || filters.length > 0 || expandable;
   const frozenKey = freezeColumn ?? columns[0]?.key;
+  const serialFrozen = serial && freezeSerial;
 
   const pager = (where: "top" | "bottom") =>
     pageSize ? (
@@ -509,7 +517,12 @@ export function DataTable({
                 </th>
               )}
               {serial && (
-                <th scope="col" className={`w-12 ${dense ? "px-2 py-2" : "px-3 py-3"} text-right font-medium`} data-serial>
+                <th
+                  scope="col"
+                  className={`w-12 ${dense ? "px-2 py-2" : "px-3 py-3"} text-right font-medium`}
+                  data-serial
+                  data-frozen-lead={serialFrozen || undefined}
+                >
                   <abbr title="Serial number" className="no-underline">
                     #
                   </abbr>
@@ -519,6 +532,7 @@ export function DataTable({
                 <th
                   key={c.key}
                   data-frozen={c.key === frozenKey || undefined}
+                  data-frozen-next={(serialFrozen && c.key === frozenKey) || undefined}
                   className={`${headPad} font-medium ${oneLine && !c.wrap ? "whitespace-nowrap" : ""} ${
                     c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : ""
                   }`}
@@ -550,7 +564,11 @@ export function DataTable({
                   </td>
                 )}
                 {serial && (
-                  <td className={`w-12 ${dense ? "px-2 py-1" : "px-3 py-3"} text-right text-xs tabular-nums text-muted`} data-serial>
+                  <td
+                    className={`w-12 ${dense ? "px-2 py-1" : "px-3 py-3"} text-right text-xs tabular-nums text-muted`}
+                    data-serial
+                    data-frozen-lead={serialFrozen || undefined}
+                  >
                     {(pageSize ? (currentPage - 1) * pageSize : 0) + i + 1}
                   </td>
                 )}
@@ -558,6 +576,7 @@ export function DataTable({
                   <td
                     key={c.key}
                     data-frozen={c.key === frozenKey || undefined}
+                    data-frozen-next={(serialFrozen && c.key === frozenKey) || undefined}
                     className={`${cellPad} ${oneLine && !c.wrap ? "whitespace-nowrap" : ""} ${
                       c.align === "right" ? "text-right tabular-nums" : c.align === "center" ? "text-center" : ""
                     }`}

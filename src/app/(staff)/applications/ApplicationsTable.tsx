@@ -244,7 +244,7 @@ export function ApplicationsTable({
             universityName={r.universityName}
           />
         ),
-        country: r.country ?? <span className="text-muted">—</span>,
+        country: <LongTextCell text={r.country} label="Country" rowName={who} widthClassName="max-w-[9rem]" />,
         university: (
           <LongTextCell
             text={r.universityName}
@@ -265,7 +265,7 @@ export function ApplicationsTable({
             label="Programme"
             disabled={locked || r.finalized}
             title={r.finalized ? "Finalised for the visa, so the programme is fixed — undo that to change it." : undefined}
-            buttonClassName="max-w-[16rem]"
+            widthClassName="max-w-[16rem]"
             onSave={(id) => {
               const next = programs.find((p) => p.id === id) ?? null;
               const keepsRound = Boolean(next?.rounds.some((x) => x.id === r.roundId));
@@ -278,7 +278,7 @@ export function ApplicationsTable({
             }}
           />
         ),
-        level: r.level ?? <span className="text-muted">—</span>,
+        level: <LongTextCell text={r.level} label="Level" rowName={who} widthClassName="max-w-[7rem]" />,
         intake: <TextCell value={r.intake} label="Intake" disabled={locked} widthClassName="max-w-[8rem]" onSave={(v) => save(r, "intake", v, { intake: v.trim() || null }, { reread: false })} />,
         round:
           rounds.length === 0 && !r.roundId ? (
@@ -297,7 +297,7 @@ export function ApplicationsTable({
               display={r.roundLabel ?? (g === "progress" ? <span className="text-warning">Choose a round</span> : <span className="text-muted">No round</span>)}
               label="Round"
               disabled={locked}
-              buttonClassName="max-w-[12rem]"
+              widthClassName="max-w-[12rem]"
               onSave={(id) => {
                 const x = rounds.find((y) => y.id === id) ?? null;
                 return save(r, "round", id, {
@@ -376,8 +376,8 @@ export function ApplicationsTable({
             )}
           </Link>
         ),
-        counselor: r.counselorName ?? <span className="text-muted">—</span>,
-        officer: r.officerName ?? <span className="text-muted">—</span>,
+        counselor: <LongTextCell text={r.counselorName} label="Counsellor" rowName={who} widthClassName="max-w-[9rem]" />,
+        officer: <LongTextCell text={r.officerName} label="Processing" rowName={who} widthClassName="max-w-[9rem]" />,
         portal_link: catalogueLink(r, "portal_link", "Application portal", r.portalLink),
         page_link: catalogueLink(r, "page_link", "Programme page", r.pageLink),
         requirements_link: catalogueLink(r, "requirements_link", "Requirements page", r.requirementsLink),
@@ -513,6 +513,8 @@ export function ApplicationsTable({
         exportHref={exportHref}
         label={label}
         freezeColumn={scope === "all" ? "student" : "university"}
+        // A student's tab: the application's number stays beside its university.
+        freezeSerial={scope === "student"}
         minTableWidthClassName="min-w-[1200px]"
         oneLine
         dense

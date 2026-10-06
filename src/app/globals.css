@@ -547,6 +547,25 @@ body {
     inset -1px 0 0 var(--border),
     4px 0 5px -4px rgb(0 0 0 / 0.2);
 }
+/* Two columns frozen (DataTable freezeSerial): the serial number holds the
+   left edge at a width of its own, so the frozen column knows where to stand —
+   just after it. Only the second casts the shadow, and the serial keeps the
+   row's coloured edge (data-tone, data-current) rather than a shadow. */
+.table-frame > table > * > tr > [data-frozen-lead] {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background-color: var(--frame-bg);
+  width: 3rem;
+  min-width: 3rem;
+  max-width: 3rem;
+}
+.table-frame > table > thead > tr > [data-frozen-lead] {
+  z-index: 3;
+}
+.table-frame > table > * > tr > [data-frozen][data-frozen-next] {
+  left: 3rem;
+}
 /* A row shaded grey on purpose (a section heading) keeps its shade where it is frozen. */
 .table-frame > table > tbody > tr.bg-bg > * {
   background-color: var(--bg);

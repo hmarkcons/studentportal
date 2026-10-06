@@ -15,7 +15,9 @@ export type SaveFn = (value: string) => Promise<boolean>;
 
 /**
  * A choice from a list, shown as its label until clicked, and then as the
- * browser's own list, opened at once where the browser allows it.
+ * browser's own list, opened at once where the browser allows it. A label too
+ * long for its width — a programme's full name — is cut short on its line and
+ * shown whole on hover, as the leads list does.
  */
 export function ChoiceCell({
   value,
@@ -28,6 +30,7 @@ export function ChoiceCell({
   label,
   className = "",
   buttonClassName = "",
+  widthClassName = "max-w-full",
 }: {
   value: string;
   options: { value: string; label: string }[];
@@ -42,10 +45,14 @@ export function ChoiceCell({
   label: string;
   className?: string;
   buttonClassName?: string;
+  /** How wide it may get, closed or open: longer is cut short. */
+  widthClassName?: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const ref = useRef<HTMLSelectElement>(null);
+  const textRef = useRef<HTMLSpanElement>(null);
+  const [cut, setCut] = useState(false);
 
   useEffect(() => {
     if (!editing) return;
@@ -61,25 +68,46 @@ export function ChoiceCell({
 
   const current = options.find((o) => o.value === value);
   const shown = display ?? current?.label ?? (value ? value : emptyLabel ?? "—");
+  const text = typeof shown === "string" ? shown : (current?.label ?? null);
+  const hover = useHoverPreview(text, cut && !editing);
+
+  // Measured rather than guessed from the length, as LongTextCell does.
+  useEffect(() => {
+    const el = textRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => setCut(el.scrollWidth > el.clientWidth + 1));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [text, editing]);
 
   if (!editing || disabled) {
     return (
-      <button
-        type="button"
-        disabled={disabled || saving}
-        onClick={() => setEditing(true)}
-        title={title ?? (disabled ? undefined : `Change — ${typeof shown === "string" ? shown : label}`)}
-        aria-label={`${label}: ${typeof shown === "string" ? shown : current?.label ?? "none"} — change`}
-        className={`group inline-flex max-w-full items-center gap-1 rounded-md border border-transparent px-1.5 py-0.5 text-left text-sm text-ink hover:border-border hover:bg-card disabled:cursor-default disabled:hover:border-transparent disabled:hover:bg-transparent ${buttonClassName}`}
-        data-choice-cell={label}
-      >
-        <span className="truncate">{shown}</span>
+      <>
+        <button
+          type="button"
+          disabled={disabled || saving}
+          onClick={() => {
+            hover.close();
+            setEditing(true);
+          }}
+          title={title}
+          aria-label={`${label}: ${text ?? "none"}${disabled ? "" : " — change"}`}
+          className={`group inline-flex ${widthClassName} items-center gap-1 rounded-md border border-transparent px-1.5 py-0.5 text-left text-sm text-ink hover:border-border hover:bg-card disabled:cursor-default disabled:hover:border-transparent disabled:hover:bg-transparent ${buttonClassName}`}
+          data-choice-cell={label}
+          data-cut={cut || undefined}
+          {...hover.bind}
+        >
+          <span ref={textRef} className="min-w-0 truncate">
+            {shown}
+          </span>
         {saving ? (
           <LoaderCircle aria-hidden className="h-3 w-3 shrink-0 animate-spin text-muted" />
         ) : (
           !disabled && <ChevronDown aria-hidden className="h-3 w-3 shrink-0 text-muted opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
         )}
-      </button>
+        </button>
+        {hover.preview}
+      </>
     );
   }
 
@@ -88,7 +116,7 @@ export function ChoiceCell({
       ref={ref}
       defaultValue={value}
       aria-label={label}
-      className={`max-w-full rounded-md border border-primary bg-card px-1 py-0.5 text-sm text-ink ${className}`}
+      className={`${widthClassName} rounded-md border border-primary bg-card px-1 py-0.5 text-sm text-ink ${className}`}
       onBlur={() => setEditing(false)}
       onKeyDown={(e) => {
         if (e.key === "Escape") setEditing(false);
