@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { useHoverPreview } from "@/components/ui/useHoverPreview";
-import { LeadRemarkEditor } from "./LeadRemarkEditor";
+import { LeadRemarkEditor, type RemarkStore } from "./LeadRemarkEditor";
 
 /**
  * The Remarks column (0306): the lead's remark on one line, cut short with an
@@ -19,14 +19,19 @@ export function RemarkCell({
   updatedAt,
   updatedBy,
   onSaved,
+  store,
 }: {
+  /** Whose remark: the lead's id, or the application's with an application store. */
   leadId: string;
+  /** What the pop-up is titled with: the lead, or the student and university. */
   leadName: string;
   remark: string | null;
   updatedAt: string | null;
   updatedBy: string | null;
   /** Told what was saved, so a list that draws only the rows in view keeps it when this row is drawn again. */
   onSaved?: (remark: string | null, at: string | null, by: string | null) => void;
+  /** An application's remarks rather than a lead's. */
+  store?: RemarkStore;
 }) {
   const [open, setOpen] = useState(false);
   // Built the first time it is asked for, not with the row (see LongTextCell).
@@ -81,6 +86,7 @@ export function RemarkCell({
               updatedAt={meta.at}
               updatedBy={meta.by}
               startEditing={!shown}
+              store={store}
               onSaved={(next, at, by) => {
                 setShown(next);
                 setMeta({ at, by });

@@ -419,12 +419,17 @@ try {
   // Last, because everything above rests on the university being finalised.
   console.log("\n--- un-finalizing ---");
   await procPage.goto(`${BASE}/students/${studentId}/applications`, { waitUntil: "domcontentloaded" });
+  // The applications table asks before undoing; yes.
+  procPage.on("dialog", (d) => d.accept());
   const undo = procPage.getByRole("button", { name: /^Undo pre-enrolled/i }).first();
   await undo.waitFor({ timeout: 60_000 });
   // The button is in the page's HTML before React is ready to hear it; a
   // click in between is lost, which on the deployed portal it was.
   await procPage.waitForFunction(
-    () => [...document.querySelectorAll("button")].some((b) => /Undo pre-enrolled/i.test(b.textContent ?? "") && Object.keys(b).some((k) => k.startsWith("__reactProps"))),
+    () =>
+      [...document.querySelectorAll("button")].some(
+        (b) => /Undo pre-enrolled/i.test(b.getAttribute("aria-label") ?? b.textContent ?? "") && Object.keys(b).some((k) => k.startsWith("__reactProps"))
+      ),
     null,
     { timeout: 60_000 }
   ).catch(() => {});

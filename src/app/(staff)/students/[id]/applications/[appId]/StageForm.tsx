@@ -3,7 +3,8 @@
 import { useActionState } from "react";
 import { updateApplicationStage } from "@/lib/actions/applications";
 import { MANUAL_APPLICATION_STATUSES } from "@/lib/constants";
-import { applicationStageLabel, isFinalizedStage } from "@/lib/finalizedStage";
+import { isFinalizedStage } from "@/lib/finalizedStage";
+import { stageLabel } from "@/lib/applicationTable";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Input";
 import { ActionStatus } from "@/components/ActionStatus";
@@ -31,7 +32,7 @@ export function StageForm({
       <Select name="current_stage" defaultValue={currentStage}>
         {options.map((s) => (
           <option key={s} value={s}>
-            {applicationStageLabel(s)}
+            {stageLabel(s)}
           </option>
         ))}
       </Select>

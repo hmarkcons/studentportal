@@ -5,16 +5,27 @@ import { ArrowDown, ArrowUp, Columns3, GripVertical } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { toast } from "@/lib/toast";
-import { resetLeadColumnOrder, saveLeadColumnOrder } from "@/lib/actions/leadColumns";
+import { resetColumnOrder, saveColumnOrder, type ArrangeableList } from "@/lib/actions/leadColumns";
 
 type Column = { key: string; header: string };
 
+const ABOUT: Record<ArrangeableList, { title: string; note: string }> = {
+  leads: {
+    title: "Arrange the leads columns",
+    note: "The order is the same for everyone, and the Excel template and export follow it.",
+  },
+  applications: {
+    title: "Arrange the applications columns",
+    note: "The order is the same for everyone — on the Applications page and each student's Applications tab — and the Excel export follows it.",
+  },
+};
+
 /**
- * A Super Admin's control for the order of the leads columns (0313): drag a
- * column, or move it up and down, and save — for everyone, and for the leads
- * Excel template and export, which follow the list.
+ * A Super Admin's control for the order of a list's columns (0313, 0319):
+ * drag a column, or move it up and down, and save — for everyone, and for
+ * the list's Excel export, which follows it.
  */
-export function ArrangeLeadColumns({ columns }: { columns: Column[] }) {
+export function ArrangeLeadColumns({ columns, list = "leads" }: { columns: Column[]; list?: ArrangeableList }) {
   const [open, setOpen] = useState(false);
   const [order, setOrder] = useState(columns);
   const [dragging, setDragging] = useState<number | null>(null);
@@ -58,10 +69,10 @@ export function ArrangeLeadColumns({ columns }: { columns: Column[] }) {
         <Columns3 aria-hidden className="h-4 w-4" />
         Arrange columns
       </Button>
-      <Modal open={open} onClose={() => setOpen(false)} title="Arrange the leads columns">
+      <Modal open={open} onClose={() => setOpen(false)} title={ABOUT[list].title}>
         <div className="flex flex-col gap-3" data-arrange-dialog>
           <p className="text-xs text-muted">
-            Drag a column, or move it up or down. The order is the same for everyone, and the Excel template and export follow it.
+            Drag a column, or move it up or down. {ABOUT[list].note}
           </p>
           <ol className="flex flex-col divide-y divide-border rounded-md border border-border">
             {order.map((c, i) => (
@@ -108,10 +119,10 @@ export function ArrangeLeadColumns({ columns }: { columns: Column[] }) {
             </p>
           )}
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="primary" pending={saving} onClick={() => run(() => saveLeadColumnOrder(order.map((c) => c.key)), "Column order saved.")}>
+            <Button type="button" variant="primary" pending={saving} onClick={() => run(() => saveColumnOrder(list, order.map((c) => c.key)), "Column order saved.")}>
               Save order
             </Button>
-            <Button type="button" variant="ghost" disabled={saving} onClick={() => run(resetLeadColumnOrder, "Columns back in their default order.")}>
+            <Button type="button" variant="ghost" disabled={saving} onClick={() => run(() => resetColumnOrder(list), "Columns back in their default order.")}>
               Reset to default
             </Button>
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>

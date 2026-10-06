@@ -34,6 +34,11 @@ type Row = {
   id: string;
   cells: Record<string, React.ReactNode>;
   csv?: Record<string, string>;
+  /**
+   * A colour for the whole row, with rowHighlight (globals.css, data-tone):
+   * the applications list's offers green and rejections red.
+   */
+  tone?: string;
 };
 
 /** A page longer than this is drawn a window at a time (virtualRowHeight). */
@@ -514,6 +519,7 @@ export function DataTable({
                 className="border-b border-border last:border-0 hover:bg-bg/60"
                 data-row
                 data-alt={i % 2 === 1 || undefined}
+                data-tone={row.tone}
                 aria-rowindex={virtual ? i + 2 : undefined}
                 data-current={(rowHighlight && currentRow === row.id) || undefined}
                 onClick={rowHighlight ? () => setCurrentRow(row.id) : undefined}

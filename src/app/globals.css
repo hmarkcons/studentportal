@@ -1118,8 +1118,48 @@ table[data-row-highlight]:where(:not([data-virtual])) > tbody > tr:nth-child(eve
 table[data-row-highlight] > tbody > tr:where([data-alt]) {
   --row-bg: color-mix(in srgb, var(--primary) 6%, var(--card));
 }
+/* A row coloured by what it is (DataTable's row tone): the applications list's
+   offers green, rejections red, the withdrawn greyed. After the stripes, which
+   it replaces, and before the pointer and the clicked row, which still win.
+   Every other one a shade deeper, so the stripes still read within a colour. */
+table[data-row-highlight] > tbody > tr[data-tone] {
+  --row-bg: color-mix(in srgb, var(--tone) 9%, var(--card));
+}
+table[data-row-highlight] > tbody > tr[data-tone]:where([data-alt]),
+table[data-row-highlight]:where(:not([data-virtual])) > tbody > tr[data-tone]:where(:nth-child(even)) {
+  --row-bg: color-mix(in srgb, var(--tone) 14%, var(--card));
+}
+table[data-row-highlight] > tbody > tr[data-tone="accepted"] {
+  --tone: var(--success);
+}
+table[data-row-highlight] > tbody > tr[data-tone="rejected"] {
+  --tone: var(--danger);
+}
+table[data-row-highlight] > tbody > tr[data-tone="rejected"],
+table[data-row-highlight] > tbody > tr[data-tone="rejected"]:where([data-alt]) {
+  --row-bg: color-mix(in srgb, var(--tone) 18%, var(--card));
+}
+table[data-row-highlight] > tbody > tr[data-tone="closed"] {
+  --tone: var(--muted);
+}
+table[data-row-highlight] > tbody > tr[data-tone="progress"] {
+  --tone: var(--info);
+  --row-bg: var(--card);
+}
+table[data-row-highlight] > tbody > tr[data-tone="progress"]:where([data-alt]),
+table[data-row-highlight]:where(:not([data-virtual])) > tbody > tr[data-tone="progress"]:where(:nth-child(even)) {
+  --row-bg: color-mix(in srgb, var(--tone) 5%, var(--card));
+}
+/* And a bar down its left edge in the same colour, on the serial number. */
+table[data-row-highlight] > tbody > tr[data-tone] > td:first-child {
+  box-shadow: inset 4px 0 0 var(--tone);
+}
 table[data-row-highlight] > tbody > tr:hover {
   --row-bg: color-mix(in srgb, var(--primary) 14%, var(--card));
+}
+/* A coloured row keeps its colour under the pointer, a shade deeper. */
+table[data-row-highlight] > tbody > tr[data-tone]:hover {
+  --row-bg: color-mix(in srgb, var(--tone) 24%, var(--card));
 }
 table[data-row-highlight] > tbody > tr[data-current] {
   --row-bg: color-mix(in srgb, var(--primary) 24%, var(--card));
@@ -1129,6 +1169,12 @@ table[data-row-highlight] > tbody > tr > td {
 }
 table[data-row-highlight] > tbody > tr[data-current] > td:first-child {
   box-shadow: inset 4px 0 0 var(--primary);
+}
+/* A coloured row last clicked keeps its colour — a rejection stays red while
+   it is being worked on — deeper still. One still in progress takes the
+   usual green. */
+table[data-row-highlight] > tbody > tr[data-tone]:not([data-tone="progress"])[data-current] {
+  --row-bg: color-mix(in srgb, var(--tone) 30%, var(--card));
 }
 
 /* The HMARK logo (BrandLogo): transparent, and lettered light on a dark
@@ -1180,4 +1226,51 @@ table[data-dense] > tbody > tr > td > * {
   flex: 1 1 auto;
   min-height: 0;
   max-height: none;
+}
+
+/* An application's stage (the applications table, src/lib/applicationTable.ts
+   stageHue): a colour for each kind of step, so the list reads at a glance.
+   The tint and its lettering are mixed against the theme's own card and ink,
+   so one set of colours reads in the light theme and the dark. */
+[data-hue] {
+  --hue-bg: color-mix(in srgb, var(--hue) 16%, var(--card));
+  --hue-ink: color-mix(in srgb, var(--hue) 72%, var(--ink));
+  --hue-line: color-mix(in srgb, var(--hue) 45%, var(--card));
+}
+[data-hue="amber"] { --hue: #d97706; }
+[data-hue="lime"] { --hue: #65a30d; }
+[data-hue="sky"] { --hue: #0284c7; }
+[data-hue="indigo"] { --hue: #4f46e5; }
+[data-hue="violet"] { --hue: #7c3aed; }
+[data-hue="fuchsia"] { --hue: #c026d3; }
+[data-hue="teal"] { --hue: #0d9488; }
+[data-hue="green"] { --hue: #16a34a; }
+[data-hue="emerald"] { --hue: #059669; }
+[data-hue="orange"] { --hue: #ea580c; }
+[data-hue="cyan"] { --hue: #0891b2; }
+[data-hue="blue"] { --hue: #2563eb; }
+[data-hue="red"] { --hue: #dc2626; }
+[data-hue="slate"] { --hue: #64748b; }
+:root[data-theme="dark"] [data-hue] {
+  --hue-bg: color-mix(in srgb, var(--hue) 26%, var(--card));
+  --hue-ink: color-mix(in srgb, var(--hue) 55%, var(--ink));
+  --hue-line: color-mix(in srgb, var(--hue) 55%, var(--card));
+}
+.stage-pill {
+  background-color: var(--hue-bg);
+  color: var(--hue-ink);
+  border: 1px solid var(--hue-line);
+}
+.stage-pill:hover:not(:disabled) {
+  border-color: var(--hue);
+}
+.stage-pill option {
+  background-color: var(--card);
+  color: var(--ink);
+}
+.stage-meter {
+  background-color: color-mix(in srgb, var(--hue) 14%, transparent);
+}
+.stage-meter > span {
+  background-color: var(--hue);
 }

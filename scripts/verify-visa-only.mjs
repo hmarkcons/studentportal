@@ -338,7 +338,7 @@ try {
     if (await row.count()) {
       await row.getByRole("button", { name: "Modify" }).click();
       await row.locator('input[name="intake"]').fill("zztmp Spring 2100");
-      await row.getByRole("button", { name: "Save changes" }).click();
+      await row.getByRole("button", { name: "Save invoice" }).click();
       const edited = await poll(async () => {
         const { data } = await admin.from("invoices").select("intake, consultancy_fee, admin_charge, currency, terms").eq("id", invoice.id).single();
         return data?.intake === "zztmp Spring 2100" ? data : null;

@@ -8,6 +8,23 @@ import { listLeadRemarks, saveLeadRemark, type RemarkVersion } from "@/lib/actio
 import { REMARK_MAX, remarkChanged, remarkWhen } from "@/lib/leadRemarks";
 
 /**
+ * Where a remark's versions are read from and saved to: a lead's (0306) by
+ * default, or an application's (0319) — the same shape, kept apart because a
+ * student can read their own lead and their own applications.
+ */
+export type RemarkStore = {
+  list: (id: string) => Promise<{ versions: RemarkVersion[] } | { error: string }>;
+  save: (id: string, raw: string) => Promise<{ success: true; remark: string | null; version: RemarkVersion | null } | { error: string }>;
+  placeholder?: string;
+};
+
+const LEAD_REMARKS: RemarkStore = {
+  list: listLeadRemarks,
+  save: saveLeadRemark,
+  placeholder: "e.g. Wants Italy for masters, budget tight — call after Eid",
+};
+
+/**
  * A lead's remark, whole, to read and to edit — with every earlier version
  * beneath it, who wrote each and when (0306). Shared by the leads list's
  * pop-up and the lead's own page, so the two cannot differ.
@@ -23,7 +40,9 @@ export function LeadRemarkEditor({
   updatedBy,
   startEditing = false,
   onSaved,
+  store = LEAD_REMARKS,
 }: {
+  /** Whose remark: the lead's id, or the application's with an application store. */
   leadId: string;
   remark: string | null;
   updatedAt: string | null;
@@ -31,6 +50,7 @@ export function LeadRemarkEditor({
   /** Opened to add one: straight into the box. */
   startEditing?: boolean;
   onSaved?: (remark: string | null, at: string | null, by: string | null) => void;
+  store?: RemarkStore;
 }) {
   const [remark, setRemark] = useState(initialRemark);
   const [meta, setMeta] = useState<{ at: string | null; by: string | null }>({ at: updatedAt, by: updatedBy });
@@ -44,18 +64,18 @@ export function LeadRemarkEditor({
   // The history, once, when the remark is first shown.
   useEffect(() => {
     let live = true;
-    void listLeadRemarks(leadId).then((result) => {
+    void store.list(leadId).then((result) => {
       if (live) setVersions("error" in result ? [] : result.versions);
     });
     return () => {
       live = false;
     };
-  }, [leadId]);
+  }, [leadId, store]);
 
   async function save() {
     setSaving(true);
     setError(null);
-    const result = await saveLeadRemark(leadId, draft);
+    const result = await store.save(leadId, draft);
     setSaving(false);
     if ("error" in result) return setError(result.error);
     setRemark(result.remark);
@@ -84,7 +104,7 @@ export function LeadRemarkEditor({
             rows={6}
             maxLength={REMARK_MAX}
             autoFocus
-            placeholder="e.g. Wants Italy for masters, budget tight — call after Eid"
+            placeholder={store.placeholder}
             aria-label="Remark"
             data-remark-input
           />
