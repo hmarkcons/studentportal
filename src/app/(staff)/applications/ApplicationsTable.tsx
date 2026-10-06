@@ -513,8 +513,8 @@ export function ApplicationsTable({
         exportHref={exportHref}
         label={label}
         freezeColumn={scope === "all" ? "student" : "university"}
-        // A student's tab: the application's number stays beside its university.
-        freezeSerial={scope === "student"}
+        // The row's number stays beside whose it is: the student, or on a student's tab the university.
+        freezeSerial
         minTableWidthClassName="min-w-[1200px]"
         oneLine
         dense

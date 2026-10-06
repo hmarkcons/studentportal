@@ -171,8 +171,8 @@ export function DataTable({
   gridLines?: boolean;
   /**
    * The serial number frozen at the left as well, with the frozen column
-   * held just after it (globals.css, data-frozen-lead): a student's
-   * applications, read across by number and university.
+   * held just after it (globals.css, data-frozen-lead): the applications,
+   * read across by number and student, or number and university.
    */
   freezeSerial?: boolean;
 }) {

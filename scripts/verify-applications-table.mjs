@@ -117,6 +117,19 @@ try {
       trs.map((tr) => tr.querySelector('a[href*="/applications/"]')?.getAttribute("href")?.split("/").pop())
     );
   const bg = (locator) => locator.evaluate((el) => getComputedStyle(el).backgroundColor);
+  /** Scrolled as far right as it goes: where the row number and the frozen column stand. */
+  const pinnedIn = (p, scope) =>
+    p.locator(`[data-applications-table='${scope}'] [data-table-frame]`).evaluate(async (frame) => {
+      frame.scrollLeft = frame.scrollWidth;
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const tr = frame.querySelector("tbody tr[data-row]");
+      const number = tr.querySelector("td[data-serial]").getBoundingClientRect();
+      const frozen = tr.querySelector("td[data-frozen]").getBoundingClientRect();
+      const edge = frame.getBoundingClientRect().left + frame.clientLeft;
+      const out = { scrolled: frame.scrollLeft, edge, numberLeft: number.left, numberRight: number.right, frozenLeft: frozen.left };
+      frame.scrollLeft = 0;
+      return out;
+    });
   const rgb = (s) => (s.match(/[\d.]+/g) ?? []).map(Number);
 
   // ------------------------------------------------------------ the tab
@@ -152,21 +165,10 @@ try {
   const frozen = await page.locator("[data-applications-table='student'] tbody tr[data-row]").first().locator("td[data-frozen]").evaluate(rule);
   ok("the table is ruled: a line between every column and every row", ruled.right === "1px" && ruled.bottom === "1px" && ruled.style === "solid", JSON.stringify(ruled));
   ok("...the frozen column too", frozen.right === "1px" && frozen.bottom === "1px", JSON.stringify(frozen));
-  // Scrolled as far right as it goes: the number and the university still at the left, side by side.
-  const pinned = await page.locator("[data-applications-table='student'] [data-table-frame]").evaluate(async (frame) => {
-    frame.scrollLeft = frame.scrollWidth;
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-    const tr = frame.querySelector("tbody tr[data-row]");
-    const number = tr.querySelector("td[data-serial]").getBoundingClientRect();
-    const university = tr.querySelector("td[data-frozen]").getBoundingClientRect();
-    const edge = frame.getBoundingClientRect().left + frame.clientLeft;
-    const out = { scrolled: frame.scrollLeft, edge, numberLeft: number.left, numberRight: number.right, universityLeft: university.left };
-    frame.scrollLeft = 0;
-    return out;
-  });
+  const pinned = await pinnedIn(page, "student");
   ok("scrolled sideways, the number stays at the left edge",
     pinned.scrolled > 200 && Math.abs(pinned.numberLeft - pinned.edge) <= 1.5, JSON.stringify(pinned));
-  ok("...with the university right beside it", Math.abs(pinned.universityLeft - pinned.numberRight) <= 1, JSON.stringify(pinned));
+  ok("...with the university right beside it", Math.abs(pinned.frozenLeft - pinned.numberRight) <= 1, JSON.stringify(pinned));
 
   // ------------------------------------------------------------ priority
   console.log("\n--- priority ---");
@@ -282,6 +284,10 @@ try {
   await all.locator('input[placeholder^="Search"]').fill(STUDENT);
   ok("the page lists the student's applications", (await poll(async () => ((await all.locator("tbody tr[data-row]").count()) === 4 ? true : null), 15)) === true);
   await shot(page, "4-all-page");
+  const pinnedAll = await pinnedIn(page, "all");
+  ok("scrolled sideways, the number stays at the left edge here too",
+    pinnedAll.scrolled > 200 && Math.abs(pinnedAll.numberLeft - pinnedAll.edge) <= 1.5, JSON.stringify(pinnedAll));
+  ok("...with the student right beside it", Math.abs(pinnedAll.frozenLeft - pinnedAll.numberRight) <= 1, JSON.stringify(pinnedAll));
   await page.locator("[data-group-chip='rejected']").click();
   const onlyRejected = await poll(async () => {
     const t = await tones(page);
