@@ -618,12 +618,16 @@ create trigger trg_notifications_on_leave
   for each row execute function public.notifications_on_leave();
 
 -- ------------------------------------------------------- read, and emailed
--- Marks the caller's own alerts read: the ones named, or all of them.
+-- Marks the caller's own alerts read: the ones named, or all they are shown.
+-- "Mark all read" leaves the ones only emailed (feed = false) alone: those
+-- stand for a to-do — a student waiting on a reply — and clear when it is
+-- done, not when the news above it is dismissed.
 create or replace function public.mark_notifications_read(p_ids uuid[] default null) returns integer
 language sql security definer set search_path = public as $$
   with done as (
     update notifications set read_at = now()
-    where user_id = auth.uid() and read_at is null and (p_ids is null or id = any (p_ids))
+    where user_id = auth.uid() and read_at is null
+      and (case when p_ids is null then feed else id = any (p_ids) end)
     returning 1
   )
   select count(*)::integer from done

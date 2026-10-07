@@ -246,13 +246,27 @@ try {
     console.log("skipped against a local server: alerts are emailed only from a deployment");
   } else {
     // Quiet for two minutes, then sent by the next page view (or the cron).
+    // Read, by whom, and what each of them should come to:
+    //   the Super Admin's partner message, the partner's message from HMARK,
+    //   the student's document sent back, the staff's email-only alerts — unread: sent;
+    //   the counsellor's lead assignment — read in the portal first: never emailed.
+    let states = null;
     const emailed = await poll(async () => {
       await couPage.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded" }).catch(() => {});
-      const { data } = await admin.from("notifications").select("kind, email_state").in("user_id", [cou.id, sup.id, partnerUserId]).in("kind", ["lead_assigned", "partner_message", "message"]);
-      const states = Object.fromEntries((data ?? []).map((r) => [r.kind, r.email_state]));
-      return states.lead_assigned === "sent" && states.partner_message === "sent" && states.message === "sent" ? states : null;
+      const { data } = await admin
+        .from("notifications")
+        .select("user_id, kind, email_state, email_error")
+        .in("user_id", [cou.id, proc.id, sup.id, partnerUserId, studentUserId]);
+      const whose = { [cou.id]: "cou", [proc.id]: "proc", [sup.id]: "sup", [partnerUserId]: "partner", [studentUserId]: "student" };
+      states = Object.fromEntries(
+        (data ?? []).map((r) => [`${r.kind}@${whose[r.user_id]}`, r.email_error ? `${r.email_state}: ${r.email_error}` : r.email_state])
+      );
+      const sent = ["partner_message@sup", "message@partner", "document_rejected@student", "student_message@cou", "student_message@proc"];
+      return sent.every((k) => states[k] === "sent") ? states : null;
     }, 420, 20000);
-    ok("each alert is emailed once it has been quiet two minutes", Boolean(emailed), JSON.stringify(emailed));
+    ok("each unread alert is emailed once it has been quiet two minutes", Boolean(emailed), JSON.stringify(states));
+    ok("...the ones only emailed too, though Mark all read was pressed", states?.["student_message@cou"] === "sent", JSON.stringify(states));
+    ok("...and one read in the portal first is not emailed", states?.["lead_assigned@cou"] === "skipped" && states?.["message@student"] === "skipped", JSON.stringify(states));
   }
 } finally {
   await browser?.close().catch(() => {});
