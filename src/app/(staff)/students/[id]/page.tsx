@@ -31,6 +31,7 @@ import { UndoAgreementApproval, UndoneApprovalNote } from "./UndoAgreementApprov
 import { ConsentVideoLink } from "./ConsentVideoLink";
 import { GenerateAgreementPdfButton } from "./GenerateAgreementPdfButton";
 import { AgreementActionsMenu } from "./AgreementActionsMenu";
+import { isPortalESigned } from "@/lib/esignature";
 import { GenerateInvoiceForm, InvoiceCard } from "./InvoicePanel";
 import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
 import { documentUrls, avatarUrlMap } from "@/lib/storageUrls";
@@ -1093,6 +1094,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                         links={links}
                         canEdit={isSuperAdmin && a.status !== "signed"}
                         canDelete={isSuperAdmin}
+                        invoiced={(invoices ?? []).some((inv) => inv.agreement_id === a.id)}
                       />
                     </div>
                   </div>
@@ -1113,6 +1115,12 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                           byRole: a.signing_method === "e_signature" ? "student" : "staff",
                           audience: "staff",
                         })}
+                        {/* Signed in the portal with their own signature, rather than a scan of paper. */}
+                        {isPortalESigned(a.signed_file_path) && (
+                          <span className="ml-1.5 rounded-full bg-success-bg px-1.5 py-0.5 text-[10px] font-semibold text-success" data-portal-esigned>
+                            E-signed in the portal
+                          </span>
+                        )}
                       </span>
                     )}
                     {uploadedLine({ at: a.video_uploaded_at, byRole: "student", audience: "staff" }) && (

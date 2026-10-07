@@ -404,6 +404,17 @@ try {
       new URL(studentPage.url()).pathname === "/portal/agreement", studentPage.url());
 
     await studentPage.goto(`${BASE}/portal/agreement`, { waitUntil: "domcontentloaded" });
+    // Signing in the portal is the first choice (check:esign covers it); this
+    // check takes the other road — a copy signed on paper, uploaded.
+    const paperRoute = studentPage.locator('[data-sign-method="upload"]').first();
+    await paperRoute.waitFor({ timeout: 60_000 }).catch(() => {});
+    await studentPage
+      .waitForFunction(() => {
+        const el = document.querySelector('[data-sign-method="upload"]');
+        return Boolean(el && Object.keys(el).some((k) => k.startsWith("__reactProps")));
+      }, null, { timeout: 60_000 })
+      .catch(() => {});
+    if (await paperRoute.count()) await paperRoute.click();
 
     const submit = studentPage.getByRole("button", { name: /Submit signed agreement/i });
     // Waited for: the page streams in, and counting on arrival read only its header.
@@ -601,6 +612,12 @@ try {
           const redoText = await waitForText(studentPage, new RegExp(half.reason.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
           ok("the student is told what was wrong with it",
             redoText.includes(half.reason), redoText.replace(/\s+/g, " ").slice(0, 400));
+          // The signed agreement again by the paper road, as first time round.
+          if (half.noun === "signed agreement") {
+            const paper = studentPage.locator('[data-sign-method="upload"]').first();
+            await paper.waitFor({ timeout: 30_000 }).catch(() => {});
+            if (await paper.count()) await paper.click();
+          }
           ok(`...and is asked for the ${half.noun} only`,
             (await studentPage.locator(half.absentInput).count()) === 0
             && (await studentPage.locator(half.studentInput).count()) > 0,

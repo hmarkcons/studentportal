@@ -7,6 +7,7 @@ import { companyMergeVars, missingCompanyFields, officeLine, DEFAULT_AGREEMENT_C
 import { formatAmount, normalizeTheme } from "@/lib/pdf/agreementTheme";
 import { serviceOf } from "@/lib/serviceType";
 import { studentAgreementDateText } from "@/lib/agreementDate";
+import type { ClientSignature } from "@/lib/pdf/AgreementDocument";
 
 // A student's agreement as a PDF, from its template and the student: shared
 // by "Generate PDF" on a student (generateAgreementPdf) and the template
@@ -49,6 +50,8 @@ export type StudentAgreementInput = {
   };
   profile: { emergency_contact_name: string | null; emergency_contact_relation: string | null; emergency_contact_number: string | null } | null;
   signatureDataUri: string | null;
+  /** The student's own signature, given in the portal; absent, their places are left blank to sign by hand. */
+  clientSignature?: ClientSignature | null;
   /**
    * The company as Setup → Agreement templates → Company details has it (0288):
    * the office line, the header, the signature caption and the {{company_…}}
@@ -186,6 +189,7 @@ export async function renderStudentAgreementPdf(input: StudentAgreementInput): P
       signatureDataUri: input.signatureDataUri,
       signatoryName,
       theme,
+      clientSignature: input.clientSignature ?? null,
     },
   });
 

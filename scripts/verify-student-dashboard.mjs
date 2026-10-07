@@ -327,7 +327,7 @@ try {
   ok("...each with its signed copy", (await page.getByRole("link", { name: /View your signed copy/ }).count()) === 2);
   const agreementText = await page.locator("main").innerText();
   ok("the draft the office is preparing is not shown", !/Being prepared/.test(agreementText) && !/Version 3/.test(agreementText));
-  ok("no unsigned agreement is offered to view", (await page.getByRole("link", { name: /View agreement|Download to sign/ }).count()) === 0);
+  ok("no unsigned agreement is offered to view", (await page.getByRole("link", { name: /View agreement|Download to sign|Download the agreement/ }).count()) === 0);
 
   console.log("\n--- full width ---");
   const width = async () => page.evaluate(() => document.querySelector("main [data-portal-page]")?.getBoundingClientRect().width ?? 0);

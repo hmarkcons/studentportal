@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { EllipsisVertical, Eye, Pencil, Trash2 } from "lucide-react";
-import { deleteAgreement } from "@/lib/actions/agreements";
+import { EllipsisVertical, Eye, FileMinus, Pencil, Trash2 } from "lucide-react";
+import { deleteAgreement, removeSignedAgreement } from "@/lib/actions/agreements";
+import { Button } from "@/components/ui/Button";
+import { Textarea } from "@/components/ui/Input";
 import { useButtonAction } from "@/components/useButtonAction";
 import { useAnchoredMenu } from "@/components/useAnchoredMenu";
 import { SlideOver } from "@/components/ui/SlideOver";
@@ -32,6 +34,8 @@ type AgreementRecord = {
   service_type?: string | null;
   visa_service_fee_override?: number | null;
   destination_id?: string | null;
+  /** The signed copy on file, if one is. */
+  signed_file_path?: string | null;
 };
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
@@ -54,6 +58,7 @@ export function AgreementActionsMenu({
   links,
   canEdit,
   canDelete,
+  invoiced = false,
 }: {
   agreement: AgreementRecord;
   studentId: string;
@@ -66,6 +71,8 @@ export function AgreementActionsMenu({
   links?: { templateUrl?: string; signedUrl?: string; pdfUrl?: string };
   canEdit: boolean;
   canDelete: boolean;
+  /** An invoice has been raised on it: deleting keeps the invoice, unlinked. */
+  invoiced?: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
@@ -76,11 +83,29 @@ export function AgreementActionsMenu({
   // The agreement and this menu go with a successful delete, so it confirms
   // with a toast; a refusal is still said under the menu's button.
   const del = useButtonAction();
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [withVideo, setWithVideo] = useState(true);
+  const removal = useButtonAction();
+  const eSignature = agreement.signing_method === "e_signature";
 
   async function handleDelete() {
-    if (!confirm("Delete this agreement? This cannot be undone.")) return;
+    const warning = invoiced
+      ? "Delete this agreement? An invoice has been raised on it: the invoice stays, no longer linked to an agreement. This cannot be undone."
+      : "Delete this agreement? This cannot be undone.";
+    if (!confirm(warning)) return;
     await del.run(() => deleteAgreement(agreement.id, studentId), { toast: "Deleted." });
     setMenuOpen(false);
+  }
+
+  async function handleRemove() {
+    const result = await removal.run(() => removeSignedAgreement(agreement.id, studentId, reason, eSignature && withVideo), {
+      toast: "Signed copy removed — the agreement is waiting for a signature again.",
+    });
+    if (result && !("error" in result && result.error)) {
+      setRemoveOpen(false);
+      setReason("");
+    }
   }
 
   return (
@@ -93,7 +118,7 @@ export function AgreementActionsMenu({
           <>
             <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
             {/* Menu items: full width by design, so exempt from the text-width rule. */}
-            <div ref={menu} style={menuStyle} data-menu className="z-20 w-36 rounded-md border border-border bg-card py-1 shadow-lg">
+            <div ref={menu} style={menuStyle} data-menu className="z-20 w-48 rounded-md border border-border bg-card py-1 shadow-lg">
               <button
                 data-full-width
                 onClick={() => {
@@ -116,6 +141,20 @@ export function AgreementActionsMenu({
                 >
                   <Pencil aria-hidden className="h-4 w-4 shrink-0" />
                   Edit
+                </button>
+              )}
+              {canDelete && agreement.signed_file_path && (
+                <button
+                  data-full-width
+                  onClick={() => {
+                    setRemoveOpen(true);
+                    setMenuOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-ink hover:bg-bg"
+                  data-remove-signed
+                >
+                  <FileMinus aria-hidden className="h-4 w-4 shrink-0" />
+                  Remove signed copy
                 </button>
               )}
               {canDelete && (
@@ -175,6 +214,51 @@ export function AgreementActionsMenu({
           </div>
         </div>
       </SlideOver>
+
+      {canDelete && agreement.signed_file_path && (
+        <SlideOver open={removeOpen} onClose={() => setRemoveOpen(false)} title="Remove the signed copy">
+          <div className="flex flex-col gap-3" data-remove-signed-dialog>
+            <p className="text-sm text-ink">
+              The signed copy is taken off this agreement and kept in its history. The agreement goes back to waiting for a
+              signature, so you can correct it, regenerate its PDF and have it signed again
+              {eSignature ? " — in the portal, or on paper and uploaded." : " — at the office, and upload the new signed copy."}
+            </p>
+            {invoiced && (
+              <p className="rounded-md bg-info-bg px-3 py-2 text-xs text-info">
+                An invoice has been raised on this agreement. It is not changed: correct it separately if the figures change.
+              </p>
+            )}
+            <label className="flex flex-col gap-1 text-xs font-medium text-ink">
+              Why — the student is shown this
+              <Textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                rows={3}
+                placeholder="e.g. The consultancy fee was corrected — please sign the updated agreement."
+                data-remove-reason
+              />
+            </label>
+            {eSignature && (
+              <label className="flex items-start gap-2 text-xs text-ink">
+                <input type="checkbox" checked={withVideo} onChange={(e) => setWithVideo(e.target.checked)} className="mt-0.5" />
+                <span>
+                  Ask for a new consent video too
+                  <span className="block text-muted">Recommended when the agreement itself changes: the video confirms what they are signing.</span>
+                </span>
+              </label>
+            )}
+            {removal.state?.error && <p className="text-xs text-danger">{removal.state.error}</p>}
+            <div className="flex gap-2">
+              <Button type="button" variant="danger" size="sm" onClick={() => void handleRemove()} pending={removal.pending} disabled={!reason.trim()} data-remove-confirm>
+                Remove signed copy
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setRemoveOpen(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </SlideOver>
+      )}
 
       {canEdit && (
         <SlideOver open={editOpen} onClose={() => setEditOpen(false)} title="Edit agreement">

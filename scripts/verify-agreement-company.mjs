@@ -13,16 +13,21 @@
 //                       header and the signature caption — read from the
 //                       database, the one path the preview does not share.
 //   placeholders        a template quoting {{company_email}} refuses to
-//                       generate while the email is blank, and prints it once
-//                       it is set.
-//   Italy               its Standard agreement printed the landline as 778;
-//                       with the saved details restored it prints 777.
+//                       generate while the email is blank (it is blanked for
+//                       that moment), and prints it once it is set.
+//   Italy               with the saved details restored, its Standard
+//                       agreement prints them again.
+//
+// What agreements print is read from the saved details at the start, not
+// written in here: the office changes them (an email and a mobile were added
+// after this check was written, and it then failed on the old landline).
 //
 // The saved details are snapshotted first and put back straight after the one
 // real agreement that needs them, and again in the finally, so real
 // agreements generated meanwhile are exposed to the test values for seconds.
 import { inflateSync } from "node:zlib";
 import { BASE, apiAs, clients, fixtures, openBrowser, reporter, requireConfirmation, signIn } from "./verify-portal-lib.mjs";
+import { companyFromSettings, officeLine } from "../src/lib/agreementCompany.ts";
 
 requireConfirmation("check:agreementcompany");
 
@@ -30,8 +35,6 @@ const { admin, url, anonKey } = clients();
 const fx = fixtures(admin);
 const { ok, finish } = reporter();
 
-const PRINTED_BEFORE =
-  "HMARK Consultants - Office Address: Suite 101, Dashtiyar Chambers, Opp. Urdu Federal University, Gulshan-e-Iqbal, Block 13-C, University Road, Karachi, Pakistan. Landline #: 021 34 999 777";
 
 async function poll(fn, seconds = 60) {
   for (let i = 0; i < seconds; i++) {
@@ -91,6 +94,8 @@ if (readError || !before) {
   process.exit(1);
 }
 const snapshot = { ...before };
+// The office line every agreement prints now, from the saved details — the same rule the PDF uses.
+const PRINTED_BEFORE = officeLine(companyFromSettings(before));
 delete snapshot.id;
 delete snapshot.updated_at;
 const restore = () => admin.from("agreement_settings").update(snapshot).eq("id", true);
@@ -211,7 +216,10 @@ try {
   ok("it starts on exactly what agreements have printed", (await officePreview.innerText()).trim() === PRINTED_BEFORE, await officePreview.innerText());
 
   // A placeholder with nothing to print stops the agreement before it goes out.
+  // The email is blanked for this one generation, and put back straight after.
+  await admin.from("agreement_settings").update({ email: null }).eq("id", true);
   const refusedPdf = await generate(onPlaceholders);
+  await restore();
   ok("a template quoting {{company_email}} will not generate while the email is blank",
     Boolean(refusedPdf.error) && /company's email, which is blank/.test(refusedPdf.error), refusedPdf.error ?? "a PDF was generated");
 

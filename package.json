@@ -52,6 +52,7 @@
     "check:visaonly": "node scripts/verify-visa-only.mjs",
     "check:apptable": "node scripts/verify-applications-table.mjs",
     "check:notify": "node scripts/verify-notifications.mjs",
+    "check:esign": "node scripts/verify-esignature.mjs",
     "check:builder": "node scripts/verify-agreement-builder.mjs",
     "check:tables": "node scripts/verify-table-frames.mjs",
     "check:calendar": "node scripts/verify-calendar.mjs",

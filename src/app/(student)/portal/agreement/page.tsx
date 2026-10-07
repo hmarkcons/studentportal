@@ -178,7 +178,7 @@ export default async function PortalAgreementPage() {
                       className="bg-primary mt-3 inline-flex w-fit items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-primary-ink shadow-sm transition-colors hover:bg-[var(--brand-strong)]"
                     >
                       <Download aria-hidden className="h-3.5 w-3.5 shrink-0" />
-                      Download to sign
+                      Download the agreement
                     </a>
                   )}
                   <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted">
@@ -221,6 +221,7 @@ export default async function PortalAgreementPage() {
                         studentId={student.id}
                         needsDocument={!a.signed_file_path}
                         needsVideo={!a.video_recording_path}
+                        canSignHere={generated.has(a.id)}
                       />
                     </>
                   )}

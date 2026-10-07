@@ -3,8 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { agreementToday, readAgreementDate } from "@/lib/agreementDate";
 import { createClient } from "@/lib/supabase/server";
-import { renderStudentAgreementPdf, type AgreementDestination } from "@/lib/pdf/studentAgreementPdf";
-import { readAgreementCompany } from "@/lib/agreementCompanyRead";
+import { buildStudentAgreementPdf } from "@/lib/agreementPdfBuild";
 import { requirePermission } from "@/lib/auth/permissions";
 import { ensureCommissionForStudent } from "@/lib/actions/commissionAuto";
 import { validateDocumentFile, sanitizeFilename } from "@/lib/documentUpload";
@@ -13,10 +12,6 @@ import { uploadedFile } from "@/lib/stagedUpload";
 import { serviceOf, templateServiceError, type ServiceType } from "@/lib/serviceType";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
-
-function one<T>(v: T | T[] | null) {
-  return Array.isArray(v) ? v[0] ?? null : v;
-}
 
 function parseAgreementFields(formData: FormData) {
   const template_id = String(formData.get("template_id") ?? "") || null;
@@ -229,74 +224,9 @@ export async function generateAgreementPdf(agreementId: string, studentId: strin
   const denied = await requirePermission("agreements.process", "Only Super Admin/Processing can regenerate an agreement PDF.");
   if (denied) return { error: denied.error };
 
-  const { data: agreement, error: agreementError } = await supabase
-    .from("agreements")
-    .select("id, template_id, destination_id, admin_charge_override, consultancy_fee_override, discount_amount, installment_count, is_backup, created_at, agreement_date, service_type, visa_service_fee_override")
-    .eq("id", agreementId)
-    .single();
-  if (agreementError || !agreement) return { error: agreementError?.message ?? "Agreement not found." };
-  if (!agreement.template_id) return { error: "This agreement has no template selected." };
-
-  const { data: template } = await supabase
-    .from("agreement_templates")
-    .select(
-      "signatory_name, wording, design, destination:destinations(country_code, track, display_name, admin_charge, consultancy_fee, consultancy_fee_currency, visa_service_fee)"
-    )
-    .eq("id", agreement.template_id)
-    .maybeSingle();
-  // The agreement names its country (0298) — the only place a general
-  // visa-service template's agreement has one; otherwise its template's.
-  const { data: ownDestination } = agreement.destination_id
-    ? await supabase
-        .from("destinations")
-        .select("country_code, track, display_name, admin_charge, consultancy_fee, consultancy_fee_currency, visa_service_fee")
-        .eq("id", agreement.destination_id)
-        .maybeSingle()
-    : { data: null };
-  const destination =
-    (ownDestination as AgreementDestination | null) ??
-    (template?.destination ? (one(template.destination as never) as AgreementDestination | null) : null);
-  if (!destination?.country_code || !destination.track) return { error: "This agreement's destination could not be resolved." };
-
-  const { data: student } = await supabase
-    .from("students")
-    .select("full_name, date_of_birth, email, address, contact_number, current_qualification, course_of_interest")
-    .eq("id", studentId)
-    .maybeSingle();
-  if (!student) return { error: "Student not found." };
-
-  const { data: profile } = await supabase
-    .from("student_profiles")
-    .select("emergency_contact_name, emergency_contact_relation, emergency_contact_number")
-    .eq("student_id", studentId)
-    .maybeSingle();
-
-  // The agreement PDF prints these fields directly (see StudentDetailsChart
-  // in AgreementDocument) — generating it with any of them blank would hand
-  // the student a legal document with empty fields instead of failing loudly here.
-  const missingProfileFields = [
-    !student.date_of_birth && "date of birth",
-    !student.address?.trim() && "address",
-    !profile?.emergency_contact_name?.trim() && "emergency contact name",
-    !profile?.emergency_contact_relation?.trim() && "emergency contact relation",
-    !profile?.emergency_contact_number?.trim() && "emergency contact number",
-  ].filter((f): f is string => Boolean(f));
-  if (missingProfileFields.length > 0) {
-    return { error: `Complete the student's profile before generating the agreement — missing: ${missingProfileFields.join(", ")}.` };
-  }
-
-  const { data: sigFile } = await supabase.storage.from("documents").download("branding/hmark-signature.png");
-  const signatureDataUri = sigFile ? `data:image/png;base64,${Buffer.from(await sigFile.arrayBuffer()).toString("base64")}` : null;
-
-  const rendered = await renderStudentAgreementPdf({
-    template: { wording: template?.wording ?? null, signatory_name: template?.signatory_name ?? null, design: template?.design ?? null },
-    destination,
-    agreement,
-    student,
-    profile: profile ?? null,
-    signatureDataUri,
-    company: await readAgreementCompany(supabase),
-  });
+  // The same build the student's e-signing uses (src/lib/agreementPdfBuild.ts),
+  // here with HMARK's signature and the student's places left blank.
+  const rendered = await buildStudentAgreementPdf(supabase, agreementId, studentId);
   if ("error" in rendered) return { error: rendered.error };
   const buffer = rendered.buffer;
 
@@ -612,6 +542,35 @@ export async function undoAgreementApproval(
  * of what was originally submitted — and the reason is shown to the student so
  * they know what to fix rather than guessing.
  */
+/**
+ * Takes the signed copy off an agreement (0321), so it can be corrected and
+ * signed again — whether or not an invoice has been raised on it. Super Admin
+ * only. The copy is archived, the student is shown the reason, and an
+ * e-signature agreement's consent video goes with it unless kept.
+ */
+export async function removeSignedAgreement(
+  agreementId: string,
+  studentId: string,
+  reason: string,
+  withVideo: boolean
+): Promise<{ error?: string; success?: boolean }> {
+  const denied = await requirePermission("agreements.edit_delete", "Only a Super Admin can remove a signed agreement.");
+  if (denied) return { error: denied.error };
+  if (!reason.trim()) return { error: "Say why — the student is shown it, so they know what changed and what to sign." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("remove_signed_agreement", {
+    p_agreement_id: agreementId,
+    p_reason: reason.trim(),
+    p_with_video: withVideo,
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath(`/students/${studentId}`);
+  revalidatePath("/portal/agreement");
+  return { success: true };
+}
+
 export async function rejectAgreementArtifact(
   agreementId: string,
   studentId: string,

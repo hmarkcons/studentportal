@@ -131,7 +131,23 @@ const styles = StyleSheet.create({
   signNameLine: { borderBottomWidth: 1, borderColor: INK, height: 20, marginTop: 16, justifyContent: "flex-end", alignItems: "center" },
   signNameText: { fontSize: 9 },
   signNameCaption: { fontSize: 7.5, color: INK_SOFT, marginTop: 2, textAlign: "center" },
+  // The student's own signature, signed in the portal: on their line, and in
+  // their half of every page's box. Sized to fit, never stretched.
+  clientSignImg: { position: "absolute", bottom: 1, left: 4 },
+  signedLine: { fontSize: 6.5, color: INK_SOFT, marginTop: 4, lineHeight: 1.3 },
 });
+
+/**
+ * The student's signature, given in the portal (an image with its background
+ * taken out), with the line that says when and how it was given.
+ */
+export type ClientSignature = { dataUri: string; width: number; height: number; signedLine: string | null };
+
+/** The size that fits within the box, keeping the signature's shape. */
+function fitSignature(sig: ClientSignature, maxWidth: number, maxHeight: number) {
+  const scale = Math.min(maxWidth / Math.max(1, sig.width), maxHeight / Math.max(1, sig.height));
+  return { width: Math.round(sig.width * scale * 10) / 10, height: Math.round(sig.height * scale * 10) / 10 };
+}
 
 export type AgreementPdfData = {
   destinationLabel: string;
@@ -177,6 +193,8 @@ export type AgreementPdfData = {
   signatoryName: string | null;
   /** The template's design; absent or null prints the Classic look. */
   theme?: Theme | null;
+  /** Signed in the portal: the student's signature in their places. Absent, those places are left to sign by hand. */
+  clientSignature?: ClientSignature | null;
 };
 
 export function money(symbol: string, n: number) {
@@ -321,7 +339,17 @@ function Header({
   );
 }
 
-function Footer({ date, signatureDataUri, theme }: { date: string; signatureDataUri: string | null; theme?: Theme | null }) {
+function Footer({
+  date,
+  signatureDataUri,
+  theme,
+  clientSignature = null,
+}: {
+  date: string;
+  signatureDataUri: string | null;
+  theme?: Theme | null;
+  clientSignature?: ClientSignature | null;
+}) {
   const m = theme?.page.margin;
   const ink = theme?.body.color ?? INK;
   return (
@@ -337,7 +365,9 @@ function Footer({ date, signatureDataUri, theme }: { date: string; signatureData
           Signature
         </Text>
         <View style={styles.sigBoxCells}>
-          <View style={styles.sigBoxCell} />
+          <View style={styles.sigBoxCell}>
+            {clientSignature && <Image src={clientSignature.dataUri} style={fitSignature(clientSignature, 96, 34)} />}
+          </View>
           <View style={[styles.sigBoxCell, styles.sigBoxCellDivider, theme ? { borderLeftColor: ink } : {}]}>
             {signatureDataUri && <Image src={signatureDataUri} style={styles.sigBoxImg} />}
           </View>
@@ -999,6 +1029,7 @@ function SignatureBlock({
   signatoryName,
   theme,
   companyName = COMPANY_NAME,
+  leftSignature = null,
 }: {
   leftCaption: string;
   leftName: string;
@@ -1008,6 +1039,8 @@ function SignatureBlock({
   signatoryName: string | null;
   theme?: Theme | null;
   companyName?: string;
+  /** The client's signature, given in the portal, on their line. */
+  leftSignature?: ClientSignature | null;
 }) {
   const ink = theme ? { borderColor: theme.body.color } : {};
   const caption = theme ? { fontFamily: theme.body.font, fontWeight: BOLD, fontSize: 8.5, color: theme.body.color } : {};
@@ -1016,12 +1049,15 @@ function SignatureBlock({
   return (
     <View style={styles.signGrid} wrap={theme ? false : undefined}>
       <View style={styles.signCol}>
-        <View style={[styles.signLine, ink]} />
+        <View style={[styles.signLine, ink]}>
+          {leftSignature && <Image src={leftSignature.dataUri} style={[styles.clientSignImg, fitSignature(leftSignature, 150, 46)]} />}
+        </View>
         <Text style={[styles.signCaption, caption]}>{leftCaption}</Text>
         <View style={[styles.signNameLine, ink]}>
           <Text style={[styles.signNameText, name]}>{leftName}</Text>
         </View>
         <Text style={[styles.signNameCaption, nameCaption]}>{leftNameCaption}</Text>
+        {leftSignature?.signedLine && <Text style={styles.signedLine}>{leftSignature.signedLine}</Text>}
       </View>
       <View style={styles.signCol}>
         <View style={[styles.signLine, ink]}>{signatureDataUri && <Image src={signatureDataUri} style={styles.signImg} />}</View>
@@ -1089,9 +1125,10 @@ export function AgreementDocument({ data }: { data: AgreementPdfData }) {
           signatureDataUri={data.signatureDataUri}
           signatoryName={data.signatoryName}
           theme={theme}
+          leftSignature={data.clientSignature}
         />
 
-        <Footer date={data.agreementDate} signatureDataUri={data.signatureDataUri} theme={theme} />
+        <Footer date={data.agreementDate} signatureDataUri={data.signatureDataUri} theme={theme} clientSignature={data.clientSignature} />
       </Page>
     </Document>
   );
