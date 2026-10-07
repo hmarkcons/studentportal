@@ -1,3 +1,4 @@
+import { removeStorageFiles } from "@/lib/fileTrash";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readAllIn } from "@/lib/catalogueReads";
 import { RECEIPT_COLUMN, type ReceiptKind } from "@/lib/paymentReceipts";
@@ -64,6 +65,6 @@ export async function removeReceiptFiles(paths: string[]): Promise<void> {
   if (paths.length === 0) return;
   const admin = createAdminClient();
   for (let i = 0; i < paths.length; i += 100) {
-    await admin.storage.from("documents").remove(paths.slice(i, i + 100));
+    await removeStorageFiles(admin, "documents", paths.slice(i, i + 100));
   }
 }

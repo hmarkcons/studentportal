@@ -1,5 +1,6 @@
 "use server";
 
+import { removeStorageFiles } from "@/lib/fileTrash";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -341,7 +342,7 @@ export async function deleteDocumentRequirement(documentId: string, revalidateTo
   if (error) return { error: error.message };
 
   if (doc?.file_path) {
-    await supabase.storage.from("documents").remove([doc.file_path]);
+    await removeStorageFiles(supabase, "documents", [doc.file_path]);
   }
 
   if (doc?.student_id) await syncStudentStages(doc.student_id as string);

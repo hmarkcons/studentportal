@@ -1,5 +1,6 @@
 "use server";
 
+import { removeStorageFiles } from "@/lib/fileTrash";
 import { createElement } from "react";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
@@ -711,7 +712,7 @@ export async function deleteInvoice(invoiceId: string, studentId: string, revali
   if (error) return { error: error.message };
 
   if (invoice?.pdf_path) {
-    await supabase.storage.from("documents").remove([invoice.pdf_path]);
+    await removeStorageFiles(supabase, "documents", [invoice.pdf_path]);
   }
   await removeReceiptFiles(receiptFiles);
 

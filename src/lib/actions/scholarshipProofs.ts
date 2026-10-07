@@ -1,5 +1,6 @@
 "use server";
 
+import { removeStorageFiles } from "@/lib/fileTrash";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getStaffSession } from "@/lib/auth/session";
@@ -167,7 +168,7 @@ export async function deleteScholarshipProof(proofId: string, studentId: string)
 
   // The row is the record, so it goes first; a storage object left behind is
   // untidy, a row pointing at a deleted object is broken.
-  await supabase.storage.from("documents").remove([proof.file_path]);
+  await removeStorageFiles(supabase, "documents", [proof.file_path]);
 
   revalidatePath(`/students/${studentId}/scholarship`);
   return { success: true };

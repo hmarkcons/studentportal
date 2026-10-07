@@ -1,5 +1,6 @@
 "use server";
 
+import { removeStorageFiles } from "@/lib/fileTrash";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { getStaffSession } from "@/lib/auth/session";
 import { getEffectivePermissions } from "@/lib/auth/permissions";
@@ -82,7 +83,7 @@ export async function uploadLoginPicture(_prev: Result, formData: FormData): Pro
   }
 
   const old = current?.image_path as string | null | undefined;
-  if (old && old !== path) await who.supabase.storage.from("site-assets").remove([old]);
+  if (old && old !== path) await removeStorageFiles(who.supabase, "site-assets", [old]);
   refresh();
   return { success: true };
 }
@@ -101,7 +102,7 @@ export async function resetLoginPicture(): Promise<Result> {
   if (error || !data?.length) return { error: error?.message ?? "The picture wasn't reset." };
 
   const old = current?.image_path as string | null | undefined;
-  if (old) await who.supabase.storage.from("site-assets").remove([old]);
+  if (old) await removeStorageFiles(who.supabase, "site-assets", [old]);
   refresh();
   return { success: true };
 }

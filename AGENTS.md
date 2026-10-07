@@ -188,6 +188,15 @@ live database, so it would email real people about real alerts, with links
 to localhost: `deliversEmail()` (src/lib/notificationDelivery.ts) is true only
 on Vercel, or with NOTIFY_EMAILS=yes. The daily reminders obey the same rule.
 
+**A record deleted can be restored; a file removed with storage's own
+`remove()` cannot.** A Super Admin restores deletions, reverts edits and takes
+back additions from the audit log (0322), and a restore brings back the
+record's files only if they went through `removeStorageFiles`
+(`src/lib/fileTrash.ts`), which keeps a copy under `trash/` for 90 days.
+Storage's own `remove()` is for clearing away an upload that has just failed,
+nothing else: anywhere else it makes a restore that reports success and
+points at files that are gone.
+
 ## Migrations
 
 Numbered files in `supabase/migrations/`, applied by hand — there is no CLI
@@ -203,6 +212,14 @@ node scratch/apply-mig-env.mjs supabase/migrations/00NN_name.sql
 Dry-run anything destructive inside `begin; … rollback;` first, and have the
 migration itself refuse to proceed when its precondition is unmet rather than
 trusting the operator — `0250` is the model.
+
+**A new table is not audited until its migration says so.** 0322 attached
+`trg_audit_<table>` to every table that existed then; a table created later has
+no history and nothing in it can be restored. Give it one, with its primary-key
+columns as the arguments — `create trigger trg_audit_x after insert or update
+or delete on public.x for each row execute function public.log_audit_event('id')`
+— unless it belongs in `audit_excluded()` (counters, credentials, tokens, read
+markers) or, kept in step by the database itself, in `audit_internal()`.
 
 ## Verifying
 

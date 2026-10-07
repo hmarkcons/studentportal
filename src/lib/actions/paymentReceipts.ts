@@ -1,5 +1,6 @@
 "use server";
 
+import { removeStorageFiles } from "@/lib/fileTrash";
 import { revalidatePath } from "next/cache";
 import { getStaffSession } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
@@ -192,7 +193,7 @@ export async function removePaymentReceipt(
   const { data, error } = await supabase.from("payment_receipts").delete().eq("id", receiptId).eq("kind", kind).select("path");
   if (error) return { error: error.message };
   if (!data?.length) return { error: "That receipt is not on file any more — reload the page." };
-  await supabase.storage.from("documents").remove(data.map((r) => r.path as string));
+  await removeStorageFiles(supabase, "documents", data.map((r) => r.path as string));
 
   revalidatePath(revalidateTo);
   return { success: true };

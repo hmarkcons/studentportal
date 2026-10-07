@@ -1,5 +1,6 @@
 "use server";
 
+import { removeStorageFiles } from "@/lib/fileTrash";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -547,7 +548,7 @@ export async function uploadStaffPhoto(staffId: string, _prevState: unknown, for
   // The one it replaced. Paths are timestamped, so without this every photo a
   // staff member has ever had stays in the bucket with nothing pointing at it.
   if (existing?.photo_path && existing.photo_path !== path) {
-    await supabase.storage.from("documents").remove([existing.photo_path]);
+    await removeStorageFiles(supabase, "documents", [existing.photo_path]);
   }
 
   revalidatePath("/admin/staff");
@@ -575,7 +576,7 @@ export async function deleteStaffPhoto(staffId: string) {
   const { error } = await supabase.from("staff").update({ photo_path: null }).eq("id", staffId);
   if (error) return { error: error.message };
 
-  await supabase.storage.from("documents").remove([staffRow.photo_path]);
+  await removeStorageFiles(supabase, "documents", [staffRow.photo_path]);
 
   revalidatePath("/admin/staff");
   revalidateTag("staff-directory", { expire: 0 });

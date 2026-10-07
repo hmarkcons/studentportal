@@ -1,5 +1,6 @@
 "use server";
 
+import { removeStorageFiles } from "@/lib/fileTrash";
 import { serviceOf } from "@/lib/serviceType";
 import { hasRole } from "@/lib/auth/roles";
 import { revalidatePath, revalidateTag } from "next/cache";
@@ -129,7 +130,7 @@ export async function updateAgreementTemplate(templateId: string, _prevState: un
   // been updated successfully, and refusing the edit because a stale file
   // could not be tidied would be the wrong trade.
   if (previousPath && previousPath !== update.file_path) {
-    const { error: removeError } = await supabase.storage.from("documents").remove([previousPath]);
+    const { error: removeError } = await removeStorageFiles(supabase, "documents", [previousPath]);
     if (removeError) {
       console.error("[updateAgreementTemplate] could not remove the replaced file:", previousPath, removeError.message);
     }
@@ -161,7 +162,7 @@ export async function deleteAgreementTemplate(templateId: string) {
   // that still exists. Logged rather than returned: the template is already
   // gone and there is nothing useful for the user to do about a stale object.
   if (existing?.file_path) {
-    const { error: removeError } = await supabase.storage.from("documents").remove([existing.file_path]);
+    const { error: removeError } = await removeStorageFiles(supabase, "documents", [existing.file_path]);
     if (removeError) {
       console.error("[deleteAgreementTemplate] could not remove the template file:", existing.file_path, removeError.message);
     }

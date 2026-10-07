@@ -43,7 +43,6 @@ const ok = (l, c, x = "") => { if (c) { pass++; console.log(`PASS  ${l}`); } els
 const PAGES = [
   ["/leads", "Leads"],
   ["/students", "Registered students"],
-  ["/admin/audit-log", "Audit log"],
   ["/admin/attendance", "Attendance"],
   ["/admin/permissions", "Role permissions"],
   ["/admin/staff", "Staff"],

@@ -13,6 +13,7 @@ import { RegisterLeadButton } from "./RegisterLeadButton";
 import { LeadEditForm } from "@/components/LeadEditForm";
 import { DeleteStudentButton } from "../../students/[id]/DeleteStudentButton";
 import { getStaffSession } from "@/lib/auth/session";
+import { AuditHistoryLink } from "@/components/AuditHistoryLink";
 
 type CallLog = { id: string; status_at_time: string; remark: string | null; created_at: string; counselor: { full_name: string } | { full_name: string }[] | null };
 
@@ -71,9 +72,12 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
           <Badge tone={LEAD_STATUS_TONE[lead.status as never] ?? "neutral"}>
             {LEAD_STATUS_LABELS[lead.status as never] ?? lead.status}
           </Badge>
-          {canDeleteLead && (
-            <DeleteStudentButton studentId={id} studentName={lead.full_name} redirectTo="/leads" label="Delete lead" />
-          )}
+          <div className="flex items-center gap-3">
+            {hasRole(staffRow, "super_admin") && <AuditHistoryLink tab="leads" id={id} />}
+            {canDeleteLead && (
+              <DeleteStudentButton studentId={id} studentName={lead.full_name} redirectTo="/leads" label="Delete lead" />
+            )}
+          </div>
         </div>
       </div>
 

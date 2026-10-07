@@ -1,5 +1,6 @@
 "use server";
 
+import { removeStorageFiles } from "@/lib/fileTrash";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requirePermission } from "@/lib/auth/permissions";
@@ -96,7 +97,7 @@ export async function saveDocumentGuide(target: GuideTarget, _prev: unknown, for
   // The old sample goes once nothing points at it.
   const old = before.sample_file_path as string | null;
   if (old && "sample_file_path" in patch && patch.sample_file_path !== old) {
-    await supabase.storage.from("documents").remove([old]);
+    await removeStorageFiles(supabase, "documents", [old]);
   }
 
   revalidatePath(BUILDER);

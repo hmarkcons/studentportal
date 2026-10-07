@@ -16,6 +16,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { TEST_TYPES, needsCustomName } from "@/lib/testScores";
 import { MAX_PHOTO_BYTES, fileSizeError } from "@/lib/fileSize";
 import { uploadedFile } from "@/lib/stagedUpload";
+import { removeStorageFiles } from "@/lib/fileTrash";
 
 // Was a third hand-written copy of this list, and it lacked GMAT and CEnT-S —
 // so the two types just added to the picker would have been rejected here as
@@ -130,7 +131,7 @@ export async function uploadStudentPhoto(studentId: string, revalidateTo: string
   // bucket for good — readable by anyone who still had its signed link, and
   // never cleaned up by anything.
   if (existing?.photo_path && existing.photo_path !== path) {
-    await createAdminClient().storage.from("documents").remove([existing.photo_path]);
+    await removeStorageFiles(createAdminClient(), "documents", [existing.photo_path]);
   }
 
   // "layout" so the header photo (shown on every tab under students/[id])
@@ -172,7 +173,7 @@ export async function deleteStudentPhoto(studentId: string, revalidateTo: string
     .eq("student_id", studentId);
   if (error) return { error: error.message };
 
-  await createAdminClient().storage.from("documents").remove([profile.photo_path]);
+  await removeStorageFiles(createAdminClient(), "documents", [profile.photo_path]);
 
   revalidatePath(revalidateTo, "layout");
   return { success: true };

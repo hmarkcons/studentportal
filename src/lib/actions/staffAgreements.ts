@@ -1,5 +1,6 @@
 "use server";
 
+import { removeStorageFiles } from "@/lib/fileTrash";
 import { createElement } from "react";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
@@ -151,7 +152,7 @@ export async function updateStaffAgreementTemplate(templateId: string, _prev: un
   if (!updated?.length) return { error: "The template wasn't saved — you may no longer have access to it." };
 
   // The replaced reference file, once nothing points at it.
-  if (upload.path && existing.file_path) await supabase.storage.from("documents").remove([existing.file_path]);
+  if (upload.path && existing.file_path) await removeStorageFiles(supabase, "documents", [existing.file_path]);
 
   refresh();
   revalidatePath(`/setup/agreement-templates/staff/${templateId}`);
@@ -172,7 +173,7 @@ export async function deleteStaffAgreementTemplate(templateId: string): Promise<
   // set null), so deleting a template never changes a contract.
   const { error } = await supabase.from("staff_agreement_templates").delete().eq("id", templateId);
   if (error) return { error: error.message };
-  if (existing?.file_path) await supabase.storage.from("documents").remove([existing.file_path]);
+  if (existing?.file_path) await removeStorageFiles(supabase, "documents", [existing.file_path]);
 
   refresh();
   return { success: true };
@@ -546,7 +547,7 @@ export async function sendBackStaffAgreement(agreementId: string, note: string):
     .eq("id", agreementId)
     .eq("status", "submitted");
   if (error) return { error: error.message };
-  if (before.signed_file_path) await supabase.storage.from("documents").remove([before.signed_file_path]);
+  if (before.signed_file_path) await removeStorageFiles(supabase, "documents", [before.signed_file_path]);
 
   const { data: member } = await createAdminClient()
     .from("staff")
@@ -578,7 +579,7 @@ export async function deleteStaffAgreement(agreementId: string): Promise<Result>
   const { error } = await supabase.from("staff_agreements").delete().eq("id", agreementId);
   if (error) return { error: error.message };
   const files = [before?.pdf_path, before?.signed_file_path].filter((p): p is string => Boolean(p));
-  if (files.length) await supabase.storage.from("documents").remove(files);
+  if (files.length) await removeStorageFiles(supabase, "documents", files);
 
   refresh();
   return { success: true };

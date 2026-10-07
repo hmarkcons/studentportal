@@ -1,5 +1,6 @@
 "use server";
 
+import { removeStorageFiles } from "@/lib/fileTrash";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requirePermission } from "@/lib/auth/permissions";
@@ -102,7 +103,7 @@ export async function removeScholarshipCall(bodyId: string) {
   const { data: body } = await supabase.from("scholarship_bodies").select("call_pdf_path").eq("id", bodyId).maybeSingle();
   if (!body?.call_pdf_path) return { error: "There is no stored call to remove." };
 
-  await supabase.storage.from(BUCKET).remove([body.call_pdf_path]);
+  await removeStorageFiles(supabase, BUCKET, [body.call_pdf_path]);
   const { error: updateError } = await supabase
     .from("scholarship_bodies")
     .update({ call_pdf_path: null, call_pdf_language: null, call_pdf_fetched_at: null })

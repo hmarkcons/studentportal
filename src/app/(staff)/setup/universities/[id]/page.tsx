@@ -13,6 +13,7 @@ import { ProgramRow } from "./ProgramRow";
 import { uploadedLine } from "@/lib/activityStamp";
 import { karachiToday } from "@/lib/calendarDates";
 import { formatFee } from "@/lib/applicationFee";
+import { AuditHistoryLink } from "@/components/AuditHistoryLink";
 import { STANDARD_LEVELS, levelKey, levelsPresent } from "@/lib/catalogueText";
 import { EmailLinks } from "@/components/EmailLinks";
 import { getCurrentUser } from "@/lib/auth/currentUser";
@@ -134,7 +135,10 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
         &larr; Back to universities
       </Link>
       <h2 className="mt-2 mb-1 text-xl font-semibold text-ink">{university.name}</h2>
-      <p className="mb-6 text-sm text-muted">{destination?.display_name}</p>
+      <p className="mb-6 flex flex-wrap items-center gap-3 text-sm text-muted">
+        <span>{destination?.display_name}</span>
+        {isSuperAdmin && <AuditHistoryLink tab="universities" id={id} />}
+      </p>
 
       <Card className="mb-6">
         <h3 className="mb-3 text-sm font-medium text-ink">Details</h3>

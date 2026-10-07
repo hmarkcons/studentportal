@@ -1,4 +1,5 @@
 import "server-only";
+import { removeStorageFiles } from "@/lib/fileTrash";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -59,7 +60,7 @@ export async function removeStoragePrefix(
   // The API caps how many paths one call accepts.
   for (let i = 0; i < files.length; i += 100) {
     const batch = files.slice(i, i + 100);
-    const { data, error } = await supabase.storage.from(bucket).remove(batch);
+    const { data, error } = await removeStorageFiles(supabase, bucket, batch);
     if (error) {
       console.error(`[removeStoragePrefix] could not remove a batch under ${prefix}:`, error.message);
       failed += batch.length;

@@ -1,5 +1,6 @@
 "use server";
 
+import { removeStorageFiles } from "@/lib/fileTrash";
 import { revalidatePath } from "next/cache";
 import { agreementToday, readAgreementDate } from "@/lib/agreementDate";
 import { createClient } from "@/lib/supabase/server";
@@ -323,7 +324,7 @@ export async function deleteAgreement(agreementId: string, studentId: string) {
   // gone, and failing the whole action over a leftover file would tell staff
   // the deletion did not happen when it did.
   if (paths.length > 0) {
-    const { error: storageError } = await supabase.storage.from("documents").remove(paths);
+    const { error: storageError } = await removeStorageFiles(supabase, "documents", paths);
     if (storageError) {
       console.error(`deleteAgreement: removed agreement ${agreementId} but left files behind:`, storageError.message);
     }
@@ -407,7 +408,7 @@ export async function uploadSignedAgreement(agreementId: string, studentId: stri
 
   // Only once the new path is safely recorded, and never the file just written.
   if (previous?.signed_file_path && previous.signed_file_path !== path) {
-    const { error: cleanupError } = await supabase.storage.from("documents").remove([previous.signed_file_path]);
+    const { error: cleanupError } = await removeStorageFiles(supabase, "documents", [previous.signed_file_path]);
     if (cleanupError) {
       console.error(`uploadSignedAgreement: replaced ${agreementId} but left ${previous.signed_file_path}:`, cleanupError.message);
     }

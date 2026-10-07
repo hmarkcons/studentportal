@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Badge } from "@/components/ui/Badge";
 import { StudentTabs } from "./StudentTabs";
 import { DeleteStudentButton } from "./DeleteStudentButton";
+import { AuditHistoryLink } from "@/components/AuditHistoryLink";
 import { InlineRegistrationStatusCell } from "../InlineRegistrationStatusCell";
 import { countUnreadMessages } from "@/lib/unreadMessages";
 import { avatarUrlMap } from "@/lib/storageUrls";
@@ -184,7 +185,10 @@ export default async function StudentLayout({ children, params }: { children: Re
             <Badge tone={student.portal_active ? "success" : "neutral"}>{student.portal_active ? "Portal active" : "Portal inactive"}</Badge>
             <InlineRegistrationStatusCell studentId={id} status={student.registration_status} />
           </div>
-          {canDeleteStudent && <DeleteStudentButton studentId={id} studentName={student.full_name} />}
+          <div className="flex items-center gap-3">
+            {hasRole(staffRow, "super_admin") && <AuditHistoryLink tab="students" id={id} />}
+            {canDeleteStudent && <DeleteStudentButton studentId={id} studentName={student.full_name} />}
+          </div>
         </div>
       </div>
 
