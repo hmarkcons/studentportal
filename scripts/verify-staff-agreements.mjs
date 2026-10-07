@@ -155,6 +155,14 @@ try {
   await staffPage.getByRole("heading", { name: "My agreement" }).waitFor({ timeout: 60_000 });
   const mine = staffPage.locator(`[data-my-agreement="${agreementId}"]`);
   ok("...where it waits for them", (await mine.count()) === 1 && /Waiting for your signature/.test(await mine.innerText()));
+  // The form is in the server's HTML before React has it; a file chosen then
+  // is never uploaded, and the status never moves (it failed so once, then passed).
+  await staffPage
+    .waitForFunction((id) => {
+      const el = document.querySelector(`[data-my-agreement="${id}"] input[type="file"]`);
+      return Boolean(el && Object.keys(el).some((k) => k.startsWith("__reactProps")));
+    }, agreementId, { timeout: 60_000 })
+    .catch(() => {});
   await mine.locator('input[type="file"]').setInputFiles(signedFile("signed.pdf"));
   await mine.getByRole("button", { name: "Upload signed copy" }).click();
   ok("returning a signed copy moves it to returned", await waitForStatus(agreementId, "submitted"));
