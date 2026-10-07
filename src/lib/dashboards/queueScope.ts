@@ -25,6 +25,11 @@ export function scopeQueue(queue: StaffQueue, staff: Parameters<typeof hasRole>[
     message: studentContact,
     instalment: money,
     inventory: running,
+    // A lead's follow-up is its counsellor's; Management and Super Admin see the office's.
+    followup: hasRole(staff, "counselor", "management", "super_admin"),
+    // Asked for only when this person approves leave, and their own agreement is always theirs.
+    leave: true,
+    myagreement: true,
   };
   return { ...queue, items: queue.items.filter((i) => allowed[i.kind]) };
 }

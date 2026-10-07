@@ -9,14 +9,28 @@
 // Pure, with no imports, so the unit tests (scripts/waiting-items-test.mjs)
 // read it under plain Node and both the card and the page share it.
 
-export type WaitingKind = "deadline" | "agreement" | "ticket" | "message" | "task" | "document" | "inventory" | "instalment";
+export type WaitingKind =
+  | "deadline"
+  | "agreement"
+  | "myagreement"
+  | "leave"
+  | "ticket"
+  | "message"
+  | "followup"
+  | "task"
+  | "document"
+  | "inventory"
+  | "instalment";
 
 /** The kinds in the order they are listed: the ones that cannot wait first. */
 export const WAITING_KINDS: readonly { kind: WaitingKind; one: string; many: string; short: string }[] = [
   { kind: "deadline", one: "application deadline in the next fortnight", many: "application deadlines in the next fortnight", short: "Deadlines" },
   { kind: "agreement", one: "agreement to verify", many: "agreements to verify", short: "Agreements" },
+  { kind: "myagreement", one: "agreement of yours to sign", many: "agreements of yours to sign", short: "Your agreement" },
+  { kind: "leave", one: "leave request to decide", many: "leave requests to decide", short: "Leave" },
   { kind: "ticket", one: "support ticket waiting on a reply", many: "support tickets waiting on a reply", short: "Tickets" },
   { kind: "message", one: "student awaiting a reply", many: "students awaiting a reply", short: "Messages" },
+  { kind: "followup", one: "follow-up due", many: "follow-ups due", short: "Follow-ups" },
   { kind: "task", one: "task past its due date", many: "tasks past their due date", short: "Tasks" },
   { kind: "document", one: "document to review", many: "documents to review", short: "Documents" },
   { kind: "inventory", one: "inventory request awaiting a decision", many: "inventory requests awaiting a decision", short: "Inventory" },
@@ -66,6 +80,22 @@ export function sortItems(items: readonly WaitingItem[]): WaitingItem[] {
       (a.since ?? "").localeCompare(b.since ?? "") ||
       a.title.localeCompare(b.title)
   );
+}
+
+/**
+ * A Super Admin's or Management's queue: their own items in full, and the
+ * rest of the office as one count per kind — "12 documents to review" — that
+ * opens the list (the office chose this over every item, one by one).
+ * Everyone else's own and office are the same list.
+ */
+export function splitOwnAndOffice(
+  items: readonly WaitingItem[],
+  officeTotals: boolean
+): { own: WaitingItem[]; office: { kind: WaitingKind; count: number }[] } {
+  if (!officeTotals) return { own: [...items], office: [] };
+  const own = items.filter((i) => i.mine);
+  const office = WAITING_KINDS.map((w) => ({ kind: w.kind, count: items.filter((i) => i.kind === w.kind && !i.mine).length })).filter((c) => c.count > 0);
+  return { own, office };
 }
 
 /** Narrowed to one kind, to the viewer's own, or both. */

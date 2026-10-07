@@ -1,3 +1,5 @@
+import { WhatsNewCard } from "@/components/WhatsNewCard";
+import { loadNews } from "@/lib/notificationFeed";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
@@ -64,12 +66,14 @@ export default async function PartnerDashboardPage() {
 
   // At once: only the messages further down need an answer from here (the
   // university), so the rest no longer wait for one another.
-  const [{ data: account }, { data: applicationsData }, { data: commissionRows }] = await Promise.all([
+  const [{ data: account }, { data: applicationsData }, { data: commissionRows }, news] = await Promise.all([
     supabase.from("partner_university_accounts").select("university_id").eq("id", user?.id ?? "").maybeSingle(),
     supabase.rpc("get_partner_applications"),
     supabase
       .from("partner_commissions")
       .select("id, expected_amount, currency, status, student:leads(full_name), application:applications(intake)"),
+    // What has happened lately: a message from HMARK, a new application (0320).
+    loadNews(supabase, 20),
   ]);
   const applications = (applicationsData ?? []) as PartnerApplicationRow[];
 
@@ -143,6 +147,7 @@ export default async function PartnerDashboardPage() {
   return (
     <div className="mx-auto max-w-5xl">
       <h2 className="mb-6 text-lg font-semibold text-ink">Partner Dashboard</h2>
+      <WhatsNewCard news={news.news} unread={news.unread} now={news.now} audience="partner" className="mb-6" />
 
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4" data-partner-dashboard>
         <StatCard label="Referred by HMARK" value={applications.length} hint="all time" />

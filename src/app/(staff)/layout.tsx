@@ -7,6 +7,7 @@ import { getEffectivePermissions } from "@/lib/auth/permissions";
 import { AppShell } from "@/components/AppShell";
 import { buildStaffNav } from "@/lib/nav";
 import { CalendarNotifier } from "@/components/CalendarNotifier";
+import { deliverNotificationEmailsSoon } from "@/lib/notificationDelivery";
 
 const ROLE_LABELS: Record<string, string> = {
   super_admin: "Super Admin",
@@ -34,6 +35,9 @@ export default async function StaffLayout({ children }: { children: React.ReactN
   if (!staffRow || staffRow.status !== "active") {
     redirect("/");
   }
+
+  // Alerts due an email go out once this page has been served (0320).
+  deliverNotificationEmailsSoon();
 
   const isSuperAdmin = hasRole(staffRow, "super_admin");
   const nav = buildStaffNav({

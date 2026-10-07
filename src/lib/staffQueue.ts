@@ -39,7 +39,15 @@ type StudentRef = { full_name?: string; processing_officer_id?: string | null; a
 
 const day = (iso: string) => formatDateOnly(iso, ROUND_DATE_FORMAT);
 
-export async function loadStaffQueue(supabase: SupabaseClient): Promise<StaffQueue> {
+export async function loadStaffQueue(
+  supabase: SupabaseClient,
+  {
+    canApproveLeave = false,
+  }: {
+    /** leave.approve: the requests waiting on a decision are this person's to make. */
+    canApproveLeave?: boolean;
+  } = {}
+): Promise<StaffQueue> {
   // Karachi's date, not the server's. toISOString() takes UTC, so between
   // midnight and 5am local an item that fell due yesterday was not yet counted
   // as overdue — the same off-by-one already fixed in the calendar.
@@ -52,7 +60,7 @@ export async function loadStaffQueue(supabase: SupabaseClient): Promise<StaffQue
   // The viewer's own student: theirs to process, or theirs to counsel.
   const isMine = (s: StudentRef) => Boolean(viewerId) && (s?.processing_officer_id === viewerId || s?.assigned_counselor_id === viewerId);
 
-  const [tickets, tasks, docs, agreements, instalments, inbound, markers, inventory, deadlineRows] = await Promise.all([
+  const [tickets, tasks, docs, agreements, instalments, inbound, markers, inventory, deadlineRows, followUps, leave, ownAgreements] = await Promise.all([
     // Resolved tickets can wait on nobody, and leaving them out keeps this
     // well under PostgREST's 1000-row cap as the history grows.
     supabase
@@ -113,6 +121,26 @@ export async function loadStaffQueue(supabase: SupabaseClient): Promise<StaffQue
       .select(
         "id, deadline, student_id, program:programs(name, application_deadline), round:program_intake_rounds(label, application_deadline), student:leads(full_name, processing_officer_id)"
       ),
+    // A lead's follow-up that has fallen due. It was counted only on the
+    // leads list, so a counsellor who did not open that list missed it.
+    supabase
+      .from("reminders")
+      .select("id, student_id, due_date, note, student:leads(full_name, status, assigned_counselor_id, processing_officer_id)")
+      .eq("type", "follow_up")
+      .eq("resolved", false)
+      .not("due_date", "is", null)
+      .lte("due_date", today),
+    // Someone else's leave, waiting on this approver. Finance can read every
+    // request for payroll but decides none, so only an approver asks.
+    canApproveLeave
+      ? supabase
+          .from("leave_requests")
+          .select("id, staff_id, kind, start_date, end_date, created_at, staff:staff!leave_requests_staff_id_fkey(full_name)")
+          .eq("status", "pending")
+          .neq("staff_id", viewerId)
+      : Promise.resolve({ data: [] as never[] }),
+    // The viewer's own agreement, sent to them to sign (0271).
+    supabase.from("staff_agreements").select("id, title, sent_at").eq("staff_id", viewerId).eq("status", "awaiting_signature"),
   ]);
 
   const items: WaitingItem[] = [];
@@ -264,6 +292,60 @@ export async function loadStaffQueue(supabase: SupabaseClient): Promise<StaffQue
       opened: d.review_opened_at
         ? { by: opener?.full_name ?? "someone", at: d.review_opened_at as string, ago: ago(d.review_opened_at as string, now) }
         : null,
+    });
+  }
+
+  // ---------------------------------------------------------------- follow-ups
+  for (const f of followUps.data ?? []) {
+    const student = one(f.student as never) as (StudentRef & { status?: string | null }) | null;
+    const due = f.due_date as string;
+    const late = daysLate(due, today);
+    items.push({
+      kind: "followup",
+      id: f.id as string,
+      studentId: f.student_id as string,
+      studentName: student?.full_name ?? "Unknown lead",
+      title: (f.note as string | null)?.trim() || "Follow-up",
+      detail: late > 0 ? `due ${day(due)} — ${lateText(late)}` : "due today",
+      since: due,
+      href: student?.status === "registered" ? `/students/${f.student_id}` : `/leads/${f.student_id}`,
+      urgent: late > 0,
+      // The lead's counsellor's call to make.
+      mine: Boolean(viewerId) && student?.assigned_counselor_id === viewerId,
+    });
+  }
+
+  // --------------------------------------------------------------------- leave
+  for (const l of (leave.data ?? []) as { id: string; kind: string; start_date: string; end_date: string; created_at: string; staff: unknown }[]) {
+    const who = one(l.staff as never) as { full_name?: string } | null;
+    items.push({
+      kind: "leave",
+      id: l.id,
+      studentId: null,
+      studentName: null,
+      title: `${who?.full_name ?? "A staff member"} — ${l.kind} leave`,
+      detail: l.start_date === l.end_date ? day(l.start_date) : `${day(l.start_date)} – ${day(l.end_date)}`,
+      since: l.created_at,
+      href: "/admin/leave",
+      // Leave that starts soon cannot wait for next week's look.
+      urgent: daysLate(l.start_date, today) >= -3,
+      mine: true,
+    });
+  }
+
+  // ------------------------------------------------------------- own agreement
+  for (const a of ownAgreements.data ?? []) {
+    items.push({
+      kind: "myagreement",
+      id: a.id as string,
+      studentId: null,
+      studentName: null,
+      title: (a.title as string) || "Your agreement",
+      detail: a.sent_at ? `sent ${ago(a.sent_at as string, now)}` : null,
+      since: (a.sent_at as string | null) ?? null,
+      href: "/my-agreement",
+      urgent: true,
+      mine: true,
     });
   }
 

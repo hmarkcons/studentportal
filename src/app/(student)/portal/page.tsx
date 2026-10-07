@@ -4,6 +4,8 @@ import { getStudentUser } from "@/lib/auth/session";
 import { loadPortalSummary } from "@/lib/portalSummary";
 import { universityShortName } from "@/lib/finalizedStage";
 import { PortalAttention } from "@/components/PortalAttention";
+import { WhatsNewCard } from "@/components/WhatsNewCard";
+import { loadNews } from "@/lib/notificationFeed";
 import { WHATSAPP_LINK } from "@/lib/constants";
 import { karachiToday } from "@/lib/calendarDates";
 import { sortRounds } from "@/lib/programRounds";
@@ -46,7 +48,7 @@ export default async function PortalDashboardPage() {
 
   if (!student) return null;
 
-  const [apps, summary, { data: agreements }, cycleDocs, visas, { data: scholarships }, team, { data: registeredCountries }] =
+  const [apps, summary, { data: agreements }, cycleDocs, visas, { data: scholarships }, team, { data: registeredCountries }, news] =
     await Promise.all([
       // The applications have a page of their own now; the dashboard keeps
       // what it needs for the journey, the chart and what is coming up.
@@ -66,6 +68,8 @@ export default async function PortalDashboardPage() {
         .from("lead_destinations")
         .select("destination_id, is_backup, created_at, dashboard_stage_values, destination:destinations(display_name, country_code, dashboard_pipeline_stages)")
         .eq("lead_id", student.id),
+      // What has happened lately: a message, a document approved, an application moved (0320).
+      loadNews(supabase, 20),
     ]);
 
   // Read on the server so dates are judged on Karachi's business day rather
@@ -461,10 +465,12 @@ export default async function PortalDashboardPage() {
         </ChartCard>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3" data-dashboard-cards>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2" data-dashboard-cards>
         {/* Everything outstanding — documents, money, appointments, replies —
             each computed by the helper its own page uses. */}
         <PortalAttention summary={summary} className="h-full" />
+        {/* And what has happened, the same list as under the bell. */}
+        <WhatsNewCard news={news.news} unread={news.unread} now={news.now} audience="student" className="h-full" />
         <ChartCard
           icon={CalendarClock}
           title="Coming up"

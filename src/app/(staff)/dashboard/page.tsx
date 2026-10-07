@@ -13,6 +13,9 @@ import { ProcessingView } from "./views/ProcessingView";
 import { FinanceView } from "./views/FinanceView";
 import { LeadGenView, SocialView } from "./views/MarketingViews";
 import { OverviewView } from "./views/OverviewView";
+import { WhatsNewCard } from "@/components/WhatsNewCard";
+import { loadNews } from "@/lib/notificationFeed";
+import { getEffectivePermissions } from "@/lib/auth/permissions";
 
 /**
  * Each job's dashboard: what is waiting on this person first, then the
@@ -55,7 +58,18 @@ type Session = Awaited<ReturnType<typeof getStaffSession>>;
 
 async function Queue({ supabase, staff }: { supabase: Session["supabase"]; staff: Session["staff"] }) {
   // Scoped by RLS to what this person can see, then to what is their job.
-  return <StaffQueueCard queue={scopeQueue(await loadStaffQueue(supabase), staff)} />;
+  const [perms, news] = await Promise.all([getEffectivePermissions(), loadNews(supabase, 30)]);
+  const queue = scopeQueue(await loadStaffQueue(supabase, { canApproveLeave: perms["leave.approve"] === true }), staff);
+  return (
+    // What is waiting on them beside what has happened to them; Super Admin and
+    // Management see their own in full and the office's as totals.
+    <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="lg:col-span-2 [&_[data-card]]:mb-0">
+        <StaffQueueCard queue={queue} officeTotals={hasRole(staff, "management", "super_admin")} />
+      </div>
+      <WhatsNewCard news={news.news} unread={news.unread} now={news.now} audience="staff" className="self-start" />
+    </div>
+  );
 }
 
 async function ViewFor({ view, staff, supabase }: { view: DashboardView; staff: NonNullable<Session["staff"]>; supabase: Session["supabase"] }) {

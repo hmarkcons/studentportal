@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { AppShell } from "@/components/AppShell";
 import { PARTNER_NAV } from "@/lib/nav";
 import { getCurrentUser } from "@/lib/auth/currentUser";
+import { deliverNotificationEmailsSoon } from "@/lib/notificationDelivery";
 
 export default async function PartnerLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -18,6 +19,9 @@ export default async function PartnerLayout({ children }: { children: React.Reac
   if (!partnerRow || partnerRow.status !== "active") {
     redirect("/");
   }
+
+  // Alerts due an email go out once this page has been served (0320).
+  deliverNotificationEmailsSoon();
 
   const university = Array.isArray(partnerRow.university)
     ? partnerRow.university[0]

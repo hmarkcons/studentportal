@@ -1,8 +1,24 @@
 import Link from "next/link";
-import { AlarmClock, ArrowRight, CalendarClock, CircleCheck, CreditCard, FileSearch, FileText, Headset, MessageSquare, Package, type LucideIcon } from "lucide-react";
+import {
+  AlarmClock,
+  ArrowRight,
+  Building,
+  CalendarClock,
+  CalendarOff,
+  CircleCheck,
+  CreditCard,
+  FileSearch,
+  FileText,
+  Headset,
+  MessageSquare,
+  Package,
+  PenLine,
+  PhoneCall,
+  type LucideIcon,
+} from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import type { StaffQueue } from "@/lib/staffQueue";
-import { WAITING_KINDS, countLine, sortItems, type WaitingItem, type WaitingKind } from "@/lib/waitingItems";
+import { WAITING_KINDS, countLine, sortItems, splitOwnAndOffice, type WaitingItem, type WaitingKind } from "@/lib/waitingItems";
 
 // The work waiting on whoever is looking. Only true rows render — a dashboard
 // listing "0 tickets waiting" is a dashboard people stop reading.
@@ -16,7 +32,10 @@ import { WAITING_KINDS, countLine, sortItems, type WaitingItem, type WaitingKind
 export const KIND_ICON: Record<WaitingKind, LucideIcon> = {
   deadline: AlarmClock,
   agreement: FileText,
+  myagreement: PenLine,
+  leave: CalendarOff,
   ticket: Headset,
+  followup: PhoneCall,
   message: MessageSquare,
   task: CalendarClock,
   document: FileSearch,
@@ -55,12 +74,13 @@ export function ItemLink({ item, className, children }: { item: WaitingItem; cla
   );
 }
 
-export function StaffQueueCard({ queue }: { queue: StaffQueue }) {
-  const lines = WAITING_KINDS.map((k) => ({ kind: k.kind, items: sortItems(queue.items.filter((i) => i.kind === k.kind)) })).filter(
+export function StaffQueueCard({ queue, officeTotals = false }: { queue: StaffQueue; officeTotals?: boolean }) {
+  const { own, office } = splitOwnAndOffice(queue.items, officeTotals);
+  const lines = WAITING_KINDS.map((k) => ({ kind: k.kind, items: sortItems(own.filter((i) => i.kind === k.kind)) })).filter(
     (l) => l.items.length > 0
   );
 
-  if (lines.length === 0) {
+  if (lines.length === 0 && office.length === 0) {
     return (
       <Card className="mb-6">
         <div data-queue-empty className="flex items-start gap-3">
@@ -70,8 +90,8 @@ export function StaffQueueCard({ queue }: { queue: StaffQueue }) {
           <div>
             <p className="text-sm font-medium text-ink">Nothing is waiting on you.</p>
             <p className="mt-1 text-xs text-muted">
-              Application deadlines, agreements to verify, tickets, unanswered students, overdue tasks, documents,
-              inventory requests and payments all show here.
+              Application deadlines, agreements to verify, leave to decide, tickets, unanswered students, follow-ups,
+              overdue tasks, documents, inventory requests and payments all show here.
             </p>
           </div>
         </div>
@@ -80,6 +100,8 @@ export function StaffQueueCard({ queue }: { queue: StaffQueue }) {
   }
 
   return (
+    // Card passes on only its class, so the queue is marked here.
+    <div data-staff-queue>
     <Card className="mb-6">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h3 className="text-sm font-medium text-ink">Waiting on you</h3>
@@ -87,6 +109,7 @@ export function StaffQueueCard({ queue }: { queue: StaffQueue }) {
           See everything ({queue.items.length})
         </Link>
       </div>
+      {lines.length === 0 && <p className="py-1 text-sm text-muted">Nothing of your own is waiting.</p>}
       <div className="flex flex-col divide-y divide-border">
         {lines.map(({ kind, items }) => {
           const Icon = KIND_ICON[kind];
@@ -144,6 +167,33 @@ export function StaffQueueCard({ queue }: { queue: StaffQueue }) {
           );
         })}
       </div>
+      {office.length > 0 && (
+        <div className="mt-3 border-t border-border pt-3" data-office-totals>
+          <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted">
+            <Building aria-hidden className="h-3.5 w-3.5" />
+            Across the office
+          </p>
+          <ul className="flex flex-wrap gap-2">
+            {office.map(({ kind, count }) => {
+              const Icon = KIND_ICON[kind];
+              return (
+                <li key={kind}>
+                  <Link
+                    prefetch={false}
+                    href={`/waiting?kind=${kind}`}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border bg-bg px-2.5 py-1 text-xs text-ink hover:border-primary"
+                    data-office-line={kind}
+                  >
+                    <Icon aria-hidden className="h-3.5 w-3.5 text-muted" />
+                    {countLine(kind, count)}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
     </Card>
+    </div>
   );
 }

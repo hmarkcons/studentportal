@@ -175,6 +175,19 @@ took 0.3. Write them as `(select has_role(…))` and `(select auth.uid())` and
 Postgres works each out once per query (0317 proves the swap changed nobody's
 access before committing it).
 
+**Alerts are written by triggers, and a trigger that fails fails the write it
+rides on** (0320). A message, a document's status, an application's stage, a
+lead's counsellor, an import of three thousand leads — each insert or update
+runs `notify()`, so a null title there would refuse the lead import itself.
+Everything a trigger puts in an alert is coalesced; keep it so. Repeats group
+into one unread row per person and group, so an import is one alert, not
+three thousand.
+
+**Alert emails go out only from a deployment.** A local server shares the
+live database, so it would email real people about real alerts, with links
+to localhost: `deliversEmail()` (src/lib/notificationDelivery.ts) is true only
+on Vercel, or with NOTIFY_EMAILS=yes. The daily reminders obey the same rule.
+
 ## Migrations
 
 Numbered files in `supabase/migrations/`, applied by hand — there is no CLI

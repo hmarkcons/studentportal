@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getStaffSession } from "@/lib/auth/session";
 import { loadStaffQueue } from "@/lib/staffQueue";
 import { scopeQueue } from "@/lib/dashboards/queueScope";
+import { getEffectivePermissions } from "@/lib/auth/permissions";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -27,7 +28,8 @@ export default async function WaitingPage(props: PageProps<"/waiting">) {
   const kind = parseKind(typeof kindParam === "string" ? kindParam : null);
   const mine = mineParam === "1";
 
-  const all = scopeQueue(await loadStaffQueue(supabase), staff).items;
+  const perms = await getEffectivePermissions();
+  const all = scopeQueue(await loadStaffQueue(supabase, { canApproveLeave: perms["leave.approve"] === true }), staff).items;
   // The counts on the chips follow the Mine filter, so a chip never promises
   // items the list then does not show.
   const counts = kindCounts(filterItems(all, { mine }));

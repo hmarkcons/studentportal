@@ -9,6 +9,7 @@ import { countUnreadSince } from "@/lib/unreadMessages";
 import { loadTicketActivity, loadTicketReadMarkers, hasUnseenStaffReply } from "@/lib/supportSignals";
 import { approvedVisaDestinations } from "@/lib/studentVisaApproval";
 import { WHATSAPP_LINK } from "@/lib/constants";
+import { deliverNotificationEmailsSoon } from "@/lib/notificationDelivery";
 
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
   const { supabase, userId } = await getStudentUser();
@@ -48,6 +49,8 @@ export default async function StudentLayout({ children }: { children: React.Reac
   // menu while every link bounces back to the agreement reads as a broken
   // portal rather than an outstanding task.
   const gate = evaluateAgreementGate(studentRow.agreements ?? []);
+  // Alerts due an email go out once this page has been served (0320).
+  deliverNotificationEmailsSoon();
   // Scholarship is in the menu when a country the student is going to offers
   // one — a scholarship body serves it (Setup → Scholarship bodies) — or a
   // scholarship is already recorded for them. Their countries are the ones they

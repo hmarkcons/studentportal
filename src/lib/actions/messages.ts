@@ -86,6 +86,8 @@ export async function broadcastMessage(_prevState: unknown, formData: FormData) 
       direction: "outbound" as const,
       body,
       sent_by: staffRow?.id ?? null,
+      // Shown to each of them under the bell, but not emailed to every one (0320).
+      broadcast: true,
     }))
   );
 

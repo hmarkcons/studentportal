@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { ThemeToggle } from "./ThemeToggle";
 import { SignOutButton } from "./SignOutButton";
 import { SidebarToggle } from "./SidebarToggle";
+import { NotificationBell } from "./NotificationBell";
 import { ChevronRight, Menu, X } from "lucide-react";
 import { NAV_ACCENT_TEXT, NavIcon, navAccent } from "./NavIcon";
 
@@ -263,6 +264,8 @@ export function AppShell({
             {showSearch && <GlobalSearch />}
           </div>
           <div className="flex items-center gap-3">
+            {/* Every portal: what is waiting on this person, and what has happened. */}
+            <NotificationBell />
             <ThemeToggle />
             <div className="flex items-center gap-2.5">
               <div className="text-right">

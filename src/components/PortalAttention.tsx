@@ -1,107 +1,27 @@
 import Link from "next/link";
 import { ArrowRight, CalendarDays, CreditCard, FolderOpen, Headset, IdCard, ListChecks, ListTodo, MessageCircle, PartyPopper, UserRound, type LucideIcon } from "lucide-react";
 import { Card } from "@/components/ui/Card";
-import { formatDateOnly } from "@/lib/formatDate";
 import type { PortalSummary } from "@/lib/portalSummary";
+import { studentTodos, type StudentTodoIcon } from "@/lib/studentTodos";
 
 // "Is anything waiting on me" — the question a student opens the portal to
 // answer. Only rows that are actually true are rendered: a dashboard listing
 // "0 unread messages" trains people to stop reading it.
 
-function money(currency: string, n: number) {
-  return `${currency} ${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-const LONG_DATE: Intl.DateTimeFormatOptions = { weekday: "short", day: "numeric", month: "short", year: "numeric" };
-
-type Row = { href: string; icon: LucideIcon; text: string; detail?: string; urgent?: boolean };
+/** The icon each line of studentTodos names. */
+export const STUDENT_TODO_ICON: Record<StudentTodoIcon, LucideIcon> = {
+  documents: FolderOpen,
+  payments: CreditCard,
+  appointment: CalendarDays,
+  passport: IdCard,
+  profile: UserRound,
+  messages: MessageCircle,
+  support: Headset,
+};
 
 export function PortalAttention({ summary, className = "mb-6" }: { summary: PortalSummary; className?: string }) {
-  const rows: Row[] = [];
-
-  if (summary.documentsNeedingAttention > 0) {
-    rows.push({
-      href: "/portal/documents",
-      icon: FolderOpen,
-      text: `${summary.documentsNeedingAttention} document${summary.documentsNeedingAttention === 1 ? "" : "s"} to upload`,
-      detail: "Missing or sent back for a replacement",
-      urgent: true,
-    });
-  }
-
-  if (summary.money && summary.money.outstanding > 0) {
-    rows.push({
-      href: "/portal/payments",
-      icon: CreditCard,
-      text: `${money(summary.money.currency, summary.money.outstanding)} outstanding`,
-      detail: summary.money.nextDueDate
-        ? `${summary.money.overdue ? "Overdue — was due" : "Next instalment due"} ${formatDateOnly(summary.money.nextDueDate, LONG_DATE)}`
-        : "No due date set yet",
-      urgent: summary.money.overdue,
-    });
-  }
-
-  if (summary.nextAppointment) {
-    const days = summary.daysToAppointment ?? 0;
-    rows.push({
-      href: "/portal/appointments",
-      icon: CalendarDays,
-      text: summary.nextAppointment.label,
-      detail: `${formatDateOnly(summary.nextAppointment.date, LONG_DATE)} · ${
-        days === 0 ? "today" : days === 1 ? "tomorrow" : `in ${days} days`
-      }`,
-      // A week is the point at which an appointment stops being a diary entry
-      // and starts being something to prepare for.
-      urgent: days <= 7,
-    });
-  }
-
-  // A passport problem outranks an incomplete field: it needs a government
-  // office, not five minutes on a form.
-  if (summary.passport.state === "expired") {
-    rows.push({
-      href: "/portal/profile",
-      icon: IdCard,
-      text: "Your passport has expired",
-      detail: `Expired ${formatDateOnly(summary.passport.expiry!, LONG_DATE)} — a visa cannot be filed until it is renewed`,
-      urgent: true,
-    });
-  } else if (summary.passport.state === "expiring") {
-    rows.push({
-      href: "/portal/profile",
-      icon: IdCard,
-      text: "Your passport expires soon",
-      detail: `${formatDateOnly(summary.passport.expiry!, LONG_DATE)} · in ${summary.passport.daysLeft} days`,
-      urgent: true,
-    });
-  }
-
-  if (summary.profileMissing > 0) {
-    rows.push({
-      href: "/portal/profile",
-      icon: UserRound,
-      text: `${summary.profileMissing} profile detail${summary.profileMissing === 1 ? "" : "s"} to add`,
-      detail: "Needed for your visa application",
-    });
-  }
-
-  if (summary.unreadMessages > 0) {
-    rows.push({
-      href: "/portal/messages",
-      icon: MessageCircle,
-      text: `${summary.unreadMessages} new message${summary.unreadMessages === 1 ? "" : "s"}`,
-      detail: "From your counsellor",
-    });
-  }
-
-  if (summary.ticketsWithNewReply > 0) {
-    rows.push({
-      href: "/portal/support",
-      icon: Headset,
-      text: `${summary.ticketsWithNewReply} support ${summary.ticketsWithNewReply === 1 ? "ticket has" : "tickets have"} a reply`,
-      detail: "From HMARK Support",
-    });
-  }
+  // The same lines as the bell's To do (src/lib/studentTodos.ts).
+  const rows = studentTodos(summary).map((r) => ({ ...r, icon: STUDENT_TODO_ICON[r.icon] }));
 
   if (rows.length === 0) {
     return (

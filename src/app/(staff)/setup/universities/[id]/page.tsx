@@ -16,6 +16,7 @@ import { formatFee } from "@/lib/applicationFee";
 import { STANDARD_LEVELS, levelKey, levelsPresent } from "@/lib/catalogueText";
 import { EmailLinks } from "@/components/EmailLinks";
 import { getCurrentUser } from "@/lib/auth/currentUser";
+import { MessageThread, type MessageRow } from "@/components/MessageThread";
 
 export default async function UniversityDetailPage(props: PageProps<"/setup/universities/[id]">) {
   const { id } = await props.params;
@@ -98,6 +99,26 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
         .eq("university_id", id)
         .order("created_at", { ascending: false })
     : { data: null };
+
+  // The university's own thread with HMARK, written to from the partner
+  // portal. Nothing at HMARK read it, so a partner's message went nowhere; now
+  // Management and Super Admin are alerted to one (0320) and answer it here.
+  // Shown where the university has a partner account or has written at all.
+  const canMessage = hasRole(staffRow, "super_admin") || hasRole(staffRow, "management");
+  const [{ data: thread }, { count: partnerAccounts }] = canMessage
+    ? await Promise.all([
+        supabase
+          .from("messages")
+          .select("id, body, channel, direction, sent_at, sent_by:staff(full_name)")
+          .eq("entity_type", "university")
+          .eq("entity_id", id)
+          .order("sent_at", { ascending: false })
+          .limit(50)
+          .returns<MessageRow[]>(),
+        supabase.from("partner_university_accounts").select("id", { count: "exact", head: true }).eq("university_id", id),
+      ])
+    : [{ data: null }, { count: 0 }];
+  const showMessages = canMessage && ((thread ?? []).length > 0 || (partnerAccounts ?? 0) > 0);
 
   const exchangeLinks = new Map<string, string>();
   await Promise.all(
@@ -182,6 +203,23 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
         />
         {isSuperAdmin && <ImportProgramsForm universityId={id} />}
       </Card>
+
+      {showMessages && (
+        <div id="messages" className="mt-6 scroll-mt-24" data-university-messages>
+          <Card>
+            <h3 className="mb-1 text-sm font-medium text-ink">Messages with {university.name}</h3>
+            <p className="mb-3 text-xs text-muted">What the university&rsquo;s partner portal and HMARK have written to each other.</p>
+            <MessageThread
+              messages={(thread ?? []).slice().reverse()}
+              entityType="university"
+              entityId={id}
+              channel="inapp"
+              revalidateTo={`/setup/universities/${id}`}
+              counterpartName={university.name}
+            />
+          </Card>
+        </div>
+      )}
 
       {canSeeExchange && (
         <Card className="mt-6">

@@ -1316,3 +1316,18 @@ table[data-grid] > tbody > tr:last-child > td {
 .stage-meter > span {
   background-color: var(--hue);
 }
+
+/* The bell (NotificationBell) rings once when something new has arrived. */
+@keyframes bell-ring {
+  0%, 100% { transform: rotate(0); }
+  15% { transform: rotate(14deg); }
+  30% { transform: rotate(-12deg); }
+  45% { transform: rotate(9deg); }
+  60% { transform: rotate(-6deg); }
+  75% { transform: rotate(3deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-notification-bell] svg {
+    animation: none !important;
+  }
+}
