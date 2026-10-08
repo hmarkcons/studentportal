@@ -10,6 +10,8 @@ import { monthLabel, orderedLeadColumns, type LeadColumnKey } from "@/lib/leadSh
 import { getStaffSession } from "@/lib/auth/session";
 import { hasRole } from "@/lib/auth/roles";
 import { ArrangeLeadColumns } from "./ArrangeLeadColumns";
+import { searchTerm } from "@/lib/listSearch";
+import { loginEmailMatches } from "@/lib/loginEmailSearch";
 import { RefreshIfStale } from "@/components/RefreshIfStale";
 
 /** Each list column, by the leads workbook column it shows. The follow-up note has none of its own: it is in Follow-up. */
@@ -108,8 +110,9 @@ export default async function LeadsPage(props: { searchParams: Promise<Record<st
     counselor: param("f_counselor"),
   };
   // The search as an ilike pattern, without what PostgREST's filter syntax
-  // would read as structure — commas, brackets, quotes — or as wildcards.
-  const term = search.replace(/[%_,()*\\"']/g, " ").replace(/\s+/g, " ").trim();
+  // would read as structure — commas, brackets, quotes — or as wildcards; an
+  // email address's underscore kept (src/lib/listSearch.ts).
+  const term = searchTerm(search);
   const like = `%${term}%`;
 
   const supabase = await createClient();
@@ -118,7 +121,7 @@ export default async function LeadsPage(props: { searchParams: Promise<Record<st
   // lead, worked out by the database in one request (lead_list_options, 0316):
   // reading every lead here to work them out, a thousand at a time and one
   // request after another, was most of the time the list took to open.
-  const [canDelete, counselors, { staff }, { data: savedOrder }, { data: listOptions }, remarkHits] = await Promise.all([
+  const [canDelete, counselors, { staff }, { data: savedOrder }, { data: listOptions }, remarkHits, loginHits] = await Promise.all([
     hasPermission("leads.delete"),
     getCachedCounselors(),
     getStaffSession(),
@@ -135,6 +138,9 @@ export default async function LeadsPage(props: { searchParams: Promise<Record<st
           .limit(100)
           .then((r) => (r.data ?? []) as { lead_id: string }[])
       : Promise.resolve([] as { lead_id: string }[]),
+    // Students whose portal sign-in address says it, where that is not the
+    // email on their record (0327).
+    term.length >= 2 ? loginEmailMatches(supabase, term) : Promise.resolve([] as string[]),
   ]);
   const canArrange = hasRole(staff, "super_admin");
 
@@ -158,7 +164,8 @@ export default async function LeadsPage(props: { searchParams: Promise<Record<st
   if (term) {
     const lower = term.toLowerCase();
     const ors = SEARCHED_COLUMNS.map((c) => `${c}.ilike."${like}"`);
-    if (remarkHits.length) ors.push(`id.in.(${remarkHits.map((r) => r.lead_id).join(",")})`);
+    const idHits = [...new Set([...remarkHits.map((r) => r.lead_id), ...loginHits])];
+    if (idHits.length) ors.push(`id.in.(${idHits.join(",")})`);
     const counselorIds = Array.from(counselorIdByName.entries())
       .filter(([name]) => name.toLowerCase().includes(lower))
       .map(([, id]) => id);
@@ -280,7 +287,7 @@ export default async function LeadsPage(props: { searchParams: Promise<Record<st
             freezeColumn="name"
             columns={columns}
             searchable
-            searchPlaceholder="Search name, contact, course, remarks…"
+            searchPlaceholder="Search name, email, phone, course, remarks…"
             oneLine
             minTableWidthClassName="min-w-[1500px]"
             pageSize={PAGE_SIZE}

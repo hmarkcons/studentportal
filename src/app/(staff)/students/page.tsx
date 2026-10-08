@@ -8,6 +8,8 @@ import { LongTextCell } from "@/components/ui/LongTextCell";
 import { ImportRegisteredStudentsForm } from "./ImportRegisteredStudentsForm";
 import { InlineRegistrationStatusCell } from "./InlineRegistrationStatusCell";
 import { RowActionsMenu } from "@/components/RowActionsMenu";
+import { searchTerm } from "@/lib/listSearch";
+import { loginEmailMatches } from "@/lib/loginEmailSearch";
 import { getCurrentUser } from "@/lib/auth/currentUser";
 
 type StudentRow = {
@@ -90,8 +92,9 @@ export default async function StudentsPage(props: { searchParams: Promise<Record
     year: param("f_year"),
   };
   // The search as an ilike pattern, without what PostgREST's filter syntax
-  // would read as structure — commas, brackets, quotes — or as wildcards.
-  const term = search.replace(/[%_,()*\\"']/g, " ").replace(/\s+/g, " ").trim();
+  // would read as structure — commas, brackets, quotes — or as wildcards; an
+  // email address's underscore kept (src/lib/listSearch.ts).
+  const term = searchTerm(search);
   const like = `%${term}%`;
 
   const supabase = await createClient();
@@ -101,7 +104,7 @@ export default async function StudentsPage(props: { searchParams: Promise<Record
   // at a time, since PostgREST stops at 1000 to a request without saying so —
   // and the backup countries, by what RLS lets this viewer see.
   type BackupRow = { lead_id: string; destination: { display_name: string } | { display_name: string }[] | null };
-  const [{ data: staffRow }, optionRows, backupRows] = await Promise.all([
+  const [{ data: staffRow }, optionRows, backupRows, loginHits] = await Promise.all([
     supabase.from("staff").select("role, roles").eq("id", user?.id ?? "").maybeSingle(),
     readAll<OptionRow>((from, to) =>
       supabase
@@ -123,6 +126,9 @@ export default async function StudentsPage(props: { searchParams: Promise<Record
         .range(from, to)
         .returns<BackupRow[]>()
     ).catch(() => [] as BackupRow[]),
+    // Students whose portal sign-in address says it, where that is not the
+    // email on their record (0327).
+    term.length >= 2 ? loginEmailMatches(supabase, term) : Promise.resolve([] as string[]),
   ]);
   const canDelete = hasRole(staffRow, "super_admin") || hasRole(staffRow, "processing");
 
@@ -191,6 +197,7 @@ export default async function StudentsPage(props: { searchParams: Promise<Record
     byName(officerIdByName, "processing_officer_id");
     const statuses = ["registered", "withdrawn", "ghost"].filter((st) => st.includes(lower));
     if (statuses.length) ors.push(`registration_status.in.(${statuses.join(",")})`);
+    if (loginHits.length) ors.push(`id.in.(${loginHits.join(",")})`);
     eitherOr.push(ors.join(","));
   }
   if (eitherOr.length === 1) query = query.or(eitherOr[0]);
@@ -357,7 +364,7 @@ export default async function StudentsPage(props: { searchParams: Promise<Record
             rows={rows}
             columns={columns}
             searchable
-            searchPlaceholder="Search name, contact…"
+            searchPlaceholder="Search name, email, phone, Student ID…"
             oneLine
             minTableWidthClassName="min-w-[640px] lg:min-w-[1250px]"
             pageSize={PAGE_SIZE}

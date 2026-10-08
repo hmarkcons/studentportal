@@ -46,10 +46,10 @@ try {
   const page = await signIn(browser, admin1.email);
   await page.setViewportSize({ width: 1400, height: 900 });
   await page.goto(`${BASE}/students`, { waitUntil: "domcontentloaded" });
-  const search = page.getByPlaceholder("Search name, contact…");
+  const search = page.getByPlaceholder("Search name, email, phone, Student ID…");
   await search.waitFor({ timeout: 60000 });
   await page.waitForFunction(() => {
-    const i = document.querySelector('input[placeholder="Search name, contact…"]');
+    const i = document.querySelector('input[placeholder="Search name, email, phone, Student ID…"]');
     return Boolean(i && Object.keys(i).some((k) => k.startsWith("__reactProps")));
   }, null, { timeout: 30000 });
   await search.fill("zztmp Cells");

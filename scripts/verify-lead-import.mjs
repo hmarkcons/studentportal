@@ -300,10 +300,10 @@ try {
   // ----------------------------------------------------------- the list
   console.log("\n--- the list ---");
   await page.goto(`${BASE}/leads`, { waitUntil: "domcontentloaded" });
-  const search = page.getByPlaceholder("Search name, contact, course, remarks…");
+  const search = page.getByPlaceholder("Search name, email, phone, course, remarks…");
   await search.waitFor({ timeout: 60000 });
   await page.waitForFunction(() => {
-    const i = document.querySelector('input[placeholder="Search name, contact, course, remarks…"]');
+    const i = document.querySelector('input[placeholder="Search name, email, phone, course, remarks…"]');
     return Boolean(i && Object.keys(i).some((k) => k.startsWith("__reactProps")));
   }, null, { timeout: 30000 });
   await search.fill("zztmp Import");
