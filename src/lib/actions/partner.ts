@@ -8,6 +8,7 @@ import { refuseFinalizedStageByHand } from "@/lib/finalizedStageGuard";
 import { sanitizeFilename, validateDocumentFile } from "@/lib/documentUpload";
 import { parseRoundsFromFormData } from "@/lib/programRounds";
 import { saveProgramRounds } from "@/lib/actions/programRoundsWrite";
+import { parseSourceNames } from "@/lib/documentFileNames";
 import { uploadedFile } from "@/lib/stagedUpload";
 
 export async function partnerUpdateStage(applicationId: string, _prevState: unknown, formData: FormData) {
@@ -60,30 +61,32 @@ export async function partnerUploadLetter(applicationId: string, category: "offe
   const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: false });
   if (uploadError) return { error: uploadError.message };
 
-  if (existing) {
-    // Archives whatever was there and points the requirement at the new file,
-    // in one transaction (0165).
-    const { error } = await supabase.rpc("replace_student_document", {
-      p_document_id: existing.id,
-      p_new_path: path,
-      p_uploaded_by_role: "partner",
-    });
-    if (error) return { error: error.message };
-  } else {
-    const { error } = await supabase.from("student_documents").insert({
-      student_id: app.student_id,
-      application_id: applicationId,
-      category,
-      file_path: path,
-      status: "submitted",
-      uploaded_by_role: "partner",
-      // The staff and student upload paths both stamp this; this one did not,
-      // so an offer letter from a university was the one document on file that
-      // nobody could date. uploaded_at has no database default, so the row was
-      // simply left null. A trigger (0154) now backs all three up.
-      uploaded_at: new Date().toISOString(),
-    });
-    if (error) return { error: error.message };
+  // The letter's requirement: the one already on this application, or a new one.
+  // Its id chosen here: a university that sees its students in limited mode
+  // may add the row but not read it back.
+  const documentId = (existing?.id as string | undefined) ?? crypto.randomUUID();
+  if (!existing) {
+    const { error } = await supabase
+      .from("student_documents")
+      .insert({ id: documentId, student_id: app.student_id, application_id: applicationId, category, status: "missing", uploaded_by_role: "partner" });
+    if (error) {
+      await supabase.storage.from("documents").remove([path]);
+      return { error: error.message };
+    }
+  }
+  // A file of its own beside any earlier letter (0328) — one HMARK sent back
+  // is replaced by it and kept in the history — under the name it was sent as.
+  const { error: fileError } = await supabase.rpc("add_student_document_file", {
+    p_document_id: documentId,
+    p_path: path,
+    p_name: file.name,
+    p_sources: parseSourceNames(formData.get("file_sources")),
+    p_role: "partner",
+    p_status: "submitted",
+  });
+  if (fileError) {
+    await supabase.storage.from("documents").remove([path]);
+    return { error: fileError.message === "not authorized" ? "That application is not one of your university's." : fileError.message };
   }
 
   // An offer letter from the university moves the application and the country on.

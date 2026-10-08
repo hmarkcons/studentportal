@@ -21,6 +21,7 @@ import { holdsPermission } from "@/lib/permissionResolve";
 import { formatLeaveRange, leaveHtml, leaveSubject, leaveText, type LeaveMail } from "@/lib/leaveEmail";
 import { sendEmail } from "@/lib/email";
 import { getSiteUrl } from "@/lib/siteUrl";
+import { storedFileName } from "@/lib/documentFileNames";
 import { uploadedFile } from "@/lib/stagedUpload";
 
 // Staff leave (0272). A staff member asks; someone holding leave.approve —
@@ -415,6 +416,8 @@ export type LeaveRow = {
   unpaidDays: number;
   decisionNote: string | null;
   certificateUrl: string | null;
+  /** The certificate's name as uploaded. */
+  certificateName: string | null;
   createdAt: string;
   recordedForThem: boolean;
 };
@@ -457,6 +460,7 @@ async function toRows(rows: RequestRecord[]): Promise<LeaveRow[]> {
       certificateUrl: r.certificate_path
         ? ((await supabase.storage.from("documents").createSignedUrl(r.certificate_path, 3600)).data?.signedUrl ?? null)
         : null,
+      certificateName: r.certificate_path ? storedFileName(r.certificate_path) : null,
       createdAt: r.created_at,
       recordedForThem: Boolean(r.created_by && r.created_by !== r.staff_id),
     }))

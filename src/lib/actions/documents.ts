@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sanitizeFilename, validateDocumentFile } from "@/lib/documentUpload";
+import { documentFilePath, parseSourceNames } from "@/lib/documentFileNames";
 import { profileDerivedRequirements, reconcileDerived, templatesToSeed } from "@/lib/documentChecklist";
 import { requirePermission } from "@/lib/auth/permissions";
 import { categoryCarriesOver } from "@/lib/intakeCycle";
@@ -60,6 +61,7 @@ export async function ensureStudentDocumentRequirements(studentId: string): Prom
     { data: qualifications },
     { data: testScores },
     { data: profile },
+    { data: removals },
   ] = await Promise.all([
     // Beside the reads rather than after them. When it has to create the
     // student's first cycle it also stamps their existing rows with it, which
@@ -82,7 +84,11 @@ export async function ensureStudentDocumentRequirements(studentId: string): Prom
       .eq("student_id", studentId),
     supabase.from("student_test_scores").select("id, test_type, custom_test_name").eq("student_id", studentId),
     supabase.from("student_profiles").select("travel_history, visa_refusal_history").eq("student_id", studentId).maybeSingle(),
+    // Requirements staff deleted for this student (0328): never added back.
+    supabase.from("student_document_removals").select("template_id, derived_key").eq("student_id", studentId),
   ]);
+  const removedTemplates = new Set((removals ?? []).map((r) => r.template_id as string | null).filter(Boolean));
+  const removedKeys = new Set((removals ?? []).map((r) => r.derived_key as string | null).filter(Boolean));
 
   const destinationIds = new Set((destRows ?? []).map((d) => d.destination_id));
   const existingRows = existing ?? [];
@@ -142,6 +148,7 @@ export async function ensureStudentDocumentRequirements(studentId: string): Prom
 
   const applicable = (templates ?? []).filter((t) => {
     if (existingTemplateIds.has(t.id)) return false;
+    if (removedTemplates.has(t.id)) return false;
     if (visaOnly && skippedForVisaOnly.has(t.id as string)) return false;
     const levelMatches = t.level === "all" || t.level === level;
     const destMatches = t.destination_id === null || destinationIds.has(t.destination_id);
@@ -203,7 +210,9 @@ export async function ensureStudentDocumentRequirements(studentId: string): Prom
     travelHistoryCount: Array.isArray(profile?.travel_history) ? profile!.travel_history.length : 0,
     visaHistoryCount: Array.isArray(profile?.visa_refusal_history) ? profile!.visa_refusal_history.length : 0,
   });
-  const { toInsert, toDeleteIds, toRename } = reconcileDerived(wanted, existingRows);
+  const reconciled = reconcileDerived(wanted, existingRows);
+  const { toDeleteIds, toRename } = reconciled;
+  const toInsert = reconciled.toInsert.filter((r) => !removedKeys.has(r.derivedKey));
 
   if (toInsert.length > 0) {
     const { error } = await supabase.from("student_documents").insert(
@@ -272,55 +281,92 @@ export async function uploadDocument(
   const validationError = validateDocumentFile(file);
   if (validationError) return { error: validationError };
 
-  const path = `${studentId}/${documentId}-${sanitizeFilename(file.name)}`;
-  const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: true });
+  // A file of its own beside any already there (0328): several chosen at once
+  // arrive here joined into one, with the names they were joined from.
+  const path = documentFilePath(studentId, documentId, sanitizeFilename(file.name), crypto.randomUUID().slice(0, 8));
+  const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: false });
   if (uploadError) return { error: uploadError.message };
 
-  const { error } = await supabase
-    .from("student_documents")
-    .update({
-      file_path: path,
-      status: "submitted",
-      uploaded_at: new Date().toISOString(),
-      uploaded_by_role: "staff",
-    })
-    .eq("id", documentId);
-
-  if (error) return { error: error.message };
+  const { error } = await supabase.rpc("add_student_document_file", {
+    p_document_id: documentId,
+    p_path: path,
+    p_name: file.name,
+    p_sources: parseSourceNames(formData.get("file_sources")),
+    p_role: "staff",
+    p_status: "submitted",
+  });
+  if (error) {
+    await supabase.storage.from("documents").remove([path]);
+    return { error: error.message === "not authorized" ? "Only the student's processing team can upload their documents." : error.message };
+  }
 
   await syncStudentStages(studentId);
   revalidatePath(revalidateTo);
   return { success: true };
 }
 
-export async function reviewDocument(documentId: string, revalidateTo: string, status: "verified" | "rejected", reason?: string) {
+/**
+ * Approves one file of a requirement, or sends it back with a reason (0328).
+ * The requirement is approved once every file of it is; a file sent back
+ * sends the requirement back, with its reason, to the student.
+ *
+ * A file with no id is one on record from before files were kept one by one:
+ * reviewed on the requirement itself, as it always was.
+ */
+export async function reviewDocumentFile(
+  fileId: string | null,
+  documentId: string,
+  revalidateTo: string,
+  status: "verified" | "rejected",
+  reason?: string
+) {
   const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const trimmedReason = reason?.trim() || null;
-  // Approving needs no reason; rejecting does. A rejection with no reason
-  // leaves the student staring at "Rejected" with nothing to act on, and they
-  // cannot ask the document what was wrong with it.
-  if (status === "rejected" && !trimmedReason) {
-    return { error: "Give a reason for the rejection — the student sees it and needs to know what to fix." };
+  const trimmed = reason?.trim() || null;
+  if (status === "rejected" && !trimmed) {
+    return { error: "Give a reason for sending it back — the student sees it and needs to know what to fix." };
   }
-
-  const { error } = await supabase
-    .from("student_documents")
-    .update({
-      status,
-      verified_by: user?.id,
-      verified_at: new Date().toISOString(),
-      rejected_reason: status === "rejected" ? trimmedReason : null,
-    })
-    .eq("id", documentId);
-
-  if (!error) await syncStagesForDocument(documentId);
+  let error: { message: string } | null = null;
+  if (fileId) {
+    ({ error } = await supabase.rpc("review_student_document_file", { p_file_id: fileId, p_status: status, p_reason: trimmed }));
+  } else {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    ({ error } = await supabase
+      .from("student_documents")
+      .update({ status, verified_by: user?.id, verified_at: new Date().toISOString(), rejected_reason: status === "rejected" ? trimmed : null })
+      .eq("id", documentId));
+  }
+  if (error) return { error: error.message === "not authorized" ? "Only the student's processing team can review their documents." : error.message };
+  await syncStagesForDocument(documentId);
   revalidatePath(revalidateTo);
+  return { success: true };
+}
+
+/** Takes one file off a requirement; the file itself is kept for 90 days (fileTrash). */
+export async function removeDocumentFile(fileId: string, studentId: string, revalidateTo: string) {
+  const supabase = await createClient();
+  const { data: path, error } = await supabase.rpc("remove_student_document_file", { p_file_id: fileId });
+  if (error) return { error: error.message === "not authorized" ? "Only the student's processing team can remove their files." : error.message };
+  if (typeof path === "string" && path) await removeStorageFiles(supabase, "documents", [path]);
+  await syncStudentStages(studentId);
+  revalidatePath(revalidateTo);
+  return { success: true };
+}
+
+/**
+ * Puts a requirement deleted for this student back on their checklist: the
+ * mark that kept it off is removed, and the checklist is brought up to date.
+ */
+export async function restoreDocumentRequirement(removalId: string, studentId: string, revalidateTo: string) {
+  const denied = await requirePermission("documents.manage_requirements", MANAGE_DENIED);
+  if (denied) return { error: denied.error };
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("student_document_removals").delete().eq("id", removalId).select("id");
   if (error) return { error: error.message };
+  if (!data?.length) return { error: "That requirement is already back, or is not yours to change." };
+  await ensureStudentDocumentRequirements(studentId);
+  revalidatePath(revalidateTo);
   return { success: true };
 }
 
@@ -330,7 +376,14 @@ export async function deleteDocumentRequirement(documentId: string, revalidateTo
 
   const supabase = await createClient();
 
-  const { data: doc } = await supabase.from("student_documents").select("file_path, student_id").eq("id", documentId).maybeSingle();
+  const [{ data: doc }, { data: files }] = await Promise.all([
+    supabase
+      .from("student_documents")
+      .select("file_path, student_id, application_id, template_id, derived_key, custom_name, category, template:document_templates(name)")
+      .eq("id", documentId)
+      .maybeSingle(),
+    supabase.from("student_document_files").select("file_path").eq("document_id", documentId),
+  ]);
 
   // Delete the DB row (the source of truth for what's shown as "on record")
   // before touching storage — if storage cleanup below fails, the worst
@@ -341,8 +394,24 @@ export async function deleteDocumentRequirement(documentId: string, revalidateTo
   const { error } = await supabase.from("student_documents").delete().eq("id", documentId);
   if (error) return { error: error.message };
 
-  if (doc?.file_path) {
-    await removeStorageFiles(supabase, "documents", [doc.file_path]);
+  // Every file of it, kept for 90 days (fileTrash) so a restore brings them back.
+  const paths = [...new Set([doc?.file_path, ...(files ?? []).map((f) => f.file_path as string)].filter((p): p is string => Boolean(p)))];
+  if (paths.length) await removeStorageFiles(supabase, "documents", paths);
+
+  // Remembered, so the checklist does not add it straight back on the next
+  // page load (0328): a template's requirement, or one from the profile.
+  if (doc && !doc.application_id && (doc.template_id || doc.derived_key)) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const template = (Array.isArray(doc.template) ? doc.template[0] : doc.template) as { name?: string } | null;
+    await supabase.from("student_document_removals").insert({
+      student_id: doc.student_id,
+      template_id: doc.template_id ?? null,
+      derived_key: doc.template_id ? null : (doc.derived_key ?? null),
+      name: (doc.custom_name as string | null) ?? template?.name ?? (doc.category as string | null) ?? null,
+      removed_by: user?.id ?? null,
+    });
   }
 
   if (doc?.student_id) await syncStudentStages(doc.student_id as string);
@@ -417,23 +486,25 @@ export async function uploadApplicationDocument(
     return { error: insertError?.message.includes("row-level security") ? "Only the processing team can file documents for this student." : (insertError?.message ?? "The document wasn't saved.") };
   }
 
-  const path = `${studentId}/${row.id}-${sanitizeFilename(file.name)}`;
-  const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: true });
+  const path = documentFilePath(studentId, row.id as string, sanitizeFilename(file.name), crypto.randomUUID().slice(0, 8));
+  const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: false });
   if (uploadError) {
     await supabase.from("student_documents").delete().eq("id", row.id);
     return { error: uploadError.message };
   }
-  // Asked for back: an UPDATE that RLS refuses matches nothing and raises
-  // nothing, and would leave an approved document with no file behind it.
-  const { data: linked, error: pathError } = await supabase
-    .from("student_documents")
-    .update({ file_path: path })
-    .eq("id", row.id)
-    .select("id");
-  if (pathError || !linked?.length) {
+  // Its file, approved as it is filed (0328); taken back out with the row if it cannot be attached.
+  const { error: pathError } = await supabase.rpc("add_student_document_file", {
+    p_document_id: row.id,
+    p_path: path,
+    p_name: file.name,
+    p_sources: parseSourceNames(formData.get("file_sources")),
+    p_role: "staff",
+    p_status: "verified",
+  });
+  if (pathError) {
     await supabase.storage.from("documents").remove([path]);
     await supabase.from("student_documents").delete().eq("id", row.id);
-    return { error: pathError?.message ?? "The file was stored but couldn't be attached to the document, so neither was kept." };
+    return { error: pathError.message === "not authorized" ? "Only the processing team can file documents for this student." : pathError.message };
   }
 
   await syncStudentStages(studentId);

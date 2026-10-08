@@ -1,5 +1,4 @@
 import { loadDocumentHistory } from "@/lib/documentHistory";
-import { documentUrls } from "@/lib/storageUrls";
 import { loadDocumentGuides } from "@/lib/documentGuides";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -25,6 +24,7 @@ import { InterviewSection, type InterviewRow } from "@/components/InterviewSecti
 import { isIntakeMode, type IntakeMode } from "@/lib/intake";
 import { karachiToday } from "@/lib/calendarDates";
 import { ProgramDates } from "@/components/ProgramDates";
+import { loadDocumentFiles } from "@/lib/documentFilesLoad";
 import type { ProgramRound } from "@/lib/programRounds";
 
 function one<T>(v: T | T[] | null) {
@@ -200,14 +200,11 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
     return Array.isArray(v) ? v[0] ?? null : v;
   }
 
-  const [docHistory, guides, fileUrls] = await Promise.all([
+  const [docHistory, guides, filesByDoc] = await Promise.all([
     loadDocumentHistory(supabase, (rawDocs ?? []).map((d) => d.id)),
     loadDocumentGuides(supabase, id, rawDocs ?? []),
-    // Every file's link in one request, rather than one each.
-    documentUrls(
-      supabase,
-      (rawDocs ?? []).map((d) => d.file_path)
-    ),
+    // Each requirement's files, each with its link (0328).
+    loadDocumentFiles(supabase, rawDocs ?? []),
   ]);
 
   const docsWithUrls = (rawDocs ?? []).map((d) => {
@@ -218,8 +215,7 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
       // not just this university, so it's labeled to make that clear.
       const name = d.application_id === null ? `${baseName} (shared — all applications)` : baseName;
       const past = docHistory.get(d.id) ?? [];
-      if (!d.file_path) return { ...d, name, history: past };
-      return { ...d, name, history: past, fileUrl: fileUrls.get(d.file_path) ?? null };
+      return { ...d, name, history: past, files: filesByDoc.get(d.id) ?? [] };
   });
 
   return (

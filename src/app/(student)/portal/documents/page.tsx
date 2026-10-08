@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { CircleCheck, ClipboardList, FolderOpen, Hourglass, Lightbulb, Upload } from "lucide-react";
 import { MAX_UPLOAD_BYTES, formatFileSize } from "@/lib/fileSize";
-import { documentUrls } from "@/lib/storageUrls";
 import { loadDocumentHistory } from "@/lib/documentHistory";
 import { cycleTabLabel } from "@/lib/intakeCycle";
 import { loadCycleDocuments, documentCounts } from "@/lib/studentCycleDocuments";
@@ -15,6 +14,7 @@ import { sectionOfCategory } from "@/lib/documentCategories";
 import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
 import { PortalStat, PortalStats } from "@/components/studentPortal/PortalStat";
 import { PortalEmpty } from "@/components/studentPortal/PortalEmpty";
+import { loadDocumentFiles } from "@/lib/documentFilesLoad";
 import { loadDocumentGuides } from "@/lib/documentGuides";
 
 function one<T>(v: T | T[] | null) {
@@ -46,13 +46,12 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
   const appLabel = new Map((applications ?? []).map((a) => [a.id, one(a.university as never) as { name?: string } | null]));
   const { docs: rawDocs, cycles, showCycleTabs, activeCycleId, isPreviousIntake, inheritedFromById } = cycleDocs;
 
-  const [docHistory, guides, docUrls] = await Promise.all([
+  const [docHistory, guides, filesByDoc] = await Promise.all([
     loadDocumentHistory(supabase, rawDocs.map((d) => d.id)),
     // How to prepare each one, from the checklist builder (0300).
     loadDocumentGuides(supabase, student.id, rawDocs),
-    // Every file's link in one request, then a plain synchronous map. This was
-    // one round trip to Storage per document before the page could render.
-    documentUrls(supabase, rawDocs.map((d) => d.file_path)),
+    // Each requirement's files, each with its link (0328).
+    loadDocumentFiles(supabase, rawDocs),
   ]);
 
   const docsWithUrls = rawDocs.map((d) => {
@@ -67,8 +66,7 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
       const carried = inheritedFromById.get(d.id) ? " — already approved, carried over" : "";
       const custom_name = `${baseName}${uni?.name ? ` — ${uni.name}` : ""}${carried}`;
       const past = docHistory.get(d.id) ?? [];
-      if (!d.file_path) return { ...d, custom_name, history: past };
-      return { ...d, custom_name, history: past, fileUrl: docUrls.get(d.file_path) ?? null };
+      return { ...d, custom_name, history: past, files: filesByDoc.get(d.id) ?? [] };
   });
 
   // Grouped and numbered the same way staff see them on the Documents tab, so

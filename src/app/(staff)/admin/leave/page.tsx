@@ -61,7 +61,7 @@ export default async function LeaveAdminPage() {
                 {r.reason && <p className="text-xs text-muted">“{r.reason}”</p>}
                 {r.certificateUrl && (
                   <a href={r.certificateUrl} target="_blank" rel="noreferrer" className="w-fit text-xs text-primary hover:underline">
-                    Medical certificate
+                    Medical certificate{r.certificateName ? ` · ${r.certificateName}` : ""}
                   </a>
                 )}
                 {r.staffId === data.meId ? (

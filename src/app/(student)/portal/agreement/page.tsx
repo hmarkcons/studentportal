@@ -10,6 +10,7 @@ import { evaluateAgreementGate } from "@/lib/portalGate";
 import { uploadedLine } from "@/lib/activityStamp";
 import { signedAgreementGroups } from "@/lib/studentAgreements";
 import { getCurrentUser } from "@/lib/auth/currentUser";
+import { storedFileName } from "@/lib/documentFileNames";
 import { documentUrls } from "@/lib/storageUrls";
 
 
@@ -58,7 +59,9 @@ export default async function PortalAgreementPage() {
   );
   const generated = new Map<string, string>();
   const signed = new Map<string, string>();
+  const signedName = new Map<string, string>();
   for (const a of agreements ?? []) {
+    if (a.signed_file_path) signedName.set(a.id, storedFileName(a.signed_file_path));
     const pdf = a.pdf_path ? urls.get(a.pdf_path) : undefined;
     if (pdf) generated.set(a.id, pdf);
     const copy = a.signed_file_path ? urls.get(a.signed_file_path) : undefined;
@@ -296,6 +299,7 @@ export default async function PortalAgreementPage() {
                       ) : (
                         <p className="text-xs text-muted">The office is filing your signed copy — it will appear here shortly.</p>
                       )}
+                      {signed.get(v.id) && signedName.get(v.id) && <span className="break-all text-[11px] text-muted" data-file-name>{storedFileName(signedName.get(v.id)!)}</span>}
                     </div>
                   </Card>
                 ))}

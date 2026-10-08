@@ -56,6 +56,8 @@ import { TrackerCountryTabs } from "@/components/TrackerCountryTabs";
 import { uploadedLine } from "@/lib/activityStamp";
 import { trackerValueFilled } from "@/lib/trackerValue";
 import { inCredentialsSection } from "@/lib/studentCredentials";
+import { loadDocumentFiles } from "@/lib/documentFilesLoad";
+import { storedFileName } from "@/lib/documentFileNames";
 import { loadLatestPkrRate } from "@/lib/pkrRates";
 
 function one<T>(v: T | T[] | null) {
@@ -554,14 +556,12 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     // with thirty documents was thirty round trips to Storage before this page
     // could render, and they were the single biggest thing on it.
     Promise.all([
-      documentUrls(
-        supabase,
-        (rawDocs ?? []).map((d) => d.file_path)
-      ),
+      // Each requirement's files, each with its link (0328).
+      loadDocumentFiles(supabase, rawDocs ?? []),
       // Each document's earlier versions. Needs only the ids, so it is read in
       // this wave rather than in one of its own ahead of it.
       loadDocumentHistory(supabase, (rawDocs ?? []).map((d) => d.id)),
-    ]).then(([urls, docHistory]) =>
+    ]).then(([filesByDoc, docHistory]) =>
       (rawDocs ?? []).map((d) => {
         const templateName = one(d.template as never) as { name?: string } | null;
         // Which application this requirement belongs to, now named down to the
@@ -570,8 +570,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         const belongsTo = d.application_id ? appLabel.get(d.application_id) : null;
         const name = `${d.custom_name ?? templateName?.name ?? d.category ?? "Document"}${belongsTo ? ` — ${belongsTo}` : " — Student-level"}`;
         const past = docHistory.get(d.id) ?? [];
-        if (!d.file_path) return { ...d, name, history: past };
-        return { ...d, name, history: past, fileUrl: urls.get(d.file_path) ?? null };
+        return { ...d, name, history: past, files: filesByDoc.get(d.id) ?? [] };
       })
     ),
     appIds.length
@@ -1049,6 +1048,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                       {a.discount_amount != null && ` · discount ${a.discount_amount}`}
                     </span>
                     <div className="flex flex-wrap items-center justify-end gap-2">
+                      {links?.signedUrl && a.signed_file_path && <span className="break-all text-[11px] text-muted" data-file-name>{storedFileName(a.signed_file_path)}</span>}
                       {links?.signedUrl ? (
                         <a
                           href={links.signedUrl}

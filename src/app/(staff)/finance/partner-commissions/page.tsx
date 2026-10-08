@@ -11,6 +11,7 @@ import { EditPartnerCommissionForm } from "./EditPartnerCommissionForm";
 import { AddPartnerCommissionForm } from "./AddPartnerCommissionForm";
 import { PARTNER_COMMISSION_STATUS_LABELS, type PartnerCommissionStatus } from "@/lib/constants";
 import { TableFrame } from "@/components/ui/TableFrame";
+import { storedFileName } from "@/lib/documentFileNames";
 import { getCurrentUser } from "@/lib/auth/currentUser";
 
 function one<T>(v: T | T[] | null) {
@@ -124,6 +125,7 @@ export default async function PartnerCommissionsPage() {
                     {canManage ? (
                       <ProofFileCell
                         viewUrl={proofUrls.get(r.id)}
+                        fileName={r.payment_proof_path ? storedFileName(r.payment_proof_path) : null}
                         uploadedAt={r.payment_proof_uploaded_at}
                         uploadAction={uploadPartnerCommissionProof.bind(null, r.id, "/finance/partner-commissions")}
                       />

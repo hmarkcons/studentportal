@@ -53,7 +53,7 @@ export default async function MyLeavePage() {
                 {r.decisionNote && <p className="text-xs text-muted">Note: “{r.decisionNote}”</p>}
                 {r.certificateUrl && (
                   <a href={r.certificateUrl} target="_blank" rel="noreferrer" className="w-fit text-xs text-primary hover:underline">
-                    Medical certificate
+                    Medical certificate{r.certificateName ? ` · ${r.certificateName}` : ""}
                   </a>
                 )}
               </li>

@@ -197,6 +197,17 @@ Storage's own `remove()` is for clearing away an upload that has just failed,
 nothing else: anywhere else it makes a restore that reports success and
 points at files that are gone.
 
+**A student document's status is worked out from its files** (0328). A
+requirement holds several files in `student_document_files`, each approved
+or sent back on its own, and a trigger sets `student_documents.status`,
+`file_path` (the newest file) and the verdict from them. Writing the
+requirement's status or file_path directly is undone by the next change to
+any of its files; add, review and remove files through
+`add_student_document_file`, `review_student_document_file` and
+`remove_student_document_file`. And a requirement staff delete is
+remembered in `student_document_removals` — anything that rebuilds the
+checklist must skip those, or the deleted requirement comes straight back.
+
 ## Migrations
 
 Numbered files in `supabase/migrations/`, applied by hand — there is no CLI

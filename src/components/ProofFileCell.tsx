@@ -11,10 +11,13 @@ type ActionState = { error?: string; success?: boolean } | undefined;
 
 export function ProofFileCell({
   viewUrl,
+  fileName = null,
   uploadedAt,
   uploadAction,
 }: {
   viewUrl?: string | null;
+  /** The proof's name as uploaded. */
+  fileName?: string | null;
   /** When the proof on file arrived — 0155. */
   uploadedAt?: string | null;
   uploadAction: (prevState: ActionState, formData: FormData) => Promise<ActionState>;
@@ -34,6 +37,11 @@ export function ProofFileCell({
           <Eye aria-hidden className="h-3.5 w-3.5 shrink-0" />
           View proof
         </a>
+      )}
+      {viewUrl && fileName && (
+        <span className="break-all text-[11px] text-muted" data-file-name>
+          {fileName}
+        </span>
       )}
       {/* Every caller shows the proof through this cell, so the date lives
           here rather than being remembered in each table. */}

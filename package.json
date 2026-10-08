@@ -62,7 +62,8 @@
     "check:calreminders": "node scripts/verify-calendar-reminders.mjs",
     "check:invoicelog": "node scripts/verify-invoice-sent-log.mjs",
     "check:portallinks": "node scripts/verify-portal-links.mjs",
-    "check:emailsearch": "node scripts/verify-email-search.mjs"
+    "check:emailsearch": "node scripts/verify-email-search.mjs",
+    "check:docfiles": "node scripts/verify-document-files.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

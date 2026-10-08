@@ -266,6 +266,8 @@ export function FileField({
         />
       )}
       <input type="hidden" name={name} value={staged ?? ""} />
+      {/* The names of the files joined into it, so the record can say what it was made from. */}
+      <input type="hidden" name={`${name}_sources`} value={staged && joined.files.length > 1 ? JSON.stringify(joined.files.map((f) => f.name)) : ""} />
       {/* Said before a file is chosen, not only after one is refused. */}
       <p className="text-[11px] text-muted" data-upload-limit>
         {hint ? `${hint} · ` : ""}

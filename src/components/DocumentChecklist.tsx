@@ -1,9 +1,17 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Eye, Trash2 } from "lucide-react";
+import { FileText, Trash2, X } from "lucide-react";
 import { useButtonAction } from "@/components/useButtonAction";
-import { uploadDocument, reviewDocument, addDocumentRequirement, deleteDocumentRequirement } from "@/lib/actions/documents";
+import {
+  uploadDocument,
+  reviewDocumentFile,
+  removeDocumentFile,
+  addDocumentRequirement,
+  deleteDocumentRequirement,
+  restoreDocumentRequirement,
+} from "@/lib/actions/documents";
+import { fileDisplayName, type DocFile } from "@/lib/documentFileNames";
 import { formatDateOnly } from "@/lib/formatDate";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -45,7 +53,131 @@ export type DocRow = {
   created_at?: string | null;
   /** Null for a requirement somebody added by hand rather than a template. */
   template_id?: string | null;
+  /** Its files, each with its name and its own review (0328). */
+  files?: DocFile[];
 };
+
+/**
+ * One file of a requirement, for staff: its name as uploaded (and what it was
+ * joined from), its own status, and its own Approve, Send back and Remove
+ * (0328). Sending back asks for the reason the student will read.
+ */
+function StaffFileRow({
+  file,
+  doc,
+  studentId,
+  revalidateTo,
+}: {
+  file: DocFile;
+  doc: DocRow;
+  studentId: string;
+  revalidateTo: string;
+}) {
+  const approve = useButtonAction();
+  const sendBack = useButtonAction();
+  const remove = useButtonAction();
+  const [asking, setAsking] = useState(false);
+  const [reason, setReason] = useState("");
+  const busy = approve.pending || sendBack.pending || remove.pending;
+  const uploaded = uploadedLine({ at: file.uploadedAt, byRole: file.uploadedByRole, audience: "staff" });
+
+  return (
+    <li className="flex flex-col gap-1 rounded-md border border-border px-2 py-1.5" data-document-file={file.id ?? "legacy"} data-file-status={file.status}>
+      <div className="flex flex-wrap items-center gap-2">
+        <FileText aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted" />
+        {file.url ? (
+          <a href={file.url} target="_blank" rel="noreferrer" className="min-w-0 break-all text-xs font-medium text-primary hover:underline" data-file-name>
+            {file.name}
+          </a>
+        ) : (
+          <span className="min-w-0 break-all text-xs font-medium text-ink" data-file-name>
+            {file.name}
+          </span>
+        )}
+        <Badge tone={DOCUMENT_STATUS_TONE[file.status] ?? "neutral"}>{DOCUMENT_STATUS_LABELS[file.status] ?? file.status.replace("_", " ")}</Badge>
+        <span className="ml-auto flex flex-wrap items-center gap-1">
+          {file.status !== "verified" && (
+            <Button
+              type="button"
+              variant="success"
+              size="sm"
+              disabled={busy}
+              pending={approve.pending}
+              onClick={() => void approve.run(() => reviewDocumentFile(file.id, doc.id, revalidateTo, "verified"))}
+              status={{ state: approve.state, label: "Approved.", showError: true }}
+            >
+              Approve
+            </Button>
+          )}
+          {file.status !== "rejected" && !asking && (
+            <Button type="button" variant="danger" size="sm" disabled={busy} onClick={() => setAsking(true)}>
+              Send back
+            </Button>
+          )}
+          {file.id && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={busy}
+              pending={remove.pending}
+              aria-label={`Remove ${file.name}`}
+              title="Remove this file"
+              onClick={() => {
+                if (!confirm(`Remove "${file.name}" from ${doc.name ?? "this document"}? It can be restored from the audit log.`)) return;
+                void remove.run(() => removeDocumentFile(file.id!, studentId, revalidateTo), { toast: "File removed." });
+              }}
+            >
+              <X aria-hidden className="h-3.5 w-3.5 shrink-0" />
+            </Button>
+          )}
+        </span>
+      </div>
+      {file.sources && (
+        <p className="text-[11px] text-muted" data-file-sources>
+          {fileDisplayName("", file.sources).replace(/^ — /, "").replace(/^joined/, "Joined")}
+        </p>
+      )}
+      {uploaded && <p className="text-[11px] text-muted">{uploaded}</p>}
+      {file.status === "rejected" && file.reason && <p className="text-xs text-danger">Sent back: {file.reason}</p>}
+      {asking && (
+        <div className="flex flex-wrap items-center gap-1">
+          <Input
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="What needs fixing — the student reads this"
+            aria-label={`Why ${file.name} is sent back`}
+            className="min-w-48 flex-1"
+            autoFocus
+          />
+          <Button
+            type="button"
+            variant="danger"
+            size="sm"
+            disabled={busy || !reason.trim()}
+            pending={sendBack.pending}
+            onClick={() =>
+              void sendBack.run(async () => {
+                const result = await reviewDocumentFile(file.id, doc.id, revalidateTo, "rejected", reason);
+                if (!result?.error) {
+                  setAsking(false);
+                  setReason("");
+                }
+                return result;
+              })
+            }
+            status={{ state: sendBack.state, label: "Sent back.", showError: true }}
+          >
+            Send back
+          </Button>
+          <button type="button" onClick={() => setAsking(false)} className="text-xs text-muted hover:underline">
+            Cancel
+          </button>
+        </div>
+      )}
+    </li>
+  );
+}
 
 function UploadRow({
   doc,
@@ -63,7 +195,7 @@ function UploadRow({
   focused?: boolean;
   studentId: string;
   revalidateTo: string;
-  /** Whether this viewer may delete the requirement (and its file). */
+  /** Whether this viewer may delete the requirement (and its files). */
   canManage: boolean;
   /** Position within the whole checklist, e.g. "2.3" for the third document
    *  of the second section. */
@@ -71,51 +203,35 @@ function UploadRow({
 }) {
   const action = uploadDocument.bind(null, doc.id, studentId, revalidateTo);
   const [state, formAction, pending] = useActionState(action, undefined);
-  const [reason, setReason] = useState("");
-  const [showReplace, setShowReplace] = useState(false);
   // Upload stays disabled until a file within the limit is chosen, so an
   // oversized one is refused where it was picked rather than after the wait.
   const [ready, setReady] = useState(false);
-  // One per button, so each says what it did — and any refusal — beside
-  // itself. They still block one another while any is running.
-  const accept = useButtonAction();
-  const reject = useButtonAction();
   const del = useButtonAction();
-  const reviewPending = accept.pending || reject.pending || del.pending;
 
-  const isVerified = doc.status === "verified";
-  const showUploadForm = !isVerified || showReplace;
+  const files = doc.files ?? [];
+  const sentBack = files.some((f) => f.status === "rejected");
   const hasMore = guideHasMore(guide);
   const [guideOpen, setGuideOpen] = useState(false);
   const guideId = `staff-guide-${doc.id}`;
 
-  function review(status: "verified" | "rejected") {
-    const button = status === "verified" ? accept : reject;
-    void button.run(async () => {
-      const result = await reviewDocument(doc.id, revalidateTo, status, status === "rejected" ? reason : undefined);
-      if (!result?.error && status === "rejected") setReason("");
-      return result;
-    });
-  }
-
   function remove() {
-    if (!confirm(`Remove "${doc.name ?? doc.category ?? "this document"}" from the checklist?`)) return;
+    if (!confirm(`Remove "${doc.name ?? doc.category ?? "this document"}" from this student's checklist? It stays off until it is brought back.`)) return;
     // The row goes with the requirement, so success is a toast.
     void del.run(() => deleteDocumentRequirement(doc.id, revalidateTo), { toast: "Removed." });
   }
 
   return (
     // Horizontal only from lg. The name block, the upload form and the
-    // Accept/reason/Reject/delete cluster need ~600px between them, and at
-    // 768px the sidebar leaves the content column narrower than it is at
-    // 767px — so switching at sm overflowed exactly where room is tightest.
+    // delete button need ~600px between them, and at 768px the sidebar leaves
+    // the content column narrower than it is at 767px — so switching at sm
+    // overflowed exactly where room is tightest.
     <div
       id={`doc-${doc.id}`}
       className={`waiting-target flex flex-col gap-2 py-3${focused ? " px-2" : ""}`}
       data-document-row={doc.id}
       data-focused={focused || undefined}
     >
-    <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+    <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
       <div className="min-w-[180px] flex-1">
         <p className="text-sm text-ink">
           {number && <span className="mr-1.5 font-mono text-xs text-muted">{number}</span>}
@@ -129,33 +245,20 @@ function UploadRow({
         <div className="mt-1 flex items-center gap-2">
           <Badge tone={DOCUMENT_STATUS_TONE[doc.status] ?? "neutral"}>{DOCUMENT_STATUS_LABELS[doc.status] ?? doc.status.replace("_", " ")}</Badge>
           {doc.deadline && <span className="text-xs text-muted">Due {formatDateOnly(doc.deadline)}</span>}
-          {doc.fileUrl && (
-            <a
-              href={doc.fileUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
-            >
-              <Eye aria-hidden className="h-3.5 w-3.5 shrink-0" />
-              View file
-            </a>
-          )}
+          {files.length > 1 && <span className="text-xs text-muted">{files.length} files</span>}
         </div>
-        {doc.status === "rejected" && doc.rejected_reason && (
-          <p className="mt-1 text-xs text-danger">Reason: {doc.rejected_reason}</p>
+
+        {/* Each file on its own: its name, its own review (0328). */}
+        {files.length > 0 && (
+          <ul className="mt-2 flex flex-col gap-1.5" data-document-files>
+            {files.map((f) => (
+              <StaffFileRow key={f.id ?? f.path} file={f} doc={doc} studentId={studentId} revalidateTo={revalidateTo} />
+            ))}
+          </ul>
         )}
 
-        {/* All three were recorded from the start and none was ever shown, so
-            nobody could tell whether a document had arrived an hour ago or last
-            month. Only lines with something behind them render: an unfilled
-            requirement says nothing rather than "Uploaded by nobody". */}
         <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted">
-          {uploadedLine({ at: doc.uploaded_at, byRole: doc.uploaded_by_role, audience: "staff" }) && (
-            <span>{uploadedLine({ at: doc.uploaded_at, byRole: doc.uploaded_by_role, audience: "staff" })}</span>
-          )}
-          {reviewedLine(doc.verified_at, doc.status, "staff") && (
-            <span>{reviewedLine(doc.verified_at, doc.status, "staff")}</span>
-          )}
+          {reviewedLine(doc.verified_at, doc.status, "staff") && <span>{reviewedLine(doc.verified_at, doc.status, "staff")}</span>}
           {/* Only for a requirement somebody added by hand — for the seeded
               ones "Added" is just when the checklist was provisioned, which
               tells nobody anything. */}
@@ -163,9 +266,7 @@ function UploadRow({
             <span>{addedLine(doc.created_at, "Requirement added")}</span>
           )}
         </div>
-        {/* What was sent before this, and why it came back. A replacement used
-            to overwrite what it replaced, so the thing staff rejected — the
-            evidence of why — was gone. */}
+        {/* What was sent before and replaced, and why it came back. */}
         <DocumentHistory versions={doc.history ?? []} audience="staff" />
         {hasMore && (
           <div className="mt-1">
@@ -174,8 +275,8 @@ function UploadRow({
         )}
       </div>
 
-      {showUploadForm ? (
-        <form action={formAction} className="flex flex-wrap items-start gap-2">
+      <form action={formAction} className="flex flex-col gap-1" data-document-upload>
+        <div className="flex flex-wrap items-start gap-2">
           <FileField multiple accept={ACCEPTED_DOCUMENT_ACCEPT} hint="PDF, Word or image" onChange={(s) => setReady(Boolean(s.file))} />
           <Button
             type="submit"
@@ -185,51 +286,24 @@ function UploadRow({
             wrapperClassName="mt-0.5"
             status={{ state, label: "Uploaded." }}
           >
-            Upload
+            {files.length === 0 ? "Upload" : sentBack ? "Upload replacement" : "Add file"}
           </Button>
-          {isVerified && (
-            <button type="button" onClick={() => setShowReplace(false)} className="text-xs text-muted hover:underline">
-              Cancel
-            </button>
-          )}
-        </form>
-      ) : (
-        <Button type="button" variant="outline" size="sm" onClick={() => setShowReplace(true)}>
-          Replace document
-        </Button>
-      )}
+        </div>
+        <p className="max-w-xs text-[11px] text-muted">
+          {sentBack
+            ? "Replaces the file sent back; the others stay."
+            : "Uploaded one at a time, each is kept as a file of its own."}
+        </p>
+      </form>
 
-      <div className="flex flex-wrap items-center gap-1">
-        <Button
-          type="button"
-          variant="success"
-          size="sm"
-          onClick={() => review("verified")}
-          disabled={!doc.file_path || reviewPending}
-          pending={accept.pending}
-          status={{ state: accept.state, label: "Accepted.", showError: true }}
-        >
-          Accept
-        </Button>
-        <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="reason" className="w-24" />
-        <Button
-          type="button"
-          variant="danger"
-          size="sm"
-          onClick={() => review("rejected")}
-          disabled={!doc.file_path || reviewPending}
-          pending={reject.pending}
-          status={{ state: reject.state, label: "Rejected.", showError: true }}
-        >
-          Reject
-        </Button>
-        {canManage && (
+      {canManage && (
+        <div className="flex flex-wrap items-center gap-1">
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={remove}
-            disabled={reviewPending}
+            disabled={del.pending}
             pending={del.pending}
             title="Remove this requirement from the checklist"
             aria-label="Remove requirement"
@@ -237,8 +311,8 @@ function UploadRow({
           >
             <Trash2 aria-hidden className="h-4 w-4 shrink-0" />
           </Button>
-        )}
-      </div>
+        </div>
+      )}
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </div>
       {guide && hasMore && guideOpen && (
@@ -254,6 +328,59 @@ function UploadRow({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Requirements taken off this student's checklist (0328), each with Bring
+ * back. Without this, one deleted by mistake could only come back by hand.
+ */
+function RemovedRequirements({
+  removals,
+  studentId,
+  revalidateTo,
+}: {
+  removals: { id: string; name: string | null; removedAt: string | null }[];
+  studentId: string;
+  revalidateTo: string;
+}) {
+  return (
+    <div className="mt-4 rounded-lg border border-dashed border-border px-3 py-2" data-removed-requirements>
+      <p className="text-xs font-semibold text-muted">Removed from this student&apos;s checklist</p>
+      <ul className="mt-1 flex flex-col gap-1">
+        {removals.map((r) => (
+          <RemovedRequirement key={r.id} removal={r} studentId={studentId} revalidateTo={revalidateTo} />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function RemovedRequirement({
+  removal,
+  studentId,
+  revalidateTo,
+}: {
+  removal: { id: string; name: string | null; removedAt: string | null };
+  studentId: string;
+  revalidateTo: string;
+}) {
+  const back = useButtonAction();
+  return (
+    <li className="flex flex-wrap items-center gap-2 text-xs" data-removed-requirement={removal.id}>
+      <span className="text-ink">{removal.name ?? "A requirement"}</span>
+      {removal.removedAt && <span className="text-muted">removed {formatDateOnly(removal.removedAt.slice(0, 10))}</span>}
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        pending={back.pending}
+        onClick={() => void back.run(() => restoreDocumentRequirement(removal.id, studentId, revalidateTo), { toast: "Back on the checklist." })}
+        status={{ state: back.state, label: "Back.", showError: true }}
+      >
+        Bring back
+      </Button>
+    </li>
   );
 }
 
@@ -324,8 +451,11 @@ export function DocumentChecklist({
   guides = {},
   focusDocId = null,
   downloadAll,
+  removals = [],
 }: {
   docs: DocRow[];
+  /** Requirements taken off this student's checklist (0328), to bring back. */
+  removals?: { id: string; name: string | null; removedAt: string | null }[];
   /**
    * Shows "Download all": every uploaded document in the sections listed, as
    * one ZIP under this name. The student's Documents tab, for staff.
@@ -441,7 +571,7 @@ export function DocumentChecklist({
             const zipSections = visibleSections.map((s, i) => ({
               number: i + 1,
               label: s.label,
-              docs: s.docs.filter((d) => d.file_path).map((d) => ({ id: d.id, name: d.fileLabel ?? d.name ?? "Document" })),
+              docs: s.docs.filter((d) => d.file_path).map((d) => ({ id: d.id, name: d.fileLabel ?? d.name ?? "Document", files: d.files?.length })),
             }));
             return (
               <div className="flex flex-wrap items-start justify-between gap-2">
@@ -501,6 +631,7 @@ export function DocumentChecklist({
           </div>
         </>
       )}
+      {canManage && removals.length > 0 && <RemovedRequirements removals={removals} studentId={studentId} revalidateTo={revalidateTo} />}
     </div>
   );
 }

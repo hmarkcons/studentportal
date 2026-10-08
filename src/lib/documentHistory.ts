@@ -7,6 +7,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ArchivedUpload } from "@/components/DocumentHistory";
+import { storedFileName } from "@/lib/documentFileNames";
 import { documentUrls } from "@/lib/storageUrls";
 
 export async function loadDocumentHistory(
@@ -39,6 +40,7 @@ export async function loadDocumentHistory(
       previousStatus: row.previous_status,
       rejectedReason: row.rejected_reason,
       fileUrl: urls.get(row.file_path) ?? null,
+      fileName: storedFileName(row.file_path),
     };
     const list = byDocument.get(row.document_id) ?? [];
     list.push(entry);

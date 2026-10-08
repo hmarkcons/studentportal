@@ -23,6 +23,7 @@ export function ConfirmedUploadForm({
   capture,
   submitLabel,
   replacing = false,
+  removable = false,
   className = "",
   size = "sm",
   limitBytes,
@@ -44,6 +45,8 @@ export function ConfirmedUploadForm({
   submitLabel: string;
   /** True when this replaces something already sent, which is worth saying. */
   replacing?: boolean;
+  /** The sender may take it off again until it is approved (a student's document, 0328). */
+  removable?: boolean;
   className?: string;
   size?: "sm" | "md";
 }) {
@@ -104,7 +107,7 @@ export function ConfirmedUploadForm({
         <div className="flex flex-col gap-2 rounded-md border border-warning bg-warning-bg p-2">
           <p className="text-xs font-medium text-warning">Send &ldquo;{fileName}&rdquo;?</p>
           <p className="text-xs text-warning">
-            Once submitted you cannot change or delete it.{" "}
+            {removable ? "You can remove it until it is approved." : "Once submitted you cannot change or delete it."}{" "}
             {replacing
               ? "The version that was sent back stays on the record as rejected."
               : "If it is sent back, you can upload a replacement and this one stays on the record as rejected."}

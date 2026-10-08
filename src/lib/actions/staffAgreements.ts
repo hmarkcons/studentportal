@@ -32,6 +32,7 @@ import {
   type StaffAgreementMail,
 } from "@/lib/staffAgreementEmail";
 import { uploadedFile } from "@/lib/stagedUpload";
+import { storedFileName } from "@/lib/documentFileNames";
 import { normalizeTheme } from "@/lib/pdf/agreementTheme";
 
 // Staff agreements (0271). Two permissions, both a Super Admin's until granted
@@ -661,6 +662,8 @@ export type StaffAgreementView = {
   rejectionNote: string | null;
   pdfUrl: string | null;
   signedUrl: string | null;
+  /** The signed copy's name as uploaded. */
+  signedName: string | null;
 };
 
 type AgreementRow = {
@@ -700,6 +703,7 @@ async function withLinks(supabase: Awaited<ReturnType<typeof createClient>>, row
       rejectionNote: a.rejection_note,
       pdfUrl: await link(a.pdf_path),
       signedUrl: await link(a.signed_file_path),
+      signedName: a.signed_file_path ? storedFileName(a.signed_file_path) : null,
     }))
   );
 }

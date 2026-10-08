@@ -4,9 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { ConfirmedUploadForm } from "@/components/ConfirmedUploadForm";
 import { DocumentGuidePanel, DocumentGuideToggle, guideHasMore } from "@/components/DocumentGuide";
 import type { ResolvedGuide } from "@/lib/documentGuides";
-import { CircleCheck, Eye, Hourglass, ScanSearch, Undo2, Upload, type LucideIcon } from "lucide-react";
+import { CircleCheck, FileText, Hourglass, ScanSearch, Undo2, Upload, X, type LucideIcon } from "lucide-react";
 import { DocumentHistory, type ArchivedUpload } from "@/components/DocumentHistory";
-import { studentUploadDocument } from "@/lib/actions/portal-documents";
+import { studentRemoveDocumentFile, studentUploadDocument } from "@/lib/actions/portal-documents";
+import { useButtonAction } from "@/components/useButtonAction";
+import type { DocFile } from "@/lib/documentFileNames";
 import { formatDateOnly } from "@/lib/formatDate";
 import { Badge } from "@/components/ui/Badge";
 import { DOCUMENT_STATUS_TONE, DOCUMENT_STATUS_LABELS } from "@/lib/constants";
@@ -23,6 +25,60 @@ const STATUS_ICON: Record<string, { icon: LucideIcon; tile: string }> = {
   rejected: { icon: Undo2, tile: "bg-danger-bg text-danger" },
   missing: { icon: Upload, tile: "bg-primary/10 text-primary" },
 };
+
+/**
+ * One of the student's files for a requirement: its name as they sent it (and
+ * the files it was joined from), whether it is approved, and — sent back —
+ * why. Theirs to remove until it is approved (0328).
+ */
+function StudentFileRow({ file, revalidateTo, readOnly }: { file: DocFile; revalidateTo: string; readOnly: boolean }) {
+  const remove = useButtonAction();
+  const removable = !readOnly && Boolean(file.id) && file.uploadedByRole === "student" && file.status !== "verified";
+  const removeError = remove.state && typeof remove.state === "object" && "error" in remove.state ? ((remove.state as { error?: string }).error ?? null) : null;
+  return (
+    <li className="flex flex-col gap-0.5 rounded-lg border border-border px-2.5 py-1.5" data-document-file={file.id ?? "legacy"} data-file-status={file.status}>
+      <div className="flex flex-wrap items-center gap-2">
+        <FileText aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted" />
+        {file.url ? (
+          <a href={file.url} target="_blank" rel="noreferrer" className="min-w-0 break-all text-xs font-medium text-primary hover:underline" data-file-name>
+            {file.name}
+          </a>
+        ) : (
+          <span className="min-w-0 break-all text-xs font-medium text-ink" data-file-name>
+            {file.name}
+          </span>
+        )}
+        <Badge tone={DOCUMENT_STATUS_TONE[file.status] ?? "neutral"}>{DOCUMENT_STATUS_LABELS[file.status] ?? file.status.replace("_", " ")}</Badge>
+        {removable && (
+          <button
+            type="button"
+            onClick={() => {
+              if (!confirm(`Remove "${file.name}"? You can upload it again.`)) return;
+              void remove.run(() => studentRemoveDocumentFile(file.id!, revalidateTo), { toast: "File removed." });
+            }}
+            disabled={remove.pending}
+            aria-label={`Remove ${file.name}`}
+            className="ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted hover:bg-bg hover:text-danger disabled:opacity-50"
+          >
+            <X aria-hidden className="h-3 w-3" />
+            Remove
+          </button>
+        )}
+      </div>
+      {file.sources && (
+        <p className="text-[11px] text-muted" data-file-sources>
+          Joined from {file.sources.length} files: {file.sources.join(", ")}
+        </p>
+      )}
+      {file.status === "rejected" && (
+        <p className="text-xs text-danger" data-file-reason>
+          {file.reason ? `Sent back: ${file.reason}` : "Sent back — ask your counsellor what needs changing."}
+        </p>
+      )}
+      {removeError && <p className="text-xs text-danger">{removeError}</p>}
+    </li>
+  );
+}
 
 export function PortalDocumentRow({
   doc,
@@ -46,6 +102,8 @@ export function PortalDocumentRow({
     verified_at?: string | null;
     /** Everything previously sent against this requirement (0165). */
     history?: ArchivedUpload[];
+    /** Its files, each with its name and its own review (0328). */
+    files?: DocFile[];
   };
   studentId: string;
   revalidateTo: string;
@@ -59,6 +117,8 @@ export function PortalDocumentRow({
   guideOpenInitially?: boolean;
 }) {
   const action = studentUploadDocument.bind(null, doc.id, studentId, revalidateTo);
+  const files = doc.files ?? [];
+  const sentBack = files.some((f) => f.status === "rejected") || doc.status === "rejected";
 
   // A deadline that has gone is the one thing on this row a student must not
   // skim past, so it is coloured rather than left as ordinary grey text.
@@ -113,18 +173,15 @@ export function PortalDocumentRow({
               {overdue ? "Was due" : "Due"} {formatDateOnly(doc.deadline, LONG_DATE)}
             </span>
           )}
-          {doc.fileUrl && (
-            <a
-              href={doc.fileUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
-            >
-              <Eye aria-hidden className="h-3.5 w-3.5 shrink-0" />
-              View file
-            </a>
-          )}
         </div>
+        {/* Every file they sent for it, by the name they sent it under (0328). */}
+        {files.length > 0 && (
+          <ul className="mt-2 flex flex-col gap-1.5" data-document-files>
+            {files.map((f) => (
+              <StudentFileRow key={f.id ?? f.path} file={f} revalidateTo={revalidateTo} readOnly={readOnly} />
+            ))}
+          </ul>
+        )}
         {/* When it arrived and when it was looked at. A student could not
             previously tell whether the file they sent had reached anyone, or
             how long it had been sitting unreviewed. Staff names are not shown
@@ -140,9 +197,11 @@ export function PortalDocumentRow({
 
         {doc.status === "rejected" && (
           <p className="mt-1 text-xs text-danger" data-rejected-reason>
-            {doc.rejected_reason
-              ? `Sent back: ${doc.rejected_reason}`
-              : "Sent back — ask your counsellor what needs changing, then upload a replacement."}
+            {files.length > 1
+              ? "Upload a replacement for what was sent back; the rest stays."
+              : doc.rejected_reason
+                ? `Sent back: ${doc.rejected_reason}`
+                : "Sent back — ask your counsellor what needs changing, then upload a replacement."}
             {/* The moment a student most needs to know what a correct one looks like. */}
             {hasMore && !guideOpen && (
               <>
@@ -181,8 +240,9 @@ export function PortalDocumentRow({
           accept={ACCEPTED_DOCUMENT_ACCEPT}
           capture="environment"
           hint="PDF, Word or photo"
-          submitLabel={doc.status === "rejected" ? "Replace" : "Upload"}
-          replacing={doc.status === "rejected"}
+          submitLabel={sentBack ? "Replace" : files.length > 0 ? "Add another file" : "Upload"}
+          replacing={sentBack}
+          removable
           className="sm:shrink-0"
         />
       )}

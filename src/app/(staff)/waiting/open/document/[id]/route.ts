@@ -39,11 +39,9 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   if ((doc.status === "submitted" || doc.status === "under_review") && hasRole(staff, "processing", "management", "super_admin")) {
     // Conditional on the status, so a decision made in the meantime — accepted
     // a moment ago in another tab — is never turned back into "under review".
-    await supabase
-      .from("student_documents")
-      .update({ status: "under_review", review_opened_by: staff.id, review_opened_at: new Date().toISOString() })
-      .eq("id", id)
-      .in("status", ["submitted", "under_review"]);
+    // Its waiting files under review, and who opened it, together (0328): the
+    // requirement's status is worked out from its files.
+    await supabase.rpc("open_student_document_review", { p_document_id: id });
   }
 
   return back(documentTargetHref(doc.student_id as string, id, (doc.cycle_id as string | null) ?? null));

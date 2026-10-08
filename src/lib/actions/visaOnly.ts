@@ -8,6 +8,7 @@ import { uploadedFile } from "@/lib/stagedUpload";
 import { validateDocumentFile, sanitizeFilename } from "@/lib/documentUpload";
 import { karachiToday } from "@/lib/calendarDates";
 import type { DashboardStageDef, DashboardStageValues } from "@/lib/dashboardPipeline";
+import { documentFilePath, parseSourceNames } from "@/lib/documentFileNames";
 import { admittedStage, canSetService, serviceOf, withAdmissionStagesDone } from "@/lib/serviceType";
 
 function one<T>(v: T | T[] | null | undefined): T | null {
@@ -133,14 +134,28 @@ export async function recordExistingAdmission(studentId: string, _prev: unknown,
     await supabase.from("applications").delete().eq("id", app.id);
     return { error: docError?.message ?? "The admission letter couldn't be filed." };
   }
-  const path = `${studentId}/${doc.id}-${sanitizeFilename(file.name)}`;
-  const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: true });
+  const path = documentFilePath(studentId, doc.id as string, sanitizeFilename(file.name), crypto.randomUUID().slice(0, 8));
+  const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: false });
   if (uploadError) {
     await supabase.from("student_documents").delete().eq("id", doc.id);
     await supabase.from("applications").delete().eq("id", app.id);
     return { error: uploadError.message };
   }
-  await supabase.from("student_documents").update({ file_path: path }).eq("id", doc.id);
+  // Its file, approved as it is filed, under the name it was uploaded as (0328).
+  const { error: fileError } = await supabase.rpc("add_student_document_file", {
+    p_document_id: doc.id,
+    p_path: path,
+    p_name: file.name,
+    p_sources: parseSourceNames(formData.get("file_sources")),
+    p_role: "staff",
+    p_status: "verified",
+  });
+  if (fileError) {
+    await supabase.storage.from("documents").remove([path]);
+    await supabase.from("student_documents").delete().eq("id", doc.id);
+    await supabase.from("applications").delete().eq("id", app.id);
+    return { error: fileError.message };
+  }
 
   // Finalized for the visa, unless another application already is — only one
   // may be, and moving that is a decision for the person, not for this form.

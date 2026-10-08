@@ -17,6 +17,7 @@ import { AuditHistoryLink } from "@/components/AuditHistoryLink";
 import { STANDARD_LEVELS, levelKey, levelsPresent } from "@/lib/catalogueText";
 import { EmailLinks } from "@/components/EmailLinks";
 import { getCurrentUser } from "@/lib/auth/currentUser";
+import { storedFileName } from "@/lib/documentFileNames";
 import { MessageThread, type MessageRow } from "@/components/MessageThread";
 
 export default async function UniversityDetailPage(props: PageProps<"/setup/universities/[id]">) {
@@ -255,6 +256,7 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
                     View file
                   </a>
                 )}
+                {exchangeLinks.has(d.id) && d.file_path && <span className="break-all text-[11px] text-muted" data-file-name>{storedFileName(d.file_path)}</span>}
               </div>
             ))}
             {(!exchange || exchange.length === 0) && (

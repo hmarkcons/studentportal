@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { loadDocumentHistory } from "@/lib/documentHistory";
 import { loadDocumentGuides } from "@/lib/documentGuides";
-import { documentUrls } from "@/lib/storageUrls";
+import { loadDocumentFiles } from "@/lib/documentFilesLoad";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { DocumentChecklist, type DocRow } from "@/components/DocumentChecklist";
@@ -93,13 +93,20 @@ export default async function StudentDocumentsTab(props: {
 
   const appLabel = new Map((applications ?? []).map((a) => [a.id, one(a.university as never) as { name?: string } | null]));
 
-  const [history, guides, docUrls] = await Promise.all([
+  const [history, guides, filesByDoc, { data: removalRows }] = await Promise.all([
     loadDocumentHistory(supabase, docs.map((d) => d.id)),
     // The guide the student reads for each, so staff talk them through the same words (0300).
     loadDocumentGuides(supabase, id, docs),
-    // One request for every file's link, then a plain synchronous map.
-    documentUrls(supabase, docs.map((d) => d.file_path)),
+    // Each requirement's files, each with its link (0328).
+    loadDocumentFiles(supabase, docs),
+    // Requirements taken off this student's checklist, to bring back (0328).
+    supabase.from("student_document_removals").select("id, name, removed_at, template_id, derived_key").eq("student_id", id).order("removed_at", { ascending: false }),
   ]);
+  // One brought back some other way — restored from the audit log — is not "removed".
+  const present = new Set((rawDocs ?? []).flatMap((d) => [d.template_id ? `t:${d.template_id}` : null, d.derived_key ? `d:${d.derived_key}` : null]).filter(Boolean));
+  const removals = (removalRows ?? [])
+    .filter((r) => !present.has(r.template_id ? `t:${r.template_id}` : `d:${r.derived_key}`))
+    .map((r) => ({ id: r.id as string, name: (r.name as string | null) ?? null, removedAt: (r.removed_at as string | null) ?? null }));
 
   const docsWithUrls = docs.map((d) => {
       const templateName = one(d.template as never) as { name?: string } | null;
@@ -114,8 +121,7 @@ export default async function StudentDocumentsTab(props: {
       const fileLabel = `${base}${uni?.name ? ` — ${uni.name}` : ""}`;
       const name = `${fileLabel}${carried}`;
       const past = history.get(d.id) ?? [];
-      if (!d.file_path) return { ...d, name, fileLabel, history: past };
-      return { ...d, name, fileLabel, history: past, fileUrl: docUrls.get(d.file_path) ?? null };
+      return { ...d, name, fileLabel, history: past, files: filesByDoc.get(d.id) ?? [] };
   });
 
   return (
@@ -157,6 +163,7 @@ export default async function StudentDocumentsTab(props: {
           sections={sections}
           canManage={canManage && !isPreviousIntake}
           guides={guides}
+          removals={isPreviousIntake ? [] : removals}
           focusDocId={typeof focusDocId === "string" ? focusDocId : null}
           downloadAll={{
             zipName: zipFileName(

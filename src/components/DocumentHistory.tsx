@@ -9,6 +9,8 @@ export type ArchivedUpload = {
   previousStatus: string;
   rejectedReason: string | null;
   fileUrl?: string | null;
+  /** The name it was sent under. */
+  fileName?: string | null;
 };
 
 /**
@@ -39,10 +41,12 @@ export function DocumentHistory({ versions, audience }: { versions: ArchivedUplo
           {v.uploadedAt && <span>· sent {formatStamp(v.uploadedAt)}</span>}
           {/* Why it was sent back, which is the reason this is kept at all. */}
           {v.rejectedReason && <span>· {v.rejectedReason}</span>}
-          {v.fileUrl && (
-            <a href={v.fileUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
-              {audience === "staff" ? "View" : "View what you sent"}
+          {v.fileUrl ? (
+            <a href={v.fileUrl} target="_blank" rel="noreferrer" className="break-all text-primary hover:underline" data-history-file>
+              {v.fileName ?? (audience === "staff" ? "View" : "View what you sent")}
             </a>
+          ) : (
+            v.fileName && <span className="break-all">{v.fileName}</span>
           )}
         </p>
       ))}

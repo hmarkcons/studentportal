@@ -10,6 +10,7 @@ import { useAnchoredMenu } from "@/components/useAnchoredMenu";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { EditAgreementForm } from "./GenerateAgreementForm";
 import type { ServiceType } from "@/lib/serviceType";
+import { storedFileName } from "@/lib/documentFileNames";
 import { agreementDateShort } from "@/lib/agreementDate";
 
 type AgreementTemplateOption = {
@@ -200,6 +201,7 @@ export function AgreementActionsMenu({
                 View signed copy
               </a>
             )}
+            {links?.signedUrl && agreement.signed_file_path && <span className="break-all text-[11px] text-muted" data-file-name>{storedFileName(agreement.signed_file_path)}</span>}
             {links?.pdfUrl && (
               <a href={links.pdfUrl} target="_blank" rel="noreferrer" className="text-sm text-primary hover:underline">
                 View generated agreement

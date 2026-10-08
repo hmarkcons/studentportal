@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatDateOnly } from "@/lib/formatDate";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { storedFileName } from "@/lib/documentFileNames";
 import { getCurrentUser } from "@/lib/auth/currentUser";
 
 export default async function PartnerAgreementPage() {
@@ -37,6 +38,11 @@ export default async function PartnerAgreementPage() {
           <a href={data.signedUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm text-primary underline">
             View agreement
           </a>
+        )}
+        {data?.signedUrl && agreement.file_path && (
+          <p className="mt-1 break-all text-xs text-muted" data-file-name>
+            {storedFileName(agreement.file_path)}
+          </p>
         )}
       </Card>
     </div>

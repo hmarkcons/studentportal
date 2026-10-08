@@ -1,6 +1,7 @@
 import { loadMyAgreements } from "@/lib/actions/staffAgreements";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { storedFileName } from "@/lib/documentFileNames";
 import { ReturnSignedForm } from "./ReturnSignedForm";
 
 const LABEL = {
@@ -50,6 +51,7 @@ export default async function MyAgreementPage() {
                     Download the signed copy
                   </a>
                 )}
+                {a.signedUrl && a.signedName && <span className="break-all text-[11px] text-muted" data-file-name>{storedFileName(a.signedName)}</span>}
               </div>
 
               {a.status === "awaiting_signature" && (

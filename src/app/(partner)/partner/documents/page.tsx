@@ -3,6 +3,7 @@ import { documentUrls } from "@/lib/storageUrls";
 import { Card } from "@/components/ui/Card";
 import { UploadExchangeForm } from "./UploadExchangeForm";
 import { uploadedLine } from "@/lib/activityStamp";
+import { storedFileName } from "@/lib/documentFileNames";
 import { getCurrentUser } from "@/lib/auth/currentUser";
 
 export default async function PartnerDocumentsPage() {
@@ -47,8 +48,8 @@ export default async function PartnerDocumentsPage() {
                 })}
               </span>
             </span>
-            <a href={links.get(d.id)} target="_blank" rel="noreferrer" className="shrink-0 text-primary underline">
-              View
+            <a href={links.get(d.id)} target="_blank" rel="noreferrer" className="shrink-0 break-all text-primary underline" data-file-name>
+              {storedFileName(d.file_path)}
             </a>
           </div>
         ))}

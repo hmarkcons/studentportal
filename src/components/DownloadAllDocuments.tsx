@@ -6,7 +6,7 @@ import { documentDownloadLinks } from "@/lib/actions/documentDownload";
 import { PICTURE_EXTENSIONS, extensionForType, zipPaths, type ZipEntry } from "@/lib/documentZip";
 import { jpegToPdf } from "@/lib/jpegPdf";
 
-export type DownloadSection = { number: number; label: string; docs: { id: string; name: string }[] };
+export type DownloadSection = { number: number; label: string; docs: { id: string; name: string; files?: number }[] };
 
 /** Files fetched at once: enough to keep the line busy, few enough not to queue behind each other. */
 const AT_ONCE = 4;
@@ -67,6 +67,8 @@ export function DownloadAllDocuments({
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const items = sections.flatMap((s) => s.docs.map((d) => ({ ...d, section: s })));
+  // Files, not requirements: a requirement may hold several (0328).
+  const fileCount = items.reduce((n, i) => n + Math.max(1, i.files ?? 1), 0);
 
   async function download() {
     if (progress || items.length === 0) return;
@@ -81,18 +83,23 @@ export function DownloadAllDocuments({
         setMessage({ tone: "error", text: links.error });
         return;
       }
-      const byId = new Map(links.files.map((f) => [f.id, f]));
+      // Every file of each requirement (0328): a second file of one is saved
+      // beside the first as "Name (2)" (zipPaths).
+      const byDoc = new Map<string, typeof links.files>();
+      for (const f of links.files) byDoc.set(f.id, [...(byDoc.get(f.id) ?? []), f]);
+      const fileItems = items.flatMap((item) => (byDoc.get(item.id) ?? [null]).map((link) => ({ ...item, link })));
+      setProgress({ done: 0, total: fileItems.length });
 
-      const got: ({ entry: ZipEntry; bytes: Uint8Array } | null)[] = new Array(items.length).fill(null);
+      const got: ({ entry: ZipEntry; bytes: Uint8Array } | null)[] = new Array(fileItems.length).fill(null);
       const missed: string[] = [];
       let next = 0;
       let done = 0;
       const worker = async () => {
-        while (next < items.length) {
+        while (next < fileItems.length) {
           const i = next++;
-          const item = items[i];
+          const item = fileItems[i];
           const where = `${item.section.label} — ${item.name}`;
-          const link = byId.get(item.id);
+          const link = item.link;
           try {
             if (!link) throw new Error("the file is no longer on record");
             const res = await fetch(link.url);
@@ -113,10 +120,10 @@ export function DownloadAllDocuments({
             missed.push(`${where}: ${e instanceof Error ? e.message : "it could not be fetched"}`);
           }
           done += 1;
-          setProgress({ done, total: items.length });
+          setProgress({ done, total: fileItems.length });
         }
       };
-      await Promise.all(Array.from({ length: Math.min(AT_ONCE, items.length) }, worker));
+      await Promise.all(Array.from({ length: Math.min(AT_ONCE, fileItems.length) }, worker));
 
       const kept = got.filter((g): g is { entry: ZipEntry; bytes: Uint8Array } => g !== null);
       if (kept.length === 0) {
@@ -145,7 +152,7 @@ export function DownloadAllDocuments({
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
       setMessage(
         missed.length > 0
-          ? { tone: "error", text: `Downloaded ${kept.length} of ${items.length}. Not included: ${missed.join("; ")}.` }
+          ? { tone: "error", text: `Downloaded ${kept.length} of ${got.length}. Not included: ${missed.join("; ")}.` }
           : { tone: "ok", text: `Downloaded ${kept.length} document${kept.length === 1 ? "" : "s"}.` }
       );
     } catch (e) {
@@ -168,7 +175,7 @@ export function DownloadAllDocuments({
         <Download aria-hidden className="h-3.5 w-3.5" />
         {progress
           ? `Preparing ${progress.done} of ${progress.total}…`
-          : `Download all${items.length > 0 ? ` (${items.length})` : ""}`}
+          : `Download all${fileCount > 0 ? ` (${fileCount})` : ""}`}
       </button>
       {message && (
         <p role="status" className={`text-xs ${message.tone === "ok" ? "text-success" : "text-danger"}`} data-download-all-message>
