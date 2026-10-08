@@ -99,7 +99,9 @@ export function buildReminderRecipients(
     if (student?.email) {
       addToBucket(recipients, student.email, student.full_name ?? "there", item);
     }
-    (t.guest_emails ?? []).forEach((g) => addToBucket(recipients, g, "there", item));
+    // Guests are not sent this daily list: they have the invitation, and a
+    // reminder the day before and an hour before (src/lib/calendarUpcoming.ts).
+    // Nothing here is theirs to tick off, so a daily "still pending" was noise.
   });
 
   personalTasks.forEach((p) => {
@@ -118,7 +120,6 @@ export function buildReminderRecipients(
     const ownerEmail = staffEmailById.get(p.owner_id);
     const ownerName = staffNameById.get(p.owner_id) ?? "there";
     addToBucket(recipients, ownerEmail, ownerName, item);
-    (p.guest_emails ?? []).forEach((g) => addToBucket(recipients, g, "there", item));
   });
 
   return recipients;

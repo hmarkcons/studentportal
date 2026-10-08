@@ -131,6 +131,7 @@ export function buildStaffNav({
 export const PARTNER_NAV: NavItem[] = [
   { label: "Dashboard", href: "/partner", icon: "dashboard" },
   { label: "Programs", href: "/partner/programs", icon: "programs" },
+  { label: "Calendar", href: "/partner/calendar", icon: "calendar" },
   { label: "Commissions", href: "/partner/commissions", icon: "commissions" },
   { label: "Documents", href: "/partner/documents", icon: "documents" },
   { label: "Reports", href: "/partner/reports", icon: "reports" },

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { readEventForm } from "@/lib/calendarEventFields";
 import { eventColumns, writeRows, type WriteResult } from "@/lib/calendarQueries";
+import { syncGuestInvitesAfter } from "@/lib/calendarInvites";
 
 type ActionResult = { success?: boolean; error?: string; id?: string };
 
@@ -25,6 +26,7 @@ export async function updatePersonalTask(taskId: string, revalidateTo: string, _
   );
   if (error) return { error };
   if (rows.length === 0) return { error: REFUSED };
+  syncGuestInvitesAfter("personal_tasks", taskId);
 
   revalidatePath(revalidateTo);
   return { success: true, id: taskId };
@@ -48,6 +50,7 @@ export async function deletePersonalTask(taskId: string, revalidateTo: string): 
   const { data, error } = await supabase.from("personal_tasks").delete().eq("id", taskId).select("id");
   if (error) return { error: error.message };
   if (!data?.length) return { error: "Not deleted — this item is not yours, or it is already gone." };
+  syncGuestInvitesAfter("personal_tasks", taskId);
   revalidatePath(revalidateTo);
   return { success: true };
 }

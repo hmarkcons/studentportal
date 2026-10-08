@@ -6,6 +6,8 @@ import { personalEvents, recordEvent, reminderEvent, taskEvents, type CalendarEv
 import { loadPendingPersonalTasks, loadPendingTasks, one, personalInput, taskInput, type StudentRef } from "@/lib/calendarQueries";
 import { readAll } from "@/lib/catalogueReads";
 import { applicationDeadline } from "@/lib/applicationDeadline";
+import { autoEvent, instalmentItem, interviewItem } from "@/lib/calendarAuto";
+import { loadInstalments, loadInterviews } from "@/lib/calendarAutoLoad";
 import { StaffCalendar } from "./StaffCalendar";
 
 /** A read that is allowed to fail without blanking the calendar — but says it failed. */
@@ -64,7 +66,7 @@ export default async function CalendarPage(props: {
 
   // Everything that does not depend on anything else, at once: each of these
   // is a round trip to Sydney, and one after another they added up to seconds.
-  const [targetStaffRoles, tasks, reminders, appointmentFields, applications, documentDeadlines, personalTasks, staffList] = await Promise.all([
+  const [targetStaffRoles, tasks, reminders, appointmentFields, applications, documentDeadlines, personalTasks, staffList, interviews, instalments] = await Promise.all([
     // Whose calendar is on screen — deadlines are scoped to the student's
     // processing officer, so management browsing someone else's calendar needs
     // that person's roles. All of them, not only the primary (hasRole).
@@ -144,6 +146,10 @@ export default async function CalendarPage(props: {
           .order("full_name")
           .then((r) => r.data ?? [])
       : Promise.resolve([] as { id: string; full_name: string }[]),
+    // Put on the calendar without anyone adding them, and gone once done: a
+    // student's interview, an instalment until it is paid (src/lib/calendarAuto.ts).
+    attempt("interviews", () => loadInterviews(supabase, range.start, range.end), problems),
+    attempt("instalments", () => loadInstalments(supabase, range.start, range.end), problems),
   ]);
 
   const appointmentValues = appointmentFields.length
@@ -283,6 +289,20 @@ export default async function CalendarPage(props: {
         origin: "The document's deadline. Change it on the student's documents and it moves here.",
       })
     );
+  }
+
+  // An interview is on the calendars of the student's counsellor and processing
+  // officer; an instalment on the counsellor's, and on everyone's in finance.
+  for (const r of interviews) {
+    if (r.counsellorId !== targetStaffId && r.processingOfficerId !== targetStaffId) continue;
+    const item = interviewItem(r, "staff");
+    if (item) events.push(autoEvent(item));
+  }
+  const targetIsFinance = hasRole(targetStaffRoles as never, "finance");
+  for (const r of instalments) {
+    if (r.counsellorId !== targetStaffId && !targetIsFinance) continue;
+    const item = instalmentItem(r, "staff", todayStr);
+    if (item) events.push(autoEvent(item));
   }
 
   for (const raw of personalTasks) events.push(...personalEvents(personalInput(raw), range));

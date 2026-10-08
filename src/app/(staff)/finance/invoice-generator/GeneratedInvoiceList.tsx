@@ -17,6 +17,7 @@ import { PAYMENT_STATUS_LABELS, type InvoiceMath } from "@/lib/invoiceMath";
 import { formatDateOnly } from "@/lib/formatDate";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { InvoiceSentLogButton } from "@/components/InvoiceSentLog";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input, Select } from "@/components/ui/Input";
@@ -228,6 +229,7 @@ function InvoiceRow({ inv, canDelete, latestPkrRate }: { inv: GeneratedInvoice; 
           >
             {inv.sentStatus === "sent" ? "Resend email" : "Send to student"}
           </Button>
+          <InvoiceSentLogButton invoiceId={inv.id} label={inv.invoiceNumber ?? inv.studentName} />
           {!inv.studentEmail && <span className="text-xs text-warning">No email on record</span>}
           {canDelete && (
             <Button

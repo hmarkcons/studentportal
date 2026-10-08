@@ -218,3 +218,38 @@ export function upcomingNotifications(sources: readonly NotifySource[], nowMs: n
   }
   return out.sort((a, b) => a.notifyAt - b.notifyAt || a.key.localeCompare(b.key));
 }
+
+/**
+ * How far off an item is, said on its pop-up from when it really starts —
+ * "In 25 minutes", "In 2 hours", "Tomorrow" — not from the lead time it was
+ * set to notify at: a "1 day before" said late, on waking, would otherwise
+ * read "In 1 day" for something half an hour away.
+ */
+export function startsInLabel(n: Pick<DueNotification, "startsAt" | "timed" | "date">, nowMs: number): string {
+  const days = dayDelta(karachiClock(nowMs).date, n.date);
+  if (!n.timed) return days <= 0 ? "Today" : days === 1 ? "Tomorrow" : `In ${days} days`;
+  const minutes = Math.round((n.startsAt - nowMs) / 60_000);
+  if (minutes < 1) return "Now";
+  if (minutes < 60) return `In ${minutes} minute${minutes === 1 ? "" : "s"}`;
+  if (days <= 0) {
+    const hours = Math.round(minutes / 60);
+    return `In ${hours} hour${hours === 1 ? "" : "s"}`;
+  }
+  return days === 1 ? "Tomorrow" : `In ${days} days`;
+}
+
+/**
+ * Of the notifications already due, the latest for each occurrence: an
+ * interview within the hour is said once, not also as its day-before
+ * reminder. The rest are passed over, and marked so they are not said later.
+ */
+export function latestDuePerOccurrence(due: readonly DueNotification[], nowMs: number): { say: DueNotification[]; passOver: DueNotification[] } {
+  const occurrence = (n: DueNotification) => n.key.slice(0, n.key.lastIndexOf(":"));
+  const ready = due.filter((n) => n.notifyAt <= nowMs && n.startsAt > nowMs);
+  const latest = new Map<string, DueNotification>();
+  for (const n of ready) {
+    const held = latest.get(occurrence(n));
+    if (!held || n.notifyAt > held.notifyAt) latest.set(occurrence(n), n);
+  }
+  return { say: [...latest.values()], passOver: ready.filter((n) => latest.get(occurrence(n)) !== n) };
+}

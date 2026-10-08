@@ -28,6 +28,7 @@ export async function sendEmail({
   attachments,
   from,
   replyTo,
+  icalEvent,
 }: {
   to: string;
   subject: string;
@@ -37,6 +38,11 @@ export async function sendEmail({
   /** Overrides SMTP_FROM for this message (see accountsFrom). */
   from?: string;
   replyTo?: string;
+  /**
+   * A calendar invitation (src/lib/icsInvite.ts), sent as the message's
+   * text/calendar part so Gmail and Outlook show it as an event to add.
+   */
+  icalEvent?: { method: "REQUEST" | "CANCEL"; content: string; filename?: string };
 }) {
   if (!isEmailConfigured()) {
     return { error: "Email isn't configured yet — set SMTP_HOST, SMTP_USER, and SMTP_PASS in the environment." };
@@ -64,6 +70,7 @@ export async function sendEmail({
       text,
       html,
       attachments,
+      icalEvent: icalEvent ? { method: icalEvent.method.toLowerCase(), content: icalEvent.content, filename: icalEvent.filename ?? "invite.ics" } : undefined,
     });
     return { success: true as const };
   } catch (err) {

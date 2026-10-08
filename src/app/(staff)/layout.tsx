@@ -7,6 +7,7 @@ import { getEffectivePermissions } from "@/lib/auth/permissions";
 import { AppShell } from "@/components/AppShell";
 import { buildStaffNav } from "@/lib/nav";
 import { CalendarNotifier } from "@/components/CalendarNotifier";
+import { loadCalendarNotifications } from "@/lib/actions/calendarEvents";
 import { deliverNotificationEmailsSoon } from "@/lib/notificationDelivery";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -55,7 +56,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
       userSubtitle={ROLE_LABELS[staffRow.role] ?? staffRow.role}
       showSearch
     >
-      <CalendarNotifier />
+      <CalendarNotifier load={loadCalendarNotifications} calendarPath="/calendar" />
       {children}
     </AppShell>
   );

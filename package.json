@@ -58,7 +58,9 @@
     "check:calendar": "node scripts/verify-calendar.mjs",
     "check:autostages": "node scripts/verify-stage-automation.mjs",
     "check:docguides": "node scripts/verify-document-guides.mjs",
-    "check:audit": "node scripts/verify-audit-restore.mjs"
+    "check:audit": "node scripts/verify-audit-restore.mjs",
+    "check:calreminders": "node scripts/verify-calendar-reminders.mjs",
+    "check:invoicelog": "node scripts/verify-invoice-sent-log.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

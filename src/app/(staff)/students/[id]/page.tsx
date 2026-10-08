@@ -1251,6 +1251,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                 revalidateTo={`/students/${id}`}
                 canManage={canManageInvoice}
                 isSuperAdmin={canDeleteInvoice}
+                canSeeSentLog={hasRole(viewerStaff, "finance", "processing", "management", "super_admin")}
                 latestPkrRate={latestPkrRate}
               />
             ))}

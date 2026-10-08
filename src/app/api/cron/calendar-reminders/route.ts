@@ -14,7 +14,8 @@ function one<T>(v: T | T[] | null) {
 // Daily Vercel Cron job (see vercel.json) — every still-pending calendar
 // task/personal reminder gets emailed once a day to whoever has a stake in
 // it: for a student-linked task, the assigned counselor + the student
-// themself + any guests; for a personal reminder, the owner + any guests.
+// themself; for a personal reminder, the owner. Guests have their invitation
+// and their own reminders (src/lib/calendarInvites.ts, calendarUpcoming.ts).
 // Repeats daily until the item is marked done, at which point it simply
 // stops appearing in this query. Recipient-bucketing logic lives in
 // buildReminderRecipients() so it can be tested against a scoped fixture

@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { BellRing, X } from "lucide-react";
-import { loadCalendarNotifications } from "@/lib/actions/calendarEvents";
 import { formatClock, longDate } from "@/lib/calendarLayout";
-import { notifyLabel, type DueNotification } from "@/lib/calendarRecurrence";
+import { latestDuePerOccurrence, startsInLabel, type DueNotification } from "@/lib/calendarRecurrence";
 
 /** How often the list is read again, so an item added in another tab is not missed for long. */
 const REFRESH_MS = 10 * 60_000;
@@ -15,13 +14,15 @@ const MAX_SHOWN = 3;
 
 function whenText(n: DueNotification): string {
   const at = n.timed ? formatClock(n.startMinutes) : longDate(n.date);
-  if (n.minutes === 0) return n.timed ? `Now · ${at}` : `Today · ${at}`;
-  return `In ${notifyLabel(n.minutes).replace(" before", "")} · ${at}`;
+  return `${startsInLabel(n, Date.now())} · ${at}`;
 }
 
 /**
  * Says so when one of your own calendar items is due to be reminded of — at
- * the time you chose in its Notification, while any portal page is open.
+ * the time you chose in its Notification, while any portal page is open — and
+ * of what the calendar puts there itself (src/lib/calendarAuto.ts): the day
+ * before, and an hour before anything with a time. Every portal mounts it,
+ * each with its own list and its own calendar.
  *
  * The daily email cannot do this: Vercel runs the crons once a day, and a
  * reminder "30 minutes before" has to be said at a particular minute. So the
@@ -38,12 +39,28 @@ function whenText(n: DueNotification): string {
  * moment passed while the laptop slept is still said on waking, as long as
  * the item has not begun.
  */
-export function CalendarNotifier() {
+export function CalendarNotifier({
+  load,
+  calendarPath,
+}: {
+  /** The signed-in person's notifications due soon — a server action of their portal's. */
+  load: () => Promise<DueNotification[]>;
+  /** Where "Open in the calendar" goes: /calendar, /portal/calendar, /partner/calendar. */
+  calendarPath: string;
+}) {
   const [shown, setShown] = useState<DueNotification[]>([]);
 
   useEffect(() => {
     let timers: number[] = [];
     let cancelled = false;
+
+    function markSeen(n: DueNotification) {
+      try {
+        window.localStorage.setItem(SEEN_PREFIX + n.key, String(Date.now()));
+      } catch {
+        // Storage refused: it may be said once more, which is harmless.
+      }
+    }
 
     function fire(n: DueNotification) {
       const key = SEEN_PREFIX + n.key;
@@ -79,7 +96,7 @@ export function CalendarNotifier() {
     async function refresh() {
       let due: DueNotification[];
       try {
-        due = await loadCalendarNotifications();
+        due = await load();
       } catch {
         return; // Offline or signed out: the next refresh tries again.
       }
@@ -87,11 +104,13 @@ export function CalendarNotifier() {
       timers.forEach((t) => window.clearTimeout(t));
       timers = [];
       const now = Date.now();
+      // Already due: once per occurrence, the latest of its reminders.
+      const { say, passOver } = latestDuePerOccurrence(due, now);
+      passOver.forEach(markSeen);
+      say.forEach(fire);
       for (const n of due) {
-        if (n.startsAt <= now) continue;
-        const wait = n.notifyAt - now;
-        if (wait <= 0) fire(n);
-        else timers.push(window.setTimeout(() => fire(n), wait));
+        if (n.startsAt <= now || n.notifyAt <= now) continue;
+        timers.push(window.setTimeout(() => fire(n), n.notifyAt - now));
       }
     }
 
@@ -126,7 +145,7 @@ export function CalendarNotifier() {
       window.removeEventListener("calendar:changed", onChange);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, []);
+  }, [load]);
 
   if (shown.length === 0) return null;
   return (
@@ -145,7 +164,7 @@ export function CalendarNotifier() {
             <p className="truncate font-semibold">{n.title}</p>
             <p className="text-xs text-muted">{whenText(n)}</p>
             <Link
-              href={`/calendar?view=day&date=${n.date}`}
+              href={`${calendarPath}?view=day&date=${n.date}`}
               prefetch={false}
               onClick={() => setShown((list) => list.filter((x) => x.key !== n.key))}
               className="mt-1 inline-flex w-fit text-xs font-medium text-primary hover:underline"

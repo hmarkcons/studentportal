@@ -436,7 +436,7 @@ export function EventEditor({
                 ))}
               </ul>
             )}
-            <p className="text-xs text-muted">Guests are emailed the daily reminder until it is marked done.</p>
+            <p className="text-xs text-muted">Guests are emailed an invitation that adds it to their own calendar, an update when it changes, a cancellation if it is deleted, and a reminder the day before and an hour before.</p>
           </section>
         </div>
 

@@ -3,6 +3,8 @@ import { Headset, MessageCircle } from "lucide-react";
 import { redirect } from "next/navigation";
 import { getStudentUser } from "@/lib/auth/session";
 import { AppShell } from "@/components/AppShell";
+import { CalendarNotifier } from "@/components/CalendarNotifier";
+import { loadStudentCalendarNotifications } from "@/lib/actions/portalCalendarNotifications";
 import { studentNav } from "@/lib/studentNav";
 import { evaluateAgreementGate } from "@/lib/portalGate";
 import { countUnreadSince } from "@/lib/unreadMessages";
@@ -133,6 +135,8 @@ export default async function StudentLayout({ children }: { children: React.Reac
         </div>
       }
     >
+      {/* Their calendar is closed while the portal is locked, so nothing points at it. */}
+      {!gate.locked && <CalendarNotifier load={loadStudentCalendarNotifications} calendarPath="/portal/calendar" />}
       {children}
     </AppShell>
   );

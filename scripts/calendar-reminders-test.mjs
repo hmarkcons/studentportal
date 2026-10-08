@@ -11,7 +11,7 @@ test("the email gives a time, and the end too once an item has one (0295)", () =
   assert.equal(reminderTime(false, null, "19:00"), null);
 });
 
-test("a personal item reaches its owner and guests with its time range", () => {
+test("a personal item reaches its owner with its time range — not its guests, who have their invitation", () => {
   const recipients = buildReminderRecipients(
     [],
     [
@@ -33,6 +33,6 @@ test("a personal item reaches its owner and guests with its time range", () => {
     new Map([["s1", "Abdul@Example.com"]]),
     "2026-09-22"
   );
-  assert.deepEqual([...recipients.keys()].sort(), ["abdul@example.com", "guest@example.com"]);
+  assert.deepEqual([...recipients.keys()].sort(), ["abdul@example.com"]);
   assert.equal(recipients.get("abdul@example.com").items[0].time, "18:00–19:00");
 });

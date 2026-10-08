@@ -110,7 +110,8 @@ export async function loadAppointments(supabase: SupabaseClient, studentId: stri
     }
   }
 
-  if (byCountry.size === 0) return [];
+  // No country with tracker appointments is no reason to drop the interviews,
+  // which used to vanish with them for a university whose country was not set.
   const fieldsByCountry = new Map<string, { key: string; label: string | null }[]>();
   for (const f of appointmentFields ?? []) {
     (fieldsByCountry.get(f.country_code) ?? fieldsByCountry.set(f.country_code, []).get(f.country_code)!).push({ key: f.field_key, label: f.label });

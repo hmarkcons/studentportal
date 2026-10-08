@@ -6,6 +6,9 @@ import { getCurrentUser } from "@/lib/auth/currentUser";
 import { getStaffSession } from "@/lib/auth/session";
 import { hasRole } from "@/lib/auth/roles";
 import { readEventForm } from "@/lib/calendarEventFields";
+import { syncGuestInvitesAfter } from "@/lib/calendarInvites";
+import { followUpItem, instalmentItem, instalmentsByDay, interviewItem, popupSources, type AutoItem } from "@/lib/calendarAuto";
+import { loadFollowUps, loadInstalments, loadInterviews } from "@/lib/calendarAutoLoad";
 import { upcomingNotifications, type DueNotification, type NotifySource } from "@/lib/calendarRecurrence";
 import { dayDelta, karachiClock, minutesOf, parseDateParam, shiftDate } from "@/lib/calendarLayout";
 import { personalEvents, reminderEvent, taskEvents, type CalendarEvent } from "@/lib/calendarItems";
@@ -70,6 +73,7 @@ export async function createCalendarEvent(revalidateTo: string, _prevState: unkn
     );
     if (error) return { error };
     if (rows.length === 0) return { error: TASK_REFUSED };
+    if (values.guest_emails.length) syncGuestInvitesAfter("application_tasks", rows[0].id);
     revalidatePath(revalidateTo);
     return { success: true, id: rows[0].id };
   }
@@ -80,6 +84,7 @@ export async function createCalendarEvent(revalidateTo: string, _prevState: unkn
   );
   if (error) return { error };
   if (rows.length === 0) return { error: PERSONAL_REFUSED };
+  if (values.guest_emails.length) syncGuestInvitesAfter("personal_tasks", rows[0].id);
   revalidatePath(revalidateTo);
   return { success: true, id: rows[0].id };
 }
@@ -96,6 +101,7 @@ export async function updateCalendarTask(taskId: string, revalidateTo: string, _
   );
   if (error) return { error };
   if (rows.length === 0) return { error: TASK_REFUSED };
+  syncGuestInvitesAfter("application_tasks", taskId);
   revalidatePath(revalidateTo);
   return { success: true, id: taskId };
 }
@@ -118,6 +124,7 @@ export async function deleteCalendarTask(taskId: string, revalidateTo: string): 
   const { data, error } = await supabase.from("application_tasks").delete().eq("id", taskId).select("id");
   if (error) return { error: error.message };
   if (!data?.length) return { error: "Not deleted — this task belongs to a student you don't process, or it is already gone." };
+  syncGuestInvitesAfter("application_tasks", taskId);
   revalidatePath(revalidateTo);
   return { success: true };
 }
@@ -185,6 +192,7 @@ export async function moveCalendarItem(move: CalendarMove, revalidateTo: string)
   );
   if (error) return { error };
   if (rows.length === 0) return { error: move.table === "application_tasks" ? TASK_REFUSED : PERSONAL_REFUSED };
+  syncGuestInvitesAfter(move.table, move.id);
   revalidatePath(revalidateTo);
   return { success: true };
 }
@@ -247,8 +255,11 @@ type NotifyRow = {
 
 /**
  * The signed-in person's own notifications due in the next day or so — their
- * personal items, and the application tasks they own — for the notifier the
- * staff layout keeps mounted (src/components/CalendarNotifier.tsx).
+ * personal items, and the application tasks they own, at the time each was
+ * set to notify; and what the calendar puts on theirs itself, the day before
+ * and an hour before (src/lib/calendarAuto.ts): their students' interviews,
+ * instalments due, their follow-ups — for the notifier the staff layout keeps
+ * mounted (src/components/CalendarNotifier.tsx).
  *
  * Nothing at all before migration 0295: the column the question is about does
  * not exist, and a notifier that fails every few minutes helps nobody.
@@ -267,7 +278,9 @@ export async function loadCalendarNotifications(): Promise<DueNotification[]> {
   // A one-off in the past has nothing left to notify; a series may.
   const stillAhead = `due_date.gte.${today},recurrence.neq.none`;
 
-  const [personal, tasks] = await Promise.all([
+  // The automatic items reach two days ahead: a day-before reminder for the day after tomorrow is due tomorrow.
+  const until = shiftDate(today, 2);
+  const [personal, tasks, me, interviews, instalments, followUps] = await Promise.all([
     supabase
       .from("personal_tasks")
       .select("id, title, due_date, due_time, all_day, recurrence, recurrence_end_date, notify_minutes")
@@ -286,6 +299,10 @@ export async function loadCalendarNotifications(): Promise<DueNotification[]> {
       .lte("due_date", bound)
       .or(stillAhead)
       .limit(500),
+    supabase.from("staff").select("role, roles").eq("id", user.id).maybeSingle(),
+    loadInterviews(supabase, today, until).catch(() => []),
+    loadInstalments(supabase, today, until).catch(() => []),
+    loadFollowUps(supabase, today, until).catch(() => []),
   ]);
 
   const sources: NotifySource[] = [];
@@ -306,6 +323,28 @@ export async function loadCalendarNotifications(): Promise<DueNotification[]> {
   };
   if (!personal.error) add(personal.data as NotifyRow[] | null, "personal");
   if (!tasks.error) add(tasks.data as NotifyRow[] | null, "task");
+
+  const auto: AutoItem[] = [];
+  for (const r of interviews) {
+    if (r.counsellorId !== user.id && r.processingOfficerId !== user.id) continue;
+    const item = interviewItem(r, "staff");
+    if (item) auto.push(item);
+  }
+  const own = instalments.filter((r) => r.counsellorId === user.id);
+  for (const r of own) {
+    const item = instalmentItem(r, "staff", today);
+    if (item) auto.push(item);
+  }
+  if (hasRole(me.data as never, "finance")) {
+    const others = instalments.filter((r) => r.counsellorId !== user.id).map((r) => instalmentItem(r, "staff", today));
+    auto.push(...instalmentsByDay(others.filter((i): i is AutoItem => i !== null)));
+  }
+  for (const r of followUps) {
+    if (r.ownerId !== user.id) continue;
+    const item = followUpItem(r);
+    if (item) auto.push(item);
+  }
+  for (const item of auto) sources.push(...popupSources(item));
   return upcomingNotifications(sources, now);
 }
 

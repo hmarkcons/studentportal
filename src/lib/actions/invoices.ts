@@ -13,6 +13,9 @@ import { installmentDuePlan, missingDueDates } from "@/lib/installmentDueConditi
 import { splitIntoInstallments } from "@/lib/invoiceMath";
 import { after } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getCurrentUser } from "@/lib/auth/currentUser";
+import { getStaffSession } from "@/lib/auth/session";
+import { hasRole } from "@/lib/auth/roles";
 import {
   computeInvoiceMath,
   buildInstallmentPlan,
@@ -1095,6 +1098,25 @@ export async function buildAndSendInvoiceEmail(
     html: email.html,
     from: accountsFrom(),
   });
+
+  // Every invoice email is logged here, sent or not: when, to which address,
+  // what it was and who sent it — the invoice's "Sent log" (0325). Written
+  // with the service role, so the log never depends on who is signed in; a
+  // cron run has nobody, and its row says so by having no sender.
+  const sender = await getCurrentUser().catch(() => null);
+  await createAdminClient()
+    .from("invoice_email_log")
+    .insert({
+      invoice_id: invoiceId,
+      kind: variant === "overdue" ? "overdue_reminder" : variant,
+      sent_to: student.email,
+      status: sent.error ? "failed" : "sent",
+      error: sent.error ?? null,
+      sent_by: sender?.id ?? null,
+    })
+    .then(({ error }) => {
+      if (error) console.error("[invoice_email_log] not written:", error.message);
+    });
   if (sent.error) return { error: sent.error };
 
   const { data: existingReceipt } = await supabase.from("receipts").select("id").eq("invoice_id", invoiceId).maybeSingle();
@@ -1109,6 +1131,61 @@ export async function buildAndSendInvoiceEmail(
   revalidatePath(`/students/${studentId}`);
   revalidatePath("/finance/invoice-generator");
   return { success: true, sentTo: student.email };
+}
+
+export type InvoiceEmailLogRow = {
+  id: string;
+  kind: string;
+  sentTo: string | null;
+  status: string;
+  error: string | null;
+  sentBy: string | null;
+  at: string;
+};
+
+/**
+ * Every email of one invoice, newest first: when it went, to which address,
+ * what it was (the invoice, a receipt, an overdue reminder), whether it went,
+ * and who sent it. For the invoice's "Sent log".
+ *
+ * Read under the caller's own row-level security, which lets finance,
+ * management, processing and a Super Admin see it (0056) — said plainly to
+ * anyone else, rather than shown as an empty log.
+ */
+export async function listInvoiceEmailLog(
+  invoiceId: string
+): Promise<{ error: string } | { rows: InvoiceEmailLogRow[]; lastSentBeforeLog: string | null }> {
+  const { supabase, staff } = await getStaffSession();
+  if (!staff || !hasRole(staff, "finance", "management", "processing", "super_admin")) {
+    return { error: "Only finance, processing, management and a Super Admin can see where an invoice was emailed." };
+  }
+  const [{ data, error }, { data: invoice }] = await Promise.all([
+    supabase
+      .from("invoice_email_log")
+      .select("id, kind, sent_to, status, error, sent_by, created_at")
+      .eq("invoice_id", invoiceId)
+      .order("created_at", { ascending: false })
+      .limit(200),
+    supabase.from("invoices").select("sent_at").eq("id", invoiceId).maybeSingle(),
+  ]);
+  if (error) return { error: error.message };
+  const senderIds = [...new Set((data ?? []).map((r) => r.sent_by).filter((id): id is string => Boolean(id)))];
+  const { data: senders } = senderIds.length ? await supabase.from("staff").select("id, full_name").in("id", senderIds) : { data: [] };
+  const nameOf = new Map((senders ?? []).map((s) => [s.id as string, s.full_name as string]));
+  const rows = (data ?? []).map((r) => ({
+    id: r.id as string,
+    kind: r.kind as string,
+    sentTo: (r.sent_to as string | null) ?? null,
+    status: r.status as string,
+    error: (r.error as string | null) ?? null,
+    sentBy: r.sent_by ? (nameOf.get(r.sent_by as string) ?? "A former staff member") : null,
+    at: r.created_at as string,
+  }));
+  // Sent before every email was logged: only the last time was kept, on the invoice.
+  const sentAt = (invoice?.sent_at as string | null) ?? null;
+  const oldest = rows.at(-1)?.at ?? null;
+  const lastSentBeforeLog = sentAt && (!oldest || sentAt < oldest) && !rows.some((r) => r.status === "sent" && Math.abs(Date.parse(r.at) - Date.parse(sentAt)) < 60_000) ? sentAt : null;
+  return { rows, lastSentBeforeLog };
 }
 
 /**

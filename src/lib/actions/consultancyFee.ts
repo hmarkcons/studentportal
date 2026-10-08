@@ -263,24 +263,11 @@ export async function sendInvoiceEmail(invoiceId: string, studentId: string, rev
 
   if (!isEmailConfigured()) return { error: "Email isn't configured yet. Set SMTP_HOST / SMTP_USER / SMTP_PASS in the environment." };
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   // Delegates to the one shared implementation, so this sends the same
   // link-format email as the Invoice Generator. It previously attached the
   // PDF, so which kind of email a student received depended on where staff
-  // happened to click.
+  // happened to click. It logs the send too (invoice_email_log, 0325).
   const result = await buildAndSendInvoiceEmail(supabase, invoiceId, studentId, "invoice");
-
-  await supabase.from("invoice_email_log").insert({
-    invoice_id: invoiceId,
-    kind: "invoice",
-    sent_to: student.email,
-    status: result.error ? "failed" : "sent",
-    error: result.error ?? null,
-    sent_by: user?.id,
-  });
 
   if (result.error) return { error: result.error };
 
@@ -314,15 +301,8 @@ export async function sendOverdueReminderIfDue(invoiceId: string, studentId: str
   // The same link-format email as everywhere else, reframed as a reminder.
   // This used to attach the PDF, contradicting the rule that a receipt is
   // reached through a button rather than an attachment.
+  // Logged by buildAndSendInvoiceEmail, with no sender: nobody pressed a button.
   const result = await buildAndSendInvoiceEmail(supabase, invoiceId, studentId, "overdue");
-
-  await supabase.from("invoice_email_log").insert({
-    invoice_id: invoiceId,
-    kind: "overdue_reminder",
-    sent_to: student.email,
-    status: result.error ? "failed" : "sent",
-    error: result.error ?? null,
-  });
 
   if (!result.error) {
     await supabase.from("invoices").update({ last_reminder_sent_at: new Date().toISOString() }).eq("id", invoiceId);

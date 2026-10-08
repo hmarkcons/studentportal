@@ -21,6 +21,7 @@ import { formatDateOnly } from "@/lib/formatDate";
 import { balanceDueDate, carriedFromNote, INSTALMENT_PAYMENT_METHODS } from "@/lib/partialPayment";
 import { UndoPaymentButton } from "@/components/UndoPaymentButton";
 import { Badge } from "@/components/ui/Badge";
+import { InvoiceSentLogButton } from "@/components/InvoiceSentLog";
 import { Button } from "@/components/ui/Button";
 import { useButtonAction } from "@/components/useButtonAction";
 import { toast } from "@/lib/toast";
@@ -818,6 +819,7 @@ export function InvoiceCard({
   revalidateTo,
   canManage = false,
   isSuperAdmin = false,
+  canSeeSentLog = false,
   latestPkrRate = null,
 }: {
   invoice: {
@@ -877,6 +879,8 @@ export function InvoiceCard({
   revalidateTo: string;
   canManage?: boolean;
   isSuperAdmin?: boolean;
+  /** Whether the viewer may see where it was emailed (finance, processing, management, a Super Admin). */
+  canSeeSentLog?: boolean;
   /** The rupee rate last given, offered when a payment is recorded (0318). */
   latestPkrRate?: LatestPkrRate | null;
 }) {
@@ -920,7 +924,7 @@ export function InvoiceCard({
   }
 
   return (
-    <div className="rounded-md border border-border p-3">
+    <div className="rounded-md border border-border p-3" data-invoice-card={invoice.id}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-medium text-ink">
           {studentName && <span className="mr-2">{studentName}</span>}
@@ -941,6 +945,7 @@ export function InvoiceCard({
           )}
           <Badge tone={STATUS_TONE[status]}>{INVOICE_STATUS_LABELS[status]}</Badge>
           <Badge tone={invoice.sent_status === "sent" ? "success" : "neutral"}>{invoice.sent_status}</Badge>
+          {(canManage || canSeeSentLog) && <InvoiceSentLogButton invoiceId={invoice.id} label={invoice.invoice_number ?? studentName ?? undefined} />}
           {canManage && (
             <>
               <Button

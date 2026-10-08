@@ -18,6 +18,13 @@ export const STAFF_KINDS: readonly KindDef[] = [
   { key: "reminder", label: "Reminders", color: "blue", noun: "Reminder" },
   { key: "deadline", label: "Deadlines", color: "red", noun: "Deadline" },
   { key: "visa", label: "Visa appointments", color: "purple", noun: "Visa appointment" },
+  { key: "interview", label: "Interviews", color: "teal", noun: "University interview" },
+  { key: "payment", label: "Instalments due", color: "yellow", noun: "Instalment due" },
+];
+
+export const PARTNER_KINDS: readonly KindDef[] = [
+  { key: "interview", label: "Interviews", color: "blue", noun: "Interview" },
+  { key: "deadline", label: "Application deadlines", color: "red", noun: "Application deadline" },
 ];
 
 export const STUDENT_KINDS: readonly KindDef[] = [

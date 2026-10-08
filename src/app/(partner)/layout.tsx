@@ -4,6 +4,8 @@ import { AppShell } from "@/components/AppShell";
 import { PARTNER_NAV } from "@/lib/nav";
 import { getCurrentUser } from "@/lib/auth/currentUser";
 import { deliverNotificationEmailsSoon } from "@/lib/notificationDelivery";
+import { CalendarNotifier } from "@/components/CalendarNotifier";
+import { loadPartnerCalendarNotifications } from "@/lib/actions/portalCalendarNotifications";
 
 export default async function PartnerLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -34,6 +36,7 @@ export default async function PartnerLayout({ children }: { children: React.Reac
       userName={partnerRow.staff_name}
       userSubtitle={university?.name ?? "Partner University"}
     >
+      <CalendarNotifier load={loadPartnerCalendarNotifications} calendarPath="/partner/calendar" />
       {children}
     </AppShell>
   );
