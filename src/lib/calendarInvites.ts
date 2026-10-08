@@ -4,6 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
 import { isUndeliverableAddress } from "@/lib/emailRecipients";
 import { buildInvite, inviteActions, inviteEmail, inviteSignature, inviteWhen, type InviteEvent } from "@/lib/icsInvite";
+import { deliversEmail } from "@/lib/notificationDelivery";
+import { karachiToday } from "@/lib/calendarDates";
 
 // The guests of a calendar item hear about it: an invitation the moment they
 // are added, with a calendar file that puts it in their own calendar; an
@@ -35,7 +37,15 @@ type Row = {
   guest_emails: string[] | null;
 };
 
-type SentRow = { email: string; sequence: number; signature: string; event: InviteEvent; cancelled: boolean; organizer_name: string | null };
+type SentRow = {
+  email: string;
+  sequence: number;
+  signature: string;
+  event: InviteEvent;
+  cancelled: boolean;
+  organizer_name: string | null;
+  status: "sent" | "skipped" | "failed";
+};
 
 const COLUMNS: Record<Table, string> = {
   personal_tasks:
@@ -99,7 +109,7 @@ export async function syncGuestInvites(table: Table, id: string): Promise<{ sent
     admin.from(table).select(COLUMNS[table]).eq("id", id).maybeSingle(),
     admin
       .from("calendar_invites")
-      .select("email, sequence, signature, event, cancelled, organizer_name")
+      .select("email, sequence, signature, event, cancelled, organizer_name, status")
       .eq("source_table", table)
       .eq("source_id", id),
   ]);
@@ -111,7 +121,14 @@ export async function syncGuestInvites(table: Table, id: string): Promise<{ sent
 
   const guests = row?.guest_emails ?? [];
   const signature = event ? inviteSignature(event) : "";
-  const { invite, update, cancel } = inviteActions(guests, sent, signature, deleted);
+  // A send that failed is owed again: as though it had never gone, but
+  // numbered after it, so the guest's calendar takes the newest.
+  const delivered = sent.filter((s) => s.status !== "failed");
+  const owed = inviteActions(guests, delivered, signature, deleted);
+  const failedCancels = deleted ? [] : sent.filter((s) => s.status === "failed" && s.cancelled && !guests.some((g) => g.toLowerCase() === s.email.toLowerCase()));
+  const invite = owed.invite;
+  const update = owed.update;
+  const cancel = [...owed.cancel, ...failedCancels.map((s) => s.email.toLowerCase())];
   if (invite.length + update.length + cancel.length === 0) return tally;
 
   const organizer = await organizerOf(admin, row?.owner_id ?? null);
@@ -179,6 +196,42 @@ export async function syncGuestInvites(table: Table, id: string): Promise<{ sent
   for (const email of update) await deliver(email, "update");
   for (const email of cancel) await deliver(email, "cancel");
   return tally;
+}
+
+/**
+ * Every upcoming calendar item with guests, brought up to date: run by the
+ * ten-minute cron, so a guest added before invitations existed, or one whose
+ * invitation failed to send, still hears of it. Each item is a no-op once its
+ * guests have what they are owed. Only from a deployment, as every alert.
+ */
+export async function reconcileGuestInvites(limit = 40): Promise<{ checked: number; sent: number; failed: number }> {
+  const out = { checked: 0, sent: 0, failed: 0 };
+  if (!isEmailConfigured() || !deliversEmail()) return out;
+  const admin = createAdminClient();
+  const today = karachiToday();
+  const stillAhead = `due_date.gte.${today},recurrence.neq.none`;
+  const [{ data: personal }, { data: tasks }] = await Promise.all([
+    admin.from("personal_tasks").select("id, recurrence_end_date").eq("status", "pending").not("guest_emails", "is", null).neq("guest_emails", "{}").or(stillAhead).limit(200),
+    admin.from("application_tasks").select("id, recurrence_end_date").eq("status", "pending").not("guest_emails", "is", null).neq("guest_emails", "{}").or(stillAhead).limit(200),
+  ]);
+  const live = (rows: { id: string; recurrence_end_date: string | null }[] | null) =>
+    (rows ?? []).filter((r) => !r.recurrence_end_date || r.recurrence_end_date >= today).map((r) => r.id);
+  const items: [Table, string][] = [
+    ...live(personal as never).map((id) => ["personal_tasks", id] as [Table, string]),
+    ...live(tasks as never).map((id) => ["application_tasks", id] as [Table, string]),
+  ];
+  for (const [table, id] of items) {
+    if (out.sent + out.failed >= limit) break;
+    out.checked++;
+    try {
+      const t = await syncGuestInvites(table, id);
+      out.sent += t.sent;
+      out.failed += t.failed;
+    } catch (err) {
+      console.error(`[calendarInvites] reconcile ${table} ${id}:`, err instanceof Error ? err.message : err);
+    }
+  }
+  return out;
 }
 
 /** After the save has answered: the guests of this item are brought up to date. */

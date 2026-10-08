@@ -4,6 +4,7 @@ import { checkCronRequest } from "@/lib/cronAuth";
 import { deliverNotificationEmails } from "@/lib/notificationDelivery";
 import { purgeTrash } from "@/lib/fileTrash";
 import { sendCalendarReminders } from "@/lib/calendarUpcoming";
+import { reconcileGuestInvites } from "@/lib/calendarInvites";
 
 // Every ten minutes (vercel.json): emails the alerts that are due one (0320),
 // so something that happens at night goes out without anyone opening the
@@ -16,7 +17,12 @@ export async function GET(request: NextRequest) {
   const auth = checkCronRequest(request);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
-  const [result, upcoming] = await Promise.all([deliverNotificationEmails({ limit: 60 }), sendCalendarReminders("soon")]);
+  const [result, upcoming, invites] = await Promise.all([
+    deliverNotificationEmails({ limit: 60 }),
+    sendCalendarReminders("soon"),
+    // Guests owed an invitation — added before invitations existed, or a send that failed.
+    reconcileGuestInvites(),
+  ]);
 
   const admin = createAdminClient();
   const ninetyDays = new Date(Date.now() - 90 * 86_400_000).toISOString();
@@ -30,5 +36,5 @@ export async function GET(request: NextRequest) {
     admin.from("calendar_reminder_log").delete().lt("sent_at", monthAgo),
   ]);
 
-  return NextResponse.json({ ...result, calendarSoon: { sent: upcoming.sent, failed: upcoming.failed, note: upcoming.note }, purgedFiles: purged, ...(auth.warning ? { warning: auth.warning } : {}) });
+  return NextResponse.json({ ...result, calendarSoon: { sent: upcoming.sent, failed: upcoming.failed, note: upcoming.note }, invitations: invites, purgedFiles: purged, ...(auth.warning ? { warning: auth.warning } : {}) });
 }

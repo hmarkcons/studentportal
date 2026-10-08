@@ -45,7 +45,10 @@ export default async function Home() {
     .select("id, status")
     .eq("id", user.id)
     .maybeSingle();
-  if (staffRow && staffRow.status === "active") redirect("/reports");
+  // Staff land on their Dashboard: every staff member may open it, whatever
+  // their role, and it is where their day starts. (It was Reports, which not
+  // every role may open and which is nobody's first page.)
+  if (staffRow && staffRow.status === "active") redirect("/dashboard");
   if (staffRow && staffRow.status === "suspended") {
     return (
       <div className="flex flex-1 items-center justify-center bg-bg px-4">
