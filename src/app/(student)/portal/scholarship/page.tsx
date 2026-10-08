@@ -9,6 +9,7 @@ import { formatDateOnly } from "@/lib/formatDate";
 import { scholarshipPortals } from "@/lib/scholarshipPortal";
 import { callLink, callAbsenceNote } from "@/lib/scholarshipCallLink";
 import { listCredentialTypesAction } from "@/lib/actions/countryTracker";
+import { loadLoginLinks } from "@/lib/credentialLinks";
 import { VisaCredentials } from "../visa/VisaCredentials";
 import { ScholarshipGuide } from "@/components/ScholarshipGuide";
 import { bodiesForUniversity } from "@/lib/scholarshipMatch";
@@ -148,6 +149,8 @@ export default async function PortalScholarshipPage() {
       .eq("student_id", student.id),
   ]);
   const portals = scholarshipPortals(credentialTypes);
+  // Each portal's login page, for "Go to login page".
+  const portalLinks = await loadLoginLinks(supabase, "student", student.id, portals.map((p) => p.credentialType));
   type Dest = { id: string; display_name: string; scholarship_access: string | null };
   const countries = new Map<string, Dest & { bodies: string[]; chosen: { university: string; body: string }[] }>();
   const addCountry = (d: Dest | null) => {
@@ -467,6 +470,7 @@ export default async function PortalScholarshipPage() {
                 studentId={student.id}
                 credentialType={portal.credentialType}
                 label={portal.label}
+                link={portalLinks[portal.credentialType] ?? null}
               />
             ))}
           </div>

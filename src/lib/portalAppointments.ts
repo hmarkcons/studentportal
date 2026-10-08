@@ -41,6 +41,8 @@ export type PortalAppointment = {
       username: string | null;
       password: string | null;
       instructions: string | null;
+      /** Where the student signs in with it (0326). */
+      link: string | null;
     } | null;
   };
 };
@@ -83,7 +85,7 @@ export async function loadAppointments(supabase: SupabaseClient, studentId: stri
     supabase
       .from("application_interviews")
       .select(
-        "id, round_label, confirmed_datetime, timezone, platform, platform_other, status, interview_details, interview_link, preparation_notes, created_at, updated_at, application:applications!inner(student_id, university:universities(name, destination:destinations(display_name))), credentials:application_interview_credentials(login_username, login_password, login_instructions)"
+        "id, round_label, confirmed_datetime, timezone, platform, platform_other, status, interview_details, interview_link, preparation_notes, created_at, updated_at, application:applications!inner(student_id, university:universities(name, destination:destinations(display_name))), credentials:application_interview_credentials(login_username, login_password, login_instructions, login_link)"
       )
       .eq("application.student_id", studentId)
       .not("confirmed_datetime", "is", null)
@@ -155,7 +157,7 @@ export async function loadAppointments(supabase: SupabaseClient, studentId: stri
     const uni = app?.university ? (one(app.university as never) as { name?: string; destination?: unknown } | null) : null;
     const dest = uni?.destination ? (one(uni.destination as never) as { display_name?: string } | null) : null;
     const cred = one(i.credentials as never) as
-      | { login_username?: string | null; login_password?: string | null; login_instructions?: string | null }
+      | { login_username?: string | null; login_password?: string | null; login_instructions?: string | null; login_link?: string | null }
       | null;
 
     appointments.push({
@@ -183,6 +185,7 @@ export async function loadAppointments(supabase: SupabaseClient, studentId: stri
               username: cred.login_username ?? null,
               password: cred.login_password ?? null,
               instructions: cred.login_instructions ?? null,
+              link: cred.login_link ?? null,
             }
           : null,
       },

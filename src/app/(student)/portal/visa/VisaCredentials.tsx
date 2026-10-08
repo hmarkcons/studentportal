@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { ExternalLink } from "lucide-react";
 import { readCredentialAction, storeCredentialAction } from "@/lib/actions/countryTracker";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { toast } from "@/lib/toast";
+import { linkHref } from "@/lib/catalogueText";
 
 /** Nothing is revealed for longer than this without being asked for again. */
 const HIDE_AFTER_MS = 60_000;
@@ -26,11 +28,16 @@ export function VisaCredentials({
   studentId,
   credentialType,
   label,
+  link = null,
 }: {
   studentId: string;
   credentialType: string;
   label: string;
+  /** The page this login signs in to, opened from "Go to login page". */
+  link?: string | null;
 }) {
+  // Only ever a web address: anything else is not offered as a button.
+  const loginPage = linkHref(link);
   const [value, setValue] = useState<{ username: string; password: string } | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -89,8 +96,14 @@ export function VisaCredentials({
     const data = new FormData(form);
     const username = String(data.get("username") ?? "").trim();
     const password = String(data.get("password") ?? "");
-    if (!username || !password) {
+    const newLink = String(data.get("link") ?? "").trim();
+    // A new login is both halves of it; the page alone can be changed on its own.
+    if ((username || password) && !(username && password)) {
       setError("Enter both the username and the password.");
+      return;
+    }
+    if (!username && !password && newLink === (link ?? "")) {
+      setError("Enter the new details, or change the login page link.");
       return;
     }
     setSaving(true);
@@ -112,6 +125,19 @@ export function VisaCredentials({
     <div className="rounded-md border border-border p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-medium text-ink">{label}</p>
+        <div className="flex flex-wrap items-center gap-2">
+        {loginPage && (
+          <a
+            href={loginPage}
+            target="_blank"
+            rel="noreferrer"
+            data-login-page={credentialType}
+            className="inline-flex items-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
+          >
+            <ExternalLink aria-hidden className="h-3.5 w-3.5 shrink-0" />
+            Go to login page
+          </a>
+        )}
         {value ? (
           <Button type="button" size="sm" onClick={hide}>
             Hide
@@ -121,6 +147,7 @@ export function VisaCredentials({
             Show my login
           </Button>
         )}
+        </div>
       </div>
 
       {!value && !error && (
@@ -156,7 +183,7 @@ export function VisaCredentials({
       {!editing && (
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <button type="button" onClick={() => setEditing(true)} className="text-xs font-medium text-primary hover:underline">
-            I changed this password
+            I changed this login
           </button>
         </div>
       )}
@@ -175,6 +202,17 @@ export function VisaCredentials({
           </p>
           <Input name="username" placeholder="Username / ID" autoComplete="off" className="text-sm" />
           <Input name="password" type="password" placeholder="New password" autoComplete="off" className="text-sm" />
+          <Input
+            name="link"
+            defaultValue={link ?? ""}
+            type="text"
+            inputMode="url"
+            placeholder="Login page link (https://…)"
+            aria-label="Login page link"
+            autoComplete="off"
+            className="text-sm"
+          />
+          <p className="text-[11px] text-muted">Leave the username and password empty to change only the link.</p>
           <div className="flex flex-wrap items-center gap-2">
             <Button type="submit" size="sm" variant="primary" pending={saving}>
               Save

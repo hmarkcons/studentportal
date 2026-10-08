@@ -38,6 +38,7 @@ import { documentUrls, avatarUrlMap } from "@/lib/storageUrls";
 import { PortalCredentialsSection } from "./PortalCredentialsSection";
 import { DashboardTaskList, type DashboardTaskRow } from "./DashboardTaskList";
 import { listCredentialTypesAction } from "@/lib/actions/countryTracker";
+import { loadLoginLinks } from "@/lib/credentialLinks";
 import { RegistrationEditForm } from "./RegistrationEditForm";
 import { RestartProcessPanel } from "./RestartProcessPanel";
 import { loadRestartContext } from "@/lib/actions/intakeCycles";
@@ -187,7 +188,11 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   const canModifyAgreement = perms["agreements.process"] === true;
   const canManageInvoice = perms["finance.invoices.manage"] === true;
   // The rupee rate last given, offered on the next invoice and payment (0318).
-  const latestPkrRate = canManageInvoice ? await loadLatestPkrRate(supabase) : null;
+  // The login page of each saved login, read beside the rate rather than after it.
+  const [latestPkrRate, credentialLinks] = await Promise.all([
+    canManageInvoice ? loadLatestPkrRate(supabase) : Promise.resolve(null),
+    loadLoginLinks(supabase, "student", id, existingCredentialTypes.filter(inCredentialsSection)),
+  ]);
   const canDeleteInvoice = perms["finance.invoices.delete"] === true;
   const rawDocs = requirementsChanged ? (await readDocs(true)).data : docsBeforeTopUp;
 
@@ -1274,7 +1279,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
           </Badge>
         }
       >
-        <PortalCredentialsSection studentId={id} existingTypes={existingCredentialTypes} email={student?.email ?? null} />
+        <PortalCredentialsSection studentId={id} existingTypes={existingCredentialTypes} links={credentialLinks} email={student?.email ?? null} />
       </CollapsibleCard>
 
       <Card className="mt-6">

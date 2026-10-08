@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
-import { AlarmClock, CalendarClock, CalendarDays, CalendarRange, History } from "lucide-react";
+import { AlarmClock, CalendarClock, CalendarDays, CalendarRange, ExternalLink, History } from "lucide-react";
+import { SafeLink } from "@/components/SafeLink";
+import { linkHref } from "@/lib/catalogueText";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
@@ -152,14 +154,9 @@ function Row({ appointment, muted = false }: { appointment: PortalAppointment; m
               {platformLabel(interview.platform, interview.platformOther)} · {interviewStatusLabel(interview.status)}
             </p>
             {interview.link && (
-              <a
-                href={interview.link}
-                target="_blank"
-                rel="noreferrer"
-                className="text-xs font-medium text-primary hover:underline"
-              >
-                Joining link &rarr;
-              </a>
+              <span className="text-xs font-medium">
+                <SafeLink value={interview.link}>Joining link &rarr;</SafeLink>
+              </span>
             )}
             {interview.details && <p className="text-xs text-muted">{interview.details}</p>}
             {interview.preparation && (
@@ -184,6 +181,18 @@ function Row({ appointment, muted = false }: { appointment: PortalAppointment; m
                   </p>
                 )}
                 {interview.credentials.instructions && <p className="text-muted">{interview.credentials.instructions}</p>}
+                {linkHref(interview.credentials.link) && (
+                  <a
+                    href={linkHref(interview.credentials.link)!}
+                    target="_blank"
+                    rel="noreferrer"
+                    data-interview-login-page
+                    className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
+                  >
+                    <ExternalLink aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                    Go to login page
+                  </a>
+                )}
               </div>
             )}
             {/* When HMARK put this interview on the record, and — when the row

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { SendCredentialsBar } from "./SendCredentialsBar";
 import { SECTION_PRESETS, credentialLabel, inCredentialsSection } from "@/lib/studentCredentials";
+import { suggestedPortalLink } from "@/lib/portalLink";
 
 // visa_appointment_portal is shown to the student on their own Visa tab, so
 // its name has to be the one that page looks for.
@@ -22,10 +23,13 @@ function slugify(label: string) {
 export function PortalCredentialsSection({
   studentId,
   existingTypes,
+  links = {},
   email,
 }: {
   studentId: string;
   existingTypes: string[];
+  /** Each saved login's page, by credential type. */
+  links?: Record<string, string>;
   /** Where "Send to student" emails the logins ticked: the address on their record. */
   email: string | null;
 }) {
@@ -55,6 +59,8 @@ export function PortalCredentialsSection({
           ownerId={studentId}
           credentialType={credentialType}
           revalidateTo={`/students/${studentId}`}
+          link={links[credentialType] ?? null}
+          suggestedLink={suggestedPortalLink(credentialType)}
         />
       ))}
 

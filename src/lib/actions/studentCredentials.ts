@@ -5,6 +5,7 @@ import { getStaffSession } from "@/lib/auth/session";
 import { sendEmail } from "@/lib/email";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { whatsappLink } from "@/lib/reengagement";
+import { parseStoredLogin } from "@/lib/portalLink";
 import {
   PORTAL_LOGIN,
   SECTION_PRESETS,
@@ -58,13 +59,9 @@ async function readLogins(supabase: Session["supabase"], studentId: string, type
         p_credential_type: credentialType,
       });
       if (error || !data) return null;
-      let parsed: { username?: string; password?: string };
-      try {
-        parsed = JSON.parse(data as string);
-      } catch {
-        parsed = { username: String(data), password: "" };
-      }
-      return { credentialType, username: parsed.username ?? "", password: parsed.password ?? "" };
+      const stored = parseStoredLogin(data as string);
+      const login: StudentLogin = { credentialType, username: stored.username, password: stored.password, link: stored.link };
+      return login;
     })
   );
   return logins.filter((l): l is StudentLogin => l !== null && hasSomething(l));

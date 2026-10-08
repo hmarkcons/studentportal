@@ -9,6 +9,7 @@ import { bodiesForUniversity } from "@/lib/scholarshipMatch";
 import { scholarshipGate, scholarshipGateMessage } from "@/lib/scholarshipGate";
 import { scholarshipPortals } from "@/lib/scholarshipPortal";
 import { listCredentialTypesAction } from "@/lib/actions/countryTracker";
+import { loadLoginLinks } from "@/lib/credentialLinks";
 import { listScholarshipProofs } from "@/lib/actions/scholarshipProofs";
 import { AddScholarships } from "./AddScholarships";
 import { ScholarshipPortals } from "./ScholarshipPortals";
@@ -144,6 +145,16 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
     listCredentialTypesAction("student", id),
   ]);
   const portals = scholarshipPortals(credentialTypes);
+  // Each portal's saved page, and one to offer: the apply page of the body
+  // whose name it carries, else of a body the student has applied to.
+  const portalLinks = await loadLoginLinks(supabase, "student", id, portals.map((p) => p.credentialType));
+  const appliedBodies = (bodies ?? []).filter((b) => b.apply_url && (allScholarships ?? []).some((sc) => sc.scholarship_body_id === b.id));
+  const portalSuggestions = Object.fromEntries(
+    portals.map((p) => {
+      const named = (bodies ?? []).find((b) => b.apply_url && b.name && p.label.toLowerCase().includes(String(b.name).toLowerCase()));
+      return [p.credentialType, (named ?? appliedBodies[0])?.apply_url ?? null];
+    })
+  );
 
   // Signed here rather than in the guide component, which runs on the client
   // and cannot sign anything.
@@ -316,6 +327,9 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
       <ScholarshipPortals
         studentId={id}
         portals={portals}
+        links={portalLinks}
+        suggestions={portalSuggestions}
+        defaultSuggestion={appliedBodies[0]?.apply_url ?? null}
         canManage={canManage}
         revalidateTo={`/students/${id}/scholarship`}
       />

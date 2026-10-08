@@ -15,6 +15,8 @@ import { ApplicationDetailsForm } from "./ApplicationDetailsForm";
 import { AddBackupPrograms } from "./AddBackupPrograms";
 import { LinksContactForm } from "./LinksContactForm";
 import { listTrackerDefinitions } from "@/lib/actions/countryTracker";
+import { loadLoginLinks } from "@/lib/credentialLinks";
+import { suggestedPortalLink } from "@/lib/portalLink";
 import { DocumentChecklist, type DocRow } from "@/components/DocumentChecklist";
 import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
 import { loadStudentChecklistSections } from "@/lib/studentChecklistSections";
@@ -82,7 +84,7 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
     supabase
       .from("application_interviews")
       .select(
-        "id, round_label, confirmed_datetime, timezone, platform, platform_other, status, interview_details, interview_link, preparation_notes, created_at, updated_at, credentials:application_interview_credentials(login_username, login_password, login_instructions, share_with_student)"
+        "id, round_label, confirmed_datetime, timezone, platform, platform_other, status, interview_details, interview_link, preparation_notes, created_at, updated_at, credentials:application_interview_credentials(login_username, login_password, login_instructions, login_link, share_with_student)"
       )
       .eq("application_id", appId)
       .order("confirmed_datetime", { ascending: true, nullsFirst: false }),
@@ -98,7 +100,7 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
   // Every programme at this university, and which of them this student already
   // has an application for — the two things the Details form and the backup
   // picker each need.
-  const [{ data: universityPrograms }, { data: siblingApps }, trackerDefs] = await Promise.all([
+  const [{ data: universityPrograms }, { data: siblingApps }, trackerDefs, universityPortalLinks] = await Promise.all([
     university?.id
       ? supabase
           .from("programs")
@@ -121,6 +123,8 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
           data: [] as { id: string; program_id: string | null; round_id: string | null; cycle_id: string | null; program: unknown }[],
         }),
     countryCode ? listTrackerDefinitions([countryCode]).then((defs) => defs[countryCode]) : Promise.resolve(undefined),
+    // The login page saved with this application's university portal login.
+    loadLoginLinks(supabase, "application", appId, ["university_portal"]),
   ]);
   const hasTracker = Boolean(trackerDefs?.length);
 
@@ -387,7 +391,16 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
           coordinatorEmail={program?.coordinator_email ?? null}
         />
         <div className="mt-3">
-          <CredentialField label="University portal" ownerType="application" ownerId={appId} credentialType="university_portal" revalidateTo={revalidateTo} />
+          {/* Its link offered from the programme's application portal in the catalogue. */}
+          <CredentialField
+            label="University portal"
+            ownerType="application"
+            ownerId={appId}
+            credentialType="university_portal"
+            revalidateTo={revalidateTo}
+            link={universityPortalLinks.university_portal ?? null}
+            suggestedLink={suggestedPortalLink("university_portal", program?.application_portal_link ?? null)}
+          />
         </div>
       </Card>
 

@@ -7,6 +7,8 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { CredentialField } from "@/components/CredentialField";
 import { CountryTrackerForm } from "@/components/CountryTrackerForm";
 import { listTrackerDefinitions, listCredentialTypesAction } from "@/lib/actions/countryTracker";
+import { loadLoginLinks } from "@/lib/credentialLinks";
+import { suggestedPortalLink } from "@/lib/portalLink";
 import { readVisaDecision, visaMessage } from "@/lib/visaOutcome";
 import { visaCountries, type VisaApplication } from "@/lib/visaCountries";
 import { canSeeVisaSection } from "@/lib/visaAccess";
@@ -124,6 +126,13 @@ export default async function StudentVisaTab(props: PageProps<"/students/[id]/vi
     credentialTypes.find((t) => t === "visa_appointment_portal") ??
     credentialTypes.find((t) => t !== "portal_login" && /vfs|appointment|visa/i.test(t)) ??
     null;
+  const appointmentLinks = appointmentLogin ? await loadLoginLinks(client, "student", id, [appointmentLogin]) : {};
+  // Where the appointment is booked, for the login's link: the finalized
+  // application's country's visa office first, else any of the student's.
+  const finalizedDestination = rows.find((r) => r.isFinalized)?.destinationId ?? null;
+  const allOffices = Object.entries(officesByDestination).flatMap(([destinationId, list]) => list.map((o) => ({ destinationId, url: o.appointmentUrl })));
+  const appointmentPage =
+    allOffices.find((o) => o.url && o.destinationId === finalizedDestination)?.url ?? allOffices.find((o) => o.url)?.url ?? null;
 
   // The shared wording comes from loadVisaPageContent and is merged per
   // country below, so this page no longer reads visa_messages itself.
@@ -263,6 +272,8 @@ export default async function StudentVisaTab(props: PageProps<"/students/[id]/vi
           ownerId={id}
           credentialType={appointmentLogin ?? "visa_appointment_portal"}
           revalidateTo={revalidateTo}
+          link={appointmentLogin ? (appointmentLinks[appointmentLogin] ?? null) : null}
+          suggestedLink={suggestedPortalLink("visa_appointment_portal", appointmentPage)}
         />
       </Card>
     </div>

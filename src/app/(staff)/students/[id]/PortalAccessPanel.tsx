@@ -12,6 +12,7 @@ import { SetPasswordForm } from "@/components/SetPasswordForm";
 import { SendCredentialsBar } from "./SendCredentialsBar";
 import { readCredentialAction } from "@/lib/actions/countryTracker";
 import { Button } from "@/components/ui/Button";
+import { HmarkSignInLink } from "@/components/HmarkSignInLink";
 import { useButtonAction } from "@/components/useButtonAction";
 
 type ActionState = { error?: string; success?: boolean; email?: string; password?: string; warning?: string } | undefined;
@@ -137,6 +138,12 @@ export function PortalAccessPanel({
           )}
         </div>
       </div>
+
+      {enabled && (
+        <p className="mt-2 text-xs text-muted">
+          Sign-in page: <HmarkSignInLink /> <span className="opacity-80">(this portal&apos;s own — sent with the login)</span>
+        </p>
+      )}
 
       {/* Their login for this portal, and nothing else, by email or as a
           WhatsApp message (studentCredentials). */}

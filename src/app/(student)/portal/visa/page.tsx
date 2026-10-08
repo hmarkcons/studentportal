@@ -7,6 +7,7 @@ import { PortalEmpty } from "@/components/studentPortal/PortalEmpty";
 import { listTrackerDefinitions, listCredentialTypesAction } from "@/lib/actions/countryTracker";
 import { formatDateOnly } from "@/lib/formatDate";
 import { readVisaDecision, visaMessage } from "@/lib/visaOutcome";
+import { loadLoginLinks } from "@/lib/credentialLinks";
 import { VisaCredentials } from "./VisaCredentials";
 import { VisaOfficeList } from "@/components/VisaOfficeList";
 import { visaCountries } from "@/lib/visaCountries";
@@ -164,6 +165,8 @@ export default async function PortalVisaPage() {
     // portal_login is this portal's own password, not a visa one.
     credentialTypes.find((t) => t !== "portal_login" && /vfs|appointment|visa/i.test(t)) ??
     null;
+  // Its login page, for "Go to login page" — no secret, so shown without asking.
+  const appointmentLinks = appointmentLogin ? await loadLoginLinks(supabase, "student", student.id, [appointmentLogin]) : {};
 
   // The shared wording is read once in loadVisaPageContent and merged per
   // country above, so this page no longer fetches visa_messages itself —
@@ -293,6 +296,7 @@ export default async function PortalVisaPage() {
           <VisaCredentials
             studentId={student.id}
             credentialType={appointmentLogin}
+            link={appointmentLinks[appointmentLogin] ?? null}
             label={
               appointmentLogin === "visa_appointment_portal"
                 ? "Your appointment portal login"

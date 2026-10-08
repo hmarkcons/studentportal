@@ -98,3 +98,20 @@ test("the subject says what the email carries", async () => {
   assert.equal(credentialsEmailSubject([login("gmail", "a", "b")]), "Your login details from HMARK Consultants");
   assert.equal(credentialsEmailSubject([login("portal_login", "a", "b"), login("gmail", "a", "b")]), "Your login details from HMARK Consultants");
 });
+
+test("each login goes with the page it signs in to, as Sign in here", () => {
+  const input = {
+    ...INPUT,
+    logins: [
+      { credentialType: "gmail", username: "ali.raza@gmail.com", password: "G-pass-1", link: "https://mail.google.com/" },
+      { credentialType: "visa_appointment_portal", username: "ali", password: "V-1", link: null },
+      { credentialType: "portal_login", username: "ali@example.com", password: "Hmark-pass-3", link: "https://ignored.example" },
+    ],
+  };
+  const text = credentialsWhatsapp(input);
+  assert.match(text, /\*Gmail\*\nUsername: ali\.raza@gmail\.com\nPassword: G-pass-1\nSign in here: https:\/\/mail\.google\.com\//);
+  assert.ok(!/Visa appointment portal\*\n[^*]*Sign in here/.test(text), "no line for a login with no page");
+  assert.ok(!text.includes("ignored.example"), "this portal's own page is its sign-in page, never a stored one");
+  assert.match(credentialsEmailText(input), /  Sign in here: https:\/\/mail\.google\.com\//);
+  assert.match(credentialsEmailHtml(input), /<a href="https:\/\/mail\.google\.com\/"[^>]*>https:\/\/mail\.google\.com\/<\/a>/, "a link in the email");
+});

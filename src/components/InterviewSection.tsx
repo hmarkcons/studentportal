@@ -24,12 +24,15 @@ import {
 } from "@/lib/interviews";
 import { addedLine, changedLine } from "@/lib/activityStamp";
 import { ActionStatus } from "@/components/ActionStatus";
+import { SafeLink } from "@/components/SafeLink";
 import { useButtonAction } from "@/components/useButtonAction";
 
 export type InterviewCredentials = {
   login_username: string | null;
   login_password: string | null;
   login_instructions: string | null;
+  /** The page the login is used on (0326). */
+  login_link?: string | null;
   share_with_student: boolean;
 } | null;
 
@@ -218,6 +221,16 @@ function InterviewForm({
           </label>
         </div>
         <label className="flex flex-col gap-1 text-xs text-muted">
+          Login page link
+          <Input
+            name="login_link"
+            type="text"
+            inputMode="url"
+            defaultValue={existing?.credentials?.login_link ?? ""}
+            placeholder="https://… — where the student signs in with these"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-muted">
           Anything else about signing in
           <Input name="login_instructions" defaultValue={existing?.credentials?.login_instructions ?? ""} />
         </label>
@@ -331,14 +344,9 @@ function InterviewCard({
       </div>
 
       {interview.interview_link && (
-        <a
-          href={interview.interview_link}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-1 inline-flex text-xs font-medium text-primary hover:underline"
-        >
-          Joining link / details &rarr;
-        </a>
+        <span className="mt-1 inline-flex text-xs font-medium">
+          <SafeLink value={interview.interview_link}>Joining link / details &rarr;</SafeLink>
+        </span>
       )}
       {interview.interview_details && <p className="mt-1 text-xs text-muted">{interview.interview_details}</p>}
       {interview.preparation_notes && (
@@ -354,6 +362,11 @@ function InterviewCard({
             <Badge tone="warning">Shown to the student</Badge>
           ) : (
             <span className="ml-2 text-muted">not shared with the student</span>
+          )}
+          {credentials.login_link && (
+            <span className="ml-2">
+              <SafeLink value={credentials.login_link}>Open login page &rarr;</SafeLink>
+            </span>
           )}
         </p>
       )}

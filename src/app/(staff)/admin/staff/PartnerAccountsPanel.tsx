@@ -6,6 +6,7 @@ import { revealPartnerCredentials, setPartnerPassword } from "@/lib/actions/admi
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { useButtonAction } from "@/components/useButtonAction";
+import { HmarkSignInLink } from "@/components/HmarkSignInLink";
 import { CredentialsBox, SetPasswordForm } from "@/components/SetPasswordForm";
 
 /** A partner university account, as a Super Admin manages its login. */
@@ -41,6 +42,10 @@ function PartnerLogin({ row }: { row: PartnerAccountRow }) {
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
         <dt className="text-muted">Signs in with</dt>
         <dd className="break-all text-ink">{row.loginEmail ?? "—"}</dd>
+        <dt className="text-muted">Signs in at</dt>
+        <dd>
+          <HmarkSignInLink />
+        </dd>
         <dt className="text-muted">Last signed in</dt>
         <dd className={row.lastSignInAt ? "text-ink" : "text-warning"}>{row.lastSignInAt ? when(row.lastSignInAt) : "Never"}</dd>
         <dt className="text-muted">Password copy</dt>

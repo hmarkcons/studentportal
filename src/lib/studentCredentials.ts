@@ -24,7 +24,12 @@ export type StudentLogin = {
   university?: string | null;
   username: string;
   password: string;
+  /** The page it signs in to (src/lib/portalLink.ts), sent as "Sign in here". */
+  link?: string | null;
 };
+
+/** What the link line of a login is called, in the email and the message. */
+export const SIGN_IN_HERE = "Sign in here";
 
 /** The student's own login for this portal (portal.ts stores it so). */
 export const PORTAL_LOGIN = "portal_login";
@@ -107,6 +112,8 @@ function blocks(input: CredentialsMessageInput): Block[] {
       lines.push({ name: "Username", value: login.username });
     }
     if (login.password) lines.push({ name: "Password", value: login.password });
+    // This portal's own page is "Sign in at", above; every other login's is its saved link.
+    if (login.credentialType !== PORTAL_LOGIN && login.link) lines.push({ name: SIGN_IN_HERE, value: login.link });
     return { label: credentialLabel(login.credentialType, login.university), lines };
   });
 }
@@ -172,7 +179,7 @@ export function credentialsEmailHtml(input: CredentialsMessageInput): string {
       const rows = b.lines
         .map((l) => {
           const value =
-            l.name === "Sign in at"
+            l.name === "Sign in at" || l.name === SIGN_IN_HERE
               ? `<a href="${esc(l.value)}" style="color:${GREEN};text-decoration:none">${esc(l.value)}</a>`
               : `<span style="font-family:${MONO};color:${INK}">${esc(l.value)}</span>`;
           return `<tr><td style="padding:3px 12px 3px 0;color:${BODY};font-size:13px;white-space:nowrap;vertical-align:top">${esc(l.name)}</td><td style="padding:3px 0;font-size:14px;word-break:break-all">${value}</td></tr>`;

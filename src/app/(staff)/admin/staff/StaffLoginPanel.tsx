@@ -4,6 +4,7 @@ import { useState } from "react";
 import { issueStaffCredentials, revealStaffCredentials, setStaffPassword, switchStaffLoginEmail } from "@/lib/actions/admin";
 import { Button } from "@/components/ui/Button";
 import { useButtonAction } from "@/components/useButtonAction";
+import { HmarkSignInLink } from "@/components/HmarkSignInLink";
 import { CredentialsBox, SetPasswordForm } from "@/components/SetPasswordForm";
 
 /** What the page knows about a staff member's login, for a Super Admin viewer. */
@@ -113,6 +114,12 @@ export function StaffLoginPanel({
         <div className="flex items-start justify-between gap-4 border-b border-border py-2">
           <dt className="text-muted">Signs in with</dt>
           <dd className="break-all text-right text-ink" data-login-email>{switched?.email ?? login.loginEmail ?? "—"}</dd>
+        </div>
+        <div className="flex items-start justify-between gap-4 border-b border-border py-2">
+          <dt className="text-muted">Signs in at</dt>
+          <dd className="text-right">
+            <HmarkSignInLink />
+          </dd>
         </div>
         <div className="flex items-start justify-between gap-4 border-b border-border py-2">
           <dt className="text-muted">Last signed in</dt>

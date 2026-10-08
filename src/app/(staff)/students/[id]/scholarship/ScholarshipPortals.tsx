@@ -22,11 +22,20 @@ import { portalLabelError, scholarshipPortalType, type ScholarshipPortal } from 
 export function ScholarshipPortals({
   studentId,
   portals,
+  links = {},
+  suggestions = {},
+  defaultSuggestion = null,
   canManage,
   revalidateTo,
 }: {
   studentId: string;
   portals: ScholarshipPortal[];
+  /** Each saved portal's login page. */
+  links?: Record<string, string>;
+  /** A page to offer for each, from the scholarship bodies on file. */
+  suggestions?: Record<string, string | null>;
+  /** For a portal named here but not saved yet. */
+  defaultSuggestion?: string | null;
   canManage: boolean;
   revalidateTo: string;
 }) {
@@ -114,6 +123,8 @@ export function ScholarshipPortals({
               ownerId={studentId}
               credentialType={p.credentialType}
               revalidateTo={revalidateTo}
+              link={links[p.credentialType] ?? null}
+              suggestedLink={suggestions[p.credentialType] ?? defaultSuggestion}
             />
           ))}
         </div>

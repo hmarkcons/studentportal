@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requirePermission } from "@/lib/auth/permissions";
+import { parsePortalLink } from "@/lib/portalLink";
 import { interviewFieldsError, localWallTimeToInstant } from "@/lib/interviews";
 
 // Scheduling an interview was open to any staff member who could see the
@@ -122,16 +123,20 @@ async function saveCredentials(supabase: Client, interviewId: string, formData: 
   const login_username = String(formData.get("login_username") ?? "").trim() || null;
   const login_password = String(formData.get("login_password") ?? "").trim() || null;
   const login_instructions = String(formData.get("login_instructions") ?? "").trim() || null;
+  // The page the login is used on (0326), kept only as a web address.
+  const parsedLink = parsePortalLink(String(formData.get("login_link") ?? ""));
+  if ("error" in parsedLink) return parsedLink.error;
+  const login_link = parsedLink.link;
   const share_with_student = formData.get("share_with_student") === "on";
 
-  if (!login_username && !login_password && !login_instructions) {
+  if (!login_username && !login_password && !login_instructions && !login_link) {
     const { error } = await supabase.from("application_interview_credentials").delete().eq("interview_id", interviewId);
     return error ? error.message : null;
   }
 
   // Sharing nothing but a tick is a mistake worth catching: the student would
   // be shown an empty credentials box.
-  if (share_with_student && !login_username && !login_password && !login_instructions) {
+  if (share_with_student && !login_username && !login_password && !login_instructions && !login_link) {
     return "There are no credentials to share yet.";
   }
 
@@ -141,6 +146,7 @@ async function saveCredentials(supabase: Client, interviewId: string, formData: 
       login_username,
       login_password,
       login_instructions,
+      login_link,
       share_with_student,
       updated_at: new Date().toISOString(),
     },

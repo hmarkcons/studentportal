@@ -6,6 +6,7 @@ import { syncStagesForApplication } from "@/lib/autoStagesSync";
 import type { TrackerFieldDef, TrackerFieldType } from "@/lib/countryTrackers";
 import { requirePermission } from "@/lib/auth/permissions";
 import { trackerTestField, trackerTestFieldType } from "@/lib/trackerTests";
+import { mergeLogin, parsePortalLink, parseStoredLogin } from "@/lib/portalLink";
 import { TEST_TYPE_LABELS, type TestType } from "@/lib/testScores";
 
 type TrackerDefinitionRow = {
@@ -438,10 +439,28 @@ export async function storeCredentialAction(
   const supabase = await createClient();
   const username = String(formData.get("username") ?? "").trim();
   const password = String(formData.get("password") ?? "").trim();
+  // The login page (src/lib/portalLink.ts): only when the form has the field,
+  // so a form without it leaves a saved link alone.
+  let link: string | null | undefined;
+  if (formData.has("link")) {
+    const parsed = parsePortalLink(String(formData.get("link") ?? ""));
+    if ("error" in parsed) return { error: parsed.error };
+    link = parsed.link;
+  }
 
-  if (!username && !password) return { error: "Enter a username and/or password." };
+  // Laid over what is stored: a username or password left blank keeps the one on file.
+  const { data: current } = await supabase.rpc("read_credential", {
+    p_owner_type: ownerType,
+    p_owner_id: ownerId,
+    p_credential_type: credentialType,
+  });
+  const stored = parseStoredLogin((current as string | null) ?? null);
+  const merged = mergeLogin(stored, { username, password, link });
+  if (!merged.username && !merged.password && !merged.link) return { error: "Enter a username, a password or the login page link." };
+  const unchanged = merged.username === stored.username && merged.password === stored.password && merged.link === stored.link;
+  if (unchanged && current) return { success: true };
 
-  const plaintext = JSON.stringify({ username, password });
+  const plaintext = JSON.stringify(merged);
   const { error } = await supabase.rpc("store_credential", {
     p_owner_type: ownerType,
     p_owner_id: ownerId,
@@ -471,10 +490,5 @@ export async function readCredentialAction(ownerType: "student" | "application",
   });
 
   if (error || !data) return null;
-
-  try {
-    return JSON.parse(data) as { username: string; password: string };
-  } catch {
-    return { username: data as string, password: "" };
-  }
+  return parseStoredLogin(data as string);
 }
