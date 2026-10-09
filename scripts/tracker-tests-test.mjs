@@ -53,3 +53,49 @@ test("CEnT-S starts ticked for an Italy bachelors student below 70%, and only th
   assert.equal(admissionTestPreTick({ countryCode: "DE", level: "bachelors", highSchool: "60%" }), null);
   assert.equal(admissionTestPreTick({ countryCode: "IT", level: "bachelors", highSchool: null }), null, "no mark, no guess");
 });
+
+test("the tests ticked in the trackers, as the tests they are", async () => {
+  const { trackerSelectedTests } = await import("../src/lib/trackerTests.ts");
+  const fields = [
+    { field_key: "test_status", options: ["IMAT", "TOLC", "CEnT-S", "SAT", "Other"] },
+    { field_key: "translation_status", options: ["In progress", "Completed"] },
+  ];
+  const picked = trackerSelectedTests(fields, [
+    { field_key: "test_status", field_value: '["IMAT","CEnT-S"]' },
+    { field_key: "test_status", field_value: '["IMAT"]' },
+    { field_key: "translation_status", field_value: "Completed" },
+    { field_key: "test_status", field_value: "" },
+  ]);
+  assert.deepEqual(picked.map((t) => t.type), ["imat", "cent_s"], "each test once, across applications; other fields ignored");
+  assert.deepEqual(trackerSelectedTests(fields, [{ field_key: "test_status", field_value: '["Other"]' }]).map((t) => t.type), ["other"]);
+  assert.deepEqual(trackerSelectedTests(fields, []), []);
+});
+
+test("a checklist item that is a test is told apart from one that only mentions tests", async () => {
+  const { testTypeOfChecklistItem } = await import("../src/lib/trackerTests.ts");
+  assert.equal(testTypeOfChecklistItem("CEnT-S"), "cent_s");
+  assert.equal(testTypeOfChecklistItem("IMAT result"), "imat");
+  assert.equal(testTypeOfChecklistItem("TOLC — score report"), "tolc");
+  assert.equal(testTypeOfChecklistItem("SAT score (College Board)"), "sat");
+  assert.equal(testTypeOfChecklistItem("English Language Certificate (MOI/IELTS/PTE/TOEFL/Etc.)"), null);
+  assert.equal(testTypeOfChecklistItem("Satisfactory bank statement"), null);
+  assert.equal(testTypeOfChecklistItem("Other"), null);
+  assert.equal(testTypeOfChecklistItem(null), null);
+});
+
+test("a ticked test's scorecard is asked for at once, one per test however often it is sat", async () => {
+  const { profileDerivedRequirements } = await import("../src/lib/documentChecklist.ts");
+  const base = { qualifications: [], travelHistoryCount: 0, visaHistoryCount: 0 };
+  const ticked = profileDerivedRequirements({ ...base, testScores: [], trackerTests: [{ type: "imat" }] });
+  assert.deepEqual(ticked.map((r) => [r.derivedKey, r.name]), [["test:imat", "IMAT — scorecard"]], "ticked, no score yet");
+  const retest = profileDerivedRequirements({
+    ...base,
+    testScores: [{ id: "a", test_type: "ielts" }, { id: "b", test_type: "ielts" }],
+    trackerTests: [{ type: "ielts" }],
+  });
+  assert.equal(retest.length, 1, "a retest is a second file, not a second requirement");
+  const covered = profileDerivedRequirements({ ...base, testScores: [], trackerTests: [{ type: "cent_s" }, { type: "sat" }], coveredTestTypes: new Set(["cent_s"]) });
+  assert.deepEqual(covered.map((r) => r.derivedKey), ["test:sat"], "CEnT-S is asked for by the country's own item");
+  const others = profileDerivedRequirements({ ...base, testScores: [{ id: "o", test_type: "other", custom_test_name: "NTS GAT" }], trackerTests: [{ type: "other" }] });
+  assert.deepEqual(others.map((r) => r.name), ["NTS GAT — scorecard"], "a ticked Other is the one named on the Profile");
+});

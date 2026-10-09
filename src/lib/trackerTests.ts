@@ -12,6 +12,7 @@
 // under plain Node.
 
 import { TEST_TYPES, type TestType } from "./testScores.ts";
+import { parseMultiValue } from "./trackerValue.ts";
 
 /** How a tracker option names a test, each to the test type it is. */
 const OPTION_TYPES: Record<string, TestType> = {
@@ -98,4 +99,50 @@ export function admissionTestPreTick(input: {
     options: ["CEnT-S"],
     reason: `High school ${percent}% — below 70%, so CEnT-S or SAT is required for a bachelors in Italy. CEnT-S is ticked; change it to SAT or tick both.`,
   };
+}
+
+// ------------------------------------------------- what the Documents tab asks for
+
+/** A test the student is to sit or has sat: its type, and the name an "Other" one goes by. */
+export type SelectedTest = { type: TestType; name: string | null };
+
+/**
+ * The tests ticked in the student's documentation trackers — each test field
+ * (a list of tests, isTestOptionList) on each application — as the tests they
+ * are. Ticking one is what puts its scorecard on the Documents tab to upload.
+ */
+export function trackerSelectedTests(
+  fields: readonly { field_key: string; options: readonly string[] | null }[],
+  values: readonly { field_key: string; field_value: string | null }[]
+): SelectedTest[] {
+  const testFields = new Set(fields.filter((f) => isTestOptionList(f.options ?? [])).map((f) => f.field_key));
+  const out: SelectedTest[] = [];
+  for (const v of values) {
+    if (!testFields.has(v.field_key)) continue;
+    for (const option of parseMultiValue(v.field_value)) {
+      const type = testTypeForOption(option);
+      if (type && !out.some((t) => t.type === type)) out.push({ type, name: null });
+    }
+  }
+  return out;
+}
+
+/** Words a checklist item about a test may carry besides the test's own name. */
+const TEST_ITEM_WORDS = /\b(result|results|score|scores|scorecard|score card|score report|certificate|test|exam|report)\b/gi;
+
+/**
+ * The test a checklist item is, when it is one — "CEnT-S", "IMAT result",
+ * "TOLC score report" — so it is asked of a student only once that test is
+ * ticked. An item that merely mentions tests among other things, such as
+ * "English Language Certificate (MOI/IELTS/PTE/TOEFL/Etc.)", is not a test.
+ */
+export function testTypeOfChecklistItem(name: string | null | undefined): TestType | null {
+  const core = (name ?? "")
+    .replace(/\(.*?\)/g, " ")
+    .replace(TEST_ITEM_WORDS, " ")
+    .replace(/[—–:]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const type = core ? testTypeForOption(core) : null;
+  return type && type !== "other" ? type : null;
 }

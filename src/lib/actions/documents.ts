@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sanitizeFilename, validateDocumentFile } from "@/lib/documentUpload";
 import { documentFilePath, parseSourceNames } from "@/lib/documentFileNames";
+import { testTypeOfChecklistItem, trackerSelectedTests } from "@/lib/trackerTests";
 import { profileDerivedRequirements, reconcileDerived, templatesToSeed } from "@/lib/documentChecklist";
 import { requirePermission } from "@/lib/auth/permissions";
 import { categoryCarriesOver } from "@/lib/intakeCycle";
@@ -62,6 +63,8 @@ export async function ensureStudentDocumentRequirements(studentId: string): Prom
     { data: testScores },
     { data: profile },
     { data: removals },
+    { data: trackerFields },
+    { data: trackerValues },
   ] = await Promise.all([
     // Beside the reads rather than after them. When it has to create the
     // student's first cycle it also stamps their existing rows with it, which
@@ -86,7 +89,26 @@ export async function ensureStudentDocumentRequirements(studentId: string): Prom
     supabase.from("student_profiles").select("travel_history, visa_refusal_history").eq("student_id", studentId).maybeSingle(),
     // Requirements staff deleted for this student (0328): never added back.
     supabase.from("student_document_removals").select("template_id, derived_key").eq("student_id", studentId),
+    // The tests ticked in the student's documentation trackers: a test's
+    // scorecard is asked for once it is ticked, and not before.
+    supabase.from("tracker_definitions").select("field_key, options").in("field_type", ["multi_select", "select"]),
+    supabase
+      .from("application_country_extra")
+      .select("field_key, field_value, application:applications!inner(student_id)")
+      .eq("application.student_id", studentId),
   ]);
+  const selectedTests = trackerSelectedTests(
+    (trackerFields ?? []) as { field_key: string; options: string[] | null }[],
+    (trackerValues ?? []) as { field_key: string; field_value: string | null }[]
+  );
+  // A test counts as the student's when it is ticked, or its score is on their Profile.
+  const selectedTestTypes = new Set<string>([...selectedTests.map((t) => t.type), ...(testScores ?? []).map((t) => t.test_type as string)]);
+  // A checklist item that is a test (CEnT-S, IMAT…) is asked for only when that test is the student's.
+  const testOfTemplate = new Map((templates ?? []).map((t) => [t.id as string, testTypeOfChecklistItem(t.name as string | null)]));
+  const testWanted = (templateId: string) => {
+    const type = testOfTemplate.get(templateId);
+    return !type || selectedTestTypes.has(type);
+  };
   const removedTemplates = new Set((removals ?? []).map((r) => r.template_id as string | null).filter(Boolean));
   const removedKeys = new Set((removals ?? []).map((r) => r.derived_key as string | null).filter(Boolean));
 
@@ -146,16 +168,29 @@ export async function ensureStudentDocumentRequirements(studentId: string): Prom
   const visaOnly = student?.service_type === "visa_only";
   const skippedForVisaOnly = new Set((templates ?? []).filter((t) => t.skip_for_visa_only).map((t) => t.id as string));
 
-  const applicable = (templates ?? []).filter((t) => {
-    if (existingTemplateIds.has(t.id)) return false;
-    if (removedTemplates.has(t.id)) return false;
+  // Whether a template is one this student's checklist carries at all — level,
+  // destination, the builder's exclusions, visa-only.
+  const fitsStudent = (t: NonNullable<typeof templates>[number]) => {
     if (visaOnly && skippedForVisaOnly.has(t.id as string)) return false;
     const levelMatches = t.level === "all" || t.level === level;
     const destMatches = t.destination_id === null || destinationIds.has(t.destination_id);
     if (!levelMatches || !destMatches) return false;
     if (t.destination_id === null && excludedEverywhere(t.id)) return false;
     return true;
+  };
+  const applicable = (templates ?? []).filter((t) => {
+    if (existingTemplateIds.has(t.id)) return false;
+    if (removedTemplates.has(t.id)) return false;
+    if (!testWanted(t.id as string)) return false;
+    return fitsStudent(t);
   });
+  // The tests the destination's own checklist asks for by name, which the
+  // generic "— scorecard" requirement would otherwise ask for a second time.
+  const coveredTestTypes = new Set(
+    (templates ?? [])
+      .filter((t) => fitsStudent(t) && testOfTemplate.get(t.id as string) && selectedTestTypes.has(testOfTemplate.get(t.id as string)!))
+      .map((t) => testOfTemplate.get(t.id as string)!)
+  );
 
   // One document is one requirement, however many of the student's countries
   // ask for it — see templatesToSeed. Without this, a student pursuing Germany
@@ -207,6 +242,8 @@ export async function ensureStudentDocumentRequirements(studentId: string): Prom
   const wanted = profileDerivedRequirements({
     qualifications: qualifications ?? [],
     testScores: testScores ?? [],
+    trackerTests: selectedTests,
+    coveredTestTypes,
     travelHistoryCount: Array.isArray(profile?.travel_history) ? profile!.travel_history.length : 0,
     visaHistoryCount: Array.isArray(profile?.visa_refusal_history) ? profile!.visa_refusal_history.length : 0,
   });
@@ -252,6 +289,17 @@ export async function ensureStudentDocumentRequirements(studentId: string): Prom
       if (error) throw error;
       changed = true;
     }
+  }
+
+  // A test unticked in the tracker: its checklist item goes, unless a file was
+  // sent against it — nothing uploaded is ever taken off by this.
+  const unticked = existingRows
+    .filter((r) => r.template_id && !testWanted(r.template_id as string) && !r.file_path && r.status === "missing")
+    .map((r) => r.id as string);
+  if (unticked.length > 0) {
+    const { error } = await supabase.from("student_documents").delete().in("id", unticked);
+    if (error) throw error;
+    changed = true;
   }
 
   // Only ever empty rows: reconcileDerived keeps anything with a file, so a
