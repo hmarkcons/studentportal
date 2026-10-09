@@ -186,6 +186,18 @@ try {
   const { error: refused } = await api.rpc("remove_student_document_file", { p_file_id: front.id });
   ok("...and cannot remove an approved one", Boolean(refused));
 
+  // ------------------------------------------------------------ an earlier version deleted
+  page.on("dialog", (d) => void d.accept());
+  const archivedBefore = (await admin.from("student_document_archive").select("id, file_path").eq("document_id", req.id)).data ?? [];
+  r = await openRow(req.id);
+  await press(page, r.locator(`[data-delete-version="${archivedBefore[0]?.id}"]`));
+  const versionGone = await poll(async () => ((await admin.from("student_document_archive").select("id").eq("id", archivedBefore[0]?.id)).data?.length === 0 ? true : null));
+  ok("staff delete the version that was replaced from the history, at any time", archivedBefore.length === 1 && Boolean(versionGone), JSON.stringify(archivedBefore));
+  const versionKept = await poll(async () => ((await admin.from("trashed_files").select("id").eq("path", archivedBefore[0]?.file_path).is("restored_at", null)).data?.length ? true : null), 20);
+  ok("...its file kept for 90 days, to restore", Boolean(versionKept));
+  row = await studentRow();
+  ok("...and the student no longer sees it", (await row.locator("[data-history-file]").count()) === 0);
+
   // ------------------------------------------------------------ approved once all are
   r = await openRow(req.id);
   await press(page, r.locator(`[data-document-file="${visa.id}"]`).getByRole("button", { name: "Approve" }));
@@ -200,7 +212,6 @@ try {
   const victim = templated?.[0];
   ok("the student has a checklist requirement from a template to delete", Boolean(victim));
   if (victim) {
-    page.on("dialog", (d) => void d.accept());
     r = await openRow(victim.id);
     await press(page, r.getByRole("button", { name: "Remove requirement" }));
     await poll(async () => ((await admin.from("student_documents").select("id").eq("id", victim.id).maybeSingle()).data ? null : true));

@@ -391,6 +391,20 @@ export async function reviewDocumentFile(
   return { success: true };
 }
 
+/**
+ * Deletes an earlier version of a document — one replaced, or one sent back —
+ * from its history (0330), at any time. Its file is kept for 90 days
+ * (fileTrash) and the deletion can be restored from the audit log.
+ */
+export async function deleteDocumentVersion(archiveId: string, revalidateTo: string) {
+  const supabase = await createClient();
+  const { data: path, error } = await supabase.rpc("remove_student_document_version", { p_archive_id: archiveId });
+  if (error) return { error: error.message === "not authorized" ? "Only the student's processing team can delete their documents." : error.message };
+  if (typeof path === "string" && path) await removeStorageFiles(supabase, "documents", [path]);
+  revalidatePath(revalidateTo);
+  return { success: true };
+}
+
 /** Takes one file off a requirement; the file itself is kept for 90 days (fileTrash). */
 export async function removeDocumentFile(fileId: string, studentId: string, revalidateTo: string) {
   const supabase = await createClient();

@@ -267,7 +267,7 @@ function UploadRow({
           )}
         </div>
         {/* What was sent before and replaced, and why it came back. */}
-        <DocumentHistory versions={doc.history ?? []} audience="staff" />
+        <DocumentHistory versions={doc.history ?? []} audience="staff" deletable={{ revalidateTo }} />
         {hasMore && (
           <div className="mt-1">
             <DocumentGuideToggle open={guideOpen} onToggle={() => setGuideOpen((o) => !o)} controls={guideId} />
