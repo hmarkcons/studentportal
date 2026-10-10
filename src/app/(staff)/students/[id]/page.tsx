@@ -41,6 +41,7 @@ import { listCredentialTypesAction } from "@/lib/actions/countryTracker";
 import { loadLoginLinks } from "@/lib/credentialLinks";
 import { RegistrationEditForm } from "./RegistrationEditForm";
 import { RestartProcessPanel } from "./RestartProcessPanel";
+import { StudentReportButton } from "./StudentReportButton";
 import { loadRestartContext } from "@/lib/actions/intakeCycles";
 import { loadReengagementContext } from "@/lib/actions/reengagement";
 import {
@@ -838,6 +839,12 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   const sectionCredentialCount = existingCredentialTypes.filter(inCredentialsSection).length;
   return (
     <div>
+      {/* Everything on the record as one PDF — done, in progress and still to
+          do, section by section (./report/route.ts). */}
+      <div className="mb-4 flex justify-end">
+        <StudentReportButton studentId={id} />
+      </div>
+
       {/* Above everything, because a refused or ghosted student is not a
           detail — it is the thing the counsellor opened this page about. The
           panel renders nothing at all for a student who is neither. */}

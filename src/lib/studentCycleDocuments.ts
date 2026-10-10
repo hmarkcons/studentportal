@@ -20,7 +20,7 @@ export async function loadCycleDocuments(supabase: SupabaseClient, studentId: st
     supabase
       .from("student_documents")
       .select(
-        "id, category, custom_name, status, file_path, deadline, rejected_reason, application_id, uploaded_at, uploaded_by_role, verified_at, created_at, template_id, derived_key, cycle_id, template:document_templates(name)"
+        "id, category, custom_name, status, file_path, deadline, rejected_reason, application_id, uploaded_at, uploaded_by_role, verified_at, verified_by, created_at, template_id, derived_key, cycle_id, template:document_templates(name)"
       )
       .eq("student_id", studentId)
       .order("created_at", { ascending: false }),

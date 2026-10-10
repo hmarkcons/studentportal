@@ -152,9 +152,14 @@ export function fixtures(admin) {
     async cleanup() {
       for (const m of [...made].reverse()) {
         if (m.kind === "lead") {
+          // A message names its student by entity_id, with no foreign key to
+          // cascade, so it outlives the student — and then, through sent_by,
+          // stops its sender being deleted.
+          await admin.from("messages").delete().eq("entity_id", m.id);
           await admin.from("leads").delete().eq("id", m.id);
         } else {
           await removeStagedFiles(admin, m.id);
+          await admin.from("messages").delete().eq("sent_by", m.id);
           await admin.from("staff").delete().eq("id", m.id);
           await admin.auth.admin.deleteUser(m.id).catch(() => {});
         }
