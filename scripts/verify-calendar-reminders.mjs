@@ -218,9 +218,14 @@ try {
   console.log("\n--- the student ---");
   const studentPage = await signInPortal(browser, STUDENT_EMAIL, "/portal");
   ok("the student is reminded within the hour of their interview", await popup(studentPage, UNI));
-  const cards = studentPage.locator("[data-calendar-notification]", { hasText: UNI });
+  // The interview within the hour, said once — not also as its day-before
+  // reminder, which would say the same minutes. Tomorrow's interview may have
+  // a card of its own beside it: after 15:00 in Karachi its day-before
+  // reminder is due too, and counting every card for the university failed
+  // this every afternoon.
+  const cards = studentPage.locator("[data-calendar-notification]", { hasText: UNI }).filter({ hasText: /In \d+ minutes/ });
   const cardText = await cards.first().innerText().catch(() => "");
-  ok("...once, saying how many minutes away it is", (await cards.count()) === 1 && /In \d+ minutes/.test(cardText), `${await cards.count()} cards: ${cardText}`);
+  ok("...once, saying how many minutes away it is", (await cards.count()) === 1, `${await cards.count()} cards: ${cardText}`);
   await shot(studentPage, "popup-student");
 
   // Held: it leaves the calendar.

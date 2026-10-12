@@ -160,6 +160,9 @@ export function fixtures(admin) {
         } else {
           await removeStagedFiles(admin, m.id);
           await admin.from("messages").delete().eq("sent_by", m.id);
+          // Every calendar item and task sits under a task its maker set (0331);
+          // deleting the maker leaves that row behind, empty, unless it goes first.
+          await admin.from("staff_tasks").delete().eq("created_by", m.id);
           await admin.from("staff").delete().eq("id", m.id);
           await admin.auth.admin.deleteUser(m.id).catch(() => {});
         }
