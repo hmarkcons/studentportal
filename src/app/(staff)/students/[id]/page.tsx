@@ -39,6 +39,7 @@ import { PortalCredentialsSection } from "./PortalCredentialsSection";
 import { DashboardTaskList, type DashboardTaskRow } from "./DashboardTaskList";
 import { listCredentialTypesAction } from "@/lib/actions/countryTracker";
 import { loadLoginLinks } from "@/lib/credentialLinks";
+import { loadGmailRecoveryStatus } from "@/lib/gmailRecovery";
 import { RegistrationEditForm } from "./RegistrationEditForm";
 import { RestartProcessPanel } from "./RestartProcessPanel";
 import { StudentReportButton } from "./StudentReportButton";
@@ -138,6 +139,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     counselors,
     templates,
     feeProducts,
+    gmailRecovery,
   ] = await Promise.all([
     getEffectivePermissions(),
     ensureStudentDocumentRequirements(id),
@@ -188,6 +190,8 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     getCachedCounselors(),
     getCachedAgreementTemplates(),
     getCachedFeeProducts(),
+    // Whether the Gmail recovery details are on file, and whether this viewer may open them.
+    loadGmailRecoveryStatus(supabase, id),
   ]);
   const isSuperAdmin = perms["agreements.edit_delete"] === true;
   const canModifyAgreement = perms["agreements.process"] === true;
@@ -1294,7 +1298,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
           </Badge>
         }
       >
-        <PortalCredentialsSection studentId={id} existingTypes={existingCredentialTypes} links={credentialLinks} email={student?.email ?? null} />
+        <PortalCredentialsSection studentId={id} existingTypes={existingCredentialTypes} links={credentialLinks} email={student?.email ?? null} gmailRecovery={gmailRecovery} />
       </CollapsibleCard>
 
       <Card className="mt-6">

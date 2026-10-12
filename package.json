@@ -66,7 +66,8 @@
     "check:docfiles": "node scripts/verify-document-files.mjs",
     "check:testuploads": "node scripts/verify-test-uploads.mjs",
     "check:studentreport": "node scripts/verify-student-report.mjs",
-    "check:tasks": "node scripts/verify-tasks.mjs"
+    "check:tasks": "node scripts/verify-tasks.mjs",
+    "check:gmailrecovery": "node scripts/verify-gmail-recovery.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

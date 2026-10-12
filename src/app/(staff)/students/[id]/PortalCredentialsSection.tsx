@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { CredentialField } from "@/components/CredentialField";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { SendCredentialsBar } from "./SendCredentialsBar";
 import { SECTION_PRESETS, credentialLabel, inCredentialsSection } from "@/lib/studentCredentials";
 import { suggestedPortalLink } from "@/lib/portalLink";
+import type { GmailRecoveryStatus } from "@/lib/gmailRecovery";
+import { GmailRecoveryBlock } from "./GmailRecoveryBlock";
 
 // visa_appointment_portal is shown to the student on their own Visa tab, so
 // its name has to be the one that page looks for.
@@ -25,6 +27,7 @@ export function PortalCredentialsSection({
   existingTypes,
   links = {},
   email,
+  gmailRecovery = null,
 }: {
   studentId: string;
   existingTypes: string[];
@@ -32,6 +35,8 @@ export function PortalCredentialsSection({
   links?: Record<string, string>;
   /** Where "Send to student" emails the logins ticked: the address on their record. */
   email: string | null;
+  /** What of the Gmail account's recovery details is on file, and whether this viewer may open them (0332). */
+  gmailRecovery?: GmailRecoveryStatus | null;
 }) {
   const [extra, setExtra] = useState<{ label: string; credentialType: string }[]>([]);
   const [newLabel, setNewLabel] = useState("");
@@ -52,25 +57,23 @@ export function PortalCredentialsSection({
       {/* Sends the logins below that are ticked — none to begin with. */}
       <SendCredentialsBar studentId={studentId} email={email} scope="section" />
       {Array.from(shown.entries()).map(([credentialType, label]) => (
-        <CredentialField
-          key={credentialType}
-          label={label}
-          ownerType="student"
-          ownerId={studentId}
-          credentialType={credentialType}
-          revalidateTo={`/students/${studentId}`}
-          link={links[credentialType] ?? null}
-          suggestedLink={suggestedPortalLink(credentialType)}
-        />
+        <Fragment key={credentialType}>
+          <CredentialField
+            label={label}
+            ownerType="student"
+            ownerId={studentId}
+            credentialType={credentialType}
+            revalidateTo={`/students/${studentId}`}
+            link={links[credentialType] ?? null}
+            suggestedLink={suggestedPortalLink(credentialType)}
+          />
+          {/* Not a login, so never in what Send to student emails. */}
+          {credentialType === "gmail" && <GmailRecoveryBlock studentId={studentId} initial={gmailRecovery} />}
+        </Fragment>
       ))}
 
       <div className="flex items-end gap-2 border-t border-border pt-3">
-        <Input
-          value={newLabel}
-          onChange={(e) => setNewLabel(e.target.value)}
-          placeholder="Portal name (e.g. Visa appointment portal)"
-          className="flex-1"
-        />
+        <Input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="Portal name (e.g. Visa appointment portal)" className="flex-1" />
         <Button
           type="button"
           variant="outline-primary"
