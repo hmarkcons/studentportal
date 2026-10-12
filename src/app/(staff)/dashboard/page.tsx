@@ -13,6 +13,7 @@ import { ProcessingView } from "./views/ProcessingView";
 import { FinanceView } from "./views/FinanceView";
 import { LeadGenView, SocialView } from "./views/MarketingViews";
 import { OverviewView } from "./views/OverviewView";
+import { MyTasksCard } from "./MyTasksCard";
 import { WhatsNewCard } from "@/components/WhatsNewCard";
 import { loadNews } from "@/lib/notificationFeed";
 import { getEffectivePermissions } from "@/lib/auth/permissions";
@@ -36,6 +37,13 @@ export default async function DashboardPage(props: { searchParams: Promise<{ vie
           reading beside it rather than after it. It has no boundary, so it
           still arrives with the page, as before. */}
       <Queue supabase={supabase} staff={staff} />
+
+      {/* Everyone's own to-do list (0331), streamed so it holds nothing else up. */}
+      {staff && (
+        <Suspense fallback={<div className="mb-6 h-40 animate-pulse rounded-lg border border-border bg-card" />}>
+          <MyTasksCard supabase={supabase} me={staff.id} />
+        </Suspense>
+      )}
 
       <SectionTabs tabs={views.map((v) => ({ key: v, label: VIEW_LABELS[v], href: `/dashboard?view=${v}` }))} active={view ?? ""} />
 

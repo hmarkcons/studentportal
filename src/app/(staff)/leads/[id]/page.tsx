@@ -14,6 +14,8 @@ import { LeadEditForm } from "@/components/LeadEditForm";
 import { DeleteStudentButton } from "../../students/[id]/DeleteStudentButton";
 import { getStaffSession } from "@/lib/auth/session";
 import { AuditHistoryLink } from "@/components/AuditHistoryLink";
+import { Suspense } from "react";
+import { TasksAboutCard } from "@/components/tasks/TasksAboutCard";
 
 type CallLog = { id: string; status_at_time: string; remark: string | null; created_at: string; counselor: { full_name: string } | { full_name: string }[] | null };
 
@@ -163,6 +165,11 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
           updatedBy={(Array.isArray(currentRemark?.editor) ? currentRemark?.editor[0] : currentRemark?.editor)?.full_name ?? null}
         />
       </Card>
+
+      {/* Tasks about this lead (0331): follow-ups given to anyone, on their calendars. Streamed. */}
+      <Suspense fallback={null}>
+        <TasksAboutCard studentId={id} name={lead.full_name ?? "this lead"} revalidateTo={`/leads/${id}`} className="mt-6" />
+      </Suspense>
 
       <Card className="mt-6">
         <h3 className="mb-3 text-sm font-medium text-ink">Call history</h3>

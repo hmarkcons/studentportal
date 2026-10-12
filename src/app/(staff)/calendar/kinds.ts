@@ -14,6 +14,7 @@ export type KindDef = {
 
 export const STAFF_KINDS: readonly KindDef[] = [
   { key: "personal", label: "Personal", color: "brand", noun: "Personal" },
+  { key: "assigned", label: "Given to others", color: "pink", noun: "Task you gave" },
   { key: "task", label: "Student tasks", color: "orange", noun: "Student/application task" },
   { key: "reminder", label: "Reminders", color: "blue", noun: "Reminder" },
   { key: "deadline", label: "Deadlines", color: "red", noun: "Deadline" },

@@ -211,7 +211,7 @@ export async function reconcileGuestInvites(limit = 40): Promise<{ checked: numb
   const today = karachiToday();
   const stillAhead = `due_date.gte.${today},recurrence.neq.none`;
   const [{ data: personal }, { data: tasks }] = await Promise.all([
-    admin.from("personal_tasks").select("id, recurrence_end_date").eq("status", "pending").not("guest_emails", "is", null).neq("guest_emails", "{}").or(stillAhead).limit(200),
+    admin.from("personal_tasks").select("id, recurrence_end_date").neq("status", "done").not("guest_emails", "is", null).neq("guest_emails", "{}").or(stillAhead).limit(200),
     admin.from("application_tasks").select("id, recurrence_end_date").eq("status", "pending").not("guest_emails", "is", null).neq("guest_emails", "{}").or(stillAhead).limit(200),
   ]);
   const live = (rows: { id: string; recurrence_end_date: string | null }[] | null) =>

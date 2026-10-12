@@ -965,6 +965,8 @@ export type TaskInput = {
   title: string;
   about: string | null;
   done: boolean;
+  /** Started but not finished — a task manager task's In progress (0331). */
+  inProgress?: boolean;
   due: string | null;
   owner: string | null;
   priority: string | null;
@@ -986,6 +988,7 @@ export function tasksSection(tasks: readonly TaskInput[], today: string): Report
       const group = TASK_GROUPS[t.kind];
       if (t.done) return { label: t.title, status: "done", state: t.kind === "follow_up" ? "Resolved" : "Done", detail, stamp, group };
       if (t.due && t.due < today) return { label: t.title, status: "blocked", state: "Overdue", detail: [detail, `was due ${day(t.due)}`].filter(Boolean).join(" · "), stamp, due: t.due, group };
+      if (t.inProgress) return { label: t.title, status: "progress", state: "In progress", detail: [detail, t.due ? `due ${day(t.due)}` : null].filter(Boolean).join(" · ") || null, stamp, due: t.due, group };
       return { label: t.title, status: "todo", state: t.due ? `Due ${day(t.due)}` : "Open", detail, stamp, due: t.due, group };
     });
   return {

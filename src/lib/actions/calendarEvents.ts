@@ -285,7 +285,8 @@ export async function loadCalendarNotifications(): Promise<DueNotification[]> {
       .from("personal_tasks")
       .select("id, title, due_date, due_time, all_day, recurrence, recurrence_end_date, notify_minutes")
       .eq("owner_id", user.id)
-      .eq("status", "pending")
+      // To do or In progress (0331): an item under way still reminds.
+      .neq("status", "done")
       .not("notify_minutes", "is", null)
       .lte("due_date", bound)
       .or(stillAhead)

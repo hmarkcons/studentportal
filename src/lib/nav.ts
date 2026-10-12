@@ -9,6 +9,7 @@ import { canOpenPath } from "./pageAccess.ts";
 // rules they always had, wired up explicitly below.
 const BASE_STAFF_NAV: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: "dashboard" },
+  { label: "Tasks", href: "/tasks", icon: "tasks" },
   { label: "Leads", href: "/leads", icon: "leads" },
   { label: "Students", href: "/students", icon: "students" },
   { label: "Applications", href: "/applications", icon: "applications" },
@@ -87,6 +88,7 @@ export function buildStaffNav({
   hasOwnAgreement = false,
   canApproveLeave = false,
   perms = {},
+  badges = {},
 }: {
   isSuperAdmin: boolean;
   /** An agreement has been sent to this staff member — only then is "My agreement" worth a link. */
@@ -95,6 +97,8 @@ export function buildStaffNav({
   canApproveLeave?: boolean;
   /** The viewer's effective permissions, for the "page.*" keys. */
   perms?: Readonly<Record<string, boolean>>;
+  /** A count on a top-level entry, by its href — Tasks: the viewer's due today or overdue. */
+  badges?: Readonly<Record<string, number>>;
 }): NavItem[] {
   const allowed = (href: string) => canOpenPath(href, perms, isSuperAdmin);
   const shaped = BASE_STAFF_NAV.map((item) => {
@@ -117,6 +121,7 @@ export function buildStaffNav({
     if (item.label === "Admin" && item.children && isSuperAdmin) {
       return { ...item, children: [...item.children, { label: "Role Permissions", href: "/admin/permissions" }] };
     }
+    if (item.href && badges[item.href]) return { ...item, badge: badges[item.href] };
     return item;
   });
 

@@ -2,8 +2,9 @@ import { hasRole } from "@/lib/auth/roles";
 import { getStaffSession } from "@/lib/auth/session";
 import { karachiToday } from "@/lib/calendarDates";
 import { parseDateParam, parseView, periodRange } from "@/lib/calendarLayout";
-import { personalEvents, recordEvent, reminderEvent, taskEvents, type CalendarEvent } from "@/lib/calendarItems";
-import { loadPendingPersonalTasks, loadPendingTasks, one, personalInput, taskInput, type StudentRef } from "@/lib/calendarQueries";
+import { assignedEvents, personalEvents, recordEvent, reminderEvent, taskEvents, type CalendarEvent } from "@/lib/calendarItems";
+import { loadAssignedByTasks, loadPendingPersonalTasks, loadPendingTasks, one, personalInput, taskInput, type StudentRef } from "@/lib/calendarQueries";
+import { loadTaskPeople } from "@/lib/staffTasksLoad";
 import { readAll } from "@/lib/catalogueReads";
 import { applicationDeadline } from "@/lib/applicationDeadline";
 import { autoEvent, instalmentItem, interviewItem } from "@/lib/calendarAuto";
@@ -66,7 +67,7 @@ export default async function CalendarPage(props: {
 
   // Everything that does not depend on anything else, at once: each of these
   // is a round trip to Sydney, and one after another they added up to seconds.
-  const [targetStaffRoles, tasks, reminders, appointmentFields, applications, documentDeadlines, personalTasks, staffList, interviews, instalments] = await Promise.all([
+  const [targetStaffRoles, tasks, reminders, appointmentFields, applications, documentDeadlines, personalTasks, staffList, interviews, instalments, givenTasks, people] = await Promise.all([
     // Whose calendar is on screen — deadlines are scoped to the student's
     // processing officer, so management browsing someone else's calendar needs
     // that person's roles. All of them, not only the primary (hasRole).
@@ -150,7 +151,12 @@ export default async function CalendarPage(props: {
     // student's interview, an instalment until it is paid (src/lib/calendarAuto.ts).
     attempt("interviews", () => loadInterviews(supabase, range.start, range.end), problems),
     attempt("instalments", () => loadInstalments(supabase, range.start, range.end), problems),
+    // Tasks this person gave colleagues (0331), to follow on their own calendar.
+    targetStaffId ? attempt("tasks given to others", () => loadAssignedByTasks(supabase, targetStaffId, range), problems) : Promise.resolve([]),
+    // Who gave which task, and to whom — names any member of staff may read.
+    loadTaskPeople(supabase),
   ]);
+  const nameOf = new Map(people.map((p) => [p.id, p.full_name]));
 
   const appointmentValues = appointmentFields.length
     ? await attempt(
@@ -305,7 +311,14 @@ export default async function CalendarPage(props: {
     if (item) events.push(autoEvent(item));
   }
 
-  for (const raw of personalTasks) events.push(...personalEvents(personalInput(raw), range));
+  for (const raw of personalTasks) {
+    const input = personalInput(raw);
+    events.push(...personalEvents({ ...input, assignedByName: input.assigned_by ? (nameOf.get(input.assigned_by) ?? null) : null }, range));
+  }
+  for (const raw of givenTasks) {
+    const input = personalInput(raw);
+    events.push(...assignedEvents({ ...input, ownerName: input.owner_id ? (nameOf.get(input.owner_id) ?? null) : null }, range));
+  }
 
   const applicationOptions = applications.map((a) => ({
     id: a.id,

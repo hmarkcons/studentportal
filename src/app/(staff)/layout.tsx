@@ -9,6 +9,7 @@ import { buildStaffNav } from "@/lib/nav";
 import { CalendarNotifier } from "@/components/CalendarNotifier";
 import { loadCalendarNotifications } from "@/lib/actions/calendarEvents";
 import { deliverNotificationEmailsSoon } from "@/lib/notificationDelivery";
+import { karachiToday } from "@/lib/calendarDates";
 
 const ROLE_LABELS: Record<string, string> = {
   super_admin: "Super Admin",
@@ -27,10 +28,17 @@ export default async function StaffLayout({ children }: { children: React.ReactN
   // is of the viewer's own agreements that have been sent to them — RLS
   // returns nothing else (0271).
   const [user, supabase] = await Promise.all([getCurrentUser(), createClient()]);
-  const [{ staff: staffRow }, perms, { count: ownAgreements }] = await Promise.all([
+  const [{ staff: staffRow }, perms, { count: ownAgreements }, { count: tasksDue }] = await Promise.all([
     getStaffSession(),
     getEffectivePermissions(),
     supabase.from("staff_agreements").select("id", { count: "exact", head: true }).eq("staff_id", user?.id ?? ""),
+    // The viewer's own tasks due today or overdue, for the count on Tasks (0331).
+    supabase
+      .from("personal_tasks")
+      .select("id", { count: "exact", head: true })
+      .eq("owner_id", user?.id ?? "")
+      .neq("status", "done")
+      .lte("due_date", karachiToday()),
   ]);
 
   if (!staffRow || staffRow.status !== "active") {
@@ -46,6 +54,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
     hasOwnAgreement: (ownAgreements ?? 0) > 0,
     canApproveLeave: perms["leave.approve"] === true,
     perms,
+    badges: { "/tasks": tasksDue ?? 0 },
   });
 
   return (

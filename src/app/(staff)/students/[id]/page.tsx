@@ -42,6 +42,8 @@ import { loadLoginLinks } from "@/lib/credentialLinks";
 import { RegistrationEditForm } from "./RegistrationEditForm";
 import { RestartProcessPanel } from "./RestartProcessPanel";
 import { StudentReportButton } from "./StudentReportButton";
+import { Suspense } from "react";
+import { TasksAboutCard } from "@/components/tasks/TasksAboutCard";
 import { loadRestartContext } from "@/lib/actions/intakeCycles";
 import { loadReengagementContext } from "@/lib/actions/reengagement";
 import {
@@ -957,6 +959,12 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
           <DashboardTaskList tasks={taskRows} applications={applicationOptions} studentId={id} />
         </Card>
       </div>
+
+      {/* The team's own tasks about this student (0331) — the task manager's,
+          given to anyone — beside the applications' tasks above. Streamed. */}
+      <Suspense fallback={null}>
+        <TasksAboutCard studentId={id} name={student?.full_name ?? "this student"} revalidateTo={`/students/${id}`} className="mt-6" />
+      </Suspense>
 
       {trackerSections.length > 0 && (
         <CollapsibleCard

@@ -64,7 +64,7 @@ export async function loadFollowUpTasks(db: Db, ownerId: string, today: string) 
     .from("personal_tasks")
     .select("id, title, due_date, student_id, source")
     .eq("owner_id", ownerId)
-    .eq("status", "pending")
+    .neq("status", "done")
     .lte("due_date", today)
     .order("due_date")
     .limit(8);

@@ -46,7 +46,8 @@ export async function syncStudentFollowUpTask(
       .update({ status: "done" })
       .eq("student_id", studentId)
       .in("source", stale)
-      .eq("status", "pending")
+      // Open, To do or In progress (0331).
+      .neq("status", "done")
       .select("id");
     closed = (data ?? []).length;
   }

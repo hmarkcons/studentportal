@@ -173,7 +173,8 @@ export async function loadInvitedEvents(client: SupabaseClient, from: string, to
       client
         .from("personal_tasks")
         .select("id, title, due_date, due_time, end_time, all_day, recurrence, recurrence_end_date, location, status, guest_emails")
-        .eq("status", "pending")
+        // To do or In progress (0331).
+        .neq("status", "done")
         .not("guest_emails", "is", null)
         .neq("guest_emails", "{}")
         .lte("due_date", to)
@@ -205,7 +206,7 @@ export async function loadInvitedEvents(client: SupabaseClient, from: string, to
     recurrence: (r.recurrence as string | null) ?? null,
     recurrenceEndDate: (r.recurrence_end_date as string | null) ?? null,
     location: (r.location as string | null) ?? null,
-    done: r.status !== "pending",
+    done: r.status === "done" || r.status === "completed",
     guests: ((r.guest_emails as string[] | null) ?? []).map((g) => g.trim().toLowerCase()).filter(Boolean),
   });
   return [...personal.map((r) => shape("personal_tasks", r)), ...tasks.map((r) => shape("application_tasks", r))];

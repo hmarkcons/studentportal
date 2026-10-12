@@ -183,6 +183,15 @@ Everything a trigger puts in an alert is coalesced; keep it so. Repeats group
 into one unread row per person and group, so an import is one alert, not
 three thousand.
 
+**A personal task is open while To do or In progress** (0331). `personal_tasks.status`
+is `pending`, `in_progress` or `done`, so anything meaning "still to do" filters
+`.neq("status", "done")` — `.eq("status", "pending")` silently drops every task
+someone has started from the calendar, its reminders and the dashboard. Every
+personal task sits under a `staff_tasks` row (a trigger makes one if none is
+given), which holds what its copies share: the checklist, comments and files. A
+task given to someone (`assigned_by`) is theirs to move and tick; only whoever
+gave it deletes it or passes it on.
+
 **Alert emails go out only from a deployment.** A local server shares the
 live database, so it would email real people about real alerts, with links
 to localhost: `deliversEmail()` (src/lib/notificationDelivery.ts) is true only

@@ -416,3 +416,9 @@ test("the file is named for the student, their ID and the day", () => {
   assert.equal(reportFileName("O'Brien / Test", null, TODAY), "HMC-Status-Report-OBrien_Test-2026-10-10.pdf");
   assert.equal(reportFileName("", null, TODAY), "HMC-Status-Report-Student-2026-10-10.pdf");
 });
+
+test("tasks: one under way reads In progress (0331)", () => {
+  const s = tasksSection([{ kind: "calendar", title: "Chase the bank letter", about: null, done: false, inProgress: true, due: "2026-10-20", owner: "Ali", priority: null }], TODAY);
+  assert.deepEqual(states(s), ["Chase the bank letter=progress:In progress"]);
+  assert.match(s.items[0].detail, /due 20 Oct 2026/);
+});

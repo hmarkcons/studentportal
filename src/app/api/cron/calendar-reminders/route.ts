@@ -50,7 +50,8 @@ export async function GET(request: NextRequest) {
     admin
       .from("personal_tasks")
       .select(`id, title, description, due_date, due_time, ${withEnd ? "end_time, " : ""}all_day, priority, color, guest_emails, owner_id`)
-      .eq("status", "pending");
+      // To do or In progress (0331).
+      .neq("status", "done");
 
   let tasksRead = await readTasks(true);
   if (tasksRead.error && isMissingColumnError(tasksRead.error)) tasksRead = await readTasks(false);

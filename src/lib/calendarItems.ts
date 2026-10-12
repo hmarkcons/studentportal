@@ -13,6 +13,8 @@ import { occurrencesInRange, isRecurrence, type Recurrence } from "./calendarRec
 export type CalendarEventKind =
   // staff
   | "personal"
+  /** A task the person gave a colleague (0331): on their calendar to follow, not to change. */
+  | "assigned"
   | "task"
   | "reminder"
   | "deadline"
@@ -171,7 +173,16 @@ export type PersonalRowInput = {
   notify_minutes?: number | null;
   student_id: string | null;
   studentName: string | null;
+  /** Whose copy it is, and who gave it to them (0331); null or the owner for their own. */
+  owner_id?: string | null;
+  assigned_by?: string | null;
+  assignedByName?: string | null;
 };
+
+/** A task a colleague gave this person (0331), not one they made themselves. */
+export function givenByAnother(row: Pick<PersonalRowInput, "owner_id" | "assigned_by">): boolean {
+  return Boolean(row.assigned_by && row.owner_id && row.assigned_by !== row.owner_id);
+}
 
 /** A personal task or reminder, once per occurrence inside the range. */
 export function personalEvents(row: PersonalRowInput, range: DateRange): CalendarEvent[] {
@@ -179,6 +190,9 @@ export function personalEvents(row: PersonalRowInput, range: DateRange): Calenda
   const recurrence = recurrenceOf(row.recurrence);
   const occurrences = occurrencesInRange(row.due_date, row.end_date, recurrence, row.recurrence_end_date, range.start, range.end);
   const time = allDay ? null : hhmm(row.due_time);
+  // Given by a colleague: said on it, and not the owner's to delete — they mark it done.
+  const given = givenByAnother(row);
+  const from = given ? `from ${row.assignedByName ?? "a colleague"}` : null;
   return occurrences.map(({ date, spanEnd }) => ({
     id: `personal-${row.id}-${date}`,
     seriesKey: `personal:${row.id}`,
@@ -188,10 +202,10 @@ export function personalEvents(row: PersonalRowInput, range: DateRange): Calenda
     time,
     endTime: time ? hhmm(row.end_time) : null,
     title: row.title,
-    subtitle: row.studentName,
+    subtitle: [row.studentName, from].filter(Boolean).join(" · ") || null,
     done: row.status === "done",
     color: row.color,
-    can: { edit: true, move: true, resize: Boolean(time) && !spanEnd, tick: true, remove: true },
+    can: { edit: true, move: true, resize: Boolean(time) && !spanEnd, tick: true, remove: !given },
     source: { table: "personal_tasks" as const, id: row.id },
     rawTitle: row.title,
     notes: row.description,
@@ -206,8 +220,34 @@ export function personalEvents(row: PersonalRowInput, range: DateRange): Calenda
     notifyMinutes: row.notify_minutes ?? null,
     studentId: row.student_id,
     studentName: row.studentName,
-    href: row.student_id ? `/students/${row.student_id}` : null,
-    hrefLabel: row.student_id ? `Open ${row.studentName ?? "the student"}` : null,
+    // The student it is about, else the task itself — its checklist, comments and files.
+    href: row.student_id ? `/students/${row.student_id}` : `/tasks?task=${row.id}`,
+    hrefLabel: row.student_id ? `Open ${row.studentName ?? "the student"}` : "Open in Tasks",
+    origin: given ? `Given to you by ${row.assignedByName ?? "a colleague"} — mark it done when it is; only they can delete it.` : null,
+  }));
+}
+
+/**
+ * A task this person gave a colleague (0331), on their own calendar so they
+ * can see it coming: under the colleague's name, read-only — it is the
+ * colleague's to move and tick — and opening in Tasks.
+ */
+export function assignedEvents(row: PersonalRowInput & { ownerName: string | null }, range: DateRange): CalendarEvent[] {
+  const who = row.ownerName ?? "A colleague";
+  return personalEvents({ ...row, assigned_by: null }, range).map((e) => ({
+    ...e,
+    id: e.id.replace(/^personal-/, "assigned-"),
+    seriesKey: `assigned:${row.id}`,
+    kind: "assigned" as const,
+    title: `${who}: ${row.title}`,
+    // The kind's own colour: the one the colleague chose is for their calendar.
+    color: null,
+    subtitle: row.studentName,
+    can: READ_ONLY,
+    source: undefined,
+    href: `/tasks?task=${row.id}`,
+    hrefLabel: "Open in Tasks",
+    origin: `You gave this to ${who}. It is on their calendar; they move it and mark it done.`,
   }));
 }
 

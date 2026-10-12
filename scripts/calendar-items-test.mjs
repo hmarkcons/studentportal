@@ -3,6 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   taskEvents,
+  assignedEvents,
   personalEvents,
   reminderEvent,
   recordEvent,
@@ -149,4 +150,38 @@ test("search matches the title, the student, the place and the notes, ignoring c
   for (const q of ["printer", "MUEEN", "office", "brochures"]) assert.equal(matchesQuery(e, q), true, q);
   assert.equal(matchesQuery(e, "visa"), false);
   assert.equal(matchesQuery(e, "   "), false);
+});
+
+test("a personal item with no student opens in Tasks (0331)", () => {
+  const [e] = personalEvents(personal, RANGE);
+  assert.equal(e.href, "/tasks?task=p1");
+  assert.equal(e.hrefLabel, "Open in Tasks");
+  assert.equal(e.origin, null);
+});
+
+test("a task a colleague gave you says who from, and is not yours to delete", () => {
+  const [e] = personalEvents({ ...personal, owner_id: "me", assigned_by: "ali", assignedByName: "Ali Khan" }, RANGE);
+  assert.equal(e.subtitle, "from Ali Khan");
+  assert.equal(e.can.remove, false);
+  assert.equal(e.can.tick, true);
+  assert.equal(e.can.move, true);
+  assert.match(e.origin, /Given to you by Ali Khan/);
+  // One's own, assigned_by being oneself, is still one's own.
+  const [own] = personalEvents({ ...personal, owner_id: "me", assigned_by: "me" }, RANGE);
+  assert.equal(own.can.remove, true);
+  assert.equal(own.subtitle, null);
+});
+
+test("a task you gave someone is on your calendar under their name, to follow and not to change", () => {
+  const [e] = assignedEvents({ ...personal, owner_id: "ali", assigned_by: "me", ownerName: "Ali Khan", studentName: "Ayesha", color: "red" }, RANGE);
+  assert.equal(e.kind, "assigned");
+  assert.equal(e.id, "assigned-p1-2026-09-22");
+  assert.equal(e.seriesKey, "assigned:p1");
+  assert.equal(e.title, `Ali Khan: ${personal.title}`);
+  assert.equal(e.subtitle, "Ayesha");
+  assert.equal(e.color, null);
+  assert.equal(e.source, undefined);
+  assert.deepEqual(e.can, { edit: false, move: false, resize: false, tick: false, remove: false });
+  assert.equal(e.href, "/tasks?task=p1");
+  assert.equal(assignedEvents({ ...personal, status: "done", ownerName: null }, RANGE)[0].done, true);
 });

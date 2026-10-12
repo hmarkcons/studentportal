@@ -625,6 +625,7 @@ export async function loadStudentReport(supabase: SupabaseClient, studentId: str
       title: (t.title as string | null) || "Task",
       about: null,
       done: t.status === "done",
+      inProgress: t.status === "in_progress",
       due: t.due_date as string | null,
       owner: who(t.owner_id),
       priority: t.priority as string | null,

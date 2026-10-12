@@ -14,6 +14,7 @@ import {
   Headset,
   Landmark,
   LayoutDashboard,
+  ListTodo,
   Megaphone,
   MessageCircle,
   Package,
@@ -37,6 +38,7 @@ import {
  */
 export const NAV_ICONS = {
   dashboard: LayoutDashboard,
+  tasks: ListTodo,
   leads: Contact,
   students: GraduationCap,
   applications: FolderKanban,
@@ -73,6 +75,7 @@ export type NavIconName = keyof typeof NAV_ICONS;
  */
 const NAV_ACCENT: Record<string, 1 | 2 | 3 | 4 | 5> = {
   dashboard: 1,
+  tasks: 3,
   leads: 2,
   students: 5,
   applications: 3,

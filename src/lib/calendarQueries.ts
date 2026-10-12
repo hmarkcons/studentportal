@@ -32,7 +32,7 @@ const TASK_COLUMNS =
 const TASK_EMBED = ", application:applications(id, student:leads(id, full_name, assigned_counselor_id, processing_officer_id))";
 
 const PERSONAL_COLUMNS =
-  "id, title, description, due_date, due_time, end_date, all_day, priority, status, color, guest_emails, recurrence, recurrence_end_date, student_id";
+  "id, title, description, due_date, due_time, end_date, all_day, priority, status, color, guest_emails, recurrence, recurrence_end_date, student_id, owner_id, assigned_by";
 const PERSONAL_EMBED = ", student:leads!personal_tasks_student_id_fkey(full_name)";
 
 export function taskSelect(with0295: boolean): string {
@@ -115,7 +115,7 @@ export function loadPendingTasks(supabase: SupabaseClient, rangeEnd: string): Pr
   );
 }
 
-/** Someone's pending personal tasks that can have an occurrence on or before `rangeEnd`. */
+/** Someone's open personal tasks — To do or In progress (0331) — that can have an occurrence on or before `rangeEnd`. */
 export function loadPendingPersonalTasks(supabase: SupabaseClient, ownerId: string, rangeEnd: string): Promise<RawPersonalRow[]> {
   return readAllWith0295<RawPersonalRow>(
     (with0295, from, to) =>
@@ -123,8 +123,28 @@ export function loadPendingPersonalTasks(supabase: SupabaseClient, ownerId: stri
         .from("personal_tasks")
         .select(personalSelect(with0295))
         .eq("owner_id", ownerId)
-        .eq("status", "pending")
+        .neq("status", "done")
         .lte("due_date", rangeEnd)
+        .order("id")
+        .range(from, to) as unknown as PageResult<RawPersonalRow>
+  );
+}
+
+/**
+ * The tasks someone gave colleagues (0331) that can have an occurrence in the
+ * range — open or finished, so a finished one shows as done — for their own
+ * calendar.
+ */
+export function loadAssignedByTasks(supabase: SupabaseClient, assignerId: string, range: { start: string; end: string }): Promise<RawPersonalRow[]> {
+  return readAllWith0295<RawPersonalRow>(
+    (with0295, from, to) =>
+      supabase
+        .from("personal_tasks")
+        .select(personalSelect(with0295))
+        .eq("assigned_by", assignerId)
+        .neq("owner_id", assignerId)
+        .lte("due_date", range.end)
+        .or(`due_date.gte.${range.start},recurrence.neq.none`)
         .order("id")
         .range(from, to) as unknown as PageResult<RawPersonalRow>
   );
