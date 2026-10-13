@@ -8,6 +8,7 @@ import { Modal } from "@/components/ui/Modal";
 import { StatCard } from "@/components/ui/StatCard";
 import { TableFrame } from "@/components/ui/TableFrame";
 import { Badge } from "@/components/ui/Badge";
+import { LongTextCell } from "@/components/ui/LongTextCell";
 import { PreviewedImport } from "@/components/PreviewedImport";
 import { toast } from "@/lib/toast";
 import { deleteAeoRecords, importAeoCommissions, markAeoPaid, markAeoUnpaid } from "@/lib/actions/aeoCommissions";
@@ -21,6 +22,10 @@ import { AeoRecordForm } from "./AeoRecordForm";
  * usually covers a batch — and the import and the export, both in the
  * office's own sheet.
  */
+/** Where the frozen columns stand: the tick box takes the first 3rem (globals.css, data-frozen-lead), Sr. # the next 3.5rem, the name after both. */
+const SR_COLUMN = { left: "3rem", width: "3.5rem", minWidth: "3.5rem", maxWidth: "3.5rem" } as const;
+const NAME_COLUMN = { left: "6.5rem" } as const;
+
 export function AeoRegister({ records, today }: { records: AeoRecord[]; today: string }) {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<PaymentStatus | "all">("all");
@@ -212,11 +217,17 @@ export function AeoRegister({ records, today }: { records: AeoRecord[]; today: s
           Nothing on file yet. Import your sheet above, or add a registration.
         </p>
       ) : (
+        // Scrolls like a spreadsheet (TableFrame): the heading row stays at the
+        // top, and the tick box, Sr. # and the candidate's name stay at the
+        // left — the two narrow ones as data-frozen-lead, held at the widths
+        // set here, the name just after them casting the freeze line. Each row
+        // keeps to one line; a long value is cut short and shown whole on
+        // hover or in a pop-up (LongTextCell), as the leads table does.
         <TableFrame label="AEO Pakistan IELTS registrations" freezeFirstColumn={false}>
-          <table className="w-full min-w-[68rem] text-sm" data-aeo-table>
+          <table className="w-full text-sm" data-aeo-table>
             <thead>
               <tr className="border-b border-border text-left text-xs font-semibold uppercase tracking-wide whitespace-nowrap text-muted">
-                <th className="w-10 px-3 py-2">
+                <th data-frozen-lead className="px-3 py-2">
                   <input
                     type="checkbox"
                     aria-label="Select every row shown"
@@ -224,14 +235,20 @@ export function AeoRegister({ records, today }: { records: AeoRecord[]; today: s
                     onChange={() => setSelected(allPicked ? new Set() : new Set(shown.map((r) => r.id)))}
                   />
                 </th>
-                <th className="px-3 py-2">Sr. #</th>
-                <th className="px-3 py-2">Candidate&apos;s name</th>
+                <th data-frozen-lead style={SR_COLUMN} className="px-3 py-2">
+                  Sr. #
+                </th>
+                <th data-frozen data-frozen-next style={NAME_COLUMN} className="px-3 py-2">
+                  Candidate&apos;s name
+                </th>
                 <th className="px-3 py-2">Challan no.</th>
                 <th className="px-3 py-2">Challan date</th>
                 <th className="px-3 py-2">Test date</th>
                 <th className="px-3 py-2 text-right">Commission</th>
                 <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2">Paid</th>
+                <th className="px-3 py-2">Paid on</th>
+                <th className="px-3 py-2">Reference</th>
+                <th className="px-3 py-2">Notes</th>
                 <th className="px-3 py-2">
                   <span className="sr-only">Actions</span>
                 </th>
@@ -239,33 +256,33 @@ export function AeoRegister({ records, today }: { records: AeoRecord[]; today: s
             </thead>
             <tbody>
               {shown.map((r) => (
-                <tr key={r.id} className="border-b border-border/70 align-top hover:bg-bg/60" data-aeo-row={r.challan_number}>
-                  <td className="px-3 py-2">
+                <tr key={r.id} className="whitespace-nowrap border-b border-border/70 hover:bg-bg/60" data-aeo-row={r.challan_number}>
+                  <td data-frozen-lead className="px-3 py-2">
                     <input type="checkbox" aria-label={`Select ${r.candidate_name}`} checked={selected.has(r.id)} onChange={() => toggle(r.id)} />
                   </td>
-                  <td className="px-3 py-2 tabular-nums text-muted">{r.sr_no ?? "—"}</td>
-                  <td className="px-3 py-2 font-medium text-ink">
-                    {r.candidate_name}
-                    {r.notes && <p className="mt-0.5 max-w-[16rem] text-xs font-normal text-muted">{r.notes}</p>}
+                  <td data-frozen-lead style={SR_COLUMN} className="px-3 py-2 tabular-nums text-muted">
+                    {r.sr_no ?? "—"}
+                  </td>
+                  <td data-frozen data-frozen-next style={NAME_COLUMN} className="px-3 py-2 font-medium text-ink">
+                    <LongTextCell text={r.candidate_name} label="Candidate's name" rowName={r.candidate_name} widthClassName="max-w-[9rem] sm:max-w-[14rem]" />
                   </td>
                   <td className="px-3 py-2 tabular-nums">{r.challan_number}</td>
-                  <td className="whitespace-nowrap px-3 py-2 tabular-nums">{dmy(r.challan_date) || "—"}</td>
-                  <td className="max-w-[22rem] px-3 py-2 text-xs text-muted">{r.test_details || "—"}</td>
-                  <td className="whitespace-nowrap px-3 py-2 text-right font-medium tabular-nums text-ink">{formatPkr(r.commission_amount)}</td>
+                  <td className="px-3 py-2 tabular-nums">{dmy(r.challan_date) || "—"}</td>
+                  <td className="px-3 py-2 text-xs text-muted">
+                    <LongTextCell text={r.test_details} label="Test date" rowName={r.candidate_name} widthClassName="max-w-[18rem]" />
+                  </td>
+                  <td className="px-3 py-2 text-right font-medium tabular-nums text-ink">{formatPkr(r.commission_amount)}</td>
                   <td className="px-3 py-2">
                     <Badge tone={r.payment_status === "paid" ? "success" : "warning"}>{r.payment_status === "paid" ? "Paid" : "Unpaid"}</Badge>
                   </td>
-                  <td className="px-3 py-2 text-xs text-muted">
-                    {r.payment_status === "paid" ? (
-                      <>
-                        <span className="whitespace-nowrap tabular-nums text-ink">{dmy(r.paid_on) || "date not given"}</span>
-                        {r.payment_reference && <span className="block">{r.payment_reference}</span>}
-                      </>
-                    ) : (
-                      "—"
-                    )}
+                  <td className="px-3 py-2 text-xs tabular-nums text-ink">{r.payment_status === "paid" ? dmy(r.paid_on) || "not given" : "—"}</td>
+                  <td className="px-3 py-2 text-xs">
+                    <LongTextCell text={r.payment_reference} label="Payment reference" rowName={r.candidate_name} widthClassName="max-w-[9rem]" />
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2 text-right">
+                  <td className="px-3 py-2 text-xs">
+                    <LongTextCell text={r.notes} label="Notes" rowName={r.candidate_name} widthClassName="max-w-[12rem]" />
+                  </td>
+                  <td className="px-3 py-2 text-right">
                     <button
                       type="button"
                       onClick={() => setEditing(r)}
@@ -287,7 +304,7 @@ export function AeoRegister({ records, today }: { records: AeoRecord[]; today: s
               ))}
               {shown.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-3 py-8 text-center text-sm text-muted">
+                  <td colSpan={12} className="px-3 py-8 text-center text-sm text-muted">
                     Nothing matches — clear the search or the filters.
                   </td>
                 </tr>
@@ -295,12 +312,15 @@ export function AeoRegister({ records, today }: { records: AeoRecord[]; today: s
             </tbody>
             {shown.length > 0 && (
               <tfoot>
-                <tr className="border-t-2 border-border font-semibold text-ink" data-aeo-total>
-                  <td colSpan={6} className="px-3 py-2 text-right">
+                <tr className="whitespace-nowrap border-t-2 border-border font-semibold text-ink" data-aeo-total>
+                  <td data-frozen-lead className="px-3 py-2" />
+                  <td data-frozen-lead style={SR_COLUMN} className="px-3 py-2" />
+                  <td data-frozen data-frozen-next style={NAME_COLUMN} className="px-3 py-2">
                     Total{filtered ? " shown" : ""}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{formatPkr(totals.earned)}</td>
-                  <td colSpan={3} className="px-3 py-2 text-xs font-normal text-muted">
+                  <td colSpan={3} className="px-3 py-2" />
+                  <td className="px-3 py-2 text-right tabular-nums">{formatPkr(totals.earned)}</td>
+                  <td colSpan={5} className="px-3 py-2 text-xs font-normal text-muted">
                     {formatPkr(totals.outstanding)} outstanding
                   </td>
                 </tr>

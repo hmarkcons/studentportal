@@ -10,6 +10,9 @@
 //   * the office's own sheet — its headers as typed, dates like "001/8/2022",
 //     a real date cell and the Total row — previews as three registrations
 //     added, and applies as exactly that, the dates read day first;
+//   * the table scrolls as a spreadsheet: the heading row frozen at the top,
+//     the tick box, Sr. # and name at the left; each row is one line, and a
+//     long value is cut short and opens whole in a pop-up;
 //   * a row is edited in place; two are marked paid on one date with one
 //     reference, and the totals move; a challan already on file is refused;
 //   * the export is the office's layout with a Total row, and imported back it
@@ -200,8 +203,65 @@ try {
   await search.fill(TAG);
   const rows = page.locator("[data-aeo-row]");
   ok("the three are in the table", (await poll(async () => ((await rows.count()) === 3 ? 3 : null), 20)) === 3);
+  // Frozen as a spreadsheet is, and one line to a row, as the leads table.
+  await page.setViewportSize({ width: 1100, height: 1000 });
+  const firstRow = page.locator(`[data-aeo-row="${CHALLAN(1)}"]`);
+  const frame = page.locator("[data-aeo-table]").locator("xpath=..");
+  const at = async () => ({
+    tick: (await firstRow.locator("td").nth(0).boundingBox())?.x,
+    name: (await firstRow.locator("td").nth(2).boundingBox())?.x,
+    challan: (await firstRow.locator("td").nth(3).boundingBox())?.x,
+  });
+  const before = await at();
+  await frame.evaluate((el) => (el.scrollLeft = 400));
+  const after = await poll(
+    async () => {
+      const now = await at();
+      return now.challan < before.challan - 100 ? now : null;
+    },
+    10,
+    200,
+  );
+  ok(
+    "scrolled sideways, the tick box, Sr. # and the name stay where they are",
+    Boolean(after) && Math.abs(after.tick - before.tick) < 1 && Math.abs(after.name - before.name) < 1,
+    JSON.stringify({ before, after }),
+  );
+  ok(
+    "...and the heading row is frozen at the top",
+    (await page
+      .locator("[data-aeo-table] thead th")
+      .first()
+      .evaluate((el) => getComputedStyle(el).position)) === "sticky",
+  );
+  await frame.evaluate((el) => (el.scrollLeft = 0));
+  const heights = await rows.evaluateAll((trs) => trs.map((tr) => Math.round(tr.getBoundingClientRect().height)));
+  ok(
+    "each row keeps to one line",
+    heights.every((h) => h < 50),
+    JSON.stringify(heights),
+  );
+  const test = firstRow.locator("td").nth(5).locator("[aria-label]").first();
+  ok(
+    "a long test date is cut short, and says it can be opened",
+    /open to read in full/.test((await test.getAttribute("aria-label")) ?? ""),
+    (await test.getAttribute("aria-label")) ?? "no label",
+  );
+  await test.click();
+  const whole = page.locator("[data-long-full]");
+  const full = await whole.waitFor({ timeout: 10000 }).then(
+    async () => await whole.innerText(),
+    () => "",
+  );
+  ok("...and opens whole in a pop-up", full.includes("(06/08/2022)") && full.includes("IELTS (IOC)"), full);
+  await page.keyboard.press("Escape");
+  await page.setViewportSize({ width: 1500, height: 1100 });
   const cards = async () => (await page.locator("[data-aeo-totals]").innerText()).replace(/\s+/g, " ");
-  ok("the totals count them: PKR 6,200 earned, all outstanding", /PKR 6,200/.test(await cards()) && /Outstanding PKR 6,200/i.test(await cards()), await cards());
+  ok(
+    "the totals count them: PKR 6,200 earned, all outstanding",
+    /PKR 6,200/.test(await cards()) && /Outstanding PKR 6,200/i.test(await cards()),
+    await cards(),
+  );
 
   // Edit one in place.
   await page
