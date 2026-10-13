@@ -73,6 +73,7 @@ const TABLE_LABELS: Record<string, string> = {
   office_networks: "Office network",
   partner_agreements: "Partner agreement",
   partner_commissions: "University commission",
+  aeo_ielts_commissions: "AEO Pakistan commission",
   partner_document_exchange: "Partner document",
   partner_university_accounts: "Partner account",
   payment_receipts: "Payment receipt",
@@ -217,6 +218,7 @@ export function recordLabel(table: string, row: Record<string, unknown> | null |
   if (!row) return tableLabel(table);
   if (table === "invoice_installments" && row.installment_no != null) return `Installment ${row.installment_no}`;
   if (table === "agreements" && row.version != null) return `Agreement v${row.version}`;
+  if (table === "aeo_ielts_commissions" && row.candidate_name) return `${plain(row.candidate_name)} · challan ${plain(row.challan_number) ?? "—"}`;
   for (const col of NAME_COLUMNS) {
     const v = plain(row[col]);
     if (v) return v.length > 80 ? `${v.slice(0, 77)}…` : v;

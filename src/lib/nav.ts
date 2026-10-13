@@ -50,6 +50,7 @@ const BASE_STAFF_NAV: NavItem[] = [
       { label: "Consultancy Fee", href: "/finance/consultancy-fee" },
       { label: "Payroll", href: "/finance/payroll" },
       { label: "University Commissions", href: "/finance/partner-commissions" },
+      { label: "AEO Pakistan", href: "/finance/aeo-pakistan" },
       { label: "Referrals", href: "/marketing/referrals" },
     ],
   },

@@ -52,4 +52,14 @@ export const PERMISSION_KEYS = [
  */
 export const SUPER_ADMIN_ONLY_PERMISSIONS: readonly string[] = ["staff.manage"];
 
+/**
+ * Page switches fixed to the roles that hold them, and so not switches: AEO
+ * Pakistan is the Super Admin's and the account officer's (Finance) alone, and
+ * the database refuses an override for it as it does for staff.manage (0335).
+ */
+export const FIXED_PAGE_PERMISSIONS: readonly string[] = ["page.finance.aeo_pakistan"];
+
+/** What the Role Permissions screen and the per-person panel leave off. */
+export const UNSWITCHABLE_PERMISSIONS: readonly string[] = [...SUPER_ADMIN_ONLY_PERMISSIONS, ...FIXED_PAGE_PERMISSIONS];
+
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];

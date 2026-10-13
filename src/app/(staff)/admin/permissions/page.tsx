@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { getStaffSession } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { STAFF_ROLES, STAFF_ROLE_LABELS, type StaffRole } from "@/lib/constants";
-import { SUPER_ADMIN_ONLY_PERMISSIONS, type PermissionKey } from "@/lib/permissions";
+import { UNSWITCHABLE_PERMISSIONS, type PermissionKey } from "@/lib/permissions";
 import { PermissionToggle } from "./PermissionToggle";
 import { StaffPermissionsPanel } from "./StaffPermissionsPanel";
 import { StaffPicker } from "./StaffPicker";
@@ -33,8 +33,9 @@ export default async function RolePermissionsPage(props: { searchParams: Promise
     supabase.from("staff").select("id, full_name, role").not("roles", "cs", "{super_admin}").order("full_name"),
   ]);
   // Managing staff is the Super Admin's and no one else's to be given (0284),
-  // so it is not offered as a switch at all.
-  const defs = (allDefs ?? []).filter((d) => !SUPER_ADMIN_ONLY_PERMISSIONS.includes(d.key));
+  // and AEO Pakistan the Super Admin's and Finance's (0335), so neither is
+  // offered as a switch at all.
+  const defs = (allDefs ?? []).filter((d) => !UNSWITCHABLE_PERMISSIONS.includes(d.key));
 
   const overrideMap = new Map((overrides ?? []).map((o) => [`${o.role}:${o.permission_key}`, o.allowed]));
 

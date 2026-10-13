@@ -57,6 +57,8 @@ export const PAGE_PERMISSIONS: Record<string, string> = {
   "/finance/consultancy-fee": "page.finance.consultancy_fee",
   "/finance/payroll": "page.finance.payroll",
   "/finance/partner-commissions": "page.finance.partner_commissions",
+  // Super Admin and Finance, and not grantable (0335).
+  "/finance/aeo-pakistan": "page.finance.aeo_pakistan",
   "/marketing/referrals": "page.marketing.referrals",
 
   "/marketing/campaigns": "page.marketing.campaigns",
