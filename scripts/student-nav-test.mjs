@@ -7,7 +7,14 @@ const labels = (items) => items.map((i) => i.label);
 
 test("Applications has its own entry, after Documents", () => {
   const nav = labels(studentNav({ locked: false, scholarship: false, travel: false }));
-  assert.deepEqual(nav.slice(0, 5), ["Dashboard", "Profile", "Documents", "Applications", "Visa"]);
+  assert.deepEqual(nav.slice(0, 6), ["Dashboard", "Profile", "Logins", "Documents", "Applications", "Visa"]);
+});
+
+test("Logins follows Profile, with the key icon", () => {
+  const nav = studentNav({ locked: false, scholarship: false, travel: false });
+  const entry = nav.find((i) => i.label === "Logins");
+  assert.equal(entry.href, "/portal/logins");
+  assert.equal(entry.icon, "logins");
 });
 
 test("Scholarship follows Applications when the country offers one", () => {
@@ -46,6 +53,7 @@ test("the whole menu, in order", () => {
   assert.deepEqual(labels(studentNav({ locked: false, scholarship: true, travel: true })), [
     "Dashboard",
     "Profile",
+    "Logins",
     "Documents",
     "Applications",
     "Scholarship",

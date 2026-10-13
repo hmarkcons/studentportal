@@ -1,7 +1,18 @@
 // The logins a registered student sees on their own pages (src/lib/studentLogins.ts, 0333).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { loginsFromRows, visaAppointmentLogin, scholarshipLogins, applicationLogins } from "../src/lib/studentLogins.ts";
+import {
+  loginsFromRows,
+  visaAppointmentLogin,
+  scholarshipLogins,
+  applicationLogins,
+  loginKind,
+  groupLogins,
+  dashboardLogins,
+  loginAnchor,
+  loginAccent,
+  loginHeading,
+} from "../src/lib/studentLogins.ts";
 
 const STUDENT = "s1";
 const row = (credential_type, plaintext, extra = {}) => ({ owner_type: "student", owner_id: STUDENT, credential_type, university: null, plaintext, ...extra });
@@ -18,7 +29,86 @@ test("each login reads as its username, password and page, under the name Portal
     username: "ali@gmail.com",
     password: "Secret1!",
     link: "https://accounts.google.com",
+    kind: "email",
+    updatedAt: null,
   });
+  const [dated] = loginsFromRows([row("gmail", login("u", "p"), { updated_at: "2026-10-12T09:00:00Z" })]);
+  assert.equal(dated.updatedAt, "2026-10-12T09:00:00Z");
+});
+
+test("each login is a kind of account, which is its group on the Logins page", () => {
+  const kind = (credentialType, ownerType = "student") => loginKind({ credentialType, ownerType });
+  assert.equal(kind("gmail"), "email");
+  assert.equal(kind("outlook_mail"), "email");
+  assert.equal(kind("university_portal"), "university");
+  assert.equal(kind("anything", "application"), "university", "kept against an application is the university's");
+  assert.equal(kind("universitaly"), "university");
+  assert.equal(kind("visa_appointment_portal"), "visa");
+  assert.equal(kind("vfs_login"), "visa");
+  assert.equal(kind("scholarship_portal:DSU Toscana"), "scholarship");
+  assert.equal(kind("scholarship_portal:Visa help desk"), "scholarship", "the prefix decides before the words");
+  assert.equal(kind("zztmp_agency"), "other");
+});
+
+test("the groups come in the page's order, each in its section's colour, the empty ones left out", () => {
+  const logins = loginsFromRows([
+    row("zz_other", login("o", "p")),
+    row("visa_appointment_portal", login("v", "p")),
+    row("gmail", login("g", "p")),
+    { owner_type: "application", owner_id: "a1", credential_type: "university_portal", university: "Pisa", plaintext: login("u", "p") },
+  ]);
+  const groups = groupLogins(logins);
+  assert.deepEqual(
+    groups.map((g) => [g.kind, g.logins.length, g.accent]),
+    [
+      ["email", 1, 1],
+      ["university", 1, 2],
+      ["visa", 1, 5],
+      ["other", 1, 3],
+    ],
+  );
+  assert.equal(loginAccent("scholarship"), 4);
+});
+
+test("the Dashboard shows two, Gmail first, and names the rest", () => {
+  const logins = loginsFromRows([
+    row("visa_appointment_portal", login("v", "p")),
+    row("scholarship_portal:DSU", login("s", "p")),
+    row("university_portal", login("u", "p")),
+    row("gmail", login("g", "p")),
+  ]);
+  const { shown, more } = dashboardLogins(logins);
+  assert.deepEqual(
+    shown.map((l) => l.credentialType),
+    ["gmail", "university_portal"],
+  );
+  assert.equal(more.length, 2);
+  assert.deepEqual(dashboardLogins(logins.slice(0, 2)).more, []);
+});
+
+test("a card is headed by the name that tells it apart, with its kind under it", () => {
+  const logins = loginsFromRows([
+    { owner_type: "application", owner_id: "a1", credential_type: "university_portal", university: "University of Pisa", plaintext: login("u", "p") },
+    row("scholarship_portal:DSU Toscana", login("s", "p")),
+    row("gmail", login("g", "p")),
+  ]);
+  const [uni, scholarship, gmail] = ["university_portal", "scholarship_portal:DSU Toscana", "gmail"].map((t) => logins.find((l) => l.credentialType === t));
+  assert.deepEqual(loginHeading(uni), { title: "University of Pisa", caption: "University portal" });
+  assert.deepEqual(loginHeading(scholarship), { title: "DSU Toscana", caption: "Scholarship portal" });
+  assert.deepEqual(loginHeading(gmail), { title: "Gmail", caption: null });
+});
+
+test("each login has an address on the Logins page of its own", () => {
+  assert.equal(
+    loginAnchor({ ownerId: "0d6c1f2a-1111-2222", credentialType: "scholarship_portal:DSU Toscana" }),
+    "login-0d6c1f2a-scholarship-portal-dsu-toscana",
+  );
+  assert.notEqual(
+    loginAnchor({ ownerId: "aaaaaaaa-1", credentialType: "university_portal" }),
+    loginAnchor({ ownerId: "bbbbbbbb-1", credentialType: "university_portal" }),
+    "two universities' portals",
+  );
+  assert.equal(loginAnchor({ ownerId: "aaaaaaaa", credentialType: "::" }), "login-aaaaaaaa-account");
 });
 
 test("a login kept against an application is named for its university", () => {

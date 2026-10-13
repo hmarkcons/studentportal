@@ -11,6 +11,9 @@
 //                      gets no entry, so the menu never promises one.
 //   Travel & Arrival   once a visa has been issued; never for a refusal.
 //
+// Logins follows Profile: every account HMARK keeps for them (0333), the
+// Dashboard showing only the first two.
+//
 // Calendar follows Appointments: every dated thing on those pages, and the
 // deadlines and instalments from the others, laid out by day, week, month or
 // year.
@@ -35,6 +38,7 @@ export function studentNav({ locked, scholarship, travel, badges = {} }: Student
   const items: NavItem[] = [
     { label: "Dashboard", href: "/portal", icon: "dashboard" },
     { label: "Profile", href: "/portal/profile", icon: "profile" },
+    { label: "Logins", href: "/portal/logins", icon: "logins" },
     { label: "Documents", href: "/portal/documents", icon: "documents" },
     { label: "Applications", href: "/portal/applications", icon: "universities" },
     ...(scholarship ? [{ label: "Scholarship", href: "/portal/scholarship", icon: "scholarship" }] : []),

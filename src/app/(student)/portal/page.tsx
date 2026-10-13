@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlarmClock, ArrowRight, CalendarClock, CalendarDays, CreditCard, FolderOpen, Globe, Headset, IdCard, Landmark, Mail, MessageCircle, Sparkles, UserRound, BookOpen } from "lucide-react";
+import { AlarmClock, ArrowRight, CalendarClock, CalendarDays, CreditCard, FolderOpen, Globe, Headset, IdCard, KeyRound, Landmark, Mail, MessageCircle, Sparkles, UserRound, BookOpen } from "lucide-react";
 import { getStudentUser } from "@/lib/auth/session";
 import { loadPortalSummary } from "@/lib/portalSummary";
 import { universityShortName } from "@/lib/finalizedStage";
@@ -24,7 +24,8 @@ import { destinationHeadline, destinationStatusRows, type RegisteredDestination 
 import type { DashboardStageDef } from "@/lib/dashboardPipeline";
 import { TeamCard } from "@/components/studentPortal/TeamCard";
 import { LoginDetails } from "@/components/LoginDetails";
-import { loadMyLogins } from "@/lib/studentLogins";
+import { dashboardLogins, loadMyLogins, loginAccent, loginAnchor, loginHeading } from "@/lib/studentLogins";
+import { ACCENT_CLASSES, LOGIN_KIND_ICON } from "@/components/studentPortal/loginKinds";
 import { DestinationStatusCard, countryAccent } from "@/components/studentPortal/DestinationStatusCard";
 
 function one<T>(v: T | T[] | null) {
@@ -75,6 +76,9 @@ export default async function PortalDashboardPage() {
       // The logins the office keeps for them, shown as they are (0333).
       loadMyLogins(supabase),
     ]);
+
+  // The first two logins, and the rest named, for the Logins page.
+  const loginPreview = dashboardLogins(logins);
 
   // Read on the server so dates are judged on Karachi's business day rather
   // than wherever the student is, and so no component reads the clock.
@@ -502,32 +506,72 @@ export default async function PortalDashboardPage() {
       </div>
 
       {/* -------------------------------------------------------- their logins
-          Every account the office keeps for them — Gmail, the university and
-          visa portals, the scholarship portals — read-only, with no Reveal:
-          they are the student's own. Only the username, the password and
-          the page; nothing else kept with a login (the Gmail recovery
-          details) ever reaches this page. */}
-      {logins.length > 0 && (
+          The first two of the accounts the office keeps for them — Gmail,
+          then the university portal, in Portal credentials' order — and the
+          rest named, each linking to itself on the Logins page, where all of
+          them are. Read-only, with no Reveal: they are the student's own.
+          Only the username, the password and the page; nothing else kept
+          with a login (the Gmail recovery details) ever reaches this page. */}
+      {loginPreview.shown.length > 0 && (
         <section className="flex flex-col gap-3" data-my-logins>
-          <div>
-            <h3 className="text-base font-semibold text-ink">Your logins</h3>
-            <p className="text-xs text-muted">
-              The accounts HMARK keeps for you. Keep them to yourself, and if one stops working, message your counsellor rather than trying again —
-              some portals lock an account after a few wrong attempts.
-            </p>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="flex items-center gap-2 text-base font-semibold text-ink">
+                Your logins
+                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">{logins.length}</span>
+              </h3>
+              <p className="text-xs text-muted">
+                The accounts HMARK keeps for you. Keep them to yourself, and if one stops working, message your counsellor rather than trying again.
+              </p>
+            </div>
+            {loginPreview.more.length > 0 && (
+              <Link
+                prefetch={false}
+                href="/portal/logins"
+                data-view-all-logins
+                className="group inline-flex w-fit shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-ink shadow-sm transition-colors hover:bg-[var(--brand-strong)]"
+              >
+                <KeyRound aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                View all {logins.length} logins
+                <ArrowRight aria-hidden className="h-3.5 w-3.5 shrink-0 transition-transform group-hover:translate-x-0.5" />
+              </Link>
+            )}
           </div>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {logins.map((l) => (
+            {loginPreview.shown.map((l) => (
               <LoginDetails
                 key={`${l.ownerId}:${l.credentialType}`}
-                label={l.label}
+                kind={l.kind}
+                label={loginHeading(l).title}
+                caption={loginHeading(l).caption}
                 credentialType={l.credentialType}
                 username={l.username}
                 password={l.password}
                 link={l.link}
+                updatedAt={l.updatedAt}
               />
             ))}
           </div>
+          {loginPreview.more.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-border bg-card px-3 py-2.5" data-more-logins>
+              <span className="text-xs font-medium text-muted">Also saved:</span>
+              {loginPreview.more.map((l) => {
+                const Icon = LOGIN_KIND_ICON[l.kind];
+                return (
+                  <Link
+                    key={`${l.ownerId}:${l.credentialType}`}
+                    prefetch={false}
+                    href={`/portal/logins#${loginAnchor(l)}`}
+                    data-more-login={l.credentialType}
+                    className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${ACCENT_CLASSES[loginAccent(l.kind)].chip}`}
+                  >
+                    <Icon aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{l.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </section>
       )}
 

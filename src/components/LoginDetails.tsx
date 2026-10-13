@@ -4,6 +4,16 @@ import { useState } from "react";
 import { Check, Copy, ExternalLink, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { linkHref } from "@/lib/catalogueText";
+import { loginAccent, type LoginKind } from "@/lib/studentLogins";
+import { ACCENT_CLASSES, LOGIN_KIND_ICON } from "@/components/studentPortal/loginKinds";
+
+/** "Updated 12 Oct 2026", in Karachi and in one locale, so the server and the browser agree. */
+function updatedLine(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return `Updated ${d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Karachi" })}`;
+}
 
 /**
  * One saved login, shown so it can be read across a desk or typed on a
@@ -11,7 +21,8 @@ import { linkHref } from "@/lib/catalogueText";
  * l is not a 1, each with Copy, and the page it signs in to as a button.
  *
  * Staff see it when they press Reveal (CredentialField); a registered student
- * sees their own this way on their pages, with no Reveal (0333).
+ * sees their own this way on their pages, with no Reveal (0333) — each kind of
+ * account in its own colour and icon, and when HMARK last changed it.
  */
 export function LoginDetails({
   label,
@@ -20,6 +31,10 @@ export function LoginDetails({
   password,
   link = null,
   onHide,
+  kind,
+  caption,
+  updatedAt,
+  id,
   className = "",
 }: {
   label: string;
@@ -29,19 +44,47 @@ export function LoginDetails({
   link?: string | null;
   /** Staff: put it away again. */
   onHide?: () => void;
+  /** The student's pages: what kind of account, for its colour and icon. */
+  kind?: LoginKind;
+  /** A line under the name: what kind of login it is, where the name is a university or a portal. */
+  caption?: string | null;
+  /** When it was last changed. */
+  updatedAt?: string | null;
+  /** Its address on the page, which the Dashboard links to — and lights up when it is. */
+  id?: string;
   className?: string;
 }) {
   // Only ever a web address: anything else is not offered as a button.
   const loginPage = linkHref(link);
+  const Icon = kind ? LOGIN_KIND_ICON[kind] : KeyRound;
+  const accent = kind ? ACCENT_CLASSES[loginAccent(kind)] : null;
+  const updated = updatedLine(updatedAt);
   return (
-    <div className={`rounded-xl border border-primary/30 bg-primary/5 p-4 ${className}`} data-login-details={credentialType}>
+    <div
+      id={id}
+      className={`scroll-mt-24 rounded-xl border p-4 transition-shadow duration-500 ${accent ? `border-l-4 shadow-sm data-[focused]:shadow-lg data-[focused]:ring-2 data-[focused]:ring-offset-2 data-[focused]:ring-offset-bg ${accent.card}` : "border-primary/30 bg-primary/5"} ${className}`}
+      data-login-details={credentialType}
+      data-login-kind={kind}
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="flex min-w-0 items-center gap-2 text-sm font-semibold text-ink">
-          <span aria-hidden className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <KeyRound className="h-4 w-4" />
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span
+            aria-hidden
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${accent ? `bg-card shadow-sm ${accent.tile}` : "bg-primary/10 text-primary"}`}
+          >
+            <Icon className="h-4 w-4" />
           </span>
-          <span className="min-w-0 break-words">{label}</span>
-        </p>
+          <div className="min-w-0">
+            <p className="break-words text-sm font-semibold text-ink">{label}</p>
+            {(caption || updated) && (
+              <p className="text-[11px] text-muted">
+                {caption && <span data-login-caption>{caption}</span>}
+                {caption && updated && " · "}
+                {updated && <span data-login-updated>{updated}</span>}
+              </p>
+            )}
+          </div>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           {loginPage && (
             <a

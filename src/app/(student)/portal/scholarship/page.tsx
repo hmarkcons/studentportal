@@ -466,6 +466,8 @@ export default async function PortalScholarshipPage() {
                 username={portal.username}
                 password={portal.password}
                 link={portal.link}
+                kind={portal.kind}
+                updatedAt={portal.updatedAt}
               />
             ))}
           </div>

@@ -286,6 +286,8 @@ export default async function PortalVisaPage() {
             username={appointmentLogin.username}
             password={appointmentLogin.password}
             link={appointmentLogin.link}
+            kind={appointmentLogin.kind}
+            updatedAt={appointmentLogin.updatedAt}
           />
           {/* The one thing this page cannot do for them. A portal that locks
               an account after three wrong attempts is not the place to guess. */}

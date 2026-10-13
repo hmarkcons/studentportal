@@ -26,6 +26,10 @@ export type MyLogin = {
   username: string;
   password: string;
   link: string | null;
+  /** What kind of account it is, which decides its group, icon and colour on the Logins page. */
+  kind: LoginKind;
+  /** When HMARK last changed it (0334). */
+  updatedAt: string | null;
 };
 
 export type MyLoginRow = {
@@ -34,7 +38,74 @@ export type MyLoginRow = {
   credential_type: string;
   university: string | null;
   plaintext: string | null;
+  updated_at?: string | null;
 };
+
+export type LoginKind = "email" | "university" | "visa" | "scholarship" | "other";
+
+/** The kind of account a login is for, from what it is stored as. */
+export function loginKind(login: { credentialType: string; ownerType: string }): LoginKind {
+  const t = login.credentialType;
+  if (scholarshipPortalLabel(t)) return "scholarship";
+  if (login.ownerType === "application" || t === "university_portal" || /universit/i.test(t)) return "university";
+  if (t === "gmail" || /mail|outlook|yahoo/i.test(t)) return "email";
+  if (/vfs|appointment|visa/i.test(t)) return "visa";
+  return "other";
+}
+
+/**
+ * The Logins page's groups, in its order, each in the colour of the menu
+ * section it belongs to (NavIcon): the email account first, as the one every
+ * other account sends its resets to.
+ */
+export const LOGIN_GROUPS: readonly { kind: LoginKind; title: string; blurb: string; accent: 1 | 2 | 3 | 4 | 5 }[] = [
+  { kind: "email", title: "Email", blurb: "Your email account — every portal sends its codes and resets here.", accent: 1 },
+  { kind: "university", title: "Universities", blurb: "Where your applications are made and followed.", accent: 2 },
+  { kind: "visa", title: "Visa", blurb: "For booking and following your visa appointment.", accent: 5 },
+  { kind: "scholarship", title: "Scholarships", blurb: "The regional and national scholarship portals.", accent: 4 },
+  { kind: "other", title: "Other accounts", blurb: "Anything else HMARK keeps for you.", accent: 3 },
+];
+
+export type LoginGroup = (typeof LOGIN_GROUPS)[number] & { logins: MyLogin[] };
+
+/** The logins by group, in the page's order; a group with none is left out. */
+export function groupLogins(logins: readonly MyLogin[]): LoginGroup[] {
+  return LOGIN_GROUPS.map((g) => ({ ...g, logins: logins.filter((l) => l.kind === g.kind) })).filter((g) => g.logins.length > 0);
+}
+
+export function loginAccent(kind: LoginKind): 1 | 2 | 3 | 4 | 5 {
+  return LOGIN_GROUPS.find((g) => g.kind === kind)?.accent ?? 3;
+}
+
+/**
+ * What a login's card is headed, and the line under it: where the group or
+ * the card already says what kind it is, the name that tells two apart —
+ * "University of Pisa" over "University portal", "DSU Toscana" over
+ * "Scholarship portal" — and otherwise its name as Portal credentials gives it.
+ */
+export function loginHeading(login: Pick<MyLogin, "ownerType" | "credentialType" | "university" | "label">): { title: string; caption: string | null } {
+  if (login.ownerType === "application" && login.university) return { title: login.university, caption: credentialLabel(login.credentialType) };
+  const portal = scholarshipPortalLabel(login.credentialType);
+  if (portal) return { title: portal, caption: "Scholarship portal" };
+  return { title: login.label, caption: null };
+}
+
+/** How many the Dashboard shows before "View all". */
+export const DASHBOARD_LOGINS = 2;
+
+/** The Dashboard's share: the first two, in Portal credentials' order, and the rest by name only. */
+export function dashboardLogins(logins: readonly MyLogin[], limit = DASHBOARD_LOGINS): { shown: MyLogin[]; more: MyLogin[] } {
+  return { shown: logins.slice(0, limit), more: logins.slice(limit) };
+}
+
+/** Where a login is on the Logins page, so the Dashboard can link straight to it. */
+export function loginAnchor(login: Pick<MyLogin, "ownerId" | "credentialType">): string {
+  const slug = login.credentialType
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return `login-${login.ownerId.slice(0, 8)}-${slug || "account"}`;
+}
 
 /** Rows from my_logins(), read, named and put in the order Portal credentials uses; empty ones left out. */
 export function loginsFromRows(rows: readonly MyLoginRow[] | null | undefined): MyLogin[] {
@@ -54,6 +125,8 @@ export function loginsFromRows(rows: readonly MyLoginRow[] | null | undefined): 
       username: stored.username,
       password: stored.password,
       link: stored.link,
+      kind: loginKind({ credentialType: row.credential_type, ownerType: row.owner_type }),
+      updatedAt: row.updated_at ?? null,
     });
   }
   return orderLogins(logins);

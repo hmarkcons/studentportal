@@ -12,6 +12,7 @@ import {
   GraduationCap,
   HandCoins,
   Headset,
+  KeyRound,
   Landmark,
   LayoutDashboard,
   ListTodo,
@@ -63,6 +64,7 @@ export const NAV_ICONS = {
   payments: CreditCard,
   messages: MessageCircle,
   guide: CirclePlay,
+  logins: KeyRound,
 } satisfies Record<string, LucideIcon>;
 
 export type NavIconName = keyof typeof NAV_ICONS;
@@ -98,6 +100,7 @@ const NAV_ACCENT: Record<string, 1 | 2 | 3 | 4 | 5> = {
   agreement: 4,
   messages: 5,
   guide: 3,
+  logins: 4,
   programs: 5,
   commissions: 1,
 };

@@ -41,66 +41,68 @@ export function UniversityLinksCard({
   return (
     // Card takes no data attributes, so the marker is on a wrapper.
     <div data-links-contact>
-    <Card>
-      <h3 className="mb-1 flex items-center gap-2 text-base font-semibold text-ink">
-        <Link2 aria-hidden className="h-5 w-5 shrink-0 text-primary" /> Links &amp; contact
-      </h3>
-      <p className="mb-4 text-xs text-muted">
-        {universityName}&apos;s own pages for this programme, and its contacts. Your HMARK team submits the application — if anything here needs doing, ask them
-        first.
-      </p>
-      <div className={`grid grid-cols-1 gap-5 ${logins.length > 0 ? "lg:grid-cols-2" : ""}`}>
-        <div className="flex flex-col gap-3 text-sm text-ink">
-          {links.length === 0 && emails.length === 0 && <p className="text-muted">No links or contacts are recorded for this programme yet.</p>}
-          {links.map((l) => {
-            const href = linkHref(l.value);
-            return (
-              <div key={l.label} className="flex flex-wrap items-center gap-2" data-link-row={l.label}>
-                <span className="w-36 shrink-0 text-xs font-medium text-muted">{l.label}</span>
-                {href ? (
-                  <a
-                    href={href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-md border border-primary px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
-                  >
-                    {l.cta}
-                    <ExternalLink aria-hidden className="h-3.5 w-3.5 shrink-0" />
-                  </a>
-                ) : (
-                  <span className="min-w-0 break-words">{l.value}</span>
-                )}
-              </div>
-            );
-          })}
-          {emails.map((e) => (
-            <div key={e.label} className="flex flex-wrap items-center gap-2" data-email-row={e.label}>
-              <span className="w-36 shrink-0 text-xs font-medium text-muted">{e.label}</span>
-              <span className="inline-flex min-w-0 items-center gap-1.5 break-all">
-                <Mail aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted" />
-                <span className="min-w-0">
-                  <EmailLinks value={e.value} />
+      <Card>
+        <h3 className="mb-1 flex items-center gap-2 text-base font-semibold text-ink">
+          <Link2 aria-hidden className="h-5 w-5 shrink-0 text-primary" /> Links &amp; contact
+        </h3>
+        <p className="mb-4 text-xs text-muted">
+          {universityName}&apos;s own pages for this programme, and its contacts. Your HMARK team submits the application — if anything here needs doing, ask
+          them first.
+        </p>
+        <div className={`grid grid-cols-1 gap-5 ${logins.length > 0 ? "lg:grid-cols-2" : ""}`}>
+          <div className="flex flex-col gap-3 text-sm text-ink">
+            {links.length === 0 && emails.length === 0 && <p className="text-muted">No links or contacts are recorded for this programme yet.</p>}
+            {links.map((l) => {
+              const href = linkHref(l.value);
+              return (
+                <div key={l.label} className="flex flex-wrap items-center gap-2" data-link-row={l.label}>
+                  <span className="w-36 shrink-0 text-xs font-medium text-muted">{l.label}</span>
+                  {href ? (
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-primary px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                    >
+                      {l.cta}
+                      <ExternalLink aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                    </a>
+                  ) : (
+                    <span className="min-w-0 break-words">{l.value}</span>
+                  )}
+                </div>
+              );
+            })}
+            {emails.map((e) => (
+              <div key={e.label} className="flex flex-wrap items-center gap-2" data-email-row={e.label}>
+                <span className="w-36 shrink-0 text-xs font-medium text-muted">{e.label}</span>
+                <span className="inline-flex min-w-0 items-center gap-1.5 break-all">
+                  <Mail aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted" />
+                  <span className="min-w-0">
+                    <EmailLinks value={e.value} />
+                  </span>
                 </span>
-              </span>
-            </div>
-          ))}
-        </div>
-        {logins.length > 0 && (
-          <div className="flex flex-col gap-3">
-            {logins.map((l) => (
-              <LoginDetails
-                key={l.credentialType}
-                label={l.credentialType === "university_portal" ? "Your university portal login" : l.label}
-                credentialType={l.credentialType}
-                username={l.username}
-                password={l.password}
-                link={l.link}
-              />
+              </div>
             ))}
           </div>
-        )}
-      </div>
-    </Card>
+          {logins.length > 0 && (
+            <div className="flex flex-col gap-3">
+              {logins.map((l) => (
+                <LoginDetails
+                  key={l.credentialType}
+                  label={l.credentialType === "university_portal" ? "Your university portal login" : l.label}
+                  credentialType={l.credentialType}
+                  username={l.username}
+                  password={l.password}
+                  link={l.link}
+                  kind={l.kind}
+                  updatedAt={l.updatedAt}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </Card>
     </div>
   );
 }

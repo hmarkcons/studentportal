@@ -6,12 +6,16 @@
 //     a sign-in — no password-type input, autocomplete off, the password
 //     masked by CSS — and a login saved there is read back on Reveal in a
 //     panel of its own, large, with Copy, and put away with Hide;
-//   * the student sees every login kept for them on their Dashboard (Gmail,
-//     the visa portal, a scholarship portal, the university portal named for
-//     its university), the username, the password and the login page shown
-//     as they are, with no Reveal and no way to change them; this portal's
-//     own login and the Gmail recovery details are not among them, on the
-//     page or anywhere in it; it fits a phone;
+//   * the student's Dashboard shows two of their logins — Gmail, then the
+//     university portal named for its university — the username, the
+//     password and the login page shown as they are, with when each was
+//     last changed, no Reveal and no way to change them; View all 5 logins
+//     goes to the Logins page in the same window, and the other three are
+//     named, each opening the Logins page at itself, lit up; this portal's
+//     own login and the Gmail recovery details are on neither page;
+//   * the Logins page (in the menu) has all of them, grouped by kind, each
+//     kind in its colour with a chip to jump to it, and how to keep them
+//     safe; both pages fit a phone;
 //   * the Visa and Scholarship pages show theirs the same way;
 //   * each application shows the university's Links & contact: the course,
 //     requirements and application portal links, the university's and the
@@ -177,17 +181,15 @@ try {
   await page.goto(`${BASE}/students/${studentId}?open=portal-credentials`, { waitUntil: "domcontentloaded" });
   const gmail = page.locator('[data-credential="gmail"]');
   await gmail.waitFor({ timeout: 60000 });
-  const fields = await gmail
-    .locator("input:not([type=hidden])")
-    .evaluateAll((inputs) =>
-      inputs.map((i) => ({
-        type: i.type,
-        name: i.name,
-        autocomplete: i.getAttribute("autocomplete"),
-        ignore: i.getAttribute("data-1p-ignore"),
-        mask: getComputedStyle(i).webkitTextSecurity,
-      })),
-    );
+  const fields = await gmail.locator("input:not([type=hidden])").evaluateAll((inputs) =>
+    inputs.map((i) => ({
+      type: i.type,
+      name: i.name,
+      autocomplete: i.getAttribute("autocomplete"),
+      ignore: i.getAttribute("data-1p-ignore"),
+      mask: getComputedStyle(i).webkitTextSecurity,
+    })),
+  );
   ok("no field is a password field the browser would fill", fields.length === 3 && fields.every((f) => f.type !== "password"), JSON.stringify(fields));
   ok(
     "...and none offers the browser's saved logins",
@@ -232,26 +234,52 @@ try {
   await sp.click('button[type="submit"]');
   await sp.waitForURL((u) => !u.pathname.includes("/login"), { timeout: 40000 });
 
+  // ------------------------------------------------------------ the Dashboard: two, and the rest named
   await sp.goto(`${BASE}/portal`, { waitUntil: "domcontentloaded" });
   const mine = sp.locator("[data-my-logins]");
   await mine.waitFor({ timeout: 60000 });
-  const dash = {
-    gmail: await panelSays(mine.locator('[data-login-details="gmail"]')),
-    visa: await panelSays(mine.locator('[data-login-details="visa_appointment_portal"]')),
-    scholarship: await panelSays(mine.locator(`[data-login-details="scholarship_portal:zztmp Agency ${RUN}"]`)),
-  };
-  ok("the Dashboard shows the student their Gmail login, as it is", same(dash.gmail, GMAIL), JSON.stringify(dash.gmail));
-  ok("...their visa appointment login", same(dash.visa, VISA), JSON.stringify(dash.visa));
-  ok("...and their scholarship portal login", same(dash.scholarship, SCHOLARSHIP), JSON.stringify(dash.scholarship));
+  const panels = await mine.locator("[data-login-details]").evaluateAll((els) => els.map((e) => e.getAttribute("data-login-details")));
+  ok(
+    "the Dashboard shows two logins, Gmail and then the university portal",
+    JSON.stringify(panels) === JSON.stringify(["gmail", "university_portal"]),
+    JSON.stringify(panels),
+  );
+  ok("...Gmail as it is", same(await panelSays(mine.locator('[data-login-details="gmail"]')), GMAIL));
   const mineText = await mine.innerText();
   ok(
-    "...and each university portal login, named for its university",
-    mineText.includes(`University portal — ${UNI}`) && mineText.includes(UNI_LOGIN.password) && mineText.includes(`University portal — ${OTHER_UNI}`),
+    "...the university portal named for its university, as it is",
+    mineText.includes(UNI) &&
+      (await mine.locator('[data-login-details="university_portal"] [data-login-caption]').innerText()) === "University portal" &&
+      same(await panelSays(mine.locator('[data-login-details="university_portal"]')), UNI_LOGIN),
+    mineText.slice(0, 400),
+  );
+  ok(
+    "...and none of the other usernames or passwords",
+    ![VISA, SCHOLARSHIP, OTHER_LOGIN].some((l) => mineText.includes(l.password) || mineText.includes(l.username)),
     mineText.slice(0, 600),
+  );
+  const viewAll = mine.locator("[data-view-all-logins]");
+  ok(
+    "it offers View all 5 logins, in the same window",
+    (await viewAll.count()) === 1 &&
+      /View all 5 logins/.test(await viewAll.innerText()) &&
+      (await viewAll.getAttribute("href")) === "/portal/logins" &&
+      !(await viewAll.getAttribute("target")),
+  );
+  const chips = await mine.locator("[data-more-login]").evaluateAll((els) => els.map((e) => e.textContent.trim()));
+  ok(
+    "...and names the other three, each a way to it",
+    JSON.stringify(chips) === JSON.stringify([`University portal — ${OTHER_UNI}`, "Visa appointment portal", `zztmp Agency ${RUN} (scholarship portal)`]),
+    JSON.stringify(chips),
   );
   ok(
     "...with no Reveal and nothing to change",
     (await mine.getByRole("button", { name: /Reveal|Show|Edit|Save|changed/ }).count()) === 0 && (await mine.locator("input").count()) === 0,
+  );
+  ok(
+    "each shown login says when HMARK last changed it",
+    (await mine.locator("[data-login-updated]").count()) === 2 &&
+      /^Updated \d{1,2} \w{3,4} \d{4}$/.test(await mine.locator("[data-login-updated]").first().innerText()),
   );
   const html = await sp.content();
   ok(
@@ -259,15 +287,84 @@ try {
     (await mine.locator('[data-login-details="portal_login"]').count()) === 0 && !html.includes(PORTAL_LOGIN.password),
   );
   ok("nor anything of the Gmail recovery details, anywhere on the page", !html.includes(RECOVERY_EMAIL) && !html.includes(CODE));
+  ok("Logins is in the student's menu", (await sp.locator('nav a[href="/portal/logins"]').count()) >= 1);
 
-  await sp.setViewportSize({ width: 390, height: 900 });
-  await sp.reload({ waitUntil: "domcontentloaded" });
-  await sp.locator("[data-my-logins]").waitFor({ timeout: 60000 });
-  const overflow = await sp.evaluate(() => {
-    const box = document.querySelector("[data-my-logins]").getBoundingClientRect();
-    return { right: Math.round(box.right), width: window.innerWidth, scroll: document.documentElement.scrollWidth };
-  });
-  ok("the logins fit a phone", overflow.right <= overflow.width && overflow.scroll <= overflow.width, JSON.stringify(overflow));
+  // A chip goes to its own login on the Logins page, which lights up.
+  await press(sp, mine.locator('[data-more-login="visa_appointment_portal"]'));
+  await sp.waitForURL((u) => u.pathname === "/portal/logins" && u.hash.startsWith("#login-"), { timeout: 60000 });
+  const landed = await poll(
+    async () => {
+      const lit = sp.locator('[data-login-details="visa_appointment_portal"][data-focused]');
+      return (await lit.count()) ? await lit.getAttribute("id") : null;
+    },
+    30,
+    200,
+  );
+  ok("a login picked there opens the Logins page at it, lit up", Boolean(landed) && sp.url().endsWith(`#${landed}`), sp.url());
+  const box = await sp.locator('[data-login-details="visa_appointment_portal"]').boundingBox();
+  ok("...scrolled into view", Boolean(box) && box.y >= 0 && box.y + box.height <= 1100, JSON.stringify(box));
+
+  // ------------------------------------------------------------ the Logins page: all of them, grouped
+  await sp.goto(`${BASE}/portal/logins`, { waitUntil: "domcontentloaded" });
+  const all = sp.locator("[data-logins-page]");
+  await all.waitFor({ timeout: 60000 });
+  const groups = await all
+    .locator("[data-login-group]")
+    .evaluateAll((els) => els.map((e) => [e.getAttribute("data-login-group"), e.querySelectorAll("[data-login-details]").length]));
+  ok(
+    "the Logins page has all five, by kind: email, universities, visa, scholarships",
+    JSON.stringify(groups) ===
+      JSON.stringify([
+        ["email", 1],
+        ["university", 2],
+        ["visa", 1],
+        ["scholarship", 1],
+      ]),
+    JSON.stringify(groups),
+  );
+  const onPage = {
+    gmail: await panelSays(all.locator('[data-login-details="gmail"]')),
+    visa: await panelSays(all.locator('[data-login-details="visa_appointment_portal"]')),
+    scholarship: await panelSays(all.locator(`[data-login-details="scholarship_portal:zztmp Agency ${RUN}"]`)),
+  };
+  ok("...each as it is", same(onPage.gmail, GMAIL) && same(onPage.visa, VISA) && same(onPage.scholarship, SCHOLARSHIP), JSON.stringify(onPage));
+  const allText = await all.innerText();
+  ok(
+    "...both universities' portals, each under its university",
+    allText.includes(UNI_LOGIN.password) &&
+      allText.includes(OTHER_LOGIN.password) &&
+      allText.includes(OTHER_UNI) &&
+      (await all.locator('[data-login-kind="university"] [data-login-caption]').count()) === 2,
+  );
+  ok(
+    "...each in the colour of its kind",
+    (await all.locator('[data-login-kind="visa"]').count()) === 1 && (await all.locator('[data-login-kind="university"]').count()) === 2,
+  );
+  ok(
+    "...with a chip to jump to each kind, and the count",
+    (await all.locator("[data-login-jumps] a").count()) === 4 && /5 logins/.test(await all.locator("[data-logins-count]").innerText()),
+  );
+  ok(
+    "...with no Reveal and nothing to change",
+    (await all.getByRole("button", { name: /Reveal|Show|Edit|Save|changed/ }).count()) === 0 && (await all.locator("input").count()) === 0,
+  );
+  ok("...and how to keep them safe", (await all.locator("[data-logins-safety]").count()) === 1);
+  const allHtml = await sp.content();
+  ok(
+    "...and nothing of this portal's own login or the Gmail recovery details",
+    !allHtml.includes(PORTAL_LOGIN.password) && !allHtml.includes(RECOVERY_EMAIL) && !allHtml.includes(CODE),
+  );
+
+  for (const path of ["/portal", "/portal/logins"]) {
+    await sp.setViewportSize({ width: 390, height: 900 });
+    await sp.goto(`${BASE}${path}`, { waitUntil: "domcontentloaded" });
+    await sp.locator(path === "/portal" ? "[data-my-logins]" : "[data-logins-page]").waitFor({ timeout: 60000 });
+    const overflow = await sp.evaluate(() => {
+      const edges = [...document.querySelectorAll("[data-login-details], [data-more-logins], [data-login-jumps]")].map((e) => e.getBoundingClientRect().right);
+      return { right: Math.round(Math.max(...edges)), width: window.innerWidth, scroll: document.documentElement.scrollWidth };
+    });
+    ok(`${path} fits a phone`, overflow.right <= overflow.width && overflow.scroll <= overflow.width, JSON.stringify(overflow));
+  }
   await sp.setViewportSize({ width: 1400, height: 1100 });
 
   // ------------------------------------------------------ the Visa and Scholarship pages
