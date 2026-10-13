@@ -23,6 +23,8 @@ import { loadStudentTeam } from "@/lib/studentTeam";
 import { destinationHeadline, destinationStatusRows, type RegisteredDestination } from "@/lib/destinationStatus";
 import type { DashboardStageDef } from "@/lib/dashboardPipeline";
 import { TeamCard } from "@/components/studentPortal/TeamCard";
+import { LoginDetails } from "@/components/LoginDetails";
+import { loadMyLogins } from "@/lib/studentLogins";
 import { DestinationStatusCard, countryAccent } from "@/components/studentPortal/DestinationStatusCard";
 
 function one<T>(v: T | T[] | null) {
@@ -48,7 +50,7 @@ export default async function PortalDashboardPage() {
 
   if (!student) return null;
 
-  const [apps, summary, { data: agreements }, cycleDocs, visas, { data: scholarships }, team, { data: registeredCountries }, news] =
+  const [apps, summary, { data: agreements }, cycleDocs, visas, { data: scholarships }, team, { data: registeredCountries }, news, logins] =
     await Promise.all([
       // The applications have a page of their own now; the dashboard keeps
       // what it needs for the journey, the chart and what is coming up.
@@ -70,6 +72,8 @@ export default async function PortalDashboardPage() {
         .eq("lead_id", student.id),
       // What has happened lately: a message, a document approved, an application moved (0320).
       loadNews(supabase, 20),
+      // The logins the office keeps for them, shown as they are (0333).
+      loadMyLogins(supabase),
     ]);
 
   // Read on the server so dates are judged on Karachi's business day rather
@@ -496,6 +500,36 @@ export default async function PortalDashboardPage() {
           )}
         </ChartCard>
       </div>
+
+      {/* -------------------------------------------------------- their logins
+          Every account the office keeps for them — Gmail, the university and
+          visa portals, the scholarship portals — read-only, with no Reveal:
+          they are the student's own. Only the username, the password and
+          the page; nothing else kept with a login (the Gmail recovery
+          details) ever reaches this page. */}
+      {logins.length > 0 && (
+        <section className="flex flex-col gap-3" data-my-logins>
+          <div>
+            <h3 className="text-base font-semibold text-ink">Your logins</h3>
+            <p className="text-xs text-muted">
+              The accounts HMARK keeps for you. Keep them to yourself, and if one stops working, message your counsellor rather than trying again —
+              some portals lock an account after a few wrong attempts.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {logins.map((l) => (
+              <LoginDetails
+                key={`${l.ownerId}:${l.credentialType}`}
+                label={l.label}
+                credentialType={l.credentialType}
+                username={l.username}
+                password={l.password}
+                link={l.link}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ---------------------------------------------------------- the team
           Both people who look after them, as the staff Dashboard shows them

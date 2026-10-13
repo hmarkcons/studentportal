@@ -4,11 +4,11 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
 import { PortalEmpty } from "@/components/studentPortal/PortalEmpty";
-import { listTrackerDefinitions, listCredentialTypesAction } from "@/lib/actions/countryTracker";
+import { listTrackerDefinitions } from "@/lib/actions/countryTracker";
 import { formatDateOnly } from "@/lib/formatDate";
 import { readVisaDecision, visaMessage } from "@/lib/visaOutcome";
-import { loadLoginLinks } from "@/lib/credentialLinks";
-import { VisaCredentials } from "./VisaCredentials";
+import { LoginDetails } from "@/components/LoginDetails";
+import { loadMyLogins, visaAppointmentLogin } from "@/lib/studentLogins";
 import { VisaOfficeList } from "@/components/VisaOfficeList";
 import { visaCountries } from "@/lib/visaCountries";
 import { loadVisaOffices } from "@/lib/actions/visaOfficeQueries";
@@ -48,14 +48,14 @@ export default async function PortalVisaPage() {
   // Everything on this page comes from the documentation tracker — there is no
   // separate visa record. Which fields appear is opted in per field from
   // Setup › Document trackers, so a country added later needs no code change.
-  const [{ data: applications }, credentialTypes] = await Promise.all([
+  const [{ data: applications }, logins] = await Promise.all([
     supabase
       .from("applications")
       .select("id, is_finalized, university:universities(name, destination:destinations(id, country_code, display_name))")
       .eq("student_id", student.id),
     // The student's saved logins, for the appointment login further down.
     // Needs only the student, so it is not left until the end.
-    listCredentialTypesAction("student", student.id),
+    loadMyLogins(supabase),
   ]);
 
   // Which countries are actually in the visa process is decided in
@@ -151,22 +151,9 @@ export default async function PortalVisaPage() {
   const visible = sections.filter((s): s is NonNullable<typeof s> => s !== null);
 
   // The visa appointment login is the student's own — staff record it so they
-  // can book on the student's behalf, and read_credential has allowed a
-  // student to read their own since it was written. What was missing was
-  // anywhere for them to see it, so a student had to ask their counsellor for
-  // their own password.
-  //
-  // The row is listed here and decrypted only when the student asks, in
-  // VisaCredentials.
-  // The preset first; then anything a staff member typed by hand before it
-  // existed, so an older visa_portal or vfs_login is not stranded.
-  const appointmentLogin =
-    credentialTypes.find((t) => t === "visa_appointment_portal") ??
-    // portal_login is this portal's own password, not a visa one.
-    credentialTypes.find((t) => t !== "portal_login" && /vfs|appointment|visa/i.test(t)) ??
-    null;
-  // Its login page, for "Go to login page" — no secret, so shown without asking.
-  const appointmentLinks = appointmentLogin ? await loadLoginLinks(supabase, "student", student.id, [appointmentLogin]) : {};
+  // can book on the student's behalf — and is shown as it is, with no Reveal
+  // (0333): the preset, or one typed by hand before it existed.
+  const appointmentLogin = visaAppointmentLogin(logins);
 
   // The shared wording is read once in loadVisaPageContent and merged per
   // country above, so this page no longer fetches visa_messages itself —
@@ -293,15 +280,12 @@ export default async function PortalVisaPage() {
             </span>
             Visa appointment portal
           </h3>
-          <VisaCredentials
-            studentId={student.id}
-            credentialType={appointmentLogin}
-            link={appointmentLinks[appointmentLogin] ?? null}
-            label={
-              appointmentLogin === "visa_appointment_portal"
-                ? "Your appointment portal login"
-                : appointmentLogin.replace(/_/g, " ")
-            }
+          <LoginDetails
+            label={appointmentLogin.credentialType === "visa_appointment_portal" ? "Your appointment portal login" : appointmentLogin.label}
+            credentialType={appointmentLogin.credentialType}
+            username={appointmentLogin.username}
+            password={appointmentLogin.password}
+            link={appointmentLogin.link}
           />
           {/* The one thing this page cannot do for them. A portal that locks
               an account after three wrong attempts is not the place to guess. */}

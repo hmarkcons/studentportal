@@ -6,11 +6,9 @@ import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
 import { PortalStat, PortalStats } from "@/components/studentPortal/PortalStat";
 import { PortalEmpty } from "@/components/studentPortal/PortalEmpty";
 import { formatDateOnly } from "@/lib/formatDate";
-import { scholarshipPortals } from "@/lib/scholarshipPortal";
 import { callLink, callAbsenceNote } from "@/lib/scholarshipCallLink";
-import { listCredentialTypesAction } from "@/lib/actions/countryTracker";
-import { loadLoginLinks } from "@/lib/credentialLinks";
-import { VisaCredentials } from "../visa/VisaCredentials";
+import { LoginDetails } from "@/components/LoginDetails";
+import { loadMyLogins, scholarshipLogins } from "@/lib/studentLogins";
 import { ScholarshipGuide } from "@/components/ScholarshipGuide";
 import { bodiesForUniversity } from "@/lib/scholarshipMatch";
 import { guideFreshness } from "@/lib/academicYear";
@@ -128,11 +126,9 @@ export default async function PortalScholarshipPage() {
 
   // Everything that needs only the student, at once. It used to be asked for
   // a piece at a time, six round trips before the page could show anything.
-  const [credentialTypes, { data: registered }, { data: applied }, { data: scholarships }] = await Promise.all([
-    // Their own logins for the agency portals. Listed here and decrypted only
-    // when they press Show — read_credential has always allowed a student to
-    // read their own, the same as the visa appointment login.
-    listCredentialTypesAction("student", student.id),
+  const [logins, { data: registered }, { data: applied }, { data: scholarships }] = await Promise.all([
+    // Their own logins for the agency portals, shown as they are (0333).
+    loadMyLogins(supabase),
     // What each of the student's countries offers — the menu shows this page
     // for a country with a scholarship body on file, so the page says what
     // that is, country by country, rather than assuming Italy.
@@ -148,9 +144,7 @@ export default async function PortalScholarshipPage() {
       )
       .eq("student_id", student.id),
   ]);
-  const portals = scholarshipPortals(credentialTypes);
-  // Each portal's login page, for "Go to login page".
-  const portalLinks = await loadLoginLinks(supabase, "student", student.id, portals.map((p) => p.credentialType));
+  const portals = scholarshipLogins(logins);
   type Dest = { id: string; display_name: string; scholarship_access: string | null };
   const countries = new Map<string, Dest & { bodies: string[]; chosen: { university: string; body: string }[] }>();
   const addCountry = (d: Dest | null) => {
@@ -461,16 +455,17 @@ export default async function PortalScholarshipPage() {
             Your scholarship portal logins
           </h3>
           <p className="mb-3 text-xs text-muted">
-            Your own accounts on the scholarship portals. Nothing is shown until you ask for it.
+            Your own accounts on the scholarship portals. Keep them to yourself, and if one stops working, message your counsellor.
           </p>
           <div className="flex flex-col gap-3">
             {portals.map((portal) => (
-              <VisaCredentials
+              <LoginDetails
                 key={portal.credentialType}
-                studentId={student.id}
-                credentialType={portal.credentialType}
                 label={portal.label}
-                link={portalLinks[portal.credentialType] ?? null}
+                credentialType={portal.credentialType}
+                username={portal.username}
+                password={portal.password}
+                link={portal.link}
               />
             ))}
           </div>

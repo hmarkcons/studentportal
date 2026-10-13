@@ -8,6 +8,8 @@ import { universityShortName } from "@/lib/finalizedStage";
 import { ProgramDates } from "@/components/ProgramDates";
 import { karachiToday } from "@/lib/calendarDates";
 import { sortRounds, type ProgramRound } from "@/lib/programRounds";
+import { UniversityLinksCard } from "@/components/studentPortal/UniversityLinksCard";
+import { applicationLogins, loadMyLogins } from "@/lib/studentLogins";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -24,19 +26,30 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
   const { id } = await props.params;
   const { supabase, userId } = await getStudentUser();
 
-  const { data: app, error } = await supabase
-    .from("applications")
-    .select(
-      "id, student_id, current_stage, intake, round_id, university:universities(name, short_name, destination:destinations(pipeline_stages)), program:programs(name, rounds:program_intake_rounds(id, label, start_date, application_deadline, start_text, deadline_text, sort_order)), student:leads!inner(auth_user_id)"
-    )
-    .eq("id", id)
-    .maybeSingle();
+  // The logins need only the student, so they are read beside the application.
+  const [{ data: app, error }, logins] = await Promise.all([
+    supabase
+      .from("applications")
+      .select(
+        "id, student_id, current_stage, intake, round_id, university:universities(name, short_name, contact_email, destination:destinations(pipeline_stages)), program:programs(name, page_link, requirements_link, application_portal_link, coordinator_email, rounds:program_intake_rounds(id, label, start_date, application_deadline, start_text, deadline_text, sort_order)), student:leads!inner(auth_user_id)"
+      )
+      .eq("id", id)
+      .maybeSingle(),
+    loadMyLogins(supabase),
+  ]);
 
   if (error || !app || one(app.student)?.auth_user_id !== userId) notFound();
 
   const university = one(app.university);
   const destination = university ? one(university.destination as never) : null;
-  const program = one(app.program) as { name?: string; rounds?: ProgramRound[] } | null;
+  const program = one(app.program) as {
+    name?: string;
+    page_link?: string | null;
+    requirements_link?: string | null;
+    application_portal_link?: string | null;
+    coordinator_email?: string | null;
+    rounds?: ProgramRound[];
+  } | null;
   const rounds = sortRounds(program?.rounds ?? []);
 
   return (
@@ -104,6 +117,19 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
             <p className="text-xs text-muted">One checklist for everything, so the same passport is never asked for twice.</p>
           </div>
         </Card>
+      </div>
+
+      {/* The university's Links & contact, as staff keep them on the application, and its portal login. */}
+      <div data-rise>
+        <UniversityLinksCard
+          universityName={university?.name ?? "The university"}
+          pageLink={program?.page_link ?? null}
+          requirementsLink={program?.requirements_link ?? null}
+          applicationPortalLink={program?.application_portal_link ?? null}
+          contactEmail={(university as { contact_email?: string | null } | null)?.contact_email ?? null}
+          coordinatorEmail={program?.coordinator_email ?? null}
+          logins={applicationLogins(logins, app.id)}
+        />
       </div>
     </div>
   );

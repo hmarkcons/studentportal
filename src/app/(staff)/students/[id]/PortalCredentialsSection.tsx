@@ -73,7 +73,13 @@ export function PortalCredentialsSection({
       ))}
 
       <div className="flex items-end gap-2 border-t border-border pt-3">
-        <Input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="Portal name (e.g. Visa appointment portal)" className="flex-1" />
+        <Input
+          value={newLabel}
+          onChange={(e) => setNewLabel(e.target.value)}
+          placeholder="Portal name (e.g. Visa appointment portal)"
+          autoComplete="off"
+          className="flex-1"
+        />
         <Button
           type="button"
           variant="outline-primary"

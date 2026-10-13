@@ -437,8 +437,9 @@ export async function storeCredentialAction(
   formData: FormData
 ) {
   const supabase = await createClient();
-  const username = String(formData.get("username") ?? "").trim();
-  const password = String(formData.get("password") ?? "").trim();
+  // Named so the browser does not take the form for a sign-in (CredentialField).
+  const username = String(formData.get("login_user") ?? "").trim();
+  const password = String(formData.get("login_secret") ?? "").trim();
   // The login page (src/lib/portalLink.ts): only when the form has the field,
   // so a form without it leaves a saved link alone.
   let link: string | null | undefined;

@@ -71,7 +71,7 @@ export function credentialLabel(credentialType: string, university?: string | nu
 }
 
 /** This portal first, then the named ones in the section's order, then the rest by name. */
-export function orderLogins(logins: readonly StudentLogin[]): StudentLogin[] {
+export function orderLogins<T extends StudentLogin>(logins: readonly T[]): T[] {
   const rank = (l: StudentLogin) => {
     const at = ORDER.indexOf(l.credentialType);
     return at === -1 ? ORDER.length : at;

@@ -13,7 +13,7 @@
 //   * an application's university portal login offers the programme's
 //     application-portal link from the catalogue;
 //   * the student sees "Go to login page" beside their visa appointment login,
-//     and can change the link themselves;
+//     and is not offered a way to change it (0333);
 //   * an interview login's page is kept, refused by the database when it is
 //     not a web address, and shown to the student when the login is shared;
 //   * HMARK's own login shows the portal's own sign-in page.
@@ -54,8 +54,8 @@ const shot = async (page, name) => {
 
 /** Saves one login field and waits for its answer. */
 async function save(page, field, { username = "", password = "", link } = {}) {
-  if (username) await field.locator('input[name="username"]').fill(username);
-  if (password) await field.locator('input[name="password"]').fill(password);
+  if (username) await field.locator('input[name="login_user"]').fill(username);
+  if (password) await field.locator('input[name="login_secret"]').fill(password);
   if (link !== undefined) await field.locator('input[name="link"]').fill(link);
   await press(page, field.getByRole("button", { name: "Save", exact: true }));
   // Its answer replaces the last one only once it is back: wait out the busy button first.
@@ -117,11 +117,18 @@ try {
   // A blank username and password keep the saved ones; the link changes.
   await save(page, gmail, { link: "https://accounts.google.com/" });
   await press(page, gmail.getByRole("button", { name: "Reveal" }));
+  // Reveal opens the login in a panel of its own (LoginDetails): each value in its own field, the page as a button.
   const revealed = await poll(async () => {
-    const t = await gmail.innerText();
-    return t.includes("Username:") ? t : null;
+    const panel = gmail.locator('[data-login-details="gmail"]');
+    if (!(await panel.count())) return null;
+    const value = (field) => panel.locator(`[data-login-value="${field}"]`).innerText({ timeout: 5000 });
+    return { username: await value("username"), password: await value("password"), link: await panel.locator("[data-login-page]").getAttribute("href") };
   });
-  ok("a link changed alone keeps the username and password", Boolean(revealed) && revealed.includes("ayesha.links@gmail.com") && revealed.includes("G-pass-1") && revealed.includes("https://accounts.google.com/"), revealed);
+  ok(
+    "a link changed alone keeps the username and password",
+    revealed?.username === "ayesha.links@gmail.com" && revealed?.password === "G-pass-1" && revealed?.link === "https://accounts.google.com/",
+    JSON.stringify(revealed)
+  );
 
   // A portal added by name, with a bare address.
   await page.getByPlaceholder("Portal name (e.g. Visa appointment portal)").fill("zztmp Agency");
@@ -194,21 +201,11 @@ try {
   await sp.waitForURL((u) => !u.pathname.includes("/login"), { timeout: 40000 });
 
   await sp.goto(`${BASE}/portal/visa`, { waitUntil: "domcontentloaded" });
-  const go = sp.locator('[data-login-page="visa_appointment_portal"]');
+  const go = sp.locator('[data-login-details="visa_appointment_portal"] [data-login-page]');
   const goShown = await go.waitFor({ timeout: 60000 }).then(() => true, () => false);
   ok("the student sees Go to login page beside their visa appointment login", goShown && (await go.getAttribute("href")) === "https://visa.zztmp.example/appointments");
   await shot(sp, "student-visa");
-  if (goShown) {
-    await press(sp, sp.getByRole("button", { name: "I changed this login" }));
-    await sp.locator('input[aria-label="Login page link"]').fill("https://visa.zztmp.example/new-login");
-    await press(sp, sp.getByRole("button", { name: "Save", exact: true }));
-    const moved = await poll(async () => {
-      await sp.reload({ waitUntil: "domcontentloaded" });
-      const href = await sp.locator('[data-login-page="visa_appointment_portal"]').getAttribute("href", { timeout: 20000 }).catch(() => null);
-      return href === "https://visa.zztmp.example/new-login" ? href : null;
-    }, 45, 2000);
-    ok("...and can change the link themselves, keeping their login", Boolean(moved));
-  }
+  ok("...and is not offered a way to change it", goShown && (await sp.getByRole("button", { name: /changed this login/ }).count()) === 0);
 
   await sp.goto(`${BASE}/portal/appointments`, { waitUntil: "domcontentloaded" });
   const ivGo = sp.locator("[data-interview-login-page]").first();

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Download, Lock, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { NOT_A_SIGN_IN } from "@/components/CredentialField";
 import { formatStamp } from "@/lib/activityStamp";
 import { phoneBounds } from "@/lib/phoneNumber";
 import { saveGmailRecovery, revealGmailRecovery, removeGmailRecoveryPart } from "@/lib/actions/gmailRecovery";
@@ -149,8 +150,23 @@ export function GmailRecoveryBlock({ studentId, initial }: { studentId: string; 
         }}
         className="flex flex-wrap items-center gap-2"
       >
-        <Input name="recovery_email" type="text" inputMode="email" placeholder="Recovery email" aria-label="Recovery email" className="w-48" />
-        <Input name="recovery_phone" {...phoneBounds()} placeholder="Recovery mobile number" aria-label="Recovery mobile number" className="w-44" />
+        <Input
+          name="recovery_email"
+          {...NOT_A_SIGN_IN}
+          type="text"
+          inputMode="email"
+          placeholder="Recovery email"
+          aria-label="Recovery email"
+          className="w-48"
+        />
+        <Input
+          name="recovery_phone"
+          {...NOT_A_SIGN_IN}
+          {...phoneBounds()}
+          placeholder="Recovery mobile number"
+          aria-label="Recovery mobile number"
+          className="w-44"
+        />
         <label className="flex items-center gap-1.5 text-xs text-muted">
           <span className="whitespace-nowrap">Backup codes (.txt)</span>
           <input

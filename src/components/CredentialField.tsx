@@ -6,16 +6,38 @@ import { storeCredentialAction, readCredentialAction } from "@/lib/actions/count
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { SafeLink } from "@/components/SafeLink";
+import { LoginDetails } from "@/components/LoginDetails";
 import type { StoredLogin } from "@/lib/portalLink";
+
+/**
+ * Keeps the browser's password manager, and the usual extensions', out of a
+ * field that holds somebody else's login.
+ *
+ * A password-type input here made the browser offer the staff member's own
+ * saved logins, fill one in unasked, and offer to save the student's password
+ * under this portal — where it was then offered back on the sign-in page. With
+ * no password-type input there is no login form for it to recognise; the
+ * password is masked by CSS instead, and the names say nothing it knows.
+ */
+export const NOT_A_SIGN_IN = {
+  autoComplete: "off",
+  autoCorrect: "off",
+  autoCapitalize: "none",
+  spellCheck: false,
+  "data-1p-ignore": "true",
+  "data-lpignore": "true",
+  "data-bwignore": "true",
+  "data-form-type": "other",
+} as const;
 
 /**
  * One saved login, as staff keep it: the username, the password and the page
  * it signs in to (src/lib/portalLink.ts). The username and password are typed
- * fresh — a field left blank keeps what is saved — and shown only on Reveal;
- * the link is no secret, so it is shown and opened directly, and its field
- * comes filled in: with the saved link, or else with one suggested from what
- * is on file (the programme's application portal, the scholarship body's
- * apply page), to change before saving.
+ * fresh — a field left blank keeps what is saved — and shown only on Reveal,
+ * large, to read out or copy; the link is no secret, so it is shown and opened
+ * directly, and its field comes filled in: with the saved link, or else with
+ * one suggested from what is on file (the programme's application portal, the
+ * scholarship body's apply page), to change before saving.
  */
 export function CredentialField({
   label,
@@ -40,12 +62,19 @@ export function CredentialField({
   const [state, formAction, pending] = useActionState(action, undefined);
   const [revealed, setRevealed] = useState<StoredLogin | null>(null);
   const [revealing, setRevealing] = useState(false);
+  const [nothingSaved, setNothingSaved] = useState(false);
 
   async function reveal() {
+    if (revealed) {
+      setRevealed(null);
+      return;
+    }
     setRevealing(true);
     const result = await readCredentialAction(ownerType, ownerId, credentialType);
-    setRevealed(result);
     setRevealing(false);
+    const empty = !result || (!result.username && !result.password && !result.link);
+    setNothingSaved(empty);
+    setRevealed(empty ? null : result);
   }
 
   const offered = link ?? suggestedLink;
@@ -61,11 +90,20 @@ export function CredentialField({
           </SafeLink>
         )}
       </div>
-      <form action={formAction} className="flex flex-wrap items-center gap-2">
-        <Input name="username" placeholder="Username / ID" className="w-36" aria-label={`${label} username`} />
-        <Input name="password" type="password" placeholder="Password" className="w-36" aria-label={`${label} password`} />
+      <form action={formAction} autoComplete="off" className="flex flex-wrap items-center gap-2">
+        <Input name="login_user" {...NOT_A_SIGN_IN} placeholder="Username / ID" className="w-36" aria-label={`${label} username`} />
+        <Input
+          name="login_secret"
+          {...NOT_A_SIGN_IN}
+          type="text"
+          placeholder="Password"
+          // Masked as a password field would be, without being one.
+          className="w-36 [-webkit-text-security:disc]"
+          aria-label={`${label} password`}
+        />
         <Input
           name="link"
+          {...NOT_A_SIGN_IN}
           defaultValue={offered ?? ""}
           // Text, not type=url: a bare "portal.unipi.it" is fine, and the
           // browser's own check would stop the form without saying why.
@@ -79,7 +117,7 @@ export function CredentialField({
           Save
         </Button>
         <Button type="button" onClick={reveal} size="sm" pending={revealing}>
-          Reveal
+          {revealed ? "Hide" : "Reveal"}
         </Button>
       </form>
       {!link && suggestedLink && (
@@ -89,13 +127,17 @@ export function CredentialField({
       )}
       <p className="mt-1 text-[11px] text-muted">A username or password left blank keeps the one saved.</p>
       {revealed && (
-        <p className="mt-2 text-xs text-muted">
-          {revealed.username ? `Username: ${revealed.username}` : "No username set"}
-          {revealed.password && ` · Password: ${revealed.password}`}
-          {revealed.link && " · "}
-          {revealed.link && <SafeLink value={revealed.link} />}
-        </p>
+        <LoginDetails
+          className="mt-3"
+          label={label}
+          credentialType={credentialType}
+          username={revealed.username}
+          password={revealed.password}
+          link={revealed.link}
+          onHide={() => setRevealed(null)}
+        />
       )}
+      {nothingSaved && !revealed && <p className="mt-2 text-xs text-muted">Nothing is saved for this login yet.</p>}
       {state?.error && <p className="mt-1 text-xs text-danger">{state.error}</p>}
     </div>
   );
