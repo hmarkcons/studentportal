@@ -6,7 +6,7 @@ import { getCurrentUser } from "@/lib/auth/currentUser";
 export type StaffSession = {
   supabase: Awaited<ReturnType<typeof createClient>>;
   userId: string | null;
-  staff: { id: string; full_name: string; role: StaffRole; roles: StaffRole[] | null; status: string } | null;
+  staff: { id: string; full_name: string; role: StaffRole; roles: StaffRole[] | null; status: string; photo_path: string | null } | null;
 };
 
 // React's cache() dedupes this per request: layout.tsx + page.tsx (+ nested
@@ -20,7 +20,8 @@ export const getStaffSession = cache(async (): Promise<StaffSession> => {
 
   const { data: staff } = await supabase
     .from("staff")
-    .select("id, full_name, role, roles, status")
+    // photo_path for the top bar's photo (HeaderAvatar).
+    .select("id, full_name, role, roles, status, photo_path")
     .eq("id", user.id)
     .maybeSingle();
 

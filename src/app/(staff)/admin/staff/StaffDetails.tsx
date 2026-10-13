@@ -22,7 +22,7 @@ export function StaffDetails({ staff, photoUrl }: { staff: StaffRecord; photoUrl
     <div className="flex flex-col">
       {photoUrl && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={photoUrl} alt="" className="mb-4 h-20 w-20 rounded-full border border-border object-cover" />
+        <img src={photoUrl} alt="" className="mb-4 h-30 w-30 rounded-full border border-border object-cover" />
       )}
       <h4 className="mb-2 border-b border-border pb-1 text-xs font-semibold uppercase tracking-wide text-primary">Personal Information</h4>
       <Row label="Designation" value={staff.designation} />

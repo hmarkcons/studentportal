@@ -61,9 +61,9 @@ export function PhotoUpload({
       {!hidePreview &&
         (photoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={photoUrl} alt="Profile photo" className="h-20 w-20 flex-shrink-0 rounded-full border border-border object-cover" />
+          <img src={photoUrl} alt="Profile photo" className="h-30 w-30 flex-shrink-0 rounded-full border border-border object-cover" />
         ) : (
-          <div className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-full border border-dashed border-border text-xs text-muted">
+          <div className="flex h-30 w-30 flex-shrink-0 items-center justify-center rounded-full border border-dashed border-border text-xs text-muted">
             No photo
           </div>
         ))}

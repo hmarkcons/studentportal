@@ -118,21 +118,21 @@ export default async function StudentLayout({ children, params }: { children: Re
           {/* Display only — the upload controls live on the Profile tab. */}
           {photoUrl ? (
             // Sized and decoded off the critical path: these are uploaded
-            // phone photos shown at 64 pixels, and without the attributes the
+            // phone photos shown at 96 pixels, and without the attributes the
             // browser preloads them at full resolution and holds the page's
             // load event open until they arrive.
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={photoUrl}
               alt={student.full_name}
-              width={64}
-              height={64}
+              width={96}
+              height={96}
               loading="lazy"
               decoding="async"
-              className="h-16 w-16 flex-shrink-0 rounded-full border border-border object-cover"
+              className="h-24 w-24 flex-shrink-0 rounded-full border border-border object-cover"
             />
           ) : (
-            <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full border border-dashed border-border text-[10px] text-muted">
+            <div className="flex h-24 w-24 flex-shrink-0 items-center justify-center rounded-full border border-dashed border-border text-[10px] text-muted">
               No photo
             </div>
           )}

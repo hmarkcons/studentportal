@@ -234,7 +234,7 @@ export function StaffForm({
               <img
                 src={photoUrl}
                 alt={`${staff!.full_name}'s photo`}
-                className="h-20 w-20 rounded-full border border-border object-cover"
+                className="h-30 w-30 rounded-full border border-border object-cover"
               />
             ) : (
               <p className="text-xs text-muted">No photo. Only a Super Admin can set one.</p>

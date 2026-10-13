@@ -454,7 +454,7 @@ export function CalendarApp({
       data-card
       data-calendar
       data-calendar-mode={editable ? "edit" : "read"}
-      className="flex h-[calc(100dvh-8.5rem)] min-h-[600px] w-full overflow-hidden rounded-2xl border border-border bg-card"
+      className="flex h-[calc(100dvh-9.25rem)] min-h-[600px] w-full overflow-hidden rounded-2xl border border-border bg-card"
     >
       <Sidebar
         open={sidebarOpen}

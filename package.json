@@ -68,7 +68,8 @@
     "check:studentreport": "node scripts/verify-student-report.mjs",
     "check:tasks": "node scripts/verify-tasks.mjs",
     "check:gmailrecovery": "node scripts/verify-gmail-recovery.mjs",
-    "check:studentlogins": "node scripts/verify-student-logins.mjs"
+    "check:studentlogins": "node scripts/verify-student-logins.mjs",
+    "check:avatars": "node scripts/verify-avatars.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

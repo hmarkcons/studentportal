@@ -11,6 +11,7 @@ import { SidebarToggle } from "./SidebarToggle";
 import { NotificationBell } from "./NotificationBell";
 import { ChevronRight, Menu, X } from "lucide-react";
 import { NAV_ACCENT_TEXT, NavIcon, navAccent } from "./NavIcon";
+import { AvatarInitials } from "./AvatarInitials";
 
 // Pulls in React Query's client runtime — only staff nav uses search, so
 // student/partner portals never ship this code.
@@ -37,15 +38,6 @@ export type NavItem = {
  */
 export type ShellVariant = "default" | "student";
 
-function initialsOf(name: string) {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((w) => w[0]?.toUpperCase() ?? "")
-    .slice(0, 2)
-    .join("");
-}
-
 export function AppShell({
   brand,
   nav,
@@ -54,6 +46,7 @@ export function AppShell({
   showSearch = false,
   variant = "default",
   sidebarFooter,
+  userAvatar,
   children,
 }: {
   brand: string;
@@ -64,6 +57,8 @@ export function AppShell({
   variant?: ShellVariant;
   /** Under the menu, at the foot of the sidebar. */
   sidebarFooter?: React.ReactNode;
+  /** The person's own photo beside their name (HeaderAvatar, in Suspense); their initials without one. */
+  userAvatar?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const student = variant === "student";
@@ -273,12 +268,7 @@ export function AppShell({
                 {/* On a phone the student's ID line would push Sign out onto two lines; the dashboard shows it. */}
                 <p className="hidden text-xs text-muted sm:block">{userSubtitle}</p>
               </div>
-              <span
-                aria-hidden
-                className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--brand-soft)] text-xs font-semibold text-[var(--brand-strong)] sm:flex"
-              >
-                {initialsOf(userName)}
-              </span>
+              <span className="hidden shrink-0 sm:flex">{userAvatar ?? <AvatarInitials name={userName} />}</span>
             </div>
             <SignOutButton variant="outline">Sign out</SignOutButton>
           </div>

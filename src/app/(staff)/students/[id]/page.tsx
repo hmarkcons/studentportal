@@ -1310,9 +1310,9 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
               <div className="flex items-start gap-3 text-sm text-ink">
                 {assignedCounselorPhotoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={assignedCounselorPhotoUrl} alt="" width={48} height={48} loading="lazy" decoding="async" className="h-12 w-12 shrink-0 rounded-full border border-border object-cover" />
+                  <img src={assignedCounselorPhotoUrl} alt="" width={64} height={64} loading="lazy" decoding="async" className="h-16 w-16 shrink-0 rounded-full border border-border object-cover" />
                 ) : (
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-dashed border-border text-[10px] text-muted">
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-dashed border-border text-[10px] text-muted">
                     —
                   </div>
                 )}
@@ -1343,9 +1343,9 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                   <div key={officer.id} className="flex items-start gap-3 text-sm text-ink">
                     {processingOfficerPhotoUrls.has(officer.id) ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={processingOfficerPhotoUrls.get(officer.id)} alt="" width={48} height={48} loading="lazy" decoding="async" className="h-12 w-12 shrink-0 rounded-full border border-border object-cover" />
+                      <img src={processingOfficerPhotoUrls.get(officer.id)} alt="" width={64} height={64} loading="lazy" decoding="async" className="h-16 w-16 shrink-0 rounded-full border border-border object-cover" />
                     ) : (
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-dashed border-border text-[10px] text-muted">
+                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-dashed border-border text-[10px] text-muted">
                         —
                       </div>
                     )}

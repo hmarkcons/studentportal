@@ -1,10 +1,13 @@
 import { hasRole } from "@/lib/auth/roles";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { getStaffSession } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth/currentUser";
 import { getEffectivePermissions } from "@/lib/auth/permissions";
 import { AppShell } from "@/components/AppShell";
+import { HeaderAvatar } from "@/components/HeaderAvatar";
+import { AvatarInitials } from "@/components/AvatarInitials";
 import { buildStaffNav } from "@/lib/nav";
 import { CalendarNotifier } from "@/components/CalendarNotifier";
 import { loadCalendarNotifications } from "@/lib/actions/calendarEvents";
@@ -63,6 +66,11 @@ export default async function StaffLayout({ children }: { children: React.ReactN
       nav={nav}
       userName={staffRow.full_name}
       userSubtitle={ROLE_LABELS[staffRow.role] ?? staffRow.role}
+      userAvatar={
+        <Suspense fallback={<AvatarInitials name={staffRow.full_name} />}>
+          <HeaderAvatar name={staffRow.full_name} photoPath={staffRow.photo_path} />
+        </Suspense>
+      }
       showSearch
     >
       <CalendarNotifier load={loadCalendarNotifications} calendarPath="/calendar" />

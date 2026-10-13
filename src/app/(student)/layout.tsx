@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { Headset, MessageCircle } from "lucide-react";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { getStudentUser } from "@/lib/auth/session";
 import { AppShell } from "@/components/AppShell";
+import { HeaderAvatar } from "@/components/HeaderAvatar";
+import { AvatarInitials } from "@/components/AvatarInitials";
 import { CalendarNotifier } from "@/components/CalendarNotifier";
 import { loadStudentCalendarNotifications } from "@/lib/actions/portalCalendarNotifications";
 import { studentNav } from "@/lib/studentNav";
@@ -24,6 +27,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
     .from("leads")
     .select(
       `id, full_name, portal_active, student_code,
+       profile:student_profiles(photo_path),
        agreements(status, signing_method, signed_file_path, video_recording_path, approval_undone_at),
        lead_destinations(destination_id),
        applications(university:universities(destination_id)),
@@ -96,6 +100,9 @@ export default async function StudentLayout({ children }: { children: React.Reac
     "/portal/support": unreadTickets,
   };
   const nav = studentNav({ locked: gate.locked, scholarship, travel: approvedVisas.length > 0, badges });
+  // Their own photo, for the top bar.
+  const profile = studentRow.profile as { photo_path: string | null } | { photo_path: string | null }[] | null;
+  const photoPath = (Array.isArray(profile) ? profile[0] : profile)?.photo_path ?? null;
 
   return (
     <AppShell
@@ -103,6 +110,11 @@ export default async function StudentLayout({ children }: { children: React.Reac
       nav={nav}
       userName={studentRow.full_name}
       userSubtitle={`Student · ${studentRow.student_code}`}
+      userAvatar={
+        <Suspense fallback={<AvatarInitials name={studentRow.full_name} />}>
+          <HeaderAvatar name={studentRow.full_name} photoPath={photoPath} />
+        </Suspense>
+      }
       variant="student"
       sidebarFooter={
         // Help is never more than a glance away — the one thing every page of

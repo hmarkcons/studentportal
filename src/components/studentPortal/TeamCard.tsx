@@ -38,7 +38,7 @@ export function TeamCard({
         data-team-member={marker}
         data-assigned="no"
       >
-        <span aria-hidden className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-dashed border-border text-muted">
+        <span aria-hidden className="flex h-22 w-22 shrink-0 items-center justify-center rounded-2xl border border-dashed border-border text-muted">
           <UserRound className="h-7 w-7" strokeWidth={1.8} />
         </span>
         <span className="min-w-0">
@@ -63,15 +63,15 @@ export function TeamCard({
           <img
             src={person.photoUrl}
             alt={person.full_name}
-            width={64}
-            height={64}
+            width={88}
+            height={88}
             loading="lazy"
             decoding="async"
-            className="h-16 w-16 shrink-0 rounded-2xl object-cover ring-4 ring-primary/10"
+            className="h-22 w-22 shrink-0 rounded-2xl object-cover ring-4 ring-primary/10"
             data-team-photo
           />
         ) : (
-          <span aria-hidden className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-xl font-semibold bg-[var(--brand-soft)] text-[var(--brand-strong)]">
+          <span aria-hidden className="flex h-22 w-22 shrink-0 items-center justify-center rounded-2xl text-2xl font-semibold bg-[var(--brand-soft)] text-[var(--brand-strong)]">
             {initials(person.full_name)}
           </span>
         )}
