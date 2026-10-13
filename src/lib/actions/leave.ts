@@ -23,6 +23,7 @@ import { sendEmail } from "@/lib/email";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { storedFileName } from "@/lib/documentFileNames";
 import { uploadedFile } from "@/lib/stagedUpload";
+import { sentLink } from "@/lib/signInLanding";
 
 // Staff leave (0272). A staff member asks; someone holding leave.approve —
 // Management and Super Admin by default — decides, never on their own
@@ -200,7 +201,7 @@ export async function requestMyLeave(_prev: unknown, formData: FormData): Promis
       leaveLabel: LEAVE_KIND_LABEL[read.kind],
       dates: formatLeaveRange(read.start, read.end),
       days: preview.dates.length,
-      url: `${getSiteUrl()}/admin/leave`,
+      url: sentLink(getSiteUrl(), "/admin/leave"),
       shortNotice: short,
     });
   }
@@ -271,7 +272,7 @@ export async function decideLeave(requestId: string, decision: "approve" | "reje
       leaveLabel: label,
       dates,
       note: note.trim(),
-      url: `${getSiteUrl()}/my-leave`,
+      url: sentLink(getSiteUrl(), "/my-leave"),
     });
     refresh();
     return { success: true };
@@ -312,7 +313,7 @@ export async function decideLeave(requestId: string, decision: "approve" | "reje
     unpaid: split.unpaid.length,
     unpaidReason: split.reason,
     remaining: Math.max(0, split.allowance - split.usedBefore - split.paid.length),
-    url: `${getSiteUrl()}/my-leave`,
+    url: sentLink(getSiteUrl(), "/my-leave"),
   });
   refresh();
   return {
@@ -366,7 +367,7 @@ export async function recordLeaveFor(_prev: unknown, formData: FormData): Promis
     paid: split.paid.length,
     unpaid: split.unpaid.length,
     recordedBy: me?.full_name ?? null,
-    url: `${getSiteUrl()}/my-leave`,
+    url: sentLink(getSiteUrl(), "/my-leave"),
   });
   refresh();
   return { success: true, message: `Recorded — ${split.paid.length} paid, ${split.unpaid.length} unpaid.` };

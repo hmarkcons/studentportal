@@ -20,6 +20,7 @@ import { passportStatus } from "@/lib/profileCompleteness";
 import { holdsPermission } from "@/lib/permissionResolve";
 import { staffRoles } from "@/lib/auth/roles";
 import { karachiToday } from "@/lib/calendarDates";
+import { sentLink } from "@/lib/signInLanding";
 
 /** A day's emails at most, so the office mailbox's allowance is never at risk. */
 const MAX_EMAILS = 120;
@@ -245,7 +246,7 @@ export async function sendReminders(admin: SupabaseClient, { dryRun = false }: {
   let sent = 0;
   const failures: string[] = [];
   for (const r of due) {
-    const mail = notificationEmail({ recipientName: r.name, title: r.title, body: r.body, url: `${getSiteUrl()}${r.path}`, audience: r.audience });
+    const mail = notificationEmail({ recipientName: r.name, title: r.title, body: r.body, url: sentLink(getSiteUrl(), r.path), audience: r.audience });
     const result = await sendEmail({ to: r.email!, ...mail });
     if ("success" in result) {
       sent++;

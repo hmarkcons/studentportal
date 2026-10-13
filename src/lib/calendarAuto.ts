@@ -14,6 +14,7 @@ import { expandOccurrences, UNTIMED_NOTIFY_MINUTES, type NotifySource } from "./
 import { isUpcomingStatus, platformLabel } from "./interviews.ts";
 import { formatFee } from "./applicationFee.ts";
 import { recordEvent, type CalendarEvent, type CalendarEventKind } from "./calendarItems.ts";
+import { sentLink } from "./signInLanding.ts";
 
 export type Audience = "staff" | "student" | "partner" | "guest";
 
@@ -355,7 +356,7 @@ export function reminderEmail(input: {
         ? "This is on your calendar for tomorrow:"
         : `These ${items.length} are on your calendar for tomorrow:`;
   const lineOf = (i: AutoItem) => `${i.time ? `${clockWords(i.time)}${i.endTime ? `–${clockWords(i.endTime)}` : ""}` : "During the day"} — ${i.title}${i.location ? ` (${i.location})` : ""}`;
-  const link = input.siteUrl && input.calendarPath ? `${input.siteUrl}${input.calendarPath}?view=day&date=${first.date}` : null;
+  const link = input.siteUrl && input.calendarPath ? sentLink(input.siteUrl, `${input.calendarPath}?view=day&date=${first.date}`) : null;
   const text = [
     greeting,
     "",

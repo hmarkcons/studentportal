@@ -12,6 +12,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { notificationEmail, notificationHref, notificationTitle, type Audience } from "@/lib/notificationText";
+import { sentLink } from "@/lib/signInLanding";
 
 type Claimed = {
   id: string;
@@ -54,7 +55,7 @@ export async function deliverNotificationEmails({ limit = 20, quietMinutes = 2 }
             recipientName: row.recipient_name,
             title,
             body: row.count > 1 ? null : row.body,
-            url: `${getSiteUrl()}${notificationHref(row, row.audience)}`,
+            url: sentLink(getSiteUrl(), notificationHref(row, row.audience)),
             audience: row.audience,
           }),
         })

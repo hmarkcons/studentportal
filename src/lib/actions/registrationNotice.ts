@@ -6,6 +6,7 @@ import { getSiteUrl } from "@/lib/siteUrl";
 import { formatDateOnly } from "@/lib/formatDate";
 import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
 import { buildRegistrationNotice, type NoticeRole } from "@/lib/registrationNotice";
+import { sentLink } from "@/lib/signInLanding";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -121,7 +122,7 @@ export async function notifyAssignedStaff(studentId: string) {
     ? byId.get(student.processing_officer_id)?.full_name ?? null
     : null;
 
-  const studentUrl = `${getSiteUrl()}/students/${studentId}`;
+  const studentUrl = sentLink(getSiteUrl(), `/students/${studentId}`);
   let sent = 0;
 
   for (const [staffId, role] of toTell) {

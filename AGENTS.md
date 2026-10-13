@@ -192,6 +192,13 @@ given), which holds what its copies share: the checklist, comments and files. A
 task given to someone (`assigned_by`) is theirs to move and tick; only whoever
 gave it deletes it or passes it on.
 
+**A link the portal emails goes through `sentLink`** (`src/lib/signInLanding.ts`).
+Signing in lands on the person's own Dashboard unless the link they opened
+names one record (a UUID) or carries the `via=email` mark `sentLink` adds — so a
+link to a section's page in an email, built as `${getSiteUrl()}/my-leave`, takes
+anyone signed out to their Dashboard instead, and reads as working whenever the
+reader is already signed in.
+
 **Alert emails go out only from a deployment.** A local server shares the
 live database, so it would email real people about real alerts, with links
 to localhost: `deliversEmail()` (src/lib/notificationDelivery.ts) is true only

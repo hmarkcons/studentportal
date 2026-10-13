@@ -34,6 +34,7 @@ import {
 import { uploadedFile } from "@/lib/stagedUpload";
 import { storedFileName } from "@/lib/documentFileNames";
 import { normalizeTheme } from "@/lib/pdf/agreementTheme";
+import { sentLink } from "@/lib/signInLanding";
 
 // Staff agreements (0271). Two permissions, both a Super Admin's until granted
 // to a role on the Role Permissions screen:
@@ -447,7 +448,7 @@ export async function sendStaffAgreementForSigning(agreementId: string): Promise
     kind: "sent",
     staffName: member?.full_name ?? "",
     title: updated.title,
-    url: `${getSiteUrl()}/my-agreement`,
+    url: sentLink(getSiteUrl(), "/my-agreement"),
     issuedBy: actor?.full_name ?? null,
   });
 
@@ -559,7 +560,7 @@ export async function sendBackStaffAgreement(agreementId: string, note: string):
     kind: "sentBack",
     staffName: member?.full_name ?? "",
     title: before.title,
-    url: `${getSiteUrl()}/my-agreement`,
+    url: sentLink(getSiteUrl(), "/my-agreement"),
     note: reason,
   });
 
@@ -637,7 +638,7 @@ export async function submitMySignedAgreement(agreementId: string, _prev: unknow
       recipientName: r.full_name,
       staffName: me.full_name,
       title: agreement?.title ?? "Staff agreement",
-      url: `${getSiteUrl()}/setup/agreement-generator?tab=staff&staff=${me.id}`,
+      url: sentLink(getSiteUrl(), `/setup/agreement-generator?tab=staff&staff=${me.id}`),
     });
   }
 

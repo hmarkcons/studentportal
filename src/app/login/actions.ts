@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { signInErrorMessage, WRONG_CREDENTIALS } from "@/lib/signInError";
 import { isStudentIdentifier, normaliseStudentId } from "@/lib/loginScreen";
 import { SESSION_ONLY_COOKIE } from "@/lib/sessionCookies";
+import { postSignInPath } from "@/lib/signInLanding";
 
 /**
  * The login email behind a Student ID, or null.
@@ -68,26 +69,6 @@ export async function signIn(_prevState: unknown, formData: FormData) {
     return { error: !said || said === WRONG_CREDENTIALS ? refused : said };
   }
 
-  redirect(safeNextPath(next));
-}
-
-// Only ever redirect to a same-origin relative path (e.g. back to a
-// scanned QR check-in link) — never follow an absolute/protocol-relative
-// "next" value, which would be an open redirect. A plain
-// `next.startsWith("/") && !next.startsWith("//")` check is NOT enough:
-// browsers normalize a leading "/\" the same way as "//" per the WHATWG
-// URL spec (treating it as a new authority for http/https), so
-// `/\evil.com` would pass that check yet still navigate off-site.
-// Parsing with URL and comparing the resolved origin catches this and any
-// other such normalization quirk in one check, and reconstructing the
-// path from the parsed result (rather than trusting the raw string)
-// neutralizes whatever the parser already normalized away.
-function safeNextPath(next: string): string {
-  try {
-    const url = new URL(next, "http://same-origin.invalid");
-    if (url.origin !== "http://same-origin.invalid") return "/";
-    return url.pathname + url.search + url.hash;
-  } catch {
-    return "/";
-  }
+  // Their own Dashboard, unless the link they opened was to one thing (signInLanding.ts).
+  redirect(postSignInPath(next));
 }
