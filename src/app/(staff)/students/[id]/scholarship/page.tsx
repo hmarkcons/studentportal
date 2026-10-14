@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Badge } from "@/components/ui/Badge";
 import { CURRENCY_SYMBOLS } from "@/lib/constants";
-import { bodiesForUniversity } from "@/lib/scholarshipMatch";
+import { scholarshipScope, universityBodies } from "@/lib/scholarshipScope";
 import { scholarshipGate, scholarshipGateMessage } from "@/lib/scholarshipGate";
 import { scholarshipPortals } from "@/lib/scholarshipPortal";
 import { listCredentialTypesAction } from "@/lib/actions/countryTracker";
@@ -176,18 +176,27 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
           ((b.destinations ?? []) as { destination_id: string }[]).some((d) => d.destination_id === w.destinationId)
         );
 
-        // The body that actually pays for this university. Offering all
-        // twenty-one Italian agencies when the student is going to Pisa is
-        // how the wrong one gets picked; DSU Toscana is the only answer.
-        // Only narrowed once the university is settled — before that the whole
-        // list is still the honest answer.
-        const chosen = w.dsuBodyId ? (bodies ?? []).filter((b) => b.id === w.dsuBodyId) : [];
-        const designated = w.app.is_finalized
-          ? chosen.length > 0
-            ? chosen
-            : bodiesForUniversity(w.universityName, countryBodies)
-          : [];
-        const offeredBodies = designated.length > 0 ? designated : countryBodies;
+        // Only the bodies this application has: the finalised university's
+        // own, and any already recorded for the student — never the rest of
+        // the country's. Offering all twenty-one Italian agencies when the
+        // student is going to Pisa is how the wrong one gets picked, and every
+        // other region's deadlines and thresholds beside the one that applies
+        // is how they get read. A merit-based country shows only what the
+        // student is put forward for (scholarshipScope.ts).
+        const recordedIds = new Set(scholarships.map((s) => s.scholarship_body_id).filter(Boolean));
+        const scope = scholarshipScope({
+          access: w.access,
+          finalized: Boolean(w.app.is_finalized),
+          university: { name: w.universityName, dsuBodyId: w.dsuBodyId },
+          countryBodies,
+          recorded: (bodies ?? []).filter((b) => recordedIds.has(b.id)),
+        });
+        const designated = scope.own;
+        // Putting a student forward is choosing among the country's: the
+        // university's own where one names it, else all of them — a picker,
+        // not a list of guides.
+        const ownAnyAccess = w.app.is_finalized ? universityBodies({ name: w.universityName, dsuBodyId: w.dsuBodyId }, countryBodies) : [];
+        const pickFrom = ownAnyAccess.length > 0 ? ownAnyAccess : countryBodies;
 
         // Where Italy's DSU is a right, the university's own body is offered
         // ready to work — its status, its documents, its proof — without an
@@ -195,11 +204,12 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
         // body listing the university, one panel asks which of the country's
         // it is. A merit-based country is put forward body by body instead,
         // through the picker below.
-        const recordedBodies = new Set(scholarships.map((s) => s.scholarship_body_id).filter(Boolean));
         const universal = w.access === "universal";
-        const drafts = universal ? designated.filter((b) => !recordedBodies.has(b.id)) : [];
-        const chooseFrom = universal && designated.length === 0 ? countryBodies : null;
-        const bodyChoices = offeredBodies.map((b) => ({ id: b.id, name: b.name, region: b.region }));
+        const drafts = universal ? designated.filter((b) => !recordedIds.has(b.id)) : [];
+        // No body linked to the university: staff say which it is, for this student.
+        const chooseFrom = scope.needsChoice ? countryBodies : null;
+        const choiceList = universal ? (scope.needsChoice ? countryBodies : scope.shown) : [...scope.shown, ...pickFrom.filter((b) => !recordedIds.has(b.id))];
+        const bodyChoices = choiceList.map((b) => ({ id: b.id, name: b.name, region: b.region }));
 
         return (
           <Card key={w.app.id}>
@@ -214,28 +224,33 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
                 <Badge tone="info">Merit-based · limited places</Badge>
               )}
             </div>
-            {w.app.is_finalized && (
-              <p className="mb-3 rounded-md border border-success bg-success-bg px-3 py-2 text-xs text-success">
+            {w.app.is_finalized && universal && (
+              <p className="mb-3 rounded-md border border-success bg-success-bg px-3 py-2 text-xs text-success" data-scholarship-scope>
                 <span className="font-medium">{w.universityName}</span> is finalised in Applications, so the scholarship
                 is open to this student.{" "}
                 {designated.length > 0 ? (
                   <>
                     {designated.length === 1 ? "Its scholarship body is" : "Its scholarship bodies are"}{" "}
                     <span className="font-medium">{designated.map((b) => b.name).join(", ")}</span> — the only one
-                    offered below.
+                    shown here, and the only one the student sees.
+                  </>
+                ) : scope.shown.length > 0 ? (
+                  <>
+                    No body in the directory is linked to it; <span className="font-medium">{scope.shown.map((b) => b.name).join(", ")}</span>{" "}
+                    was chosen for this student.
                   </>
                 ) : (
                   <>
-                    No body in the directory lists this university, so all of {w.country}&rsquo;s are offered below. Add
-                    it to a body&rsquo;s &ldquo;covers&rdquo; in Setup &rsaquo; Scholarship bodies to narrow this.
+                    No body in the directory is linked to it yet, so none is shown — to the student either. Choose it below
+                    for this student, or set it on the university in Setup &rsaquo; Universities so every student going there
+                    gets it.
                   </>
                 )}
               </p>
             )}
-            {!w.app.is_finalized && w.access === "universal" && (
+            {!w.app.is_finalized && universal && (
               <p className="mb-3 text-xs text-muted">
-                No university finalised for {w.country} yet, so every body is offered. Finalise one in Applications and
-                only its own body will be shown.
+                No body is shown until {w.universityName} is finalised in Applications; then only its own.
               </p>
             )}
             {w.access !== "universal" && scholarships.length === 0 && (
@@ -251,7 +266,7 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
                   applicationId={w.app.id}
                   revalidateTo={`/students/${id}/scholarship`}
                   countryName={w.country ?? "this country"}
-                  bodies={offeredBodies.map((b) => ({
+                  bodies={pickFrom.map((b) => ({
                     id: b.id,
                     name: b.name,
                     region: b.region,
@@ -284,9 +299,9 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
               revalidateTo={`/students/${id}/scholarship`}
             />
 
-            {offeredBodies.length > 0 && (
-              <div className="flex flex-col gap-2">
-                {offeredBodies.map((b) => (
+            {scope.shown.length > 0 && (
+              <div className="flex flex-col gap-2" data-scholarship-guides>
+                {scope.shown.map((b) => (
                   <ScholarshipGuide
                     key={b.id}
                     body={{

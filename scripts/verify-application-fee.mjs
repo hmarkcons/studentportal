@@ -88,7 +88,9 @@ try {
   // --------------------------------------------------------------- sandbox
   const { data: dest, error: destError } = await admin
     .from("destinations")
-    .insert({ country: "zztmp Feeland", country_code: "ZF", track: "public", display_name: "zztmp Feeland (Public)", currency: "GBP", status: "active" })
+    // A DSU country, as Italy is: every student is offered the body of the university they pre-enrol at.
+    // A merit-based one names no body until the student is put forward (scholarshipScope.ts).
+    .insert({ country: "zztmp Feeland", country_code: "ZF", track: "public", display_name: "zztmp Feeland (Public)", currency: "GBP", status: "active", scholarship_access: "universal" })
     .select("id, display_name")
     .single();
   if (destError) throw new Error(`sandbox destination: ${destError.message}`);

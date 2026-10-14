@@ -10,7 +10,7 @@ import { callLink, callAbsenceNote } from "@/lib/scholarshipCallLink";
 import { LoginDetails } from "@/components/LoginDetails";
 import { loadMyLogins, scholarshipLogins } from "@/lib/studentLogins";
 import { ScholarshipGuide } from "@/components/ScholarshipGuide";
-import { bodiesForUniversity } from "@/lib/scholarshipMatch";
+import { scholarshipScope } from "@/lib/scholarshipScope";
 import { guideFreshness } from "@/lib/academicYear";
 import {
   SCHOLARSHIP_CURRENCY_SYMBOL,
@@ -135,28 +135,27 @@ export default async function PortalScholarshipPage() {
     supabase.from("lead_destinations").select("destination:destinations(id, display_name, scholarship_access)").eq("lead_id", student.id),
     supabase
       .from("applications")
-      .select("id, is_finalized, university:universities(name, dsu_body_id, dsu_body:scholarship_bodies(name), destination:destinations(id, display_name, scholarship_access))")
+      .select("id, is_finalized, university:universities(name, dsu_body_id, destination:destinations(id, display_name, scholarship_access))")
       .eq("student_id", student.id),
     supabase
       .from("student_scholarships")
       .select(
-        "id, name, status, documents_status, award_amount, application_deadline, body:scholarship_bodies(name, region, academic_year, application_deadline, document_upload_deadline, courier_deadline, isee_threshold, ispe_threshold, stipend_amount, benefits, source_url, call_status, call_expected_on, call_expected_text, call_pdf_path, call_pdf_url, call_page_url, call_pdf_language)"
+        "id, name, status, documents_status, award_amount, application_deadline, application_id, scholarship_body_id, body:scholarship_bodies(name, region, academic_year, application_deadline, document_upload_deadline, courier_deadline, isee_threshold, ispe_threshold, stipend_amount, benefits, source_url, call_status, call_expected_on, call_expected_text, call_pdf_path, call_pdf_url, call_page_url, call_pdf_language)"
       )
       .eq("student_id", student.id),
   ]);
   const portals = scholarshipLogins(logins);
   type Dest = { id: string; display_name: string; scholarship_access: string | null };
-  const countries = new Map<string, Dest & { bodies: string[]; chosen: { university: string; body: string }[] }>();
+  // Each country the student is going to, and how many bodies it has — counted, never listed: the
+  // student is shown only the body of the university they pre-enrol at (scholarshipScope.ts).
+  const countries = new Map<string, Dest & { bodies: string[] }>();
   const addCountry = (d: Dest | null) => {
-    if (d?.id && !countries.has(d.id)) countries.set(d.id, { ...d, bodies: [], chosen: [] });
+    if (d?.id && !countries.has(d.id)) countries.set(d.id, { ...d, bodies: [] });
   };
   for (const r of registered ?? []) addCountry(one(r.destination as never) as Dest | null);
   for (const a of applied ?? []) {
-    const uni = one(a.university as never) as { name?: string; dsu_body?: unknown; destination?: unknown } | null;
-    const dest = uni?.destination ? (one(uni.destination as never) as Dest | null) : null;
-    addCountry(dest);
-    const body = uni?.dsu_body ? (one(uni.dsu_body as never) as { name?: string } | null) : null;
-    if (dest?.id && body?.name && uni?.name) countries.get(dest.id)!.chosen.push({ university: uni.name, body: body.name });
+    const uni = one(a.university as never) as { name?: string; destination?: unknown } | null;
+    addCountry(uni?.destination ? (one(uni.destination as never) as Dest | null) : null);
   }
   const { data: bodyLinks } = countries.size
     ? await supabase
@@ -196,19 +195,29 @@ export default async function PortalScholarshipPage() {
 
   // A university finalised for the visa settles which body pays for it: the
   // one set on the university in Setup, or else the one the directory's covers
-  // name (scholarshipMatch.ts). The student sees that body's guide from then
-  // on, exactly as their counsellor does on the staff Scholarship tab. It used
-  // to wait until a scholarship was recorded, which left the student with
-  // nothing while the office was already reading the deadlines.
+  // name — and that one alone, with no other region's beside it
+  // (scholarshipScope.ts). The student sees its guide from then on, exactly as
+  // their counsellor does on the staff Scholarship tab. With none linked, their
+  // counsellor chooses it, and it shows once recorded. A merit-based country
+  // shows only what the student is put forward for, which the recorded
+  // scholarships below already do.
   const finalized = (applied ?? []).flatMap((a) => {
     if (!a.is_finalized) return [];
     const uni = one(a.university as never) as { name?: string; dsu_body_id?: string | null; destination?: unknown } | null;
     const dest = uni?.destination ? (one(uni.destination as never) as Dest | null) : null;
     const countryBodies = dest?.id ? (bodiesByCountry.get(dest.id) ?? []) : [];
-    if (!dest || !uni?.name || countryBodies.length === 0) return [];
-    const chosen = uni.dsu_body_id ? countryBodies.filter((b) => b.id === uni.dsu_body_id) : [];
-    const bodies = chosen.length > 0 ? chosen : bodiesForUniversity(uni.name, countryBodies);
-    return [{ appId: a.id as string, university: uni.name, country: dest.display_name, access: dest.scholarship_access, bodies }];
+    if (!dest || !uni?.name || countryBodies.length === 0 || dest.scholarship_access !== "universal") return [];
+    const recordedIds = new Set(
+      (scholarships ?? []).filter((s) => s.application_id === a.id && s.scholarship_body_id).map((s) => s.scholarship_body_id as string)
+    );
+    const scope = scholarshipScope({
+      access: dest.scholarship_access,
+      finalized: true,
+      university: { name: uni.name, dsuBodyId: uni.dsu_body_id },
+      countryBodies,
+      recorded: countryBodies.filter((b) => recordedIds.has(b.id)),
+    });
+    return [{ appId: a.id as string, university: uni.name, country: dest.display_name, access: dest.scholarship_access, bodies: scope.shown }];
   });
   const offering = [...countries.values()].filter((c) => c.bodies.length > 0);
   const universal = offering.some((c) => c.scholarship_access === "universal");
@@ -269,28 +278,11 @@ export default async function PortalScholarshipPage() {
                   ? "Regional scholarships (DSU) are awarded by the region your university sits in, on the basis of your family’s ISEE and ISPE assessment."
                   : "Awarded to a few students on merit. Your counsellor will tell you whether you are being put forward."}
               </p>
-              {c.chosen.length > 0 && (
-                <ul className="mt-2 flex flex-col gap-0.5 text-xs">
-                  {c.chosen.map((u) => (
-                    <li key={u.university} className="text-ink">
-                      <span className="text-muted">{u.university}:</span> {u.body}
-                    </li>
-                  ))}
-                </ul>
+              {c.scholarship_access === "universal" && !finalized.some((f) => f.country === c.display_name) && (
+                <p className="mt-2 text-xs text-ink" data-scholarship-awaits>
+                  Yours is the body of the university you pre-enrol at. It appears here once that university is finalised.
+                </p>
               )}
-              {(() => {
-                const others = c.bodies.filter((b) => !c.chosen.some((u) => u.body === b));
-                // Folded: Italy alone has over twenty regional bodies, and the
-                // one that matters is the one above, when it is set.
-                return others.length > 0 ? (
-                  <details className="mt-2 text-[11px] text-muted">
-                    <summary className="cursor-pointer">
-                      {others.length} {c.chosen.length > 0 ? "other " : ""}bod{others.length === 1 ? "y" : "ies"} in {c.display_name}
-                    </summary>
-                    <p className="mt-1">{others.join(", ")}</p>
-                  </details>
-                ) : null;
-              })()}
             </Card>
           ))}
         </div>
