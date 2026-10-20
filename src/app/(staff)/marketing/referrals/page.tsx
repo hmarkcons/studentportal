@@ -45,7 +45,7 @@ export default async function ReferralsPage() {
     .not("registered_at", "is", null)
     .order("full_name");
 
-  const [{ data: parties }, { data: balances }, { data: referrals }] = await Promise.all([
+  const [{ data: parties }, { data: balances }, { data: referrals }, { data: bankRows }] = await Promise.all([
     supabase.from("referral_parties").select("*").order("full_name"),
     supabase.from("referral_party_balances").select("*").order("amount_owed", { ascending: false }),
     supabase
@@ -55,6 +55,10 @@ export default async function ReferralsPage() {
       )
       .eq("receipts.is_current", true)
       .order("created_at", { ascending: false }),
+    // Bank details + CNIC live apart (0341) and RLS returns them only to
+    // finance / Super Admin — a marketing viewer gets an empty list, so the
+    // account numbers never reach their browser.
+    supabase.from("referral_party_bank").select("referral_party_id, cnic, bank_name, account_title, account_number"),
   ]);
 
   // Attaching an amount and declaring it paid is Finance's, not everyone's.
@@ -63,7 +67,20 @@ export default async function ReferralsPage() {
   // but a separate permission so Admin > Role Permissions can move either.
   const canManage = await hasPermission("marketing.referrals.manage");
 
-  const partyRows = (parties ?? []) as ReferralParty[];
+  // The bank columns now come from referral_party_bank (finance-only); fold
+  // them back onto each party so the edit form and the "Paid into" column read
+  // the same shape as before. For a marketing viewer this map is empty.
+  const bankBy = new Map((bankRows ?? []).map((b) => [b.referral_party_id as string, b]));
+  const partyRows = ((parties ?? []) as Omit<ReferralParty, "cnic" | "bank_name" | "account_title" | "account_number">[]).map((p) => {
+    const bank = bankBy.get(p.id);
+    return {
+      ...p,
+      cnic: (bank?.cnic as string | null) ?? null,
+      bank_name: (bank?.bank_name as string | null) ?? null,
+      account_title: (bank?.account_title as string | null) ?? null,
+      account_number: (bank?.account_number as string | null) ?? null,
+    };
+  }) as ReferralParty[];
   const partyById = new Map(partyRows.map((p) => [p.id, p]));
   const studentById = new Map((students ?? []).map((s) => [s.id, s]));
   const rows = referrals ?? [];
@@ -238,8 +255,10 @@ export default async function ReferralsPage() {
             { key: "organisation", header: "Organisation" },
             { key: "contact", header: "Contact" },
             { key: "city", header: "City" },
-            { key: "bank", header: "Paid into" },
-            { key: "referrals", header: "Referrals", align: "right" },
+            // "Paid into" is a bank account number — shown only to finance /
+            // Super Admin (who can also edit it); marketing never sees it.
+            ...(canManage ? [{ key: "bank", header: "Paid into" }] : []),
+            { key: "referrals", header: "Referrals", align: "right" as const },
             { key: "owed", header: "Owed", align: "right" },
             { key: "paid", header: "Paid", align: "right" },
             { key: "last_paid", header: "Last paid" },

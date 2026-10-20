@@ -92,6 +92,7 @@ const TABLE_LABELS: Record<string, string> = {
   receipts: "Receipt",
   reengagement_messages: "Re-engagement message",
   referral_parties: "Referral party",
+  referral_party_bank: "Referral party bank details",
   referrals: "Referral",
   refund_requests: "Refund request",
   reminders: "Reminder",

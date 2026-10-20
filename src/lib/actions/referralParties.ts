@@ -17,6 +17,31 @@ function text(formData: FormData, key: string, max = 200): string | null {
 }
 
 /**
+ * The bank details and CNIC live in referral_party_bank, which only finance and
+ * Super Admin may read or write (0341) — the party's other details stay on
+ * referral_parties for everyone who manages referrals. The caller is already
+ * past requirePermission("marketing.referrals.manage") (finance / Super Admin),
+ * which is exactly who that table's RLS admits. Clearing every field removes
+ * the row rather than leaving an empty one.
+ */
+async function saveReferralBank(supabase: Awaited<ReturnType<typeof createClient>>, referralPartyId: string, formData: FormData): Promise<string | null> {
+  const bank = {
+    cnic: text(formData, "cnic", 40),
+    bank_name: text(formData, "bank_name", 120),
+    account_title: text(formData, "account_title", 120),
+    account_number: text(formData, "account_number", 60),
+  };
+  if (Object.values(bank).every((v) => v === null)) {
+    const { error } = await supabase.from("referral_party_bank").delete().eq("referral_party_id", referralPartyId);
+    return error?.message ?? null;
+  }
+  const { error } = await supabase
+    .from("referral_party_bank")
+    .upsert({ referral_party_id: referralPartyId, ...bank, updated_at: new Date().toISOString() }, { onConflict: "referral_party_id" });
+  return error?.message ?? null;
+}
+
+/**
  * Adds an outside referring party — a sub-agent, or anyone else who sends us
  * students and is paid for it.
  *
@@ -42,10 +67,6 @@ export async function createReferralParty(_prevState: unknown, formData: FormDat
       contact_number: text(formData, "contact_number", 40),
       email: text(formData, "email", 160),
       city: text(formData, "city", 80),
-      cnic: text(formData, "cnic", 40),
-      bank_name: text(formData, "bank_name", 120),
-      account_title: text(formData, "account_title", 120),
-      account_number: text(formData, "account_number", 60),
       notes: text(formData, "notes", 1000),
     })
     .select("id")
@@ -59,6 +80,9 @@ export async function createReferralParty(_prevState: unknown, formData: FormDat
     }
     return { error: error.message };
   }
+
+  const bankError = await saveReferralBank(supabase, data.id, formData);
+  if (bankError) return { error: `The party was added, but its bank details didn't save: ${bankError}` };
 
   revalidatePath(PAGE);
   return { success: true, id: data.id };
@@ -84,10 +108,6 @@ export async function updateReferralParty(id: string, _prevState: unknown, formD
       contact_number: text(formData, "contact_number", 40),
       email: text(formData, "email", 160),
       city: text(formData, "city", 80),
-      cnic: text(formData, "cnic", 40),
-      bank_name: text(formData, "bank_name", 120),
-      account_title: text(formData, "account_title", 120),
-      account_number: text(formData, "account_number", 60),
       notes: text(formData, "notes", 1000),
       is_active: formData.get("is_active") !== null,
     })
@@ -99,6 +119,9 @@ export async function updateReferralParty(id: string, _prevState: unknown, formD
     return { error: error.message };
   }
   if (!data?.length) return { error: REFUSED };
+
+  const bankError = await saveReferralBank(supabase, id, formData);
+  if (bankError) return { error: `The details saved, but the bank details didn't: ${bankError}` };
 
   revalidatePath(PAGE);
   return { success: true };
