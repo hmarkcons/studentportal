@@ -1,11 +1,11 @@
-// A student's logins, sent by email or copied as a WhatsApp message: what
-// each is called, the order, and that the email and the message say the same.
+// A student's logins, copied as a WhatsApp message: what each is called, the
+// order, and the note left behind. The emails that carry them are the
+// student's own (studentEmailTemplates, portalWelcomeEmail), tested in
+// student-email-test and portal-welcome-email-test.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   credentialLabel,
-  credentialsEmailHtml,
-  credentialsEmailText,
   credentialsNote,
   credentialsWhatsapp,
   loginLabels,
@@ -57,22 +57,6 @@ test("the WhatsApp message carries every login, each under its name in bold", ()
   assert.ok(text.indexOf("HMARK Student Portal") < text.indexOf("Gmail"));
 });
 
-test("the email says what the message says", () => {
-  const text = credentialsEmailText(INPUT);
-  const html = credentialsEmailHtml(INPUT);
-  for (const value of ["Hmark-pass-3", "G-pass-1", "Uni-pass-2", "Sch-pass-4", "HMC-F26-IT-012", "https://portal.example/login"]) {
-    assert.ok(text.includes(value), `text: ${value}`);
-    assert.ok(html.includes(value), `html: ${value}`);
-  }
-  assert.ok(!text.includes("*"), "no WhatsApp asterisks in an email");
-});
-
-test("what a login says is escaped in the email, not run as markup", () => {
-  const html = credentialsEmailHtml({ ...INPUT, logins: [login("gmail", "<script>alert(1)</script>", "a&b")] });
-  assert.ok(!html.includes("<script>alert(1)</script>"));
-  assert.ok(html.includes("&lt;script&gt;") && html.includes("a&amp;b"));
-});
-
 test("the note on the timeline names what went — never a password", () => {
   const labels = loginLabels(INPUT.logins);
   const emailed = credentialsNote("email", labels, "ali@example.com");
@@ -92,13 +76,6 @@ test("Portal credentials holds every login but this portal's own, which is sent 
   assert.equal(inCredentialsSection("scholarship_portal:EDiSU"), true);
 });
 
-test("the subject says what the email carries", async () => {
-  const { credentialsEmailSubject } = await import("../src/lib/studentCredentials.ts");
-  assert.equal(credentialsEmailSubject([login("portal_login", "ali@example.com", "p")]), "Your HMARK Student Portal login");
-  assert.equal(credentialsEmailSubject([login("gmail", "a", "b")]), "Your login details from HMARK Consultants");
-  assert.equal(credentialsEmailSubject([login("portal_login", "a", "b"), login("gmail", "a", "b")]), "Your login details from HMARK Consultants");
-});
-
 test("each login goes with the page it signs in to, as Sign in here", () => {
   const input = {
     ...INPUT,
@@ -112,6 +89,4 @@ test("each login goes with the page it signs in to, as Sign in here", () => {
   assert.match(text, /\*Gmail\*\nUsername: ali\.raza@gmail\.com\nPassword: G-pass-1\nSign in here: https:\/\/mail\.google\.com\//);
   assert.ok(!/Visa appointment portal\*\n[^*]*Sign in here/.test(text), "no line for a login with no page");
   assert.ok(!text.includes("ignored.example"), "this portal's own page is its sign-in page, never a stored one");
-  assert.match(credentialsEmailText(input), /  Sign in here: https:\/\/mail\.google\.com\//);
-  assert.match(credentialsEmailHtml(input), /<a href="https:\/\/mail\.google\.com\/"[^>]*>https:\/\/mail\.google\.com\/<\/a>/, "a link in the email");
 });

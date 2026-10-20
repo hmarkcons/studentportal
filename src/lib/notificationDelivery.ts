@@ -11,7 +11,8 @@ import { after } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
 import { getSiteUrl } from "@/lib/siteUrl";
-import { notificationEmail, notificationHref, notificationTitle, type Audience } from "@/lib/notificationText";
+import { notificationHref, notificationTitle, type Audience } from "@/lib/notificationText";
+import { alertEmail } from "@/lib/alertEmail";
 import { sentLink } from "@/lib/signInLanding";
 
 type Claimed = {
@@ -51,13 +52,14 @@ export async function deliverNotificationEmails({ limit = 20, quietMinutes = 2 }
     const result = row.email
       ? await sendEmail({
           to: row.email,
-          ...notificationEmail({
+          ...(await alertEmail({
             recipientName: row.recipient_name,
             title,
             body: row.count > 1 ? null : row.body,
             url: sentLink(getSiteUrl(), notificationHref(row, row.audience)),
             audience: row.audience,
-          }),
+            kind: row.kind,
+          })),
         })
       : { error: "No email address on file." };
     if ("success" in result) sent++;

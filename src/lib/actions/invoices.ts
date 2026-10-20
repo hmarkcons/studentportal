@@ -57,6 +57,7 @@ function buildPdfAfterResponse(invoiceId: string, studentId: string, revalidate:
 }
 import { balanceDueDate, checkPartialSplit } from "@/lib/partialPayment";
 import { buildInvoiceEmail } from "@/lib/invoiceEmail";
+import { loadEmailOffice } from "@/lib/emailOffice";
 import { sendEmail, accountsFrom } from "@/lib/email";
 import { getSiteUrl } from "@/lib/siteUrl";
 
@@ -1089,6 +1090,9 @@ export async function buildAndSendInvoiceEmail(
     companyName: issuerFromSettings(bankRow as IssuerRow | null).companyName,
     taxLabel: issuerFromSettings(bankRow as IssuerRow | null).taxLabel,
     bank: bankFromSettings(bankRow),
+    // The office at the foot and the hosted pictures, as every student email carries them.
+    office: await loadEmailOffice(),
+    siteUrl: getSiteUrl(),
   });
 
   const sent = await sendEmail({

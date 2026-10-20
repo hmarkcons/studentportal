@@ -1,7 +1,8 @@
 "use server";
 
 import { createElement } from "react";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { EMAIL_OFFICE_TAG } from "@/lib/emailOffice";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hasRole } from "@/lib/auth/roles";
@@ -138,6 +139,8 @@ export async function updateInvoiceBankSettings(_prevState: unknown, formData: F
 
   revalidatePath("/setup/invoice-settings");
   revalidatePath("/finance/invoice-generator");
+  // The office details at the foot of every student email (emailOffice.ts).
+  revalidateTag(EMAIL_OFFICE_TAG, { expire: 0 });
   return { success: true };
 }
 

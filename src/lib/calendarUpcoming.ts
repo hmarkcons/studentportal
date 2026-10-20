@@ -22,6 +22,9 @@ import {
   type ReminderMode,
 } from "@/lib/calendarAuto";
 import { loadFollowUps, loadInstalments, loadInterviews, loadInvitedEvents } from "@/lib/calendarAutoLoad";
+import { loadEmailOffice } from "@/lib/emailOffice";
+import { sentLink } from "@/lib/signInLanding";
+import { studentCalendarEmail } from "@/lib/studentEmailTemplates";
 
 // Emails before what is on people's calendars: "tomorrow" — everything on
 // tomorrow's date, from the daily run — and "soon" — what starts within the
@@ -235,12 +238,24 @@ export async function sendCalendarReminders(mode: ReminderMode, opts: { dryRun?:
   if (dryRun) return result;
 
   const siteUrl = getSiteUrl();
+  const office = toSend.some((b) => b.audience === "student") ? await loadEmailOffice() : null;
   for (const b of toSend.slice(0, MAX_EMAILS)) {
     let ok = true;
     if (isUndeliverableAddress(b.email)) {
       result.skipped++;
     } else {
-      const words = reminderEmail({ name: b.name, mode, items: b.items, siteUrl, calendarPath: CALENDAR_PATH[b.audience] });
+      // A student's in their own style (studentEmailTemplates); everyone else's plain.
+      const words =
+        b.audience === "student" && office
+          ? studentCalendarEmail({
+              office,
+              siteUrl,
+              name: b.name,
+              mode,
+              items: b.items.map((i) => ({ title: i.title, kind: i.kind, date: i.date, time: i.time, endTime: i.endTime, location: i.location ?? null })),
+              link: sentLink(siteUrl, `${CALENDAR_PATH.student}?view=day&date=${[...b.items].sort((x, y) => x.date.localeCompare(y.date))[0].date}`),
+            })
+          : reminderEmail({ name: b.name, mode, items: b.items, siteUrl, calendarPath: CALENDAR_PATH[b.audience] });
       const sent = await sendEmail({ to: b.email, ...words });
       if ("error" in sent && sent.error) {
         ok = false;

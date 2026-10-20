@@ -32,7 +32,8 @@ export type PendingPersonalTaskRow = {
   owner_id: string;
 };
 
-export type RecipientBucket = { name: string; items: ReminderEmailItem[] };
+/** "student" is the student a task is about, emailed in their own style; "staff" everyone else. */
+export type RecipientBucket = { name: string; items: ReminderEmailItem[]; audience: "staff" | "student" };
 
 /** "18:00", or "18:00–19:30" once an item has an end time. */
 export function reminderTime(allDay: boolean, dueTime: string | null | undefined, endTime?: string | null): string | null {
@@ -50,14 +51,15 @@ function addToBucket(
   map: Map<string, RecipientBucket & { seen: Set<string> }>,
   email: string | null | undefined,
   name: string,
-  item: ReminderEmailItem
+  item: ReminderEmailItem,
+  audience: RecipientBucket["audience"]
 ) {
   const addr = email?.trim().toLowerCase();
   if (!addr) return;
   const key = `${item.kind}-${item.title}-${item.dueDate}`;
   let bucket = map.get(addr);
   if (!bucket) {
-    bucket = { name, items: [], seen: new Set() };
+    bucket = { name, items: [], seen: new Set(), audience };
     map.set(addr, bucket);
   }
   if (bucket.seen.has(key)) return;
@@ -94,10 +96,10 @@ export function buildReminderRecipients(
     if (student?.assigned_counselor_id) {
       const staffEmail = staffEmailById.get(student.assigned_counselor_id);
       const staffName = staffNameById.get(student.assigned_counselor_id) ?? "there";
-      addToBucket(recipients, staffEmail, staffName, item);
+      addToBucket(recipients, staffEmail, staffName, item, "staff");
     }
     if (student?.email) {
-      addToBucket(recipients, student.email, student.full_name ?? "there", item);
+      addToBucket(recipients, student.email, student.full_name ?? "there", item, "student");
     }
     // Guests are not sent this daily list: they have the invitation, and a
     // reminder the day before and an hour before (src/lib/calendarUpcoming.ts).
@@ -119,7 +121,7 @@ export function buildReminderRecipients(
 
     const ownerEmail = staffEmailById.get(p.owner_id);
     const ownerName = staffNameById.get(p.owner_id) ?? "there";
-    addToBucket(recipients, ownerEmail, ownerName, item);
+    addToBucket(recipients, ownerEmail, ownerName, item, "staff");
   });
 
   return recipients;

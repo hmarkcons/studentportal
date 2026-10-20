@@ -9,7 +9,10 @@
 //   Registration & Portal Access   "Copy as message" copies their login for
 //                                  this portal — where to sign in, the email,
 //                                  the password — and nothing else; "Send to
-//                                  student" asks first, then emails only that.
+//                                  student" asks first, then emails only that:
+//                                  the login on its own until a signed
+//                                  agreement is on file, then the welcome,
+//                                  once — recorded, and offered again.
 //   Portal credentials             this portal's own login is not there at
 //                                  all. Either button opens the section's
 //                                  logins to tick, none ticked, one with
@@ -129,6 +132,50 @@ try {
   ok("...then emails only their portal login", /^Emailed HMARK Student Portal to zztmp-sendcreds-student@hmark-test\.local\./.test((await outcome.innerText()).trim()), await outcome.innerText());
   ok("...noted on the timeline",
     Boolean(await poll(async () => (await notes()).find((m) => m.body === `Emailed the student their login details at ${STUDENT_EMAIL}: HMARK Student Portal.`))));
+
+  // ---------------------------------------------------------- the welcome
+  // Before the signed agreement is in, the login goes on its own, and the panel says why.
+  const openPortalSend = async () => {
+    await page.goto(`${BASE}/students/${studentId}?open=registration-portal-access#card-registration-portal-access`, { waitUntil: "domcontentloaded" });
+    await portalBar.waitFor({ timeout: 60000 });
+    await hydrated("portal");
+    await portalBar.getByRole("button", { name: "Send to student" }).click();
+    await confirmBox.waitFor({ timeout: 30000 });
+    return { kind: await confirmBox.getAttribute("data-portal-email-kind"), says: (await confirmBox.locator("[data-portal-email-plan]").innerText()).trim() };
+  };
+  const welcomeRow = async () => (await admin.from("student_welcome_emails").select("sent_at, sent_to, sent_by").eq("student_id", studentId).maybeSingle()).data;
+  ok("(no welcome had gone with the login on its own)", (await welcomeRow()) === null);
+  let plan = await openPortalSend();
+  ok("before the signed agreement is in, Send is the login on its own, and says why", plan.kind === "login" && /signed agreement isn.t on file yet/.test(plan.says), JSON.stringify(plan));
+
+  // The signed copy uploaded: the next send is the welcome, once.
+  const { error: agreementError } = await admin
+    .from("agreements")
+    .insert({ student_id: studentId, status: "pending_signature", signed_file_path: `${studentId}/agreements/zztmp-signed.pdf` });
+  ok("(the signed agreement is uploaded)", !agreementError, JSON.stringify(agreementError));
+  plan = await openPortalSend();
+  ok("with the signed agreement on file, Send is the welcome", plan.kind === "welcome" && /this is the welcome/.test(plan.says), JSON.stringify(plan));
+  await confirmBox.getByRole("button", { name: "Send email" }).click();
+  outcome = portalBar.locator("[data-credentials-emailed], [role=alert]").first();
+  await outcome.waitFor({ timeout: 90000 });
+  ok("...and goes as the welcome, with their login", /^Emailed the welcome, with their login, to zztmp-sendcreds-student@hmark-test\.local\./.test((await outcome.innerText()).trim()), await outcome.innerText());
+  const welcomed = await poll(welcomeRow);
+  ok("...recorded: when, to whom, by whom", welcomed?.sent_to === STUDENT_EMAIL && welcomed.sent_by === officer.id, JSON.stringify(welcomed));
+  ok("...and noted on the timeline as the welcome",
+    Boolean(await poll(async () => (await notes()).find((m) => m.body === `Emailed the student the welcome email with their login details at ${STUDENT_EMAIL}: HMARK Student Portal.`))));
+
+  plan = await openPortalSend();
+  ok("the send after it is the login on its own, saying when the welcome went", plan.kind === "login" && /^The welcome went on \d{1,2} \w{3,4} \d{4} to zztmp-sendcreds-student@hmark-test\.local, so this is the login on its own\.$/.test(plan.says), JSON.stringify(plan));
+  await confirmBox.locator("[data-welcome-again]").check();
+  ok("...unless the welcome is asked for again", (await confirmBox.getAttribute("data-portal-email-kind")) === "welcome");
+  await confirmBox.getByRole("button", { name: "Send email" }).click();
+  outcome = portalBar.locator("[data-credentials-emailed], [role=alert]").first();
+  await outcome.waitFor({ timeout: 90000 });
+  const again = await poll(async () => {
+    const row = await welcomeRow();
+    return row && row.sent_at !== welcomed?.sent_at ? row : null;
+  });
+  ok("...which goes as the welcome again, and is recorded", /^Emailed the welcome/.test((await outcome.innerText()).trim()) && Boolean(again), await outcome.innerText());
 
   // ------------------------------------------------------ Portal credentials
   console.log("\n--- Portal credentials ---");

@@ -1,0 +1,179 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a5a42"/>
+      <stop offset="0.5" stop-color="#14946d"/>
+      <stop offset="1" stop-color="#2f6fc4"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.74" cy="0.42" r="0.42">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ocean" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2bb58a"/>
+      <stop offset="1" stop-color="#1b5fa8"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.35"/>
+      <stop offset="0.45" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.06"/>
+    </linearGradient>
+    <clipPath id="earth"><circle cx="870" cy="250" r="170"/></clipPath>
+    <mask id="moon">
+      <rect width="1200" height="520" fill="#ffffff"/>
+      <circle cx="104" cy="72" r="19" fill="#000000"/>
+    </mask>
+  </defs>
+
+  <rect width="1200" height="520" fill="url(#sky)"/>
+  <rect width="1200" height="520" fill="url(#glow)"/>
+
+  <!-- crescent and star, as on the flag -->
+  <g opacity="0.9">
+    <circle cx="94" cy="80" r="23" fill="#ffffff" mask="url(#moon)"/>
+    <path d="M126 64 l3.2 9.8 h10.3 l-8.3 6 l3.2 9.8 l-8.4 -6.1 l-8.3 6.1 l3.2 -9.8 l-8.4 -6 h10.4 z" fill="#ffffff"/>
+  </g>
+
+  <!-- stars and sparkles -->
+  <g fill="#ffffff">
+    <circle cx="420" cy="48" r="2" opacity="0.6"/>
+    <circle cx="560" cy="120" r="2.5" opacity="0.5"/>
+    <circle cx="1120" cy="70" r="2.5" opacity="0.7"/>
+    <circle cx="1150" cy="300" r="2" opacity="0.5"/>
+    <circle cx="250" cy="60" r="1.8" opacity="0.55"/>
+    <path d="M1060 140 l5 14 l14 5 l-14 5 l-5 14 l-5 -14 l-14 -5 l14 -5 z" opacity="0.85"/>
+    <path d="M500 70 l3.5 10 l10 3.5 l-10 3.5 l-3.5 10 l-3.5 -10 l-10 -3.5 l10 -3.5 z" opacity="0.8"/>
+    <path d="M640 250 l3 8 l8 3 l-8 3 l-3 8 l-3 -8 l-8 -3 l8 -3 z" opacity="0.6"/>
+  </g>
+
+  <!-- clouds -->
+  <g fill="#ffffff" opacity="0.15">
+    <path d="M980 470 h170 a34 34 0 0 0 -34 -40 a48 48 0 0 0 -90 8 a32 32 0 0 0 -46 32 z"/>
+    <path d="M560 200 h110 a22 22 0 0 0 -22 -28 a34 34 0 0 0 -62 6 a22 22 0 0 0 -26 22 z"/>
+  </g>
+
+  <!-- the Karakoram behind, K2 the tallest -->
+  <path d="M0 330 L70 250 L120 290 L190 200 L250 262 L300 150 L362 242 L420 192 L482 262 L540 214 L620 300 L700 340 L700 452 L0 452 Z" fill="#ffffff" opacity="0.11"/>
+  <g fill="#ffffff" opacity="0.6">
+    <path d="M300 150 L324 186 L312 182 L301 198 L290 182 L276 190 Z"/>
+    <path d="M190 200 L207 226 L196 222 L187 233 L176 220 Z"/>
+    <path d="M420 192 L437 217 L427 213 L418 225 L408 214 Z"/>
+    <path d="M540 214 L553 234 L545 231 L538 240 L530 232 Z"/>
+  </g>
+  <path d="M0 382 L90 322 L160 360 L240 306 L330 368 L400 330 L470 368 L560 322 L660 378 L720 452 L0 452 Z" fill="#0a5a42" opacity="0.32"/>
+
+  <!-- Pakistan's landmarks, left to right: Badshahi Mosque, Minar-e-Pakistan, Faisal Mosque, Mazar-e-Quaid -->
+  <rect x="0" y="452" width="1200" height="68" fill="url(#ground)"/>
+  <g fill="#ffffff" opacity="0.3">
+    <!-- Badshahi Mosque, Lahore: three domes between two minarets -->
+    <rect x="30" y="404" width="190" height="48"/>
+    <path d="M95 404 C95 360 155 360 155 404 Z"/>
+    <rect x="123" y="350" width="4" height="14"/>
+    <path d="M55 404 C55 378 95 378 95 404 Z"/>
+    <path d="M155 404 C155 378 195 378 195 404 Z"/>
+    <rect x="18" y="352" width="12" height="100"/>
+    <rect x="15" y="345" width="18" height="8"/>
+    <path d="M15 345 C15 332 33 332 33 345 Z"/>
+    <rect x="220" y="352" width="12" height="100"/>
+    <rect x="217" y="345" width="18" height="8"/>
+    <path d="M217 345 C217 332 235 332 235 345 Z"/>
+    <!-- Minar-e-Pakistan, Lahore -->
+    <rect x="250" y="438" width="100" height="14"/>
+    <rect x="262" y="428" width="76" height="10"/>
+    <path d="M283 428 L317 428 L309 252 L291 252 Z"/>
+    <rect x="280" y="340" width="40" height="6"/>
+    <rect x="284" y="248" width="32" height="7"/>
+    <rect x="292" y="226" width="16" height="22"/>
+    <path d="M290 227 C290 210 310 210 310 227 Z"/>
+    <rect x="299" y="194" width="2" height="18"/>
+    <!-- Faisal Mosque, Islamabad: the tent of the prayer hall and four pencil minarets -->
+    <path d="M405 452 L405 414 Q440 396 470 344 Q500 396 535 414 L535 452 Z"/>
+    <rect x="384" y="302" width="8" height="150"/>
+    <path d="M384 302 L388 268 L392 302 Z"/>
+    <rect x="548" y="302" width="8" height="150"/>
+    <path d="M548 302 L552 268 L556 302 Z"/>
+    <rect x="405" y="322" width="6" height="92"/>
+    <path d="M405 322 L408 298 L411 322 Z"/>
+    <rect x="529" y="322" width="6" height="92"/>
+    <path d="M529 322 L532 298 L535 322 Z"/>
+    <!-- Mazar-e-Quaid, Karachi: the white cube and its dome -->
+    <rect x="596" y="440" width="128" height="12"/>
+    <rect x="612" y="372" width="96" height="68"/>
+    <path d="M620 373 C620 314 700 314 700 373 Z"/>
+    <rect x="658" y="314" width="4" height="16"/>
+  </g>
+  <g fill="#0a5a42" opacity="0.5">
+    <!-- arches and openings -->
+    <rect x="44" y="418" width="14" height="34" rx="7"/>
+    <rect x="74" y="418" width="14" height="34" rx="7"/>
+    <rect x="104" y="414" width="16" height="38" rx="8"/>
+    <rect x="130" y="414" width="16" height="38" rx="8"/>
+    <rect x="162" y="418" width="14" height="34" rx="7"/>
+    <rect x="192" y="418" width="14" height="34" rx="7"/>
+    <rect x="296" y="300" width="8" height="26" rx="4"/>
+    <rect x="460" y="418" width="20" height="34" rx="10"/>
+    <rect x="648" y="386" width="24" height="54" rx="12"/>
+    <rect x="622" y="396" width="14" height="40" rx="7"/>
+    <rect x="684" y="396" width="14" height="40" rx="7"/>
+  </g>
+
+  <!-- the world -->
+  <circle cx="870" cy="250" r="196" fill="#ffffff" opacity="0.08"/>
+  <circle cx="870" cy="250" r="182" fill="#ffffff" opacity="0.10"/>
+  <circle cx="870" cy="250" r="170" fill="url(#ocean)"/>
+  <g clip-path="url(#earth)">
+    <g fill="#7fe0b8" opacity="0.92">
+      <path d="M760 120 c30 -20 80 -18 104 4 c18 16 4 36 -18 40 c-22 4 -26 22 -10 34 c18 14 10 40 -18 44 c-30 4 -50 -16 -66 -40 c-16 -24 -18 -64 8 -82 z"/>
+      <path d="M880 150 c26 -14 70 -10 90 10 c20 20 6 44 -20 48 c-20 3 -24 22 -6 34 c22 14 18 46 -12 58 c-28 12 -44 -6 -52 -30 c-8 -24 -28 -30 -32 -56 c-4 -26 10 -54 32 -64 z"/>
+      <path d="M940 300 c22 -8 52 4 56 26 c4 22 -14 44 -38 52 c-24 8 -42 -6 -42 -28 c0 -22 6 -42 24 -50 z"/>
+      <path d="M720 300 c18 -10 44 -2 50 18 c6 20 -8 40 -30 44 c-22 4 -36 -10 -36 -28 c0 -14 4 -26 16 -34 z"/>
+      <path d="M990 120 c18 -6 40 4 42 20 c2 16 -14 26 -30 24 c-16 -2 -26 -14 -24 -26 c1 -8 4 -14 12 -18 z"/>
+    </g>
+    <g fill="none" stroke="#ffffff" stroke-opacity="0.28" stroke-width="2">
+      <ellipse cx="870" cy="250" rx="170" ry="56"/>
+      <ellipse cx="870" cy="250" rx="170" ry="118"/>
+      <line x1="700" y1="250" x2="1040" y2="250"/>
+      <ellipse cx="870" cy="250" rx="60" ry="170"/>
+      <ellipse cx="870" cy="250" rx="120" ry="170"/>
+      <line x1="870" y1="80" x2="870" y2="420"/>
+    </g>
+    <circle cx="870" cy="250" r="170" fill="url(#shine)"/>
+  </g>
+  <circle cx="870" cy="250" r="170" fill="none" stroke="#ffffff" stroke-opacity="0.45" stroke-width="3"/>
+  <g>
+    <path d="M905 168 c0 -14 11 -24 24 -24 s24 10 24 24 c0 18 -24 40 -24 40 s-24 -22 -24 -40 z" fill="#ffd166"/>
+    <circle cx="929" cy="168" r="8" fill="#0a5a42"/>
+    <path d="M800 236 c0 -9 7 -16 16 -16 s16 7 16 16 c0 12 -16 27 -16 27 s-16 -15 -16 -27 z" fill="#ffffff"/>
+    <circle cx="816" cy="236" r="5.5" fill="#2f6fc4"/>
+    <path d="M960 300 c0 -8 6 -14 14 -14 s14 6 14 14 c0 11 -14 24 -14 24 s-14 -13 -14 -24 z" fill="#ffffff" opacity="0.9"/>
+    <circle cx="974" cy="300" r="5" fill="#14946d"/>
+  </g>
+
+  <!-- the flight: taking off from home, out to the world -->
+  <circle cx="352" cy="300" r="20" fill="#ffffff" opacity="0.18"/>
+  <circle cx="352" cy="300" r="10" fill="#ffffff"/>
+  <circle cx="352" cy="300" r="4.5" fill="#14946d"/>
+  <path d="M364 290 C 440 180, 580 118, 718 128" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" stroke-dasharray="1 16" opacity="0.9"/>
+  <path d="M740 130 C 800 132, 860 140, 905 158" fill="none" stroke="#ffd166" stroke-width="5" stroke-linecap="round" stroke-dasharray="1 16" opacity="0.95"/>
+  <g transform="translate(722 128) rotate(4) scale(1.55)">
+    <path d="M-44 0 C-40 -7 -10 -8 32 -6 C46 -5 52 -2 54 0 C52 2 46 5 32 6 C-10 8 -40 7 -44 0 Z" fill="#ffffff"/>
+    <path d="M6 -6 L-16 -44 L-6 -44 L26 -6 Z" fill="#ffffff"/>
+    <path d="M6 6 L-16 44 L-6 44 L26 6 Z" fill="#ffffff"/>
+    <path d="M-34 -5 L-46 -22 L-39 -22 L-24 -5 Z" fill="#ffffff"/>
+    <path d="M-34 5 L-46 22 L-39 22 L-24 5 Z" fill="#ffffff"/>
+    <path d="M40 -3 C46 -2 49 -1 50 0 C49 1 46 2 40 3 Z" fill="#9fd8ff"/>
+  </g>
+
+  <!-- graduation cap, tossed in celebration -->
+  <g transform="translate(470 92) rotate(-14) scale(0.85)">
+    <path d="M0 -26 L62 0 L0 26 L-62 0 Z" fill="#1d2433"/>
+    <path d="M0 -26 L62 0 L0 26 L-62 0 Z" fill="none" stroke="#ffffff" stroke-opacity="0.25" stroke-width="2"/>
+    <path d="M-34 12 L-34 34 C-34 46 34 46 34 34 L34 12 L0 26 Z" fill="#2a3346"/>
+    <circle cx="0" cy="0" r="4.5" fill="#ffd166"/>
+    <path d="M0 0 C18 6 40 10 46 14 L46 44" fill="none" stroke="#ffd166" stroke-width="3.5" stroke-linecap="round"/>
+    <path d="M40 44 L52 44 L50 60 L42 60 Z" fill="#ffd166"/>
+  </g>
+</svg>

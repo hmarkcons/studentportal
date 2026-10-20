@@ -15,7 +15,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { sendEmail } from "@/lib/email";
-import { notificationEmail, reminderDue, type Audience } from "@/lib/notificationText";
+import { reminderDue, type Audience } from "@/lib/notificationText";
+import { alertEmail } from "@/lib/alertEmail";
 import { passportStatus } from "@/lib/profileCompleteness";
 import { holdsPermission } from "@/lib/permissionResolve";
 import { staffRoles } from "@/lib/auth/roles";
@@ -246,7 +247,7 @@ export async function sendReminders(admin: SupabaseClient, { dryRun = false }: {
   let sent = 0;
   const failures: string[] = [];
   for (const r of due) {
-    const mail = notificationEmail({ recipientName: r.name, title: r.title, body: r.body, url: sentLink(getSiteUrl(), r.path), audience: r.audience });
+    const mail = await alertEmail({ recipientName: r.name, title: r.title, body: r.body, url: sentLink(getSiteUrl(), r.path), audience: r.audience, kind: r.key });
     const result = await sendEmail({ to: r.email!, ...mail });
     if ("success" in result) {
       sent++;

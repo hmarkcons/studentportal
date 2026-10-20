@@ -5,6 +5,9 @@ import { createClient } from "@/lib/supabase/server";
 import { getStaffSession } from "@/lib/auth/session";
 import { requirePermission } from "@/lib/auth/permissions";
 import { sendEmail, accountsFrom } from "@/lib/email";
+import { loadEmailOffice } from "@/lib/emailOffice";
+import { getSiteUrl } from "@/lib/siteUrl";
+import { studentMessageEmail } from "@/lib/studentEmailTemplates";
 import { messageBodyError } from "@/lib/messages";
 import { buildReengagementDraft, type ReengagementDraft, type ReengagementTemplates } from "@/lib/reengagement";
 
@@ -92,19 +95,19 @@ export async function sendReengagementMessage(studentId: string, _prevState: unk
   let emailed = false;
   if (alsoEmail) {
     if (!student.email) return { error: "This student has no email address on file — send it to their portal instead." };
+    // In the student's own style (studentEmailTemplates), signed by whoever wrote it.
+    const mail = studentMessageEmail({ office: await loadEmailOffice(), siteUrl: getSiteUrl(), subject, body, fromName: staff.full_name ?? null });
+    let sent: Awaited<ReturnType<typeof sendEmail>>;
     try {
-      await sendEmail({
-        to: student.email,
-        subject,
-        text: body,
-        from: accountsFrom(),
-      });
-      emailed = true;
+      sent = await sendEmail({ to: student.email, subject: mail.subject, text: mail.text, html: mail.html, from: accountsFrom() });
     } catch (e) {
-      // Said plainly rather than recorded as sent. A message the student never
-      // received, logged as delivered, is worse than a failure on screen.
-      return { error: `The email did not go: ${e instanceof Error ? e.message : String(e)}` };
+      sent = { error: e instanceof Error ? e.message : String(e) };
     }
+    // Said plainly rather than recorded as sent. A message the student never
+    // received, logged as delivered, is worse than a failure on screen. sendEmail
+    // answers with an error rather than throwing, which this used to miss.
+    if ("error" in sent && sent.error) return { error: `The email did not go: ${sent.error}` };
+    emailed = true;
   }
 
   const { error } = await supabase.from("messages").insert({

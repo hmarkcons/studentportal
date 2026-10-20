@@ -8,8 +8,7 @@ import { generatePassword } from "@/lib/generatePassword";
 import { chosenPasswordError } from "@/lib/passwordPolicy";
 import { finishPasswordSet, passwordRefusal, type PasswordSetResult } from "@/lib/passwordSet";
 import { sendEmail } from "@/lib/email";
-import { getSiteUrl } from "@/lib/siteUrl";
-import { staffLoginHtml, staffLoginSubject, staffLoginText, type StaffLoginEmailData } from "@/lib/staffLoginEmail";
+import { portalMail } from "@/lib/portalEmailLoad";
 
 
 export async function inviteStudentToPortal(studentId: string, _prevState: unknown, _formData: FormData) {
@@ -259,8 +258,6 @@ export async function setStudentPortalPassword(studentId: string, password: stri
   const { error: authError } = await admin.auth.admin.updateUserById(student.auth_user_id, { password });
   if (authError) return { error: passwordRefusal(authError.message) };
 
-  const { data: me } = await supabase.auth.getUser();
-  const { data: actor } = await supabase.from("staff").select("full_name").eq("id", me.user?.id ?? "").maybeSingle();
   const done = await finishPasswordSet({
     signOut: () => supabase.rpc("revoke_user_sessions", { p_user_id: student.auth_user_id }),
     keepCopy: () =>
@@ -272,17 +269,11 @@ export async function setStudentPortalPassword(studentId: string, password: stri
       }),
     mail: async () => {
       if (!email) return "the student has no email address";
-      const payload: StaffLoginEmailData = {
-        staffName: student.full_name ?? "there",
-        email,
-        password,
-        loginUrl: `${getSiteUrl()}/login`,
-        issuedBy: actor?.full_name ?? null,
-        reason: "password_set",
-        audience: "student",
-        studentCode: student.student_code ?? null,
-      };
-      const sent = await sendEmail({ to: email, subject: staffLoginSubject(payload), text: staffLoginText(payload), html: staffLoginHtml(payload) });
+      // In the student's own style (portalWelcomeEmail): the new password on
+      // their boarding pass, with their Student ID, and that they have been
+      // signed out everywhere.
+      const words = await portalMail(studentId, { username: email, password }, "new_password");
+      const sent = await sendEmail({ to: email, subject: words.subject, text: words.text, html: words.html });
       return sent && "error" in sent && sent.error ? String(sent.error) : null;
     },
   });

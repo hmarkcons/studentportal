@@ -2,22 +2,25 @@
 
 import { revalidatePath } from "next/cache";
 import { getStaffSession } from "@/lib/auth/session";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { whatsappLink } from "@/lib/reengagement";
 import { parseStoredLogin } from "@/lib/portalLink";
+import { loadEmailOffice } from "@/lib/emailOffice";
+import type { PortalEmailKind } from "@/lib/portalWelcomeEmail";
+import { portalMail } from "@/lib/portalEmailLoad";
+import { studentLoginsEmail } from "@/lib/studentEmailTemplates";
 import {
   PORTAL_LOGIN,
   SECTION_PRESETS,
   credentialLabel,
-  credentialsEmailHtml,
-  credentialsEmailSubject,
-  credentialsEmailText,
   credentialsNote,
   credentialsWhatsapp,
   hasSomething,
   inCredentialsSection,
   loginLabels,
+  orderLogins,
   type CredentialsMessageInput,
   type StudentLogin,
 } from "@/lib/studentCredentials";
@@ -132,29 +135,97 @@ export async function sectionLogins(studentId: string): Promise<{ logins: Sectio
   return { logins, email: (read.student.email as string | null) ?? null };
 }
 
-/** Emails the student the logins this place sends, to the address on their record. */
+// ------------------------------------------------------------- the welcome
+
+/**
+ * Which portal email a send would be, and why — for the panel to say before
+ * anybody presses Send:
+ *
+ *   welcome   the first send once a signed agreement is on file (uploaded, or
+ *             marked signed): "Welcome aboard", the boarding pass, their team,
+ *             what happens next;
+ *   login     the login on its own: before the agreement is in, or once the
+ *             welcome has gone — unless staff ask for the welcome again.
+ */
+export type PortalEmailPlan = {
+  kind: Exclude<PortalEmailKind, "new_password">;
+  signed: boolean;
+  welcomedAt: string | null;
+  welcomedTo: string | null;
+};
+
+/** Read with the service role, once the caller has been shown to be able to see the student (load). */
+async function planFor(studentId: string): Promise<Omit<PortalEmailPlan, "kind">> {
+  const admin = createAdminClient();
+  const [{ data: signed }, { data: welcomed }] = await Promise.all([
+    admin.from("agreements").select("id").eq("student_id", studentId).or("signed_file_path.not.is.null,status.eq.signed").limit(1),
+    admin.from("student_welcome_emails").select("sent_at, sent_to").eq("student_id", studentId).maybeSingle(),
+  ]);
+  return { signed: (signed ?? []).length > 0, welcomedAt: (welcomed?.sent_at as string | null) ?? null, welcomedTo: (welcomed?.sent_to as string | null) ?? null };
+}
+
+function kindOf(plan: Omit<PortalEmailPlan, "kind">, welcomeAgain: boolean): PortalEmailPlan["kind"] {
+  return plan.signed && (!plan.welcomedAt || welcomeAgain) ? "welcome" : "login";
+}
+
+/** What Send to student would send from Registration & Portal Access. */
+export async function portalEmailPlan(studentId: string): Promise<PortalEmailPlan | { error: string }> {
+  const { supabase, staff } = await getStaffSession();
+  if (!staff) return { error: "You are signed out — reload the page." };
+  if (!(await load(supabase, studentId))) return { error: "That student is not one you can see." };
+  const plan = await planFor(studentId);
+  return { ...plan, kind: kindOf(plan, false) };
+}
+
+/**
+ * Emails the student the logins this place sends, to the address on their
+ * record: from Registration & Portal Access the welcome or the login on its own
+ * (portalEmailPlan), from Portal credentials the logins ticked.
+ */
 export async function emailStudentLogins(
   scope: CredentialScope,
   studentId: string,
-  types?: string[]
-): Promise<{ success: true; to: string; labels: string[] } | { error: string }> {
+  types?: string[],
+  options: { welcomeAgain?: boolean } = {}
+): Promise<{ success: true; to: string; labels: string[]; kind: PortalEmailKind | "logins" } | { error: string }> {
   const r = await resolve(scope, studentId, types);
   if ("error" in r) return { error: r.error! };
   const to = ((r.student.email as string | null) ?? "").trim();
   if (!to) return { error: "There is no email on this student's record — add one, or copy it as a message instead." };
 
-  const sent = await sendEmail({
-    to,
-    subject: credentialsEmailSubject(r.input.logins),
-    text: credentialsEmailText(r.input),
-    html: credentialsEmailHtml(r.input),
-  });
+  let kind: PortalEmailKind | "logins" = "logins";
+  let mail: { subject: string; text: string; html: string };
+  if (scope === "portal") {
+    kind = kindOf(await planFor(studentId), Boolean(options.welcomeAgain));
+    mail = await portalMail(studentId, { username: r.input.logins[0].username, password: r.input.logins[0].password }, kind);
+  } else {
+    mail = studentLoginsEmail({
+      office: await loadEmailOffice(),
+      siteUrl: getSiteUrl(),
+      studentName: r.input.studentName,
+      logins: orderLogins(r.input.logins).map((l) => ({
+        label: credentialLabel(l.credentialType),
+        username: l.username,
+        password: l.password,
+        link: l.link ?? null,
+      })),
+    });
+  }
+
+  const sent = await sendEmail({ to, subject: mail.subject, text: mail.text, html: mail.html });
   // Said plainly rather than noted as sent: a mail that did not go, recorded
   // as sent, is worse than a failure on screen.
   if ("error" in sent) return { error: `The email did not go: ${sent.error}` };
 
-  await note(r.supabase, studentId, r.staff.id, credentialsNote("email", r.labels, to));
-  return { success: true, to, labels: r.labels };
+  // Only once it has gone: the next send is then the login on its own.
+  if (kind === "welcome") {
+    await createAdminClient()
+      .from("student_welcome_emails")
+      .upsert({ student_id: studentId, sent_at: new Date().toISOString(), sent_by: r.staff.id, sent_to: to }, { onConflict: "student_id" });
+  }
+  const noted = credentialsNote("email", r.labels, to);
+  await note(r.supabase, studentId, r.staff.id, kind === "welcome" ? noted.replace(/^Emailed the student/, "Emailed the student the welcome email with") : noted);
+  return { success: true, to, labels: r.labels, kind };
 }
 
 /**

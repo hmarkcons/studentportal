@@ -141,68 +141,6 @@ export function credentialsWhatsapp(input: CredentialsMessageInput): string {
   return parts.join("\n");
 }
 
-/** "Your HMARK Student Portal login" when that is all it carries, else what it is. */
-export function credentialsEmailSubject(logins: readonly StudentLogin[] = []): string {
-  const sent = logins.filter(hasSomething);
-  if (sent.length === 1 && sent[0].credentialType === PORTAL_LOGIN) return "Your HMARK Student Portal login";
-  return "Your login details from HMARK Consultants";
-}
-
-/** The email's plain text: the same as the message, without WhatsApp's asterisks. */
-export function credentialsEmailText(input: CredentialsMessageInput): string {
-  const parts = [`Dear ${input.studentName.trim() || "student"},`, "", "Here are your login details from HMARK Consultants."];
-  for (const b of blocks(input)) {
-    parts.push("", b.label, ...b.lines.map((l) => `  ${l.name}: ${l.value}`));
-  }
-  parts.push("", KEEP_SAFE, "", "HMARK Consultants");
-  return parts.join("\n");
-}
-
-function esc(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
-}
-
-// The house style of the login mail (staffLoginEmail.ts).
-const INK = "#14151a";
-const BODY = "#5f6068";
-const FAINT = "#9b9ca3";
-const HAIR = "#ebebe8";
-const PAGE = "#f6f6f4";
-const GREEN = "#157a5b";
-const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
-const MONO = "ui-monospace,SFMono-Regular,Menlo,Consolas,monospace";
-
-/** The email's HTML: one card per login, the values in a monospace face so 0 and O are told apart. */
-export function credentialsEmailHtml(input: CredentialsMessageInput): string {
-  const cards = blocks(input)
-    .map((b) => {
-      const rows = b.lines
-        .map((l) => {
-          const value =
-            l.name === "Sign in at" || l.name === SIGN_IN_HERE
-              ? `<a href="${esc(l.value)}" style="color:${GREEN};text-decoration:none">${esc(l.value)}</a>`
-              : `<span style="font-family:${MONO};color:${INK}">${esc(l.value)}</span>`;
-          return `<tr><td style="padding:3px 12px 3px 0;color:${BODY};font-size:13px;white-space:nowrap;vertical-align:top">${esc(l.name)}</td><td style="padding:3px 0;font-size:14px;word-break:break-all">${value}</td></tr>`;
-        })
-        .join("");
-      return `<div style="border:1px solid ${HAIR};border-radius:10px;padding:14px 16px;margin:0 0 12px">
-  <div style="font-weight:600;color:${INK};font-size:14px;margin:0 0 6px">${esc(b.label)}</div>
-  <table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse">${rows}</table>
-</div>`;
-    })
-    .join("\n");
-  return `<!doctype html><html><body style="margin:0;background:${PAGE};font-family:${FONT}">
-<div style="max-width:560px;margin:0 auto;padding:28px 16px">
-<div style="background:#ffffff;border:1px solid ${HAIR};border-radius:14px;padding:26px 24px">
-  <p style="margin:0 0 6px;color:${INK};font-size:16px;font-weight:600">Your login details</p>
-  <p style="margin:0 0 18px;color:${BODY};font-size:14px;line-height:1.5">Dear ${esc(input.studentName.trim() || "student")}, here are your login details from HMARK Consultants.</p>
-  ${cards}
-  <p style="margin:16px 0 0;color:${BODY};font-size:13px;line-height:1.5">${esc(KEEP_SAFE)}</p>
-</div>
-<p style="margin:14px 0 0;text-align:center;color:${FAINT};font-size:12px">HMARK Consultants</p>
-</div></body></html>`;
-}
-
 /** The internal note on the student's timeline: what went, how, to where — never a password. */
 export function credentialsNote(how: "email" | "copy", labels: readonly string[], to?: string | null): string {
   const what = labels.join(", ");

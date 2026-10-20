@@ -6,6 +6,9 @@ import { isUndeliverableAddress } from "@/lib/emailRecipients";
 import { buildInvite, inviteActions, inviteEmail, inviteSignature, inviteWhen, type InviteEvent } from "@/lib/icsInvite";
 import { deliversEmail } from "@/lib/notificationDelivery";
 import { karachiToday } from "@/lib/calendarDates";
+import { loadEmailOffice } from "@/lib/emailOffice";
+import { getSiteUrl } from "@/lib/siteUrl";
+import { studentInviteEmail } from "@/lib/studentEmailTemplates";
 
 // The guests of a calendar item hear about it: an invitation the moment they
 // are added, with a calendar file that puts it in their own calendar; an
@@ -132,6 +135,14 @@ export async function syncGuestInvites(table: Table, id: string): Promise<{ sent
   if (invite.length + update.length + cancel.length === 0) return tally;
 
   const organizer = await organizerOf(admin, row?.owner_id ?? null);
+  // A guest who is a registered student gets the words in their own style
+  // (studentEmailTemplates); anyone else, the plain ones. The calendar file is the same.
+  const addresses = [...new Set([...invite, ...update, ...cancel].map((e) => e.toLowerCase()))];
+  const { data: studentRows } = addresses.length
+    ? await admin.from("leads").select("email").not("student_code", "is", null).in("email", [...addresses, ...[...invite, ...update, ...cancel]])
+    : { data: [] as { email: string | null }[] };
+  const students = new Set((studentRows ?? []).map((s) => (s.email ?? "").trim().toLowerCase()).filter(Boolean));
+  const studentOffice = students.size > 0 ? await loadEmailOffice() : null;
   const office = process.env.SMTP_FROM || process.env.SMTP_USER || "";
   const from = `"${organizer.name.replace(/"/g, "")} (HMARK)" <${addressOf(office)}>`;
   const known = new Map(sent.map((s) => [s.email.toLowerCase(), s]));
@@ -152,7 +163,19 @@ export async function syncGuestInvites(table: Table, id: string): Promise<{ sent
       attendees,
       now,
     });
-    const words = inviteEmail({ kind, event: version, organizerName: organizer.name, when: inviteWhen(version) });
+    const words =
+      studentOffice && students.has(email.toLowerCase())
+        ? studentInviteEmail({
+            office: studentOffice,
+            siteUrl: getSiteUrl(),
+            kind,
+            title: version.title,
+            when: inviteWhen(version),
+            location: version.location ?? null,
+            description: version.description ?? null,
+            organizerName: organizer.name,
+          })
+        : inviteEmail({ kind, event: version, organizerName: organizer.name, when: inviteWhen(version) });
 
     let status: "sent" | "skipped" | "failed" = "sent";
     let error: string | null = null;

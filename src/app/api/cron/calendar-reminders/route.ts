@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail, isEmailConfigured } from "@/lib/email";
-import { buildCalendarReminderEmail } from "@/lib/calendarReminderEmail";
+import { buildCalendarReminderEmail, type ReminderEmailItem } from "@/lib/calendarReminderEmail";
+import { loadEmailOffice } from "@/lib/emailOffice";
+import { getSiteUrl } from "@/lib/siteUrl";
+import { sentLink } from "@/lib/signInLanding";
+import { studentTaskReminderEmail } from "@/lib/studentEmailTemplates";
+import type { RecipientBucket } from "@/lib/calendarReminders";
 import { buildReminderRecipients } from "@/lib/calendarReminders";
 import { checkCronRequest } from "@/lib/cronAuth";
 import { karachiToday } from "@/lib/calendarDates";
@@ -20,6 +25,31 @@ function one<T>(v: T | T[] | null) {
 // stops appearing in this query. Recipient-bucketing logic lives in
 // buildReminderRecipients() so it can be tested against a scoped fixture
 // without ever running this route against live production data.
+/**
+ * The day's email for one person: a student's in their own style
+ * (studentEmailTemplates), what is still open on their application; staff
+ * the CRM's list as before.
+ */
+async function reminderMail(bucket: RecipientBucket, office: Awaited<ReturnType<typeof loadEmailOffice>> | null) {
+  if (bucket.audience !== "student" || !office) return buildCalendarReminderEmail(bucket.name, bucket.items);
+  const siteUrl = getSiteUrl();
+  return studentTaskReminderEmail({
+    office,
+    siteUrl,
+    name: bucket.name,
+    // reminderTime writes "18:00–19:30"; the student's email says when it starts.
+    items: bucket.items.map((i: ReminderEmailItem) => ({
+      title: i.title,
+      dueDate: i.dueDate,
+      isOverdue: i.isOverdue,
+      allDay: i.allDay,
+      time: i.time ? i.time.slice(0, 5) : null,
+      notes: i.notes,
+    })),
+    link: sentLink(siteUrl, "/portal"),
+  });
+}
+
 export async function GET(request: NextRequest) {
   // Same guard as the other two: the old one authenticated nothing when
   // CRON_SECRET was unset, and it is unset in production.
@@ -94,18 +124,19 @@ export async function GET(request: NextRequest) {
     todayStr
   );
 
+  const office = [...recipients.values()].some((b) => b.audience === "student") ? await loadEmailOffice() : null;
+
   // Reports who would be written to and about what, and sends nothing.
   if (dryRun) {
+    const listed = [];
+    for (const [to, bucket] of recipients) {
+      listed.push({ to, name: bucket.name, items: bucket.items.length, audience: bucket.audience, subject: (await reminderMail(bucket, office)).subject });
+    }
     return NextResponse.json({
       dryRun: true,
       tasksChecked: tasks?.length ?? 0,
       personalChecked: personalTasks?.length ?? 0,
-      recipients: [...recipients].map(([to, bucket]) => ({
-        to,
-        name: bucket.name,
-        items: bucket.items.length,
-        subject: buildCalendarReminderEmail(bucket.name, bucket.items).subject,
-      })),
+      recipients: listed,
     });
   }
 
@@ -113,7 +144,7 @@ export async function GET(request: NextRequest) {
   let failed = 0;
   const results: { to: string; result: unknown }[] = [];
   for (const [to, bucket] of recipients) {
-    const { subject, text, html } = buildCalendarReminderEmail(bucket.name, bucket.items);
+    const { subject, text, html } = await reminderMail(bucket, office);
     const result = await sendEmail({ to, subject, text, html });
     results.push({ to, result });
     if ("success" in result) sent++;

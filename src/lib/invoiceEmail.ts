@@ -10,6 +10,32 @@
 
 import { feeLineLabel, installmentNote, type AdminChargeLine, type InvoiceMath } from "@/lib/invoiceMath";
 import { hasPaymentInstructions } from "@/lib/invoiceIssuer";
+import {
+  AMBER,
+  AMBER_BG,
+  AMBER_EDGE,
+  BODY,
+  DEFAULT_OFFICE,
+  FAINT,
+  FONT,
+  GREEN,
+  HAIR,
+  INK,
+  MINT,
+  MINT_EDGE,
+  NUM,
+  button,
+  callout,
+  card,
+  displayName,
+  emailFrame,
+  esc,
+  heading,
+  label,
+  rows,
+  type Images,
+  type OfficeDetails,
+} from "@/lib/studentEmail";
 
 export type InvoiceEmailData = {
   studentName: string;
@@ -46,6 +72,12 @@ export type InvoiceEmailData = {
   companyName?: string;
   /** What the tax is called on the invoice (Invoice Settings). */
   taxLabel?: string;
+  /** The office at the foot (Setup › Invoice settings); HMARK's defaults without it. */
+  office?: OfficeDetails;
+  /** The portal's address, for the hosted images. */
+  siteUrl?: string;
+  /** Image sources in place of the hosted ones — a preview sends them inline. */
+  images?: Images;
   bank: {
     bankName: string | null;
     accountTitle: string | null;
@@ -85,32 +117,12 @@ function fmtDate(d: string | null) {
   });
 }
 
-/** Escape anything that reaches the HTML body — names and reasons are free text. */
-function esc(s: string | null | undefined): string {
-  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
-}
-
-const INK = "#14151a";
-const BODY = "#5f6068";
-const FAINT = "#9b9ca3";
-const HAIR = "#ebebe8";
-const PAGE = "#f6f6f4";
-const GREEN = "#157a5b";
-const AMBER = "#a05a20";
-
-// A system stack, not a webfont: Gmail and Outlook strip @font-face, so a
-// hosted face would silently fall back on most clients anyway.
-const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
-// Tabular figures, so the amount column lines up without a monospace face.
-const NUM = `${FONT};font-variant-numeric:tabular-nums;font-feature-settings:'tnum'`;
-
 export function buildInvoiceEmail(data: InvoiceEmailData) {
   const { math } = data;
   const overdue = data.variant === "overdue";
   const receipt = data.variant === "receipt";
   const settled = receipt && data.balanceDue <= 0;
 
-  const accent = receipt ? GREEN : overdue ? AMBER : INK;
   // Who it is from, as Invoice Settings names the company.
   const company = data.companyName?.trim() || "HMARK Consultants";
 
@@ -223,155 +235,108 @@ export function buildInvoiceEmail(data: InvoiceEmailData) {
     .filter((l) => l !== "")
     .join("\n");
 
-  // ---- HTML ----
+  // ---- HTML, in the student's house style (studentEmail.ts) ----
+  const tone = receipt ? GREEN : overdue ? AMBER : INK;
+  const office: OfficeDetails = data.office ?? { ...DEFAULT_OFFICE, name: company };
+  const siteUrl = data.siteUrl ?? "https://portal.hmarkconsultants.com";
+
   const line = (label: string, value: string, opts: { strong?: boolean; color?: string; rule?: boolean } = {}) => {
-    const pad = opts.rule ? "11px 0 0" : "5px 0";
+    const pad = opts.rule ? "12px 0 0" : "6px 0";
     const border = opts.rule ? `border-top:1px solid ${HAIR};` : "";
-    const weight = opts.strong ? "600 " : "";
-    return `
-    <tr>
-      <td style="padding:${pad};${border}font:${weight}13px ${FONT};color:${opts.color ?? (opts.strong ? INK : BODY)}">${esc(label)}</td>
-      <td style="padding:${pad};${border}text-align:right;white-space:nowrap;font:${weight}13px ${NUM};color:${opts.color ?? INK}">${esc(value)}</td>
+    const weight = opts.strong ? "700" : "400";
+    return `<tr>
+      <td style="padding:${pad};${border}font-family:${FONT};font-size:14px;line-height:20px;font-weight:${weight};color:${opts.color ?? (opts.strong ? INK : BODY)}">${esc(label)}</td>
+      <td style="padding:${pad};${border}text-align:right;white-space:nowrap;font-family:${NUM};font-size:14px;line-height:20px;font-weight:${weight};color:${opts.color ?? INK}">${esc(value)}</td>
     </tr>`;
   };
 
-  const scheduleHtml =
-    data.installments.length > 1
-      ? `
-        <tr><td style="padding:26px 0 0">
-          <div style="font:600 10px ${FONT};letter-spacing:.10em;text-transform:uppercase;color:${FAINT};padding-bottom:9px">Payment schedule</div>
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse">
-            ${data.installments
-              .map(
-                (i) => `<tr>
-                  <td style="padding:8px 0;border-bottom:1px solid ${HAIR};font:13px ${FONT};color:${INK}">
-                    ${i.no}.&nbsp;<span style="font:13px ${NUM}">${esc(amount(i.amount))}</span>${
-                      noteFor(i) ? `<span style="color:${FAINT}"> · ${esc(noteFor(i))}</span>` : ""
-                    }
-                  </td>
-                  <td style="padding:8px 0;border-bottom:1px solid ${HAIR};text-align:right;white-space:nowrap;font:13px ${FONT};color:${i.paid ? GREEN : FAINT}">
-                    ${i.paid ? "Paid" : esc(i.dueDate ? `Due ${fmtDate(i.dueDate)}` : i.dueCondition ?? "Due —")}
-                  </td>
-                </tr>`
-              )
-              .join("")}
-          </table>
-        </td></tr>`
-      : "";
+  // The one figure the email was opened for, large, in the colour of what it says.
+  const figure = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;background:${receipt ? MINT : overdue ? AMBER_BG : "#f6f8f7"};border:1px solid ${receipt ? MINT_EDGE : overdue ? AMBER_EDGE : HAIR};border-radius:16px"><tr><td style="padding:20px 22px">
+    ${label(overdue ? "Outstanding now" : heroLabel, receipt ? GREEN : overdue ? AMBER : FAINT)}
+    <div class="big" style="font-family:${NUM};font-size:36px;line-height:42px;font-weight:800;color:${tone};letter-spacing:-.5px;margin-top:4px"><span style="font-family:${FONT};font-size:16px;font-weight:700;color:${FAINT};letter-spacing:.5px">${esc(data.currency)}</span>&nbsp;${esc(amount(heroValue))}</div>
+    <div style="font-family:${FONT};font-size:13px;line-height:19px;color:${BODY};margin-top:6px">${receipt ? "Receipt" : "Invoice"} <span style="font-family:${NUM};color:${INK};font-weight:600">${esc(data.invoiceNumber)}</span>${data.destination ? ` &middot; ${esc(data.destination)}` : ""}${data.intake ? ` &middot; ${esc(data.intake)} intake` : ""}</div>
+    ${receipt && !settled ? `<div style="font-family:${FONT};font-size:13px;line-height:19px;color:${BODY};margin-top:4px">Still to pay: <span style="font-family:${NUM};font-weight:700;color:${INK}">${esc(money(data.currency, data.balanceDue))}</span></div>` : ""}
+  </td></tr></table>`;
 
-  const bankHtml =
-    showBank && data.bank
-      ? `
-        <tr><td style="padding:26px 0 0">
-          <div style="font:600 10px ${FONT};letter-spacing:.10em;text-transform:uppercase;color:${FAINT};padding-bottom:9px">Where to pay</div>
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;background:${PAGE};border-radius:10px">
-            <tr><td style="padding:16px 18px;font:13px ${FONT};color:${BODY};line-height:1.85">
-              ${data.bank.accountTitle ? `<span style="color:${INK}">${esc(data.bank.accountTitle)}</span><br>` : ""}
-              ${data.bank.bankName ? `${esc(data.bank.bankName)}${data.bank.branch ? `, ${esc(data.bank.branch)}` : ""}<br>` : ""}
-              ${data.bank.accountNumber ? `Account <span style="font:13px ${NUM};color:${INK}">${esc(data.bank.accountNumber)}</span><br>` : ""}
-              ${data.bank.iban ? `IBAN <span style="font:13px ${NUM};color:${INK}">${esc(data.bank.iban)}</span><br>` : ""}
-              ${data.bank.swiftCode ? `SWIFT <span style="font:13px ${NUM};color:${INK}">${esc(data.bank.swiftCode)}</span><br>` : ""}
-              Reference <span style="font:13px ${NUM};color:${INK}">${esc(data.invoiceNumber)}</span>
-              ${data.bank.paymentNote ? `<br><span style="color:${FAINT}">${esc(data.bank.paymentNote)}</span>` : ""}
-            </td></tr>
-          </table>
-        </td></tr>`
-      : "";
-
-  const html = `<!doctype html>
-<html lang="en"><head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light">
-<meta name="supported-color-schemes" content="light">
-<title>${esc(subject)}</title>
-</head>
-<body style="margin:0;padding:0;background:${PAGE};-webkit-font-smoothing:antialiased">
-<!-- Preview text: what the inbox list shows before the mail is opened. The
-     run of spacers stops the client filling that line with the body's first
-     words instead. -->
-<div style="display:none;font-size:1px;color:${PAGE};line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden">${esc(preheader)}&nbsp;&zwnj;${"&nbsp;&zwnj;".repeat(60)}</div>
-
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;background:${PAGE}">
-  <tr><td align="center" style="padding:40px 16px">
-
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:496px;border-collapse:collapse">
-
-      <!-- The only block of colour in the design, and the one thing that tells
-           a receipt from a reminder before a word is read. -->
-      <tr><td style="background:${accent};height:3px;line-height:3px;font-size:0">&nbsp;</td></tr>
-
-      <tr><td style="background:#ffffff;padding:38px 36px 34px">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse">
-
-          <tr><td style="font:600 10px ${FONT};letter-spacing:.16em;text-transform:uppercase;color:${FAINT}">${esc(company)}</td></tr>
-
-          <!-- Hero: label small and quiet, figure large. One number should
-               answer the reason the mail was opened. -->
-          <tr><td style="padding:30px 0 0;font:13px ${FONT};color:${BODY}">${esc(heroLabel)}</td></tr>
-          <tr><td style="padding:5px 0 0;font:600 33px ${NUM};color:${accent};letter-spacing:-.6px;line-height:1.15">
-            <span style="font:600 15px ${FONT};color:${FAINT};letter-spacing:.04em">${esc(data.currency)}</span>&nbsp;${esc(amount(heroValue))}
-          </td></tr>
-          <tr><td style="padding:11px 0 0;font:12px ${FONT};color:${FAINT}">
-            Receipt ${esc(data.invoiceNumber)}${data.destination ? ` · ${esc(data.destination)}` : ""}${data.intake ? ` · ${esc(data.intake)} intake` : ""}
-          </td></tr>
-
-          <tr><td style="padding:26px 0 0;font:14px ${FONT};color:${BODY};line-height:1.7">
-            ${
-              receipt
-                ? `Thank you, ${esc(data.studentName)} — your payment has been received${settled ? " and nothing further is outstanding" : ""}.`
-                : overdue
-                  ? `${esc(data.studentName)}, one or more installments on this invoice are now past their due date.`
-                  : `${esc(data.studentName)}, here is your invoice from ${esc(company)}.`
-            }
-          </td></tr>
-
-          <tr><td style="padding:26px 0 0">
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse">
-              ${breakdown.map(([l, v]) => line(l, v)).join("")}
-              ${line("Total", amount(math.total), { strong: true, rule: true })}
-              ${data.amountPaid > 0 ? line("Received", `− ${amount(data.amountPaid)}`, { color: GREEN }) : ""}
-              ${line("Balance", amount(data.balanceDue), { strong: true, color: data.balanceDue <= 0 ? GREEN : INK, rule: true })}
-            </table>
-            <div style="padding:9px 0 0;font:11px ${FONT};color:${FAINT}">All amounts in ${esc(data.currency)}.</div>
-          </td></tr>
-
-          ${scheduleHtml}
-
-          <!-- No attachment by design: the receipt opens in the browser, where
-               it can be printed or saved. -->
-          <tr><td style="padding:30px 0 0">
-            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse">
-              <tr><td style="background:${INK};border-radius:8px">
-                <a href="${esc(data.receiptUrl)}" target="_blank"
-                   style="display:inline-block;padding:13px 26px;font:600 13px ${FONT};color:#ffffff;text-decoration:none">
-                  View receipt&nbsp;&nbsp;&rarr;
-                </a>
-              </td></tr>
-            </table>
-            <div style="padding:10px 2px 0;font:11px ${FONT};color:${FAINT}">Opens in your browser — print or save it from there.</div>
-          </td></tr>
-
-          ${bankHtml}
-
-          <tr><td style="padding:30px 0 0">
-            <div style="border-top:1px solid ${HAIR};padding:18px 0 0;font:12px ${FONT};color:${FAINT};line-height:1.75">
-              If anything here looks wrong, reply to this email and your counselor will check it.<br>
-              This link is personal to you — please don&rsquo;t forward it.
-            </div>
-          </td></tr>
-
-        </table>
-      </td></tr>
-
-      <tr><td align="center" style="padding:20px 0 0;font:11px ${FONT};color:${FAINT}">
-        ${esc(company)}
-      </td></tr>
-
+  const breakdownCard = `${heading("The breakdown", 26)}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;border:1px solid ${HAIR};border-radius:14px"><tr><td style="padding:14px 18px">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+      ${breakdown.map(([l, v]) => line(l, v)).join("")}
+      ${line("Total", amount(math.total), { strong: true, rule: true })}
+      ${data.amountPaid > 0 ? line("Received", `− ${amount(data.amountPaid)}`, { color: GREEN }) : ""}
+      ${line("Balance", amount(data.balanceDue), { strong: true, color: data.balanceDue <= 0 ? GREEN : INK, rule: true })}
     </table>
-  </td></tr>
-</table>
-</body></html>`;
+    <div style="padding:10px 0 0;font-family:${FONT};font-size:12px;color:${FAINT}">All amounts in ${esc(data.currency)}.</div>
+  </td></tr></table>`;
+
+  const pill = (paid: boolean, words: string) =>
+    `<span style="display:inline-block;padding:3px 10px;border-radius:999px;font-family:${FONT};font-size:12px;line-height:16px;font-weight:700;background:${paid ? MINT : "#f2f4f3"};color:${paid ? GREEN : BODY}">${esc(words)}</span>`;
+  const scheduleCard =
+    data.installments.length > 1
+      ? `${heading("Payment schedule", 26)}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;border:1px solid ${HAIR};border-radius:14px"><tr><td style="padding:6px 18px">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${data.installments
+      .map(
+        (i, n) => `<tr>
+      <td style="padding:10px 0;${n > 0 ? `border-top:1px solid ${HAIR};` : ""}font-family:${FONT};font-size:14px;line-height:20px;color:${INK}">
+        <span style="color:${FAINT}">${i.no}.</span>&nbsp;<span style="font-family:${NUM};font-weight:700">${esc(money(data.currency, i.amount))}</span>${noteFor(i) ? `<div style="font-size:12px;line-height:17px;color:${FAINT}">${esc(noteFor(i))}</div>` : ""}
+      </td>
+      <td style="padding:10px 0;${n > 0 ? `border-top:1px solid ${HAIR};` : ""}text-align:right;white-space:nowrap">${pill(i.paid, i.paid ? "Paid" : i.dueDate ? `Due ${fmtDate(i.dueDate)}` : (i.dueCondition ?? "Due —"))}</td>
+    </tr>`
+      )
+      .join("")}</table>
+  </td></tr></table>`
+      : "";
+
+  const bankCard =
+    showBank && data.bank
+      ? `${heading("Where to pay", 26)}${card(
+          rows(
+            [
+              data.bank.accountTitle ? ["Account title", esc(data.bank.accountTitle)] : null,
+              data.bank.bankName ? ["Bank", `${esc(data.bank.bankName)}${data.bank.branch ? `, ${esc(data.bank.branch)}` : ""}`] : null,
+              data.bank.accountNumber ? ["Account no.", `<span style="font-family:${NUM}">${esc(data.bank.accountNumber)}</span>`] : null,
+              data.bank.iban ? ["IBAN", `<span style="font-family:${NUM}">${esc(data.bank.iban)}</span>`] : null,
+              data.bank.swiftCode ? ["SWIFT", `<span style="font-family:${NUM}">${esc(data.bank.swiftCode)}</span>`] : null,
+              ["Reference", `<span style="font-family:${NUM}">${esc(data.invoiceNumber)}</span>`],
+            ].filter((r): r is [string, string] => r !== null)
+          ) + (data.bank.paymentNote ? `<div style="font-family:${FONT};font-size:13px;line-height:19px;color:${FAINT};margin-top:8px">${esc(data.bank.paymentNote)}</div>` : ""),
+          { tint: true }
+        )}`
+      : "";
+
+  const opening = receipt
+    ? `Thank you, ${esc(displayName(data.studentName))} — your payment has been received${settled ? " and nothing further is outstanding" : ""}.`
+    : overdue
+      ? `${esc(displayName(data.studentName))}, one or more instalments on this invoice are now past their due date. Please arrange payment at your earliest convenience.`
+      : `${esc(displayName(data.studentName))}, here is your invoice from ${esc(company)}. The amount due, how it is made up, and when each part falls due are all below.`;
+
+  const html = emailFrame({
+    subject,
+    preheader,
+    banner: receipt ? "receipt" : overdue ? "overdue" : "invoice",
+    eyebrow: receipt ? (settled ? "Paid in full" : "Payment received") : overdue ? "Payment overdue" : "Your invoice",
+    eyebrowTone: overdue ? "amber" : "green",
+    title: receipt ? (settled ? "Thank you — you're all paid up" : "Thank you — payment received") : overdue ? "A payment is past its date" : `Invoice ${data.invoiceNumber}`,
+    intro: [opening],
+    content: [
+      `<div style="height:6px;line-height:6px;font-size:0">&nbsp;</div>`,
+      figure,
+      breakdownCard,
+      scheduleCard,
+      button(data.receiptUrl, `${receipt ? "View your receipt" : "View your invoice"} &rarr;`, overdue ? "amber" : "green"),
+      `<div style="padding:10px 2px 0;font-family:${FONT};font-size:12px;color:${FAINT}">Opens in your browser &mdash; print or save it from there.</div>`,
+      bankCard,
+      callout(esc("If anything here looks wrong, reply to this email and your counsellor will check it. The link is personal to you — please don't forward it."), {
+        tone: "green",
+        icon: "&#128172;",
+      }),
+    ].join(""),
+    signoff: receipt ? "Thank you for your trust in us," : "Warm regards,",
+    office,
+    siteUrl,
+    images: data.images,
+    reason: `You are receiving this because you are registered with ${office.name}.`,
+  });
 
   return { subject, text, html };
 }
+

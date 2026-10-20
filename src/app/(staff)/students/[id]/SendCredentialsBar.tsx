@@ -6,10 +6,17 @@ import { Button } from "@/components/ui/Button";
 import {
   copyStudentLogins,
   emailStudentLogins,
+  portalEmailPlan,
   sectionLogins,
   type CredentialScope,
+  type PortalEmailPlan,
   type SectionLogin,
 } from "@/lib/actions/studentCredentials";
+
+/** "12 Oct 2026", as the office reads a date. */
+function onDay(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Karachi" });
+}
 
 type Copied = { labels: string[]; whatsapp: string | null; text: string; onClipboard: boolean };
 
@@ -25,6 +32,11 @@ type Copied = { labels: string[]; whatsapp: string | null; text: string; onClipb
  *                    shared between the two — and ends in "Send email" or
  *                    "Copy message".
  *
+ * From Registration & Portal Access the email is the welcome the first time
+ * once a signed agreement is on file, and the login on its own otherwise; the
+ * address check says which, and offers the welcome again once it has gone
+ * (portalEmailPlan).
+ *
  * Copying offers to open WhatsApp on the student's number with the message
  * typed in. Either leaves a note on the student's timeline saying which logins
  * went, and who sent them; never a password.
@@ -35,7 +47,10 @@ export function SendCredentialsBar({ studentId, email, scope }: { studentId: str
   const [mode, setMode] = useState<"email" | "copy" | null>(null);
   const [choices, setChoices] = useState<SectionLogin[] | null>(null);
   const [ticked, setTicked] = useState<Set<string>>(new Set());
-  const [emailed, setEmailed] = useState<{ to: string; labels: string[] } | null>(null);
+  const [emailed, setEmailed] = useState<{ to: string; labels: string[]; welcome: boolean } | null>(null);
+  // Portal only: which email Send would be, read when the address check opens.
+  const [plan, setPlan] = useState<PortalEmailPlan | null>(null);
+  const [welcomeAgain, setWelcomeAgain] = useState(false);
   const [copied, setCopied] = useState<Copied | null>(null);
   const [showText, setShowText] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +68,18 @@ export function SendCredentialsBar({ studentId, email, scope }: { studentId: str
     clearOutcome();
     if (scope === "portal") {
       if (next === "copy") return copy();
-      return setMode("email");
+      setMode("email");
+      setWelcomeAgain(false);
+      // Asked afresh each time: the last answer may be one send out of date.
+      setPlan(null);
+      setBusy("open");
+      const read = await portalEmailPlan(studentId);
+      setBusy(null);
+      if ("error" in read) {
+        setMode(null);
+        return setError(read.error);
+      }
+      return setPlan(read);
     }
     setMode(next);
     // The list once per visit to the section: what is saved changes only when
@@ -71,11 +97,12 @@ export function SendCredentialsBar({ studentId, email, scope }: { studentId: str
 
   async function sendEmail() {
     setBusy("email");
-    const result = await emailStudentLogins(scope, studentId, types);
+    const result = await emailStudentLogins(scope, studentId, types, { welcomeAgain });
     setBusy(null);
     if ("error" in result) return setError(result.error);
     setMode(null);
-    setEmailed({ to: result.to, labels: result.labels });
+    setEmailed({ to: result.to, labels: result.labels, welcome: result.kind === "welcome" });
+    if (result.kind === "welcome") setPlan((p) => (p ? { ...p, welcomedAt: new Date().toISOString(), welcomedTo: result.to } : p));
   }
 
   function copy() {
@@ -151,7 +178,7 @@ export function SendCredentialsBar({ studentId, email, scope }: { studentId: str
       </div>
       <p className="mt-1.5 text-xs text-muted">
         {scope === "portal"
-          ? "Sends their login for this portal — the email or Student ID, the password, and where to sign in — and nothing else."
+          ? "Sends their login for this portal — the email or Student ID, the password, and where to sign in. The first send once their signed agreement is on file is the welcome email."
           : "Choose which of the logins below to send. This portal's own login is sent from Registration & Portal Access."}{" "}
         {email ? (
           <>
@@ -163,11 +190,24 @@ export function SendCredentialsBar({ studentId, email, scope }: { studentId: str
       </p>
 
       {/* Portal: the address, checked before anything is sent. */}
-      {scope === "portal" && mode === "email" && email && (
-        <div className="mt-3 rounded-md border border-border bg-card p-3" data-confirm-credentials-email>
+      {scope === "portal" && mode === "email" && email && plan && (
+        <div className="mt-3 rounded-md border border-border bg-card p-3" data-confirm-credentials-email data-portal-email-kind={welcomeAgain ? "welcome" : plan.kind}>
           <p className="text-sm text-ink">
-            Email {what} to <span className="font-medium">{email}</span>?
+            {plan.kind === "welcome" || welcomeAgain ? "Email the welcome, with their login," : `Email ${what}`} to <span className="font-medium">{email}</span>?
           </p>
+          <p className="mt-1 text-xs text-muted" data-portal-email-plan>
+            {plan.kind === "welcome"
+              ? "Their signed agreement is on file, so this is the welcome: \u201cWelcome aboard\u201d, their login as a boarding pass, their HMARK team and what happens next. It goes once — later sends are the login on its own."
+              : !plan.signed
+                ? "Their signed agreement isn\u2019t on file yet, so this is the login on its own. The welcome goes with the first send after it is uploaded."
+                : `The welcome went ${plan.welcomedAt ? `on ${onDay(plan.welcomedAt)}` : "already"}${plan.welcomedTo ? ` to ${plan.welcomedTo}` : ""}, so this is the login on its own.`}
+          </p>
+          {plan.kind === "login" && plan.signed && (
+            <label className="mt-2 flex items-center gap-2 text-xs text-ink">
+              <input type="checkbox" checked={welcomeAgain} onChange={(e) => setWelcomeAgain(e.target.checked)} className="h-4 w-4" data-welcome-again />
+              Send the welcome again instead
+            </label>
+          )}
           <p className="mt-1 text-xs text-muted">The password is in the email, so check the address is the student&rsquo;s own.</p>
           <div className="mt-2 flex items-center gap-2">
             <Button type="button" variant="primary" size="sm" onClick={sendEmail} pending={busy === "email"}>
@@ -223,7 +263,8 @@ export function SendCredentialsBar({ studentId, email, scope }: { studentId: str
 
       {emailed && (
         <p className="mt-2 text-xs text-success" data-credentials-emailed role="status">
-          Emailed {emailed.labels.join(", ")} to {emailed.to}. A note is on the student&rsquo;s timeline.
+          {emailed.welcome ? `Emailed the welcome, with their login, to ${emailed.to}.` : `Emailed ${emailed.labels.join(", ")} to ${emailed.to}.`} A note is on the
+          student&rsquo;s timeline.
         </p>
       )}
 
