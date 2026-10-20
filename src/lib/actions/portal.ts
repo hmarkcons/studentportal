@@ -1,6 +1,7 @@
 "use server";
 
 import { hasRole } from "@/lib/auth/roles";
+import { getStaffSession } from "@/lib/auth/session";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -13,6 +14,16 @@ import { portalMail } from "@/lib/portalEmailLoad";
 
 export async function inviteStudentToPortal(studentId: string, _prevState: unknown, _formData: FormData) {
   const supabase = await createClient();
+
+  // Creating a portal login mints an auth account and reveals a working
+  // password, so it is held to the Super Admin and the processing officers who
+  // onboard students — not every staff member who can see the student. The
+  // resets, suspensions and deletions beside it are already Super-Admin-only
+  // (0302); this closes the one credential-issuing op that was not gated.
+  const { staff } = await getStaffSession();
+  if (!staff || !(hasRole(staff, "super_admin") || hasRole(staff, "processing"))) {
+    return { error: "Only a Super Admin or a processing officer can create a student's portal login." };
+  }
 
   // Fetch through the RLS-respecting client first — if this returns nothing,
   // the caller isn't authorized to manage this student, and we stop here

@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/Badge";
+import { linkHref } from "@/lib/catalogueText";
 import { kindLabel, orderOffices, whereToApply, needsChecking, type VisaOffice } from "@/lib/visaOffices";
 
 function Line({ label, value }: { label: string; value: string | null }) {
@@ -11,20 +12,30 @@ function Line({ label, value }: { label: string; value: string | null }) {
   );
 }
 
-function LinkLine({ label, href }: { label: string; href: string | null }) {
-  if (!href) return null;
-  let shown = href;
-  try {
-    shown = new URL(href).hostname.replace(/^www\./, "");
-  } catch {
-    // Not a URL somebody could open; show what was typed rather than nothing.
+function LinkLine({ label, href: value }: { label: string; href: string | null }) {
+  if (!value) return null;
+  // A stored "website" may be words, or javascript:/data: (0304) — only a real
+  // http(s) address is made a link; anything else shows as the text it is, so a
+  // student or another staff member never gets a clickable script URL.
+  const href = linkHref(value);
+  let shown = value;
+  if (href) {
+    try {
+      shown = new URL(href).hostname.replace(/^www\./, "");
+    } catch {
+      /* keep the typed text */
+    }
   }
   return (
     <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
       <span className="shrink-0 text-xs text-muted sm:w-28">{label}</span>
-      <a href={href} target="_blank" rel="noreferrer" className="min-w-0 break-words text-sm text-primary hover:underline">
-        {shown} &rarr;
-      </a>
+      {href ? (
+        <a href={href} target="_blank" rel="noreferrer" className="min-w-0 break-words text-sm text-primary hover:underline">
+          {shown} &rarr;
+        </a>
+      ) : (
+        <span className="min-w-0 break-words text-sm text-ink">{value}</span>
+      )}
     </div>
   );
 }
