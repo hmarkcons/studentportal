@@ -85,7 +85,7 @@ test("a checklist item that is a test is told apart from one that only mentions 
 
 test("a ticked test's scorecard is asked for at once, one per test however often it is sat", async () => {
   const { profileDerivedRequirements } = await import("../src/lib/documentChecklist.ts");
-  const base = { qualifications: [], travelHistoryCount: 0, visaHistoryCount: 0 };
+  const base = { qualifications: [], travel: [], visaRefusals: [] };
   const ticked = profileDerivedRequirements({ ...base, testScores: [], trackerTests: [{ type: "imat" }] });
   assert.deepEqual(ticked.map((r) => [r.derivedKey, r.name]), [["test:imat", "IMAT — scorecard"]], "ticked, no score yet");
   const retest = profileDerivedRequirements({

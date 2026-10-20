@@ -17,6 +17,7 @@ import { TEST_TYPES, needsCustomName } from "@/lib/testScores";
 import { MAX_PHOTO_BYTES, fileSizeError } from "@/lib/fileSize";
 import { uploadedFile } from "@/lib/stagedUpload";
 import { removeStorageFiles } from "@/lib/fileTrash";
+import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
 
 // Was a third hand-written copy of this list, and it lacked GMAT and CEnT-S —
 // so the two types just added to the picker would have been rejected here as
@@ -230,6 +231,13 @@ export async function saveTravelAndVisaHistory(studentId: string, revalidateTo: 
     .from("student_profiles")
     .upsert({ student_id: studentId, travel_history, visa_refusal_history }, { onConflict: "student_id" });
   if (error) return { error: error.message };
+
+  // Each refusal asks for its letter, and a trip for its stamps: raised now,
+  // so the Dashboard's to-dos and the Documents count say so at once rather
+  // than when somebody next opens Documents.
+  await ensureStudentDocumentRequirements(studentId).catch(() => {
+    // The history is saved; the checklist catches up when Documents is opened.
+  });
 
   revalidatePath(revalidateTo);
   return { success: true };

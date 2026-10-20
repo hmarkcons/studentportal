@@ -18,6 +18,7 @@
 // unit tests load it under plain Node.
 
 import { parseVideoUrl, watchUrl, type VideoEmbed } from "./videoEmbed.ts";
+import { isPreviousVisaKey, isVisaRefusalKey } from "./documentChecklist.ts";
 
 /** How long each part may be; the database holds the same limits (0300). */
 export const GUIDE_LIMITS = { note: 600, body: 8000, countryNote: 1000 } as const;
@@ -201,8 +202,9 @@ export const PROFILE_GUIDE_KINDS = [
   { kind: "qualification:certificate", label: "Qualification certificate", example: "Bachelors (4 years) — certificate — Karachi University" },
   { kind: "qualification:transcript", label: "Transcript / marksheet", example: "Bachelors (4 years) — transcript / marksheet — Karachi University" },
   { kind: "test:scorecard", label: "Test scorecard", example: "IELTS Academic — scorecard" },
-  { kind: "profile:travel_history", label: "Previous travel history — visas & stamps", example: "Previous travel history — visas & stamps" },
-  { kind: "profile:visa_refusals", label: "Previous refusal / deportation papers", example: "Previous refusal / deportation papers" },
+  // Kept under their first kinds, which the stored guides are filed by (0300): one guide for every trip, one for every refusal.
+  { kind: "profile:travel_history", label: "Previous visa & entry/exit stamps", example: "Previous visa — UAE, 4–20 Aug 2026" },
+  { kind: "profile:visa_refusals", label: "Visa refusal letter / deportation papers", example: "Visa refusal letter — UK, 12 Mar 2024" },
 ] as const;
 
 export type ProfileGuideKind = (typeof PROFILE_GUIDE_KINDS)[number]["kind"];
@@ -217,6 +219,10 @@ export function isProfileGuideKind(kind: string): kind is ProfileGuideKind {
  */
 export function profileGuideKind(derivedKey: string | null | undefined): ProfileGuideKind | null {
   if (!derivedKey) return null;
+  // One key per trip and per refusal (previous_visa:<its id>,
+  // visa_refusal:<its id>), one guide for each kind.
+  if (isPreviousVisaKey(derivedKey)) return "profile:travel_history";
+  if (isVisaRefusalKey(derivedKey)) return "profile:visa_refusals";
   const parts = derivedKey.split(":");
   const kind = parts.length === 3 ? `${parts[0]}:${parts[2]}` : derivedKey;
   return isProfileGuideKind(kind) ? kind : null;

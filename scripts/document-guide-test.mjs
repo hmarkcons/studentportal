@@ -98,6 +98,10 @@ test("a profile document reads the guide of its kind, whichever qualification it
   assert.equal(profileGuideKind("qualification:172ef950-9dee-44c8-b6ac-27c68b595520:transcript"), "qualification:transcript");
   assert.equal(profileGuideKind("test:abc:scorecard"), "test:scorecard");
   assert.equal(profileGuideKind("profile:travel_history"), "profile:travel_history");
+  // Every trip's visa and every refusal's letter reads the one guide of its kind, under the kind it has always been filed by.
+  assert.equal(profileGuideKind("previous_visa:0d6c9f8e-1a2b-4c3d-9e8f-123456789abc"), "profile:travel_history");
+  assert.equal(profileGuideKind("visa_refusal:7d1e2f4a-5b6c-4d7e-8f90-a1b2c3d4e5f6"), "profile:visa_refusals");
+  assert.equal(profileGuideKind("profile:visa_refusals"), "profile:visa_refusals");
   assert.equal(profileGuideKind("profile:something_new"), null);
   assert.equal(profileGuideKind(null), null);
 });

@@ -11,6 +11,7 @@
 // documents carry over.
 
 import { parseIntake, type IntakeMode } from "./intake.ts";
+import { isHistoryDocumentKey } from "./documentChecklist.ts";
 
 export type Cycle = {
   id: string;
@@ -214,6 +215,10 @@ export type CycleDoc = {
  * than guessed from its name here.
  */
 export function documentCarriesOver(doc: CycleDoc, renewTemplateIds: Set<string>): boolean {
+  // A trip's visa or a refusal's letter sits with the visa papers but is not
+  // paperwork for this attempt: it is the same document whichever intake
+  // asks, so once approved it stays approved rather than being uploaded again.
+  if (isHistoryDocumentKey(doc.derived_key)) return doc.status === "verified";
   if (!categoryCarriesOver(doc.category)) return false;
   if (doc.template_id && renewTemplateIds.has(doc.template_id)) return false;
   // Only something actually accepted carries over. A rejected or missing row

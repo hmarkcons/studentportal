@@ -126,6 +126,7 @@ export default async function StudentProfileTab(props: PageProps<"/students/[id]
           <TravelVisaHistorySection
             studentId={id}
             revalidateTo={revalidateTo}
+            documentsHref={`/students/${id}/documents`}
             travel={(profile?.travel_history ?? []) as never}
             refusals={(profile?.visa_refusal_history ?? []) as never}
           />

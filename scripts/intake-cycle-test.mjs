@@ -141,6 +141,29 @@ test("only an approved document carries over, and not one flagged to be renewed"
   assert.equal(documentCarriesOver(doc({ category: "visa" }), renew), false);
 });
 
+test("an approved previous visa or refusal letter follows the student into a new intake; the rest of the visa papers do not", () => {
+  const renew = new Set();
+  const letter = (over) => ({ id: "d", cycle_id: "c1", category: "visa", template_id: null, derived_key: "visa_refusal:r1", status: "verified", ...over });
+  assert.equal(documentCarriesOver(letter({}), renew), true, "the same letter, whichever intake asks");
+  assert.equal(documentCarriesOver(letter({ status: "submitted" }), renew), false, "not yet approved: asked again");
+  assert.equal(documentCarriesOver(letter({ status: "rejected" }), renew), false);
+  assert.equal(documentCarriesOver(letter({ derived_key: "previous_visa:t1" }), renew), true, "a trip's visa is the same visa");
+  assert.equal(documentCarriesOver(letter({ derived_key: "previous_visa:t1", status: "missing" }), renew), false);
+  assert.equal(documentCarriesOver(letter({ derived_key: null, template_id: "t-visa-form" }), renew), false, "this attempt's visa papers are asked for again");
+
+  const seq = new Map([["c1", 1], ["c2", 2]]);
+  const docs = [
+    letter({ id: "d-letter" }),
+    letter({ id: "d-pending", derived_key: "visa_refusal:r2", status: "submitted" }),
+    letter({ id: "d-trip", derived_key: "previous_visa:t1" }),
+    letter({ id: "d-form", derived_key: null, template_id: "t-visa-form" }),
+    letter({ id: "d-form-2", cycle_id: "c2", derived_key: null, template_id: "t-visa-form", status: "missing" }),
+  ];
+  const resolved = resolveCycleDocuments(docs, "c2", seq, renew);
+  assert.deepEqual(resolved.map((r) => r.doc.id).sort(), ["d-form-2", "d-letter", "d-trip"]);
+  assert.equal(resolved.find((r) => r.doc.id === "d-letter").inheritedFrom, 1);
+});
+
 test("a new intake inherits last year's approved documents without re-asking", () => {
   const seq = new Map([["c1", 1], ["c2", 2]]);
   const docs = [

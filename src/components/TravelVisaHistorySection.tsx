@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { saveTravelAndVisaHistory } from "@/lib/actions/studentProfileExtras";
@@ -19,11 +20,14 @@ type VisaDraft = { key: string; id: string; country: string; type: string; date:
 export function TravelVisaHistorySection({
   studentId,
   revalidateTo,
+  documentsHref,
   travel,
   refusals,
 }: {
   studentId: string;
   revalidateTo: string;
+  /** Where this student's documents are, for the visa each trip and the letter each refusal asks for. */
+  documentsHref: string;
   travel: TravelRecord[];
   refusals: VisaRefusalRecord[];
 }) {
@@ -57,7 +61,16 @@ export function TravelVisaHistorySection({
   return (
     <form action={formAction} onReset={(e) => e.preventDefault()} className="flex flex-col gap-6">
       <div className="flex flex-col gap-3">
-        <h4 className="text-sm font-semibold text-ink">Travel history</h4>
+        <div className="flex flex-col gap-1">
+          <h4 className="text-sm font-semibold text-ink">Travel history</h4>
+          <p className="text-xs text-muted" data-previous-visa-note>
+            Once saved, each trip asks for its visa and entry/exit stamps in the visa section of{" "}
+            <Link href={documentsHref} prefetch={false} className="font-medium text-primary hover:underline">
+              Documents
+            </Link>
+            .
+          </p>
+        </div>
         {trips.length === 0 && <p className="text-xs text-muted">No prior travel on file.</p>}
         {trips.map((r) => (
           <div key={r.key} className="flex flex-wrap items-end gap-2 rounded-md border border-border p-2">
@@ -122,7 +135,19 @@ export function TravelVisaHistorySection({
       </div>
 
       <div className="flex flex-col gap-3 border-t border-border pt-4">
-        <h4 className="text-sm font-semibold text-ink">Visa refusal / deportation history</h4>
+        <div className="flex flex-col gap-1">
+          <h4 className="text-sm font-semibold text-ink">Visa refusal / deportation history</h4>
+          {/* Said before anything is added, so a refusal is listed knowing
+              what it asks for, and found again once it has. The section is
+              not named: its label is set in Setup and can change. */}
+          <p className="text-xs text-muted" data-refusal-letter-note>
+            Once saved, each one asks for its letter in the visa section of{" "}
+            <Link href={documentsHref} prefetch={false} className="font-medium text-primary hover:underline">
+              Documents
+            </Link>
+            .
+          </p>
+        </div>
         {records.length === 0 && <p className="text-xs text-muted">No prior visa refusal or deportation on file.</p>}
         {records.map((r) => (
           <div key={r.key} className="flex flex-wrap items-end gap-2 rounded-md border border-border p-2">

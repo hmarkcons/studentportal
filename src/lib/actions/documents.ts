@@ -7,9 +7,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sanitizeFilename, validateDocumentFile } from "@/lib/documentUpload";
 import { documentFilePath, parseSourceNames } from "@/lib/documentFileNames";
 import { testTypeOfChecklistItem, trackerSelectedTests } from "@/lib/trackerTests";
-import { profileDerivedRequirements, reconcileDerived, templatesToSeed } from "@/lib/documentChecklist";
+import { profileDerivedRequirements, reconcileDerived, studentTracks, templatesToSeed, trackFits, type TravelRow, type VisaRefusalRow } from "@/lib/documentChecklist";
 import { requirePermission } from "@/lib/auth/permissions";
-import { categoryCarriesOver } from "@/lib/intakeCycle";
+import { categoryCarriesOver, documentCarriesOver } from "@/lib/intakeCycle";
 import { ensureCurrentCycle } from "@/lib/ensureCycle";
 import { uploadedFile } from "@/lib/stagedUpload";
 import { syncStagesForDocument, syncStudentStages } from "@/lib/autoStagesSync";
@@ -42,8 +42,9 @@ const MANAGE_DENIED = "Only Super Admin and the Processing team can add or remov
 //     shared ones, minus any shared item that destination has explicitly
 //     dropped in the builder (destination_document_exclusions).
 //   * the student's own profile — a requirement per qualification (certificate
-//     and transcript, separately) and per test score they have entered, plus
-//     one row each for travel history and prior refusals when they have any.
+//     and transcript, separately) and per test score they have entered, the
+//     visa and stamps of each trip they list, and the letter for each refusal
+//     or deportation.
 //     These carry a derived_key so this stays idempotent and so a requirement
 //     whose profile entry has gone can be found again.
 //
@@ -65,6 +66,7 @@ export async function ensureStudentDocumentRequirements(studentId: string): Prom
     { data: removals },
     { data: trackerFields },
     { data: trackerValues },
+    { data: applicationRows },
   ] = await Promise.all([
     // Beside the reads rather than after them. When it has to create the
     // student's first cycle it also stamps their existing rows with it, which
@@ -73,8 +75,12 @@ export async function ensureStudentDocumentRequirements(studentId: string): Prom
     // whatever its cycle says.
     ensureCurrentCycle(studentId),
     supabase.from("leads").select("level_applying_for, service_type").eq("id", studentId).maybeSingle(),
-    supabase.from("lead_destinations").select("destination_id").eq("lead_id", studentId),
-    supabase.from("document_templates").select("id, category, level, destination_id, name, sort_order, renew_each_intake, skip_for_visa_only"),
+    // With each destination's track: what the student registered for, until
+    // their applications say which kind of university they are applying to.
+    supabase.from("lead_destinations").select("destination_id, destination:destinations(track)").eq("lead_id", studentId),
+    supabase
+      .from("document_templates")
+      .select("id, category, level, destination_id, name, sort_order, renew_each_intake, skip_for_visa_only, university_track"),
     supabase
       .from("student_documents")
       .select("id, template_id, derived_key, file_path, category, custom_name, cycle_id, status, template:document_templates(name)")
@@ -96,6 +102,9 @@ export async function ensureStudentDocumentRequirements(studentId: string): Prom
       .from("application_country_extra")
       .select("field_key, field_value, application:applications!inner(student_id)")
       .eq("application.student_id", studentId),
+    // Which kind of university each application is to, for a requirement
+    // limited to public or private universities (0337).
+    supabase.from("applications").select("cycle_id, current_stage, university:universities(type, destination_id)").eq("student_id", studentId),
   ]);
   const selectedTests = trackerSelectedTests(
     (trackerFields ?? []) as { field_key: string; options: string[] | null }[],
@@ -163,15 +172,33 @@ export async function ensureStudentDocumentRequirements(studentId: string): Prom
     destinationIds.size > 0 &&
     [...destinationIds].every((d) => excludedByDestination.get(d as string)?.has(templateId));
 
+  // Public, private or both, per destination — from this intake's applications,
+  // else the destination's own track (studentTracks).
+  const one = <T,>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? (v[0] ?? null) : (v ?? null));
+  const tracks = studentTracks({
+    destinations: (destRows ?? []).map((d) => ({
+      id: d.destination_id as string,
+      track: one(d.destination as { track: string | null } | { track: string | null }[] | null)?.track ?? null,
+    })),
+    applications: (applicationRows ?? [])
+      .filter((a) => isFirstAttempt || !a.cycle_id || a.cycle_id === currentCycleId)
+      .map((a) => {
+        const uni = one(a.university as { type: string | null; destination_id: string | null } | { type: string | null; destination_id: string | null }[] | null);
+        return { destinationId: uni?.destination_id ?? null, type: uni?.type ?? null, stage: (a.current_stage as string | null) ?? null };
+      }),
+  });
+  const trackWanted = (t: NonNullable<typeof templates>[number]) => trackFits(t.university_track as string | null, t.destination_id as string | null, tracks);
+
   // A visa-only client (0279) already has their admission, so the items that
   // exist only to win one are not asked of them (0280).
   const visaOnly = student?.service_type === "visa_only";
   const skippedForVisaOnly = new Set((templates ?? []).filter((t) => t.skip_for_visa_only).map((t) => t.id as string));
 
   // Whether a template is one this student's checklist carries at all — level,
-  // destination, the builder's exclusions, visa-only.
+  // destination, the builder's exclusions, visa-only, public or private.
   const fitsStudent = (t: NonNullable<typeof templates>[number]) => {
     if (visaOnly && skippedForVisaOnly.has(t.id as string)) return false;
+    if (!trackWanted(t)) return false;
     const levelMatches = t.level === "all" || t.level === level;
     const destMatches = t.destination_id === null || destinationIds.has(t.destination_id);
     if (!levelMatches || !destMatches) return false;
@@ -244,10 +271,22 @@ export async function ensureStudentDocumentRequirements(studentId: string): Prom
     testScores: testScores ?? [],
     trackerTests: selectedTests,
     coveredTestTypes,
-    travelHistoryCount: Array.isArray(profile?.travel_history) ? profile!.travel_history.length : 0,
-    visaHistoryCount: Array.isArray(profile?.visa_refusal_history) ? profile!.visa_refusal_history.length : 0,
+    travel: Array.isArray(profile?.travel_history) ? (profile!.travel_history as TravelRow[]) : [],
+    visaRefusals: Array.isArray(profile?.visa_refusal_history) ? (profile!.visa_refusal_history as VisaRefusalRow[]) : [],
   });
-  const reconciled = reconcileDerived(wanted, existingRows);
+  // Only what answers a requirement in this intake, by the rule the templates
+  // follow above: a row of this intake, or one approved earlier that carries
+  // over. A visa row from an earlier intake does not (but for a trip's visa
+  // or a refusal's letter once approved), so the new intake asks for it again
+  // — it used to count wherever it was, and never came back.
+  const derivedNow = existingRows.filter(
+    (r) =>
+      r.derived_key &&
+      (isFirstAttempt ||
+        (r.cycle_id ?? null) === currentCycleId ||
+        documentCarriesOver({ ...r, category: r.category ?? null, template_id: null, status: r.status as string }, renewTemplateIds))
+  );
+  const reconciled = reconcileDerived(wanted, derivedNow);
   const { toDeleteIds, toRename } = reconciled;
   const toInsert = reconciled.toInsert.filter((r) => !removedKeys.has(r.derivedKey));
 
@@ -289,6 +328,24 @@ export async function ensureStudentDocumentRequirements(studentId: string): Prom
       if (error) throw error;
       changed = true;
     }
+  }
+
+  // A requirement for private universities, say, once the student's private
+  // application has gone or been withdrawn: this intake's copy goes if nothing
+  // was sent against it. An earlier intake's is that intake's record, and stays.
+  const templateById = new Map((templates ?? []).map((t) => [t.id as string, t]));
+  const offTrack = existingRows
+    .filter((r) => {
+      const t = r.template_id ? templateById.get(r.template_id as string) : undefined;
+      if (!t || trackWanted(t)) return false;
+      if (!(isFirstAttempt || (r.cycle_id ?? null) === currentCycleId)) return false;
+      return !r.file_path && r.status === "missing";
+    })
+    .map((r) => r.id as string);
+  if (offTrack.length > 0) {
+    const { error } = await supabase.from("student_documents").delete().in("id", offTrack);
+    if (error) throw error;
+    changed = true;
   }
 
   // A test unticked in the tracker: its checklist item goes, unless a file was

@@ -72,6 +72,7 @@ export function notificationTone(kind: string): NotificationTone {
     case "document_rejected":
     case "agreement":
     case "document_submitted":
+    case "visa_refusal":
       return "attention";
     case "lead_assigned":
     case "student_assigned":

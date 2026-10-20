@@ -24,7 +24,7 @@ export default async function CreateDocChecklistPage(props: {
       supabase.from("destination_document_sections").select("destination_id, section_key, sort_order"),
       supabase
         .from("document_templates")
-        .select(`id, destination_id, category, name, required, level, sort_order, renew_each_intake, skip_for_visa_only, ${GUIDE_COLUMNS}`)
+        .select(`id, destination_id, category, name, required, level, sort_order, renew_each_intake, skip_for_visa_only, university_track, ${GUIDE_COLUMNS}`)
         .order("sort_order"),
     ]);
 
@@ -141,6 +141,7 @@ export default async function CreateDocChecklistPage(props: {
               isShared: i.isShared,
               renewEachIntake: Boolean(i.renew_each_intake),
               skipForVisaOnly: Boolean(i.skip_for_visa_only),
+              universityTrack: i.university_track ?? "all",
             })),
           }))}
           excludedItems={excludedItems.map((t) => ({ id: t.id, name: t.name, category: t.category }))}

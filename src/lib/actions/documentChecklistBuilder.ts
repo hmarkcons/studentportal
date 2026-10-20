@@ -15,6 +15,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { isTrackScope } from "@/lib/documentChecklist";
 import { requirePermission } from "@/lib/auth/permissions";
 
 const REVALIDATE = "/setup/create-doc-checklist";
@@ -250,6 +251,12 @@ export async function reorderDestinationSections(destinationId: string | null, o
 
 // -------------------------------------------------------------- the items
 
+/** The form's "University" choice; one it does not send is both, as before the choice existed. */
+function universityTrack(formData: FormData) {
+  const value = String(formData.get("university_track") ?? "all");
+  return isTrackScope(value) ? value : null;
+}
+
 export async function addChecklistItem(
   destinationId: string | null,
   sectionKey: string,
@@ -263,8 +270,12 @@ export async function addChecklistItem(
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return { error: "Give the requirement a name." };
   const description = String(formData.get("description") ?? "").trim() || null;
-  const required = formData.get("required") !== "off";
+  // A checkbox left unticked is not sent at all, so "not off" was always true
+  // and nothing could be made optional here.
+  const required = formData.get("required") === "on";
   const level = String(formData.get("level") ?? "all");
+  const track = universityTrack(formData);
+  if (!track) return { error: "Choose public, private, or both." };
 
   const { data: last } = await supabase
     .from("document_templates")
@@ -287,6 +298,8 @@ export async function addChecklistItem(
     renew_each_intake: formData.get("renew_each_intake") === "on",
     // Admission-only paperwork a visa-only client (0279) is not asked for.
     skip_for_visa_only: formData.get("skip_for_visa_only") === "on",
+    // Only for a student applying to a public, or a private, university (0337).
+    university_track: track,
     sort_order: (last?.sort_order ?? 0) + 1,
   });
   if (insertError) return { error: insertError.message };
@@ -302,6 +315,8 @@ export async function updateChecklistItem(templateId: string, _prevState: unknow
 
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return { error: "Give the requirement a name." };
+  const track = universityTrack(formData);
+  if (!track) return { error: "Choose public, private, or both." };
 
   const { data: updated, error: updateError } = await supabase
     .from("document_templates")
@@ -310,10 +325,13 @@ export async function updateChecklistItem(templateId: string, _prevState: unknow
       // Not the description: that is the guide's short note now, written in
       // the guide editor (0300). This form never had a field for it, so saving
       // a requirement's name or ticks used to wipe its note.
-      required: formData.get("required") !== "off",
+      // Unticked is not sent: see addChecklistItem. Saving an optional
+      // requirement used to make it required again.
+      required: formData.get("required") === "on",
       level: String(formData.get("level") ?? "all"),
       renew_each_intake: formData.get("renew_each_intake") === "on",
       skip_for_visa_only: formData.get("skip_for_visa_only") === "on",
+      university_track: track,
     })
     .eq("id", templateId)
     .select("id");

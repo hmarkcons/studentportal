@@ -16,6 +16,7 @@ import {
   updateChecklistItem,
 } from "@/lib/actions/documentChecklistBuilder";
 import { STUDY_LEVELS } from "@/lib/constants";
+import { TRACK_SCOPES } from "@/lib/documentChecklist";
 import { toast } from "@/lib/toast";
 import { GuideEditor, guideIsWritten, type EditableGuide } from "./GuideEditor";
 
@@ -30,6 +31,8 @@ export type BuilderItem = {
   renewEachIntake: boolean;
   /** Not asked of a visa-only client (0280). */
   skipForVisaOnly: boolean;
+  /** 'all', or only for students applying to a 'public' or a 'private' university (0337). */
+  universityTrack: string;
   /** How the student prepares it (0300). */
   guide: EditableGuide;
   /** This destination's note beneath a shared requirement's guide. */
@@ -37,6 +40,29 @@ export type BuilderItem = {
 };
 
 type Section = { key: string; label: string; items: BuilderItem[] };
+
+/**
+ * Public, private or both. Which a student is on is worked out per country:
+ * from the universities they are applying to there, else the country's own
+ * track until they have an application (studentTracks).
+ */
+function TrackSelect({ defaultValue }: { defaultValue: string }) {
+  return (
+    <label
+      className="flex flex-col gap-1 text-xs text-muted"
+      title="Public only or Private only: asked of a student once they apply to a university of that kind here, and before they have any application, when this country's own track is that kind."
+    >
+      University
+      <Select name="university_track" defaultValue={defaultValue} className="w-40" data-track-select>
+        {TRACK_SCOPES.map((s) => (
+          <option key={s.value} value={s.value}>
+            {s.label}
+          </option>
+        ))}
+      </Select>
+    </label>
+  );
+}
 
 export function SectionCard({
   destinationId,
@@ -280,6 +306,7 @@ export function SectionCard({
                     ))}
                   </Select>
                 </label>
+                <TrackSelect defaultValue={item.universityTrack} />
                 <label className="flex items-center gap-1 pb-2 text-xs text-muted">
                   <input type="checkbox" name="required" defaultChecked={item.required} /> Required
                 </label>
@@ -314,6 +341,11 @@ export function SectionCard({
                     {item.name}
                     {!item.required && <span className="ml-2 text-xs text-muted">optional</span>}
                     {item.level !== "all" && <span className="ml-2 text-xs text-muted">{item.level} only</span>}
+                    {TRACK_SCOPES.find((s) => s.value === item.universityTrack)?.badge && (
+                      <span className="ml-2 text-xs font-medium text-primary" data-track-badge={item.universityTrack}>
+                        {TRACK_SCOPES.find((s) => s.value === item.universityTrack)?.badge}
+                      </span>
+                    )}
                     {item.renewEachIntake && <span className="ml-2 text-xs text-warning">renew each intake</span>}
                     {item.skipForVisaOnly && <span className="ml-2 text-xs text-muted">not for visa-only clients</span>}
                     {item.isShared && <span className="ml-2 text-xs text-muted">shared</span>}
@@ -429,6 +461,7 @@ export function SectionCard({
               ))}
             </Select>
           </label>
+          <TrackSelect defaultValue="all" />
           <label className="flex items-center gap-1 pb-2 text-xs text-muted">
             <input type="checkbox" name="required" defaultChecked /> Required
           </label>

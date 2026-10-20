@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveChecklist, profileDerivedRequirements, reconcileDerived, templatesToSeed } from "../src/lib/documentChecklist.ts";
+import { resolveChecklist, profileDerivedRequirements, reconcileDerived, templatesToSeed, visaRefusalRequirementName, isVisaRefusalKey, isPreviousVisaKey, isHistoryDocumentKey, previousVisaRequirementName, tripDates, studentTracks, trackFits, isTrackScope, TRACK_SCOPES } from "../src/lib/documentChecklist.ts";
 import { testLabel, needsCustomName, TEST_TYPE_LABELS } from "../src/lib/testScores.ts";
 
 const SECTIONS = [
@@ -157,8 +157,8 @@ test("each qualification asks for its certificate and transcript separately", ()
   const out = profileDerivedRequirements({
     qualifications: QUALS,
     testScores: [],
-    travelHistoryCount: 0,
-    visaHistoryCount: 0,
+    travel: [],
+    visaRefusals: [],
   });
   assert.deepEqual(out.map((r) => r.name), [
     "High School — certificate",
@@ -173,8 +173,8 @@ test("each test score asks for its scorecard, named by the test", () => {
   const out = profileDerivedRequirements({
     qualifications: [],
     testScores: TESTS,
-    travelHistoryCount: 0,
-    visaHistoryCount: 0,
+    travel: [],
+    visaRefusals: [],
   });
   assert.deepEqual(out.map((r) => r.name), ["IELTS — scorecard", "NTS GAT — scorecard"]);
 });
@@ -183,38 +183,127 @@ test("a student with nothing in their profile is asked for nothing derived", () 
   const out = profileDerivedRequirements({
     qualifications: [],
     testScores: [],
-    travelHistoryCount: 0,
-    visaHistoryCount: 0,
+    travel: [],
+    visaRefusals: [],
   });
   assert.deepEqual(out, []);
 });
 
-test("travel and refusal history each add one row, and only when there is history", () => {
-  const none = profileDerivedRequirements({
-    qualifications: [],
-    testScores: [],
-    travelHistoryCount: 0,
-    visaHistoryCount: 0,
-  });
-  assert.ok(!none.some((r) => r.category === "visa"), "never travelled means no stamps to ask for");
+const REFUSALS = [
+  { id: "r-uk", country: "UK", type: "refusal", date: "2024-03-12", reason: "Funds not shown" },
+  { id: "r-it", country: "Italy", type: "refusal", date: "2025-08-15", reason: null },
+  { id: "r-ae", country: "UAE", type: "deportation", date: null, reason: null },
+];
 
-  const both = profileDerivedRequirements({
+const TRIPS = [
+  { id: "t-ae1", country: "UAE", purpose: "Tourism", from_date: "2026-08-04", to_date: "2026-08-20" },
+  { id: "t-ae2", country: "UAE", purpose: "Family", from_date: "2025-01-02", to_date: "2025-01-09" },
+  { id: "t-th", country: "Thailand", purpose: null, from_date: "2026-10-15", to_date: "2026-10-19" },
+  { id: "t-tr", country: "Turkey", purpose: "Tourism", from_date: null, to_date: null },
+];
+
+test("a student who never travelled and was never refused is asked for nothing of the kind", () => {
+  const none = profileDerivedRequirements({ qualifications: [], testScores: [], travel: [], visaRefusals: [] });
+  assert.ok(!none.some((r) => r.category === "visa"));
+});
+
+test("each trip asks for its own visa in the visa section, named by country and dates, two trips to one country as two", () => {
+  const out = profileDerivedRequirements({ qualifications: [], testScores: [], travel: TRIPS, visaRefusals: [] });
+  assert.deepEqual(out.map((r) => [r.derivedKey, r.name]), [
+    ["previous_visa:t-ae1", "Previous visa — UAE, 4–20 Aug 2026"],
+    ["previous_visa:t-ae2", "Previous visa — UAE, 2–9 Jan 2025"],
+    ["previous_visa:t-th", "Previous visa — Thailand, 15–19 Oct 2026"],
+    ["previous_visa:t-tr", "Previous visa — Turkey"],
+  ]);
+  assert.ok(out.every((r) => r.category === "visa" && r.required && isPreviousVisaKey(r.derivedKey) && isHistoryDocumentKey(r.derivedKey)));
+});
+
+test("a trip's dates are said as briefly as they can be, and a date that cannot be read is left out", () => {
+  assert.equal(tripDates("2026-08-04", "2026-08-20"), "4–20 Aug 2026");
+  assert.equal(tripDates("2026-07-28", "2026-08-03"), "28 Jul – 3 Aug 2026");
+  assert.equal(tripDates("2025-12-28", "2026-01-03"), "28 Dec 2025 – 3 Jan 2026");
+  assert.equal(tripDates("2026-08-04", "2026-08-04"), "4 Aug 2026");
+  assert.equal(tripDates("2026-08-04", null), "from 4 Aug 2026");
+  assert.equal(tripDates("", "2026-08-20"), "until 20 Aug 2026");
+  assert.equal(tripDates("2026-13-01", "soon"), null);
+  assert.equal(previousVisaRequirementName({ country: "  Saudi Arabia ", from_date: "2024-03-01", to_date: "2024-03-15" }), "Previous visa — Saudi Arabia, 1–15 Mar 2024");
+  assert.equal(previousVisaRequirementName({ country: "", from_date: "2024-03-01", to_date: null }), "Previous visa — from 1 Mar 2024");
+  assert.equal(previousVisaRequirementName({ country: null }), "Previous visa");
+});
+
+test("a trip corrected on the profile renames its visa and keeps it; one taken off goes only if nothing was sent", () => {
+  const before = [
+    { id: "d-ae1", derived_key: "previous_visa:t-ae1", file_path: "s/d-ae1/visa.pdf", custom_name: "Previous visa — UAE, 4–20 Aug 2026" },
+    { id: "d-th", derived_key: "previous_visa:t-th", file_path: null, custom_name: "Previous visa — Thailand, 15–19 Oct 2026" },
+    // The one row the travel history used to raise, still empty: it goes.
+    { id: "d-old", derived_key: "profile:travel_history", file_path: null, custom_name: "Previous travel history — visas & stamps" },
+  ];
+  const wanted = profileDerivedRequirements({
     qualifications: [],
     testScores: [],
-    travelHistoryCount: 3,
-    visaHistoryCount: 2,
+    travel: [{ ...TRIPS[0], to_date: "2026-08-22" }, TRIPS[1]],
+    visaRefusals: [],
   });
-  assert.deepEqual(both.map((r) => r.name), [
-    "Previous travel history — visas & stamps",
-    "Previous refusal / deportation papers",
+  const r = reconcileDerived(wanted, before);
+  assert.deepEqual(r.toInsert.map((x) => x.derivedKey), ["previous_visa:t-ae2"]);
+  assert.deepEqual(r.toRename, [{ id: "d-ae1", name: "Previous visa — UAE, 4–22 Aug 2026" }]);
+  assert.deepEqual(r.toDeleteIds.sort(), ["d-old", "d-th"]);
+});
+
+test("each refusal or deportation asks for its own letter in the visa section, named by country and date", () => {
+  const out = profileDerivedRequirements({ qualifications: [], testScores: [], travel: [TRIPS[3]], visaRefusals: REFUSALS });
+  assert.deepEqual(out.map((r) => [r.derivedKey, r.name]), [
+    ["previous_visa:t-tr", "Previous visa — Turkey"],
+    ["visa_refusal:r-uk", "Visa refusal letter — UK, 12 Mar 2024"],
+    ["visa_refusal:r-it", "Visa refusal letter — Italy, 15 Aug 2025"],
+    ["visa_refusal:r-ae", "Deportation papers — UAE"],
   ]);
-  assert.ok(both.every((r) => r.category === "visa"));
-  // Three trips is one row, not three.
-  assert.equal(both.filter((r) => r.derivedKey === "profile:travel_history").length, 1);
+  assert.ok(out.every((r) => r.category === "visa" && r.required));
+  assert.ok(out.slice(1).every((r) => isVisaRefusalKey(r.derivedKey) && isHistoryDocumentKey(r.derivedKey)) && !isVisaRefusalKey("previous_visa:t-tr"));
+});
+
+test("a refusal's letter is named with what is known, and never prints a date it cannot read", () => {
+  assert.equal(visaRefusalRequirementName({ country: "  Schengen (France) ", type: "refusal", date: "2023-01-05" }), "Visa refusal letter — Schengen (France), 5 Jan 2023");
+  assert.equal(visaRefusalRequirementName({ country: "", type: "refusal", date: "2023-01-05" }), "Visa refusal letter — 5 Jan 2023");
+  assert.equal(visaRefusalRequirementName({ country: null, type: null, date: null }), "Visa refusal letter");
+  assert.equal(visaRefusalRequirementName({ country: "UK", type: "refusal", date: "2023-13-05" }), "Visa refusal letter — UK");
+  assert.equal(visaRefusalRequirementName({ country: "UK", type: "refusal", date: "last year" }), "Visa refusal letter — UK");
+  assert.equal(visaRefusalRequirementName({ country: "Canada", type: "deportation", date: "2019-11-30" }), "Deportation papers — Canada, 30 Nov 2019");
+});
+
+test("one refusal listed twice is one letter, and a refusal with no id still has a key of its own", () => {
+  const out = profileDerivedRequirements({
+    qualifications: [],
+    testScores: [],
+    travel: [],
+    visaRefusals: [REFUSALS[0], { ...REFUSALS[0] }, { country: "Spain", type: "refusal", date: "2022-06-01" }, { country: "Spain", type: "refusal", date: "2022-06-01" }],
+  });
+  assert.equal(out.length, 2);
+  assert.equal(new Set(out.map((r) => r.derivedKey)).size, 2);
+});
+
+test("a refusal corrected on the profile renames its letter and keeps it; one taken off goes only if nothing was sent", () => {
+  const before = [
+    { id: "d-uk", derived_key: "visa_refusal:r-uk", file_path: "s/d-uk/letter.pdf", custom_name: "Visa refusal letter — UK, 12 Mar 2024" },
+    { id: "d-it", derived_key: "visa_refusal:r-it", file_path: null, custom_name: "Visa refusal letter — Italy, 15 Aug 2025" },
+    { id: "d-ae", derived_key: "visa_refusal:r-ae", file_path: "s/d-ae/papers.pdf", custom_name: "Deportation papers — UAE" },
+  ];
+  // The UK date corrected; Italy and UAE taken off the profile.
+  const wanted = profileDerivedRequirements({
+    qualifications: [],
+    testScores: [],
+    travel: [],
+    visaRefusals: [{ ...REFUSALS[0], date: "2024-03-21" }],
+  });
+  const r = reconcileDerived(wanted, before);
+  assert.deepEqual(r.toInsert, []);
+  assert.deepEqual(r.toRename, [{ id: "d-uk", name: "Visa refusal letter — UK, 21 Mar 2024" }]);
+  assert.deepEqual(r.toDeleteIds, ["d-it"]);
+  assert.deepEqual(r.keptWithFileIds, ["d-ae"]);
 });
 
 test("derived keys are stable and unique, so re-seeding cannot duplicate", () => {
-  const args = { qualifications: QUALS, testScores: TESTS, travelHistoryCount: 1, visaHistoryCount: 1 };
+  const args = { qualifications: QUALS, testScores: TESTS, travel: TRIPS, visaRefusals: REFUSALS };
   const a = profileDerivedRequirements(args);
   const b = profileDerivedRequirements(args);
   assert.deepEqual(a.map((r) => r.derivedKey), b.map((r) => r.derivedKey));
@@ -227,8 +316,8 @@ test("only missing rows are inserted", () => {
   const wanted = profileDerivedRequirements({
     qualifications: QUALS,
     testScores: [],
-    travelHistoryCount: 0,
-    visaHistoryCount: 0,
+    travel: [],
+    visaRefusals: [],
   });
   const existing = [{ id: "d1", derived_key: "qualification:q1:certificate", file_path: null }];
   const { toInsert } = reconcileDerived(wanted, existing);
@@ -394,8 +483,8 @@ test("a qualification's document names the school it is from", () => {
       { id: "q3", qualification_type: "bachelors_4yr", institution_name: "University of the Punjab" },
     ],
     testScores: [],
-    travelHistoryCount: 0,
-    visaHistoryCount: 0,
+    travel: [],
+    visaRefusals: [],
   });
   const names = wanted.map((w) => w.name);
   assert.ok(names.includes("Secondary School — certificate — Beaconhouse School System"), names.join(" | "));
@@ -407,8 +496,8 @@ test("a qualification with no institution recorded keeps its old wording", () =>
   const wanted = profileDerivedRequirements({
     qualifications: [{ id: "q1", qualification_type: "secondary_school", institution_name: "   " }],
     testScores: [],
-    travelHistoryCount: 0,
-    visaHistoryCount: 0,
+    travel: [],
+    visaRefusals: [],
   });
   assert.deepEqual(
     wanted.map((w) => w.name),
@@ -421,8 +510,8 @@ test("a test scorecard is not given an institution", () => {
   const wanted = profileDerivedRequirements({
     qualifications: [],
     testScores: [{ id: "t1", test_type: "ielts" }],
-    travelHistoryCount: 0,
-    visaHistoryCount: 0,
+    travel: [],
+    visaRefusals: [],
   });
   assert.equal(wanted.length, 1);
   assert.ok(!wanted[0].name.includes(" — ") || wanted[0].name.endsWith("scorecard"), wanted[0].name);
@@ -434,14 +523,14 @@ test("renaming the school renames the requirement instead of retiring it", () =>
   const before = profileDerivedRequirements({
     qualifications: [{ id: "q1", qualification_type: "secondary_school", institution_name: "Beconhouse" }],
     testScores: [],
-    travelHistoryCount: 0,
-    visaHistoryCount: 0,
+    travel: [],
+    visaRefusals: [],
   });
   const after = profileDerivedRequirements({
     qualifications: [{ id: "q1", qualification_type: "secondary_school", institution_name: "Beaconhouse" }],
     testScores: [],
-    travelHistoryCount: 0,
-    visaHistoryCount: 0,
+    travel: [],
+    visaRefusals: [],
   });
   assert.deepEqual(
     before.map((b) => b.derivedKey),
@@ -468,8 +557,8 @@ test("a row whose label already matches is left alone", () => {
   const wanted = profileDerivedRequirements({
     qualifications: [{ id: "q1", qualification_type: "secondary_school", institution_name: "Beaconhouse" }],
     testScores: [],
-    travelHistoryCount: 0,
-    visaHistoryCount: 0,
+    travel: [],
+    visaRefusals: [],
   });
   const existing = wanted.map((w, i) => ({
     id: `d${i}`,
@@ -478,4 +567,77 @@ test("a row whose label already matches is left alone", () => {
     custom_name: w.name,
   }));
   assert.deepEqual(reconcileDerived(wanted, existing).toRename, []);
+});
+
+// -------------------------------------------------------- university track
+
+const ITALY = { id: "it", track: "public" };
+const UK = { id: "uk", track: "private" };
+
+test("before any application, a country's own track is the student's track there", () => {
+  const tracks = studentTracks({ destinations: [ITALY, UK], applications: [] });
+  assert.deepEqual([...tracks.byDestination.get("it")], ["public"]);
+  assert.deepEqual([...tracks.byDestination.get("uk")], ["private"]);
+  assert.deepEqual([...tracks.any].sort(), ["private", "public"]);
+});
+
+test("a private university under Italy (Public) puts the student on Italy's private track, and only that", () => {
+  const tracks = studentTracks({ destinations: [ITALY], applications: [{ destinationId: "it", type: "private", stage: "documents_pending" }] });
+  assert.ok(trackFits("private", "it", tracks), "Bocconi's deposit is asked for");
+  assert.ok(!trackFits("public", "it", tracks), "no public university in sight");
+  assert.ok(trackFits("all", "it", tracks) && trackFits(undefined, "it", tracks) && trackFits(null, "it", tracks));
+});
+
+test("applying to a public and a private university is both tracks", () => {
+  const tracks = studentTracks({
+    destinations: [ITALY],
+    applications: [
+      { destinationId: "it", type: "public", stage: "application_submitted" },
+      { destinationId: "it", type: "private", stage: "documents_pending" },
+    ],
+  });
+  assert.ok(trackFits("public", "it", tracks) && trackFits("private", "it", tracks));
+});
+
+test("a rejected, declined or withdrawn application no longer counts, and the country's track stands again", () => {
+  for (const stage of ["rejected", "declined", "withdrawn"]) {
+    const tracks = studentTracks({ destinations: [ITALY], applications: [{ destinationId: "it", type: "private", stage }] });
+    assert.ok(!trackFits("private", "it", tracks), stage);
+    assert.ok(trackFits("public", "it", tracks), stage);
+  }
+});
+
+test("each country is on its own track: a private application in the UK says nothing about Italy", () => {
+  const tracks = studentTracks({ destinations: [ITALY, UK], applications: [{ destinationId: "uk", type: "private" }] });
+  assert.ok(!trackFits("private", "it", tracks));
+  assert.ok(trackFits("public", "it", tracks));
+  assert.ok(trackFits("private", "uk", tracks) && !trackFits("public", "uk", tracks));
+  // A shared requirement asks whether the student is on that track anywhere.
+  assert.ok(trackFits("private", null, tracks) && trackFits("public", null, tracks));
+});
+
+test("a shared requirement counts an application in a country the student has not listed", () => {
+  const tracks = studentTracks({ destinations: [ITALY], applications: [{ destinationId: "fr", type: "private" }] });
+  assert.ok(trackFits("private", null, tracks));
+  assert.ok(!trackFits("private", "it", tracks));
+  assert.ok(!trackFits("private", "fr", tracks), "a country not on their checklist asks nothing of them");
+});
+
+test("a student with no country and no application is asked only what is for both", () => {
+  const tracks = studentTracks({ destinations: [], applications: [] });
+  assert.ok(trackFits("all", null, tracks));
+  assert.ok(!trackFits("public", null, tracks) && !trackFits("private", null, tracks));
+});
+
+test("an application whose university has no type known adds no track", () => {
+  const tracks = studentTracks({ destinations: [ITALY], applications: [{ destinationId: "it", type: null }] });
+  assert.deepEqual([...tracks.byDestination.get("it")], ["public"]);
+});
+
+test("the builder offers exactly both, public and private, and accepts nothing else", () => {
+  assert.deepEqual(TRACK_SCOPES.map((s) => s.value), ["all", "public", "private"]);
+  assert.equal(TRACK_SCOPES[0].label, "Public and private");
+  assert.equal(TRACK_SCOPES[0].badge, null, "a requirement for both is not labelled");
+  assert.ok(isTrackScope("all") && isTrackScope("public") && isTrackScope("private"));
+  assert.ok(!isTrackScope("Private") && !isTrackScope("") && !isTrackScope(null) && !isTrackScope("both"));
 });

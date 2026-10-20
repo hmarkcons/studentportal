@@ -72,7 +72,9 @@
     "check:avatars": "node scripts/verify-avatars.mjs",
     "check:signinlanding": "node scripts/verify-sign-in-landing.mjs",
     "check:aeo": "node scripts/verify-aeo.mjs",
-    "check:scholarshipscope": "node scripts/verify-scholarship-scope.mjs"
+    "check:scholarshipscope": "node scripts/verify-scholarship-scope.mjs",
+    "check:visahistory": "node scripts/verify-visa-history.mjs",
+    "check:doctrack": "node scripts/verify-document-track.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

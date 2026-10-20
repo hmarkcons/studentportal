@@ -131,6 +131,7 @@ export default async function PortalProfilePage() {
           <TravelVisaHistorySection
             studentId={student.id}
             revalidateTo={revalidateTo}
+            documentsHref="/portal/documents"
             travel={(profile?.travel_history ?? []) as never}
             refusals={(profile?.visa_refusal_history ?? []) as never}
           />
