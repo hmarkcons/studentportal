@@ -42,6 +42,8 @@ export const PERMISSION_KEYS = [
   "students.restart_process",
   "settings.reengagement_messages",
   "inventory.manage",
+  // Downloading the universities sheet and the catalogue from Setup › Universities (0338).
+  "catalogue.export",
 ] as const;
 
 /**

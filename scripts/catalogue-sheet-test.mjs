@@ -10,6 +10,8 @@ import {
   unreadColumns,
   CATALOGUE_SHEET_READS,
   UNIVERSITY_SHEET_HEADERS,
+  roundRowsForUniversity,
+  universitySheetRow,
 } from "../src/lib/catalogueSheet.ts";
 import {
   programFromRow,
@@ -306,3 +308,71 @@ test("a yes/no in words, a level of its own and several emails go out and come b
   assert.equal(back.coordinator_email, "a@unipv.it, b@unipv.it");
   assert.equal(universityFromRow(row, "university_name", []).contact_email, "admissions@unipv.it, see the faculty page");
 });
+
+// ------------------------------------------------- a search's export (0338)
+
+const shared = [{ label: "1st call", start_date: "2026-02-01", application_deadline: "2026-03-01", sort_order: 1 }];
+const p = (name, level = "masters") => ({ program: { name, level }, rounds: shared });
+
+test("a whole university's shared rounds are written once, for every programme", () => {
+  const all = [p("Computer Science"), p("Data Science"), p("Physics", "bachelors")];
+  const rows = roundRowsForUniversity("Italy (Public)", "Università di Pavia", all);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].level, "");
+  assert.equal(rows[0].program_name, "");
+});
+
+test("a search's export of some programmes writes each one's rounds, never a row reaching the rest", () => {
+  // Imported, a row with no programme named reaches every programme the
+  // university has: folded from the two exported, it would add the round to
+  // Physics, which was not in the file.
+  const every = [p("Computer Science"), p("Data Science"), p("Physics", "bachelors")];
+  const rows = roundRowsForUniversity("Italy (Public)", "Università di Pavia", every.slice(0, 2), every);
+  assert.deepEqual(
+    rows.map((r) => [r.level, r.program_name, r.round]),
+    [
+      ["masters", "", "1st call"],
+    ],
+    "both masters programmes are all of its masters: one row for the level is still exact"
+  );
+
+  const oneOfTwo = roundRowsForUniversity("Italy (Public)", "Università di Pavia", every.slice(0, 1), every);
+  assert.deepEqual(oneOfTwo.map((r) => [r.level, r.program_name]), [["masters", "Computer Science"]], "one of two masters: named");
+});
+
+test("rounds written for a level only when the export holds that level's every programme", () => {
+  const every = [p("Computer Science"), p("Data Science"), p("Architecture", "bachelors"), p("Physics", "bachelors")];
+  const some = [every[0], every[2], every[3]];
+  const rows = roundRowsForUniversity("Italy (Public)", "Università di Pavia", some, every);
+  assert.deepEqual(
+    rows.map((r) => [r.level, r.program_name]),
+    [
+      ["bachelors", ""],
+      ["masters", "Computer Science"],
+    ]
+  );
+});
+
+test("a universities-sheet row has the sheet's own columns and parses back into exactly what was exported", () => {
+  const full = { ...university, destination: "Italy (Public)", short_name: "UniPV", application_fee: "30", application_fee_currency: "EUR", dsu_body: "EDiSU Pavia" };
+  const row = universitySheetRow(full);
+  assert.deepEqual(Object.keys(row), [...UNIVERSITY_SHEET_HEADERS]);
+  assert.equal(row.name, "Università di Pavia");
+  assert.equal(row.application_fee, "30");
+  assert.equal(row.application_fee_currency, "EUR");
+
+  const back = universityFromRow(row, "name", []);
+  const [catalogueRow] = catalogueRowsForUniversity(full, []);
+  // The same university as the catalogue's own columns describe it.
+  assert.deepEqual(back, universityFromRow(catalogueRow, "university_name", []));
+  assert.equal(back.short_name, "UniPV");
+  assert.equal(back.dsu_body, "EDiSU Pavia");
+  assert.deepEqual(back.levels_offered, university.levels_offered);
+});
+
+test("a universities-sheet row of a university with nothing on file is all blank, never null", () => {
+  const row = universitySheetRow({ name: "Bare", city: null, region: null, type: null, levels_offered: null, fields_offered: null, contact_email: null });
+  assert.ok(Object.values(row).every((v) => typeof v === "string"));
+  assert.equal(Object.values(row).filter(Boolean).length, 1);
+});
+

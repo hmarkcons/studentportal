@@ -310,7 +310,15 @@ function allShare(programmes: readonly { rounds: readonly ExportRound[] }[]): bo
 export function roundRowsForUniversity(
   destination: string,
   universityName: string,
-  programmes: readonly { program: Pick<ExportProgram, "level" | "name">; rounds: readonly ExportRound[] }[]
+  programmes: readonly { program: Pick<ExportProgram, "level" | "name">; rounds: readonly ExportRound[] }[],
+  /**
+   * Every programme the university has, when `programmes` is only some of
+   * them — a search's export. A row with no programme named reaches every
+   * programme the university has (or has at that level) when it is imported,
+   * so a round is written that widely only when the sheet holds all of them:
+   * folded from a few, it would be added on re-import to the ones left out.
+   */
+  everyProgramme: readonly { program: Pick<ExportProgram, "level"> }[] = programmes
 ): RoundRow[] {
   const rowsFor = (rounds: readonly ExportRound[], level: string, programName: string): RoundRow[] =>
     sortedRounds(rounds).map((r) => ({
@@ -323,14 +331,16 @@ export function roundRowsForUniversity(
       application_deadline: deadlineCell(r),
     }));
 
-  if (allShare(programmes)) return rowsFor(programmes[0].rounds, "", "");
+  const whole = programmes.length === everyProgramme.length;
+  if (whole && allShare(programmes)) return rowsFor(programmes[0].rounds, "", "");
 
   const rows: RoundRow[] = [];
   // One group per level, however it is capitalised (0304), named as its first programme writes it.
   const levels = [...new Map(programmes.map((p) => [levelKey(p.program.level), p.program.level])).values()].sort(compareLevels);
   for (const level of levels) {
     const atLevel = programmes.filter((p) => levelKey(p.program.level) === levelKey(level));
-    if (allShare(atLevel)) {
+    const wholeLevel = atLevel.length === everyProgramme.filter((p) => levelKey(p.program.level) === levelKey(level)).length;
+    if (wholeLevel && allShare(atLevel)) {
       rows.push(...rowsFor(atLevel[0].rounds, level, ""));
       continue;
     }
@@ -378,6 +388,29 @@ export const UNIVERSITY_SHEET_HEADERS = [
   "destination", "name", "short_name", "city", "region", "type", "levels_offered", "fields_offered", "contact_email",
   "application_fee", "application_fee_currency", "dsu_body",
 ] as const;
+
+/**
+ * A university as a row of the universities sheet (Import universities): the
+ * same cells the catalogue's university columns hold, under that sheet's own
+ * headers, so an exported row parses back into exactly what was exported.
+ */
+export function universitySheetRow(university: ExportUniversity): Record<(typeof UNIVERSITY_SHEET_HEADERS)[number], string> {
+  const c = universityCells(university);
+  return {
+    destination: c.destination ?? "",
+    name: c.university_name ?? "",
+    short_name: c.university_short_name ?? "",
+    city: c.city ?? "",
+    region: c.region ?? "",
+    type: c.type ?? "",
+    levels_offered: c.levels_offered ?? "",
+    fields_offered: c.fields_offered ?? "",
+    contact_email: c.contact_email ?? "",
+    application_fee: c.university_application_fee ?? "",
+    application_fee_currency: c.university_application_fee_currency ?? "",
+    dsu_body: c.dsu_body ?? "",
+  };
+}
 
 /** One university's programmes sheet, in the order its sample writes them. */
 export const PROGRAMME_SHEET_HEADERS = [

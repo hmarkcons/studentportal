@@ -11,6 +11,7 @@ import {
   ROUND_COLUMNS,
   ROUNDS_SHEET,
   roundColumnIndex,
+  UNIVERSITY_SHEET_HEADERS,
   type CatalogueRow,
   type RoundRow,
 } from "@/lib/catalogueSheet";
@@ -233,3 +234,107 @@ export function catalogueWorkbook(
       ),
   };
 }
+
+// ------------------------------------------------------- universities only
+
+/** The sheet Import universities looks for first, by name. */
+const UNIVERSITY_SHEET = "Universities";
+const UNIVERSITY_LIST_SHEET = "Lists";
+
+/** The universities sheet's columns and widths, in the order Import universities reads them. */
+const UNIVERSITY_COLUMN_WIDTHS: Record<(typeof UNIVERSITY_SHEET_HEADERS)[number], number> = {
+  destination: 22,
+  name: 42,
+  short_name: 16,
+  city: 16,
+  region: 16,
+  type: 10,
+  levels_offered: 22,
+  fields_offered: 30,
+  contact_email: 32,
+  application_fee: 18,
+  application_fee_currency: 12,
+  dsu_body: 26,
+};
+
+/**
+ * Universities alone, as the sheet Import universities takes back: one row
+ * each, the destination and type and scholarship body offered as dropdowns
+ * the way the catalogue workbook offers them.
+ */
+export function universitiesWorkbook(
+  rows: Record<(typeof UNIVERSITY_SHEET_HEADERS)[number], string>[],
+  { destinations = [], dsuBodies = [] }: { destinations?: readonly string[]; dsuBodies?: readonly string[] } = {}
+) {
+  const header = UNIVERSITY_SHEET_HEADERS.map((h) => ({ value: h, type: String, fontWeight: "bold" as const, backgroundColor: "#EFEFEF" }));
+  const body = rows.map((row) => UNIVERSITY_SHEET_HEADERS.map((h) => ({ value: row[h] || undefined, type: String })));
+
+  const lists: { value?: string; type: typeof String }[][] = [
+    [
+      { value: "Types", type: String },
+      { value: "Destinations", type: String },
+      { value: "Currencies", type: String },
+      { value: "DSUBodies", type: String },
+    ],
+  ];
+  const depth = Math.max(CATALOGUE_TYPES.length, destinations.length, FEE_CURRENCIES.length, dsuBodies.length);
+  for (let i = 0; i < depth; i++) {
+    lists.push([
+      { value: CATALOGUE_TYPES[i], type: String },
+      { value: destinations[i], type: String },
+      { value: FEE_CURRENCIES[i], type: String },
+      { value: dsuBodies[i], type: String },
+    ]);
+  }
+  const column = (h: (typeof UNIVERSITY_SHEET_HEADERS)[number]) => UNIVERSITY_SHEET_HEADERS.indexOf(h) + 1;
+  const dropdowns: Dropdown[] = [
+    ...(destinations.length > 0
+      ? [
+          {
+            column: column("destination"),
+            range: listRange(UNIVERSITY_LIST_SHEET, "B", destinations.length),
+            errorTitle: "Not a destination",
+            errorMessage: "Pick one from the list — or leave blank to use the destination chosen in the import form.",
+          },
+        ]
+      : []),
+    {
+      column: column("type"),
+      range: listRange(UNIVERSITY_LIST_SHEET, "A", CATALOGUE_TYPES.length),
+      errorTitle: "Not a track",
+      errorMessage: "public or private. Leave blank and a new university takes the destination's own track.",
+    },
+    {
+      column: column("application_fee_currency"),
+      range: listRange(UNIVERSITY_LIST_SHEET, "C", FEE_CURRENCIES.length),
+      errorTitle: "Not a currency",
+      errorMessage: "Pick one from the list — or leave blank and a new fee takes the destination's currency.",
+    },
+    ...(dsuBodies.length > 0
+      ? [
+          {
+            column: column("dsu_body"),
+            range: listRange(UNIVERSITY_LIST_SHEET, "D", dsuBodies.length),
+            errorTitle: "Not a scholarship body",
+            errorMessage: "Pick one from Setup → Scholarship bodies. A body that is not there yet has to be added there first.",
+          },
+        ]
+      : []),
+  ].map((d) => ({ ...d, fromRow: 2, toRow: rows.length + VALIDATION_HEADROOM + 1 }));
+
+  return {
+    sheets: [
+      {
+        data: [header, ...body],
+        sheet: UNIVERSITY_SHEET,
+        columns: UNIVERSITY_SHEET_HEADERS.map((h) => ({ width: UNIVERSITY_COLUMN_WIDTHS[h] })),
+        stickyRowsCount: 1,
+      },
+      { data: lists, sheet: UNIVERSITY_LIST_SHEET },
+    ],
+    options: { fontFamily: "Calibri", fontSize: 11 },
+    finish: (written: Buffer) =>
+      addDropdownsAndHideSheets(written, { sheet: UNIVERSITY_SHEET, dropdowns, hideSheets: [UNIVERSITY_LIST_SHEET] }),
+  };
+}
+
