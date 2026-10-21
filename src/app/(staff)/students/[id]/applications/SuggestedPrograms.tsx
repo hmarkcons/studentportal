@@ -219,14 +219,14 @@ export function SuggestedPrograms({
                 <div className="flex flex-col gap-3 border-t border-border px-3 py-2.5">
                   {country.universities.map((uni) => (
                     <div key={uni.id} data-university={uni.id}>
-                      {/* The university heads its own block and must read more
-                          strongly than the programmes under it: full-contrast,
-                          semibold, with a primary accent so the eye lands on it
-                          first. It was text-xs muted uppercase before — smaller
-                          and dimmer than its own programme rows. */}
-                      <p className="mb-1.5 flex items-center gap-2 text-sm font-semibold text-ink">
-                        <span aria-hidden className="h-4 w-1 shrink-0 rounded-full bg-primary" />
-                        <span className="min-w-0 truncate">{uni.name}</span>
+                      {/* The university heads its own block on a filled band
+                          in the brand green, white text on it, so the eye lands
+                          on it first and the programmes read as sitting under
+                          it. primary/primary-ink carry the contrast across
+                          themes and dark mode; it was text-xs muted uppercase
+                          before — smaller and dimmer than its own programme rows. */}
+                      <p className="mb-2 rounded-md bg-primary px-2.5 py-1 text-sm font-semibold text-primary-ink">
+                        <span className="block truncate">{uni.name}</span>
                       </p>
                       <div className="flex flex-col divide-y divide-border">
                         {uni.programmes.map((s) => {
