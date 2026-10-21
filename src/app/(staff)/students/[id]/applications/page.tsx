@@ -59,9 +59,12 @@ export default async function StudentApplicationsTab(props: {
       .select("interest_field_groups, interest_core_fields, course_of_interest, level_applying_for")
       .eq("id", id)
       .maybeSingle(),
-    // Programmes their interests point at, ranked, excluding anything already
-    // applied for. One call; see 0245 for why this is not done in the app.
-    supabase.rpc("suggested_programs", { lead: id, max_results: 25 }),
+    // Programmes their interests point at, excluding anything already applied
+    // for. One call; see 0245 for why this is not done in the app. Grouped by
+    // country on the page, so the cap is high enough that no country's matches
+    // are cut before the split — a student's interest-and-level filter keeps
+    // this to tens or low hundreds of rows in practice.
+    supabase.rpc("suggested_programs", { lead: id, max_results: 1000 }),
     supabase.from("list_column_orders").select("column_keys").eq("list_key", "applications").maybeSingle(),
   ]);
 
@@ -202,6 +205,12 @@ export default async function StudentApplicationsTab(props: {
           studentId={id}
           revalidateTo={revalidateTo}
           suggestions={(suggestions ?? []) as Suggested[]}
+          // The student's countries, primary first then backups — the order
+          // the sections are shown in, and the list used to name a country
+          // that has nothing to suggest yet. Only the registered ones: a
+          // country reached only through an old application is not somewhere
+          // new applications are suggested.
+          registered={registered.map((r) => ({ name: r.name, isBackup: r.isBackup }))}
           hasInterests={interestCount > 0}
           interestSummary={interestSummary}
         />

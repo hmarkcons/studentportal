@@ -74,6 +74,7 @@
     "check:aeo": "node scripts/verify-aeo.mjs",
     "check:scholarshipscope": "node scripts/verify-scholarship-scope.mjs",
     "check:visahistory": "node scripts/verify-visa-history.mjs",
+    "check:suggest": "node scripts/verify-suggested-programs.mjs",
     "check:doctrack": "node scripts/verify-document-track.mjs",
     "check:unisearch": "node scripts/verify-university-search.mjs"
   },
