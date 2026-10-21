@@ -6,12 +6,72 @@ import { Trash2 } from "lucide-react";
 import { saveTravelAndVisaHistory } from "@/lib/actions/studentProfileExtras";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
+import { VISA_TYPES, VISA_TYPE_OTHER } from "@/lib/visaTypes";
 
-export type TravelRecord = { id: string; country: string; purpose: string | null; from_date: string | null; to_date: string | null };
-export type VisaRefusalRecord = { id: string; country: string; type: string; date: string | null; reason: string | null };
+export type TravelRecord = {
+  id: string;
+  country: string;
+  purpose: string | null;
+  visa_type: string | null;
+  visa_type_other: string | null;
+  from_date: string | null;
+  to_date: string | null;
+};
+export type VisaRefusalRecord = {
+  id: string;
+  country: string;
+  type: string;
+  visa_type: string | null;
+  visa_type_other: string | null;
+  date: string | null;
+  reason: string | null;
+};
 
-type TravelDraft = { key: string; id: string; country: string; purpose: string; from_date: string; to_date: string };
-type VisaDraft = { key: string; id: string; country: string; type: string; date: string; reason: string };
+type TravelDraft = { key: string; id: string; country: string; purpose: string; visa_type: string; visa_type_other: string; from_date: string; to_date: string };
+type VisaDraft = { key: string; id: string; country: string; type: string; visa_type: string; visa_type_other: string; date: string; reason: string };
+
+/**
+ * The kind of visa a trip was on, or that a refusal was against. The "name it"
+ * box only shows for Other; the hidden input in its place keeps every row
+ * carrying exactly one of each field, so the server reads the columns in step.
+ */
+function VisaTypeField({
+  name,
+  value,
+  other,
+  onType,
+  onOther,
+}: {
+  name: string;
+  value: string;
+  other: string;
+  onType: (v: string) => void;
+  onOther: (v: string) => void;
+}) {
+  return (
+    <>
+      <label className="flex flex-col gap-1 text-xs text-muted">
+        Visa type
+        <Select name={name} value={value} onChange={(e) => onType(e.target.value)} className="w-40" data-visa-type>
+          <option value="">Select…</option>
+          {VISA_TYPES.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
+          ))}
+        </Select>
+      </label>
+      {value === VISA_TYPE_OTHER ? (
+        <label className="flex flex-col gap-1 text-xs text-muted">
+          Name it
+          <Input name={`${name}_other`} value={other} onChange={(e) => onOther(e.target.value)} placeholder="e.g. Schengen C" className="w-36" data-visa-type-other />
+        </label>
+      ) : (
+        <input type="hidden" name={`${name}_other`} value="" />
+      )}
+    </>
+  );
+}
 
 // One section, one Save. Where a student has been and whether they have ever
 // been refused is a single story a visa officer reads together, and both lists
@@ -40,6 +100,8 @@ export function TravelVisaHistorySection({
       id: r.id,
       country: r.country,
       purpose: r.purpose ?? "",
+      visa_type: r.visa_type ?? "",
+      visa_type_other: r.visa_type_other ?? "",
       from_date: r.from_date ?? "",
       to_date: r.to_date ?? "",
     }))
@@ -50,6 +112,8 @@ export function TravelVisaHistorySection({
       id: r.id,
       country: r.country,
       type: r.type || "refusal",
+      visa_type: r.visa_type ?? "",
+      visa_type_other: r.visa_type_other ?? "",
       date: r.date ?? "",
       reason: r.reason ?? "",
     }))
@@ -95,6 +159,13 @@ export function TravelVisaHistorySection({
                 className="w-32"
               />
             </label>
+            <VisaTypeField
+              name="travel_visa_type"
+              value={r.visa_type}
+              other={r.visa_type_other}
+              onType={(v) => setTrips((prev) => prev.map((x) => (x.key === r.key ? { ...x, visa_type: v } : x)))}
+              onOther={(v) => setTrips((prev) => prev.map((x) => (x.key === r.key ? { ...x, visa_type_other: v } : x)))}
+            />
             <label className="flex flex-col gap-1 text-xs text-muted">
               From
               <Input
@@ -126,7 +197,7 @@ export function TravelVisaHistorySection({
         <div>
           <button
             type="button"
-            onClick={() => setTrips((prev) => [...prev, { key: crypto.randomUUID(), id: "", country: "", purpose: "", from_date: "", to_date: "" }])}
+            onClick={() => setTrips((prev) => [...prev, { key: crypto.randomUUID(), id: "", country: "", purpose: "", visa_type: "", visa_type_other: "", from_date: "", to_date: "" }])}
             className="text-xs font-medium text-primary hover:underline"
           >
             + Add trip
@@ -163,9 +234,9 @@ export function TravelVisaHistorySection({
               />
             </label>
             <label className="flex flex-col gap-1 text-xs text-muted">
-              Type
+              Record
               <Select
-                name="visa_type"
+                name="visa_outcome"
                 value={r.type}
                 onChange={(e) => setRecords((prev) => prev.map((x) => (x.key === r.key ? { ...x, type: e.target.value } : x)))}
                 className="w-36"
@@ -174,6 +245,13 @@ export function TravelVisaHistorySection({
                 <option value="deportation">Deportation</option>
               </Select>
             </label>
+            <VisaTypeField
+              name="visa_type"
+              value={r.visa_type}
+              other={r.visa_type_other}
+              onType={(v) => setRecords((prev) => prev.map((x) => (x.key === r.key ? { ...x, visa_type: v } : x)))}
+              onOther={(v) => setRecords((prev) => prev.map((x) => (x.key === r.key ? { ...x, visa_type_other: v } : x)))}
+            />
             <label className="flex flex-col gap-1 text-xs text-muted">
               Date
               <Input
@@ -205,7 +283,7 @@ export function TravelVisaHistorySection({
         <div>
           <button
             type="button"
-            onClick={() => setRecords((prev) => [...prev, { key: crypto.randomUUID(), id: "", country: "", type: "refusal", date: "", reason: "" }])}
+            onClick={() => setRecords((prev) => [...prev, { key: crypto.randomUUID(), id: "", country: "", type: "refusal", visa_type: "", visa_type_other: "", date: "", reason: "" }])}
             className="text-xs font-medium text-primary hover:underline"
           >
             + Add record

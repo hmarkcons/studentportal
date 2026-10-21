@@ -20,6 +20,7 @@
 
 import { QUALIFICATION_TYPE_LABELS, type QualificationType } from "./qualifications.ts";
 import { needsCustomName, testLabel } from "./testScores.ts";
+import { visaTypeShort } from "./visaTypes.ts";
 
 export type SectionRow = { key: string; label: string; is_predefined?: boolean; sort_order?: number };
 export type DestinationSectionRow = { destination_id: string | null; section_key: string; sort_order: number };
@@ -286,6 +287,9 @@ export type VisaRefusalRow = {
   country?: string | null;
   /** 'refusal' or 'deportation'. */
   type?: string | null;
+  /** The kind of visa refused (visaTypes.ts); 'other' names it in visa_type_other. */
+  visa_type?: string | null;
+  visa_type_other?: string | null;
   /** YYYY-MM-DD, from a date input. */
   date?: string | null;
 };
@@ -294,6 +298,9 @@ export type VisaRefusalRow = {
 export type TravelRow = {
   id?: string | null;
   country?: string | null;
+  /** The kind of visa the trip was on (visaTypes.ts); 'other' names it in visa_type_other. */
+  visa_type?: string | null;
+  visa_type_other?: string | null;
   /** YYYY-MM-DD, from date inputs. */
   from_date?: string | null;
   to_date?: string | null;
@@ -361,7 +368,12 @@ export function tripDates(from: string | null | undefined, to: string | null | u
  * for, so two trips to one country are two things to find, each named.
  */
 export function previousVisaRequirementName(t: TravelRow): string {
-  const which = [(t.country ?? "").trim(), tripDates(t.from_date, t.to_date)].filter(Boolean).join(", ");
+  const country = (t.country ?? "").trim();
+  const visa = visaTypeShort(t.visa_type, t.visa_type_other);
+  // "Previous visa — UAE (Student), 4–20 Aug 2026": the country carries the
+  // kind of visa, then the dates.
+  const place = country && visa ? `${country} (${visa})` : country;
+  const which = [place, tripDates(t.from_date, t.to_date)].filter(Boolean).join(", ");
   return which ? `Previous visa — ${which}` : "Previous visa";
 }
 
@@ -371,7 +383,11 @@ export function previousVisaRequirementName(t: TravelRow): string {
  * to find and the officer which one is still missing.
  */
 export function visaRefusalRequirementName(r: VisaRefusalRow): string {
-  const what = r.type === "deportation" ? "Deportation papers" : "Visa refusal letter";
+  const visa = visaTypeShort(r.visa_type, r.visa_type_other);
+  // The visa named leads a refusal letter ("Student visa refusal letter"), so
+  // the officer knows which one to collect; a deportation's papers are not a
+  // visa, so the kind is left to the profile.
+  const what = r.type === "deportation" ? "Deportation papers" : visa ? `${visa} visa refusal letter` : "Visa refusal letter";
   const which = [(r.country ?? "").trim(), refusalDate(r.date)].filter(Boolean).join(", ");
   return which ? `${what} — ${which}` : what;
 }

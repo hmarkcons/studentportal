@@ -18,6 +18,7 @@ import { MAX_PHOTO_BYTES, fileSizeError } from "@/lib/fileSize";
 import { uploadedFile } from "@/lib/stagedUpload";
 import { removeStorageFiles } from "@/lib/fileTrash";
 import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
+import { isVisaType, VISA_TYPE_OTHER } from "@/lib/visaTypes";
 
 // Was a third hand-written copy of this list, and it lacked GMAT and CEnT-S —
 // so the two types just added to the picker would have been rejected here as
@@ -190,42 +191,57 @@ export async function saveTravelAndVisaHistory(studentId: string, revalidateTo: 
   const travelIds = formData.getAll("travel_id").map(String);
   const travelCountries = formData.getAll("travel_country").map((v) => String(v).trim());
   const travelPurposes = formData.getAll("travel_purpose").map((v) => String(v).trim() || null);
+  const travelVisa = formData.getAll("travel_visa_type").map(String);
+  const travelVisaOther = formData.getAll("travel_visa_type_other").map((v) => String(v).trim());
   const travelFrom = formData.getAll("travel_from").map((v) => String(v) || null);
   const travelTo = formData.getAll("travel_to").map((v) => String(v) || null);
 
   const visaIds = formData.getAll("visa_id").map(String);
   const visaCountries = formData.getAll("visa_country").map((v) => String(v).trim());
-  const visaTypes = formData.getAll("visa_type").map(String);
+  // The refusal/deportation distinction (stored as `type`); the kind of visa is `visa_type` below.
+  const visaOutcomes = formData.getAll("visa_outcome").map(String);
+  const visaVisaType = formData.getAll("visa_type").map(String);
+  const visaVisaOther = formData.getAll("visa_type_other").map((v) => String(v).trim());
   const visaDates = formData.getAll("visa_date").map((v) => String(v) || null);
   const visaReasons = formData.getAll("visa_reason").map((v) => String(v).trim() || null);
 
   if (
-    [travelCountries, travelPurposes, travelFrom, travelTo].some((a) => a.length !== travelIds.length) ||
-    [visaCountries, visaTypes, visaDates, visaReasons].some((a) => a.length !== visaIds.length)
+    [travelCountries, travelPurposes, travelVisa, travelVisaOther, travelFrom, travelTo].some((a) => a.length !== travelIds.length) ||
+    [visaCountries, visaOutcomes, visaVisaType, visaVisaOther, visaDates, visaReasons].some((a) => a.length !== visaIds.length)
   ) {
     return { error: "That didn't submit cleanly — reload the page and try again." };
   }
+
+  // The visa type is kept as its dropdown value, and the typed name only when
+  // it is "Other" — so a re-save of a known type never leaves a stray word behind.
+  const visaTypeOf = (type: string, other: string) => ({ visa_type: type, visa_type_other: type === VISA_TYPE_OTHER ? other || null : null });
 
   const travel_history = travelIds.map((id, i) => ({
     id: id || crypto.randomUUID(),
     country: travelCountries[i],
     purpose: travelPurposes[i],
+    ...visaTypeOf(travelVisa[i], travelVisaOther[i]),
     from_date: travelFrom[i],
     to_date: travelTo[i],
   }));
   const visa_refusal_history = visaIds.map((id, i) => ({
     id: id || crypto.randomUUID(),
     country: visaCountries[i],
-    type: visaTypes[i],
+    type: visaOutcomes[i],
+    ...visaTypeOf(visaVisaType[i], visaVisaOther[i]),
     date: visaDates[i],
     reason: visaReasons[i],
   }));
 
   if (travel_history.some((r) => !r.country)) return { error: "Every trip needs a country — remove the row if it was added by mistake." };
+  if (travel_history.some((r) => !isVisaType(r.visa_type))) return { error: "Choose a visa type for every trip." };
+  if (travel_history.some((r) => r.visa_type === VISA_TYPE_OTHER && !r.visa_type_other)) return { error: "Name the visa type on every trip marked Other." };
   if (visa_refusal_history.some((r) => !r.country)) return { error: "Every refusal or deportation needs a country." };
   if (visa_refusal_history.some((r) => !["refusal", "deportation"].includes(r.type))) {
     return { error: "Choose refusal or deportation for every row." };
   }
+  if (visa_refusal_history.some((r) => !isVisaType(r.visa_type))) return { error: "Choose a visa type for every refusal or deportation." };
+  if (visa_refusal_history.some((r) => r.visa_type === VISA_TYPE_OTHER && !r.visa_type_other)) return { error: "Name the visa type on every row marked Other." };
 
   const { error } = await supabase
     .from("student_profiles")

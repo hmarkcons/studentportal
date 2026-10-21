@@ -4,12 +4,13 @@
 //   VERIFY_AGAINST_PRODUCTION=yes npm run check:visahistory
 //
 //   * a student adds two trips to one country and a refusal under Travel &
-//     visa history and saves: each trip's visa — "Previous visa — <country>,
-//     4–20 Aug 2026", and "…, 28 Dec 2025 – 3 Jan 2026" — and the refusal's
-//     letter — "Visa refusal letter — <country>, 15 Aug 2025" — are asked for
-//     at once, before anybody opens Documents, in the visa section of their
-//     Documents, each with the note saying what to send, and the one row the
-//     travel history used to raise is not;
+//     visa history, each with its visa type, and saves: each trip's visa —
+//     "Previous visa — <country> (Student), 4–20 Aug 2026", and "… (Tourist),
+//     28 Dec 2025 – 3 Jan 2026" — and the refusal's letter — "Student visa
+//     refusal letter — <country>, 15 Aug 2025" — are asked for at once, named
+//     with the visa type, before anybody opens Documents, in the visa section
+//     of their Documents, each with the note saying what to send, and the one
+//     row the travel history used to raise is not;
 //   * their counsellor and processing officer are each alerted, with the
 //     country, the date and the reason, and a link to the documents;
 //   * a deportation asks for its own papers beside it, and the alerts group;
@@ -130,14 +131,16 @@ try {
     await travelNote.innerText(),
   );
 
-  for (const [from, to] of [["2026-08-04", "2026-08-20"], ["2025-12-28", "2026-01-03"]]) {
+  for (const [from, to, visa] of [["2026-08-04", "2026-08-20", "student"], ["2025-12-28", "2026-01-03", "tourist"]]) {
     await press(sp, form.getByRole("button", { name: "+ Add trip" }));
     await form.locator('input[name="travel_country"]').last().fill(TRAVELLED_TO);
+    await form.locator('select[name="travel_visa_type"]').last().selectOption(visa);
     await form.locator('input[name="travel_from"]').last().fill(from);
     await form.locator('input[name="travel_to"]').last().fill(to);
   }
   await press(sp, form.getByRole("button", { name: "+ Add record" }));
   await form.locator('input[name="visa_country"]').last().fill(REFUSED_BY);
+  await form.locator('select[name="visa_type"]').last().selectOption("student");
   await form.locator('input[name="visa_date"]').last().fill("2025-08-15");
   await form.locator('input[name="visa_reason"]').last().fill(REASON);
   const saved = await saveHistory(sp);
@@ -149,8 +152,8 @@ try {
   // Nobody has opened Documents: only the save can have raised it.
   const first = await poll(async () => (await letters()).find((d) => d.derived_key === `visa_refusal:${entry?.id}`), 20);
   ok(
-    "its letter is asked for at once, named by country and date, in the visa section",
-    first?.custom_name === `Visa refusal letter — ${REFUSED_BY}, 15 Aug 2025` && first.category === "visa" && first.status === "missing",
+    "its letter is asked for at once, named by visa type, country and date, in the visa section",
+    first?.custom_name === `Student visa refusal letter — ${REFUSED_BY}, 15 Aug 2025` && first.category === "visa" && first.status === "missing",
     JSON.stringify(first),
   );
   const [tripA, tripB] = await trips();
@@ -160,9 +163,9 @@ try {
   }, 20);
   const visaOf = (trip) => (tripVisas ?? []).find((d) => d.derived_key === `previous_visa:${trip?.id}`);
   ok(
-    "...and each trip's visa, two trips to one country as two, named by their dates",
-    visaOf(tripA)?.custom_name === `Previous visa — ${TRAVELLED_TO}, 4–20 Aug 2026` &&
-      visaOf(tripB)?.custom_name === `Previous visa — ${TRAVELLED_TO}, 28 Dec 2025 – 3 Jan 2026` &&
+    "...and each trip's visa, two trips to one country as two, named by their visa type and dates",
+    visaOf(tripA)?.custom_name === `Previous visa — ${TRAVELLED_TO} (Student), 4–20 Aug 2026` &&
+      visaOf(tripB)?.custom_name === `Previous visa — ${TRAVELLED_TO} (Tourist), 28 Dec 2025 – 3 Jan 2026` &&
       (tripVisas ?? []).every((d) => d.category === "visa" && d.status === "missing"),
     JSON.stringify(tripVisas ?? (await visas())),
   );
@@ -186,14 +189,14 @@ try {
   const row = visaSection.locator(`[data-document-row="${first?.id}"]`);
   await row.waitFor({ timeout: 60000 }).catch(() => {});
   const rowText = (await row.count()) ? await row.innerText() : "";
-  ok("the student sees it under Visa Application Requirements", rowText.includes(`Visa refusal letter — ${REFUSED_BY}, 15 Aug 2025`), rowText.slice(0, 300));
+  ok("the student sees it under Visa Application Requirements", rowText.includes(`Student visa refusal letter — ${REFUSED_BY}, 15 Aug 2025`), rowText.slice(0, 300));
   const guideNote = (await row.locator("[data-guide-note]").count()) ? await row.locator("[data-guide-note]").innerText() : "";
   ok("...with the note saying what to send", /letter the embassy or consulate gave you/.test(guideNote), guideNote);
   const tripRow = visaSection.locator(`[data-document-row="${visaOf(tripB)?.id}"]`);
   const tripText = (await tripRow.count()) ? await tripRow.innerText() : "";
   ok(
     "...beside each trip's visa, with its own note",
-    tripText.includes(`Previous visa — ${TRAVELLED_TO}, 28 Dec 2025 – 3 Jan 2026`) &&
+    tripText.includes(`Previous visa — ${TRAVELLED_TO} (Tourist), 28 Dec 2025 – 3 Jan 2026`) &&
       /The visa for this trip/.test(tripText) &&
       (await visaSection.locator(`[data-document-row="${visaOf(tripA)?.id}"]`).count()) === 1,
     tripText.slice(0, 300),
@@ -204,7 +207,10 @@ try {
   await form.waitFor({ timeout: 60000 });
   await press(sp, form.getByRole("button", { name: "+ Add record" }));
   await form.locator('input[name="visa_country"]').last().fill(DEPORTED_FROM);
-  await form.locator('select[name="visa_type"]').last().selectOption("deportation");
+  await form.locator('select[name="visa_outcome"]').last().selectOption("deportation");
+  // A visa type is required even for a deportation, though its papers are not
+  // named by it — the kind is left to the profile, so this never shows "Work".
+  await form.locator('select[name="visa_type"]').last().selectOption("work");
   const saved2 = await saveHistory(sp);
   const deportation = (await history()).find((r) => r.country === DEPORTED_FROM);
   const papers = await poll(async () => (await letters()).find((d) => d.derived_key === `visa_refusal:${deportation?.id}`), 20);
@@ -233,7 +239,7 @@ try {
     const d = (await letters()).find((x) => x.id === first?.id);
     return d?.custom_name?.endsWith("20 Aug 2025") ? d : null;
   }, 20);
-  ok("a date corrected renames the same letter", saved3 === "saved" && renamed?.custom_name === `Visa refusal letter — ${REFUSED_BY}, 20 Aug 2025`, JSON.stringify(await letters()));
+  ok("a date corrected renames the same letter", saved3 === "saved" && renamed?.custom_name === `Student visa refusal letter — ${REFUSED_BY}, 20 Aug 2025`, JSON.stringify(await letters()));
   ok("...and is not news to anyone", (await alertOf(officer.id))?.count === 2, JSON.stringify(await alertOf(officer.id)));
 
   await sp.goto(`${BASE}/portal/profile`, { waitUntil: "domcontentloaded" });
@@ -287,7 +293,7 @@ try {
   await op.locator(`[data-document-row="${first?.id}"]`).waitFor({ timeout: 60000 }).catch(() => {});
   const staffLetter = await poll(async () => (await letters()).find((d) => d.derived_key === `visa_refusal:${staffEntry.id}`), 20);
   const staffRow = op.locator(`[data-document-row="${first?.id}"]`);
-  ok("staff see the letter on the student's Documents", (await staffRow.count()) > 0 && (await staffRow.first().innerText()).includes(`Visa refusal letter — ${REFUSED_BY}, 20 Aug 2025`));
+  ok("staff see the letter on the student's Documents", (await staffRow.count()) > 0 && (await staffRow.first().innerText()).includes(`Student visa refusal letter — ${REFUSED_BY}, 20 Aug 2025`));
 
   const path = `${studentId}/documents/${first?.id}/${RUN}/refusal-letter.pdf`;
   const { error: upError } = await asOfficer.storage
@@ -336,7 +342,7 @@ try {
   const carriedText = (await carriedRow.count()) ? await carriedRow.innerText() : "";
   ok(
     "...it is carried over, approved, in the new intake's visa section",
-    carriedText.includes(`Visa refusal letter — ${REFUSED_BY}, 20 Aug 2025 — already approved, carried over`),
+    carriedText.includes(`Student visa refusal letter — ${REFUSED_BY}, 20 Aug 2025 — already approved, carried over`),
     carriedText.slice(0, 300),
   );
   ok(

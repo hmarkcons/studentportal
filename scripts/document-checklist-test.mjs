@@ -229,6 +229,14 @@ test("a trip's dates are said as briefly as they can be, and a date that cannot 
   assert.equal(previousVisaRequirementName({ country: "  Saudi Arabia ", from_date: "2024-03-01", to_date: "2024-03-15" }), "Previous visa — Saudi Arabia, 1–15 Mar 2024");
   assert.equal(previousVisaRequirementName({ country: "", from_date: "2024-03-01", to_date: null }), "Previous visa — from 1 Mar 2024");
   assert.equal(previousVisaRequirementName({ country: null }), "Previous visa");
+  // The visa type rides with the country, in brackets.
+  assert.equal(previousVisaRequirementName({ country: "UAE", visa_type: "student", from_date: "2026-08-04", to_date: "2026-08-20" }), "Previous visa — UAE (Student), 4–20 Aug 2026");
+  assert.equal(previousVisaRequirementName({ country: "Turkey", visa_type: "tourist" }), "Previous visa — Turkey (Tourist)");
+  // Other is named from visa_type_other; a blank name falls back to the country alone.
+  assert.equal(previousVisaRequirementName({ country: "France", visa_type: "other", visa_type_other: "Schengen C" }), "Previous visa — France (Schengen C)");
+  assert.equal(previousVisaRequirementName({ country: "France", visa_type: "other", visa_type_other: "  " }), "Previous visa — France");
+  // No visa type at all: the pre-visa-type wording stands.
+  assert.equal(previousVisaRequirementName({ country: "UAE", from_date: "2026-08-04", to_date: "2026-08-20" }), "Previous visa — UAE, 4–20 Aug 2026");
 });
 
 test("a trip corrected on the profile renames its visa and keeps it; one taken off goes only if nothing was sent", () => {
@@ -269,6 +277,14 @@ test("a refusal's letter is named with what is known, and never prints a date it
   assert.equal(visaRefusalRequirementName({ country: "UK", type: "refusal", date: "2023-13-05" }), "Visa refusal letter — UK");
   assert.equal(visaRefusalRequirementName({ country: "UK", type: "refusal", date: "last year" }), "Visa refusal letter — UK");
   assert.equal(visaRefusalRequirementName({ country: "Canada", type: "deportation", date: "2019-11-30" }), "Deportation papers — Canada, 30 Nov 2019");
+  // The visa type leads the refusal letter, so staff know which one to chase.
+  assert.equal(visaRefusalRequirementName({ country: "UK", type: "refusal", visa_type: "student", date: "2024-03-12" }), "Student visa refusal letter — UK, 12 Mar 2024");
+  assert.equal(visaRefusalRequirementName({ country: "Italy", type: "refusal", visa_type: "work" }), "Work visa refusal letter — Italy");
+  assert.equal(visaRefusalRequirementName({ country: "France", type: "refusal", visa_type: "other", visa_type_other: "Schengen C" }), "Schengen C visa refusal letter — France");
+  // A blank Other name falls back to the plain wording.
+  assert.equal(visaRefusalRequirementName({ country: "France", type: "refusal", visa_type: "other", visa_type_other: "" }), "Visa refusal letter — France");
+  // A deportation is not a visa, so its type never leads the papers.
+  assert.equal(visaRefusalRequirementName({ country: "UAE", type: "deportation", visa_type: "work" }), "Deportation papers — UAE");
 });
 
 test("one refusal listed twice is one letter, and a refusal with no id still has a key of its own", () => {
