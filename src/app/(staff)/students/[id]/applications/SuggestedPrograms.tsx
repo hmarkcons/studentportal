@@ -219,7 +219,15 @@ export function SuggestedPrograms({
                 <div className="flex flex-col gap-3 border-t border-border px-3 py-2.5">
                   {country.universities.map((uni) => (
                     <div key={uni.id} data-university={uni.id}>
-                      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">{uni.name}</p>
+                      {/* The university heads its own block and must read more
+                          strongly than the programmes under it: full-contrast,
+                          semibold, with a primary accent so the eye lands on it
+                          first. It was text-xs muted uppercase before — smaller
+                          and dimmer than its own programme rows. */}
+                      <p className="mb-1.5 flex items-center gap-2 text-sm font-semibold text-ink">
+                        <span aria-hidden className="h-4 w-1 shrink-0 rounded-full bg-primary" />
+                        <span className="min-w-0 truncate">{uni.name}</span>
+                      </p>
                       <div className="flex flex-col divide-y divide-border">
                         {uni.programmes.map((s) => {
                           const isAdded = added.has(s.program_id);
