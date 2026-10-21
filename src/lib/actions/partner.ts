@@ -4,6 +4,11 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { FEE_TEXT_MAX, parseTuitionText } from "@/lib/applicationFee";
 import { syncStagesForApplication } from "@/lib/autoStagesSync";
+
+// A partner's writes are RLS-scoped to their own university; a refused
+// UPDATE/DELETE matches no rows and raises nothing, so each one selects the
+// row back and says so rather than reporting work it did not do.
+const PARTNER_REFUSED = "That isn't something your university can change here.";
 import { refuseFinalizedStageByHand } from "@/lib/finalizedStageGuard";
 import { sanitizeFilename, validateDocumentFile } from "@/lib/documentUpload";
 import { parseRoundsFromFormData } from "@/lib/programRounds";
@@ -18,8 +23,9 @@ export async function partnerUpdateStage(applicationId: string, _prevState: unkn
   const refused = await refuseFinalizedStageByHand(supabase, applicationId, current_stage);
   if (refused) return { error: refused.error };
 
-  const { error } = await supabase.from("applications").update({ current_stage }).eq("id", applicationId);
+  const { data: updated, error } = await supabase.from("applications").update({ current_stage }).eq("id", applicationId).select("id");
   if (error) return { error: error.message };
+  if (!updated?.length) return { error: PARTNER_REFUSED };
 
   await syncStagesForApplication(applicationId);
   revalidatePath(`/partner/applications/${applicationId}`);
@@ -106,11 +112,13 @@ export async function partnerUploadCommissionProof(commissionId: string, _prevSt
   const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: true });
   if (uploadError) return { error: uploadError.message };
 
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("partner_commissions")
     .update({ payment_proof_path: path, payment_proof_uploaded_at: new Date().toISOString() })
-    .eq("id", commissionId);
+    .eq("id", commissionId)
+    .select("id");
   if (error) return { error: error.message };
+  if (!updated?.length) return { error: PARTNER_REFUSED };
 
   revalidatePath("/partner/commissions");
   return { success: true };
@@ -118,8 +126,9 @@ export async function partnerUploadCommissionProof(commissionId: string, _prevSt
 
 export async function partnerDisputeCommission(commissionId: string) {
   const supabase = await createClient();
-  const { error } = await supabase.from("partner_commissions").update({ status: "disputed" }).eq("id", commissionId);
+  const { data, error } = await supabase.from("partner_commissions").update({ status: "disputed" }).eq("id", commissionId).select("id");
   if (error) return { error: error.message };
+  if (!data?.length) return { error: PARTNER_REFUSED };
   revalidatePath("/partner/commissions");
   return { success: true };
 }
@@ -212,8 +221,9 @@ export async function partnerAddProgram(_prevState: unknown, formData: FormData)
 
 export async function partnerDeleteProgram(programId: string) {
   const supabase = await createClient();
-  const { error } = await supabase.from("programs").delete().eq("id", programId);
+  const { data, error } = await supabase.from("programs").delete().eq("id", programId).select("id");
   if (error) return { error: error.message };
+  if (!data?.length) return { error: PARTNER_REFUSED };
   revalidatePath("/partner/programs");
   return { success: true };
 }

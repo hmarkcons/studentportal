@@ -15,6 +15,11 @@ function one<T>(v: T | T[] | null) {
 
 type Db = Awaited<ReturnType<typeof createClient>>;
 
+// An UPDATE or DELETE that RLS refuses matches no rows and raises nothing, so
+// without checking what was written it reads as a clean success. Every write
+// below selects the row back and says so when nothing changed.
+const APP_REFUSED = "That change was refused — this application may not be yours to change, or it no longer exists.";
+
 /**
  * The intake this student is currently working towards.
  *
@@ -140,8 +145,9 @@ export async function deleteApplication(applicationId: string, revalidateTo: str
   const supabase = await createClient();
   // Whose it was, for the finalized step below — asked before it is gone.
   const { data: owner } = await supabase.from("applications").select("student_id").eq("id", applicationId).maybeSingle();
-  const { error } = await supabase.from("applications").delete().eq("id", applicationId);
+  const { data: deleted, error } = await supabase.from("applications").delete().eq("id", applicationId).select("id");
   if (error) return { error: error.message };
+  if (!deleted?.length) return { error: APP_REFUSED };
   // The finalized application gone: its country's Pre-Enrolled or University
   // Finalized step goes with it.
   if (owner?.student_id) await clearFinalizedStages(owner.student_id as string);
@@ -178,8 +184,9 @@ export async function finalizeApplication(applicationId: string, studentId: stri
 
 export async function unfinalizeApplication(applicationId: string, studentId: string, revalidateTo: string) {
   const supabase = await createClient();
-  const { error } = await supabase.from("applications").update({ is_finalized: false }).eq("id", applicationId);
+  const { data: updated, error } = await supabase.from("applications").update({ is_finalized: false }).eq("id", applicationId).select("id");
   if (error) return { error: error.message };
+  if (!updated?.length) return { error: APP_REFUSED };
   // Pre-Enrolled / University Finalized come off: the application goes back a
   // stage and the country's bar loses the step.
   await clearFinalizedStages(studentId);
@@ -294,7 +301,7 @@ export async function updateApplicationDetails(applicationId: string, studentId:
     }
   }
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("applications")
     .update({
       deadline,
@@ -305,7 +312,8 @@ export async function updateApplicationDetails(applicationId: string, studentId:
       round_id: nextRoundId,
       ...(programSubmitted ? { program_id } : {}),
     })
-    .eq("id", applicationId);
+    .eq("id", applicationId)
+    .select("id");
   if (error) {
     // The (student, cycle, university, programme, round) unique index: the
     // student already has this exact application, which is a sentence rather
@@ -318,6 +326,7 @@ export async function updateApplicationDetails(applicationId: string, studentId:
     }
     return { error: error.message };
   }
+  if (!data?.length) return { error: APP_REFUSED };
 
   revalidatePath(`/students/${studentId}/applications/${applicationId}`);
   revalidatePath(`/students/${studentId}/applications`);
@@ -525,8 +534,9 @@ export async function updateApplicationStage(applicationId: string, studentId: s
   const refused = await refuseFinalizedStageByHand(supabase, applicationId, current_stage);
   if (refused) return { error: refused.error };
 
-  const { error } = await supabase.from("applications").update({ current_stage }).eq("id", applicationId);
+  const { data: updated, error } = await supabase.from("applications").update({ current_stage }).eq("id", applicationId).select("id");
   if (error) return { error: error.message };
+  if (!updated?.length) return { error: APP_REFUSED };
 
   // A submitted application puts the country's Admission in process.
   await syncStudentStages(studentId);

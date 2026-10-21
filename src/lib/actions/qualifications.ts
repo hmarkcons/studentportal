@@ -4,6 +4,9 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { QUALIFICATION_TYPES } from "@/lib/qualifications";
 
+// A refused UPDATE/DELETE matches no rows and raises nothing (AGENTS.md); say so.
+const QUALIFICATION_REFUSED = "That wasn't saved — this qualification may not be yours to change, or it no longer exists.";
+
 export async function upsertStudentQualification(
   studentId: string,
   revalidateTo: string,
@@ -32,11 +35,14 @@ export async function upsertStudentQualification(
   const qualificationId = String(formData.get("qualification_id") ?? "");
 
   if (qualificationId) {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("student_qualifications")
       .update({ qualification_type, ...fields })
-      .eq("id", qualificationId);
+      .eq("id", qualificationId)
+      .select("id");
     if (error) return { error: error.message };
+    // An RLS-refused update matches no rows and raises nothing.
+    if (!data?.length) return { error: QUALIFICATION_REFUSED };
   } else {
     const { error } = await supabase
       .from("student_qualifications")
@@ -50,8 +56,9 @@ export async function upsertStudentQualification(
 
 export async function deleteStudentQualification(qualificationId: string, revalidateTo: string) {
   const supabase = await createClient();
-  const { error } = await supabase.from("student_qualifications").delete().eq("id", qualificationId);
+  const { data, error } = await supabase.from("student_qualifications").delete().eq("id", qualificationId).select("id");
   if (error) return { error: error.message };
+  if (!data?.length) return { error: QUALIFICATION_REFUSED };
 
   revalidatePath(revalidateTo);
   return { success: true };

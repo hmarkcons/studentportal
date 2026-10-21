@@ -24,8 +24,10 @@ export async function createMessageTemplate(_prevState: unknown, formData: FormD
 
 export async function deleteMessageTemplate(id: string) {
   const supabase = await createClient();
-  const { error } = await supabase.from("message_templates").delete().eq("id", id);
+  const { data, error } = await supabase.from("message_templates").delete().eq("id", id).select("id");
   if (error) return { error: error.message };
+  // A refused DELETE matches no rows and raises nothing (AGENTS.md).
+  if (!data?.length) return { error: "That template wasn't removed — you may not have permission, or it's already gone." };
   revalidatePath("/admin/message-templates");
   return { success: true };
 }

@@ -8,6 +8,11 @@ import { DEFAULT_AGREEMENT_WORDING } from "@/lib/pdf/defaultAgreementWording";
 import { parseDashboardStagesText } from "@/lib/dashboardPipeline";
 import { isIntakeMode } from "@/lib/intake";
 import { MAX_UPLOAD_BYTES, fileSizeError } from "@/lib/fileSize";
+
+// Editing or deleting a destination is Super-Admin-only (0039), and an RLS
+// refusal matches no rows and raises nothing — so each write selects the row
+// back and says why rather than reporting a change it did not make.
+const DEST_REFUSED = "That wasn't saved — only a Super Admin can edit or remove a destination.";
 import { uploadedFile } from "@/lib/stagedUpload";
 
 // Every destination needs an agreement it can actually generate — without a
@@ -134,8 +139,9 @@ export async function updateDestinationStages(destinationId: string, _prevState:
     }
   }
 
-  const { error } = await supabase.from("destinations").update({ pipeline_stages }).eq("id", destinationId);
+  const { data, error } = await supabase.from("destinations").update({ pipeline_stages }).eq("id", destinationId).select("id");
   if (error) return { error: error.message };
+  if (!data?.length) return { error: DEST_REFUSED };
 
   revalidatePath(`/setup/destinations/${destinationId}`);
   return { success: true };
@@ -153,8 +159,9 @@ export async function updateDashboardPipelineStages(destinationId: string, _prev
 
   if (dashboard_pipeline_stages.length === 0) return { error: "Enter at least one stage." };
 
-  const { error } = await supabase.from("destinations").update({ dashboard_pipeline_stages }).eq("id", destinationId);
+  const { data, error } = await supabase.from("destinations").update({ dashboard_pipeline_stages }).eq("id", destinationId).select("id");
   if (error) return { error: error.message };
+  if (!data?.length) return { error: DEST_REFUSED };
 
   revalidatePath(`/setup/destinations/${destinationId}`);
   return { success: true };
@@ -220,7 +227,7 @@ export async function updateDestination(destinationId: string, _prevState: unkno
     return { error: "Keep the finalising wording under 40 characters — it has to fit on a button and a badge." };
   }
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("destinations")
     .update({
       country,
@@ -241,9 +248,11 @@ export async function updateDestination(destinationId: string, _prevState: unkno
       intake_seasons: intake_mode === "free_text" ? [] : intake_seasons,
       scholarship_access,
     })
-    .eq("id", destinationId);
+    .eq("id", destinationId)
+    .select("id");
 
   if (error) return { error: error.message };
+  if (!data?.length) return { error: DEST_REFUSED };
 
   revalidatePath(`/setup/destinations/${destinationId}`);
   revalidatePath("/setup/destinations");
@@ -253,8 +262,9 @@ export async function updateDestination(destinationId: string, _prevState: unkno
 
 export async function deleteDestination(destinationId: string) {
   const supabase = await createClient();
-  const { error } = await supabase.from("destinations").delete().eq("id", destinationId);
+  const { data, error } = await supabase.from("destinations").delete().eq("id", destinationId).select("id");
   if (error) return { error: error.message };
+  if (!data?.length) return { error: DEST_REFUSED };
   revalidateTag("destinations", { expire: 0 });
   redirect("/setup/destinations");
 }

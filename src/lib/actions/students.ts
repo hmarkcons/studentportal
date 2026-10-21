@@ -37,7 +37,7 @@ export async function updateRegisteredStudentProfile(
     phoneChangeError(formData.get("emergency_contact_number"), storedProfile?.emergency_contact_number, "emergency contact number");
   if (phoneIssue) return { error: phoneIssue };
 
-  const { error: leadError } = await supabase
+  const { data: leadRows, error: leadError } = await supabase
     .from("leads")
     .update({
       full_name,
@@ -65,8 +65,12 @@ export async function updateRegisteredStudentProfile(
       address: String(formData.get("address") ?? "").trim() || null,
       home_phone: String(formData.get("home_phone") ?? "").trim() || null,
     })
-    .eq("id", studentId);
+    .eq("id", studentId)
+    .select("id");
   if (leadError) return { error: leadError.message };
+  // An RLS-refused update matches no rows and raises nothing; say so rather
+  // than reporting a save that did not happen.
+  if (!leadRows?.length) return { error: "That wasn't saved — this student may not be one you can edit." };
 
   const financial_details = {
     sponsor_contact_number: String(formData.get("sponsor_contact_number") ?? "").trim() || null,
