@@ -8,6 +8,7 @@ import { EMAILS_MAX, normalizeEmails } from "@/lib/catalogueText";
 import { clearFinalizedStages, syncStudentStages } from "@/lib/autoStagesSync";
 import { refuseFinalizedStageByHand } from "@/lib/finalizedStageGuard";
 import { ensureCurrentCycleId } from "@/lib/ensureCycle";
+import { requireStaffStudentWrite } from "@/lib/auth/permissions";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -41,6 +42,8 @@ async function currentCycleId(supabase: Db, studentId: string): Promise<string |
 
 export async function createApplication(studentId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
+  const denied = await requireStaffStudentWrite("student.applications.add", "You do not have permission to add applications for this student.");
+  if (denied) return { error: denied.error };
 
   const university_id = String(formData.get("university_id") ?? "");
   const intake = String(formData.get("intake") ?? "").trim() || null;
@@ -143,6 +146,8 @@ export async function createApplication(studentId: string, _prevState: unknown, 
 
 export async function deleteApplication(applicationId: string, revalidateTo: string) {
   const supabase = await createClient();
+  const denied = await requireStaffStudentWrite("student.applications.delete", "You do not have permission to delete this student's applications.");
+  if (denied) return { error: denied.error };
   // Whose it was, for the finalized step below — asked before it is gone.
   const { data: owner } = await supabase.from("applications").select("student_id").eq("id", applicationId).maybeSingle();
   const { data: deleted, error } = await supabase.from("applications").delete().eq("id", applicationId).select("id");
@@ -162,6 +167,8 @@ export async function deleteApplication(applicationId: string, revalidateTo: str
 // reports.
 export async function finalizeApplication(applicationId: string, studentId: string, revalidateTo: string) {
   const supabase = await createClient();
+  const denied = await requireStaffStudentWrite("student.applications.edit", "You do not have permission to change this student's applications.");
+  if (denied) return { error: denied.error };
 
   // Single security-definer RPC — clearing every application's flag and
   // setting the target one commit or fail together (see migration 0091),
@@ -184,6 +191,8 @@ export async function finalizeApplication(applicationId: string, studentId: stri
 
 export async function unfinalizeApplication(applicationId: string, studentId: string, revalidateTo: string) {
   const supabase = await createClient();
+  const denied = await requireStaffStudentWrite("student.applications.edit", "You do not have permission to change this student's applications.");
+  if (denied) return { error: denied.error };
   const { data: updated, error } = await supabase.from("applications").update({ is_finalized: false }).eq("id", applicationId).select("id");
   if (error) return { error: error.message };
   if (!updated?.length) return { error: APP_REFUSED };
@@ -211,6 +220,8 @@ export async function unfinalizeApplication(applicationId: string, studentId: st
  */
 export async function updateApplicationDetails(applicationId: string, studentId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
+  const denied = await requireStaffStudentWrite("student.applications.edit", "You do not have permission to change this student's applications.");
+  if (denied) return { error: denied.error };
   const deadline = String(formData.get("deadline") ?? "") || null;
   // An amount or words (0303). "€30" typed with a symbol is in euros.
   const fee = parseFeeText(String(formData.get("application_fee") ?? ""));
@@ -350,6 +361,8 @@ export async function updateApplicationDetails(applicationId: string, studentId:
  */
 export async function addBackupPrograms(applicationId: string, studentId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
+  const denied = await requireStaffStudentWrite("student.applications.add", "You do not have permission to add applications for this student.");
+  if (denied) return { error: denied.error };
 
   // Zipped by index before anything is dropped, then de-duplicated on the
   // programme. Filtering or de-duplicating program_ids on its own would shift
@@ -481,6 +494,8 @@ export async function updateApplicationLinks(
   formData: FormData
 ) {
   const supabase = await createClient();
+  const denied = await requireStaffStudentWrite("student.applications.edit", "You do not have permission to change this student's applications.");
+  if (denied) return { error: denied.error };
 
   const clean = (key: string) => String(formData.get(key) ?? "").trim() || null;
   // Anything may be written in these (0304) — a link with or without its
@@ -529,6 +544,8 @@ export async function updateApplicationLinks(
 
 export async function updateApplicationStage(applicationId: string, studentId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
+  const denied = await requireStaffStudentWrite("student.applications.edit", "You do not have permission to change this student's applications.");
+  if (denied) return { error: denied.error };
   const current_stage = String(formData.get("current_stage") ?? "");
   if (!current_stage) return { error: "Choose a stage." };
   const refused = await refuseFinalizedStageByHand(supabase, applicationId, current_stage);
@@ -547,6 +564,8 @@ export async function updateApplicationStage(applicationId: string, studentId: s
 
 export async function addApplicationTask(applicationId: string, studentId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
+  const denied = await requireStaffStudentWrite("student.applications.add", "You do not have permission to add tasks to this student's applications.");
+  if (denied) return { error: denied.error };
   const description = String(formData.get("description") ?? "").trim();
   const due_date = String(formData.get("due_date") ?? "") || null;
   const owner_id = String(formData.get("owner_id") ?? "") || null;
@@ -569,6 +588,8 @@ const TASK_REFUSED = "You can't change this task — it isn't yours, or it has a
 
 export async function toggleApplicationTask(taskId: string, revalidateTo: string, done: boolean) {
   const supabase = await createClient();
+  const denied = await requireStaffStudentWrite("student.applications.edit", "You do not have permission to change this student's applications.");
+  if (denied) return { error: denied.error };
   const { data, error } = await supabase
     .from("application_tasks")
     .update({ status: done ? "done" : "pending" })
@@ -582,6 +603,8 @@ export async function toggleApplicationTask(taskId: string, revalidateTo: string
 
 export async function updateApplicationTask(taskId: string, revalidateTo: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
+  const denied = await requireStaffStudentWrite("student.applications.edit", "You do not have permission to change this student's applications.");
+  if (denied) return { error: denied.error };
   const description = String(formData.get("description") ?? "").trim();
   const due_date = String(formData.get("due_date") ?? "") || null;
   const priority = String(formData.get("priority") ?? "medium");
@@ -602,6 +625,8 @@ export async function updateApplicationTask(taskId: string, revalidateTo: string
 
 export async function deleteApplicationTask(taskId: string, revalidateTo: string) {
   const supabase = await createClient();
+  const denied = await requireStaffStudentWrite("student.applications.delete", "You do not have permission to delete this student's application tasks.");
+  if (denied) return { error: denied.error };
   const { data, error } = await supabase.from("application_tasks").delete().eq("id", taskId).select("id");
   if (error) return { error: error.message };
   if (!data?.length) return { error: TASK_REFUSED };
@@ -623,6 +648,8 @@ export async function deleteApplicationTask(taskId: string, revalidateTo: string
  */
 export async function reorderApplications(studentId: string, orderedIds: string[]) {
   const supabase = await createClient();
+  const denied = await requireStaffStudentWrite("student.applications.edit", "You do not have permission to change this student's applications.");
+  if (denied) return { error: denied.error };
 
   if (!Array.isArray(orderedIds) || orderedIds.length === 0) return { error: "Nothing to reorder." };
   if (new Set(orderedIds).size !== orderedIds.length) return { error: "That order listed the same application twice." };

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { dateOfBirthError } from "@/lib/dateOfBirth";
 import { phoneChangeError } from "@/lib/phoneNumber";
+import { requireStaffStudentWrite } from "@/lib/auth/permissions";
 
 // Saves the entire "Personal details" card on a registered student's profile
 // tab in one submit — the core lead fields (name, contact, registration
@@ -17,6 +18,10 @@ export async function updateRegisteredStudentProfile(
   formData: FormData
 ) {
   const supabase = await createClient();
+
+  // Staff gate (0343); the student editing their own details is left to RLS.
+  const denied = await requireStaffStudentWrite("student.profile.edit", "You do not have permission to edit this student's profile.");
+  if (denied) return { error: denied.error };
 
   const full_name = String(formData.get("full_name") ?? "").trim();
   if (!full_name) return { error: "Name is required." };

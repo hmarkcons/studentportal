@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { requirePermission } from "@/lib/auth/permissions";
+import { requirePermission, requireStaffStudentWrite } from "@/lib/auth/permissions";
 import { isSendableChannel, messageBodyError, broadcastRecipientsError } from "@/lib/messages";
 
 export async function sendMessage(
@@ -14,6 +14,14 @@ export async function sendMessage(
   formData: FormData
 ) {
   const supabase = await createClient();
+
+  // Staff gate for messaging a student (0343). Only when the message is to a
+  // student — a university message is not a student record — and never for the
+  // student sending from their own portal, who has no staff row.
+  if (entityType === "student") {
+    const denied = await requireStaffStudentWrite("student.communication.send", "You do not have permission to message this student.");
+    if (denied) return { error: denied.error };
+  }
 
   // The channel comes from the caller, not the form, so it is checked rather
   // than trusted: the column also allows email, sms and whatsapp, and the

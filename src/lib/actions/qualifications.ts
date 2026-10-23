@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { QUALIFICATION_TYPES } from "@/lib/qualifications";
+import { requireStaffStudentWrite } from "@/lib/auth/permissions";
 
 // A refused UPDATE/DELETE matches no rows and raises nothing (AGENTS.md); say so.
 const QUALIFICATION_REFUSED = "That wasn't saved — this qualification may not be yours to change, or it no longer exists.";
@@ -34,6 +35,13 @@ export async function upsertStudentQualification(
   // identifies a row. An id means "edit this one", no id means "add another".
   const qualificationId = String(formData.get("qualification_id") ?? "");
 
+  // Staff gate (0343); the student editing their own academics is left to RLS.
+  const denied = await requireStaffStudentWrite(
+    qualificationId ? "student.profile.edit" : "student.profile.add",
+    qualificationId ? "You do not have permission to edit this student's academics." : "You do not have permission to add to this student's academics.",
+  );
+  if (denied) return { error: denied.error };
+
   if (qualificationId) {
     const { data, error } = await supabase
       .from("student_qualifications")
@@ -56,6 +64,8 @@ export async function upsertStudentQualification(
 
 export async function deleteStudentQualification(qualificationId: string, revalidateTo: string) {
   const supabase = await createClient();
+  const denied = await requireStaffStudentWrite("student.profile.delete", "You do not have permission to remove this student's academics.");
+  if (denied) return { error: denied.error };
   const { data, error } = await supabase.from("student_qualifications").delete().eq("id", qualificationId).select("id");
   if (error) return { error: error.message };
   if (!data?.length) return { error: QUALIFICATION_REFUSED };

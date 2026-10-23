@@ -19,6 +19,7 @@ import { uploadedFile } from "@/lib/stagedUpload";
 import { removeStorageFiles } from "@/lib/fileTrash";
 import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
 import { isVisaType, VISA_TYPE_OTHER } from "@/lib/visaTypes";
+import { requireStaffStudentWrite } from "@/lib/auth/permissions";
 
 // Was a third hand-written copy of this list, and it lacked GMAT and CEnT-S —
 // so the two types just added to the picker would have been rejected here as
@@ -71,6 +72,16 @@ export async function saveTestScores(studentId: string, revalidateTo: string, _p
 
   const kept = new Set(rows.map((r) => r.id).filter(Boolean) as string[]);
   const removed = (existing ?? []).map((r) => r.id).filter((id) => !kept.has(id));
+
+  // Which operations this whole-section save performs, gated for staff (0343).
+  // A student saving their own scores has no staff row, so these are no-ops and
+  // RLS alone governs them — exactly as before this permission existed.
+  const denied =
+    (rows.some((r) => !r.id) && (await requireStaffStudentWrite("student.profile.add", "You do not have permission to add to this student's profile."))) ||
+    (rows.some((r) => r.id) && (await requireStaffStudentWrite("student.profile.edit", "You do not have permission to edit this student's profile."))) ||
+    (removed.length > 0 && (await requireStaffStudentWrite("student.profile.delete", "You do not have permission to remove records from this student's profile.")));
+  if (denied) return { error: denied.error };
+
   if (removed.length > 0) {
     const { error } = await supabase.from("student_test_scores").delete().in("id", removed);
     if (error) return { error: error.message };
@@ -121,6 +132,13 @@ export async function uploadStudentPhoto(studentId: string, revalidateTo: string
     .eq("student_id", studentId)
     .maybeSingle();
 
+  // Replacing a photo is an edit; setting the first one is an add (0343).
+  const denied = await requireStaffStudentWrite(
+    existing?.photo_path ? "student.profile.edit" : "student.profile.add",
+    "You do not have permission to change this student's photo.",
+  );
+  if (denied) return { error: denied.error };
+
   const path = `${studentId}/photo-${Date.now()}-${file.name}`;
   const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: true });
   if (uploadError) return { error: uploadError.message };
@@ -168,6 +186,9 @@ export async function deleteStudentPhoto(studentId: string, revalidateTo: string
     .eq("student_id", studentId)
     .maybeSingle();
   if (!profile?.photo_path) return { error: "There is no photo to remove." };
+
+  const denied = await requireStaffStudentWrite("student.profile.delete", "You do not have permission to remove this student's photo.");
+  if (denied) return { error: denied.error };
 
   const { error } = await supabase
     .from("student_profiles")
@@ -242,6 +263,31 @@ export async function saveTravelAndVisaHistory(studentId: string, revalidateTo: 
   }
   if (visa_refusal_history.some((r) => !isVisaType(r.visa_type))) return { error: "Choose a visa type for every refusal or deportation." };
   if (visa_refusal_history.some((r) => r.visa_type === VISA_TYPE_OTHER && !r.visa_type_other)) return { error: "Name the visa type on every row marked Other." };
+
+  // Gate the operations this whole-section save performs, for staff (0343). A
+  // student saving their own history has no staff row → these are no-ops and
+  // RLS governs, exactly as before. Deletes are worked out against what is on
+  // file, not trusted from the form.
+  const submittedIds = new Set<string>([...travelIds, ...visaIds].filter(Boolean));
+  const hasAdds = [...travelIds, ...visaIds].some((id) => !id);
+  const hasEdits = submittedIds.size > 0;
+  const { data: beforeRow } = await supabase
+    .from("student_profiles")
+    .select("travel_history, visa_refusal_history")
+    .eq("student_id", studentId)
+    .maybeSingle();
+  const priorIds = [
+    ...(((beforeRow?.travel_history as { id?: string }[] | null) ?? [])),
+    ...(((beforeRow?.visa_refusal_history as { id?: string }[] | null) ?? [])),
+  ]
+    .map((r) => r?.id)
+    .filter((id): id is string => Boolean(id));
+  const hasDeletes = priorIds.some((id) => !submittedIds.has(id));
+  const denied =
+    (hasAdds && (await requireStaffStudentWrite("student.profile.add", "You do not have permission to add to this student's profile."))) ||
+    (hasEdits && (await requireStaffStudentWrite("student.profile.edit", "You do not have permission to edit this student's profile."))) ||
+    (hasDeletes && (await requireStaffStudentWrite("student.profile.delete", "You do not have permission to remove records from this student's profile.")));
+  if (denied) return { error: denied.error };
 
   const { error } = await supabase
     .from("student_profiles")

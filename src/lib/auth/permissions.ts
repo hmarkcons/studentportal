@@ -81,3 +81,20 @@ export async function hasPermission(key: PermissionKey): Promise<boolean> {
 export async function requirePermission(key: PermissionKey, message: string): Promise<{ error: string } | null> {
   return (await hasPermission(key)) ? null : { error: message };
 }
+
+/**
+ * Gate a write to a registered student's record — for STAFF only (0343).
+ *
+ * Many of these actions (profile, test scores, travel/visa history, document
+ * uploads, messages) are shared with the student portal, where a student edits
+ * their OWN record. This must never block them: a caller with no staff row is
+ * self-service and is left to RLS, which already allows only their own record —
+ * exactly as before this permission existed. A staff caller, on the other hand,
+ * must hold the permission. So this only ever *adds* a check for staff; it can
+ * never take away access anyone has today.
+ */
+export async function requireStaffStudentWrite(key: PermissionKey, message: string): Promise<{ error: string } | null> {
+  const { staff } = await getStaffSession();
+  if (!staff) return null;
+  return requirePermission(key, message);
+}

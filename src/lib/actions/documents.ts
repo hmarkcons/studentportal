@@ -8,7 +8,7 @@ import { sanitizeFilename, validateDocumentFile } from "@/lib/documentUpload";
 import { documentFilePath, parseSourceNames } from "@/lib/documentFileNames";
 import { testTypeOfChecklistItem, trackerSelectedTests } from "@/lib/trackerTests";
 import { profileDerivedRequirements, reconcileDerived, studentTracks, templatesToSeed, trackFits, type TravelRow, type VisaRefusalRow } from "@/lib/documentChecklist";
-import { requirePermission } from "@/lib/auth/permissions";
+import { requirePermission, requireStaffStudentWrite } from "@/lib/auth/permissions";
 import { categoryCarriesOver, documentCarriesOver } from "@/lib/intakeCycle";
 import { ensureCurrentCycle } from "@/lib/ensureCycle";
 import { uploadedFile } from "@/lib/stagedUpload";
@@ -378,6 +378,10 @@ export async function uploadDocument(
   formData: FormData
 ) {
   const supabase = await createClient();
+  // Staff gate (0343); the student uploading their own document is left to RLS
+  // (and to the add_student_document_file definer, which refuses otherwise).
+  const denied = await requireStaffStudentWrite("student.documents.add", "You do not have permission to upload documents for this student.");
+  if (denied) return { error: denied.error };
   const file = await uploadedFile(formData, "file");
 
   if (!file || file.size === 0) {
@@ -426,6 +430,8 @@ export async function reviewDocumentFile(
   reason?: string
 ) {
   const supabase = await createClient();
+  const denied = await requireStaffStudentWrite("student.documents.edit", "You do not have permission to review this student's documents.");
+  if (denied) return { error: denied.error };
   const trimmed = reason?.trim() || null;
   if (status === "rejected" && !trimmed) {
     return { error: "Give a reason for sending it back — the student sees it and needs to know what to fix." };
@@ -455,6 +461,8 @@ export async function reviewDocumentFile(
  */
 export async function deleteDocumentVersion(archiveId: string, revalidateTo: string) {
   const supabase = await createClient();
+  const denied = await requireStaffStudentWrite("student.documents.delete", "You do not have permission to remove this student's documents.");
+  if (denied) return { error: denied.error };
   const { data: path, error } = await supabase.rpc("remove_student_document_version", { p_archive_id: archiveId });
   if (error) return { error: error.message === "not authorized" ? "Only the student's processing team can delete their documents." : error.message };
   if (typeof path === "string" && path) await removeStorageFiles(supabase, "documents", [path]);
@@ -465,6 +473,8 @@ export async function deleteDocumentVersion(archiveId: string, revalidateTo: str
 /** Takes one file off a requirement; the file itself is kept for 90 days (fileTrash). */
 export async function removeDocumentFile(fileId: string, studentId: string, revalidateTo: string) {
   const supabase = await createClient();
+  const denied = await requireStaffStudentWrite("student.documents.delete", "You do not have permission to remove this student's documents.");
+  if (denied) return { error: denied.error };
   const { data: path, error } = await supabase.rpc("remove_student_document_file", { p_file_id: fileId });
   if (error) return { error: error.message === "not authorized" ? "Only the student's processing team can remove their files." : error.message };
   if (typeof path === "string" && path) await removeStorageFiles(supabase, "documents", [path]);

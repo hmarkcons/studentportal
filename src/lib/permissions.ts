@@ -44,7 +44,40 @@ export const PERMISSION_KEYS = [
   "inventory.manage",
   // Downloading the universities sheet and the catalogue from Setup › Universities (0338).
   "catalogue.export",
+  // Registered-student record permissions (0343): add / edit / delete on each
+  // section of a registered student, checked by the staff-side write actions on
+  // top of RLS. A student editing their OWN record in the portal is never gated
+  // by these — the gate is staff-only (see requireStaffStudentWrite). Visa and
+  // Communication have only one real write each, so only that one is defined.
+  "student.profile.add",
+  "student.profile.edit",
+  "student.profile.delete",
+  "student.applications.add",
+  "student.applications.edit",
+  "student.applications.delete",
+  "student.documents.add",
+  "student.documents.edit",
+  "student.documents.delete",
+  "student.scholarship.add",
+  "student.scholarship.edit",
+  "student.scholarship.delete",
+  "student.visa.edit",
+  "student.communication.send",
 ] as const;
+
+/**
+ * The registered-student section permissions, grouped by section and operation.
+ * The single source for wiring the write actions and for the consistency test;
+ * the human labels/categories still live in the DB (migration 0343).
+ */
+export const STUDENT_SECTION_PERMISSIONS = {
+  profile: { add: "student.profile.add", edit: "student.profile.edit", delete: "student.profile.delete" },
+  applications: { add: "student.applications.add", edit: "student.applications.edit", delete: "student.applications.delete" },
+  documents: { add: "student.documents.add", edit: "student.documents.edit", delete: "student.documents.delete" },
+  scholarship: { add: "student.scholarship.add", edit: "student.scholarship.edit", delete: "student.scholarship.delete" },
+  visa: { edit: "student.visa.edit" },
+  communication: { send: "student.communication.send" },
+} as const satisfies Record<string, Partial<Record<"add" | "edit" | "delete" | "send", PermissionKey>>>;
 
 /**
  * Permissions a Super Admin holds and nobody else can be given: they are left

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { syncStagesForApplication } from "@/lib/autoStagesSync";
 import type { TrackerFieldDef, TrackerFieldType } from "@/lib/countryTrackers";
-import { requirePermission } from "@/lib/auth/permissions";
+import { requirePermission, requireStaffStudentWrite } from "@/lib/auth/permissions";
 import { trackerTestField, trackerTestFieldType } from "@/lib/trackerTests";
 import { mergeLogin, parsePortalLink, parseStoredLogin } from "@/lib/portalLink";
 import { TEST_TYPE_LABELS, type TestType } from "@/lib/testScores";
@@ -321,6 +321,11 @@ export async function saveTrackerFields(
   formData: FormData
 ) {
   const supabase = await createClient();
+
+  // Staff gate (0343). The tracker is processing work (RLS: processing +
+  // Super Admin); a student only ever reads it, so this is a no-op for them.
+  const vdenied = await requireStaffStudentWrite("student.visa.edit", "You do not have permission to edit this student's visa tracker.");
+  if (vdenied) return { error: vdenied.error };
 
   const {
     data: { user },

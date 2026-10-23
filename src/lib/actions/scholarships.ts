@@ -335,8 +335,8 @@ export async function addStudentScholarship(
   _prevState: unknown,
   formData: FormData
 ) {
-  const error = await gate();
-  if (error) return { error };
+  const denied = await requirePermission("student.scholarship.add", "You do not have permission to add scholarships for this student.");
+  if (denied) return { error: denied.error };
   const supabase = await createClient();
 
   const fields = readScholarshipFields(formData);
@@ -371,8 +371,8 @@ export async function addStudentScholarships(
   revalidateTo: string,
   bodyIds: string[]
 ) {
-  const error = await gate();
-  if (error) return { error };
+  const denied = await requirePermission("student.scholarship.add", "You do not have permission to add scholarships for this student.");
+  if (denied) return { error: denied.error };
   if (bodyIds.length === 0) return { error: "Choose at least one scholarship to add." };
 
   const supabase = await createClient();
@@ -415,8 +415,8 @@ export async function updateStudentScholarship(
   _prevState: unknown,
   formData: FormData
 ) {
-  const error = await gate();
-  if (error) return { error };
+  const denied = await requirePermission("student.scholarship.edit", "You do not have permission to edit this student's scholarships.");
+  if (denied) return { error: denied.error };
   const supabase = await createClient();
 
   const fields = readScholarshipFields(formData);
@@ -441,8 +441,8 @@ export async function updateStudentScholarship(
 }
 
 export async function deleteStudentScholarship(scholarshipId: string, revalidateTo: string) {
-  const error = await gate();
-  if (error) return { error };
+  const denied = await requirePermission("student.scholarship.delete", "You do not have permission to delete this student's scholarships.");
+  if (denied) return { error: denied.error };
   const supabase = await createClient();
 
   const { data: deleted, error: deleteError } = await supabase
