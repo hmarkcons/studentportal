@@ -18,11 +18,12 @@ const effectiveCaption = (base: string, override: string, hashtags: string) =>
 
 const textareaClass = "w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-primary focus:outline-none";
 
-export function ComposerForm({ accounts, media, campaigns, countries }: {
+export function ComposerForm({ accounts, media, campaigns, countries, canPublish }: {
   accounts: Account[];
   media: Media[];
   campaigns: { id: string; name: string }[];
   countries: string[];
+  canPublish: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -62,7 +63,7 @@ export function ComposerForm({ accounts, media, campaigns, countries }: {
 
   const anyErrors = perAccount.some((p) => p.errs.length > 0);
 
-  const submit = (mode: "draft" | "schedule") => {
+  const submit = (mode: "draft" | "schedule" | "publish") => {
     setError(null);
     if (targetIds.length === 0) return setError("Choose at least one account to post to.");
     if (mode === "schedule" && !scheduledAt) return setError("Pick a date and time to schedule.");
@@ -226,13 +227,18 @@ export function ComposerForm({ accounts, media, campaigns, countries }: {
             Schedule (Asia/Karachi)
             <Input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} data-schedule />
           </label>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" size="sm" pending={pending} disabled={pending || anyErrors} onClick={() => submit("draft")}>
               Save draft
             </Button>
-            <Button type="button" variant="primary" size="sm" pending={pending} disabled={pending || anyErrors || !scheduledAt} onClick={() => submit("schedule")}>
+            <Button type="button" variant="outline-primary" size="sm" pending={pending} disabled={pending || anyErrors || !scheduledAt} onClick={() => submit("schedule")}>
               Schedule
             </Button>
+            {canPublish && (
+              <Button type="button" variant="primary" size="sm" pending={pending} disabled={pending || anyErrors} onClick={() => submit("publish")}>
+                Publish now
+              </Button>
+            )}
           </div>
           {anyErrors && <p className="text-xs text-muted">Fix the platform issues above to continue.</p>}
           {error && <p className="text-xs text-danger" data-submit-error>{error}</p>}

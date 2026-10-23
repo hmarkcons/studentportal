@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { hasPermission } from "@/lib/auth/permissions";
 import { Card } from "@/components/ui/Card";
 import { ComposerForm } from "./ComposerForm";
 import type { SocialPlatform } from "@/lib/social/types";
 
 export default async function CreatePostPage() {
   const supabase = await createClient();
+  const canPublish = await hasPermission("social.posts.publish");
   const [{ data: accounts }, { data: media }, { data: campaigns }, { data: destinations }] = await Promise.all([
     supabase.from("social_accounts").select("id, platform, display_name, username, status").neq("status", "disconnected").order("platform"),
     supabase.from("media_assets").select("id, public_url, kind, size_bytes").order("created_at", { ascending: false }),
@@ -45,6 +47,7 @@ export default async function CreatePostPage() {
           media={(media ?? []).map((m) => ({ id: m.id as string, publicUrl: m.public_url as string, kind: m.kind as "image" | "video", sizeBytes: (m.size_bytes as number | null) ?? null }))}
           campaigns={(campaigns ?? []).map((c) => ({ id: c.id as string, name: c.name as string }))}
           countries={(destinations ?? []).map((d) => d.display_name as string)}
+          canPublish={canPublish}
         />
       )}
     </div>

@@ -2,9 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getStaffSession } from "@/lib/auth/session";
 import { requirePermission } from "@/lib/auth/permissions";
 import { validateForPlatform, type DraftMedia } from "@/lib/social/validate";
+import { publishPost } from "@/lib/social/publisher";
 import { isSocialPlatform, type SocialPlatform } from "@/lib/social/types";
 
 export type CreatePostTarget = {
@@ -22,7 +24,7 @@ export type CreatePostInput = {
   campaignId?: string | null;
   intake?: string | null;
   targets: CreatePostTarget[];
-  mode: "draft" | "schedule";
+  mode: "draft" | "schedule" | "publish";
   /** ISO UTC; required when mode is "schedule". */
   scheduledAt?: string | null;
 };
@@ -31,11 +33,15 @@ const effectiveCaption = (base: string, override: string | null | undefined, has
   `${(override?.trim() || base).trim()}${hashtags?.trim() ? `\n\n${hashtags.trim()}` : ""}`;
 
 export async function createPost(input: CreatePostInput) {
-  // Draft needs create; scheduling needs the schedule permission too.
-  const denied = await requirePermission(
-    input.mode === "schedule" ? "social.posts.schedule" : "social.posts.create",
-    input.mode === "schedule" ? "You do not have permission to schedule posts." : "You do not have permission to create posts.",
-  );
+  // Draft needs create; scheduling needs schedule; publishing now needs publish.
+  const permKey = input.mode === "publish" ? "social.posts.publish" : input.mode === "schedule" ? "social.posts.schedule" : "social.posts.create";
+  const permMsg =
+    input.mode === "publish"
+      ? "You do not have permission to publish posts."
+      : input.mode === "schedule"
+        ? "You do not have permission to schedule posts."
+        : "You do not have permission to create posts.";
+  const denied = await requirePermission(permKey, permMsg);
   if (denied) return { error: denied.error };
 
   if (!input.targets.length) return { error: "Choose at least one account to post to." };
@@ -47,6 +53,9 @@ export async function createPost(input: CreatePostInput) {
     if (Number.isNaN(when.getTime())) return { error: "That schedule time isn't valid." };
     if (when.getTime() < Date.now() - 60_000) return { error: "Pick a time in the future." };
     scheduledAt = when.toISOString();
+  } else if (input.mode === "publish") {
+    // Due now; the publisher runs immediately below and the cron is the backstop.
+    scheduledAt = new Date().toISOString();
   }
 
   const supabase = await createClient();
@@ -95,7 +104,7 @@ export async function createPost(input: CreatePostInput) {
       destination_country: input.destinationCountry?.trim() || null,
       campaign_id: input.campaignId || null,
       intake: input.intake?.trim() || null,
-      status: input.mode === "schedule" ? "scheduled" : "draft",
+      status: input.mode === "draft" ? "draft" : "scheduled",
       scheduled_at: scheduledAt,
       author_id: staff?.id ?? null,
     })
@@ -120,9 +129,15 @@ export async function createPost(input: CreatePostInput) {
   await supabase.from("social_post_audit_log").insert({
     post_id: post.id,
     actor_id: staff?.id ?? null,
-    action: input.mode === "schedule" ? "scheduled" : "created",
-    detail: input.mode === "schedule" ? `Scheduled for ${scheduledAt}` : "Saved as draft",
+    action: input.mode === "publish" ? "publishing" : input.mode === "schedule" ? "scheduled" : "created",
+    detail: input.mode === "schedule" ? `Scheduled for ${scheduledAt}` : input.mode === "publish" ? "Publishing now" : "Saved as draft",
   });
+
+  // Publish now: run the engine immediately (service role, for the tokens); the
+  // per-minute cron is the backstop if this request is interrupted.
+  if (input.mode === "publish") {
+    await publishPost(createAdminClient(), post.id);
+  }
 
   revalidatePath("/social/posts");
   return { success: true, postId: post.id };
