@@ -91,6 +91,7 @@
     "@tiptap/react": "^3.30.5",
     "@tiptap/starter-kit": "^3.30.5",
     "fflate": "^0.8.3",
+    "framer-motion": "^14.6.0",
     "jszip": "^3.10.2",
     "lucide-react": "^1.48.0",
     "mammoth": "^1.12.2",
