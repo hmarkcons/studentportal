@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getStaffSession } from "@/lib/auth/session";
-import { hasPermission } from "@/lib/auth/permissions";
+import { studentSectionAccess } from "@/lib/auth/studentSectionAccess";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Badge } from "@/components/ui/Badge";
@@ -27,11 +27,13 @@ export default async function StudentScholarshipTab(props: PageProps<"/students/
   const { supabase, staff } = await getStaffSession();
   if (!staff) return null;
 
-  // Gated on the permission, not on role === "super_admin". Editing was
-  // hardcoded to Super Admin, so granting Processing scholarships.manage in
-  // Admin > Role Permissions changed what the server would accept and nothing
-  // about what the page offered.
-  const canManage = await hasPermission("scholarships.manage");
+  // The student-scholarship actions carry their own add/edit/delete permissions
+  // now (0343, replacing the old scholarships.manage gate). Offer the controls
+  // when the person holds any of them; the actions enforce which operation
+  // specifically, so a toggle in Admin › Role Permissions changes both what the
+  // page offers and what the server accepts.
+  const sAccess = await studentSectionAccess();
+  const canManage = sAccess.scholarship.add || sAccess.scholarship.edit || sAccess.scholarship.delete;
 
   const { data: applications } = await supabase
     .from("applications")

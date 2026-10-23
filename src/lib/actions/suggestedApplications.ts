@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { requireStaffStudentWrite } from "@/lib/auth/permissions";
 // applications.ts keeps its own currentCycleId private — and being a
 // "use server" module it cannot export a helper that takes a client. This is
 // the same lookup, and it also creates the student's first cycle if they
@@ -19,6 +20,8 @@ import { ensureCurrentCycleId } from "@/lib/ensureCycle";
  */
 export async function addSuggestedApplication(studentId: string, programId: string, revalidateTo: string) {
   const supabase = await createClient();
+  const denied = await requireStaffStudentWrite("student.applications.add", "You do not have permission to add applications for this student.");
+  if (denied) return { error: denied.error };
 
   // The programme's own university rather than one passed in: a bound argument
   // is client-supplied, and pairing a programme with the wrong university would

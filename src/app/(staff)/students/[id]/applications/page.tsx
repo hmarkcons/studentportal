@@ -1,6 +1,7 @@
 import { hasRole } from "@/lib/auth/roles";
 import Link from "next/link";
 import { getStaffSession } from "@/lib/auth/session";
+import { studentSectionAccess } from "@/lib/auth/studentSectionAccess";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { RefreshIfStale } from "@/components/RefreshIfStale";
@@ -24,7 +25,13 @@ export default async function StudentApplicationsTab(props: {
   const { cycle: cycleParam } = await props.searchParams;
   const { supabase, staff: staffRow } = await getStaffSession();
   const isSuperAdmin = hasRole(staffRow, "super_admin");
-  const canDelete = isSuperAdmin || hasRole(staffRow, "management");
+  // Who may add / edit / delete these applications drives the controls shown,
+  // from the Role Permissions toggles (0343), not a fixed role list. Editing
+  // the catalogue cells (programme, coordinator) stays Super Admin's (0039).
+  const access = await studentSectionAccess();
+  const canDelete = access.applications.delete;
+  const canAddApplication = access.applications.add;
+  const canEditApplications = access.applications.edit;
   // A visa-only client (0279) already holds their admission: the way in is to
   // record it, not to apply for one.
   const { data: serviceRow } = await supabase.from("leads").select("service_type, full_name, student_code").eq("id", id).maybeSingle();
@@ -190,7 +197,7 @@ export default async function StudentApplicationsTab(props: {
         </div>
         {/* A closed intake takes no new applications — an application added to
             last year would quietly reopen work that is finished. */}
-        {!isPreviousIntake && (
+        {!isPreviousIntake && canAddApplication && (
           <Link prefetch={false} href={`/students/${id}/applications/new`} className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-ink">
             + Add application
           </Link>
@@ -200,7 +207,7 @@ export default async function StudentApplicationsTab(props: {
       {/* Suggestions sit above the list and only for the intake being worked:
           a closed intake is a record, and recommending new applications into
           it would invite reopening finished work. */}
-      {!isPreviousIntake && (
+      {!isPreviousIntake && canAddApplication && (
         <SuggestedPrograms
           studentId={id}
           revalidateTo={revalidateTo}
@@ -238,7 +245,7 @@ export default async function StudentApplicationsTab(props: {
           today={karachiToday()}
           canEditCatalogue={isSuperAdmin}
           canDelete={canDelete}
-          readOnly={isPreviousIntake}
+          readOnly={isPreviousIntake || !canEditApplications}
           exportHref={`/api/export/applications?student=${id}${showCycleTabs && activeCycleId ? `&cycle=${activeCycleId}` : ""}`}
           label={`Applications — ${serviceRow?.full_name ?? "student"}`}
           // Expanded, the student's name and ID are no longer on screen: said above the table.

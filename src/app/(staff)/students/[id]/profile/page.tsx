@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getStaffSession } from "@/lib/auth/session";
 import { seesStagesOnly } from "@/lib/auth/studentAccess";
+import { studentSectionAccess } from "@/lib/auth/studentSectionAccess";
 import { Card } from "@/components/ui/Card";
 import { AcademicsSection } from "@/components/AcademicsSection";
 import { PhotoUpload } from "@/components/PhotoUpload";
@@ -13,9 +14,12 @@ export default async function StudentProfileTab(props: PageProps<"/students/[id]
   const { id } = await props.params;
   const supabase = await createClient();
   // A counsellor with no processing role reads a registered student's profile
-  // and changes nothing on it (src/lib/auth/studentAccess.ts).
+  // and changes nothing on it (src/lib/auth/studentAccess.ts); and anyone whose
+  // student.profile.edit is turned off (0343) sees the same read-only view
+  // rather than controls that would only be refused on save.
   const { staff } = await getStaffSession();
-  const readOnly = seesStagesOnly(staff);
+  const access = await studentSectionAccess();
+  const readOnly = seesStagesOnly(staff) || !access.profile.edit;
 
   const [
     { data: student },
