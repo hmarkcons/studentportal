@@ -6,6 +6,7 @@ import { createPost, type CreatePostTarget } from "@/lib/actions/socialPosts";
 import { validateForPlatform, type DraftMedia } from "@/lib/social/validate";
 import { PLATFORM_LABELS, type SocialPlatform } from "@/lib/social/types";
 import { PLATFORM_LIMITS, INSTAGRAM_POST_TYPES, TIKTOK_PRIVACY_LEVELS, SNAPCHAT_DESTINATIONS } from "@/lib/social/limits";
+import { karachiLocalToUtcIso } from "@/lib/social/time";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 
@@ -14,9 +15,6 @@ type Media = { id: string; publicUrl: string; kind: "image" | "video"; sizeBytes
 
 const effectiveCaption = (base: string, override: string, hashtags: string) =>
   `${(override.trim() || base).trim()}${hashtags.trim() ? `\n\n${hashtags.trim()}` : ""}`;
-
-// Asia/Karachi is UTC+5 with no DST, so a wall-clock entered here is that time.
-const karachiToUtcIso = (local: string) => (local ? new Date(`${local}:00+05:00`).toISOString() : null);
 
 const textareaClass = "w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-primary focus:outline-none";
 
@@ -84,7 +82,7 @@ export function ComposerForm({ accounts, media, campaigns, countries }: {
         intake,
         targets,
         mode,
-        scheduledAt: mode === "schedule" ? karachiToUtcIso(scheduledAt) : null,
+        scheduledAt: mode === "schedule" ? karachiLocalToUtcIso(scheduledAt) : null,
       });
       if (r?.error) setError(r.error);
       else router.push("/social/posts");

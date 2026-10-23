@@ -127,3 +127,78 @@ export async function createPost(input: CreatePostInput) {
   revalidatePath("/social/posts");
   return { success: true, postId: post.id };
 }
+
+// Move a draft/scheduled post to a new time (calendar drag-and-drop). A post
+// that is publishing or already out can't be moved.
+export async function rescheduleSocialPost(postId: string, scheduledAtIso: string) {
+  const denied = await requirePermission("social.posts.schedule", "You do not have permission to reschedule posts.");
+  if (denied) return { error: denied.error };
+  const when = new Date(scheduledAtIso);
+  if (Number.isNaN(when.getTime())) return { error: "That time isn't valid." };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("social_posts")
+    .update({ scheduled_at: when.toISOString(), status: "scheduled" })
+    .eq("id", postId)
+    .in("status", ["draft", "scheduled"])
+    .select("id");
+  if (error) return { error: error.message };
+  if (!data?.length) return { error: "That post can't be rescheduled — it may already be published." };
+
+  const { staff } = await getStaffSession();
+  await supabase.from("social_post_audit_log").insert({ post_id: postId, actor_id: staff?.id ?? null, action: "rescheduled", detail: `Moved to ${when.toISOString()}` });
+  revalidatePath("/social/calendar");
+  revalidatePath("/social/posts");
+  return { success: true };
+}
+
+// Delete a post that hasn't gone out. The delete is in the audit log, so a
+// Super Admin can restore it; deleting a published record does not unpublish it,
+// so those are left alone.
+export async function deleteSocialPost(postId: string) {
+  const denied = await requirePermission("social.posts.create", "You do not have permission to delete posts.");
+  if (denied) return { error: denied.error };
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("social_posts")
+    .delete()
+    .eq("id", postId)
+    .in("status", ["draft", "scheduled", "failed"])
+    .select("id");
+  if (error) return { error: error.message };
+  if (!data?.length) return { error: "That post can't be deleted here (only drafts, scheduled or failed posts)." };
+  revalidatePath("/social/calendar");
+  revalidatePath("/social/posts");
+  return { success: true };
+}
+
+// Copy a post (and its per-platform targets) as a fresh draft.
+export async function duplicateSocialPost(postId: string) {
+  const denied = await requirePermission("social.posts.create", "You do not have permission to create posts.");
+  if (denied) return { error: denied.error };
+  const supabase = await createClient();
+  const { data: src } = await supabase
+    .from("social_posts")
+    .select("caption, hashtags, link, media_asset_ids, destination_country, campaign_id, intake")
+    .eq("id", postId)
+    .maybeSingle();
+  if (!src) return { error: "That post no longer exists." };
+  const { data: targets } = await supabase.from("social_post_targets").select("account_id, platform, caption_override, options").eq("post_id", postId);
+
+  const { staff } = await getStaffSession();
+  const { data: copy, error } = await supabase
+    .from("social_posts")
+    .insert({ ...src, status: "draft", scheduled_at: null, author_id: staff?.id ?? null })
+    .select("id")
+    .single();
+  if (error || !copy) return { error: error?.message ?? "Couldn't duplicate the post." };
+
+  if (targets?.length) {
+    await supabase.from("social_post_targets").insert(
+      targets.map((t) => ({ post_id: copy.id, account_id: t.account_id, platform: t.platform, caption_override: t.caption_override, options: t.options, status: "pending" })),
+    );
+  }
+  revalidatePath("/social/posts");
+  return { success: true, postId: copy.id };
+}
