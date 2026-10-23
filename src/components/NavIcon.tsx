@@ -13,6 +13,7 @@ import {
   HandCoins,
   Headset,
   KeyRound,
+  Share2,
   Landmark,
   LayoutDashboard,
   ListTodo,
@@ -65,6 +66,7 @@ export const NAV_ICONS = {
   messages: MessageCircle,
   guide: CirclePlay,
   logins: KeyRound,
+  social: Share2,
 } satisfies Record<string, LucideIcon>;
 
 export type NavIconName = keyof typeof NAV_ICONS;
@@ -103,6 +105,7 @@ const NAV_ACCENT: Record<string, 1 | 2 | 3 | 4 | 5> = {
   logins: 4,
   programs: 5,
   commissions: 1,
+  social: 2,
 };
 
 export function navAccent(name: string | undefined): 1 | 2 | 3 | 4 | 5 | null {

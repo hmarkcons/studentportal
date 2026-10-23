@@ -63,6 +63,15 @@ export const PERMISSION_KEYS = [
   "student.scholarship.delete",
   "student.visa.edit",
   "student.communication.send",
+  // Social Media module (0344). page.social opens the section; the rest gate the
+  // actions. Seeded in the migration; retunable in Admin › Role Permissions.
+  "page.social",
+  "social.accounts.manage",
+  "social.posts.create",
+  "social.posts.schedule",
+  "social.posts.approve",
+  "social.posts.publish",
+  "social.analytics.view",
 ] as const;
 
 /**

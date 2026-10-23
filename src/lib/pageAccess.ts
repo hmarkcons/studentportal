@@ -28,6 +28,7 @@ export const PAGE_PERMISSIONS: Record<string, string> = {
   "/students": "page.students",
   "/applications": "page.applications",
   "/calendar": "page.calendar",
+  "/social": "page.social",
   "/tasks": "page.tasks",
   "/support": "page.support",
   "/inventory": "page.inventory",

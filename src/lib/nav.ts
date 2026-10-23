@@ -55,6 +55,18 @@ const BASE_STAFF_NAV: NavItem[] = [
     ],
   },
   {
+    label: "Social Media",
+    icon: "social",
+    children: [
+      { label: "Calendar", href: "/social/calendar" },
+      { label: "Create Post", href: "/social/create" },
+      { label: "Posts", href: "/social/posts" },
+      { label: "Media Library", href: "/social/media" },
+      { label: "Accounts", href: "/social/accounts" },
+      { label: "Analytics", href: "/social/analytics" },
+    ],
+  },
+  {
     label: "Marketing",
     icon: "marketing",
     children: [
