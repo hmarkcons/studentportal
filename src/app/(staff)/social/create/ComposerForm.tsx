@@ -63,7 +63,7 @@ export function ComposerForm({ accounts, media, campaigns, countries, canPublish
 
   const anyErrors = perAccount.some((p) => p.errs.length > 0);
 
-  const submit = (mode: "draft" | "schedule" | "publish") => {
+  const submit = (mode: "draft" | "submit" | "schedule" | "publish") => {
     setError(null);
     if (targetIds.length === 0) return setError("Choose at least one account to post to.");
     if (mode === "schedule" && !scheduledAt) return setError("Pick a date and time to schedule.");
@@ -230,6 +230,9 @@ export function ComposerForm({ accounts, media, campaigns, countries, canPublish
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" size="sm" pending={pending} disabled={pending || anyErrors} onClick={() => submit("draft")}>
               Save draft
+            </Button>
+            <Button type="button" variant="outline" size="sm" pending={pending} disabled={pending || anyErrors} onClick={() => submit("submit")}>
+              Submit for approval
             </Button>
             <Button type="button" variant="outline-primary" size="sm" pending={pending} disabled={pending || anyErrors || !scheduledAt} onClick={() => submit("schedule")}>
               Schedule

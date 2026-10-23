@@ -66,8 +66,8 @@ export default async function PostsPage() {
       ) : (
         <div className="flex flex-col gap-2" data-posts>
           {posts.map((p) => (
-            <div key={p.id} data-post={p.id}>
-            <Card className="flex flex-wrap items-center justify-between gap-3">
+            <Link key={p.id} prefetch={false} href={`/social/posts/${p.id}`} data-post={p.id} className="block">
+            <Card className="flex flex-wrap items-center justify-between gap-3 transition-colors hover:border-primary">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm text-ink">{p.caption?.trim() || <span className="text-muted">No caption</span>}</p>
                 <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted">
@@ -81,7 +81,7 @@ export default async function PostsPage() {
               </div>
               <Badge tone={STATUS_TONE[p.status]}>{STATUS_LABEL[p.status]}</Badge>
             </Card>
-            </div>
+            </Link>
           ))}
         </div>
       )}

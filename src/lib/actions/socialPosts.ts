@@ -24,8 +24,8 @@ export type CreatePostInput = {
   campaignId?: string | null;
   intake?: string | null;
   targets: CreatePostTarget[];
-  mode: "draft" | "schedule" | "publish";
-  /** ISO UTC; required when mode is "schedule". */
+  mode: "draft" | "submit" | "schedule" | "publish";
+  /** ISO UTC; required for "schedule", optional for "submit". */
   scheduledAt?: string | null;
 };
 
@@ -47,16 +47,16 @@ export async function createPost(input: CreatePostInput) {
   if (!input.targets.length) return { error: "Choose at least one account to post to." };
 
   let scheduledAt: string | null = null;
-  if (input.mode === "schedule") {
-    if (!input.scheduledAt) return { error: "Pick a date and time to schedule the post." };
+  if (input.scheduledAt && (input.mode === "schedule" || input.mode === "submit")) {
     const when = new Date(input.scheduledAt);
     if (Number.isNaN(when.getTime())) return { error: "That schedule time isn't valid." };
     if (when.getTime() < Date.now() - 60_000) return { error: "Pick a time in the future." };
     scheduledAt = when.toISOString();
-  } else if (input.mode === "publish") {
-    // Due now; the publisher runs immediately below and the cron is the backstop.
-    scheduledAt = new Date().toISOString();
   }
+  if (input.mode === "schedule" && !scheduledAt) return { error: "Pick a date and time to schedule the post." };
+  if (input.mode === "publish") scheduledAt = new Date().toISOString();
+
+  const postStatus = input.mode === "submit" ? "pending_approval" : input.mode === "draft" ? "draft" : "scheduled";
 
   const supabase = await createClient();
   const { staff } = await getStaffSession();
@@ -104,7 +104,7 @@ export async function createPost(input: CreatePostInput) {
       destination_country: input.destinationCountry?.trim() || null,
       campaign_id: input.campaignId || null,
       intake: input.intake?.trim() || null,
-      status: input.mode === "draft" ? "draft" : "scheduled",
+      status: postStatus,
       scheduled_at: scheduledAt,
       author_id: staff?.id ?? null,
     })
@@ -126,11 +126,15 @@ export async function createPost(input: CreatePostInput) {
     return { error: targetError.message };
   }
 
-  await supabase.from("social_post_audit_log").insert({
+  await createAdminClient().from("social_post_audit_log").insert({
     post_id: post.id,
     actor_id: staff?.id ?? null,
-    action: input.mode === "publish" ? "publishing" : input.mode === "schedule" ? "scheduled" : "created",
-    detail: input.mode === "schedule" ? `Scheduled for ${scheduledAt}` : input.mode === "publish" ? "Publishing now" : "Saved as draft",
+    action: input.mode === "publish" ? "publishing" : input.mode === "schedule" ? "scheduled" : input.mode === "submit" ? "submitted" : "created",
+    detail:
+      input.mode === "schedule" ? `Scheduled for ${scheduledAt}`
+        : input.mode === "publish" ? "Publishing now"
+          : input.mode === "submit" ? "Submitted for approval"
+            : "Saved as draft",
   });
 
   // Publish now: run the engine immediately (service role, for the tokens); the
@@ -162,7 +166,7 @@ export async function rescheduleSocialPost(postId: string, scheduledAtIso: strin
   if (!data?.length) return { error: "That post can't be rescheduled — it may already be published." };
 
   const { staff } = await getStaffSession();
-  await supabase.from("social_post_audit_log").insert({ post_id: postId, actor_id: staff?.id ?? null, action: "rescheduled", detail: `Moved to ${when.toISOString()}` });
+  await createAdminClient().from("social_post_audit_log").insert({ post_id: postId, actor_id: staff?.id ?? null, action: "rescheduled", detail: `Moved to ${when.toISOString()}` });
   revalidatePath("/social/calendar");
   revalidatePath("/social/posts");
   return { success: true };
@@ -216,4 +220,69 @@ export async function duplicateSocialPost(postId: string) {
   }
   revalidatePath("/social/posts");
   return { success: true, postId: copy.id };
+}
+
+// --- approval workflow (0343 permissions; audit in social_post_audit_log) ---
+
+/** Send an existing draft for approval. */
+export async function submitForApproval(postId: string) {
+  const denied = await requirePermission("social.posts.create", "You do not have permission to submit posts.");
+  if (denied) return { error: denied.error };
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("social_posts").update({ status: "pending_approval" }).eq("id", postId).eq("status", "draft").select("id");
+  if (error) return { error: error.message };
+  if (!data?.length) return { error: "Only a draft can be submitted for approval." };
+  const { staff } = await getStaffSession();
+  await createAdminClient().from("social_post_audit_log").insert({ post_id: postId, actor_id: staff?.id ?? null, action: "submitted", detail: "Submitted for approval" });
+  revalidatePath("/social/posts");
+  revalidatePath(`/social/posts/${postId}`);
+  return { success: true };
+}
+
+/** Approve a post waiting for approval: it becomes scheduled (if it has a time) or a ready draft. */
+export async function approvePost(postId: string) {
+  const denied = await requirePermission("social.posts.approve", "You do not have permission to approve posts.");
+  if (denied) return { error: denied.error };
+  const supabase = await createClient();
+  const { data: post } = await supabase.from("social_posts").select("scheduled_at, author_id").eq("id", postId).maybeSingle();
+  const nextStatus = post?.scheduled_at ? "scheduled" : "draft";
+  const { staff } = await getStaffSession();
+  const { data, error } = await supabase
+    .from("social_posts")
+    .update({ status: nextStatus, approved_by: staff?.id ?? null, approved_at: new Date().toISOString() })
+    .eq("id", postId)
+    .eq("status", "pending_approval")
+    .select("id");
+  if (error) return { error: error.message };
+  if (!data?.length) return { error: "That post isn't waiting for approval." };
+
+  await createAdminClient().from("social_post_audit_log").insert({ post_id: postId, actor_id: staff?.id ?? null, action: "approved", detail: nextStatus === "scheduled" ? "Approved — now scheduled" : "Approved" });
+  if (post?.author_id && post.author_id !== staff?.id) {
+    await createAdminClient().from("notifications").insert({ user_id: post.author_id, kind: "social_post_approved", title: "Your post was approved", body: nextStatus === "scheduled" ? "It's scheduled to publish." : "It's ready to schedule or publish.", link: `/social/posts/${postId}` });
+  }
+  revalidatePath("/social/posts");
+  revalidatePath(`/social/posts/${postId}`);
+  return { success: true };
+}
+
+/** Send a post back to its author with a reason. */
+export async function rejectPost(postId: string, reason: string) {
+  const denied = await requirePermission("social.posts.approve", "You do not have permission to review posts.");
+  if (denied) return { error: denied.error };
+  const trimmed = reason.trim();
+  if (!trimmed) return { error: "Give a reason so the author knows what to change." };
+  const supabase = await createClient();
+  const { data: post } = await supabase.from("social_posts").select("author_id").eq("id", postId).maybeSingle();
+  const { staff } = await getStaffSession();
+  const { data, error } = await supabase.from("social_posts").update({ status: "draft" }).eq("id", postId).eq("status", "pending_approval").select("id");
+  if (error) return { error: error.message };
+  if (!data?.length) return { error: "That post isn't waiting for approval." };
+
+  await createAdminClient().from("social_post_audit_log").insert({ post_id: postId, actor_id: staff?.id ?? null, action: "rejected", detail: trimmed.slice(0, 500) });
+  if (post?.author_id && post.author_id !== staff?.id) {
+    await createAdminClient().from("notifications").insert({ user_id: post.author_id, kind: "social_post_rejected", title: "Your post was sent back", body: trimmed.slice(0, 300), link: `/social/posts/${postId}` });
+  }
+  revalidatePath("/social/posts");
+  revalidatePath(`/social/posts/${postId}`);
+  return { success: true };
 }
