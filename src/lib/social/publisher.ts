@@ -4,7 +4,7 @@
 // never publishes it twice; a target already published is skipped.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getProvider } from "./registry.ts";
+import { providerForAccount } from "./registry.ts";
 import { isSocialPlatform, type PostStatus, type PublishInput, type TargetStatus } from "./types.ts";
 
 const MAX_ATTEMPTS = 3;
@@ -100,7 +100,7 @@ export async function publishPost(admin: Admin, postId: string): Promise<void> {
     try {
       const { data: tokenJson } = await admin.rpc("read_social_token", { p_account_id: account.id });
       const token = tokenJson ? (JSON.parse(tokenJson as string) as Record<string, unknown>) : {};
-      const provider = getProvider(account.platform);
+      const provider = providerForAccount(account);
       const input: PublishInput = {
         caption: effectiveCaption(post.caption, t.caption_override, post.hashtags),
         link: post.link ?? null,

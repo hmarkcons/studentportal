@@ -3,7 +3,8 @@ import { cookies } from "next/headers";
 import { getStaffSession } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getProvider, socialSandboxMode } from "@/lib/social/registry";
+import { getProvider } from "@/lib/social/registry";
+import { isPlatformLive } from "@/lib/social/config";
 import { isSocialPlatform } from "@/lib/social/types";
 import { OAUTH_STATE_COOKIE, socialRedirectUri } from "@/lib/social/oauth";
 
@@ -48,7 +49,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ plat
       avatar_url: connected.avatar_url ?? null,
       scopes: connected.scopes ?? [],
       profile_ref: connected.choices?.[0]?.id ?? null,
-      is_mock: socialSandboxMode(),
+      is_mock: !isPlatformLive(platform),
       token_expires_at: connected.token_expires_at ?? null,
       status: "active",
       connected_by: staff.id,
