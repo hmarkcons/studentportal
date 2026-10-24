@@ -164,3 +164,36 @@ export async function runDuePosts(admin: Admin): Promise<{ processed: number }> 
   for (const p of posts ?? []) await publishPost(admin, p.id as string);
   return { processed: (posts ?? []).length };
 }
+
+/** Refresh cached engagement metrics for published targets not fetched recently. */
+export async function syncMetrics(admin: Admin, limit = 25): Promise<{ synced: number }> {
+  const stale = new Date(Date.now() - 6 * 3600 * 1000).toISOString();
+  const { data: targets } = await admin
+    .from("social_post_targets")
+    .select("id, account_id, platform_post_id")
+    .eq("status", "published")
+    .not("platform_post_id", "is", null)
+    .or(`metrics_fetched_at.is.null,metrics_fetched_at.lte.${stale}`)
+    .limit(limit);
+
+  let synced = 0;
+  for (const t of targets ?? []) {
+    const { data: account } = await admin
+      .from("social_accounts")
+      .select("id, platform, display_name, username, avatar_url, external_id, status, scopes, profile_ref, is_mock, token_expires_at, connected_at")
+      .eq("id", t.account_id)
+      .maybeSingle();
+    if (!account) continue;
+    let metrics: Record<string, number> | null = null;
+    try {
+      const { data: tokenJson } = await admin.rpc("read_social_token", { p_account_id: account.id });
+      const token = tokenJson ? (JSON.parse(tokenJson as string) as Record<string, unknown>) : {};
+      metrics = await providerForAccount(account).fetchMetrics(account, token, t.platform_post_id as string);
+    } catch {
+      metrics = null;
+    }
+    await admin.from("social_post_targets").update({ metrics, metrics_fetched_at: new Date().toISOString() }).eq("id", t.id);
+    synced += 1;
+  }
+  return { synced };
+}
