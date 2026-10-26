@@ -39,6 +39,12 @@ the portal.
 4. Add both redirect URIs under Facebook Login → Settings → Valid OAuth Redirect
    URIs (and the Threads app's redirect settings).
 5. Copy **App ID** and **App Secret** → `META_APP_ID`, `META_APP_SECRET`.
+6. **Threads has its own credentials.** Facebook and Instagram share the Meta App
+   ID above, but Threads does **not** — sending the Meta App ID to `threads.net`
+   fails with "No app ID was sent with the request". In **Use cases → Access the
+   Threads API → Settings**, copy the **Threads App ID** / **Threads App Secret**
+   → `THREADS_APP_ID`, `THREADS_APP_SECRET`, and register the Threads redirect URI
+   (`.../api/social/oauth/threads/callback`) in that same Settings tab.
 
 **Limitations — read before promising dates:**
 - **Instagram must be a Business or Creator account linked to a Facebook Page.**

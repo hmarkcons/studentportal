@@ -6,7 +6,7 @@
 
 import type { SocialProvider } from "../provider.ts";
 import type { ConnectedAccount, PublishResult } from "../types.ts";
-import { metaCreds } from "../config.ts";
+import { metaCreds, threadsCreds } from "../config.ts";
 import { httpGet, httpPostForm, isRetryableStatus } from "../http.ts";
 
 const GRAPH = "https://graph.facebook.com/v21.0";
@@ -23,8 +23,9 @@ const SCOPES: Record<MetaPlatform, string> = {
 const fail = (r: { status: number; error: string }): PublishResult => ({ ok: false, error: r.error, retryable: isRetryableStatus(r.status) });
 
 export function metaProvider(platform: MetaPlatform): SocialProvider {
-  const creds = metaCreds();
   const isThreads = platform === "threads";
+  // Threads authenticates against its own app; Facebook/Instagram use the Meta app.
+  const creds = isThreads ? threadsCreds() : metaCreds();
 
   return {
     platform,

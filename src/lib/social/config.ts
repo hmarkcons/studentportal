@@ -16,8 +16,12 @@ function creds(idVar: string | undefined, secretVar: string | undefined): Platfo
   return idVar && secretVar ? { clientId: idVar, clientSecret: secretVar } : null;
 }
 
-// Facebook, Instagram and Threads share one Meta app.
+// Facebook and Instagram share one Meta app.
 export const metaCreds = (): PlatformCreds => creds(process.env.META_APP_ID, process.env.META_APP_SECRET);
+// Threads issues its OWN app id/secret, distinct from the Facebook/Instagram
+// Meta app — sending the Meta app id to threads.net fails ("No app ID was sent").
+// Falls back to the Meta app only if the Threads-specific vars aren't set.
+export const threadsCreds = (): PlatformCreds => creds(process.env.THREADS_APP_ID, process.env.THREADS_APP_SECRET) ?? metaCreds();
 export const linkedinCreds = (): PlatformCreds => creds(process.env.LINKEDIN_CLIENT_ID, process.env.LINKEDIN_CLIENT_SECRET);
 export const tiktokCreds = (): PlatformCreds => creds(process.env.TIKTOK_CLIENT_KEY, process.env.TIKTOK_CLIENT_SECRET);
 export const snapchatCreds = (): PlatformCreds => creds(process.env.SNAPCHAT_CLIENT_ID, process.env.SNAPCHAT_CLIENT_SECRET);
@@ -26,8 +30,9 @@ export function credsFor(platform: SocialPlatform): PlatformCreds {
   switch (platform) {
     case "facebook":
     case "instagram":
-    case "threads":
       return metaCreds();
+    case "threads":
+      return threadsCreds();
     case "linkedin":
       return linkedinCreds();
     case "tiktok":

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { socialSandboxMode, getProvider, providerForAccount } from "../src/lib/social/registry.ts";
 
 const clearEnv = () => {
-  for (const k of ["SOCIAL_LIVE", "META_APP_ID", "META_APP_SECRET", "LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET", "TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET", "SNAPCHAT_CLIENT_ID", "SNAPCHAT_CLIENT_SECRET"]) delete process.env[k];
+  for (const k of ["SOCIAL_LIVE", "META_APP_ID", "META_APP_SECRET", "THREADS_APP_ID", "THREADS_APP_SECRET", "LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET", "TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET", "SNAPCHAT_CLIENT_ID", "SNAPCHAT_CLIENT_SECRET"]) delete process.env[k];
 };
 
 test("sandbox is the default and every platform is the mock", () => {
@@ -35,6 +35,21 @@ test("live mode uses the real provider only for a configured platform", () => {
   process.env.LINKEDIN_CLIENT_ID = "LI";
   process.env.LINKEDIN_CLIENT_SECRET = "LS";
   assert.match(getProvider("linkedin").getAuthUrl("s", "https://x/cb"), /linkedin\.com\/oauth\/v2\/authorization/);
+  clearEnv();
+});
+
+test("Threads uses its own app id/secret when set, falling back to the Meta app", () => {
+  clearEnv();
+  process.env.SOCIAL_LIVE = "yes";
+  process.env.META_APP_ID = "METAID";
+  process.env.META_APP_SECRET = "METASECRET";
+  // No Threads-specific creds yet → Threads falls back to the Meta app id.
+  assert.match(getProvider("threads").getAuthUrl("s", "https://x/cb"), /client_id=METAID/);
+  // Facebook/Instagram must NOT pick up a Threads id.
+  process.env.THREADS_APP_ID = "THID";
+  process.env.THREADS_APP_SECRET = "THSECRET";
+  assert.match(getProvider("threads").getAuthUrl("s", "https://x/cb"), /client_id=THID/);
+  assert.match(getProvider("facebook").getAuthUrl("s", "https://x/cb"), /client_id=METAID/);
   clearEnv();
 });
 
