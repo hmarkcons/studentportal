@@ -118,7 +118,9 @@ export async function proxy(request: NextRequest) {
 
   const isPublicPage =
     request.nextUrl.pathname.startsWith("/login") ||
-    request.nextUrl.pathname.startsWith("/register/partner");
+    request.nextUrl.pathname.startsWith("/register/partner") ||
+    request.nextUrl.pathname === "/terms" ||
+    request.nextUrl.pathname === "/privacy";
 
   if (!user && !isPublicPage) {
     const next = request.nextUrl.pathname + request.nextUrl.search;

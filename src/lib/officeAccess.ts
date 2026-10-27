@@ -43,6 +43,8 @@ export function isAccessAllowedPath(pathname: string): boolean {
     pathname === ACCESS_PENDING_PATH ||
     pathname.startsWith(`${ACCESS_PENDING_PATH}/`) ||
     pathname.startsWith("/login") ||
+    pathname === "/terms" ||
+    pathname === "/privacy" ||
     pathname === "/api/sign-out" ||
     pathname.startsWith("/_next/")
   );
