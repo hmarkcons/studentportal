@@ -80,6 +80,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",
+    "@gsap/react": "^2.1.2",
     "@react-pdf/renderer": "^4.8.1",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.3",
@@ -92,6 +93,7 @@
     "@tiptap/starter-kit": "^3.30.5",
     "fflate": "^0.8.3",
     "framer-motion": "^14.6.0",
+    "gsap": "^3.15.0",
     "jszip": "^3.10.2",
     "lucide-react": "^1.48.0",
     "mammoth": "^1.12.2",
