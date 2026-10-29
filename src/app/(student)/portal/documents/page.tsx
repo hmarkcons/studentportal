@@ -16,6 +16,8 @@ import { PortalStat, PortalStats } from "@/components/studentPortal/PortalStat";
 import { PortalEmpty } from "@/components/studentPortal/PortalEmpty";
 import { loadDocumentFiles } from "@/lib/documentFilesLoad";
 import { loadDocumentGuides } from "@/lib/documentGuides";
+import { DownloadSectionPdf } from "@/components/DownloadSectionPdf";
+import { safeName } from "@/lib/documentZip";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -202,19 +204,37 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
           outstanding: section.docs.filter((d) => d.status === "missing").length,
           rejected: section.docs.filter((d) => d.status === "rejected").length,
           content: (
-            <div className="flex flex-col divide-y divide-border">
-              {section.docs.map((doc, j) => (
-                <PortalDocumentRow
-                  key={doc.id}
-                  doc={doc}
-                  number={`${i + 1}.${j + 1}`}
-                  studentId={student.id}
-                  revalidateTo={`/portal/documents${showCycleTabs && activeCycleId ? `?cycle=${activeCycleId}` : ""}`}
-                  readOnly={isPreviousIntake}
-                  guide={guides[doc.id] ?? null}
-                  guideOpenInitially={guideParam === doc.id}
-                />
-              ))}
+            <div className="flex flex-col gap-3">
+              {(() => {
+                const dl = section.docs
+                  .filter((d) => (d.files?.length ?? 0) > 0)
+                  .map((d) => ({ id: d.id, name: d.custom_name ?? "Document", files: d.files?.length }));
+                return dl.length > 0 ? (
+                  <div>
+                    <DownloadSectionPdf
+                      studentId={student.id}
+                      label={section.label}
+                      docs={dl}
+                      fileName={`${safeName(section.label)}.pdf`}
+                      mode="student"
+                    />
+                  </div>
+                ) : null;
+              })()}
+              <div className="flex flex-col divide-y divide-border">
+                {section.docs.map((doc, j) => (
+                  <PortalDocumentRow
+                    key={doc.id}
+                    doc={doc}
+                    number={`${i + 1}.${j + 1}`}
+                    studentId={student.id}
+                    revalidateTo={`/portal/documents${showCycleTabs && activeCycleId ? `?cycle=${activeCycleId}` : ""}`}
+                    readOnly={isPreviousIntake}
+                    guide={guides[doc.id] ?? null}
+                    guideOpenInitially={guideParam === doc.id}
+                  />
+                ))}
+              </div>
             </div>
           ),
         }))}

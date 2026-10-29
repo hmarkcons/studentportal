@@ -9,7 +9,7 @@ import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
 import { loadStudentChecklistSections } from "@/lib/studentChecklistSections";
 import { hasPermission } from "@/lib/auth/permissions";
 import { orderCycles, cycleTabLabel, resolveCycleDocuments, type Cycle } from "@/lib/intakeCycle";
-import { zipFileName } from "@/lib/documentZip";
+import { zipFileName, safeName } from "@/lib/documentZip";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -171,6 +171,12 @@ export default async function StudentDocumentsTab(props: {
               (student?.student_code as string | null | undefined) ?? null,
               showCycleTabs ? (activeCycle?.intake ?? null) : null
             ),
+          }}
+          perSectionDownload={{
+            mode: "staff",
+            nameBase: [safeName((student?.full_name as string | undefined) ?? "Student"), student?.student_code ? safeName(student.student_code as string) : null]
+              .filter(Boolean)
+              .join(" - "),
           }}
         />
       </Card>

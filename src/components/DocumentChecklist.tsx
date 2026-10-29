@@ -27,6 +27,8 @@ import { FileField } from "@/components/FileField";
 import { DocumentGuidePanel, DocumentGuideToggle, guideHasMore } from "@/components/DocumentGuide";
 import type { ResolvedGuide } from "@/lib/documentGuides";
 import { DownloadAllDocuments } from "@/components/DownloadAllDocuments";
+import { DownloadSectionPdf } from "@/components/DownloadSectionPdf";
+import { safeName } from "@/lib/documentZip";
 
 export type DocRow = {
   id: string;
@@ -451,6 +453,7 @@ export function DocumentChecklist({
   guides = {},
   focusDocId = null,
   downloadAll,
+  perSectionDownload,
   removals = [],
 }: {
   docs: DocRow[];
@@ -461,6 +464,13 @@ export function DocumentChecklist({
    * one ZIP under this name. The student's Documents tab, for staff.
    */
   downloadAll?: { zipName: string };
+  /**
+   * Adds a per-section "Download as PDF" button that merges that section's
+   * uploaded documents into one PDF. `nameBase` prefixes the file name
+   * ("<nameBase> - <section>.pdf"); `mode` picks the staff vs student link
+   * action. Independent of downloadAll (the whole-student ZIP).
+   */
+  perSectionDownload?: { mode: "staff" | "student"; nameBase: string };
   /**
    * The document somebody came here for — from Waiting on you, which links
    * ?doc=<id>#doc-<id>. Its section starts open, so the row is on the page to
@@ -599,6 +609,22 @@ export function DocumentChecklist({
                   open={openSections[section.key] ?? false}
                   onToggle={() => setOpenSections((prev) => ({ ...prev, [section.key]: !prev[section.key] }))}
                 >
+                  {perSectionDownload && (() => {
+                    const dl = section.docs
+                      .filter((d) => d.file_path || (d.files?.length ?? 0) > 0)
+                      .map((d) => ({ id: d.id, name: d.fileLabel ?? d.name ?? "Document", files: d.files?.length }));
+                    return dl.length > 0 ? (
+                      <div className="pb-3">
+                        <DownloadSectionPdf
+                          studentId={studentId}
+                          label={section.label}
+                          docs={dl}
+                          fileName={`${perSectionDownload.nameBase} - ${safeName(section.label)}.pdf`}
+                          mode={perSectionDownload.mode}
+                        />
+                      </div>
+                    ) : null;
+                  })()}
                   <div className="flex flex-col divide-y divide-border">
                     {section.docs.map((doc, j) => (
                       <UploadRow
