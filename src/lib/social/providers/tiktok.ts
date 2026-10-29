@@ -9,7 +9,10 @@ import { tiktokCreds } from "../config.ts";
 import { httpGet, httpPostForm, httpPostJson, isRetryableStatus } from "../http.ts";
 
 const API = "https://open.tiktokapis.com/v2";
-const SCOPE = "user.info.basic,video.publish,video.upload,photo.publish";
+// photo.publish is intentionally omitted: it isn't offered on HMARK's app, and
+// requesting a scope the app lacks breaks the OAuth connect. Video posting works
+// with these three; re-add photo.publish here once it is enabled on the app.
+const SCOPE = "user.info.basic,video.publish,video.upload";
 const PRIVACY: Record<string, string> = { public: "PUBLIC_TO_EVERYONE", friends: "MUTUAL_FOLLOW_FRIENDS", private: "SELF_ONLY" };
 const fail = (r: { status: number; error: string }): PublishResult => ({ ok: false, error: r.error, retryable: isRetryableStatus(r.status) });
 
@@ -79,16 +82,12 @@ export function tiktokProvider(): SocialProvider {
         }, auth);
         return r.ok ? { ok: "pending", containerId: r.data.data.publish_id } : fail(r);
       }
-      if (input.mediaKind === "image" && input.mediaUrls.length) {
-        const r = await httpPostJson<{ data: { publish_id: string } }>(`${API}/post/publish/content/init/`, {
-          media_type: "PHOTO",
-          post_mode: "DIRECT_POST",
-          post_info: { title: input.caption, privacy_level: privacy },
-          source_info: { source: "PULL_FROM_URL", photo_images: input.mediaUrls, photo_cover_index: 0 },
-        }, auth);
-        return r.ok ? { ok: "pending", containerId: r.data.data.publish_id } : fail(r);
+      if (input.mediaKind === "image") {
+        // photo.publish is not enabled on the app (see SCOPE above), so photo
+        // posting would fail at TikTok anyway — say so plainly instead.
+        return { ok: false, error: "Photo posting to TikTok isn't enabled for this app yet — post a video, or enable photo.publish on the TikTok app.", retryable: false };
       }
-      return { ok: false, error: "TikTok needs a video or photos.", retryable: false };
+      return { ok: false, error: "TikTok needs a video.", retryable: false };
     },
 
     async getStatus(_account, token, containerId): Promise<PublishResult> {
