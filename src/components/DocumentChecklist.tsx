@@ -26,9 +26,7 @@ import { DocumentSectionShell, ExpandAllToggle } from "@/components/DocumentSect
 import { FileField } from "@/components/FileField";
 import { DocumentGuidePanel, DocumentGuideToggle, guideHasMore } from "@/components/DocumentGuide";
 import type { ResolvedGuide } from "@/lib/documentGuides";
-import { DownloadAllDocuments } from "@/components/DownloadAllDocuments";
-import { DownloadSectionPdf } from "@/components/DownloadSectionPdf";
-import { safeName } from "@/lib/documentZip";
+import { DownloadDocumentsPdf } from "@/components/DownloadDocumentsPdf";
 
 export type DocRow = {
   id: string;
@@ -452,25 +450,19 @@ export function DocumentChecklist({
   emptySections = "all",
   guides = {},
   focusDocId = null,
-  downloadAll,
-  perSectionDownload,
+  downloadPdf,
   removals = [],
 }: {
   docs: DocRow[];
   /** Requirements taken off this student's checklist (0328), to bring back. */
   removals?: { id: string; name: string | null; removedAt: string | null }[];
   /**
-   * Shows "Download all": every uploaded document in the sections listed, as
-   * one ZIP under this name. The student's Documents tab, for staff.
+   * Shows "Download all" + "Download selected" above the sections: both combine
+   * the student's uploaded documents into one PDF (selected lets a subset be
+   * chosen). `fileNameBase` prefixes the saved file; `mode` picks the staff vs
+   * student link action.
    */
-  downloadAll?: { zipName: string };
-  /**
-   * Adds a per-section "Download as PDF" button that merges that section's
-   * uploaded documents into one PDF. `nameBase` prefixes the file name
-   * ("<nameBase> - <section>.pdf"); `mode` picks the staff vs student link
-   * action. Independent of downloadAll (the whole-student ZIP).
-   */
-  perSectionDownload?: { mode: "staff" | "student"; nameBase: string };
+  downloadPdf?: { fileNameBase?: string; mode: "staff" | "student" };
   /**
    * The document somebody came here for — from Waiting on you, which links
    * ?doc=<id>#doc-<id>. Its section starts open, so the row is on the page to
@@ -576,16 +568,19 @@ export function DocumentChecklist({
                 }
               />
             );
-            if (!downloadAll) return toggle;
-            // The same sections, numbered the same way, as the folders of the ZIP.
-            const zipSections = visibleSections.map((s, i) => ({
-              number: i + 1,
-              label: s.label,
-              docs: s.docs.filter((d) => d.file_path).map((d) => ({ id: d.id, name: d.fileLabel ?? d.name ?? "Document", files: d.files?.length })),
-            }));
+            if (!downloadPdf) return toggle;
+            // Only sections with something uploaded, in the order they appear.
+            const pdfSections = visibleSections
+              .map((s) => ({
+                label: s.label,
+                docs: s.docs
+                  .filter((d) => d.file_path || (d.files?.length ?? 0) > 0)
+                  .map((d) => ({ id: d.id, name: d.fileLabel ?? d.name ?? "Document", files: d.files?.length })),
+              }))
+              .filter((s) => s.docs.length > 0);
             return (
               <div className="flex flex-wrap items-start justify-between gap-2">
-                <DownloadAllDocuments studentId={studentId} zipName={downloadAll.zipName} sections={zipSections} />
+                <DownloadDocumentsPdf studentId={studentId} sections={pdfSections} fileNameBase={downloadPdf.fileNameBase} mode={downloadPdf.mode} />
                 {toggle}
               </div>
             );
@@ -609,22 +604,6 @@ export function DocumentChecklist({
                   open={openSections[section.key] ?? false}
                   onToggle={() => setOpenSections((prev) => ({ ...prev, [section.key]: !prev[section.key] }))}
                 >
-                  {perSectionDownload && (() => {
-                    const dl = section.docs
-                      .filter((d) => d.file_path || (d.files?.length ?? 0) > 0)
-                      .map((d) => ({ id: d.id, name: d.fileLabel ?? d.name ?? "Document", files: d.files?.length }));
-                    return dl.length > 0 ? (
-                      <div className="pb-3">
-                        <DownloadSectionPdf
-                          studentId={studentId}
-                          label={section.label}
-                          docs={dl}
-                          fileName={`${perSectionDownload.nameBase} - ${safeName(section.label)}.pdf`}
-                          mode={perSectionDownload.mode}
-                        />
-                      </div>
-                    ) : null;
-                  })()}
                   <div className="flex flex-col divide-y divide-border">
                     {section.docs.map((doc, j) => (
                       <UploadRow

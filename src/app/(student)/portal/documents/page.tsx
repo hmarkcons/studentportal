@@ -16,8 +16,7 @@ import { PortalStat, PortalStats } from "@/components/studentPortal/PortalStat";
 import { PortalEmpty } from "@/components/studentPortal/PortalEmpty";
 import { loadDocumentFiles } from "@/lib/documentFilesLoad";
 import { loadDocumentGuides } from "@/lib/documentGuides";
-import { DownloadSectionPdf } from "@/components/DownloadSectionPdf";
-import { safeName } from "@/lib/documentZip";
+import { DownloadDocumentsPdf } from "@/components/DownloadDocumentsPdf";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -193,6 +192,20 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
           Expand-all comes from the shared list wrapper: the staff tab has had
           it since these sections became collapsible, and without it reading a
           whole checklist here was one click per section. */}
+      {(() => {
+        const pdfSections = sections
+          .map((s) => ({
+            label: s.label,
+            docs: s.docs.filter((d) => (d.files?.length ?? 0) > 0).map((d) => ({ id: d.id, name: d.custom_name ?? "Document", files: d.files?.length })),
+          }))
+          .filter((s) => s.docs.length > 0);
+        return pdfSections.length > 0 ? (
+          <div data-rise>
+            <DownloadDocumentsPdf studentId={student.id} sections={pdfSections} mode="student" />
+          </div>
+        ) : null;
+      })()}
+
       <DocumentSectionList
         initiallyOpen={guideParam ? (sections.find((sec) => sec.docs.some((d) => d.id === guideParam))?.category ?? null) : null}
         sections={sections.map((section, i) => ({
@@ -204,37 +217,19 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
           outstanding: section.docs.filter((d) => d.status === "missing").length,
           rejected: section.docs.filter((d) => d.status === "rejected").length,
           content: (
-            <div className="flex flex-col gap-3">
-              {(() => {
-                const dl = section.docs
-                  .filter((d) => (d.files?.length ?? 0) > 0)
-                  .map((d) => ({ id: d.id, name: d.custom_name ?? "Document", files: d.files?.length }));
-                return dl.length > 0 ? (
-                  <div>
-                    <DownloadSectionPdf
-                      studentId={student.id}
-                      label={section.label}
-                      docs={dl}
-                      fileName={`${safeName(section.label)}.pdf`}
-                      mode="student"
-                    />
-                  </div>
-                ) : null;
-              })()}
-              <div className="flex flex-col divide-y divide-border">
-                {section.docs.map((doc, j) => (
-                  <PortalDocumentRow
-                    key={doc.id}
-                    doc={doc}
-                    number={`${i + 1}.${j + 1}`}
-                    studentId={student.id}
-                    revalidateTo={`/portal/documents${showCycleTabs && activeCycleId ? `?cycle=${activeCycleId}` : ""}`}
-                    readOnly={isPreviousIntake}
-                    guide={guides[doc.id] ?? null}
-                    guideOpenInitially={guideParam === doc.id}
-                  />
-                ))}
-              </div>
+            <div className="flex flex-col divide-y divide-border">
+              {section.docs.map((doc, j) => (
+                <PortalDocumentRow
+                  key={doc.id}
+                  doc={doc}
+                  number={`${i + 1}.${j + 1}`}
+                  studentId={student.id}
+                  revalidateTo={`/portal/documents${showCycleTabs && activeCycleId ? `?cycle=${activeCycleId}` : ""}`}
+                  readOnly={isPreviousIntake}
+                  guide={guides[doc.id] ?? null}
+                  guideOpenInitially={guideParam === doc.id}
+                />
+              ))}
             </div>
           ),
         }))}
