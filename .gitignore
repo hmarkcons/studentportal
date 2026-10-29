@@ -39,6 +39,7 @@ yarn-error.log*
 
 # claude code session files
 .claude/
+.cursor/
 
 # typescript
 *.tsbuildinfo
