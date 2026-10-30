@@ -9,12 +9,13 @@
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/apply-europe-scholarship-guides.ps1          # dry run
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/apply-europe-scholarship-guides.ps1 -Apply   # write
+#   ... -Apply -Force   # also overwrite bodies someone has saved in the app (skipped otherwise)
 #
 # Run from the repository root: it reads .env.local from the current directory.
 # The service-role key is read into a variable and sent only as a header; it is
 # never printed.
 
-param([switch] $Apply)
+param([switch] $Apply, [switch] $Force)
 
 $ErrorActionPreference = "Stop"
 
@@ -52,7 +53,11 @@ $guides = [IO.File]::ReadAllText($dataPath, $utf8) | ConvertFrom-Json
 $columns = @("region", "covers", "academic_year", "application_deadline", "call_status", "call_expected_on", "call_notes",
   "source_url", "apply_url", "call_page_url", "call_pdf_url", "stipend_amount", "benefits")
 
-$bodies = Invoke-Rest GET "scholarship_bodies?select=id,name,guide_sections" $null $null
+$bodies = Invoke-Rest GET "scholarship_bodies?select=id,name,guide_sections,guide_updated_by" $null $null
+
+# The edit form's limits (BODY_TEXT_LIMITS in src/lib/scholarshipBodySheet.ts).
+# A guide seeded over one could never be saved again in the app.
+$limits = @{ region = 200; application_deadline = 1000; stipend_amount = 4000; benefits = 4000; call_notes = 4000 }
 $destinations = Invoke-Rest GET "destinations?select=id,country" $null $null
 
 $byCountry = @{}
@@ -87,6 +92,19 @@ foreach ($g in $guides) {
   $destIds = @($destIds | Select-Object -Unique)
   if ($destIds.Count -eq 0) {
     $problems += "$($g.name): none of [$($g.countries -join ', ')] is a destination - skipped"
+    continue
+  }
+
+  $tooLong = $limits.Keys | Where-Object { $g.$_ -is [string] -and $g.$_.Length -gt $limits[$_] } | Select-Object -First 1
+  if ($tooLong) {
+    $problems += "$($g.name): $tooLong is $($g.$tooLong.Length) characters, over the form's $($limits[$tooLong]) - skipped"
+    continue
+  }
+
+  # Someone saved this body in the app: re-seeding would undo their edit.
+  if ($body -and $body.guide_updated_by -and -not $Force) {
+    $pad = if ($Apply) { 7 } else { 13 }
+    "{0} {1,-64} edited in the app - -Force to overwrite" -f "skip".PadRight($pad), $g.name
     continue
   }
 

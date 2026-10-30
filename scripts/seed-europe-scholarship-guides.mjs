@@ -18,13 +18,22 @@
 // its `countries` list. Anything already on an existing row and not named in
 // the data — call_pdf_path, guide_updated_by, last_checked_at — is left as is.
 //
-//   node scripts/seed-europe-scholarship-guides.mjs          # what it would change
-//   node scripts/seed-europe-scholarship-guides.mjs --apply  # change it
+// A body whose stored guide already matches the file is left alone, so its
+// guide_updated_at keeps saying when it was last really changed.
+//
+// A body someone has saved in the app (guide_updated_by is set) is skipped, so
+// re-running for a new guide cannot undo their edit. Copy the edit into the
+// JSON first, then --force if the file really should win.
+//
+//   node scripts/seed-europe-scholarship-guides.mjs                  # what it would change
+//   node scripts/seed-europe-scholarship-guides.mjs --apply          # change it
+//   node scripts/seed-europe-scholarship-guides.mjs --apply --force  # including bodies edited in the app
 
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { overLongBodyField } from "../src/lib/scholarshipBodySheet.ts";
 
 const env = Object.fromEntries(
   readFileSync(".env.local", "utf8")
@@ -37,6 +46,7 @@ const env = Object.fromEntries(
 );
 const db = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 const APPLY = process.argv.includes("--apply");
+const FORCE = process.argv.includes("--force");
 
 const here = dirname(fileURLToPath(import.meta.url));
 const GUIDES = JSON.parse(readFileSync(join(here, "europe-scholarship-guides.json"), "utf8"));
@@ -60,7 +70,7 @@ const COLUMNS = [
 ];
 
 const [{ data: bodies, error: bodiesErr }, { data: destinations, error: destErr }] = await Promise.all([
-  db.from("scholarship_bodies").select("id, name, guide_sections"),
+  db.from("scholarship_bodies").select(["id", "name", "guide_sections", "guide_updated_by", ...COLUMNS].join(", ")),
   db.from("destinations").select("id, country"),
 ]);
 if (bodiesErr || destErr) {
@@ -82,6 +92,17 @@ function patchFor(g) {
   return patch;
 }
 
+// Section objects are compared by their text, not their key order: the app
+// stores { body, title } where the file has { title, body }.
+const sameSections = (a, b) =>
+  JSON.stringify((a ?? []).map((s) => [s.title, s.body])) === JSON.stringify((b ?? []).map((s) => [s.title, s.body]));
+
+function unchanged(body, g) {
+  if (body.name !== g.name || !sameSections(body.guide_sections, g.sections)) return false;
+  const { guide_sections: _s, guide_updated_at: _t, ...fields } = patchFor(g);
+  return Object.entries(fields).every(([k, v]) => (body[k] ?? null) === (v ?? null));
+}
+
 let updated = 0;
 let created = 0;
 const problems = [];
@@ -93,6 +114,24 @@ for (const g of GUIDES) {
   const destIds = [...new Set((g.countries ?? []).flatMap((c) => byCountry.get(c.trim().toLowerCase()) ?? []))];
   if (destIds.length === 0) {
     problems.push(`${g.name}: none of ${JSON.stringify(g.countries)} is a destination — skipped`);
+    continue;
+  }
+
+  // The edit form refuses a field over its limit, so a guide seeded with one
+  // could never be saved again in the app.
+  const tooLong = overLongBodyField(g);
+  if (tooLong) {
+    problems.push(`${g.name}: ${tooLong.field} is ${tooLong.length} characters, over the form's ${tooLong.max} — skipped`);
+    continue;
+  }
+
+  if (body?.guide_updated_by && !FORCE) {
+    console.log(`${"skip".padEnd(APPLY ? 7 : 13)} ${g.name.padEnd(64)} edited in the app — --force to overwrite`);
+    continue;
+  }
+
+  if (body && unchanged(body, g)) {
+    console.log(`${"same".padEnd(APPLY ? 7 : 13)} ${g.name}`);
     continue;
   }
 
