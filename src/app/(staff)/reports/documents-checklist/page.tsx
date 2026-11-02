@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { FileDown, FileSpreadsheet } from "lucide-react";
 import { requireReportAccess } from "@/lib/auth/reportAccess";
 import { loadDocumentChecklist } from "@/lib/documentChecklistLoad";
 import {
@@ -19,6 +18,7 @@ import { StatCard } from "@/components/ui/StatCard";
 import { TableFrame } from "@/components/ui/TableFrame";
 import { Select } from "@/components/ui/Input";
 import { VARIANT_CLASSES, SIZE_CLASSES } from "@/components/ui/Button";
+import { DownloadChecklistButton } from "./DownloadChecklistButton";
 
 const HREF = "/reports/documents-checklist";
 
@@ -80,7 +80,6 @@ export default async function DocumentsChecklistPage(props: { searchParams: Prom
   const t = report.totals;
   const filtered = checklistQuery(filters) !== "";
   const download = (format: "pdf" | "xlsx") => `${HREF}/download${checklistQuery(filters, { format })}`;
-  const button = `${VARIANT_CLASSES.outline} ${SIZE_CLASSES.md} inline-flex items-center gap-1.5 rounded-md font-medium`;
 
   return (
     <div className="w-full">
@@ -95,16 +94,9 @@ export default async function DocumentsChecklistPage(props: { searchParams: Prom
             still to do.
           </p>
         </div>
-        {/* Plain links, not <Link>: a file is downloaded, not navigated to. */}
-        <div className="flex flex-wrap gap-2">
-          <a href={download("pdf")} className={button} data-download="pdf">
-            <FileDown className="h-4 w-4" aria-hidden />
-            Download PDF
-          </a>
-          <a href={download("xlsx")} className={button} data-download="xlsx">
-            <FileSpreadsheet className="h-4 w-4" aria-hidden />
-            Download Excel
-          </a>
+        <div className="flex flex-wrap items-start gap-2">
+          <DownloadChecklistButton href={download("pdf")} format="pdf" />
+          <DownloadChecklistButton href={download("xlsx")} format="xlsx" />
         </div>
       </div>
 

@@ -19,6 +19,7 @@
 //                and one Checklist row per document
 //   management   is not offered it, is turned back from the page and refused
 //                the download (403); so is a counsellor
+import { readFileSync } from "node:fs";
 import { inflateSync } from "node:zlib";
 import { BASE, clients, fixtures, openBrowser, reporter, requireConfirmation, signIn } from "./verify-portal-lib.mjs";
 import { loadDocumentChecklist } from "../src/lib/documentChecklistLoad.ts";
@@ -108,28 +109,37 @@ try {
   const shown = await page.locator("tr[data-student-row]").count();
   ok("filter: only students with every document approved", shown === complete, `${shown} shown, ${complete} complete`);
   if (complete === 0) ok("filter: an empty result says so", (await page.getByText("No students match these filters.").count()) === 1);
-  const pdfHref = await page.locator('a[data-download="pdf"]').getAttribute("href");
+  const pdfHref = await page.locator('button[data-download="pdf"]').getAttribute("data-href");
   ok("filter: the downloads carry it", pdfHref?.includes("show=complete") && pdfHref.includes("format=pdf"), pdfHref ?? "");
 
   // ---------------------------------------------------------------- downloads
+  // Clicked, as staff click them: the button fetches the file and hands it to the browser.
   await page.goto(`${BASE}${HREF}`, { waitUntil: "domcontentloaded" });
-  const pdfLink = await page.locator('a[data-download="pdf"]').getAttribute("href");
-  const t0 = Date.now();
-  const pdf = await page.request.get(`${BASE}${pdfLink}`, { timeout: 90000 });
-  const pdfMs = Date.now() - t0;
-  const pdfBody = Buffer.from(await pdf.body());
-  ok("PDF: downloads", pdf.status() === 200 && pdf.headers()["content-type"] === "application/pdf", `${pdf.status()} ${pdf.headers()["content-type"]}`);
-  ok("PDF: named for the day", /attachment; filename="HMC-Documents-Checklist-\d{4}-\d{2}-\d{2}\.pdf"/.test(pdf.headers()["content-disposition"] ?? ""), pdf.headers()["content-disposition"]);
+  const clickDownload = async (format) => {
+    const button = page.locator(`button[data-download="${format}"]`);
+    const t0 = Date.now();
+    const [file] = await Promise.all([page.waitForEvent("download", { timeout: 90000 }), button.click()]);
+    const busy = await button.innerText();
+    return { file, body: readFileSync(await file.path()), ms: Date.now() - t0, busy };
+  };
+  const { file: pdfFile, body: pdfBody, ms: pdfMs } = await clickDownload("pdf");
+  ok("PDF: the button downloads it, named for the day", /^HMC-Documents-Checklist-\d{4}-\d{2}-\d{2}\.pdf$/.test(pdfFile.suggestedFilename()), pdfFile.suggestedFilename());
   ok("PDF: is a PDF", pdfBody.subarray(0, 5).toString() === "%PDF-");
   const drawn = pdfText(pdfBody);
   ok("PDF: the first student is in it, with page numbers", drawn.includes(want[0].name) && /Page 1 of \d+/.test(drawn), want[0].name);
   console.log(`      PDF ${Math.round(pdfBody.length / 1024)} KB in ${(pdfMs / 1000).toFixed(1)}s`);
 
-  const xlsxLink = await page.locator('a[data-download="xlsx"]').getAttribute("href");
-  const xlsx = await page.request.get(`${BASE}${xlsxLink}`, { timeout: 90000 });
-  const xlsxBody = Buffer.from(await xlsx.body());
-  ok("Excel: downloads", xlsx.status() === 200 && /spreadsheetml/.test(xlsx.headers()["content-type"] ?? ""), `${xlsx.status()} ${xlsx.headers()["content-type"]}`);
+  const { file: xlsxFile, body: xlsxBody } = await clickDownload("xlsx");
+  ok("Excel: the button downloads it, named for the day", /^HMC-Documents-Checklist-\d{4}-\d{2}-\d{2}\.xlsx$/.test(xlsxFile.suggestedFilename()), xlsxFile.suggestedFilename());
   ok("Excel: is a workbook", xlsxBody.subarray(0, 2).toString() === "PK");
+
+  // The route itself, for its headers: a PDF, offered as an attachment.
+  const direct = await page.request.get(`${BASE}${HREF}/download?format=pdf&show=complete`, { timeout: 90000 });
+  ok(
+    "PDF: the route answers with a PDF attachment",
+    direct.status() === 200 && direct.headers()["content-type"] === "application/pdf" && /^attachment; filename="/.test(direct.headers()["content-disposition"] ?? ""),
+    `${direct.status()} ${direct.headers()["content-type"]} ${direct.headers()["content-disposition"]}`
+  );
   let ExcelJS = null;
   try {
     ExcelJS = (await import("exceljs")).default;
