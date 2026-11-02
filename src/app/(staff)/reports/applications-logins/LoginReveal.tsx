@@ -7,8 +7,9 @@ import { Copy, Eye, EyeOff } from "lucide-react";
  * A saved login on the report's page: the username as it is, the password
  * hidden until asked for — the page is often open on a screen others can see,
  * where the downloaded file is not — and either one copied with a click.
+ * The portal itself opens from the application's "Open portal" button.
  */
-export function LoginReveal({ label, username, password, link }: { label: string; username: string; password: string; link: string | null }) {
+export function LoginReveal({ label, username, password }: { label: string; username: string; password: string }) {
   const [shown, setShown] = useState(false);
   const [copied, setCopied] = useState<"username" | "password" | null>(null);
 
@@ -66,11 +67,6 @@ export function LoginReveal({ label, username, password, link }: { label: string
         {copyButton("password", password)}
         {copied === "password" && <span className="text-success">Copied</span>}
       </span>
-      {link && (
-        <a href={link} target="_blank" rel="noopener noreferrer" className="max-w-xs truncate text-primary hover:underline">
-          {link}
-        </a>
-      )}
     </span>
   );
 }

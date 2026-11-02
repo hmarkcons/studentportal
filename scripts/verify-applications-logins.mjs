@@ -138,6 +138,15 @@ try {
     console.log("      (no login is saved against any application: the login checks below are skipped)");
   }
 
+  // Open portal: a button on each application that has somewhere to go, opening in a new tab.
+  const portalButtons = page.locator("[data-portal-link]");
+  const firstPortal = portalButtons.first();
+  ok(
+    "processing: applications have an Open portal button, opening the portal in a new tab",
+    (await portalButtons.count()) > 0 && (await firstPortal.getAttribute("target")) === "_blank" && /^https?:\/\//.test((await firstPortal.getAttribute("href")) ?? ""),
+    `${await portalButtons.count()} buttons`
+  );
+
   // "No login saved": no login on the page at all.
   await page.goto(`${BASE}${HREF}?login=missing`, { waitUntil: "domcontentloaded" });
   await page.locator("table[data-applications-report]").waitFor({ timeout: 40000 });

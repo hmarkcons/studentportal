@@ -126,6 +126,19 @@ test("a programme's apply link is passed on only when it is a real address", () 
   );
 });
 
+test("Open portal goes where the saved login signs in, else where the programme says to apply", () => {
+  const apps = [
+    app("s", "documents_pending", { portalLink: "https://unipi.it/apply" }),
+    app("s", "documents_pending", { portalLink: "https://unipi.it/apply" }),
+    app("s", "documents_pending"),
+  ];
+  const r = build([student("s", "Sara")], apps, [login(apps[0].id, { username: "u", password: "p", link: "https://portal.unipi.it/login" })]);
+  assert.deepEqual(
+    r.students[0].applications.map((a) => a.portalUrl),
+    ["https://portal.unipi.it/login", "https://unipi.it/apply", null]
+  );
+});
+
 test("students are listed by name; one with no application is listed and counted as such", () => {
   const r = build([student("b", "bilal"), student("a", "Ahmed")], [app("a", "documents_pending")]);
   assert.deepEqual(

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldAlert } from "lucide-react";
+import { ExternalLink, ShieldAlert } from "lucide-react";
 import { requireReportAccess } from "@/lib/auth/reportAccess";
 import { loadApplicationsReport } from "@/lib/applicationsReportLoad";
 import {
@@ -56,6 +56,19 @@ function ApplicationList({ s }: { s: AppReportStudent }) {
                 {a.stageLabel}
                 {a.step && ` · step ${a.step.step} of ${a.step.of}`}
               </span>
+              {a.portalUrl && (
+                <a
+                  href={a.portalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-md border border-primary px-2 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/10"
+                  title={a.portalUrl}
+                  data-portal-link
+                >
+                  Open portal
+                  <ExternalLink className="h-3 w-3" aria-hidden />
+                </a>
+              )}
             </div>
             <div className="text-muted">
               {[a.programme ?? "Programme not chosen", a.level, a.intake, a.round, a.country].filter(Boolean).join(" · ")}
@@ -68,19 +81,11 @@ function ApplicationList({ s }: { s: AppReportStudent }) {
               {a.finalizedBadge && <span className="font-semibold text-success"> · {a.finalizedBadge}</span>}
             </div>
             {a.logins.map((l, i) => (
-              <LoginReveal key={i} label={l.label} username={l.username} password={l.password} link={l.link ?? a.portalLink} />
+              <LoginReveal key={i} label={l.label} username={l.username} password={l.password} />
             ))}
             {a.logins.length === 0 && (
               <div className="italic text-muted" data-no-login>
                 No portal login saved
-                {a.portalLink && (
-                  <>
-                    {" · "}
-                    <a href={a.portalLink} target="_blank" rel="noopener noreferrer" className="not-italic text-primary hover:underline">
-                      apply here
-                    </a>
-                  </>
-                )}
               </div>
             )}
           </li>

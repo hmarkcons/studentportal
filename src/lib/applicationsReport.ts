@@ -119,6 +119,8 @@ export type ReportApplication = {
   finalizedBadge: string | null;
   /** Where the programme says to apply, when it is a real http(s) address (linkHref). */
   portalLink: string | null;
+  /** What "Open portal" opens: the saved login's own link (where it signs in), else the programme's. */
+  portalUrl: string | null;
   logins: AppLogin[];
 };
 
@@ -305,6 +307,9 @@ export function buildApplicationsReport(input: {
   for (const a of input.applications) {
     const group = stageGroup(a.stage, a.pipeline);
     const deadline = /^\d{4}-\d{2}-\d{2}/.test(a.deadline ?? "") ? a.deadline!.slice(0, 10) : null;
+    const logins = input.logins.get(a.id) ?? [];
+    // A link field may hold words, or "javascript:…" (0304): only a real address is passed on.
+    const portalLink = linkHref(a.portalLink);
     const app: ReportApplication = {
       id: a.id,
       number: a.number,
@@ -325,9 +330,9 @@ export function buildApplicationsReport(input: {
       step: stageProgress(a.stage, a.pipeline),
       finalized: a.finalized,
       finalizedBadge: a.finalized ? a.finalizedBadge?.trim() || "University finalized" : null,
-      // A link field may hold words, or "javascript:…" (0304): only a real address is passed on.
-      portalLink: linkHref(a.portalLink),
-      logins: input.logins.get(a.id) ?? [],
+      portalLink,
+      portalUrl: logins.find((l) => l.link)?.link ?? portalLink,
+      logins,
     };
     (appsOf.get(a.studentId) ?? appsOf.set(a.studentId, []).get(a.studentId)!).push(app);
   }

@@ -111,6 +111,9 @@ const styles = StyleSheet.create({
   date: { fontSize: 7.4, color: SOFT, textAlign: "right", lineHeight: 1.3 },
   dateBad: { fontSize: 7.4, color: ALERT, textAlign: "right", fontFamily: "Helvetica-Bold", lineHeight: 1.3 },
   final: { fontSize: 7, color: "#166534", fontFamily: "Helvetica-Bold", textAlign: "right", marginTop: 1.5 },
+  portalLink: { marginTop: 4, textDecoration: "none" },
+  portalBtn: { backgroundColor: BRAND, borderRadius: 3, paddingVertical: 2.4, paddingHorizontal: 7 },
+  portalBtnText: { fontFamily: "Helvetica-Bold", fontSize: 7, color: "#FFFFFF", lineHeight: 1.2 },
 
   login: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", marginTop: 4, marginLeft: 20, backgroundColor: "#FFFBEB", borderWidth: 0.6, borderColor: "#FCD34D", borderRadius: 3, paddingVertical: 3, paddingHorizontal: 6 },
   loginLabel: { fontFamily: "Helvetica-Bold", fontSize: 7.2, color: "#92400E", marginRight: 10 },
@@ -258,6 +261,14 @@ function ApplicationRow({ a }: { a: ReportApplication }) {
             <Text style={styles.date}>No deadline set</Text>
           )}
           {a.finalizedBadge ? <Text style={styles.final}>{t(a.finalizedBadge)}</Text> : null}
+          {/* Clickable on screen; on paper the address is in the login line below. */}
+          {a.portalUrl ? (
+            <PdfLink src={a.portalUrl} style={styles.portalLink}>
+              <View style={styles.portalBtn}>
+                <Text style={styles.portalBtnText}>Open portal  &gt;</Text>
+              </View>
+            </PdfLink>
+          ) : null}
         </View>
       </View>
       {a.logins.map((l, i) => (
