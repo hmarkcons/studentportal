@@ -29,6 +29,7 @@
     "check:paging": "node scripts/verify-list-paging.mjs",
     "check:leadswork": "node scripts/verify-leads-workflow.mjs",
     "check:docszip": "node scripts/verify-documents-zip.mjs",
+    "check:docchecklist": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/verify-documents-checklist.mjs",
     "check:pkrrates": "node scripts/verify-pkr-rates.mjs",
     "check:multiupload": "node scripts/verify-multi-upload.mjs",
     "check:pay": "node scripts/verify-pay-split.mjs",

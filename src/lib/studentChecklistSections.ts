@@ -8,7 +8,8 @@
 // buried.
 
 import type { createClient } from "@/lib/supabase/server";
-import { CATEGORY_LABELS, CATEGORY_ORDER } from "@/lib/documentCategories";
+// Relative, with its extension: the documents checklist report loads this under plain Node.
+import { CATEGORY_LABELS, CATEGORY_ORDER } from "./documentCategories.ts";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
@@ -31,12 +32,29 @@ export async function loadStudentChecklistSections(
     supabase.from("destination_document_sections").select("destination_id, section_key, sort_order"),
   ]);
 
-  const destinationIds = new Set((destRows ?? []).map((d) => d.destination_id as string));
+  return checklistSectionsFor(
+    new Set((destRows ?? []).map((d) => d.destination_id as string)),
+    (sections ?? []) as { key: string; label: string }[],
+    (destinationSections ?? []) as SectionPlacement[]
+  );
+}
 
-  const labelOf = new Map((sections ?? []).map((s) => [s.key, s.label]));
+type SectionPlacement = { destination_id: string | null; section_key: string; sort_order: number };
+
+/**
+ * The choosing half of loadStudentChecklistSections, for rows already read:
+ * the destinations one student is pursuing, and the whole arrangement. The
+ * documents checklist report reads the arrangement once for every student.
+ */
+export function checklistSectionsFor(
+  destinationIds: ReadonlySet<string>,
+  sections: readonly { key: string; label: string }[],
+  destinationSections: readonly SectionPlacement[]
+): ChecklistSectionRef[] {
+  const labelOf = new Map(sections.map((s) => [s.key, s.label]));
 
   const best = new Map<string, number>();
-  for (const row of destinationSections ?? []) {
+  for (const row of destinationSections) {
     // Shared sections (destination_id null) always apply; a destination's own
     // only if the student is pursuing it.
     if (row.destination_id !== null && !destinationIds.has(row.destination_id)) continue;

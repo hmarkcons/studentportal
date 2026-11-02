@@ -41,6 +41,13 @@ export const REPORT_CATALOGUE: ReportCatalogueEntry[] = [
     roles: ["super_admin", "management", "processing"],
   },
   {
+    href: "/reports/documents-checklist",
+    label: "Documents checklist",
+    description: "Every registered student's documents — approved, awaiting review and still to do. Download as PDF or Excel.",
+    // Processing and Super Admin only, as the office asked (2026-11-02); not Management.
+    roles: ["super_admin", "processing"],
+  },
+  {
     href: "/reports/revenue-commission",
     label: "Revenue & commission",
     description: "Invoiced revenue, collections, and commission totals.",

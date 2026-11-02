@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 import { getStaffSession } from "./session";
-import { staffRoles } from "./roles";
+import { hasRole, staffRoles } from "./roles";
+import { getEffectivePermissions } from "./permissions";
 import { visibleReports } from "@/lib/reportsCatalogue";
+import { canOpenPath } from "@/lib/pageAccess";
 
 /**
  * Gates a report page on the same catalogue that decides whether its card is
@@ -28,4 +30,19 @@ export async function requireReportAccess(href: string) {
   const { supabase, staff } = await getStaffSession();
   if (!visibleReports(staffRoles(staff)).some((r) => r.href === href)) redirect("/dashboard");
   return { supabase, staff };
+}
+
+/**
+ * The same decision for a report's download (a route handler), which answers
+ * with a status rather than a redirect, and which no layout guards: a route
+ * handler is not wrapped by reports/layout.tsx's PageGuard, so the page-access
+ * check that guard makes for the page is made here too.
+ */
+export async function reportDownloadAccess(href: string) {
+  const { supabase, staff } = await getStaffSession();
+  if (!staff) return { supabase, staff, refusal: { status: 401, message: "Sign in to download this report." } } as const;
+  const perms = await getEffectivePermissions();
+  const allowed = canOpenPath("/reports", perms, hasRole(staff, "super_admin")) && visibleReports(staffRoles(staff)).some((r) => r.href === href);
+  if (!allowed) return { supabase, staff, refusal: { status: 403, message: "This report is not one your role can open." } } as const;
+  return { supabase, staff, refusal: null } as const;
 }

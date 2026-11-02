@@ -26,7 +26,36 @@ export async function loadCycleDocuments(supabase: SupabaseClient, studentId: st
       .order("created_at", { ascending: false }),
   ]);
 
-  const cycles = orderCycles((cycleRows ?? []) as Cycle[]);
+  return pickCycleDocuments(
+    allDocs ?? [],
+    (cycleRows ?? []) as Cycle[],
+    new Set((renewTemplates ?? []).map((t) => t.id as string)),
+    cycleParam
+  );
+}
+
+type CycleDocRow = {
+  id: string;
+  cycle_id: string | null;
+  category?: string | null;
+  template_id?: string | null;
+  derived_key?: string | null;
+  status: string;
+};
+
+/**
+ * The choosing half of loadCycleDocuments, for rows already read: one
+ * student's documents and intakes. The documents checklist report reads every
+ * student's at once and picks each one's here, so its counts are the
+ * Documents page's counts.
+ */
+export function pickCycleDocuments<D extends CycleDocRow>(
+  allDocs: readonly D[],
+  cycleRows: readonly Cycle[],
+  renewTemplateIds: Set<string>,
+  cycleParam?: string | null
+) {
+  const cycles = orderCycles([...cycleRows]);
   const showCycleTabs = cycles.length > 1;
   const currentCycleId = cycles.find((c) => c.is_current)?.id ?? cycles[0]?.id ?? null;
   const activeCycleId =
@@ -34,7 +63,7 @@ export async function loadCycleDocuments(supabase: SupabaseClient, studentId: st
   const activeCycle = cycles.find((c) => c.id === activeCycleId) ?? null;
   const isPreviousIntake = Boolean(activeCycle && !activeCycle.is_current);
 
-  let docs = allDocs ?? [];
+  let docs = [...allDocs];
   const inheritedFromById = new Map<string, number | null>();
   if (showCycleTabs && activeCycleId) {
     const resolved = resolveCycleDocuments(
@@ -48,7 +77,7 @@ export async function loadCycleDocuments(supabase: SupabaseClient, studentId: st
       })),
       activeCycleId,
       new Map(cycles.map((c) => [c.id, c.sequence])),
-      new Set((renewTemplates ?? []).map((t) => t.id as string))
+      renewTemplateIds
     );
     const keep = new Map(resolved.map((r) => [r.doc.id, r.inheritedFrom]));
     for (const [docId, from] of keep) inheritedFromById.set(docId, from);
