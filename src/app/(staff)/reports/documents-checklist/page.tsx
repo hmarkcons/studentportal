@@ -18,8 +18,8 @@ import { StatCard } from "@/components/ui/StatCard";
 import { TableFrame } from "@/components/ui/TableFrame";
 import { Select } from "@/components/ui/Input";
 import { VARIANT_CLASSES, SIZE_CLASSES } from "@/components/ui/Button";
-import { DownloadChecklistButton } from "./DownloadChecklistButton";
-import { StudentPicker } from "./StudentPicker";
+import { ReportDownloadButton } from "@/components/reports/ReportDownloadButton";
+import { StudentPicker } from "@/components/reports/StudentPicker";
 
 const HREF = "/reports/documents-checklist";
 
@@ -96,8 +96,8 @@ export default async function DocumentsChecklistPage(props: { searchParams: Prom
           </p>
         </div>
         <div className="flex flex-wrap items-start gap-2">
-          <DownloadChecklistButton href={download("pdf")} format="pdf" />
-          <DownloadChecklistButton href={download("xlsx")} format="xlsx" />
+          <ReportDownloadButton href={download("pdf")} format="pdf" fallbackName="Documents-checklist" />
+          <ReportDownloadButton href={download("xlsx")} format="xlsx" fallbackName="Documents-checklist" />
         </div>
       </div>
 
@@ -221,7 +221,7 @@ export default async function DocumentsChecklistPage(props: { searchParams: Prom
                 </td>
                 <td className="px-2 py-2">
                   {/* This one student's checklist, whatever else is on screen. */}
-                  <DownloadChecklistButton
+                  <ReportDownloadButton
                     href={`${HREF}/download${checklistQuery({ ...DEFAULT_FILTERS, students: [s.id] }, { format: "pdf" })}`}
                     format="pdf"
                     compact

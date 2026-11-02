@@ -18,7 +18,9 @@ import {
   type ChecklistStudent,
 } from "./documentChecklistReport.ts";
 
-type CellStyle = {
+export type CellStyle = {
+  /** "Consolas" for a password, so 0/O and 1/l/I cannot be mistaken. */
+  fontFamily?: string;
   fontWeight?: "bold";
   fontStyle?: "italic";
   fontSize?: number;

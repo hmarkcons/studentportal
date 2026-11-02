@@ -16,11 +16,12 @@ const fold = (v: string) =>
 const SHOWN = 60;
 
 /**
- * Choose particular students for the documents checklist — one, a few, or
- * none for everyone. Search by name or Student ID; each one chosen is a chip
+ * Choose particular students for a report (Documents checklist, Applications
+ * & portal logins) — one, a few, or none for everyone. Search by name or Student ID; each one chosen is a chip
  * that can be taken off again. The choice travels in a hidden "students"
  * field (ids, comma-separated), so the filter form's Apply sends it with the
- * rest, and the page and its downloads read it as they read the others.
+ * rest, and the page and its downloads read it as they read the others
+ * (parseStudentIds in src/lib/reportFilters.ts).
  */
 export function StudentPicker({ options, selected: initial }: { options: PickerStudent[]; selected: string[] }) {
   const known = useMemo(() => new Map(options.map((o) => [o.id, o])), [options]);

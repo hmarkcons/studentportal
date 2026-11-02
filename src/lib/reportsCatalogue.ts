@@ -48,6 +48,14 @@ export const REPORT_CATALOGUE: ReportCatalogueEntry[] = [
     roles: ["super_admin", "processing"],
   },
   {
+    href: "/reports/applications-logins",
+    label: "Applications & portal logins",
+    description: "Every registered student's applications, where each one stands, and the university-portal login saved against it. Download as PDF or Excel — it contains passwords.",
+    // Processing and Super Admin, as the office asked (2026-11-03): the same
+    // people who can Reveal these logins on a student's record.
+    roles: ["super_admin", "processing"],
+  },
+  {
     href: "/reports/revenue-commission",
     label: "Revenue & commission",
     description: "Invoiced revenue, collections, and commission totals.",

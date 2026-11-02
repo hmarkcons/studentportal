@@ -20,6 +20,8 @@ export type ApplicationRow = {
   sortOrder: number | null;
   cycleId: string | null;
   country: string | null;
+  /** The university's destination, for filtering by it. */
+  destinationId: string | null;
   countryCode: string | null;
   universityId: string;
   universityName: string;
@@ -90,7 +92,7 @@ type Raw = {
     name: string;
     city: string | null;
     contact_email: string | null;
-    destination: One<{ display_name: string; country_code: string | null; pipeline_stages: string[] | null; finalize_action_label: string | null; finalized_badge_label: string | null }>;
+    destination: One<{ id: string; display_name: string; country_code: string | null; pipeline_stages: string[] | null; finalize_action_label: string | null; finalized_badge_label: string | null }>;
   }>;
   program: One<{
     id: string;
@@ -115,7 +117,7 @@ type Raw = {
 
 const SELECT = `id, student_id, current_stage, intake, deadline, application_fee, application_fee_currency, special_requirements,
   is_finalized, sort_order, cycle_id, round_id, program_id, university_id, created_at, updated_at,
-  university:universities(id, name, city, contact_email, destination:destinations(display_name, country_code, pipeline_stages, finalize_action_label, finalized_badge_label)),
+  university:universities(id, name, city, contact_email, destination:destinations(id, display_name, country_code, pipeline_stages, finalize_action_label, finalized_badge_label)),
   program:programs(id, name, level, application_deadline, page_link, requirements_link, application_portal_link, coordinator_email),
   round:program_intake_rounds(id, label, application_deadline),
   student:leads(full_name, student_code, assigned_counselor:staff!assigned_counselor_id(full_name), processing_officer:staff!processing_officer_id(full_name)),
@@ -129,7 +131,14 @@ const SELECT = `id, student_id, current_stage, intake, deadline, application_fee
  */
 export async function loadApplicationRows(
   supabase: SupabaseClient,
-  { studentId }: { studentId?: string } = {}
+  {
+    studentId,
+    withPrograms = true,
+  }: {
+    studentId?: string;
+    /** The universities' programmes, for the table's Programme and Round cells; a report reading rows alone skips them. */
+    withPrograms?: boolean;
+  } = {}
 ): Promise<{ rows: ApplicationRow[]; programsByUniversity: Record<string, ProgramOption[]> }> {
   const raw = await readAll<Raw>((from, to) => {
     let q = supabase.from("applications").select(SELECT);
@@ -156,6 +165,7 @@ export async function loadApplicationRows(
       sortOrder: a.sort_order,
       cycleId: a.cycle_id,
       country: dest?.display_name ?? null,
+      destinationId: dest?.id ?? null,
       countryCode: dest?.country_code ?? null,
       universityId: a.university_id,
       universityName: uni?.name ?? "Unknown university",
@@ -208,7 +218,7 @@ export async function loadApplicationRows(
   // The programmes of the universities on the list, and their rounds.
   const universityIds = [...new Set(rows.map((r) => r.universityId))];
   type P = { id: string; name: string; level: string | null; university_id: string; rounds: { id: string; label: string; application_deadline: string | null; deadline_text: string | null; sort_order: number | null }[] | null };
-  const programs = universityIds.length
+  const programs = withPrograms && universityIds.length
     ? await readAllIn<P>(universityIds, (chunk, from, to) =>
         supabase
           .from("programs")

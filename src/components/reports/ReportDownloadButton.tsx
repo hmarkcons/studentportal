@@ -5,8 +5,8 @@ import { FileDown, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
 const TYPES = {
-  pdf: { mime: "application/pdf", label: "Download PDF", busy: "Preparing PDF…", Icon: FileDown, fallback: "Documents-checklist.pdf" },
-  xlsx: { mime: "spreadsheetml", label: "Download Excel", busy: "Preparing Excel…", Icon: FileSpreadsheet, fallback: "Documents-checklist.xlsx" },
+  pdf: { mime: "application/pdf", label: "Download PDF", busy: "Preparing PDF…", Icon: FileDown, ext: "pdf" },
+  xlsx: { mime: "spreadsheetml", label: "Download Excel", busy: "Preparing Excel…", Icon: FileSpreadsheet, ext: "xlsx" },
 } as const;
 
 /** The file name the route gave the download, from its Content-Disposition. */
@@ -16,24 +16,28 @@ function fileNameOf(response: Response, fallback: string) {
 }
 
 /**
- * Downloads the documents checklist (./download/route.ts) as PDF or Excel.
+ * Downloads a report (its download/route.ts) as PDF or Excel — the Documents
+ * checklist, Applications & portal logins.
  *
- * Fetched rather than linked, as the status report button is: the PDF of
- * every registered student takes ten seconds or more to draw, and a plain
- * link gives no sign that anything is happening — and should the download be
+ * Fetched rather than linked, as the status report button is: a PDF of every
+ * registered student takes ten seconds or more to draw, and a plain link
+ * gives no sign that anything is happening — and should the download be
  * refused, this says why instead of opening a blank tab.
  */
-export function DownloadChecklistButton({
+export function ReportDownloadButton({
   href,
   format,
   compact = false,
   title,
+  fallbackName = "Report",
 }: {
   href: string;
   format: keyof typeof TYPES;
   /** A small "PDF" button for a table row, named by its title. */
   compact?: boolean;
   title?: string;
+  /** The file's name should the route not give one, without its extension. */
+  fallbackName?: string;
 }) {
   const type = TYPES[format];
   const [pending, setPending] = useState(false);
@@ -51,7 +55,7 @@ export function DownloadChecklistButton({
       const url = URL.createObjectURL(await response.blob());
       const a = document.createElement("a");
       a.href = url;
-      a.download = fileNameOf(response, type.fallback);
+      a.download = fileNameOf(response, `${fallbackName}.${type.ext}`);
       document.body.appendChild(a);
       a.click();
       a.remove();

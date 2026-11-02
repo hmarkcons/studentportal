@@ -14,6 +14,9 @@
 
 // Relative, with their extensions: the unit tests load this under plain Node.
 import { CATEGORY_LABELS, sectionOfCategory } from "./documentCategories.ts";
+import { MAX_SELECTED_STUDENTS, UUID, param, parseStudentIds, reportFileName, type ReportParams } from "./reportFilters.ts";
+
+export { MAX_SELECTED_STUDENTS };
 
 export type ChecklistState = "approved" | "review" | "missing" | "sent_back";
 
@@ -152,8 +155,6 @@ export type ChecklistFilters = {
 
 export const DEFAULT_FILTERS: ChecklistFilters = { officer: "", country: "", show: "all", sort: "name", students: [] };
 
-/** More than any office will tick, and short of an address too long to send. */
-export const MAX_SELECTED_STUDENTS = 300;
 
 export const SHOW_LABELS: Record<ChecklistShow, string> = {
   all: "All registered students",
@@ -166,27 +167,13 @@ export const SORT_LABELS: Record<ChecklistSort, string> = {
   progress: "Least complete first",
 };
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-type Params = URLSearchParams | Record<string, string | string[] | undefined>;
-
-function param(params: Params, key: string): string {
-  const v = params instanceof URLSearchParams ? params.get(key) : params[key];
-  return (Array.isArray(v) ? v[0] : v ?? "").trim();
-}
-
-/** Every value of a key, each split at commas: "students=a,b&students=c" is a, b and c. */
-function list(params: Params, key: string): string[] {
-  const raw = params instanceof URLSearchParams ? params.getAll(key) : [params[key] ?? []].flat();
-  return raw.flatMap((v) => v.split(",")).map((v) => v.trim()).filter(Boolean);
-}
 
 /**
  * The filters from a page's or a download's query string. Anything that is
  * not a known value falls back to the default, so a mangled link shows
  * everyone rather than an error or an empty report.
  */
-export function parseChecklistFilters(params: Params): ChecklistFilters {
+export function parseChecklistFilters(params: ReportParams): ChecklistFilters {
   const officer = param(params, "officer");
   const country = param(params, "country");
   const show = param(params, "show");
@@ -196,8 +183,7 @@ export function parseChecklistFilters(params: Params): ChecklistFilters {
     country: UUID.test(country) ? country : "",
     show: show === "left" || show === "complete" ? show : "all",
     sort: sort === "progress" ? "progress" : "name",
-    // Ids only, each once, lower-cased as Postgres writes them.
-    students: [...new Set(list(params, "students").filter((v) => UUID.test(v)).map((v) => v.toLowerCase()))].slice(0, MAX_SELECTED_STUDENTS),
+    students: parseStudentIds(params),
   };
 }
 
@@ -387,23 +373,11 @@ export function buildChecklistReport(input: {
   return { today, students, totals: { ...totals, percent: percentDone(totals) } };
 }
 
-/** Letters, digits and hyphens only: a file name every browser and Content-Disposition take as it is. */
-function slug(v: string): string {
-  return v
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^\w\s-]+/g, "")
-    .trim()
-    .replace(/[\s_]+/g, "-")
-    .replace(/-+/g, "-");
-}
-
 /**
  * "HMC-Documents-Checklist-2026-11-02.pdf" — ".xlsx" for the workbook — or,
  * for one student, "HMC-Documents-Checklist-Ali-Raza-HMC-FALL27-IT-0003-2026-11-02.pdf",
  * so a file saved for a student says whose it is.
  */
 export function checklistFileName(today: string, ext: "pdf" | "xlsx", only?: { name: string; code: string | null } | null): string {
-  const who = only ? [slug(only.name), only.code ? slug(only.code) : ""].filter(Boolean).join("-") : "";
-  return `HMC-Documents-Checklist-${who ? `${who}-` : ""}${today}.${ext}`;
+  return reportFileName("Documents-Checklist", today, ext, only);
 }
