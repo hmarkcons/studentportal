@@ -117,7 +117,9 @@ try {
   for (const s of students.slice(0, 12)) {
     const text = (await page.locator(`tr[data-student-row="${s.id}"]`).innerText()).replace(/\s+/g, " ");
     const want = appsOf.get(s.id) ?? 0;
-    if (want === 0 ? text.includes("No application yet") : text.includes(`${want} show`)) counted++;
+    // The count and "show" are separate spans, spaced by a margin: innerText runs them together.
+    const shownCount = text.match(/(\d+)\s*show\b/)?.[1];
+    if (want === 0 ? text.includes("No application yet") : shownCount === String(want)) counted++;
     else console.log(`      ${s.full_name}: "${text.slice(0, 140)}", expected ${want}`);
   }
   ok("processing: each student's number of applications is the database's", counted === Math.min(12, students.length), `${counted} matched`);
