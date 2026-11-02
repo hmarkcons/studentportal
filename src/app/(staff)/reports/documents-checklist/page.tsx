@@ -19,6 +19,7 @@ import { TableFrame } from "@/components/ui/TableFrame";
 import { Select } from "@/components/ui/Input";
 import { VARIANT_CLASSES, SIZE_CLASSES } from "@/components/ui/Button";
 import { DownloadChecklistButton } from "./DownloadChecklistButton";
+import { StudentPicker } from "./StudentPicker";
 
 const HREF = "/reports/documents-checklist";
 
@@ -76,7 +77,7 @@ function LeftList({ s }: { s: ChecklistStudent }) {
 export default async function DocumentsChecklistPage(props: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { supabase } = await requireReportAccess("/reports/documents-checklist");
   const filters = parseChecklistFilters(await props.searchParams);
-  const { report, officers, countries, registered } = await loadDocumentChecklist(supabase, filters);
+  const { report, officers, countries, students, registered } = await loadDocumentChecklist(supabase, filters);
   const t = report.totals;
   const filtered = checklistQuery(filters) !== "";
   const download = (format: "pdf" | "xlsx") => `${HREF}/download${checklistQuery(filters, { format })}`;
@@ -100,7 +101,8 @@ export default async function DocumentsChecklistPage(props: { searchParams: Prom
         </div>
       </div>
 
-      <form method="get" action={HREF} className="mb-5 flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-3">
+      <form method="get" action={HREF} className="mb-5 flex flex-wrap items-start gap-3 rounded-lg border border-border bg-card p-3">
+        <StudentPicker options={students} selected={filters.students} />
         <label className="flex flex-col gap-1 text-xs font-medium text-muted">
           Processing officer
           <Select name="officer" defaultValue={filters.officer} className="min-w-44">
@@ -144,14 +146,17 @@ export default async function DocumentsChecklistPage(props: { searchParams: Prom
             ))}
           </Select>
         </label>
-        <button type="submit" className={`${VARIANT_CLASSES.primary} ${SIZE_CLASSES.md} rounded-md font-medium`}>
-          Apply
-        </button>
-        {filtered && (
-          <Link prefetch={false} href={`${HREF}${checklistQuery(DEFAULT_FILTERS)}`} className="py-1.5 text-sm text-muted hover:text-ink">
-            Clear
-          </Link>
-        )}
+        {/* Lined up with the fields, below their labels. */}
+        <div className="flex items-center gap-3 self-start pt-5">
+          <button type="submit" className={`${VARIANT_CLASSES.primary} ${SIZE_CLASSES.md} rounded-md font-medium`}>
+            Apply
+          </button>
+          {filtered && (
+            <Link prefetch={false} href={`${HREF}${checklistQuery(DEFAULT_FILTERS)}`} className="py-1.5 text-sm text-muted hover:text-ink">
+              Clear
+            </Link>
+          )}
+        </div>
         <p className="ml-auto self-center text-xs text-muted" data-showing={t.students}>
           Showing {t.students} of {registered} registered student{registered === 1 ? "" : "s"}. The downloads follow these filters.
         </p>
@@ -182,6 +187,9 @@ export default async function DocumentsChecklistPage(props: { searchParams: Prom
               <th className="px-4 py-3 text-right">Approved</th>
               <th className="px-4 py-3">Left to do</th>
               <th className="w-48 px-4 py-3">Progress</th>
+              <th className="w-16 px-2 py-3">
+                <span className="sr-only">Download</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -211,11 +219,20 @@ export default async function DocumentsChecklistPage(props: { searchParams: Prom
                     <span className="w-10 shrink-0 text-right text-xs font-semibold tabular-nums text-ink">{s.percent === null ? "—" : `${s.percent}%`}</span>
                   </div>
                 </td>
+                <td className="px-2 py-2">
+                  {/* This one student's checklist, whatever else is on screen. */}
+                  <DownloadChecklistButton
+                    href={`${HREF}/download${checklistQuery({ ...DEFAULT_FILTERS, students: [s.id] }, { format: "pdf" })}`}
+                    format="pdf"
+                    compact
+                    title={`Download ${s.name}'s checklist (PDF)`}
+                  />
+                </td>
               </tr>
             ))}
             {report.students.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-muted">
+                <td colSpan={8} className="px-4 py-10 text-center text-muted">
                   No students match these filters.
                 </td>
               </tr>

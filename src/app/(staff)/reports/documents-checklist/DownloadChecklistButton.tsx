@@ -23,7 +23,18 @@ function fileNameOf(response: Response, fallback: string) {
  * link gives no sign that anything is happening — and should the download be
  * refused, this says why instead of opening a blank tab.
  */
-export function DownloadChecklistButton({ href, format }: { href: string; format: keyof typeof TYPES }) {
+export function DownloadChecklistButton({
+  href,
+  format,
+  compact = false,
+  title,
+}: {
+  href: string;
+  format: keyof typeof TYPES;
+  /** A small "PDF" button for a table row, named by its title. */
+  compact?: boolean;
+  title?: string;
+}) {
   const type = TYPES[format];
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,9 +66,19 @@ export function DownloadChecklistButton({ href, format }: { href: string; format
 
   return (
     <span className="inline-flex flex-col items-end gap-1">
-      <Button type="button" variant="outline" size="md" pending={pending} onClick={download} data-download={format} data-href={href}>
-        <type.Icon aria-hidden className="h-4 w-4" />
-        {pending ? type.busy : type.label}
+      <Button
+        type="button"
+        variant={compact ? "ghost" : "outline"}
+        size={compact ? "sm" : "md"}
+        pending={pending}
+        onClick={download}
+        data-download={compact ? `${format}-one` : format}
+        data-href={href}
+        title={title}
+        aria-label={compact ? title : undefined}
+      >
+        <type.Icon aria-hidden className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
+        {compact ? (pending ? "…" : format.toUpperCase()) : pending ? type.busy : type.label}
       </Button>
       {error && (
         <span role="alert" className="max-w-xs text-right text-xs text-danger">

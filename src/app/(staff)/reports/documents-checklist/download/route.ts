@@ -17,8 +17,9 @@ const refuse = (status: number, message: string) =>
 
 /**
  * The documents checklist report as a file: ?format=pdf or ?format=xlsx, with
- * the page's own filters (officer, country, show, sort) so the download is
- * what the page was showing.
+ * the page's own filters (students, officer, country, show, sort) so the
+ * download is what the page was showing. For one student (a row's PDF button,
+ * or one picked) the file is named after them.
  *
  * Gated as the page is — Processing and Super Admin (REPORT_CATALOGUE) — and
  * read through the caller's own session, so row-level security decides whose
@@ -34,20 +35,23 @@ export async function GET(request: Request) {
 
   const filters = parseChecklistFilters(params);
   const today = karachiToday();
-  const { report, officers, countries } = await loadDocumentChecklist(supabase, filters, today);
+  const { report, officers, countries, students } = await loadDocumentChecklist(supabase, filters, today);
   const meta = {
     preparedOn: day(today) ?? today,
     preparedBy: staff?.full_name?.trim() || null,
     filters: describeFilters(
       filters,
       (id) => officers.find((o) => o.id === id)?.name ?? null,
-      (id) => countries.find((c) => c.id === id)?.name ?? null
+      (id) => countries.find((c) => c.id === id)?.name ?? null,
+      (id) => students.find((s) => s.id === id)?.name ?? null
     ),
   };
+  // Named for the student only when one was asked for and one is in it.
+  const only = filters.students.length === 1 && report.students.length === 1 ? report.students[0] : null;
 
   const headers = (type: string, length: number) => ({
     "Content-Type": type,
-    "Content-Disposition": `attachment; filename="${checklistFileName(today, format)}"`,
+    "Content-Disposition": `attachment; filename="${checklistFileName(today, format, only)}"`,
     "Content-Length": String(length),
     "Cache-Control": "no-store",
   });

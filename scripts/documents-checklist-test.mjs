@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   buildChecklistReport,
+  checklistFileName,
   checklistQuery,
   checklistState,
   countDocs,
@@ -10,6 +11,7 @@ import {
   parseChecklistFilters,
   percentDone,
   DEFAULT_FILTERS,
+  MAX_SELECTED_STUDENTS,
 } from "../src/lib/documentChecklistReport.ts";
 import { checklistWorkbookSheets } from "../src/lib/documentChecklistWorkbook.ts";
 import { checklistSectionsFor } from "../src/lib/studentChecklistSections.ts";
@@ -233,6 +235,7 @@ test("filters from the address: anything unknown falls back to the default", () 
     country: ITALY,
     show: "left",
     sort: "progress",
+    students: [],
   });
   assert.equal(parseChecklistFilters({ officer: [OFFICER, "x"] }).officer, OFFICER);
 });
@@ -240,8 +243,55 @@ test("filters from the address: anything unknown falls back to the default", () 
 test("the query string leaves defaults out and survives a round trip", () => {
   assert.equal(checklistQuery(DEFAULT_FILTERS), "");
   assert.equal(checklistQuery(DEFAULT_FILTERS, { format: "pdf" }), "?format=pdf");
-  const f = { officer: OFFICER, country: ITALY, show: "complete", sort: "progress" };
+  const f = { officer: OFFICER, country: ITALY, show: "complete", sort: "progress", students: [OTHER_OFFICER, GERMANY] };
   assert.deepEqual(parseChecklistFilters(new URLSearchParams(checklistQuery(f).slice(1))), f);
+});
+
+// ------------------------------------------------------------------ chosen students
+
+test("chosen students from the address: comma-separated or repeated, ids only, each once", () => {
+  const upper = OFFICER.toUpperCase();
+  const f = parseChecklistFilters(new URLSearchParams(`students=${OFFICER},${ITALY}, not-an-id ,${upper}&students=${GERMANY}&students=`));
+  assert.deepEqual(f.students, [OFFICER, ITALY, GERMANY]);
+  assert.deepEqual(parseChecklistFilters({ students: [`${ITALY},${GERMANY}`, OFFICER] }).students, [ITALY, GERMANY, OFFICER]);
+  assert.deepEqual(parseChecklistFilters({}).students, []);
+  const many = Array.from({ length: MAX_SELECTED_STUDENTS + 20 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`);
+  assert.equal(parseChecklistFilters({ students: many.join(",") }).students.length, MAX_SELECTED_STUDENTS);
+});
+
+test("chosen students: only they are in the report, and the other filters still apply to them", () => {
+  const students = [student("a", "Ali"), student("b", "Bano", { officerId: OTHER_OFFICER }), student("c", "Chand")];
+  const docs = [doc("a", "verified"), doc("b", "missing"), doc("c", "missing")];
+  const pick = (ids, extra = {}) => build(students, docs, { ...DEFAULT_FILTERS, students: ids, ...extra }).students.map((s) => s.name);
+  assert.deepEqual(pick(["b"]), ["Bano"]);
+  assert.deepEqual(pick(["a", "c"]), ["Ali", "Chand"]);
+  assert.deepEqual(pick(["a", "b"], { officer: OTHER_OFFICER }), ["Bano"]);
+  assert.deepEqual(pick(["a", "c"], { show: "left" }), ["Chand"]);
+  assert.deepEqual(pick(["nobody"]), []);
+  const one = build(students, docs, { ...DEFAULT_FILTERS, students: ["b"] });
+  assert.equal(one.totals.students, 1);
+  assert.equal(one.totals.total, 1, "the totals are the chosen students' alone");
+});
+
+test("chosen students are named in the description; 'all registered students' is not said beside them", () => {
+  const names = (id) => ({ [ITALY]: "Ali Raza" })[id] ?? null;
+  assert.equal(describeFilters({ ...DEFAULT_FILTERS, students: [ITALY] }, () => null, () => null, names), "Student: Ali Raza");
+  assert.equal(describeFilters({ ...DEFAULT_FILTERS, students: [ITALY, GERMANY] }, () => null, () => null, names), "2 selected students");
+  assert.equal(
+    describeFilters({ ...DEFAULT_FILTERS, students: [ITALY, GERMANY], show: "left" }, () => null, () => null, names),
+    "2 selected students · Students with documents left"
+  );
+});
+
+test("a file for one student is named after them, in letters a browser keeps", () => {
+  assert.equal(checklistFileName("2026-11-02", "pdf"), "HMC-Documents-Checklist-2026-11-02.pdf");
+  assert.equal(
+    checklistFileName("2026-11-02", "pdf", { name: "Zoë  O'Neil", code: "HMC-FALL27-IT-0003" }),
+    "HMC-Documents-Checklist-Zoe-ONeil-HMC-FALL27-IT-0003-2026-11-02.pdf"
+  );
+  assert.equal(checklistFileName("2026-11-02", "xlsx", { name: "علی رضا", code: "HMC-SEP27-FR-0008" }), "HMC-Documents-Checklist-HMC-SEP27-FR-0008-2026-11-02.xlsx");
+  assert.equal(checklistFileName("2026-11-02", "pdf", { name: "Ali Raza", code: null }), "HMC-Documents-Checklist-Ali-Raza-2026-11-02.pdf");
+  assert.match(checklistFileName("2026-11-02", "pdf", { name: 'A "quoted"; name', code: null }), /^[\w.-]+$/);
 });
 
 test("the filters are described in words for the PDF and the workbook", () => {

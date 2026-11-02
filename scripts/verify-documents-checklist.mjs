@@ -17,6 +17,10 @@
 //                and "Page 1 of" drawn in it
 //   Excel        a real workbook with Summary, Checklist and Still to do sheets
 //                and one Checklist row per document
+//   picking      a student found in the picker by their Student ID, ticked and
+//                applied, is shown alone and carried into the downloads; their
+//                row's PDF button gives their checklist alone, named after
+//                them; two chosen give a workbook of those two
 //   management   is not offered it, is turned back from the page and refused
 //                the download (403); so is a counsellor
 import { readFileSync } from "node:fs";
@@ -154,6 +158,66 @@ try {
     const owed = want.reduce((n, s) => n + s.counts.total - s.counts.approved, 0);
     ok("Excel: one Checklist row per document", wb.getWorksheet("Checklist").actualRowCount === docs + 1, `${wb.getWorksheet("Checklist").actualRowCount} rows, ${docs} documents`);
     ok("Excel: Still to do holds only what is not approved", wb.getWorksheet("Still to do").actualRowCount === (owed || 1) + 1, `${wb.getWorksheet("Still to do").actualRowCount} rows, ${owed} owed`);
+  }
+
+  // ---------------------------------------------------------------- chosen students
+  // Picked as staff pick them: searched for, ticked in the list, applied.
+  const target = want.find((s) => s.counts.sentBack > 0) ?? want[0];
+  const other = want.find((s) => s.id !== target.id && !s.name.includes(target.name) && !target.name.includes(s.name));
+  await page.goto(`${BASE}${HREF}`, { waitUntil: "domcontentloaded" });
+  await page.locator("table[data-documents-checklist]").waitFor({ timeout: 40000 });
+  await page.locator("[data-student-picker] input[type=search]").fill(target.code ?? target.name);
+  await page.locator(`[data-student-option="${target.id}"]`).click();
+  ok("pick: the student found by search is shown as chosen", (await page.locator(`[data-picked="${target.id}"]`).count()) === 1);
+  ok("pick: it says to press Apply", (await page.locator("[data-picker-pending]").count()) === 1);
+  await page.getByRole("button", { name: "Apply", exact: true }).click();
+  await page.waitForURL((u) => u.searchParams.get("students") === target.id, { timeout: 40000 });
+  await page.locator("table[data-documents-checklist]").waitFor({ timeout: 40000 });
+  ok(
+    "pick: Apply shows that student alone",
+    (await page.locator("tr[data-student-row]").count()) === 1 && (await page.locator(`tr[data-student-row="${target.id}"]`).count()) === 1,
+    `${await page.locator("tr[data-student-row]").count()} rows`
+  );
+  ok("pick: the choice is still shown after Apply", (await page.locator(`[data-picked="${target.id}"]`).count()) === 1);
+  const pickedHref = await page.locator('button[data-download="pdf"]').getAttribute("data-href");
+  ok("pick: the downloads carry it", pickedHref?.includes(`students=${target.id}`), pickedHref ?? "");
+
+  // The row's own PDF button: that student's checklist, named after them, nobody else in it.
+  const rowPdf = page.locator(`tr[data-student-row="${target.id}"] button[data-download="pdf-one"]`);
+  const [one] = await Promise.all([page.waitForEvent("download", { timeout: 90000 }), rowPdf.click()]);
+  const oneText = pdfText(readFileSync(await one.path()));
+  ok(
+    "row PDF: named after the student",
+    one.suggestedFilename().startsWith("HMC-Documents-Checklist-") && (target.code ? one.suggestedFilename().includes(target.code) : true),
+    one.suggestedFilename()
+  );
+  ok(
+    "row PDF: their checklist alone, headed with their name",
+    oneText.includes(`Student: ${target.name}`) && /Page 1 of \d+/.test(oneText) && !(other && oneText.includes(other.name)),
+    target.name
+  );
+
+  // Two at once, from the address, as a workbook.
+  if (other) {
+    await page.goto(`${BASE}${HREF}?students=${target.id},${other.id}`, { waitUntil: "domcontentloaded" });
+    await page.locator("table[data-documents-checklist]").waitFor({ timeout: 40000 });
+    ok("pick: two students chosen, two shown", (await page.locator("tr[data-student-row]").count()) === 2 && (await page.locator("[data-picked]").count()) === 2);
+    const [two] = await Promise.all([page.waitForEvent("download", { timeout: 90000 }), page.locator('button[data-download="xlsx"]').click()]);
+    if (ExcelJS) {
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(readFileSync(await two.path()));
+      // Column B below the title: the heading, a row per student, then "Total".
+      const names = wb
+        .getWorksheet("Summary")
+        .getColumn(2)
+        .values.filter((v) => typeof v === "string" && v !== "Student" && v !== "Total");
+      ok("pick: the workbook's summary has the two of them", names.includes(target.name) && names.includes(other.name) && names.length === 2, names.join(" | "));
+      ok(
+        "pick: its checklist is their documents and no more",
+        wb.getWorksheet("Checklist").actualRowCount === target.counts.total + other.counts.total + 1,
+        `${wb.getWorksheet("Checklist").actualRowCount} rows`
+      );
+    }
   }
   await page.close();
 

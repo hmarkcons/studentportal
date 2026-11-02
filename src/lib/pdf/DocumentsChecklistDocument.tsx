@@ -282,9 +282,35 @@ function CountLine({ c }: { c: ChecklistCounts }) {
   );
 }
 
-/** One student, on pages of their own. Flat: the band, the facts and every row are siblings. */
-function StudentPages({ s, data }: { s: ChecklistStudent; data: ChecklistPdfData }) {
+/** The logo, the title, who prepared it and for whom, and the strip in the statuses' colours. */
+function Head({ data }: { data: ChecklistPdfData }) {
+  return (
+    <View>
+      <View style={styles.head}>
+        <Image src={BRAND_LOGO_DATA_URI} style={styles.logo} />
+        <View style={styles.headRight}>
+          <Text style={styles.title}>DOCUMENTS CHECKLIST</Text>
+          <Text style={styles.prepared}>{t(`Prepared ${data.preparedOn}${data.preparedBy ? ` by ${data.preparedBy}` : ""}`)}</Text>
+          <Text style={styles.prepared}>{t(data.filters)}</Text>
+        </View>
+      </View>
+      <View style={styles.strip}>
+        {CHECKLIST_STATES.map((s) => (
+          <View key={s} style={{ flex: 1, backgroundColor: CHECKLIST_STATE_COLORS[s] }} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/**
+ * One student, on pages of their own. Flat: the band, the facts and every row
+ * are siblings. With `head`, the document's heading opens it — a checklist
+ * for one student is that student's document, with no summary page of one row.
+ */
+function StudentPages({ s, data, head = false }: { s: ChecklistStudent; data: ChecklistPdfData; head?: boolean }) {
   const rows: ReactNode[] = [
+    ...(head ? [<Head key="head" data={data} />] : []),
     <View key="band" style={styles.band} wrap={false}>
       <View style={styles.bandLeft}>
         <Text style={styles.bandName}>{t(s.name)}</Text>
@@ -336,24 +362,20 @@ function StudentPages({ s, data }: { s: ChecklistStudent; data: ChecklistPdfData
 export function DocumentsChecklistDocument({ data }: { data: ChecklistPdfData }) {
   const { report } = data;
   const tt = report.totals;
+  if (report.students.length === 1) {
+    const only = report.students[0];
+    return (
+      <Document title={t(`Documents checklist — ${only.name}`)} author="HMARK Consultants" subject="Documents checklist" creator="HMARK Student Portal">
+        <StudentPages s={only} data={data} head />
+      </Document>
+    );
+  }
   return (
     <Document title="Documents checklist" author="HMARK Consultants" subject="Documents checklist for registered students" creator="HMARK Student Portal">
       <Page size="A4" style={styles.page}>
         {Footer({ data })}
         <View>
-          <View style={styles.head}>
-            <Image src={BRAND_LOGO_DATA_URI} style={styles.logo} />
-            <View style={styles.headRight}>
-              <Text style={styles.title}>DOCUMENTS CHECKLIST</Text>
-              <Text style={styles.prepared}>{t(`Prepared ${data.preparedOn}${data.preparedBy ? ` by ${data.preparedBy}` : ""}`)}</Text>
-              <Text style={styles.prepared}>{t(data.filters)}</Text>
-            </View>
-          </View>
-          <View style={styles.strip}>
-            {CHECKLIST_STATES.map((s) => (
-              <View key={s} style={{ flex: 1, backgroundColor: CHECKLIST_STATE_COLORS[s] }} />
-            ))}
-          </View>
+          <Head data={data} />
 
           <View style={styles.kpis}>
             <Kpi label="Students" value={String(tt.students)} sub={tt.complete ? `${tt.complete} with every document approved` : "None complete yet"} color={BRAND} />

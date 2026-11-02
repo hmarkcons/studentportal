@@ -146,9 +146,14 @@ export type ChecklistFilters = {
   country: string;
   show: ChecklistShow;
   sort: ChecklistSort;
+  /** Particular students (ids), or none for everyone. The other filters still apply to them. */
+  students: string[];
 };
 
-export const DEFAULT_FILTERS: ChecklistFilters = { officer: "", country: "", show: "all", sort: "name" };
+export const DEFAULT_FILTERS: ChecklistFilters = { officer: "", country: "", show: "all", sort: "name", students: [] };
+
+/** More than any office will tick, and short of an address too long to send. */
+export const MAX_SELECTED_STUDENTS = 300;
 
 export const SHOW_LABELS: Record<ChecklistShow, string> = {
   all: "All registered students",
@@ -170,6 +175,12 @@ function param(params: Params, key: string): string {
   return (Array.isArray(v) ? v[0] : v ?? "").trim();
 }
 
+/** Every value of a key, each split at commas: "students=a,b&students=c" is a, b and c. */
+function list(params: Params, key: string): string[] {
+  const raw = params instanceof URLSearchParams ? params.getAll(key) : [params[key] ?? []].flat();
+  return raw.flatMap((v) => v.split(",")).map((v) => v.trim()).filter(Boolean);
+}
+
 /**
  * The filters from a page's or a download's query string. Anything that is
  * not a known value falls back to the default, so a mangled link shows
@@ -185,6 +196,8 @@ export function parseChecklistFilters(params: Params): ChecklistFilters {
     country: UUID.test(country) ? country : "",
     show: show === "left" || show === "complete" ? show : "all",
     sort: sort === "progress" ? "progress" : "name",
+    // Ids only, each once, lower-cased as Postgres writes them.
+    students: [...new Set(list(params, "students").filter((v) => UUID.test(v)).map((v) => v.toLowerCase()))].slice(0, MAX_SELECTED_STUDENTS),
   };
 }
 
@@ -195,22 +208,31 @@ export function checklistQuery(f: ChecklistFilters, extra: Record<string, string
   if (f.country) q.set("country", f.country);
   if (f.show !== "all") q.set("show", f.show);
   if (f.sort !== "name") q.set("sort", f.sort);
+  if (f.students.length) q.set("students", f.students.join(","));
   for (const [k, v] of Object.entries(extra)) q.set(k, v);
   const s = q.toString();
   return s ? `?${s}` : "";
 }
 
-/** "Officer: Imran Ali · Italy · Students with documents left", for the PDF's heading and the workbook. */
+/**
+ * "Officer: Imran Ali · Italy · Students with documents left", or
+ * "Student: Ali Raza" / "3 selected students", for the PDF's heading and the
+ * workbook.
+ */
 export function describeFilters(
   f: ChecklistFilters,
   officerName: (id: string) => string | null,
-  countryName: (id: string) => string | null
+  countryName: (id: string) => string | null,
+  studentName: (id: string) => string | null = () => null
 ): string {
   const parts: string[] = [];
+  if (f.students.length === 1) parts.push(`Student: ${studentName(f.students[0]) ?? "one student"}`);
+  else if (f.students.length > 1) parts.push(`${f.students.length} selected students`);
   if (f.officer === "none") parts.push("No processing officer");
   else if (f.officer) parts.push(`Officer: ${officerName(f.officer) ?? "unknown"}`);
   if (f.country) parts.push(countryName(f.country) ?? "One destination");
-  parts.push(SHOW_LABELS[f.show]);
+  // "All registered students" beside a chosen few would say the opposite of what was asked.
+  if (!(f.students.length && f.show === "all")) parts.push(SHOW_LABELS[f.show]);
   return parts.join(" · ");
 }
 
@@ -328,7 +350,9 @@ export function buildChecklistReport(input: {
   });
 
   const countryOf = new Map(input.students.map((s) => [s.id, new Set(s.countries.map((c) => c.id))]));
+  const chosen = new Set(filters.students);
   const students = all.filter((s) => {
+    if (chosen.size && !chosen.has(s.id.toLowerCase())) return false;
     if (filters.officer === "none" ? s.officerId !== null : filters.officer && s.officerId !== filters.officer) return false;
     if (filters.country && !countryOf.get(s.id)?.has(filters.country)) return false;
     if (filters.show === "left" && isComplete(s.counts)) return false;
@@ -363,7 +387,23 @@ export function buildChecklistReport(input: {
   return { today, students, totals: { ...totals, percent: percentDone(totals) } };
 }
 
-/** "HMC-Documents-Checklist-2026-11-02.pdf" — and ".xlsx" for the workbook. */
-export function checklistFileName(today: string, ext: "pdf" | "xlsx"): string {
-  return `HMC-Documents-Checklist-${today}.${ext}`;
+/** Letters, digits and hyphens only: a file name every browser and Content-Disposition take as it is. */
+function slug(v: string): string {
+  return v
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\w\s-]+/g, "")
+    .trim()
+    .replace(/[\s_]+/g, "-")
+    .replace(/-+/g, "-");
+}
+
+/**
+ * "HMC-Documents-Checklist-2026-11-02.pdf" — ".xlsx" for the workbook — or,
+ * for one student, "HMC-Documents-Checklist-Ali-Raza-HMC-FALL27-IT-0003-2026-11-02.pdf",
+ * so a file saved for a student says whose it is.
+ */
+export function checklistFileName(today: string, ext: "pdf" | "xlsx", only?: { name: string; code: string | null } | null): string {
+  const who = only ? [slug(only.name), only.code ? slug(only.code) : ""].filter(Boolean).join("-") : "";
+  return `HMC-Documents-Checklist-${who ? `${who}-` : ""}${today}.${ext}`;
 }

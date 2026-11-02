@@ -20,12 +20,17 @@ function one<T>(v: T | T[] | null | undefined): T | null {
 
 export type ChecklistOption = { id: string; name: string };
 
+/** A registered student as the picker offers them: name and Student ID. */
+export type ChecklistStudentOption = { id: string; name: string; code: string | null };
+
 export type LoadedChecklist = {
   report: ChecklistReport;
   /** Every processing officer with a registered student, for the filter. */
   officers: ChecklistOption[];
   /** Every destination a registered student is pursuing, for the filter. */
   countries: ChecklistOption[];
+  /** Every registered student, whatever the filters, for picking particular ones. */
+  students: ChecklistStudentOption[];
   /** Registered students before any filter, so the page can say "12 of 47". */
   registered: number;
 };
@@ -180,6 +185,9 @@ export async function loadDocumentChecklist(
     report: buildChecklistReport({ students: studentInputs, docs, sectionsByStudent, officerNames, filters, today }),
     officers: [...officerNames].map(([id, name]) => ({ id, name })).sort(byName),
     countries: [...countryNames].map(([id, name]) => ({ id, name })).sort(byName),
+    students: students
+      .map((s) => ({ id: s.id, name: s.full_name?.trim() || "Unnamed student", code: s.student_code }))
+      .sort((a, b) => byName(a, b) || (a.code ?? "").localeCompare(b.code ?? "")),
     registered: students.length,
   };
 }
