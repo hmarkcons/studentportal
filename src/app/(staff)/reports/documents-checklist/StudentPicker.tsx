@@ -39,10 +39,17 @@ export function StudentPicker({ options, selected: initial }: { options: PickerS
   const shown = matches.slice(0, SHOWN);
   const chosen = new Set(selected);
 
+  /**
+   * Ticks or unticks a student and closes the list. Left open it would show
+   * every student again and lie over Apply, so a click meant for Apply picked
+   * whoever was underneath. The cursor stays in the search: typing, or the
+   * down arrow, opens it again for the next one.
+   */
   function toggle(id: string) {
     setSelected((now) => (now.includes(id) ? now.filter((x) => x !== id) : [...now, id]));
     setQuery("");
     setActive(0);
+    setOpen(false);
     input.current?.focus();
   }
 

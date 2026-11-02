@@ -170,6 +170,7 @@ try {
   await page.locator(`[data-student-option="${target.id}"]`).click();
   ok("pick: the student found by search is shown as chosen", (await page.locator(`[data-picked="${target.id}"]`).count()) === 1);
   ok("pick: it says to press Apply", (await page.locator("[data-picker-pending]").count()) === 1);
+  ok("pick: the list closes after a pick, out of Apply's way", (await page.locator("[data-student-picker] [role=listbox]").count()) === 0);
   await page.getByRole("button", { name: "Apply", exact: true }).click();
   await page.waitForURL((u) => u.searchParams.get("students") === target.id, { timeout: 40000 });
   await page.locator("table[data-documents-checklist]").waitFor({ timeout: 40000 });
