@@ -3,9 +3,11 @@ import type { ReactNode } from "react";
 import { BRAND_LOGO_DATA_URI, BRAND_LOGO_RATIO } from "./brandLogo";
 import { day, dayOf, pdfSafe } from "../studentReport";
 import {
+  DEADLINE_SOON_DAYS,
   GROUPS,
   GROUP_COLORS,
   GROUP_LABELS,
+  daysLeftLabel,
   type AppCounts,
   type ApplicationsReport,
   type AppReportStudent,
@@ -110,6 +112,10 @@ const styles = StyleSheet.create({
   dateCol: { width: 92, alignItems: "flex-end" },
   date: { fontSize: 7.4, color: SOFT, textAlign: "right", lineHeight: 1.3 },
   dateBad: { fontSize: 7.4, color: ALERT, textAlign: "right", fontFamily: "Helvetica-Bold", lineHeight: 1.3 },
+  // A deadline within the week: amber, boxed, and how long is left.
+  soon: { alignItems: "flex-end", backgroundColor: "#FEF3C7", borderWidth: 0.8, borderColor: "#F59E0B", borderRadius: 3, paddingVertical: 2.5, paddingHorizontal: 5 },
+  soonDate: { fontSize: 7.6, color: "#92400E", fontFamily: "Helvetica-Bold", textAlign: "right", lineHeight: 1.25 },
+  soonLeft: { fontSize: 7, color: "#B45309", fontFamily: "Helvetica-Bold", textAlign: "right", textTransform: "uppercase", letterSpacing: 0.3, marginTop: 1, lineHeight: 1.2 },
   final: { fontSize: 7, color: "#166534", fontFamily: "Helvetica-Bold", textAlign: "right", marginTop: 1.5 },
   portalLink: { marginTop: 4, textDecoration: "none" },
   portalBtn: { backgroundColor: BRAND, borderRadius: 3, paddingVertical: 2.4, paddingHorizontal: 7 },
@@ -255,7 +261,12 @@ function ApplicationRow({ a }: { a: ReportApplication }) {
           <Text style={styles.stage}>{t(`${a.stageLabel}${a.step ? ` · step ${a.step.step} of ${a.step.of}` : ""}`)}</Text>
         </View>
         <View style={styles.dateCol}>
-          {a.deadline ? (
+          {a.deadline && a.deadlineSoon ? (
+            <View style={styles.soon}>
+              <Text style={styles.soonDate}>{t(`Deadline ${day(a.deadline)}`)}</Text>
+              <Text style={styles.soonLeft}>{daysLeftLabel(a.daysLeft ?? 0)}</Text>
+            </View>
+          ) : a.deadline ? (
             <Text style={a.deadlinePassed ? styles.dateBad : styles.date}>{t(`${a.deadlinePassed ? "Deadline passed" : "Deadline"} ${day(a.deadline)}`)}</Text>
           ) : (
             <Text style={styles.date}>No deadline set</Text>
@@ -314,6 +325,14 @@ function StudentPages({ s, data, head = false }: { s: AppReportStudent; data: Ap
     </View>,
   ];
   if (s.counts.total) rows.push(<CountLine key="counts" c={s.counts} />);
+  const soon = s.applications.filter((a) => a.deadlineSoon).length;
+  if (soon) {
+    rows.push(
+      <Text key="soon" style={[styles.note, { color: "#B45309", fontFamily: "Helvetica-Bold" }]}>
+        {`${soon} deadline${soon === 1 ? "" : "s"} in the next ${DEADLINE_SOON_DAYS} days — highlighted below.`}
+      </Text>
+    );
+  }
   if (s.applications.length < s.allApplications) {
     rows.push(
       <Text key="filtered" style={styles.note}>

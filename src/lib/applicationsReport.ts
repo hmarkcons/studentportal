@@ -44,6 +44,21 @@ export const GROUP_COLORS: Record<StageGroup, string> = {
   rejected: "#DC2626",
 };
 
+/** "A week left": a deadline this many days away or fewer, today included, is highlighted. */
+export const DEADLINE_SOON_DAYS = 7;
+
+/** Whole days from one calendar day to another ("2026-11-03" to "2026-11-06" is 3). */
+export function daysBetween(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+}
+
+/** "Due today", "Due tomorrow", "3 days left". */
+export function daysLeftLabel(days: number): string {
+  if (days <= 0) return "Due today";
+  if (days === 1) return "Due tomorrow";
+  return `${days} days left`;
+}
+
 // ------------------------------------------------------------------ inputs
 
 export type AppStudentInput = {
@@ -110,6 +125,10 @@ export type ReportApplication = {
   deadline: string | null;
   /** Still in progress and its deadline gone by. */
   deadlinePassed: boolean;
+  /** Still in progress and its deadline within the week: today, or up to DEADLINE_SOON_DAYS days away. */
+  deadlineSoon: boolean;
+  /** Days from today to the deadline (0 is today); null with no deadline. */
+  daysLeft: number | null;
   stage: string;
   stageLabel: string;
   group: StageGroup;
@@ -307,6 +326,7 @@ export function buildApplicationsReport(input: {
   for (const a of input.applications) {
     const group = stageGroup(a.stage, a.pipeline);
     const deadline = /^\d{4}-\d{2}-\d{2}/.test(a.deadline ?? "") ? a.deadline!.slice(0, 10) : null;
+    const daysLeft = deadline ? daysBetween(today, deadline) : null;
     const logins = input.logins.get(a.id) ?? [];
     // A link field may hold words, or "javascript:…" (0304): only a real address is passed on.
     const portalLink = linkHref(a.portalLink);
@@ -324,6 +344,9 @@ export function buildApplicationsReport(input: {
       round: a.roundLabel,
       deadline,
       deadlinePassed: Boolean(deadline && deadline < today && group === "progress"),
+      // Only while it runs: once there is an offer, or it has ended, the date no longer presses.
+      deadlineSoon: group === "progress" && daysLeft !== null && daysLeft >= 0 && daysLeft <= DEADLINE_SOON_DAYS,
+      daysLeft,
       stage: a.stage,
       stageLabel: stageLabel(a.stage),
       group,

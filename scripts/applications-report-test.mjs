@@ -263,3 +263,23 @@ test("the report is for Processing and Super Admin only", () => {
   assert.ok(sees("super_admin") && sees("processing"));
   for (const role of ["management", "counselor", "finance", "marketing", "digital_marketing"]) assert.ok(!sees(role), `${role} should not see it`);
 });
+
+test("a deadline a week or less away is highlighted while the application runs, today included", () => {
+  const due = (deadline, stage = "documents_pending") => app("s", stage, { deadline });
+  const apps = [due("2026-11-03"), due("2026-11-04"), due("2026-11-10"), due("2026-11-11"), due("2026-11-02"), due("2026-11-05", "acceptance_letter"), due(null)];
+  const got = build([student("s", "Sara")], apps).students[0].applications.map((a) => [a.deadline, a.deadlineSoon, a.daysLeft]);
+  assert.deepEqual(got, [
+    ["2026-11-03", true, 0],
+    ["2026-11-04", true, 1],
+    ["2026-11-10", true, 7],
+    ["2026-11-11", false, 8],
+    ["2026-11-02", false, -1],
+    ["2026-11-05", false, 2],
+    [null, false, null],
+  ]);
+});
+
+test("days left in words", async () => {
+  const { daysLeftLabel } = await import("../src/lib/applicationsReport.ts");
+  assert.deepEqual([0, 1, 3].map(daysLeftLabel), ["Due today", "Due tomorrow", "3 days left"]);
+});
