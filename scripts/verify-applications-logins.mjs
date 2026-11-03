@@ -209,11 +209,22 @@ try {
   if (one) {
     await page.goto(`${BASE}/students/${one.id}`, { waitUntil: "domcontentloaded" });
     await page.locator("[data-student-reports]").waitFor({ state: "attached", timeout: 40000 });
-    const order = await page.evaluate(() => {
-      const reports = document.querySelector("[data-student-reports]");
-      const tracker = document.getElementById("card-documentation-tracker") ?? [...document.querySelectorAll("h2, h3, button")].find((e) => /Documentation tracker/.test(e.textContent ?? ""));
-      return reports && tracker ? Boolean(reports.compareDocumentPosition(tracker) & Node.DOCUMENT_POSITION_FOLLOWING) : null;
-    });
+    // Streamed: its content arrives at the foot of the page and is moved into
+    // place a moment later, so wait for it to be where it belongs.
+    const order = await page
+      .waitForFunction(
+        () => {
+          const reports = document.querySelector("[data-student-reports]");
+          const tracker = document.getElementById("card-documentation-tracker");
+          if (!reports) return false;
+          if (!tracker) return true; // a student with no tracker has nothing to be before
+          return Boolean(reports.compareDocumentPosition(tracker) & Node.DOCUMENT_POSITION_FOLLOWING);
+        },
+        null,
+        { timeout: 20000 }
+      )
+      .then(() => true)
+      .catch(() => false);
     ok("dashboard: the Reports section is there, before the Documentation tracker", order !== false, `${order}`);
     await openReports(page);
     const inSection = (kind, format) => page.locator(`[data-student-report="${kind}"] button[data-download="${format}"]`);
