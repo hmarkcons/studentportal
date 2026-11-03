@@ -69,17 +69,18 @@ type DocRow = {
 export async function loadDocumentChecklist(
   db: SupabaseClient,
   filters: ChecklistFilters,
-  today: string = karachiToday()
+  today: string = karachiToday(),
+  /** Read the chosen students' rows alone (a student's own dashboard), not everyone's. The picker's list is then theirs only. */
+  { onlyChosen = false }: { onlyChosen?: boolean } = {}
 ): Promise<LoadedChecklist> {
+  const narrow = onlyChosen && filters.students.length > 0;
   const [students, renewRows, sectionRows, placementRows] = await Promise.all([
     readAll<{ id: string; full_name: string | null; student_code: string | null; intake: string | null; processing_officer_id: string | null }>(
-      (from, to) =>
-        db
-          .from("students")
-          .select("id, full_name, student_code, intake, processing_officer_id")
-          .eq("registration_status", "registered")
-          .order("id")
-          .range(from, to)
+      (from, to) => {
+        let q = db.from("students").select("id, full_name, student_code, intake, processing_officer_id").eq("registration_status", "registered");
+        if (narrow) q = q.in("id", filters.students);
+        return q.order("id").range(from, to);
+      }
     ),
     readAll<{ id: string }>((from, to) => db.from("document_templates").select("id").eq("renew_each_intake", true).order("id").range(from, to)),
     readAll<{ key: string; label: string }>((from, to) => db.from("document_sections").select("key, label").order("key").range(from, to)),

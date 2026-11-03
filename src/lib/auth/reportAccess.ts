@@ -4,6 +4,7 @@ import { hasRole, staffRoles } from "./roles";
 import { getEffectivePermissions } from "./permissions";
 import { visibleReports } from "@/lib/reportsCatalogue";
 import { canOpenPath } from "@/lib/pageAccess";
+import type { PermissionKey } from "@/lib/permissions";
 
 /**
  * Gates a report page on the same catalogue that decides whether its card is
@@ -37,12 +38,19 @@ export async function requireReportAccess(href: string) {
  * with a status rather than a redirect, and which no layout guards: a route
  * handler is not wrapped by reports/layout.tsx's PageGuard, so the page-access
  * check that guard makes for the page is made here too.
+ *
+ * `oneStudent`: a file for exactly one student is also open to whoever holds
+ * that permission — the Reports section of a registered student's dashboard
+ * (student.reports.view, 0348), which a Super Admin may give any role. It
+ * never opens the whole report, and row-level security still decides what
+ * is in the file.
  */
-export async function reportDownloadAccess(href: string) {
+export async function reportDownloadAccess(href: string, oneStudent?: { permission: PermissionKey; studentIds: readonly string[] }) {
   const { supabase, staff } = await getStaffSession();
   if (!staff) return { supabase, staff, refusal: { status: 401, message: "Sign in to download this report." } } as const;
   const perms = await getEffectivePermissions();
-  const allowed = canOpenPath("/reports", perms, hasRole(staff, "super_admin")) && visibleReports(staffRoles(staff)).some((r) => r.href === href);
-  if (!allowed) return { supabase, staff, refusal: { status: 403, message: "This report is not one your role can open." } } as const;
+  const asReport = canOpenPath("/reports", perms, hasRole(staff, "super_admin")) && visibleReports(staffRoles(staff)).some((r) => r.href === href);
+  const asStudentSection = Boolean(oneStudent && oneStudent.studentIds.length === 1 && perms[oneStudent.permission] === true);
+  if (!asReport && !asStudentSection) return { supabase, staff, refusal: { status: 403, message: "This report is not one your role can open." } } as const;
   return { supabase, staff, refusal: null } as const;
 }

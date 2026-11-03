@@ -43,6 +43,8 @@ import { loadGmailRecoveryStatus } from "@/lib/gmailRecovery";
 import { RegistrationEditForm } from "./RegistrationEditForm";
 import { RestartProcessPanel } from "./RestartProcessPanel";
 import { StudentReportButton } from "./StudentReportButton";
+import { StudentReportsSection } from "./StudentReportsSection";
+import { hasPermission } from "@/lib/auth/permissions";
 import { Suspense } from "react";
 import { TasksAboutCard } from "@/components/tasks/TasksAboutCard";
 import { loadRestartContext } from "@/lib/actions/intakeCycles";
@@ -843,6 +845,9 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     .sort((a, b) => a.rank - b.rank || a.section.entry.displayName.localeCompare(b.section.entry.displayName));
 
   const sectionCredentialCount = existingCredentialTypes.filter(inCredentialsSection).length;
+  // The Reports section is a switch in Role Permissions (0348), not a role.
+  const canSeeReports = await hasPermission("student.reports.view");
+
   return (
     <div>
       {/* Everything on the record as one PDF — done, in progress and still to
@@ -969,6 +974,15 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       <Suspense fallback={null}>
         <TasksAboutCard studentId={id} name={student?.full_name ?? "this student"} revalidateTo={`/students/${id}`} className="mt-6" />
       </Suspense>
+
+      {/* Reports (0348): this student's documents checklist and applications &
+          portal logins, to download — for whoever holds student.reports.view
+          (Processing and Super Admin to begin with). Streamed. */}
+      {canSeeReports && (
+        <Suspense fallback={null}>
+          <StudentReportsSection studentId={id} className="mt-6" />
+        </Suspense>
+      )}
 
       {trackerSections.length > 0 && (
         <CollapsibleCard

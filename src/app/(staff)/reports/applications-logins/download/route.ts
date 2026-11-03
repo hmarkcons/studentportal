@@ -27,14 +27,15 @@ const refuse = (status: number, message: string) =>
  * (0347) decrypts only what they may see. Never cached on the way.
  */
 export async function GET(request: Request) {
-  const { supabase, staff, refusal } = await reportDownloadAccess("/reports/applications-logins");
+  const params = new URL(request.url).searchParams;
+  const filters = parseApplicationsFilters(params);
+  // One student's file is also for whoever may see the Reports section of their dashboard.
+  const { supabase, staff, refusal } = await reportDownloadAccess("/reports/applications-logins", { permission: "student.reports.view", studentIds: filters.students });
   if (refusal) return refuse(refusal.status, refusal.message);
 
-  const params = new URL(request.url).searchParams;
   const format = params.get("format") === "xlsx" ? "xlsx" : params.get("format") === "pdf" ? "pdf" : null;
   if (!format) return refuse(400, "Ask for format=pdf or format=xlsx.");
 
-  const filters = parseApplicationsFilters(params);
   const today = karachiToday();
   const { report, officers, countries, students, loginsError } = await loadApplicationsReport(supabase, filters, today);
   const meta = {

@@ -63,6 +63,9 @@ export const PERMISSION_KEYS = [
   "student.scholarship.delete",
   "student.visa.edit",
   "student.communication.send",
+  // The Reports section of a registered student's dashboard (0348): their
+  // documents checklist and their applications & portal logins, for them alone.
+  "student.reports.view",
   // Social Media module (0344). page.social opens the section; the rest gate the
   // actions. Seeded in the migration; retunable in Admin › Role Permissions.
   "page.social",

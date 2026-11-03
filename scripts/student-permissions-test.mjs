@@ -26,3 +26,11 @@ test("migration 0343 seeds exactly the student.* keys the code declares", () => 
   for (const k of studentKeys) assert.ok(seeded.has(k), `${k} is declared in code but not seeded in 0343`);
   for (const k of seeded) assert.ok(studentKeys.includes(k), `${k} is seeded in 0343 but not declared in code`);
 });
+
+test("the dashboard's Reports section has its own switch, seeded by 0348 for Processing", () => {
+  assert.ok(PERMISSION_KEYS.includes("student.reports.view"), "student.reports.view is missing from PERMISSION_KEYS");
+  const sql = readFileSync(new URL("../supabase/migrations/0348_student_reports_permission.sql", import.meta.url), "utf8");
+  assert.match(sql, /'student\.reports\.view'/);
+  assert.match(sql, /array\['processing'\]::staff_role\[\]/, "it starts with Processing (Super Admin holds every permission)");
+  assert.match(sql, /'Registered student · Reports'/, "it sits with the other registered-student switches");
+});

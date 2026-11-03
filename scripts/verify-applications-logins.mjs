@@ -200,6 +200,29 @@ try {
     ok("row PDF: their applications, headed with their name", text.includes(`Student: ${one.full_name}`));
     if (sample) ok("row PDF: their login in full", text.includes(sample.password));
   }
+
+  // ---------------------------------------------------------------- the student's dashboard (0348)
+  const openReports = async (p) => {
+    const panel = await p.locator("[data-student-reports]").evaluate((el) => el.closest("[hidden]")?.id ?? el.parentElement?.id ?? "");
+    if (panel) await p.locator(`button[aria-controls="${panel}"]`).click();
+  };
+  if (one) {
+    await page.goto(`${BASE}/students/${one.id}`, { waitUntil: "domcontentloaded" });
+    await page.locator("[data-student-reports]").waitFor({ state: "attached", timeout: 40000 });
+    const order = await page.evaluate(() => {
+      const reports = document.querySelector("[data-student-reports]");
+      const tracker = document.getElementById("card-documentation-tracker") ?? [...document.querySelectorAll("h2, h3, button")].find((e) => /Documentation tracker/.test(e.textContent ?? ""));
+      return reports && tracker ? Boolean(reports.compareDocumentPosition(tracker) & Node.DOCUMENT_POSITION_FOLLOWING) : null;
+    });
+    ok("dashboard: the Reports section is there, before the Documentation tracker", order !== false, `${order}`);
+    await openReports(page);
+    const inSection = (kind, format) => page.locator(`[data-student-report="${kind}"] button[data-download="${format}"]`);
+    ok("dashboard: PDF and Excel for both reports", (await page.locator("[data-student-reports] button[data-download]").count()) === 4);
+    const docPdf = await click(inSection("documents-checklist", "pdf"));
+    ok("dashboard: the documents checklist PDF is this student's", one.student_code ? docPdf.name.includes(one.student_code) : docPdf.name.startsWith("HMC-Documents-Checklist-"), docPdf.name);
+    const appsXlsx = await click(inSection("applications-logins", "xlsx"));
+    ok("dashboard: the applications workbook is this student's", one.student_code ? appsXlsx.name.includes(one.student_code) : appsXlsx.name.endsWith(".xlsx"), appsXlsx.name);
+  }
   await page.close();
 
   // ---------------------------------------------------------------- not for them
@@ -213,6 +236,28 @@ try {
     ok(`${who.name}: the download is refused`, refused.status() === 403, `${refused.status()}`);
     await p.close();
   }
+  // The switch, given to a role that has no Reports (Management, here as one person): the
+  // section appears and one student's file downloads — and the whole report is still refused.
+  if (one) {
+    const oneFile = `${HREF}/download?format=pdf&students=${one.id}`;
+    let p = await signIn(browser, mgmt.email);
+    await p.goto(`${BASE}/students/${one.id}`, { waitUntil: "domcontentloaded" });
+    await p.waitForLoadState("load");
+    ok("dashboard: Management does not see the Reports section", (await p.locator("[data-student-reports]").count()) === 0);
+    ok("dashboard: nor download one student's file", (await p.request.get(`${BASE}${oneFile}`)).status() === 403);
+    await p.close();
+
+    await admin.from("staff_permission_overrides").insert({ staff_id: mgmt.id, permission_key: "student.reports.view", allowed: true });
+    p = await signIn(browser, mgmt.email);
+    await p.goto(`${BASE}/students/${one.id}`, { waitUntil: "domcontentloaded" });
+    await p.locator("[data-student-reports]").waitFor({ state: "attached", timeout: 40000 }).catch(() => {});
+    ok("switch given: the Reports section appears", (await p.locator("[data-student-reports]").count()) === 1);
+    const given = await p.request.get(`${BASE}${oneFile}`, { timeout: 90000 });
+    ok("switch given: one student's file downloads", given.status() === 200 && given.headers()["content-type"] === "application/pdf", `${given.status()}`);
+    ok("switch given: the whole report is still refused", (await p.request.get(`${BASE}${HREF}/download?format=pdf`)).status() === 403);
+    await p.close();
+  }
+
   const anon = await browser.newContext();
   const anonRes = await anon.request.get(`${BASE}${HREF}/download?format=pdf`, { maxRedirects: 0 });
   ok("signed out: no file", anonRes.status() !== 200 || !/pdf/.test(anonRes.headers()["content-type"] ?? ""), `${anonRes.status()}`);
