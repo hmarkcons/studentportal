@@ -10,7 +10,9 @@ import {
   LOGIN_FILTER_LABELS,
   SHOW_LABELS,
   STATUS_FILTER_LABELS,
+  DEADLINE_SOON_DAYS,
   applicationsQuery,
+  daysLeftLabel,
   parseApplicationsFilters,
   type AppLoginFilter,
   type AppReportStudent,
@@ -39,6 +41,12 @@ function ApplicationList({ s }: { s: AppReportStudent }) {
       <summary className="cursor-pointer list-none tabular-nums">
         <span className="font-semibold text-ink">{s.counts.total}</span>
         {s.applications.length < s.allApplications && <span className="text-muted"> of {s.allApplications}</span>}
+        {s.counts.dueSoon > 0 && (
+          // Seen without opening the list: what presses this week.
+          <span className="ml-2 rounded-full border border-warning/50 bg-warning-bg px-1.5 py-0.5 text-[10px] font-semibold text-warning" data-due-soon={s.counts.dueSoon}>
+            {s.counts.dueSoon} due within {DEADLINE_SOON_DAYS} days
+          </span>
+        )}
         <span className="ml-1 text-xs text-primary group-open:hidden">show</span>
         <span className="ml-1 hidden text-xs text-primary group-open:inline">hide</span>
       </summary>
@@ -72,12 +80,20 @@ function ApplicationList({ s }: { s: AppReportStudent }) {
             </div>
             <div className="text-muted">
               {[a.programme ?? "Programme not chosen", a.level, a.intake, a.round, a.country].filter(Boolean).join(" · ")}
-              {a.deadline && (
-                <span className={a.deadlinePassed ? "font-semibold text-danger" : ""}>
-                  {" "}
-                  · {a.deadlinePassed ? "deadline passed" : "deadline"} {day(a.deadline)}
-                </span>
-              )}
+              {a.deadline &&
+                (a.deadlineSoon ? (
+                  <>
+                    {" · "}
+                    <span className="rounded border border-warning/50 bg-warning-bg px-1 font-semibold text-warning" data-deadline-soon>
+                      deadline {day(a.deadline)} · {daysLeftLabel(a.daysLeft ?? 0).toLowerCase()}
+                    </span>
+                  </>
+                ) : (
+                  <span className={a.deadlinePassed ? "font-semibold text-danger" : ""}>
+                    {" "}
+                    · {a.deadlinePassed ? "deadline passed" : "deadline"} {day(a.deadline)}
+                  </span>
+                ))}
               {a.finalizedBadge && <span className="font-semibold text-success"> · {a.finalizedBadge}</span>}
             </div>
             {a.logins.map((l, i) => (
@@ -205,7 +221,12 @@ export default async function ApplicationsLoginsPage(props: { searchParams: Prom
 
       <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-5">
         <StatCard label="Students" value={t.students} hint={`${t.withApplications} with applications`} />
-        <StatCard label="Applications" value={t.total} />
+        <StatCard
+          label="Applications"
+          value={t.total}
+          tone={t.dueSoon ? "warning" : "default"}
+          hint={t.dueSoon ? `${t.dueSoon} due within ${DEADLINE_SOON_DAYS} days` : `None due within ${DEADLINE_SOON_DAYS} days`}
+        />
         <StatCard label={GROUP_LABELS.progress} value={t.progress} hint="Still running" />
         <StatCard label={GROUP_LABELS.accepted} value={t.accepted} tone={t.accepted ? "success" : "default"} hint="Offer, acceptance or later" />
         <StatCard label="Logins saved" value={t.withLogin} tone={t.total && t.withLogin < t.total ? "warning" : "default"} hint={`of ${t.total} applications`} />

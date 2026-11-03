@@ -12,7 +12,7 @@
 //
 // Pure: the route hands these sheets to write-excel-file.
 
-import { GROUP_LABELS, type ApplicationsReport, type AppLogin, type ReportApplication, type StageGroup } from "./applicationsReport.ts";
+import { DEADLINE_SOON_DAYS, GROUP_LABELS, type ApplicationsReport, type AppLogin, type ReportApplication, type StageGroup } from "./applicationsReport.ts";
 import type { CellStyle, WorkbookCell, WorkbookSheet } from "./documentChecklistWorkbook.ts";
 
 const HEADER: CellStyle = { fontWeight: "bold", backgroundColor: "#E6F4EE", borderColor: "#B7DCC8", borderStyle: "thin", alignVertical: "center", wrap: true };
@@ -27,6 +27,10 @@ const GROUP_STYLE: Record<StageGroup, CellStyle> = {
 };
 
 const DATE_FORMAT = "dd mmm yyyy";
+
+/** A deadline a week or less away, as the PDF and the page show it: amber. */
+const SOON: CellStyle = { backgroundColor: "#FEF3C7", textColor: "#92400E", fontWeight: "bold" };
+const PASSED: CellStyle = { textColor: "#991B1B", fontWeight: "bold" };
 
 const text = (value: string | null | undefined, style: CellStyle = {}): WorkbookCell => ({ type: String, value: value || undefined, ...style });
 const num = (value: number, style: CellStyle = {}): WorkbookCell => ({ type: Number, value, ...style });
@@ -76,6 +80,7 @@ function summarySheet(report: ApplicationsReport, meta: ApplicationsWorkbookMeta
     GROUP_LABELS.closed,
     GROUP_LABELS.rejected,
     "Logins saved",
+    `Due within ${DEADLINE_SOON_DAYS} days`,
   ].map((h) => text(h, HEADER));
   const rows = report.students.map((s, i): WorkbookCell[] => {
     const none = s.counts.total === 0 ? { fontStyle: "italic" as const, textColor: "#6B7280" } : {};
@@ -92,6 +97,7 @@ function summarySheet(report: ApplicationsReport, meta: ApplicationsWorkbookMeta
       num(s.counts.closed),
       num(s.counts.rejected, s.counts.rejected ? { textColor: "#991B1B" } : {}),
       num(s.counts.withLogin),
+      num(s.counts.dueSoon, s.counts.dueSoon ? SOON : {}),
     ];
   });
   const totalStyle: CellStyle = { fontWeight: "bold", backgroundColor: "#F3F4F6", borderColor: "#D1D5DB", borderStyle: "thin" };
@@ -105,11 +111,12 @@ function summarySheet(report: ApplicationsReport, meta: ApplicationsWorkbookMeta
     num(t.closed, totalStyle),
     num(t.rejected, totalStyle),
     num(t.withLogin, totalStyle),
+    num(t.dueSoon, totalStyle),
   ];
   return {
     sheet: "Summary",
     data: [...title, header, ...rows, ...(rows.length ? [totals] : [[text("No students match these filters.", { fontStyle: "italic" })]])],
-    columns: [5, 28, 22, 26, 18, 22, 13, 12, 13, 13, 11, 12].map((width) => ({ width })),
+    columns: [5, 28, 22, 26, 18, 22, 13, 12, 13, 13, 11, 12, 13].map((width) => ({ width })),
     stickyRowsCount: title.length + 1,
   };
 }
@@ -127,6 +134,7 @@ const APP_HEADER = [
   "Intake",
   "Round",
   "Deadline",
+  "Days left",
   "Status",
   "Stage",
   "Step",
@@ -138,7 +146,7 @@ const APP_HEADER = [
   "Login link",
   "Login updated",
 ];
-const APP_WIDTHS = [26, 22, 20, 5, 18, 36, 14, 40, 12, 16, 16, 13, 20, 26, 9, 18, 36, 20, 28, 22, 36, 13];
+const APP_WIDTHS = [26, 22, 20, 5, 18, 36, 14, 40, 12, 16, 16, 13, 10, 20, 26, 9, 18, 36, 20, 28, 22, 36, 13];
 
 function applicationsSheet(report: ApplicationsReport): WorkbookSheet {
   const rows: WorkbookCell[][] = [];
@@ -168,7 +176,13 @@ function applicationRow(s: ApplicationsReport["students"][number], a: ReportAppl
     text(a.level),
     text(a.intake),
     text(a.round),
-    dateCell(a.deadline, "day", a.deadlinePassed ? { textColor: "#991B1B", fontWeight: "bold" } : {}),
+    dateCell(a.deadline, "day", a.deadlineSoon ? SOON : a.deadlinePassed ? PASSED : {}),
+    // A number to sort by, for the ones still running; "Passed" once it has gone by.
+    a.group !== "progress" || a.daysLeft === null
+      ? text(null)
+      : a.daysLeft < 0
+        ? text("Passed", PASSED)
+        : num(a.daysLeft, a.deadlineSoon ? SOON : {}),
     text(GROUP_LABELS[a.group], GROUP_STYLE[a.group]),
     text(a.stageLabel),
     text(a.step ? `${a.step.step} of ${a.step.of}` : null),

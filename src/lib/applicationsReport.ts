@@ -151,6 +151,8 @@ export type AppCounts = {
   rejected: number;
   /** Applications with at least one login saved against them. */
   withLogin: number;
+  /** In progress with a deadline a week or less away (deadlineSoon). */
+  dueSoon: number;
 };
 
 export type AppReportStudent = {
@@ -294,11 +296,12 @@ export function loginsByApplication(rows: readonly LoginRowInput[] | null | unde
   return out;
 }
 
-export function countApplications(apps: readonly Pick<ReportApplication, "group" | "logins">[]): AppCounts {
-  const c: AppCounts = { total: apps.length, accepted: 0, progress: 0, closed: 0, rejected: 0, withLogin: 0 };
+export function countApplications(apps: readonly Pick<ReportApplication, "group" | "logins" | "deadlineSoon">[]): AppCounts {
+  const c: AppCounts = { total: apps.length, accepted: 0, progress: 0, closed: 0, rejected: 0, withLogin: 0, dueSoon: 0 };
   for (const a of apps) {
     c[a.group]++;
     if (a.logins.length) c.withLogin++;
+    if (a.deadlineSoon) c.dueSoon++;
   }
   return c;
 }
@@ -402,10 +405,11 @@ export function buildApplicationsReport(input: {
       t.closed += s.counts.closed;
       t.rejected += s.counts.rejected;
       t.withLogin += s.counts.withLogin;
+      t.dueSoon += s.counts.dueSoon;
       if (s.counts.total > 0) t.withApplications++;
       return t;
     },
-    { students: students.length, withApplications: 0, total: 0, accepted: 0, progress: 0, closed: 0, rejected: 0, withLogin: 0 }
+    { students: students.length, withApplications: 0, total: 0, accepted: 0, progress: 0, closed: 0, rejected: 0, withLogin: 0, dueSoon: 0 }
   );
   return { today, students, totals };
 }

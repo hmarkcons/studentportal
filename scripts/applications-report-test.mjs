@@ -101,7 +101,7 @@ test("each application gets the Applications table's status, its stage and its l
   assert.equal(got[0].logins[0].password, "pw");
   assert.equal(got[4].finalizedBadge, "Pre-Enrolled");
   assert.equal(got[0].level, "Master's", "the level as people write it");
-  assert.deepEqual(r.students[0].counts, { total: 5, accepted: 2, progress: 1, closed: 1, rejected: 1, withLogin: 1 });
+  assert.deepEqual(r.students[0].counts, { total: 5, accepted: 2, progress: 1, closed: 1, rejected: 1, withLogin: 1, dueSoon: 0 });
 });
 
 test("a deadline gone by is flagged only while the application is still in progress", () => {
@@ -282,4 +282,32 @@ test("a deadline a week or less away is highlighted while the application runs, 
 test("days left in words", async () => {
   const { daysLeftLabel } = await import("../src/lib/applicationsReport.ts");
   assert.deepEqual([0, 1, 3].map(daysLeftLabel), ["Due today", "Due tomorrow", "3 days left"]);
+});
+
+test("workbook: a deadline within the week is amber with its days left, and counted per student", () => {
+  const apps = [
+    app("a", "documents_pending", { deadline: "2026-11-06" }),
+    app("a", "documents_pending", { deadline: "2026-12-20" }),
+    app("a", "documents_pending", { deadline: "2026-10-01" }),
+    app("a", "acceptance_letter", { deadline: "2026-11-05" }),
+  ];
+  const r = build([student("a", "Ahmed")], apps);
+  const [summary, applications] = applicationsWorkbookSheets(r, { preparedOn: "x", preparedBy: null, filters: "y", loginsError: null });
+  const header = applications.data[1].map((c) => c?.value);
+  const d = header.indexOf("Deadline");
+  const left = header.indexOf("Days left");
+  assert.equal(left, d + 1);
+  const rows = applications.data.slice(2);
+  const byDeadline = (iso) => rows.find((row) => row[d].value?.toISOString().slice(0, 10) === iso);
+  assert.equal(byDeadline("2026-11-06")[left].value, 3);
+  assert.equal(byDeadline("2026-11-06")[d].backgroundColor, "#FEF3C7", "a week or less away is amber");
+  assert.equal(byDeadline("2026-12-20")[left].value, 47);
+  assert.equal(byDeadline("2026-12-20")[d].backgroundColor, undefined);
+  assert.equal(byDeadline("2026-10-01")[left].value, "Passed");
+  assert.equal(byDeadline("2026-11-05")[left].value, undefined, "an offer's deadline no longer counts down");
+
+  const sh = summary.data.find((row) => row[0]?.value === "#").map((c) => c?.value);
+  const due = sh.indexOf("Due within 7 days");
+  assert.equal(summary.data.find((row) => row[1]?.value === "Ahmed")[due].value, 1);
+  assert.equal(summary.data.at(-1)[due].value, 1, "and in the total");
 });
