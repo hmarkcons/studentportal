@@ -90,3 +90,35 @@ test("whitespace alone is not treated as a change", () => {
 test("clearing an optional number is allowed", () => {
   assert.equal(phoneChangeError("", "090078601"), null);
 });
+
+test("the phone pattern is valid as a browser compiles it (the v flag), and agrees with the server", async () => {
+  const { phoneBounds, matchesPhonePattern } = await import("../src/lib/phoneNumber.ts");
+  // A browser wraps `pattern` as ^(?:…)$ and compiles it with the v flag; an
+  // invalid one is ignored without a word, and the field goes unchecked.
+  const asBrowser = new RegExp(`^(?:${phoneBounds().pattern})$`, "v");
+  for (const v of ["0300-1234567", "+92 300 1234567", "(021) 3456-7890", "021.3456.7890", "12345", "abc0300123456", "0300 12345678901234", ""]) {
+    assert.equal(asBrowser.test(v), matchesPhonePattern(v), `browser and server disagree on "${v}"`);
+  }
+});
+
+test("every pattern attribute written in the code is valid as a browser compiles it", async () => {
+  const { readdirSync, readFileSync, statSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const files = [];
+  const walk = (dir) => {
+    for (const name of readdirSync(dir)) {
+      const full = join(dir, name);
+      if (statSync(full).isDirectory()) walk(full);
+      else if (full.endsWith(".tsx")) files.push(full);
+    }
+  };
+  walk("src");
+  let checked = 0;
+  for (const f of files) {
+    for (const m of readFileSync(f, "utf8").matchAll(/\bpattern="([^"]*)"/g)) {
+      assert.doesNotThrow(() => new RegExp(`^(?:${m[1]})$`, "v"), `${f}: pattern="${m[1]}" is not valid with the v flag, so browsers ignore it`);
+      checked++;
+    }
+  }
+  assert.ok(checked > 0, "found no pattern attributes to check");
+});

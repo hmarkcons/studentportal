@@ -72,8 +72,15 @@ export function phoneChangeError(
  * escapes matter — a `\d` that collapses to a literal `d` produces a pattern
  * that silently rejects every number, and pattern failures are invisible
  * except as a form that will not submit.
+ *
+ * And every bracket inside [...] is escaped. A browser compiles `pattern` with
+ * the v flag (Chrome 112+, Firefox 116+, Safari 17+), where an unescaped ( or
+ * ) in a character class is an error — and an invalid pattern is ignored
+ * without a word, so the phone fields went unchecked in every current
+ * browser. Only Firefox said so, in its console (check:browsers, 2026-11-04).
+ * phone-number-test.mjs compiles it as a browser does, with the v flag.
  */
-const PHONE_PATTERN = new RegExp(`^\\+?(?:[\\s()\\-.]*\\d){${PHONE_MIN_DIGITS},${PHONE_MAX_DIGITS}}[\\s()\\-.]*$`);
+const PHONE_PATTERN = new RegExp(`^\\+?(?:[\\s\\(\\)\\-.]*\\d){${PHONE_MIN_DIGITS},${PHONE_MAX_DIGITS}}[\\s\\(\\)\\-.]*$`);
 
 /** Attributes for a phone input: a tel keypad on mobile, plus that pattern. */
 export function phoneBounds() {

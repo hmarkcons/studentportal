@@ -81,7 +81,12 @@ async function signInAs(page, email) {
   await page.fill('input[name="email"]', email);
   await page.fill('input[type="password"]', FIXTURE_PASSWORD);
   await page.click('button[type="submit"]');
-  return page.waitForURL((u) => !u.pathname.includes("/login"), { timeout: 60000 }).then(() => true, () => false);
+  const left = await page.waitForURL((u) => !u.pathname.includes("/login"), { timeout: 60000 }).then(() => true, () => false);
+  // Signing in lands on "/" and is sent on to the Dashboard or the portal: wait
+  // for that, or the first page opened is cut short by it.
+  if (left) await page.waitForURL((u) => /^\/(dashboard|portal)/.test(u.pathname), { timeout: 30000 }).catch(() => {});
+  if (left) await page.waitForLoadState("load").catch(() => {});
+  return left;
 }
 
 /** Opens each route, and notes what went wrong on it. */
@@ -112,7 +117,10 @@ async function sweep(page, name, list, problems, setCurrent) {
 }
 
 function watch(page, problems, getCurrent) {
-  page.on("pageerror", (e) => problems.push({ route: getCurrent(), kind: "script error", text: String(e.message ?? e).slice(0, 300) }));
+  page.on("pageerror", (e) => {
+    const text = String(e.message ?? e);
+    if (!isNoise(text)) problems.push({ route: getCurrent(), kind: "script error", text: text.slice(0, 300) });
+  });
   page.on("console", (m) => {
     if (m.type() !== "error") return;
     const text = m.text();
@@ -142,7 +150,19 @@ const NOISE = [
   /net::ERR_ABORTED|NS_BINDING_ABORTED|cancelled|Load failed$/i,
   // Third-party embeds the portal does not own.
   /googletagmanager|google-analytics|facebook|tiktok|doubleclick/i,
+  // Firefox refusing Cloudflare's bot cookie on Supabase's image responses: theirs, harmless.
+  /Cookie “?__cf_bm”? has been rejected/i,
+  // Firefox's word for a request cut short by moving to the next page. A request
+  // that really fails still shows, as the server error the response listener records.
+  /^NetworkError when attempting to fetch resource\.?$/,
 ];
+// WebKit's word for one of the portal's own requests cut short by moving to
+// the next page (a prefetch, the notifications poll): "…/dashboard?_rsc=… due
+// to access control checks". The portal catches them; WebKit reports them
+// anyway, always naming the page being left. A real cross-origin refusal
+// names another host, and still counts.
+const ownHost = new URL(BASE).host.replace(/\./g, "\\.");
+NOISE.push(new RegExp(`${ownHost}/[^ ]* due to access control checks`));
 const isNoise = (text) => NOISE.some((re) => re.test(text));
 
 async function openEngine(name) {
