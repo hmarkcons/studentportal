@@ -1,5 +1,6 @@
 "use server";
 
+import { agreementFamily, familyWords } from "@/lib/accompanyingFamily";
 import { removeStorageFiles } from "@/lib/fileTrash";
 import { createElement } from "react";
 import { revalidatePath } from "next/cache";
@@ -88,6 +89,21 @@ function one<T>(v: T | T[] | null) {
 const CURRENCY_SYMBOLS: Record<string, string> = { PKR: "PKR ", USD: "$", EUR: "€" };
 
 const LONG_DATE: Intl.DateTimeFormatOptions = { year: "numeric", month: "long", day: "numeric" };
+
+/**
+ * The line under the consultancy fee saying who else it is for (0350): the
+ * accompanying family on the agreement the invoice was raised against. In
+ * words only — the invoice may be in another currency than the agreement.
+ */
+async function invoiceFamilyNote(supabase: Awaited<ReturnType<typeof createClient>>, invoiceId: string): Promise<string | null> {
+  const { data } = await supabase
+    .from("invoices")
+    .select("agreement:agreements(spouse_count, children_count, spouse_fee, child_fee)")
+    .eq("id", invoiceId)
+    .maybeSingle();
+  const words = familyWords(agreementFamily(one(data?.agreement as never)));
+  return words ? `Includes the consultancy fee for the accompanying family: ${words}.` : null;
+}
 
 // Date.setMonth() overflows past month-end for short target months (e.g. 31
 // Jan + 1 month rolls over to 3 March, not the intended end of February) —
@@ -232,14 +248,14 @@ export async function generateInvoice(studentId: string, agreementId: string, _p
   const terms = String(formData.get("terms") ?? "").trim() || (visaOnly ? VISA_INVOICE_TERMS : DEFAULT_TERMS);
   const typedInvoiceNumber = String(formData.get("invoice_number") ?? "").trim() || null;
 
-  // Public-university destinations are billed in EUR — both the consultancy
-  // fee and the administrative charge — so the currency is taken from the
-  // destination's track rather than from the form. Enforced here and not only
-  // in the form's default: a stale or hand-posted form must not be able to
-  // raise a public-track invoice in rupees.
-  const requestedCurrency = String(formData.get("currency") ?? "EUR");
+  // Euro or rupees, as whoever raises it chooses (2026-11-05): a public-track
+  // student, billed in euro by default, may be invoiced in rupees instead.
+  // A euro invoice carries its rupees-per-euro rate and prints it; a rupee one
+  // carries none. The track still decides when the last instalment falls due.
+  const requestedCurrency = String(formData.get("currency") ?? "EUR").trim().toUpperCase();
+  if (requestedCurrency !== "EUR" && requestedCurrency !== "PKR") return { error: "Choose euro or rupees for the invoice." };
+  const currency = requestedCurrency;
   const track = await agreementTrack(supabase, agreement_id);
-  const currency = track === "public" ? "EUR" : requestedCurrency;
   // Rupees per euro for this invoice (0318), given by whoever raises it, and
   // kept by it for good. A form from before the field existed gives none, and
   // generate_invoice uses the latest given.
@@ -1369,6 +1385,7 @@ export async function buildAndStoreInvoicePdf(
       adminCharge: math.adminCharge,
       adminCharges: adminBreakdown,
       feeName: SERVICE_FEE_TITLE[serviceOf(invoice.service_type)],
+      familyNote: await invoiceFamilyNote(supabase, invoiceId),
       consultancyFee: math.consultancyFee,
       discountAmount: math.discountAmount,
       discountReason: invoice.discount_reason ?? null,

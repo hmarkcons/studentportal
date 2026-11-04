@@ -461,9 +461,52 @@ export type FeeFigures = {
   isBackup: boolean;
   destinationLabel: string;
   isVisaOnly?: boolean;
+  /**
+   * The accompanying family the agreement carries (0350), whose consultancy
+   * fees are already inside consultancyFee's instalments and the total.
+   */
+  family?: { spouses: number; children: number; spouseFee: number; childFee: number } | null;
 };
 
 export type FeeRow = { label: string; note?: string; value: number; total?: boolean };
+
+/** The family's fees together. */
+function familyTotal(f: FeeFigures["family"]): number {
+  return f ? Math.round((f.spouses * f.spouseFee + f.children * f.childFee) * 100) / 100 : 0;
+}
+
+/**
+ * The accompanying family in the payment chart (0350), for the Classic chart
+ * and a themed one alike. Paid in one go, the student's own fee and each
+ * family fee are rows of their own and add up to the total. Paid in
+ * instalments, the family's fees are inside each instalment, so they are said
+ * in a note on the total rather than rows that would count them twice.
+ */
+export function familyFeeParts(
+  fee: FeeFigures,
+  format: (n: number) => string
+): { studentFee: number | null; rows: FeeRow[]; note: string | null } {
+  const f = fee.family;
+  if (!f || fee.isBackup || fee.isVisaOnly || (f.spouses <= 0 && f.children <= 0)) return { studentFee: null, rows: [], note: null };
+  const parts: string[] = [];
+  const rows: FeeRow[] = [];
+  if (f.spouses > 0) {
+    const label = `${f.spouses} spouse${f.spouses === 1 ? "" : "s"}`;
+    parts.push(`${label} (${f.spouses} × ${format(f.spouseFee)})`);
+    rows.push({ label: `Consultancy Fee — ${f.spouses === 1 ? "Spouse" : "Spouses"} (${f.spouses} × ${format(f.spouseFee)})`, value: Math.round(f.spouses * f.spouseFee * 100) / 100 });
+  }
+  if (f.children > 0) {
+    const label = `${f.children} ${f.children === 1 ? "child" : "children"}`;
+    parts.push(`${label} (${f.children} × ${format(f.childFee)})`);
+    rows.push({ label: `Consultancy Fee — ${f.children === 1 ? "Child" : "Children"} (${f.children} × ${format(f.childFee)})`, value: Math.round(f.children * f.childFee * 100) / 100 });
+  }
+  const amounts = fee.installmentAmounts;
+  if (amounts.length <= 1) {
+    // In one payment: the student's own fee, then each family fee, each a row.
+    return { studentFee: Math.round(((amounts[0] ?? fee.consultancyFee) - familyTotal(f)) * 100) / 100, rows, note: null };
+  }
+  return { studentFee: null, rows: [], note: `Includes the consultancy fee for the accompanying ${parts.join(" and ")}, spread over the instalments.` };
+}
 
 /**
  * The payment chart's rows under a theme: the same figures and order as the
@@ -475,6 +518,7 @@ export type FeeRow = { label: string; note?: string; value: number; total?: bool
  */
 export function themedFeeRows(fee: FeeFigures, labels: Theme["fee"]): FeeRow[] {
   const rows: FeeRow[] = [];
+  const family = familyFeeParts(fee, (n) => formatAmount(fee.currencySymbol, n, labels.amount));
   const amounts = fee.installmentAmounts;
   const row = (l: FeeRowLabel, value: number): FeeRow => (l.note ? { label: l.label, note: l.note, value } : { label: l.label, value });
   const installments = () => {
@@ -490,14 +534,21 @@ export function themedFeeRows(fee: FeeFigures, labels: Theme["fee"]): FeeRow[] {
     rows.push({ label: `Administrative fee (${fee.destinationLabel})`, value: fee.adminCharge });
   } else {
     rows.push(row(labels.admin, fee.adminCharge));
-    if (amounts.length <= 1) rows.push(row(labels.single, amounts[0] ?? fee.consultancyFee));
-    else installments();
+    if (amounts.length <= 1) {
+      // With family (0350) the student's own fee, then a row for each family fee.
+      rows.push(row(labels.single, family.studentFee ?? amounts[0] ?? fee.consultancyFee));
+      rows.push(...family.rows);
+    } else installments();
   }
 
   const discount = fee.discount && fee.discount > 0 ? fee.discount : 0;
+  const notes = [
+    discount ? `Includes a discount of ${formatAmount(fee.currencySymbol, discount, labels.amount)}, already applied above` : null,
+    family.note,
+  ].filter((n): n is string => Boolean(n));
   rows.push({
     label: labels.total,
-    ...(discount ? { note: `Includes a discount of ${formatAmount(fee.currencySymbol, discount, labels.amount)}, already applied above` } : {}),
+    ...(notes.length ? { note: notes.join(". ") } : {}),
     value: fee.total,
     total: true,
   });

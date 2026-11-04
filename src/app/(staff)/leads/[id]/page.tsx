@@ -10,6 +10,7 @@ import { LEAD_STATUS_LABELS, LEAD_STATUS_TONE } from "@/lib/constants";
 import { CallLogForm } from "./CallLogForm";
 import { LeadRemarkEditor } from "../LeadRemarkEditor";
 import { RegisterLeadButton } from "./RegisterLeadButton";
+import { getCachedDestinations } from "@/lib/cachedQueries";
 import { LeadEditForm } from "@/components/LeadEditForm";
 import { DeleteStudentButton } from "../../students/[id]/DeleteStudentButton";
 import { getStaffSession } from "@/lib/auth/session";
@@ -28,7 +29,7 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
   const supabase = await createClient();
 
   // Everything at once: the page is read again after every save on it.
-  const [{ staff: staffRow }, { data: lead, error }, { data: logs }] = await Promise.all([
+  const [{ staff: staffRow }, { data: lead, error }, { data: logs }, { data: leadCountries }, allDestinations] = await Promise.all([
     getStaffSession(),
     supabase
       .from("leads")
@@ -43,6 +44,10 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
       .eq("lead_id", id)
       .order("created_at", { ascending: false })
       .returns<CallLog[]>(),
+    // The lead's countries, primary first: registering it asks who is
+    // accompanying them when one of these allows family (0350).
+    supabase.from("lead_destinations").select("destination_id, is_backup").eq("lead_id", id),
+    getCachedDestinations(),
   ]);
   const canDeleteLead = hasRole(staffRow, "super_admin") || hasRole(staffRow, "processing");
   // Whatever is already on file, to start the registration form from.
@@ -101,6 +106,10 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
             <RegisterLeadButton
               leadId={id}
               leadName={lead.full_name}
+              familyDestinations={allDestinations}
+              familySelectedIds={[...(leadCountries ?? [])]
+                .sort((a, b) => Number(a.is_backup) - Number(b.is_backup))
+                .map((d) => d.destination_id as string)}
               defaults={{
                 date_of_birth: lead.date_of_birth,
                 address: lead.address,

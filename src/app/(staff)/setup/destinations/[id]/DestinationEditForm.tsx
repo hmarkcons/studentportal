@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { FamilySettingsFields } from "../FamilySettingsFields";
 import { updateDestination, deleteDestination } from "@/lib/actions/destinations";
 import { Button } from "@/components/ui/Button";
 import { ActionStatus } from "@/components/ActionStatus";
@@ -24,6 +25,9 @@ type Destination = {
   consultancy_fee: number;
   consultancy_fee_currency: string;
   visa_service_fee?: number | null;
+  allows_dependants?: boolean | null;
+  spouse_fee?: number | null;
+  child_fee?: number | null;
   installment_plan: string | null;
   status: string;
 };
@@ -164,6 +168,12 @@ export function DestinationEditForm({ destination }: { destination: Destination 
           <span className="text-xs font-normal text-muted">Visa documentation &amp; application only — in the fee currency</span>
         </label>
       </div>
+      <FamilySettingsFields
+        allows={destination.allows_dependants}
+        spouseFee={destination.spouse_fee}
+        childFee={destination.child_fee}
+        currency={destination.consultancy_fee_currency}
+      />
       <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
         Installment plan
         <Input

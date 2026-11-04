@@ -1,5 +1,6 @@
 "use server";
 
+import { parseFamily } from "@/lib/accompanyingFamily";
 import { hasRole } from "@/lib/auth/roles";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -1050,6 +1051,9 @@ export async function registerStudentManually(_prevState: unknown, formData: For
   const course_of_interest = String(formData.get("course_of_interest") ?? "").trim() || null;
   const selection = parseDestinationSelection(formData);
   if ("error" in selection) return selection;
+  // Who is accompanying them, when a country that allows family is chosen (0350).
+  const family = parseFamily(formData);
+  if (family && "error" in family) return { error: family.error };
   const assigned_counselor_id = String(formData.get("assigned_counselor_id") ?? "") || null;
   const intake = String(formData.get("intake") ?? "").trim() || null;
 
@@ -1099,6 +1103,7 @@ export async function registerStudentManually(_prevState: unknown, formData: For
     // Germany (Public)" became its own filter option, matching one student.
     // It also now agrees with what the spreadsheet import writes.
     country_of_interest: selection.primaryDestinationName,
+    ...(family ?? {}),
     assigned_counselor_id,
     intake,
     date_of_birth: personal.values.date_of_birth,
@@ -1226,6 +1231,9 @@ export async function updateRegistrationDetails(studentId: string, revalidateTo:
   const intake = String(formData.get("intake") ?? "").trim() || null;
   const discount_amount = formData.get("discount_amount") ? Number(formData.get("discount_amount")) : null;
   const discount_reason = String(formData.get("discount_reason") ?? "").trim() || null;
+  // Who is accompanying them (0350) — only when the form showed the section; otherwise left as it is.
+  const family = parseFamily(formData);
+  if (family && "error" in family) return { error: family.error };
   const hasNewSelection = Boolean(selection.primaryDestinationId) || selection.backupDestinationIds.length > 0;
 
   // The registration date, when the form posts one (it always does now; an
@@ -1291,7 +1299,7 @@ export async function updateRegistrationDetails(studentId: string, revalidateTo:
     }
   }
 
-  const patch: Record<string, unknown> = { assigned_counselor_id, processing_officer_id, intake, discount_amount, discount_reason };
+  const patch: Record<string, unknown> = { assigned_counselor_id, processing_officer_id, intake, discount_amount, discount_reason, ...(family ?? {}) };
   if (serviceChange) patch.service_type = serviceChange;
   if (registeredAt) patch.registered_at = registeredAt;
   if (hasNewSelection || hadExistingDestinations) {
@@ -1393,10 +1401,13 @@ export async function registerLead(leadId: string, _prevState: unknown, formData
   const supabase = await createClient();
   const personal = readRegistrationPersonal((k) => formData.get(k));
   if ("error" in personal) return { error: personal.error };
+  // Who is accompanying them, when one of the lead's countries allows family (0350).
+  const family = parseFamily(formData);
+  if (family && "error" in family) return { error: family.error };
 
   const { error } = await supabase
     .from("leads")
-    .update({ status: "registered", date_of_birth: personal.values.date_of_birth, address: personal.values.address })
+    .update({ status: "registered", date_of_birth: personal.values.date_of_birth, address: personal.values.address, ...(family ?? {}) })
     .eq("id", leadId);
   if (error) return { error: error.message };
   // An update RLS refuses matches nothing and says nothing: read it back.

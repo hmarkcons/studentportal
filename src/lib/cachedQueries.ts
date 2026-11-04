@@ -19,12 +19,14 @@ export const getCachedDestinations = unstable_cache(
       // sets one — Italy has a single intake a year, Germany two, the UK is
       // written out — so they travel with the destination list (0170).
       .select(
-        "id, display_name, status, installment_plan, admin_charge, consultancy_fee, consultancy_fee_currency, intake_mode, intake_seasons"
+        "id, display_name, status, installment_plan, admin_charge, consultancy_fee, consultancy_fee_currency, intake_mode, intake_seasons, allows_dependants, spouse_fee, child_fee"
       )
       .order("display_name");
     return data ?? [];
   },
-  ["destinations-list"],
+  // v2 with the family settings (0350): a new key, because Vercel's Data Cache
+  // survives a deploy and an entry without them would linger for five minutes.
+  ["destinations-list-v2"],
   { tags: ["destinations"], revalidate: 300 }
 );
 

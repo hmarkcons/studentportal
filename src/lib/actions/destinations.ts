@@ -58,6 +58,23 @@ function visaServiceFeeFrom(formData: FormData): { value?: number | null; error?
   return { value: Math.round(n * 100) / 100 };
 }
 
+/**
+ * Whether students going here may bring family, and the fee per spouse and
+ * per child (0350) — from a form that carries those fields (marked by
+ * family_settings), else nothing, so the import never switches family off.
+ */
+function familySettingsFrom(formData: FormData): { value?: { allows_dependants: boolean; spouse_fee: number; child_fee: number }; error?: string } {
+  if (!formData.has("family_settings")) return {};
+  const fee = (name: string) => {
+    const n = Number(String(formData.get(name) ?? "").trim());
+    return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null;
+  };
+  const spouse_fee = fee("spouse_fee");
+  const child_fee = fee("child_fee");
+  if (spouse_fee === null || child_fee === null) return { error: "The fee per spouse and per child must each be a number of 0 or more." };
+  return { value: { allows_dependants: formData.get("allows_dependants") === "on", spouse_fee, child_fee } };
+}
+
 export async function createDestination(_prevState: unknown, formData: FormData) {
   const supabase = await createClient();
 
@@ -81,6 +98,8 @@ export async function createDestination(_prevState: unknown, formData: FormData)
   }
   const visaFee = visaServiceFeeFrom(formData);
   if (visaFee.error) return { error: visaFee.error };
+  const family = familySettingsFrom(formData);
+  if (family.error) return { error: family.error };
 
   const pipeline_stages = stagesRaw ? slugifyStages(stagesRaw) : undefined;
   const dashboard_pipeline_stages = dashboardStagesRaw ? parseDashboardStagesText(dashboardStagesRaw) : undefined;
@@ -97,6 +116,7 @@ export async function createDestination(_prevState: unknown, formData: FormData)
       consultancy_fee,
       consultancy_fee_currency,
       ...(visaFee.value !== undefined ? { visa_service_fee: visaFee.value } : {}),
+      ...(family.value ?? {}),
       installment_plan,
       ...(pipeline_stages ? { pipeline_stages } : {}),
       ...(dashboard_pipeline_stages ? { dashboard_pipeline_stages } : {}),
@@ -205,6 +225,8 @@ export async function updateDestination(destinationId: string, _prevState: unkno
   }
   const visaFee = visaServiceFeeFrom(formData);
   if (visaFee.error) return { error: visaFee.error };
+  const family = familySettingsFrom(formData);
+  if (family.error) return { error: family.error };
   if (!["universal", "selective"].includes(scholarship_access)) {
     return { error: "Choose whether this destination's scholarships are for every student or awarded on merit." };
   }
@@ -240,6 +262,7 @@ export async function updateDestination(destinationId: string, _prevState: unkno
       consultancy_fee,
       consultancy_fee_currency,
       ...(visaFee.value !== undefined ? { visa_service_fee: visaFee.value } : {}),
+      ...(family.value ?? {}),
       installment_plan,
       status,
       finalize_action_label,

@@ -1,5 +1,6 @@
 "use server";
 
+import { familyForAgreement, type FamilyColumns } from "@/lib/accompanyingFamily";
 import { removeStorageFiles } from "@/lib/fileTrash";
 import { revalidatePath } from "next/cache";
 import { agreementToday, readAgreementDate } from "@/lib/agreementDate";
@@ -119,6 +120,32 @@ async function templateCountryError(
   );
 }
 
+/**
+ * The family this agreement carries (0350): the student's accompanying spouse(s)
+ * and children from their registration, with each fee — the student's own if
+ * staff set one, else the agreement's country's standard. Taken when the
+ * agreement is made or corrected, so a signed agreement keeps what it was
+ * signed with. None for a country that does not allow family, a backup
+ * country's agreement or a visa-only one.
+ */
+async function familyFor(
+  supabase: SupabaseServerClient,
+  studentId: string,
+  templateId: string | null,
+  chosenDestinationId: string | null,
+  { isBackup, visaOnly }: { isBackup: boolean; visaOnly: boolean }
+): Promise<FamilyColumns> {
+  const [{ data: lead }, { data: template }] = await Promise.all([
+    supabase.from("leads").select("spouse_count, children_count, spouse_fee, child_fee").eq("id", studentId).maybeSingle(),
+    templateId ? supabase.from("agreement_templates").select("destination_id").eq("id", templateId).maybeSingle() : Promise.resolve({ data: null }),
+  ]);
+  const destinationId = (template?.destination_id as string | null | undefined) ?? chosenDestinationId;
+  const { data: destination } = destinationId
+    ? await supabase.from("destinations").select("allows_dependants, spouse_fee, child_fee").eq("id", destinationId).maybeSingle()
+    : { data: null };
+  return familyForAgreement(lead, destination, { isBackup, visaOnly });
+}
+
 export async function generateAgreement(studentId: string, _prevState: unknown, formData: FormData) {
   const supabase = await createClient();
   const fields = parseAgreementFields(formData);
@@ -145,6 +172,11 @@ export async function generateAgreement(studentId: string, _prevState: unknown, 
     fields.installment_count = 1;
   }
 
+  const family = await familyFor(supabase, studentId, fields.template_id, fields.destination_id, {
+    isBackup: is_backup,
+    visaOnly: service.service_type === "visa_only",
+  });
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -152,6 +184,7 @@ export async function generateAgreement(studentId: string, _prevState: unknown, 
   const { error } = await supabase.from("agreements").insert({
     student_id: studentId,
     ...fields,
+    ...family,
     service_type: service.service_type,
     is_backup,
     agreement_date: dated.date,
@@ -205,9 +238,15 @@ export async function updateAgreement(agreementId: string, studentId: string, _p
     fields.installment_count = 1;
   }
 
+  // Taken again from the registration, as the template or the family may have changed since.
+  const family = await familyFor(supabase, studentId, fields.template_id, fields.destination_id, {
+    isBackup: is_backup,
+    visaOnly: service.service_type === "visa_only",
+  });
+
   const { error } = await supabase
     .from("agreements")
-    .update({ ...fields, service_type: service.service_type, is_backup, agreement_date: dated.date })
+    .update({ ...fields, ...family, service_type: service.service_type, is_backup, agreement_date: dated.date })
     .eq("id", agreementId);
   if (error) return { error: error.message };
 

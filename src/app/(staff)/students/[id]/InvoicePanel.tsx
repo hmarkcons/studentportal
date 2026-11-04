@@ -156,10 +156,10 @@ export function GenerateInvoiceForm({
             className="w-36"
           />
         )}
-        <Select name="currency" defaultValue={defaultCurrency ?? "EUR"}>
-          <option value="EUR">EUR</option>
-          <option value="PKR">PKR</option>
-          <option value="USD">USD</option>
+        {/* Euro or rupees, for any student. A euro invoice states its rupee rate; a rupee one states none. */}
+        <Select name="currency" defaultValue={defaultCurrency === "PKR" ? "PKR" : "EUR"} aria-label="Invoice currency" title="Amounts are in this currency">
+          <option value="EUR">EUR — euro</option>
+          <option value="PKR">PKR — rupees</option>
         </Select>
         {/* Taken from the signed agreement, which is where the number of
             payments was agreed with the student. Still changeable, because
@@ -337,9 +337,10 @@ export function EditInvoiceForm({
         <label className="flex flex-col gap-0.5 text-xs text-muted">
           Currency
           <Select name="currency" defaultValue={invoice.currency}>
-            <option value="EUR">EUR</option>
-            <option value="PKR">PKR</option>
-            <option value="USD">USD</option>
+            <option value="EUR">EUR — euro</option>
+            <option value="PKR">PKR — rupees</option>
+            {/* Only an invoice already in dollars keeps the choice. */}
+            {invoice.currency === "USD" && <option value="USD">USD</option>}
           </Select>
         </label>
         <label className="flex flex-col gap-0.5 text-xs text-muted">

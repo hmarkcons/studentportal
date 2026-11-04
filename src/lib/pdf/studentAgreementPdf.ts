@@ -8,6 +8,7 @@ import { formatAmount, normalizeTheme } from "@/lib/pdf/agreementTheme";
 import { serviceOf } from "@/lib/serviceType";
 import { studentAgreementDateText } from "@/lib/agreementDate";
 import type { ClientSignature } from "@/lib/pdf/AgreementDocument";
+import { agreementFamily, familyFee, familyWords } from "@/lib/accompanyingFamily";
 
 // A student's agreement as a PDF, from its template and the student: shared
 // by "Generate PDF" on a student (generateAgreementPdf) and the template
@@ -38,6 +39,11 @@ export type StudentAgreementInput = {
     agreement_date?: string | null;
     service_type: string | null;
     visa_service_fee_override: number | null;
+    /** The accompanying family it was made with (0350); absent on a preview. */
+    spouse_count?: number | null;
+    children_count?: number | null;
+    spouse_fee?: number | null;
+    child_fee?: number | null;
   };
   student: {
     full_name: string;
@@ -97,8 +103,13 @@ export async function renderStudentAgreementPdf(input: StudentAgreementInput): P
   const adminCharge = isVisaOnly ? 0 : (agreement.admin_charge_override ?? destination.admin_charge ?? 0);
   const consultancyFee = isVisaOnly ? Number(visaFee) : isBackup ? 0 : (agreement.consultancy_fee_override ?? destination.consultancy_fee ?? 0);
   const discountAmount = isBackup ? 0 : (agreement.discount_amount ?? 0);
+  // The accompanying family (0350): their consultancy fees join the student's,
+  // in the total and spread over the instalments with it. Never on a backup
+  // country's agreement or a visa-only one.
+  const family = isVisaOnly || isBackup ? null : agreementFamily(agreement);
+  const familyTotal = familyFee(family);
   const currencySymbol = CURRENCY_SYMBOLS[destination.consultancy_fee_currency ?? "EUR"] ?? destination.consultancy_fee_currency ?? "€";
-  const totalFee = adminCharge + consultancyFee - discountAmount;
+  const totalFee = adminCharge + consultancyFee - discountAmount + familyTotal;
   const agreementDateStr = agreement.agreement_date
     ? studentAgreementDateText(agreement.agreement_date)
     : formatAgreementDate(new Date(agreement.created_at));
@@ -110,7 +121,7 @@ export async function renderStudentAgreementPdf(input: StudentAgreementInput): P
   // always sum to the whole. Splitting the discount across every installment
   // this way means what the client actually owes at each payment point is
   // already net of the discount, instead of only reconciling in the total row.
-  const discountedConsultancyFee = consultancyFee - discountAmount;
+  const discountedConsultancyFee = consultancyFee - discountAmount + familyTotal;
   const installmentCount = isBackup ? 1 : (agreement.installment_count ?? 1);
   const perInstallment = Math.round((discountedConsultancyFee / installmentCount) * 100) / 100;
   const installmentAmounts = Array.from({ length: installmentCount }, (_, i) =>
@@ -144,6 +155,13 @@ export async function renderStudentAgreementPdf(input: StudentAgreementInput): P
           visa_service_fee: isVisaOnly ? amount(consultancyFee) : "",
           discount: agreement.discount_amount ? amount(agreement.discount_amount) : "",
           total_fee: amount(totalFee),
+          // The accompanying family (0350): blank or 0 when nobody comes.
+          family: familyWords(family),
+          spouse_count: String(family?.spouses ?? 0),
+          children_count: String(family?.children ?? 0),
+          spouse_fee: family && family.spouses > 0 ? amount(family.spouseFee) : "",
+          child_fee: family && family.children > 0 ? amount(family.childFee) : "",
+          family_fee: familyTotal > 0 ? amount(familyTotal) : "",
           currency: destination.consultancy_fee_currency ?? "EUR",
           agreement_date: agreementDateStr,
           signatory_name: signatoryName ?? "",
@@ -173,6 +191,7 @@ export async function renderStudentAgreementPdf(input: StudentAgreementInput): P
         emergencyContactName: profile?.emergency_contact_name ?? null,
         emergencyContactRelation: profile?.emergency_contact_relation ?? null,
         emergencyContactNumber: profile?.emergency_contact_number ?? null,
+        family: familyWords(family) || null,
       },
       fee: {
         currencySymbol,
@@ -184,6 +203,7 @@ export async function renderStudentAgreementPdf(input: StudentAgreementInput): P
         isBackup,
         destinationLabel: destination.display_name ?? "",
         isVisaOnly,
+        family,
       },
       agreementDate: agreementDateStr,
       signatureDataUri: input.signatureDataUri,

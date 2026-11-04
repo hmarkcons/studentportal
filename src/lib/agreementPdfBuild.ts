@@ -26,7 +26,7 @@ export async function buildStudentAgreementPdf(
   const { data: agreement, error: agreementError } = await db
     .from("agreements")
     .select(
-      "id, student_id, template_id, destination_id, admin_charge_override, consultancy_fee_override, discount_amount, installment_count, is_backup, created_at, agreement_date, service_type, visa_service_fee_override"
+      "id, student_id, template_id, destination_id, admin_charge_override, consultancy_fee_override, discount_amount, installment_count, is_backup, created_at, agreement_date, service_type, visa_service_fee_override, spouse_count, children_count, spouse_fee, child_fee"
     )
     .eq("id", agreementId)
     .single();

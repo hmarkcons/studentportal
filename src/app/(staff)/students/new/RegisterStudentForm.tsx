@@ -7,6 +7,7 @@ import { SERVICE_LABELS, SERVICE_TYPES } from "@/lib/serviceType";
 import { isIntakeMode } from "@/lib/intake";
 import { STUDY_LEVELS, QUALIFICATION_LEVELS } from "@/lib/constants";
 import { PrimaryBackupDestinationSelect } from "@/components/PrimaryBackupDestinationSelect";
+import { FamilyFields } from "@/components/FamilyFields";
 import { RegistrationPersonalFields } from "@/components/RegistrationPersonalFields";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
@@ -20,6 +21,11 @@ export type DestinationOption = {
   display_name: string;
   intake_mode?: string | null;
   intake_seasons?: string[] | null;
+  /** Whether a student going here may bring family, and the fees for them (0350). */
+  allows_dependants?: boolean | null;
+  spouse_fee?: number | null;
+  child_fee?: number | null;
+  consultancy_fee_currency?: string | null;
 };
 
 /**
@@ -65,6 +71,8 @@ export function RegisterStudentForm({
   };
   const [state, formAction, pending] = useActionState(register, undefined);
   const [primaryId, setPrimaryId] = useState("");
+  // Every country chosen, for the family section: it shows while one of them allows family (0350).
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const intakeConfig = intakeConfigFor(destinations, primaryId);
 
   return (
@@ -117,7 +125,11 @@ export function RegisterStudentForm({
         <label className={labelClass}>
           Country of interest <span className="text-danger">*</span>
         </label>
-        <PrimaryBackupDestinationSelect destinations={destinations} onPrimaryChange={setPrimaryId} />
+        <PrimaryBackupDestinationSelect
+          destinations={destinations}
+          onPrimaryChange={setPrimaryId}
+          onSelectionChange={({ primaryId: p, backupIds: b }) => setSelectedIds([p, ...b].filter(Boolean))}
+        />
         {/* Said here rather than only in the error, because the picker posts
             hidden inputs and cannot carry HTML `required` — so the browser
             gives no hint that this one is not optional. */}
@@ -125,6 +137,7 @@ export function RegisterStudentForm({
           The primary country issues the Student ID and is what applications are created against.
         </p>
       </div>
+      <FamilyFields destinations={destinations} selectedIds={selectedIds} />
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-1.5">
           <label className={labelClass}>Assigned counselor</label>

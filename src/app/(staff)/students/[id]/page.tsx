@@ -1,3 +1,4 @@
+import { agreementFamily, familyFee, familyWords } from "@/lib/accompanyingFamily";
 import { hasRole } from "@/lib/auth/roles";
 import { AgreementDateEditor } from "@/components/AgreementDateEditor";
 import { agreementToday } from "@/lib/agreementDate";
@@ -151,7 +152,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         .select("auth_user_id, full_name, email, portal_active")
         .eq("id", id)
         .maybeSingle(),
-      supabase.from("leads").select("assigned_counselor_id, processing_officer_id, intake, discount_amount, discount_reason, service_type, registered_at, level_applying_for").eq("id", id).maybeSingle(),
+      supabase.from("leads").select("assigned_counselor_id, processing_officer_id, intake, discount_amount, discount_reason, service_type, registered_at, level_applying_for, spouse_count, children_count, spouse_fee, child_fee").eq("id", id).maybeSingle(),
       supabase
         .from("lead_destinations")
         .select("destination_id, is_backup, created_at, dashboard_stage_values, destination:destinations(display_name, country, admin_charge, country_code, dashboard_pipeline_stages, finalize_action_label, visa_service_fee)")
@@ -159,7 +160,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       supabase
         .from("agreements")
         .select(
-          "id, status, version, signing_method, signed_file_path, video_recording_path, signed_file_uploaded_at, video_uploaded_at, approval_undone_at, approval_undo_note, undone_by:staff!agreements_approval_undone_by_fkey(full_name), pdf_path, email_verified, document_status, video_status, document_review_note, video_review_note, discount_amount, created_at, agreement_date, template_id, admin_charge_override, consultancy_fee_override, installment_count, service_type, visa_service_fee_override, destination_id, destination:destinations(country, track), template:agreement_templates(file_path, destination_id, destination:destinations(country, track))"
+          "id, status, version, signing_method, signed_file_path, video_recording_path, signed_file_uploaded_at, video_uploaded_at, approval_undone_at, approval_undo_note, undone_by:staff!agreements_approval_undone_by_fkey(full_name), pdf_path, email_verified, document_status, video_status, document_review_note, video_review_note, discount_amount, created_at, agreement_date, template_id, admin_charge_override, consultancy_fee_override, installment_count, service_type, visa_service_fee_override, spouse_count, children_count, spouse_fee, child_fee, destination_id, destination:destinations(country, track), template:agreement_templates(file_path, destination_id, destination:destinations(country, track))"
         )
         .eq("student_id", id)
         .order("created_at", { ascending: false }),
@@ -260,9 +261,12 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   const defaultInvoiceAdminCharge = signedAgreement
     ? (signedAgreement.admin_charge_override ?? signedAgreementDestination?.admin_charge ?? null)
     : null;
+  // With the accompanying family's fees (0350), as the agreement's payment chart has them.
   const defaultInvoiceConsultancyFee =
     signedAgreement && signedAgreementDestination
-      ? (signedAgreement.consultancy_fee_override ?? signedAgreementDestination.consultancy_fee ?? 0) - (signedAgreement.discount_amount ?? 0)
+      ? (signedAgreement.consultancy_fee_override ?? signedAgreementDestination.consultancy_fee ?? 0) -
+        (signedAgreement.discount_amount ?? 0) +
+        familyFee(agreementFamily(signedAgreement))
       : null;
   const defaultInvoiceCurrency = signedAgreementDestination?.consultancy_fee_currency ?? null;
   const invoiceIds = (invoices ?? []).map((i) => i.id);
@@ -904,6 +908,13 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       >
         <div className="mb-4">
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Registration</p>
+          {/* Who is coming with them (0350): it goes onto their agreement and invoice. */}
+          {familyWords({ spouses: Number(leadRegistration?.spouse_count ?? 0), children: Number(leadRegistration?.children_count ?? 0) }) && (
+            <p className="mb-2 text-sm text-ink" data-registered-family>
+              <span className="text-muted">Accompanying family: </span>
+              {familyWords({ spouses: Number(leadRegistration?.spouse_count ?? 0), children: Number(leadRegistration?.children_count ?? 0) })}
+            </p>
+          )}
           <RegistrationEditForm
             registeredAt={(leadRegistration?.registered_at as string | null | undefined) ?? null}
             serviceType={serviceOf(leadRegistration?.service_type)}
@@ -924,6 +935,12 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
             intake={leadRegistration?.intake ?? null}
             discountAmount={leadRegistration?.discount_amount ?? null}
             discountReason={leadRegistration?.discount_reason ?? null}
+            family={{
+              spouses: Number(leadRegistration?.spouse_count ?? 0),
+              children: Number(leadRegistration?.children_count ?? 0),
+              spouseFee: leadRegistration?.spouse_fee != null ? Number(leadRegistration.spouse_fee) : null,
+              childFee: leadRegistration?.child_fee != null ? Number(leadRegistration.child_fee) : null,
+            }}
           />
         </div>
         <div className="border-t border-border pt-4">

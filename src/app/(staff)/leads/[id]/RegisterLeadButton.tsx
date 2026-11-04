@@ -1,6 +1,8 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { FamilyFields } from "@/components/FamilyFields";
+import type { DestinationOption } from "@/app/(staff)/students/new/RegisterStudentForm";
 import { registerLead } from "@/lib/actions/leads";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -21,10 +23,15 @@ export function RegisterLeadButton({
   leadId,
   leadName,
   defaults,
+  familyDestinations = [],
+  familySelectedIds = [],
 }: {
   leadId: string;
   leadName: string;
   defaults: Partial<Record<keyof RegistrationPersonal, string | null | undefined>>;
+  /** Every destination, and the lead's own countries (primary first): the family section shows when one allows family (0350). */
+  familyDestinations?: DestinationOption[];
+  familySelectedIds?: string[];
 }) {
   const [open, setOpen] = useState(false);
   const register = async (prevState: unknown, formData: FormData) => {
@@ -55,6 +62,7 @@ export function RegisterLeadButton({
             <RegistrationPersonalFields
               defaults={Object.fromEntries(Object.entries(defaults).map(([k, v]) => [k, v ?? ""]))}
             />
+            <FamilyFields destinations={familyDestinations} selectedIds={familySelectedIds} />
             {state?.error && <p className="text-sm text-danger">{state.error}</p>}
             <div className="flex items-center gap-2">
               <Button type="submit" variant="primary" pending={pending}>

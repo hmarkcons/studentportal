@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { createDestination } from "@/lib/actions/destinations";
 import { Button } from "@/components/ui/Button";
 import { Input, Select, Textarea } from "@/components/ui/Input";
+import { FamilySettingsFields } from "./FamilySettingsFields";
 
 export function NewDestinationForm() {
   const [state, formAction, pending] = useActionState(createDestination, undefined);
@@ -55,6 +56,7 @@ export function NewDestinationForm() {
           <Input name="visa_service_fee" type="number" step="0.01" min="0" placeholder="Visa-only clients" />
         </div>
       </div>
+      <FamilySettingsFields />
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-medium text-ink">Installment plan (optional)</label>
         <Input name="installment_plan" placeholder="e.g. 2 installments" />

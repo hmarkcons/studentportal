@@ -5,6 +5,7 @@ import { Pencil } from "lucide-react";
 import { updateRegistrationDetails } from "@/lib/actions/leads";
 import { SERVICE_LABELS, SERVICE_TYPES, type ServiceType } from "@/lib/serviceType";
 import { PrimaryBackupDestinationSelect } from "@/components/PrimaryBackupDestinationSelect";
+import { FamilyFields } from "@/components/FamilyFields";
 import { IntakeField } from "@/components/IntakeField";
 import { DestinationChangeWarning, type DestinationWork } from "./DestinationChangeWarning";
 import { intakeConfigFor, type DestinationOption } from "@/app/(staff)/students/new/RegisterStudentForm";
@@ -35,6 +36,7 @@ export function RegistrationEditForm({
   serviceType = "full",
   canSetService = false,
   registeredAt = null,
+  family = null,
 }: {
   studentId: string;
   revalidateTo: string;
@@ -56,6 +58,8 @@ export function RegistrationEditForm({
   canSetService?: boolean;
   /** When they registered — the day registration was done unless corrected. */
   registeredAt?: string | null;
+  /** The family registered as accompanying them, and their fees when set for this student (0350). */
+  family?: { spouses: number; children: number; spouseFee: number | null; childFee: number | null } | null;
 }) {
   const [editing, setEditing] = useState(false);
   // Starts at whatever the student is already registered for, so the intake
@@ -123,6 +127,8 @@ export function RegistrationEditForm({
           />
         </div>
       </div>
+      {/* Only while a country that allows family is chosen (0350). */}
+      <FamilyFields destinations={destinations} selectedIds={[primaryId, ...backupIds].filter(Boolean)} initial={family} />
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
         <label className="flex flex-col gap-1 text-xs text-muted">
           Assigned counselor

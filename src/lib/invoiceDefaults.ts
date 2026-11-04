@@ -9,6 +9,7 @@
 // registration, since the agreement is what the student actually signed.
 
 import { computeInvoiceMath, SRB_TAX_RATE, buildInstallmentPlan, type InvoiceMath } from "@/lib/invoiceMath";
+import { agreementFamily, familyFee } from "@/lib/accompanyingFamily";
 
 export type StudentFeeInputs = {
   discount_amount?: number | string | null;
@@ -35,6 +36,11 @@ export type AgreementFeeInputs = {
   discount_amount?: number | string | null;
   installment_count?: number | string | null;
   visa_service_fee_override?: number | string | null;
+  /** The accompanying family on the agreement (0350), whose fees join the consultancy fee. */
+  spouse_count?: number | string | null;
+  children_count?: number | string | null;
+  spouse_fee?: number | string | null;
+  child_fee?: number | string | null;
 } | null;
 
 export type InvoiceDefaults = {
@@ -76,7 +82,8 @@ export function resolveInvoiceDefaults(
   const agreementDiscount = num(agreement?.discount_amount);
   const registrationDiscount = num(student.discount_amount);
 
-  const consultancyFee = agreementFee ?? countryFee ?? 0;
+  // The accompanying family's fees (0350) are part of the consultancy fee, as on the agreement.
+  const consultancyFee = (agreementFee ?? countryFee ?? 0) + (visaOnly ? 0 : familyFee(agreementFamily(agreement)));
   const adminCharge = agreementAdmin ?? countryAdmin ?? 0;
   const discountAmount = agreementDiscount ?? registrationDiscount ?? 0;
 

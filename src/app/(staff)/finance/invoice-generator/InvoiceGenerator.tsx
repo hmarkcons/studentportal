@@ -77,6 +77,8 @@ export function InvoiceGenerator({
   const [discount, setDiscount] = useState("");
   const [discountReason, setDiscountReason] = useState("");
   const [count, setCount] = useState("1");
+  // Euro or rupees, chosen per invoice; it opens on the student's default.
+  const [currency, setCurrency] = useState("PKR");
   const [seenStudent, setSeenStudent] = useState<string>("");
 
   // Re-seed on each new pick, adjusting state during render rather than in an
@@ -91,12 +93,12 @@ export function InvoiceGenerator({
     setDiscount(String(student.discountAmount));
     setDiscountReason(student.discountReason ?? "");
     setCount(String(student.installmentCount));
+    setCurrency(student.currency === "EUR" ? "EUR" : "PKR");
   }
 
   const action = generateInvoice.bind(null, studentId, student?.agreementId ?? "");
   const [state, formAction, pending] = useActionState(action, undefined);
 
-  const currency = student?.currency ?? "PKR";
   const countries = student?.countries ?? [];
   const isVisaOnly = student?.service === "visa_only";
   const feeName = SERVICE_FEE_NAME[student?.service ?? "full"];
@@ -142,7 +144,19 @@ export function InvoiceGenerator({
 
       {student && (
         <form action={formAction} className="flex flex-col gap-4">
-          <input type="hidden" name="currency" value={currency} />
+          {/* Euro or rupees, for any student. A euro invoice states its rupee rate; a rupee one states none. */}
+          <label className="flex max-w-xs flex-col gap-1 text-xs text-muted">
+            Currency
+            <Select name="currency" value={currency} onChange={(e) => setCurrency(e.target.value)} data-generator-currency>
+              <option value="EUR">EUR — euro</option>
+              <option value="PKR">PKR — rupees</option>
+            </Select>
+            {student.currency && currency !== student.currency && (
+              <span className="text-[11px] text-warning">
+                The figures below came from {student.currency} fees — enter them in {currency}.
+              </span>
+            )}
+          </label>
           <input type="hidden" name="intake" value={student.intake ?? ""} />
 
           {isVisaOnly && (

@@ -126,6 +126,8 @@ export type InvoicePdfData = {
   /** Items added after the invoice was raised — a product from the fee
    *  catalog or a custom charge. Each is its own row in the Service table. */
   lineItems: { name: string; description?: string | null; amount: number }[];
+  /** Under the consultancy fee: the accompanying family it covers (0350), in words. */
+  familyNote?: string | null;
   extrasAmount: number;
   /** What the tax was charged on: the net consultancy fee plus the items. */
   taxableAmount: number;
@@ -250,6 +252,14 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
               <Text style={styles.metaKey}>Invoice Date:</Text>
               <Text style={styles.metaVal}>{data.issuedDate}</Text>
             </View>
+            {/* A euro invoice says the rate it was issued at, in plain sight; a
+                rupee invoice converts nothing and says none. */}
+            {data.currencyCode === "EUR" && data.pkrPerEur != null && data.pkrPerEur > 0 && (
+              <View style={styles.metaLine}>
+                <Text style={styles.metaKey}>Exchange Rate:</Text>
+                <Text style={styles.metaVal}>{`€1 = PKR ${Number.isInteger(data.pkrPerEur) ? data.pkrPerEur : Number(data.pkrPerEur.toFixed(2))}`}</Text>
+              </View>
+            )}
             {/* Only when there is no schedule below to say it better. With a
                 schedule this line repeated one of its dates out of context,
                 and a reader had two "due" dates to reconcile. */}
@@ -310,6 +320,7 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
                 above are. The consultancy fee is the primary country's — a
                 backup never carries one. */}
             <Text style={styles.itemName}>{feeLineLabel(data.feeName ?? "Consultancy Fee", data.destination)}</Text>
+            {data.familyNote && <Text style={styles.itemDesc}>{data.familyNote}</Text>}
             {data.intake && <Text style={styles.itemDesc}>Intake: {data.intake}</Text>}
             {data.installmentPlan && <Text style={styles.itemDesc}>Installment plan: {data.installmentPlan}</Text>}
             {/* The counselor used to be named here. It is a receipt for money,

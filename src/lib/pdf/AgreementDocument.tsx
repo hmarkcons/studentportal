@@ -8,6 +8,7 @@ import {
   formatAmount,
   formatListNumber,
   themedFeeRows,
+  familyFeeParts,
   type BulletShape,
   type HeadingStyle,
   type NumberFormat,
@@ -166,6 +167,8 @@ export type AgreementPdfData = {
     emergencyContactName: string | null;
     emergencyContactRelation: string | null;
     emergencyContactNumber: string | null;
+    /** "1 spouse and 2 children" coming with the student (0350); null when nobody. */
+    family?: string | null;
   };
   fee: {
     currencySymbol: string;
@@ -187,6 +190,8 @@ export type AgreementPdfData = {
      * carried in consultancyFee and installmentAmounts, is the whole of it.
      */
     isVisaOnly?: boolean;
+    /** The accompanying family (0350), whose fees are inside the instalments and the total. */
+    family?: { spouses: number; children: number; spouseFee: number; childFee: number } | null;
   };
   agreementDate: string;
   signatureDataUri: string | null;
@@ -447,6 +452,8 @@ function StudentDetailsChart({ student, destinationLabel, theme }: { student: Ag
           { label: "University (Applying)", value: destinationLabel },
           { label: "Course of Interest", value: student.courseOfInterest ?? "" },
         ],
+        // Said on every agreement that carries family (0350), whatever the template's wording.
+        ...(student.family ? [[{ label: "Accompanying Family", value: student.family, full: true }]] : []),
       ]}
     />
   );
@@ -479,6 +486,7 @@ const INSTALLMENT_SCHEDULE: { label: string; note: string }[] = [
 function FeeTable({ fee, theme }: { fee: AgreementPdfData["fee"]; theme?: Theme | null }) {
   if (theme) return <ThemedFeeTable fee={fee} theme={theme} />;
   if (fee.isVisaOnly) return <VisaServiceFeeTable fee={fee} />;
+  const family = familyFeeParts(fee, (n) => money(fee.currencySymbol, n));
   const rows: { label: string; note?: string; value: number }[] = [
     {
       label: fee.isBackup ? `Administrative Fee (${fee.destinationLabel})` : "Administrative Charges (Non-Refundable)",
@@ -488,7 +496,9 @@ function FeeTable({ fee, theme }: { fee: AgreementPdfData["fee"]; theme?: Theme 
   ];
   if (!fee.isBackup) {
     if (fee.installmentAmounts.length <= 1) {
-      rows.push({ label: "Consultancy Fee", value: fee.installmentAmounts[0] ?? fee.consultancyFee });
+      // With family (0350) the student's own fee, then a row for each family fee.
+      rows.push({ label: "Consultancy Fee", value: family.studentFee ?? fee.installmentAmounts[0] ?? fee.consultancyFee });
+      rows.push(...family.rows);
     } else {
       fee.installmentAmounts.forEach((amount, i) => {
         const schedule = INSTALLMENT_SCHEDULE[i] ?? { label: `Installment ${i + 1}`, note: undefined };
@@ -496,9 +506,12 @@ function FeeTable({ fee, theme }: { fee: AgreementPdfData["fee"]; theme?: Theme 
       });
     }
   }
+  const notes = [fee.discount && fee.discount > 0 ? `Includes a discount of ${money(fee.currencySymbol, fee.discount)}, already applied above` : null, family.note].filter(
+    (n): n is string => Boolean(n)
+  );
   rows.push({
     label: "Total Professional Fee",
-    note: fee.discount && fee.discount > 0 ? `Includes a discount of ${money(fee.currencySymbol, fee.discount)}, already applied above` : undefined,
+    note: notes.length ? notes.join(". ") : undefined,
     value: fee.total,
   });
 
