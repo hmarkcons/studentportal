@@ -42,6 +42,8 @@ type AgreementRecord = {
   /** The fee per spouse and per child it charges (0350). */
   spouse_fee?: number | null;
   child_fee?: number | null;
+  /** SRB tax percent (0353). */
+  tax_rate?: number | null;
   /** The signed copy on file, if one is. */
   signed_file_path?: string | null;
 };
@@ -213,6 +215,7 @@ export function AgreementActionsMenu({
           )}
           <Row label="Discount" value={inCurrency(agreement.discount_amount)} />
           <Row label="Installments" value={agreement.installment_count} />
+          <Row label="SRB tax" value={agreement.tax_rate != null && Number(agreement.tax_rate) > 0 ? `${Number(agreement.tax_rate)}%` : "None"} />
           <Row
             label="Currency"
             value={

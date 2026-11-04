@@ -3,6 +3,7 @@
 import { familyForAgreement, withAgreementFamilyFees, type FamilyColumns } from "@/lib/accompanyingFamily";
 import { convertFee, feeCurrencyOf, parseAgreementCurrency, type AgreementCurrencyColumns } from "@/lib/agreementCurrency";
 import { removeStorageFiles } from "@/lib/fileTrash";
+import { parseTaxRate } from "@/lib/invoiceMath";
 import { revalidatePath } from "next/cache";
 import { agreementToday, readAgreementDate } from "@/lib/agreementDate";
 import { createClient } from "@/lib/supabase/server";
@@ -141,7 +142,7 @@ async function agreementTerms(
   chosenDestinationId: string | null,
   formData: FormData,
   { isBackup, visaOnly }: { isBackup: boolean; visaOnly: boolean }
-): Promise<{ family: FamilyColumns; money: AgreementCurrencyColumns | null } | { error: string }> {
+): Promise<{ family: FamilyColumns; money: AgreementCurrencyColumns | null; tax: { tax_rate: number } | null } | { error: string }> {
   const [{ data: lead }, { data: template }] = await Promise.all([
     supabase.from("leads").select("spouse_count, children_count, spouse_fee, child_fee, family_members").eq("id", studentId).maybeSingle(),
     templateId ? supabase.from("agreement_templates").select("destination_id").eq("id", templateId).maybeSingle() : Promise.resolve({ data: null }),
@@ -165,7 +166,15 @@ async function agreementTerms(
   // A fee per spouse or child typed on the form, already in the agreement's currency.
   const withFees = withAgreementFamilyFees(family, formData);
   if ("error" in withFees) return { error: withFees.error };
-  return { family: withFees, money };
+  // SRB tax on the total after discount (0353), as typed — 0 for none. A form
+  // that posts no rate (one loaded before 0353) leaves it as it is.
+  let tax: { tax_rate: number } | null = null;
+  if (formData.has("tax_rate")) {
+    const rate = parseTaxRate(formData.get("tax_rate"));
+    if (rate === null) return { error: "Give the SRB tax as a percentage from 0 to 100 — 0 for none." };
+    tax = { tax_rate: rate };
+  }
+  return { family: withFees, money, tax };
 }
 
 export async function generateAgreement(studentId: string, _prevState: unknown, formData: FormData) {
@@ -209,6 +218,7 @@ export async function generateAgreement(studentId: string, _prevState: unknown, 
     ...fields,
     ...terms.family,
     ...(terms.money ?? {}),
+    ...(terms.tax ?? {}),
     service_type: service.service_type,
     is_backup,
     agreement_date: dated.date,
@@ -271,7 +281,15 @@ export async function updateAgreement(agreementId: string, studentId: string, _p
 
   const { error } = await supabase
     .from("agreements")
-    .update({ ...fields, ...terms.family, ...(terms.money ?? {}), service_type: service.service_type, is_backup, agreement_date: dated.date })
+    .update({
+      ...fields,
+      ...terms.family,
+      ...(terms.money ?? {}),
+      ...(terms.tax ?? {}),
+      service_type: service.service_type,
+      is_backup,
+      agreement_date: dated.date,
+    })
     .eq("id", agreementId);
   if (error) return { error: error.message };
 

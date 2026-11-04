@@ -50,6 +50,8 @@ export type StudentAgreementInput = {
     currency?: string | null;
     /** The rupees per euro its figures are converted at, when they are (0351). */
     pkr_per_eur?: number | string | null;
+    /** SRB tax percent on the total after discount (0353); null or absent, none. */
+    tax_rate?: number | string | null;
   };
   student: {
     full_name: string;
@@ -126,7 +128,13 @@ export async function renderStudentAgreementPdf(input: StudentAgreementInput): P
   const members = family ? familyMembersOf(agreement.family_members) : [];
   const memberLabels = familyMemberLabels(members);
   const currencySymbol = agreementSymbol(conversion.currency);
-  const totalFee = adminCharge + consultancyFee - discountAmount + familyTotal;
+  // SRB tax (0353) on the total after the discount, rounded as the agreement's
+  // currency is: to the rupee, or to the cent. The total includes it.
+  const feeBeforeTax = adminCharge + consultancyFee - discountAmount + familyTotal;
+  const taxRate = agreement.tax_rate != null && Number(agreement.tax_rate) > 0 ? Number(agreement.tax_rate) : 0;
+  const rawTax = (feeBeforeTax * taxRate) / 100;
+  const taxAmount = taxRate > 0 ? (conversion.currency === "PKR" ? Math.round(rawTax) : Math.round(rawTax * 100) / 100) : 0;
+  const totalFee = feeBeforeTax + taxAmount;
   const agreementDateStr = agreement.agreement_date
     ? studentAgreementDateText(agreement.agreement_date)
     : formatAgreementDate(new Date(agreement.created_at));
@@ -176,6 +184,10 @@ export async function renderStudentAgreementPdf(input: StudentAgreementInput): P
           visa_service_fee: isVisaOnly ? amount(consultancyFee) : "",
           discount: agreement.discount_amount ? amount(agreement.discount_amount) : "",
           total_fee: amount(totalFee),
+          // SRB tax (0353): blank when the agreement carries none.
+          fee_before_tax: amount(feeBeforeTax),
+          tax_rate: taxRate > 0 ? `${String(Math.round(taxRate * 100) / 100)}%` : "",
+          tax_amount: taxRate > 0 ? amount(taxAmount) : "",
           // The accompanying family (0350): blank or 0 when nobody comes.
           family: familyWords(family),
           spouse_count: String(family?.spouses ?? 0),
@@ -229,6 +241,7 @@ export async function renderStudentAgreementPdf(input: StudentAgreementInput): P
         destinationLabel: destination.display_name ?? "",
         isVisaOnly,
         family,
+        tax: taxRate > 0 ? { rate: taxRate, amount: taxAmount, base: feeBeforeTax } : null,
       },
       agreementDate: agreementDateStr,
       signatureDataUri: input.signatureDataUri,

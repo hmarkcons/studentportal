@@ -1,3 +1,4 @@
+import { SRB_TAX_RATE } from "@/lib/invoiceMath";
 import { agreementFamily, familyFee, familyMemberLabels, familyMembersOf, familyWords } from "@/lib/accompanyingFamily";
 import { agreementCurrencyOf, convertFee, feeCurrencyOf, type CountryFees } from "@/lib/agreementCurrency";
 import { readAgreementRate } from "@/lib/agreementCompanyRead";
@@ -163,7 +164,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       supabase
         .from("agreements")
         .select(
-          "id, status, version, signing_method, signed_file_path, video_recording_path, signed_file_uploaded_at, video_uploaded_at, approval_undone_at, approval_undo_note, undone_by:staff!agreements_approval_undone_by_fkey(full_name), pdf_path, email_verified, document_status, video_status, document_review_note, video_review_note, discount_amount, created_at, agreement_date, template_id, admin_charge_override, consultancy_fee_override, installment_count, service_type, visa_service_fee_override, spouse_count, children_count, spouse_fee, child_fee, family_members, currency, pkr_per_eur, destination_id, destination:destinations(country, track), template:agreement_templates(file_path, destination_id, destination:destinations(country, track))"
+          "id, status, version, signing_method, signed_file_path, video_recording_path, signed_file_uploaded_at, video_uploaded_at, approval_undone_at, approval_undo_note, undone_by:staff!agreements_approval_undone_by_fkey(full_name), pdf_path, email_verified, document_status, video_status, document_review_note, video_review_note, discount_amount, created_at, agreement_date, template_id, admin_charge_override, consultancy_fee_override, installment_count, service_type, visa_service_fee_override, spouse_count, children_count, spouse_fee, child_fee, family_members, currency, pkr_per_eur, tax_rate, destination_id, destination:destinations(country, track), template:agreement_templates(file_path, destination_id, destination:destinations(country, track))"
         )
         .eq("student_id", id)
         .order("created_at", { ascending: false }),
@@ -297,15 +298,18 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
       ? Number(signedAgreement.admin_charge_override)
       : countryInInvoiceCurrency(signedAgreementDestination?.admin_charge)
     : null;
-  // With the accompanying family's fees (0350), as the agreement's payment chart has them.
+  // With the accompanying family's fees (0350), as the agreement's payment
+  // chart has them — before the discount, which the form carries on its own
+  // line and takes off once. (Taking it off here too, as this did from
+  // 2026-09-22, took a discounted student's discount off twice.)
   const defaultInvoiceConsultancyFee =
     signedAgreement && signedAgreementDestination
       ? (signedAgreement.consultancy_fee_override != null
           ? Number(signedAgreement.consultancy_fee_override)
-          : inInvoiceCurrency(Number(signedAgreementDestination.consultancy_fee ?? 0))) -
-        Number(signedAgreement.discount_amount ?? 0) +
-        familyFee(agreementFamily(signedAgreement))
+          : inInvoiceCurrency(Number(signedAgreementDestination.consultancy_fee ?? 0))) + familyFee(agreementFamily(signedAgreement))
       : null;
+  // The SRB tax the signed agreement charges (0353); one signed before it carried none, and its invoice the standard.
+  const defaultInvoiceTaxRate = signedAgreement?.tax_rate != null ? Number(signedAgreement.tax_rate) : SRB_TAX_RATE;
   const defaultInvoiceCurrency = signedAgreementDestination ? invoiceOpensIn : null;
   const invoiceIds = (invoices ?? []).map((i) => i.id);
   const appIds = (applications ?? []).map((a) => a.id);
@@ -1342,6 +1346,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                 defaultAdminCharge={studentService === "visa_only" ? null : defaultInvoiceAdminCharge}
                 defaultConsultancyFee={studentService === "visa_only" ? defaultVisaInvoiceFee : defaultInvoiceConsultancyFee}
                 defaultCurrency={defaultInvoiceCurrency}
+                defaultTaxRate={defaultInvoiceTaxRate}
                 service={studentService}
                 // The agreement is where the number of payments and the
                 // discount were actually agreed with the student, so the

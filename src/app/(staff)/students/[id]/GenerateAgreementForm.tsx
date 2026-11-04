@@ -10,6 +10,7 @@ import { FileField } from "@/components/FileField";
 import { Input, Select } from "@/components/ui/Input";
 import type { ServiceType } from "@/lib/serviceType";
 import { STANDARD_CHILD_FEE, STANDARD_SPOUSE_FEE } from "@/lib/accompanyingFamily";
+import { SRB_TAX_RATE } from "@/lib/invoiceMath";
 import {
   AGREEMENT_CURRENCIES,
   AGREEMENT_CURRENCY_LABELS,
@@ -116,6 +117,8 @@ function MoneyFields({
     /** The fee per spouse and per child it charges, in its own currency. */
     spouseFee?: number | null;
     childFee?: number | null;
+    /** SRB tax percent (0353); a new agreement opens on the standard 5. */
+    taxRate?: number | null;
   };
   standardRate: number;
   wide?: boolean;
@@ -131,6 +134,7 @@ function MoneyFields({
   const [visa, setVisa] = useState(asText(initial.visa));
   const [spouseFee, setSpouseFee] = useState(asText(initial.spouseFee));
   const [childFee, setChildFee] = useState(asText(initial.childFee));
+  const [taxRate, setTaxRate] = useState(String(initial.taxRate ?? SRB_TAX_RATE));
   const rateNumber = Number(rate) > 0 ? Number(rate) : standardRate;
   const converting = currency !== feeCurrency;
   const fromCountry = (n: number) => convertFee(n, feeCurrency, currency, rateNumber);
@@ -315,11 +319,29 @@ function MoneyFields({
           )}
         </>
       )}
+      {/* SRB tax (0353): a percentage, so it does not change with the currency. */}
+      <label className={caption}>
+        SRB tax (%)
+        <Input
+          name="tax_rate"
+          type="number"
+          step="0.01"
+          min="0"
+          max="100"
+          required
+          value={taxRate}
+          onChange={(e) => setTaxRate(e.target.value)}
+          className={box("w-24")}
+          title="On the total after discount; 0 for none"
+          data-agreement-tax
+        />
+      </label>
       <p className="w-full text-xs text-muted" data-agreement-standard-fees>
         {isVisaOnly && "Visa documentation & application only — no administrative charge and no consultancy fee. "}
         Every amount is in {currency}
         {converting ? `, and the country's fees, in ${feeCurrency}, are converted at this rate, which the agreement keeps` : ""}.
         {standard.length > 0 && ` Left blank, each is the country's standard: ${standard.join(" · ")}.`}
+        {Number(taxRate) > 0 && ` SRB tax of ${taxRate}% is added on the total after discount.`}
         {isVisaOnly && countryName && visaFee == null && (
           <span className="text-warning"> No visa service fee is set for {countryName} in Setup › Destinations, so enter one here.</span>
         )}
@@ -520,6 +542,8 @@ export function EditAgreementForm({
     /** The fee per spouse and per child it charges, in its own currency (0350). */
     spouse_fee?: number | null;
     child_fee?: number | null;
+    /** SRB tax percent (0353); null on one made before, which carries none. */
+    tax_rate?: number | null;
   };
   /** The family on the registration, which saving takes again (0350). */
   family?: RegisteredFamily | null;
@@ -587,8 +611,10 @@ export function EditAgreementForm({
                   installments: agreement.installment_count,
                   spouseFee: agreement.spouse_fee,
                   childFee: agreement.child_fee,
+                  // One made before 0353 carries no tax: correcting it does not add any unless asked.
+                  taxRate: agreement.tax_rate ?? 0,
                 }
-              : { installments: agreement.installment_count }
+              : { installments: agreement.installment_count, taxRate: agreement.tax_rate ?? 0 }
           }
           standardRate={standardRate}
           family={family}

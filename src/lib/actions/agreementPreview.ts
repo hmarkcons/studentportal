@@ -1,5 +1,6 @@
 "use server";
 
+import { SRB_TAX_RATE } from "@/lib/invoiceMath";
 import { createElement } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { hasRole } from "@/lib/auth/roles";
@@ -84,6 +85,8 @@ export async function previewAgreementTemplate(input: {
       service_type: visaOnly ? "visa_only" : "full",
       // A country with no visa fee on file still previews, at a sample fee.
       visa_service_fee_override: visaOnly && destination.visa_service_fee == null ? 500 : null,
+      // At the standard SRB tax a new agreement opens on (0353).
+      tax_rate: SRB_TAX_RATE,
     },
     student: SAMPLE_STUDENT,
     profile: SAMPLE_PROFILE,
@@ -209,6 +212,7 @@ export async function previewAgreementCompany(formData: FormData): Promise<Previ
       created_at: new Date().toISOString(),
       service_type: "full",
       visa_service_fee_override: null,
+      tax_rate: SRB_TAX_RATE,
     },
     student: SAMPLE_STUDENT,
     profile: SAMPLE_PROFILE,

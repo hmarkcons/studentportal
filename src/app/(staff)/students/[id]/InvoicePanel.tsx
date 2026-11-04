@@ -16,7 +16,7 @@ import {
 } from "@/lib/actions/invoices";
 import { addLineItem, deleteLineItem } from "@/lib/actions/consultancyFee";
 import { computeInvoiceStatus, INVOICE_STATUS_LABELS } from "@/lib/invoiceStatus";
-import { computeInvoiceMath, computePaymentProgress, installmentNote, sumLineItems, type TaxBase } from "@/lib/invoiceMath";
+import { computeInvoiceMath, computePaymentProgress, installmentNote, sumLineItems, SRB_TAX_RATE, type TaxBase } from "@/lib/invoiceMath";
 import { formatDateOnly } from "@/lib/formatDate";
 import { balanceDueDate, carriedFromNote, INSTALMENT_PAYMENT_METHODS } from "@/lib/partialPayment";
 import { UndoPaymentButton } from "@/components/UndoPaymentButton";
@@ -57,9 +57,12 @@ export function GenerateInvoiceForm({
   countries = [],
   service = "full",
   latestPkrRate = null,
+  defaultTaxRate = SRB_TAX_RATE,
 }: {
   studentId: string;
   agreementId: string;
+  /** SRB tax percent: the signed agreement's (0353), else the standard. */
+  defaultTaxRate?: number;
   defaultInstallmentPlan?: string | null;
   defaultAdminCharge?: number | null;
   defaultConsultancyFee?: number | null;
@@ -94,7 +97,7 @@ export function GenerateInvoiceForm({
         </p>
       ) : (
         (defaultAdminCharge != null || defaultConsultancyFee != null) && (
-          <p className="text-xs text-muted">Pre-filled from the signed agreement (discount already applied) — adjust if needed.</p>
+          <p className="text-xs text-muted">Pre-filled from the signed agreement — the discount on its own line below — adjust if needed.</p>
         )
       )}
       {/* One administrative fee per country: a backup country's agreement is
@@ -192,6 +195,11 @@ export function GenerateInvoiceForm({
             placeholder="e.g. Early registration"
             className="w-48"
           />
+        </label>
+        {/* On the whole invoice after the discount; the agreement's rate, any figure from 0 to 100. */}
+        <label className="flex flex-col gap-0.5 text-xs text-muted">
+          SRB tax (%)
+          <Input name="tax_rate" type="number" step="0.01" min="0" max="100" required defaultValue={defaultTaxRate} className="w-24" data-invoice-tax />
         </label>
       </div>
       <div className="flex flex-wrap items-end gap-2">

@@ -13,6 +13,7 @@ import {
   type HeadingStyle,
   type NumberFormat,
   type Theme,
+  taxFeeRow,
 } from "./agreementTheme";
 
 type Style = Styles[string];
@@ -173,6 +174,8 @@ export type AgreementPdfData = {
     familyMembers?: { label: string; name: string; dob: string }[];
   };
   fee: {
+    /** SRB tax (0353): percent, amount, and the total after discount it was charged on; null for none. */
+    tax?: { rate: number; amount: number; base: number } | null;
     currencySymbol: string;
     adminCharge: number;
     consultancyFee: number;
@@ -520,6 +523,9 @@ function FeeTable({ fee, theme }: { fee: AgreementPdfData["fee"]; theme?: Theme 
   const notes = [fee.discount && fee.discount > 0 ? `Includes a discount of ${money(fee.currencySymbol, fee.discount)}, already applied above` : null, family.note].filter(
     (n): n is string => Boolean(n)
   );
+  // SRB tax (0353), on the total after discount, before the total that includes it.
+  const tax = taxFeeRow(fee, (n) => money(fee.currencySymbol, n));
+  if (tax) rows.push(tax);
   rows.push({
     label: "Total Professional Fee",
     note: notes.length ? notes.join(". ") : undefined,
@@ -1205,6 +1211,8 @@ function VisaServiceFeeTable({ fee }: { fee: AgreementPdfData["fee"] }) {
       rows.push({ label: `Visa Service — ${schedule.label}`, note: schedule.note, value: amount });
     });
   }
+  const tax = taxFeeRow(fee, (n) => money(fee.currencySymbol, n));
+  if (tax) rows.push(tax);
   rows.push({
     label: "Total Professional Fee",
     note: fee.discount && fee.discount > 0 ? `Includes a discount of ${money(fee.currencySymbol, fee.discount)}, already applied above` : undefined,

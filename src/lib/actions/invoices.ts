@@ -26,6 +26,7 @@ import {
   SRB_TAX_RATE,
   type AdminChargeLine,
   type TaxBase,
+  parseTaxRate,
 } from "@/lib/invoiceMath";
 import { planScheduleChange } from "@/lib/invoiceSchedule";
 import { ISSUER_COLUMNS, bankFromSettings, issuerFromSettings, type IssuerRow } from "@/lib/invoiceIssuer";
@@ -289,11 +290,19 @@ export async function generateInvoice(studentId: string, agreementId: string, _p
   // Discount off the fee, then SRB tax on the whole invoice — the same
   // computation the generator previews and the PDF prints. New invoices are
   // stamped with the current rule so reprinting one later reproduces it.
+  // The SRB tax percent as the form gives it — the signed agreement's (0353),
+  // any figure from 0 to 100 — else the standard for a form that sends none.
+  let taxRate = SRB_TAX_RATE;
+  if (formData.has("tax_rate")) {
+    const typed = parseTaxRate(formData.get("tax_rate"));
+    if (typed === null) return { error: "Give the SRB tax as a percentage from 0 to 100 — 0 for none." };
+    taxRate = typed;
+  }
   const math = computeInvoiceMath({
     consultancyFee: consultancy_fee,
     adminCharge: admin_charge,
     discountAmount: discount_amount,
-    taxRate: SRB_TAX_RATE,
+    taxRate,
     taxBase: CURRENT_TAX_BASE,
   });
 

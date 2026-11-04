@@ -467,9 +467,26 @@ export type FeeFigures = {
    * fees are already inside consultancyFee's instalments and the total.
    */
   family?: { spouses: number; children: number; spouseFee: number; childFee: number } | null;
+  /**
+   * SRB tax (0353): the percentage, the amount and what it was charged on —
+   * the total after the discount. Absent or null, the agreement carries none.
+   * `total` already includes it.
+   */
+  tax?: { rate: number; amount: number; base: number } | null;
 };
 
 export type FeeRow = { label: string; note?: string; value: number; total?: boolean };
+
+/**
+ * The SRB tax row of a payment chart (0353), Classic or themed: after every
+ * payment and before the total, so the rows still add up to it. Null when the
+ * agreement carries no tax.
+ */
+export function taxFeeRow(fee: Pick<FeeFigures, "tax">, format: (n: number) => string): FeeRow | null {
+  if (!fee.tax || !(fee.tax.rate > 0)) return null;
+  const rate = String(Math.round(fee.tax.rate * 100) / 100);
+  return { label: `SRB Tax (${rate}%)`, note: `On ${format(fee.tax.base)}, the total after discount`, value: fee.tax.amount };
+}
 
 /** The family's fees together. */
 function familyTotal(f: FeeFigures["family"]): number {
@@ -541,6 +558,9 @@ export function themedFeeRows(fee: FeeFigures, labels: Theme["fee"]): FeeRow[] {
       rows.push(...family.rows);
     } else installments();
   }
+
+  const tax = taxFeeRow(fee, (n) => formatAmount(fee.currencySymbol, n, labels.amount));
+  if (tax) rows.push(tax);
 
   const discount = fee.discount && fee.discount > 0 ? fee.discount : 0;
   const notes = [

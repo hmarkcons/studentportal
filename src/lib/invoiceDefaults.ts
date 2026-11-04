@@ -45,6 +45,8 @@ export type AgreementFeeInputs = {
   /** The currency the agreement was printed in and the rate it was converted at (0351). */
   currency?: string | null;
   pkr_per_eur?: number | string | null;
+  /** SRB tax percent the agreement charges (0353); null on one made before, invoiced at the standard. */
+  tax_rate?: number | string | null;
 } | null;
 
 export type InvoiceDefaults = {
@@ -52,6 +54,8 @@ export type InvoiceDefaults = {
   currency: string;
   /** The rupees per euro the agreement was converted at, to say another country's figure in the same currency (0351). */
   rate: number | null;
+  /** SRB tax percent: the agreement's (0353), else the standard. */
+  taxRate: number;
   destinationLabel: string | null;
   intake: string | null;
   installmentCount: number;
@@ -105,12 +109,14 @@ export function resolveInvoiceDefaults(
   const discountAmount = agreementDiscount ?? inCurrency(registrationDiscount ?? 0);
 
   const installmentCount = Math.max(1, Math.floor(num(agreement?.installment_count) ?? 1));
-  const math = computeInvoiceMath({ consultancyFee, adminCharge, discountAmount, taxRate: SRB_TAX_RATE });
+  const taxRate = num(agreement?.tax_rate) ?? SRB_TAX_RATE;
+  const math = computeInvoiceMath({ consultancyFee, adminCharge, discountAmount, taxRate });
 
   return {
     agreementId: agreement?.id ?? null,
     currency,
     rate: currency !== countryCurrency ? rate : null,
+    taxRate,
     destinationLabel: destination?.display_name || destination?.country || null,
     intake: student.intake ?? null,
     installmentCount,

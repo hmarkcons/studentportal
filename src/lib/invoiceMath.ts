@@ -5,6 +5,24 @@
 // Sindh Revenue Board services tax, charged on the consultancy fee.
 export const SRB_TAX_RATE = 5;
 
+/**
+ * An SRB tax percentage as typed on an agreement or an invoice form: any
+ * figure from 0 to 100, kept to two decimals as invoices.tax_rate and
+ * agreements.tax_rate store it. Null for blank or anything else.
+ */
+export function parseTaxRate(raw: unknown): number | null {
+  const s = String(raw ?? "").trim().replace(/%$/, "").trim();
+  if (s === "") return null;
+  const n = Number(s);
+  if (!Number.isFinite(n) || n < 0 || n > 100) return null;
+  return Math.round(n * 100) / 100;
+}
+
+/** "5", "2.5", "7.25" — a percentage without trailing zeros. */
+export function taxRateText(rate: number): string {
+  return String(Math.round(rate * 100) / 100);
+}
+
 export type InvoiceMathInput = {
   consultancyFee: number;
   adminCharge: number;

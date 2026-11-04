@@ -25,6 +25,8 @@ export type StudentOption = {
   level: string | null;
   agreementId: string | null;
   currency: string;
+  /** SRB tax percent: the signed agreement's (0353), else the standard. */
+  taxRate: number;
   intake: string | null;
   installmentCount: number;
   consultancyFee: number;
@@ -79,6 +81,7 @@ export function InvoiceGenerator({
   const [count, setCount] = useState("1");
   // Euro or rupees, chosen per invoice; it opens on the student's default.
   const [currency, setCurrency] = useState("PKR");
+  const [taxRate, setTaxRate] = useState(String(SRB_TAX_RATE));
   const [seenStudent, setSeenStudent] = useState<string>("");
 
   // Re-seed on each new pick, adjusting state during render rather than in an
@@ -94,6 +97,7 @@ export function InvoiceGenerator({
     setDiscountReason(student.discountReason ?? "");
     setCount(String(student.installmentCount));
     setCurrency(student.currency === "EUR" ? "EUR" : "PKR");
+    setTaxRate(String(student.taxRate));
   }
 
   const action = generateInvoice.bind(null, studentId, student?.agreementId ?? "");
@@ -116,7 +120,7 @@ export function InvoiceGenerator({
     consultancyFee: Number(fee) || 0,
     adminCharge: adminTotal,
     discountAmount: Number(discount) || 0,
-    taxRate: SRB_TAX_RATE,
+    taxRate: Math.min(100, Math.max(0, Number(taxRate) || 0)),
   });
   const n = Math.max(1, Math.floor(Number(count) || 1));
   // Admin charge on installment 1, matching how it is actually collected.
@@ -214,6 +218,11 @@ export function InvoiceGenerator({
             <label className="flex flex-col gap-1 text-xs text-muted">
               Installments
               <Input name="installment_count" type="number" min="1" max="24" value={count} onChange={(e) => setCount(e.target.value)} required />
+            </label>
+            {/* On the whole invoice after the discount: the signed agreement's rate, any figure from 0 to 100. */}
+            <label className="flex flex-col gap-1 text-xs text-muted">
+              SRB tax (%)
+              <Input name="tax_rate" type="number" step="0.01" min="0" max="100" value={taxRate} onChange={(e) => setTaxRate(e.target.value)} required data-invoice-tax />
             </label>
             <label className="flex flex-col gap-1 text-xs text-muted">
               First installment due

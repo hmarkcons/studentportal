@@ -61,7 +61,7 @@ export default async function InvoiceGeneratorPage() {
     readAll((from, to) =>
       supabase
         .from("agreements")
-        .select("id, student_id, status, admin_charge_override, consultancy_fee_override, discount_amount, installment_count, service_type, visa_service_fee_override, spouse_count, children_count, spouse_fee, child_fee, currency, pkr_per_eur")
+        .select("id, student_id, status, admin_charge_override, consultancy_fee_override, discount_amount, installment_count, service_type, visa_service_fee_override, spouse_count, children_count, spouse_fee, child_fee, currency, pkr_per_eur, tax_rate")
         .order("id")
         .range(from, to)
     ),
@@ -143,6 +143,7 @@ export default async function InvoiceGeneratorPage() {
       level: s.level_applying_for,
       agreementId: defaults.agreementId,
       currency: defaults.currency,
+      taxRate: defaults.taxRate,
       intake: defaults.intake,
       installmentCount: defaults.installmentCount,
       consultancyFee: defaults.math.consultancyFee,
