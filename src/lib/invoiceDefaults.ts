@@ -91,20 +91,18 @@ export function resolveInvoiceDefaults(
   // Public-university destinations are billed in EUR regardless of what is
   // stored against the country, so the generator opens on the right currency
   // and staff are not choosing it by hand — unless the agreement was printed
-  // in the other currency (0351), when the invoice opens on that, with every
-  // figure converted at the agreement's own rate, as the agreement has them.
+  // in the other currency (0351), when the invoice opens on that, as the
+  // agreement has it: its own figures as they are (0352), the country's and
+  // the registration's converted at the agreement's own rate.
   const countryCurrency = destination?.track === "public" ? "EUR" : destination?.consultancy_fee_currency || "PKR";
   const currency = agreement?.currency === "EUR" || agreement?.currency === "PKR" ? agreement.currency : countryCurrency;
   const rate = num(agreement?.pkr_per_eur);
   const inCurrency = (n: number) => convertFee(n, countryCurrency, currency, rate);
 
   // The accompanying family's fees (0350) are part of the consultancy fee, as on the agreement.
-  const family = visaOnly ? null : agreementFamily(agreement);
-  const consultancyFee =
-    inCurrency(agreementFee ?? countryFee ?? 0) +
-    familyFee(family && { ...family, spouseFee: inCurrency(family.spouseFee), childFee: inCurrency(family.childFee) });
-  const adminCharge = inCurrency(agreementAdmin ?? countryAdmin ?? 0);
-  const discountAmount = inCurrency(agreementDiscount ?? registrationDiscount ?? 0);
+  const consultancyFee = (agreementFee ?? inCurrency(countryFee ?? 0)) + (visaOnly ? 0 : familyFee(agreementFamily(agreement)));
+  const adminCharge = agreementAdmin ?? inCurrency(countryAdmin ?? 0);
+  const discountAmount = agreementDiscount ?? inCurrency(registrationDiscount ?? 0);
 
   const installmentCount = Math.max(1, Math.floor(num(agreement?.installment_count) ?? 1));
   const math = computeInvoiceMath({ consultancyFee, adminCharge, discountAmount, taxRate: SRB_TAX_RATE });

@@ -1,7 +1,7 @@
 "use server";
 
 import { familyForAgreement, type FamilyColumns } from "@/lib/accompanyingFamily";
-import { parseAgreementCurrency, type AgreementCurrencyColumns } from "@/lib/agreementCurrency";
+import { convertFee, feeCurrencyOf, parseAgreementCurrency, type AgreementCurrencyColumns } from "@/lib/agreementCurrency";
 import { removeStorageFiles } from "@/lib/fileTrash";
 import { revalidatePath } from "next/cache";
 import { agreementToday, readAgreementDate } from "@/lib/agreementDate";
@@ -150,9 +150,19 @@ async function agreementTerms(
   const { data: destination } = destinationId
     ? await supabase.from("destinations").select("allows_dependants, spouse_fee, child_fee, consultancy_fee_currency").eq("id", destinationId).maybeSingle()
     : { data: null };
-  const money = parseAgreementCurrency(formData, destination?.consultancy_fee_currency as string | null | undefined);
+  const feeCurrency = feeCurrencyOf(destination?.consultancy_fee_currency as string | null | undefined);
+  const money = parseAgreementCurrency(formData, feeCurrency);
   if (money && "error" in money) return { error: money.error };
-  return { family: familyForAgreement(lead, destination, { isBackup, visaOnly }), money };
+  // Everything the agreement holds is in its own currency (0352): what was
+  // typed on the form already is, and the family's fees — set at registration
+  // in the country's currency — are converted here, at the agreement's rate.
+  const family = familyForAgreement(lead, destination, { isBackup, visaOnly });
+  if (money && money.currency !== feeCurrency) {
+    const inAgreement = (n: number | null) => (n == null ? null : convertFee(n, feeCurrency, money.currency, money.pkr_per_eur));
+    family.spouse_fee = inAgreement(family.spouse_fee);
+    family.child_fee = inAgreement(family.child_fee);
+  }
+  return { family, money };
 }
 
 export async function generateAgreement(studentId: string, _prevState: unknown, formData: FormData) {

@@ -1,11 +1,12 @@
 // The currency a student's agreement is written in (0351): euro or rupees, as
-// chosen when it is made. Its figures come from its country in the country's
-// fee currency — euro for the public universities, rupees for the private —
-// and the amounts typed on the form (an override, a discount) are in that
-// currency too. An agreement in the other currency is converted when it is
-// printed, at the rupees-per-euro rate it keeps: the office's standard
-// (Setup → Agreement templates, 335 to begin with) unless another was given
-// for it.
+// chosen when it is made. Everything the agreement itself holds is in that
+// currency (0352) — an admin charge or consultancy fee typed over the
+// country's, the discount, a visa service fee, the family's fees. What it
+// takes from its country in Setup → Destinations is in the country's fee
+// currency — euro for the public universities, rupees for the private — and is
+// converted at the rupees-per-euro rate the agreement keeps: the office's
+// standard (Setup → Agreement templates, 335 to begin with) unless another was
+// given for it. An agreement in its country's own currency converts nothing.
 //
 // Pure, importing only another pure module, so the unit tests load it under
 // plain Node.
@@ -87,6 +88,35 @@ export function agreementConversion(
   }
   if (!AGREEMENT_CURRENCIES.includes(from as AgreementCurrency)) return { error: `This agreement cannot be converted from ${from} to ${to}.` };
   return { currency: to, rate, convert: (n) => convertFee(n, from, to, rate) };
+}
+
+/** A country's standard fees as an agreement form offers them, in its fee currency. */
+export type CountryFees = { currency?: string | null; admin?: number | null; consultancy?: number | null };
+
+type Num = number | string | null | undefined;
+const num = (v: Num): number | null => {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
+/**
+ * The consultancy fee an agreement settled, net of its discount, in the
+ * agreement's own currency — the basis a counselor's commission is a share of.
+ * Its own fee as typed, else its country's converted at its rate; the discount
+ * is its own. The currency is null where the country names none, as before.
+ */
+export function agreementNetFee(
+  agreement: { consultancy_fee_override?: Num; discount_amount?: Num; currency?: string | null; pkr_per_eur?: Num },
+  destination: { consultancy_fee?: Num; consultancy_fee_currency?: string | null }
+): { consultancyFee: number; currency: string | null } {
+  const conversion = agreementConversion(destination.consultancy_fee_currency, agreement);
+  const convert = "error" in conversion ? (n: number) => n : conversion.convert;
+  const own = num(agreement.consultancy_fee_override);
+  return {
+    consultancyFee: (own ?? convert(num(destination.consultancy_fee) ?? 0)) - (num(agreement.discount_amount) ?? 0),
+    currency: "error" in conversion || !isChoice(agreement.currency) ? (destination.consultancy_fee_currency ?? null) : conversion.currency,
+  };
 }
 
 export type AgreementCurrencyColumns = { currency: AgreementCurrency; pkr_per_eur: number | null };

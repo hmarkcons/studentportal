@@ -88,7 +88,7 @@ export default async function AgreementGeneratorPage(props: {
       supabase.from("lead_destinations").select("destination_id, is_backup, destination:destinations(display_name)").eq("lead_id", selected.id),
       supabase.from("leads").select("service_type").eq("id", selected.id).maybeSingle(),
       // Each country's fee currency and the standard rupee rate, for an agreement in the other currency (0351).
-      supabase.from("destinations").select("id, consultancy_fee_currency"),
+      supabase.from("destinations").select("id, consultancy_fee_currency, admin_charge, consultancy_fee"),
       readAgreementRate(supabase),
     ]);
     const backupDestinationIds = (registeredRows ?? []).filter((d) => d.is_backup).map((d) => d.destination_id as string);
@@ -157,7 +157,16 @@ export default async function AgreementGeneratorPage(props: {
             service={service}
             countries={orderedCountries}
             today={agreementToday()}
-            feeCurrencies={Object.fromEntries((feeRows ?? []).map((d) => [d.id as string, (d.consultancy_fee_currency as string | null) ?? null]))}
+            countryFees={Object.fromEntries(
+              (feeRows ?? []).map((d) => [
+                d.id as string,
+                {
+                  currency: (d.consultancy_fee_currency as string | null) ?? null,
+                  admin: d.admin_charge != null ? Number(d.admin_charge) : null,
+                  consultancy: d.consultancy_fee != null ? Number(d.consultancy_fee) : null,
+                },
+              ])
+            )}
             standardRate={agreementRate}
           />
         )}

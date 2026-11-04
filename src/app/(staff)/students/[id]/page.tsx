@@ -1,5 +1,5 @@
 import { agreementFamily, familyFee, familyMemberLabels, familyMembersOf, familyWords } from "@/lib/accompanyingFamily";
-import { agreementCurrencyOf, convertFee, feeCurrencyOf } from "@/lib/agreementCurrency";
+import { agreementCurrencyOf, convertFee, feeCurrencyOf, type CountryFees } from "@/lib/agreementCurrency";
 import { readAgreementRate } from "@/lib/agreementCompanyRead";
 import { formatDateOnly } from "@/lib/formatDate";
 import { hasRole } from "@/lib/auth/roles";
@@ -210,9 +210,16 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
     // The standard rupee rate an agreement in the other currency is converted at (0351).
     canModifyAgreement ? readAgreementRate(supabase) : Promise.resolve(undefined),
   ]);
-  // Each country's fee currency: what an agreement for it converts from (0351).
-  const feeCurrencies: Record<string, string | null> = Object.fromEntries(
-    (allDestinations ?? []).map((d) => [d.id as string, (d.consultancy_fee_currency as string | null) ?? null])
+  // Each country's standard fees and their currency: what an agreement for it converts from (0351).
+  const countryFees: Record<string, CountryFees> = Object.fromEntries(
+    (allDestinations ?? []).map((d) => [
+      d.id as string,
+      {
+        currency: (d.consultancy_fee_currency as string | null) ?? null,
+        admin: d.admin_charge != null ? Number(d.admin_charge) : null,
+        consultancy: d.consultancy_fee != null ? Number(d.consultancy_fee) : null,
+      },
+    ])
   );
   const canDeleteInvoice = perms["finance.invoices.delete"] === true;
   const rawDocs = requirementsChanged ? (await readDocs(true)).data : docsBeforeTopUp;
@@ -267,25 +274,27 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   // has the agreement's discount subtracted, same as the agreement PDF's fee
   // table, so the invoice and the signed agreement always agree on what the
   // client actually owes.
-  // In the currency the agreement was printed in (0351): its country's own,
-  // or the other one, every figure converted at the agreement's own rate as
-  // its payment chart has them.
+  // In the currency the agreement was printed in (0351): its own figures as
+  // they are (0352), the country's and the registration's converted at the
+  // agreement's own rate, as its payment chart has them.
   const signedFeeCurrency = feeCurrencyOf(signedAgreementDestination?.consultancy_fee_currency);
   const invoiceOpensIn = signedAgreement ? agreementCurrencyOf(signedAgreement.currency as string | null, signedFeeCurrency) : signedFeeCurrency;
   const inInvoiceCurrency = (n: number, from: string = signedFeeCurrency) =>
     convertFee(n, from, invoiceOpensIn, signedAgreement?.pkr_per_eur as number | null | undefined);
+  const countryInInvoiceCurrency = (raw: number | string | null | undefined) => (raw == null ? null : inInvoiceCurrency(Number(raw)));
   const defaultInvoiceAdminCharge = signedAgreement
-    ? ((raw) => (raw == null ? null : inInvoiceCurrency(Number(raw))))(signedAgreement.admin_charge_override ?? signedAgreementDestination?.admin_charge ?? null)
+    ? signedAgreement.admin_charge_override != null
+      ? Number(signedAgreement.admin_charge_override)
+      : countryInInvoiceCurrency(signedAgreementDestination?.admin_charge)
     : null;
   // With the accompanying family's fees (0350), as the agreement's payment chart has them.
-  const signedFamily = signedAgreement ? agreementFamily(signedAgreement) : null;
   const defaultInvoiceConsultancyFee =
     signedAgreement && signedAgreementDestination
-      ? inInvoiceCurrency(Number(signedAgreement.consultancy_fee_override ?? signedAgreementDestination.consultancy_fee ?? 0)) -
-        inInvoiceCurrency(Number(signedAgreement.discount_amount ?? 0)) +
-        familyFee(
-          signedFamily && { ...signedFamily, spouseFee: inInvoiceCurrency(signedFamily.spouseFee), childFee: inInvoiceCurrency(signedFamily.childFee) }
-        )
+      ? (signedAgreement.consultancy_fee_override != null
+          ? Number(signedAgreement.consultancy_fee_override)
+          : inInvoiceCurrency(Number(signedAgreementDestination.consultancy_fee ?? 0))) -
+        Number(signedAgreement.discount_amount ?? 0) +
+        familyFee(agreementFamily(signedAgreement))
       : null;
   const defaultInvoiceCurrency = signedAgreementDestination ? invoiceOpensIn : null;
   const invoiceIds = (invoices ?? []).map((i) => i.id);
@@ -452,9 +461,9 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
   // discount, which the form carries on its own line and takes off once.
   const signedAgreementDestinationId = signedAgreementCountryId;
   const defaultVisaInvoiceFee = signedAgreement
-    ? ((raw) => (raw == null ? null : inInvoiceCurrency(Number(raw))))(
-        signedAgreement.visa_service_fee_override ?? (signedAgreementDestinationId ? visaFees[signedAgreementDestinationId] : null) ?? null
-      )
+    ? signedAgreement.visa_service_fee_override != null
+      ? Number(signedAgreement.visa_service_fee_override)
+      : countryInInvoiceCurrency(signedAgreementDestinationId ? visaFees[signedAgreementDestinationId] : null)
     : null;
 
   const destinationPipelineGroups = new Map<
@@ -1124,7 +1133,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
             visaFees={visaFees}
             countries={orderedCountries}
             today={agreementToday()}
-            feeCurrencies={feeCurrencies}
+            countryFees={countryFees}
             standardRate={agreementRate}
           />
         )}
@@ -1191,7 +1200,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                         service={studentService}
                         visaFees={visaFees}
                         countries={orderedCountries}
-                        feeCurrencies={feeCurrencies}
+                        countryFees={countryFees}
                         standardRate={agreementRate}
                         links={links}
                         canEdit={isSuperAdmin && a.status !== "signed"}
@@ -1327,9 +1336,11 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                 // invoice opens on them rather than making staff retype
                 // what they already signed.
                 defaultInstallmentCount={signedAgreement?.installment_count ?? null}
-                defaultDiscount={((raw) => (raw == null ? null : inInvoiceCurrency(Number(raw))))(
-                  signedAgreement?.discount_amount ?? leadRegistration?.discount_amount ?? null
-                )}
+                defaultDiscount={
+                  signedAgreement?.discount_amount != null
+                    ? Number(signedAgreement.discount_amount)
+                    : countryInInvoiceCurrency(leadRegistration?.discount_amount)
+                }
                 defaultDiscountReason={leadRegistration?.discount_reason ?? null}
                 countries={invoiceCountries}
                 latestPkrRate={latestPkrRate}

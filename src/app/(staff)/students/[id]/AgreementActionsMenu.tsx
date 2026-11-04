@@ -9,6 +9,7 @@ import { useButtonAction } from "@/components/useButtonAction";
 import { useAnchoredMenu } from "@/components/useAnchoredMenu";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { EditAgreementForm } from "./GenerateAgreementForm";
+import type { CountryFees } from "@/lib/agreementCurrency";
 import type { ServiceType } from "@/lib/serviceType";
 import { storedFileName } from "@/lib/documentFileNames";
 import { agreementDateShort } from "@/lib/agreementDate";
@@ -59,7 +60,7 @@ export function AgreementActionsMenu({
   service = "full",
   visaFees = {},
   countries = [],
-  feeCurrencies = {},
+  countryFees = {},
   standardRate,
   links,
   canEdit,
@@ -74,8 +75,8 @@ export function AgreementActionsMenu({
   visaFees?: Record<string, number | null>;
   /** The student's countries — for a general visa template (0298). */
   countries?: { id: string; display_name: string }[];
-  /** Each country's fee currency and the standard rupee rate, for the edit form (0351). */
-  feeCurrencies?: Record<string, string | null>;
+  /** Each country's standard fees and the standard rupee rate, for the edit form (0351). */
+  countryFees?: Record<string, CountryFees>;
   standardRate?: number;
   links?: { templateUrl?: string; signedUrl?: string; pdfUrl?: string };
   canEdit: boolean;
@@ -84,6 +85,10 @@ export function AgreementActionsMenu({
   invoiced?: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  // Its own figures are in its own currency (0352) — its country's, for one made before 0351.
+  const ownCurrency = agreement.currency ?? (agreement.destination_id ? countryFees[agreement.destination_id]?.currency : null) ?? "";
+  const inCurrency = (n: number | null | undefined) =>
+    n == null ? null : `${ownCurrency ? `${ownCurrency} ` : ""}${Number(n).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
   const [viewOpen, setViewOpen] = useState(false);
   // On the screen beside its button, opening upwards when there is no room
   // below — hung from the button, the last row's menu ran off the page.
@@ -192,15 +197,15 @@ export function AgreementActionsMenu({
           {agreement.service_type === "visa_only" ? (
             <>
               <Row label="Service" value="Visa documentation & application only" />
-              <Row label="Visa service fee" value={agreement.visa_service_fee_override ?? "Country default"} />
+              <Row label="Visa service fee" value={inCurrency(agreement.visa_service_fee_override) ?? "Country default"} />
             </>
           ) : (
             <>
-              <Row label="Admin charge override" value={agreement.admin_charge_override} />
-              <Row label="Consultancy fee override" value={agreement.consultancy_fee_override} />
+              <Row label="Admin charge override" value={inCurrency(agreement.admin_charge_override)} />
+              <Row label="Consultancy fee override" value={inCurrency(agreement.consultancy_fee_override)} />
             </>
           )}
-          <Row label="Discount" value={agreement.discount_amount} />
+          <Row label="Discount" value={inCurrency(agreement.discount_amount)} />
           <Row label="Installments" value={agreement.installment_count} />
           <Row
             label="Currency"
@@ -288,7 +293,7 @@ export function AgreementActionsMenu({
             service={service}
             visaFees={visaFees}
             countries={countries}
-            feeCurrencies={feeCurrencies}
+            countryFees={countryFees}
             standardRate={standardRate}
             onSuccess={() => setEditOpen(false)}
           />

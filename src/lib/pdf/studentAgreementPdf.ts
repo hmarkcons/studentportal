@@ -99,31 +99,29 @@ export async function renderStudentAgreementPdf(input: StudentAgreementInput): P
   // service fee alone — no administrative charge, no consultancy fee. The fee
   // travels through the same installment and discount arithmetic below.
   const isVisaOnly = serviceOf(agreement.service_type) === "visa_only";
-  const visaFee = agreement.visa_service_fee_override ?? destination.visa_service_fee ?? null;
+  // The currency it is printed in (0351): euro or rupees as chosen, else its
+  // country's fee currency. What the agreement holds — a fee typed over the
+  // country's, the discount, the family's fees — is in that currency already
+  // (0352); what it takes from its country is converted, each figure on its own
+  // at the rate the agreement keeps, so the totals made from them add up.
+  const conversion = agreementConversion(destination.consultancy_fee_currency, agreement);
+  if ("error" in conversion) return { error: conversion.error };
+  const convert = conversion.convert;
+  const countryVisaFee = destination.visa_service_fee != null ? convert(Number(destination.visa_service_fee)) : null;
+  const visaFee = agreement.visa_service_fee_override ?? countryVisaFee;
   if (isVisaOnly && visaFee === null) {
     return {
       error: `No visa service fee is set for ${destination.display_name ?? "this country"}. Set it in Setup → Destinations, or enter one on the agreement.`,
     };
   }
   const isBackup = !isVisaOnly && (agreement.is_backup ?? false);
-  // The currency it is printed in (0351): euro or rupees as chosen, else its
-  // country's fee currency. Every figure below is in the country's fee
-  // currency — the country's fees, and what was typed on the agreement — and
-  // is converted on its own at the rate the agreement keeps, so the totals
-  // made from them still add up.
-  const conversion = agreementConversion(destination.consultancy_fee_currency, agreement);
-  if ("error" in conversion) return { error: conversion.error };
-  const convert = conversion.convert;
-  const adminCharge = convert(isVisaOnly ? 0 : (agreement.admin_charge_override ?? destination.admin_charge ?? 0));
-  const consultancyFee = convert(isVisaOnly ? Number(visaFee) : isBackup ? 0 : (agreement.consultancy_fee_override ?? destination.consultancy_fee ?? 0));
-  const discountAmount = convert(isBackup ? 0 : (agreement.discount_amount ?? 0));
+  const adminCharge = isVisaOnly ? 0 : (agreement.admin_charge_override ?? convert(destination.admin_charge ?? 0));
+  const consultancyFee = isVisaOnly ? Number(visaFee) : isBackup ? 0 : (agreement.consultancy_fee_override ?? convert(destination.consultancy_fee ?? 0));
+  const discountAmount = isBackup ? 0 : (agreement.discount_amount ?? 0);
   // The accompanying family (0350): their consultancy fees join the student's,
   // in the total and spread over the instalments with it, and each of them is
   // named (0351). Never on a backup country's agreement or a visa-only one.
-  const recordedFamily = isVisaOnly || isBackup ? null : agreementFamily(agreement);
-  const family = recordedFamily
-    ? { ...recordedFamily, spouseFee: convert(recordedFamily.spouseFee), childFee: convert(recordedFamily.childFee) }
-    : null;
+  const family = isVisaOnly || isBackup ? null : agreementFamily(agreement);
   const familyTotal = familyFee(family);
   const members = family ? familyMembersOf(agreement.family_members) : [];
   const memberLabels = familyMemberLabels(members);
@@ -176,7 +174,7 @@ export async function renderStudentAgreementPdf(input: StudentAgreementInput): P
           admin_charge: amount(adminCharge),
           consultancy_fee: amount(isVisaOnly ? 0 : consultancyFee),
           visa_service_fee: isVisaOnly ? amount(consultancyFee) : "",
-          discount: agreement.discount_amount ? amount(convert(agreement.discount_amount)) : "",
+          discount: agreement.discount_amount ? amount(agreement.discount_amount) : "",
           total_fee: amount(totalFee),
           // The accompanying family (0350): blank or 0 when nobody comes.
           family: familyWords(family),

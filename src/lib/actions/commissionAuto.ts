@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { agreementDestination } from "@/lib/agreementCountry";
 import { requirePermission } from "@/lib/auth/permissions";
 import { commissionFor, type CommissionBasis, type CommissionRates } from "@/lib/staffCommissionBasis";
+import { agreementNetFee } from "@/lib/agreementCurrency";
 
 /**
  * The consultancy fee this student's commission is a share of.
@@ -21,7 +22,7 @@ async function basisFor(
   const { data: agreement } = await supabase
     .from("agreements")
     .select(
-      "discount_amount, consultancy_fee_override, destination:destinations(track, consultancy_fee, consultancy_fee_currency), template:agreement_templates(destination:destinations(track, consultancy_fee, consultancy_fee_currency))"
+      "discount_amount, consultancy_fee_override, currency, pkr_per_eur, destination:destinations(track, consultancy_fee, consultancy_fee_currency), template:agreement_templates(destination:destinations(track, consultancy_fee, consultancy_fee_currency))"
     )
     .eq("student_id", studentId)
     .eq("status", "signed")
@@ -37,11 +38,8 @@ async function basisFor(
   }>(agreement);
   if (!destination) return null;
 
-  return {
-    track: destination.track ?? null,
-    consultancyFee: (agreement.consultancy_fee_override ?? destination.consultancy_fee ?? 0) - (agreement.discount_amount ?? 0),
-    currency: destination.consultancy_fee_currency ?? null,
-  };
+  // In the agreement's own currency (0351, 0352).
+  return { track: destination.track ?? null, ...agreementNetFee(agreement, destination) };
 }
 
 /**

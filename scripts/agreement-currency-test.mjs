@@ -11,6 +11,7 @@ import {
   STANDARD_AGREEMENT_PKR_PER_EUR,
   agreementConversion,
   agreementCurrencyOf,
+  agreementNetFee,
   agreementSymbol,
   convertFee,
   parseAgreementCurrency,
@@ -131,6 +132,26 @@ test("a converted chart still adds up: Sweden in rupees with a spouse and two ch
   assert.equal(rows.at(-1).value, 1038500, "€3,100 at 335");
   assert.equal(values.reduce((a, b) => a + b, 0), rows.at(-1).value);
   assert.match(rows.at(-1).note, /1 × 167,500 PKR.*2 × 83,750 PKR/);
+});
+
+// ------------------------------------------------------------------ the agreement's own figures (0352)
+
+const SWEDEN = { consultancy_fee: 1800, consultancy_fee_currency: "EUR" };
+
+test("a rupee agreement's own figures are rupees; only the country's fee is converted", () => {
+  // Typed in rupees on a rupee agreement: taken as they are.
+  assert.deepEqual(agreementNetFee({ consultancy_fee_override: 600000, discount_amount: 20000, currency: "PKR", pkr_per_eur: 335 }, SWEDEN), {
+    consultancyFee: 580000,
+    currency: "PKR",
+  });
+  // Nothing typed: the country's 1,800 euro at 335, less the agreement's own rupee discount.
+  assert.deepEqual(agreementNetFee({ discount_amount: 3000, currency: "PKR", pkr_per_eur: 335 }, SWEDEN), { consultancyFee: 600000, currency: "PKR" });
+});
+
+test("an agreement in its country's currency, or from before 0351, is as it always was", () => {
+  assert.deepEqual(agreementNetFee({ consultancy_fee_override: 1500, discount_amount: 100 }, SWEDEN), { consultancyFee: 1400, currency: "EUR" });
+  assert.deepEqual(agreementNetFee({}, { consultancy_fee: 150000, consultancy_fee_currency: "PKR" }), { consultancyFee: 150000, currency: "PKR" });
+  assert.deepEqual(agreementNetFee({}, { consultancy_fee: 150000 }), { consultancyFee: 150000, currency: null }, "a country naming no currency stays unnamed");
 });
 
 // ------------------------------------------------------------------ the banner

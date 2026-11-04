@@ -1,3 +1,4 @@
+import { agreementNetFee } from "@/lib/agreementCurrency";
 import { Award, Check } from "lucide-react";
 import { hasRole } from "@/lib/auth/roles";
 import { receiptCount } from "@/lib/paymentReceipts";
@@ -158,7 +159,7 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
         ? await supabase
             .from("agreements")
             .select(
-              "student_id, discount_amount, consultancy_fee_override, destination:destinations(track, consultancy_fee, consultancy_fee_currency), template:agreement_templates(destination:destinations(track, consultancy_fee, consultancy_fee_currency))"
+              "student_id, discount_amount, consultancy_fee_override, currency, pkr_per_eur, destination:destinations(track, consultancy_fee, consultancy_fee_currency), template:agreement_templates(destination:destinations(track, consultancy_fee, consultancy_fee_currency))"
             )
             .eq("status", "signed")
             .in("student_id", allStudentIds)
@@ -168,12 +169,8 @@ export default async function StaffPayrollPage(props: { searchParams: Promise<{ 
       for (const a of signedAgreements ?? []) {
         const destination = agreementDestination<{ track?: string; consultancy_fee?: number; consultancy_fee_currency?: string }>(a);
         if (!destination) continue;
-        const consultancyFee = (a.consultancy_fee_override ?? destination.consultancy_fee ?? 0) - (a.discount_amount ?? 0);
-        commissionBasisByStudent[a.student_id] = {
-          track: destination.track ?? null,
-          consultancyFee,
-          currency: destination.consultancy_fee_currency ?? null,
-        };
+        // In the agreement's own currency (0351, 0352).
+        commissionBasisByStudent[a.student_id] = { track: destination.track ?? null, ...agreementNetFee(a, destination) };
       }
 
       // ---- Registered this month, but nothing in the commission ledger ----
