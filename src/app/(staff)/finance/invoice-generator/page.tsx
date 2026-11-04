@@ -5,6 +5,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { getInvoiceBankSettings } from "@/lib/actions/invoiceSettings";
 import { bankFromSettings, hasBankDetails } from "@/lib/invoiceIssuer";
 import { resolveInvoiceDefaults } from "@/lib/invoiceDefaults";
+import { convertFee, feeCurrencyOf } from "@/lib/agreementCurrency";
 import { computeInvoiceMath, computePaymentProgress, sumLineItems } from "@/lib/invoiceMath";
 import { hasPermission } from "@/lib/auth/permissions";
 import type { AdminChargeRow } from "@/app/(staff)/students/[id]/InvoicePanel";
@@ -60,7 +61,7 @@ export default async function InvoiceGeneratorPage() {
     readAll((from, to) =>
       supabase
         .from("agreements")
-        .select("id, student_id, status, admin_charge_override, consultancy_fee_override, discount_amount, installment_count, service_type, visa_service_fee_override, spouse_count, children_count, spouse_fee, child_fee")
+        .select("id, student_id, status, admin_charge_override, consultancy_fee_override, discount_amount, installment_count, service_type, visa_service_fee_override, spouse_count, children_count, spouse_fee, child_fee, currency, pkr_per_eur")
         .order("id")
         .range(from, to)
     ),
@@ -123,7 +124,10 @@ export default async function InvoiceGeneratorPage() {
           destinationId: p.destination_id,
           label: (d?.display_name || d?.country || "").trim(),
           isBackup: p.is_backup,
-          defaultAdminCharge: p.is_backup ? Number(d?.admin_charge ?? 0) : defaults.math.adminCharge,
+          // In the invoice's currency: a backup's own fee converted at the agreement's rate when it was (0351).
+          defaultAdminCharge: p.is_backup
+            ? convertFee(Number(d?.admin_charge ?? 0), feeCurrencyOf(d?.consultancy_fee_currency), defaults.currency, defaults.rate)
+            : defaults.math.adminCharge,
         };
       })
       .filter((d) => d.label)

@@ -1,6 +1,7 @@
 "use server";
 
 import { familyForAgreement, type FamilyColumns } from "@/lib/accompanyingFamily";
+import { parseAgreementCurrency, type AgreementCurrencyColumns } from "@/lib/agreementCurrency";
 import { removeStorageFiles } from "@/lib/fileTrash";
 import { revalidatePath } from "next/cache";
 import { agreementToday, readAgreementDate } from "@/lib/agreementDate";
@@ -121,29 +122,37 @@ async function templateCountryError(
 }
 
 /**
- * The family this agreement carries (0350): the student's accompanying spouse(s)
- * and children from their registration, with each fee — the student's own if
- * staff set one, else the agreement's country's standard. Taken when the
- * agreement is made or corrected, so a signed agreement keeps what it was
- * signed with. None for a country that does not allow family, a backup
- * country's agreement or a visa-only one.
+ * What this agreement takes from its student and its country when it is made
+ * or corrected, so a signed agreement keeps what it was signed with:
+ *
+ * - the family (0350, 0351): the student's accompanying spouse(s) and children
+ *   from their registration, by name and date of birth, with each fee — the
+ *   student's own if staff set one, else the country's standard. None for a
+ *   country that does not allow family, a backup country's agreement or a
+ *   visa-only one;
+ * - the currency it is printed in and the rate it is converted at (0351), as
+ *   the form chose, checked against the country's own fee currency. Null when
+ *   the form posted none, which leaves the agreement in its country's currency.
  */
-async function familyFor(
+async function agreementTerms(
   supabase: SupabaseServerClient,
   studentId: string,
   templateId: string | null,
   chosenDestinationId: string | null,
+  formData: FormData,
   { isBackup, visaOnly }: { isBackup: boolean; visaOnly: boolean }
-): Promise<FamilyColumns> {
+): Promise<{ family: FamilyColumns; money: AgreementCurrencyColumns | null } | { error: string }> {
   const [{ data: lead }, { data: template }] = await Promise.all([
-    supabase.from("leads").select("spouse_count, children_count, spouse_fee, child_fee").eq("id", studentId).maybeSingle(),
+    supabase.from("leads").select("spouse_count, children_count, spouse_fee, child_fee, family_members").eq("id", studentId).maybeSingle(),
     templateId ? supabase.from("agreement_templates").select("destination_id").eq("id", templateId).maybeSingle() : Promise.resolve({ data: null }),
   ]);
   const destinationId = (template?.destination_id as string | null | undefined) ?? chosenDestinationId;
   const { data: destination } = destinationId
-    ? await supabase.from("destinations").select("allows_dependants, spouse_fee, child_fee").eq("id", destinationId).maybeSingle()
+    ? await supabase.from("destinations").select("allows_dependants, spouse_fee, child_fee, consultancy_fee_currency").eq("id", destinationId).maybeSingle()
     : { data: null };
-  return familyForAgreement(lead, destination, { isBackup, visaOnly });
+  const money = parseAgreementCurrency(formData, destination?.consultancy_fee_currency as string | null | undefined);
+  if (money && "error" in money) return { error: money.error };
+  return { family: familyForAgreement(lead, destination, { isBackup, visaOnly }), money };
 }
 
 export async function generateAgreement(studentId: string, _prevState: unknown, formData: FormData) {
@@ -172,10 +181,11 @@ export async function generateAgreement(studentId: string, _prevState: unknown, 
     fields.installment_count = 1;
   }
 
-  const family = await familyFor(supabase, studentId, fields.template_id, fields.destination_id, {
+  const terms = await agreementTerms(supabase, studentId, fields.template_id, fields.destination_id, formData, {
     isBackup: is_backup,
     visaOnly: service.service_type === "visa_only",
   });
+  if ("error" in terms) return { error: terms.error };
 
   const {
     data: { user },
@@ -184,7 +194,8 @@ export async function generateAgreement(studentId: string, _prevState: unknown, 
   const { error } = await supabase.from("agreements").insert({
     student_id: studentId,
     ...fields,
-    ...family,
+    ...terms.family,
+    ...(terms.money ?? {}),
     service_type: service.service_type,
     is_backup,
     agreement_date: dated.date,
@@ -239,14 +250,15 @@ export async function updateAgreement(agreementId: string, studentId: string, _p
   }
 
   // Taken again from the registration, as the template or the family may have changed since.
-  const family = await familyFor(supabase, studentId, fields.template_id, fields.destination_id, {
+  const terms = await agreementTerms(supabase, studentId, fields.template_id, fields.destination_id, formData, {
     isBackup: is_backup,
     visaOnly: service.service_type === "visa_only",
   });
+  if ("error" in terms) return { error: terms.error };
 
   const { error } = await supabase
     .from("agreements")
-    .update({ ...fields, ...family, service_type: service.service_type, is_backup, agreement_date: dated.date })
+    .update({ ...fields, ...terms.family, ...(terms.money ?? {}), service_type: service.service_type, is_backup, agreement_date: dated.date })
     .eq("id", agreementId);
   if (error) return { error: error.message };
 

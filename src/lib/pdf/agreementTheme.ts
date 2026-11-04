@@ -204,7 +204,8 @@ export function formatAmount(symbol: string, n: number, format: AmountFormat = {
   const whole = Math.abs(n - Math.round(n)) < 0.005;
   const digits = format.decimals === "when-needed" && whole ? 0 : 2;
   const text = (digits === 0 ? Math.round(n) : n).toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
-  return format.symbol === "after" ? `${text} ${symbol}` : `${symbol}${text}`;
+  // A currency written in letters ("PKR", 0351) is set apart from the figure; a sign (€) is not.
+  return format.symbol === "after" ? `${text} ${symbol}` : `${symbol}${/[A-Za-z]$/.test(symbol) ? " " : ""}${text}`;
 }
 
 // ------------------------------------------------------------------ the theme

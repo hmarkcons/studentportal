@@ -10,6 +10,7 @@
 
 import { computeInvoiceMath, SRB_TAX_RATE, buildInstallmentPlan, type InvoiceMath } from "@/lib/invoiceMath";
 import { agreementFamily, familyFee } from "@/lib/accompanyingFamily";
+import { convertFee } from "@/lib/agreementCurrency";
 
 export type StudentFeeInputs = {
   discount_amount?: number | string | null;
@@ -41,11 +42,16 @@ export type AgreementFeeInputs = {
   children_count?: number | string | null;
   spouse_fee?: number | string | null;
   child_fee?: number | string | null;
+  /** The currency the agreement was printed in and the rate it was converted at (0351). */
+  currency?: string | null;
+  pkr_per_eur?: number | string | null;
 } | null;
 
 export type InvoiceDefaults = {
   agreementId: string | null;
   currency: string;
+  /** The rupees per euro the agreement was converted at, to say another country's figure in the same currency (0351). */
+  rate: number | null;
   destinationLabel: string | null;
   intake: string | null;
   installmentCount: number;
@@ -82,21 +88,31 @@ export function resolveInvoiceDefaults(
   const agreementDiscount = num(agreement?.discount_amount);
   const registrationDiscount = num(student.discount_amount);
 
+  // Public-university destinations are billed in EUR regardless of what is
+  // stored against the country, so the generator opens on the right currency
+  // and staff are not choosing it by hand — unless the agreement was printed
+  // in the other currency (0351), when the invoice opens on that, with every
+  // figure converted at the agreement's own rate, as the agreement has them.
+  const countryCurrency = destination?.track === "public" ? "EUR" : destination?.consultancy_fee_currency || "PKR";
+  const currency = agreement?.currency === "EUR" || agreement?.currency === "PKR" ? agreement.currency : countryCurrency;
+  const rate = num(agreement?.pkr_per_eur);
+  const inCurrency = (n: number) => convertFee(n, countryCurrency, currency, rate);
+
   // The accompanying family's fees (0350) are part of the consultancy fee, as on the agreement.
-  const consultancyFee = (agreementFee ?? countryFee ?? 0) + (visaOnly ? 0 : familyFee(agreementFamily(agreement)));
-  const adminCharge = agreementAdmin ?? countryAdmin ?? 0;
-  const discountAmount = agreementDiscount ?? registrationDiscount ?? 0;
+  const family = visaOnly ? null : agreementFamily(agreement);
+  const consultancyFee =
+    inCurrency(agreementFee ?? countryFee ?? 0) +
+    familyFee(family && { ...family, spouseFee: inCurrency(family.spouseFee), childFee: inCurrency(family.childFee) });
+  const adminCharge = inCurrency(agreementAdmin ?? countryAdmin ?? 0);
+  const discountAmount = inCurrency(agreementDiscount ?? registrationDiscount ?? 0);
 
   const installmentCount = Math.max(1, Math.floor(num(agreement?.installment_count) ?? 1));
   const math = computeInvoiceMath({ consultancyFee, adminCharge, discountAmount, taxRate: SRB_TAX_RATE });
 
   return {
     agreementId: agreement?.id ?? null,
-    // Public-university destinations are billed in EUR regardless of what is
-    // stored against the country, so the generator opens on the right currency
-    // and staff are not choosing it by hand. generateInvoice enforces the same
-    // rule server-side.
-    currency: destination?.track === "public" ? "EUR" : destination?.consultancy_fee_currency || "PKR",
+    currency,
+    rate: currency !== countryCurrency ? rate : null,
     destinationLabel: destination?.display_name || destination?.country || null,
     intake: student.intake ?? null,
     installmentCount,

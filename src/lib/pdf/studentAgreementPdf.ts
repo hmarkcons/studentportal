@@ -1,5 +1,4 @@
 import { createElement } from "react";
-import { CURRENCY_SYMBOLS } from "@/lib/constants";
 import { formatDateOnly } from "@/lib/formatDate";
 import { getAgreementContent } from "@/lib/pdf/agreementContent";
 import { wordingToBlocks } from "@/lib/pdf/templateWording";
@@ -8,7 +7,8 @@ import { formatAmount, normalizeTheme } from "@/lib/pdf/agreementTheme";
 import { serviceOf } from "@/lib/serviceType";
 import { studentAgreementDateText } from "@/lib/agreementDate";
 import type { ClientSignature } from "@/lib/pdf/AgreementDocument";
-import { agreementFamily, familyFee, familyWords } from "@/lib/accompanyingFamily";
+import { agreementFamily, familyFee, familyMemberLabels, familyMembersOf, familyMembersText, familyWords } from "@/lib/accompanyingFamily";
+import { agreementConversion, agreementSymbol } from "@/lib/agreementCurrency";
 
 // A student's agreement as a PDF, from its template and the student: shared
 // by "Generate PDF" on a student (generateAgreementPdf) and the template
@@ -44,6 +44,12 @@ export type StudentAgreementInput = {
     children_count?: number | null;
     spouse_fee?: number | null;
     child_fee?: number | null;
+    /** Each of the family by name and date of birth (0351). */
+    family_members?: unknown;
+    /** EUR or PKR as chosen (0351); absent or null, its country's fee currency. */
+    currency?: string | null;
+    /** The rupees per euro its figures are converted at, when they are (0351). */
+    pkr_per_eur?: number | string | null;
   };
   student: {
     full_name: string;
@@ -100,15 +106,28 @@ export async function renderStudentAgreementPdf(input: StudentAgreementInput): P
     };
   }
   const isBackup = !isVisaOnly && (agreement.is_backup ?? false);
-  const adminCharge = isVisaOnly ? 0 : (agreement.admin_charge_override ?? destination.admin_charge ?? 0);
-  const consultancyFee = isVisaOnly ? Number(visaFee) : isBackup ? 0 : (agreement.consultancy_fee_override ?? destination.consultancy_fee ?? 0);
-  const discountAmount = isBackup ? 0 : (agreement.discount_amount ?? 0);
+  // The currency it is printed in (0351): euro or rupees as chosen, else its
+  // country's fee currency. Every figure below is in the country's fee
+  // currency — the country's fees, and what was typed on the agreement — and
+  // is converted on its own at the rate the agreement keeps, so the totals
+  // made from them still add up.
+  const conversion = agreementConversion(destination.consultancy_fee_currency, agreement);
+  if ("error" in conversion) return { error: conversion.error };
+  const convert = conversion.convert;
+  const adminCharge = convert(isVisaOnly ? 0 : (agreement.admin_charge_override ?? destination.admin_charge ?? 0));
+  const consultancyFee = convert(isVisaOnly ? Number(visaFee) : isBackup ? 0 : (agreement.consultancy_fee_override ?? destination.consultancy_fee ?? 0));
+  const discountAmount = convert(isBackup ? 0 : (agreement.discount_amount ?? 0));
   // The accompanying family (0350): their consultancy fees join the student's,
-  // in the total and spread over the instalments with it. Never on a backup
-  // country's agreement or a visa-only one.
-  const family = isVisaOnly || isBackup ? null : agreementFamily(agreement);
+  // in the total and spread over the instalments with it, and each of them is
+  // named (0351). Never on a backup country's agreement or a visa-only one.
+  const recordedFamily = isVisaOnly || isBackup ? null : agreementFamily(agreement);
+  const family = recordedFamily
+    ? { ...recordedFamily, spouseFee: convert(recordedFamily.spouseFee), childFee: convert(recordedFamily.childFee) }
+    : null;
   const familyTotal = familyFee(family);
-  const currencySymbol = CURRENCY_SYMBOLS[destination.consultancy_fee_currency ?? "EUR"] ?? destination.consultancy_fee_currency ?? "€";
+  const members = family ? familyMembersOf(agreement.family_members) : [];
+  const memberLabels = familyMemberLabels(members);
+  const currencySymbol = agreementSymbol(conversion.currency);
   const totalFee = adminCharge + consultancyFee - discountAmount + familyTotal;
   const agreementDateStr = agreement.agreement_date
     ? studentAgreementDateText(agreement.agreement_date)
@@ -123,7 +142,11 @@ export async function renderStudentAgreementPdf(input: StudentAgreementInput): P
   // already net of the discount, instead of only reconciling in the total row.
   const discountedConsultancyFee = consultancyFee - discountAmount + familyTotal;
   const installmentCount = isBackup ? 1 : (agreement.installment_count ?? 1);
-  const perInstallment = Math.round((discountedConsultancyFee / installmentCount) * 100) / 100;
+  // Converted into rupees (0351), each instalment is a whole number of rupees — nobody quotes paisa.
+  const wholeRupees = conversion.rate != null && conversion.currency === "PKR";
+  const perInstallment = wholeRupees
+    ? Math.round(discountedConsultancyFee / installmentCount)
+    : Math.round((discountedConsultancyFee / installmentCount) * 100) / 100;
   const installmentAmounts = Array.from({ length: installmentCount }, (_, i) =>
     i === installmentCount - 1 ? discountedConsultancyFee - perInstallment * (installmentCount - 1) : perInstallment
   );
@@ -153,7 +176,7 @@ export async function renderStudentAgreementPdf(input: StudentAgreementInput): P
           admin_charge: amount(adminCharge),
           consultancy_fee: amount(isVisaOnly ? 0 : consultancyFee),
           visa_service_fee: isVisaOnly ? amount(consultancyFee) : "",
-          discount: agreement.discount_amount ? amount(agreement.discount_amount) : "",
+          discount: agreement.discount_amount ? amount(convert(agreement.discount_amount)) : "",
           total_fee: amount(totalFee),
           // The accompanying family (0350): blank or 0 when nobody comes.
           family: familyWords(family),
@@ -162,7 +185,10 @@ export async function renderStudentAgreementPdf(input: StudentAgreementInput): P
           spouse_fee: family && family.spouses > 0 ? amount(family.spouseFee) : "",
           child_fee: family && family.children > 0 ? amount(family.childFee) : "",
           family_fee: familyTotal > 0 ? amount(familyTotal) : "",
-          currency: destination.consultancy_fee_currency ?? "EUR",
+          family_members: familyMembersText(members, (d) => formatDateOnly(d)),
+          currency: conversion.currency,
+          // The rupees per euro its figures were converted at; blank when they were not (0351).
+          exchange_rate: conversion.rate != null ? conversion.rate.toLocaleString("en-US", { maximumFractionDigits: 2 }) : "",
           agreement_date: agreementDateStr,
           signatory_name: signatoryName ?? "",
         }),
@@ -192,6 +218,7 @@ export async function renderStudentAgreementPdf(input: StudentAgreementInput): P
         emergencyContactRelation: profile?.emergency_contact_relation ?? null,
         emergencyContactNumber: profile?.emergency_contact_number ?? null,
         family: familyWords(family) || null,
+        familyMembers: members.map((m, i) => ({ label: memberLabels[i], name: m.name, dob: m.dob ? formatDateOnly(m.dob) : "" })),
       },
       fee: {
         currencySymbol,

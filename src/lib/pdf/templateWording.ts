@@ -32,7 +32,9 @@ export const MERGE_FIELDS: { key: string; label: string }[] = [
   { key: "spouse_fee", label: "Consultancy fee per spouse, formatted with currency (blank if none)" },
   { key: "child_fee", label: "Consultancy fee per child, formatted with currency (blank if none)" },
   { key: "family_fee", label: "The family's consultancy fees together, formatted with currency (blank if none)" },
-  { key: "currency", label: "Currency code (e.g. \"EUR\")" },
+  { key: "family_members", label: "Each of the family by name and date of birth, e.g. \"Spouse: Sara Khan (date of birth 3/14/1996); Child: …\" (blank if nobody)" },
+  { key: "currency", label: "The currency the agreement is in, EUR or PKR, as chosen when it was made" },
+  { key: "exchange_rate", label: "Rupees per euro its figures were converted at, e.g. \"335\" (blank when it is in its country's own currency)" },
   { key: "agreement_date", label: "The date the agreement was generated" },
   { key: "signatory_name", label: "The template's fixed authorized signatory" },
   ...COMPANY_MERGE_FIELDS,
@@ -246,6 +248,28 @@ function flattenListItems(listEl: HTMLElement, ordered: boolean, depth: number):
   return items;
 }
 
+const CELL_BLOCK_TAGS = new Set(["p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "li"]);
+
+/**
+ * A table cell's text, each of its paragraphs on a line of its own. Read as
+ * one run of text, the paragraphs of a cell ran together on one line: the
+ * green banner's heading "NO VISA GUARANTEE | NO JOB GUARANTEE" and the
+ * sentence under it printed as "…NO JOB GUARANTEEHMARK Consultants does not…".
+ * An empty paragraph is left out, so every banner reads heading-then-sentence
+ * however its cell was typed (Germany (Private)'s had an empty one between).
+ */
+function cellRuns(cell: HTMLElement): TextRun[] {
+  const blocks = cell.childNodes.filter(
+    (n) => n.nodeType === NodeType.ELEMENT_NODE && CELL_BLOCK_TAGS.has((n as HTMLElement).tagName?.toLowerCase() ?? "")
+  );
+  if (blocks.length < 2) return extractRuns(cell);
+  const lines = cell.childNodes
+    .filter((n) => n.nodeType === NodeType.ELEMENT_NODE || (n.nodeType === NodeType.TEXT_NODE && n.rawText.trim()))
+    .map((n) => extractRuns(n))
+    .filter((runs) => runs.some((r) => r.text.trim()));
+  return lines.flatMap((runs, i) => (i === 0 ? runs : [{ text: "\n" }, ...runs]));
+}
+
 // A table's rows, with each cell's alignment, background and span, and the
 // column widths the builder was dragged to (TipTap writes them as `colwidth`
 // on the cells of the first row).
@@ -257,7 +281,7 @@ function readTable(el: HTMLElement): Extract<AgreementBlock, { kind: "richTable"
     if (cellEls.length === 0) continue;
     const header = cellEls.every((c) => c.tagName?.toLowerCase() === "th");
     const cells = cellEls.map((c): RichCell => {
-      const cell: RichCell = { runs: extractRuns(c) };
+      const cell: RichCell = { runs: cellRuns(c) };
       const para = childElements(c, ["p"])[0];
       const align = para ? alignOf(para) : alignOf(c);
       if (align) cell.align = align;

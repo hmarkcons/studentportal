@@ -8,8 +8,9 @@ import { StaffTemplateActions } from "./StaffTemplateActions";
 import { StaffTemplateGuide } from "./StaffTemplateGuide";
 import { SectionTabs } from "@/components/SectionTabs";
 import { getEffectivePermissions } from "@/lib/auth/permissions";
-import { getAgreementCompanySettings } from "@/lib/actions/agreementSettings";
+import { getAgreementCompanySettings, getAgreementRate } from "@/lib/actions/agreementSettings";
 import { CompanyDetailsForm } from "./CompanyDetailsForm";
+import { AgreementRateForm } from "./AgreementRateForm";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -78,6 +79,10 @@ export default async function AgreementTemplatesPage(props: { searchParams: Prom
         </p>
         <Card>
           <CompanyDetailsForm saved={await getAgreementCompanySettings()} canEdit={isSuperAdmin} />
+        </Card>
+        {/* The rupees per euro an agreement in the other currency is converted at (0351). */}
+        <Card className="mt-4">
+          <AgreementRateForm rate={await getAgreementRate()} canEdit={isSuperAdmin} />
         </Card>
       </div>
     );

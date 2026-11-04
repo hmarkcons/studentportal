@@ -20,6 +20,7 @@ import { hasRole } from "@/lib/auth/roles";
 import { AgreementDateEditor } from "@/components/AgreementDateEditor";
 import { agreementToday } from "@/lib/agreementDate";
 import { setAgreementDate } from "@/lib/actions/agreements";
+import { readAgreementRate } from "@/lib/agreementCompanyRead";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -82,10 +83,13 @@ export default async function AgreementGeneratorPage(props: {
     const isSuperAdmin = hasRole(staffRow, "super_admin");
     const canModifyAgreement = hasRole(staffRow, "super_admin", "processing");
 
-    const [{ data: allTemplates }, { data: registeredRows }, { data: leadService }] = await Promise.all([
+    const [{ data: allTemplates }, { data: registeredRows }, { data: leadService }, { data: feeRows }, agreementRate] = await Promise.all([
       supabase.from("agreement_templates").select("id, name, signatory_name, service_type, destination:destinations(id, display_name)"),
       supabase.from("lead_destinations").select("destination_id, is_backup, destination:destinations(display_name)").eq("lead_id", selected.id),
       supabase.from("leads").select("service_type").eq("id", selected.id).maybeSingle(),
+      // Each country's fee currency and the standard rupee rate, for an agreement in the other currency (0351).
+      supabase.from("destinations").select("id, consultancy_fee_currency"),
+      readAgreementRate(supabase),
     ]);
     const backupDestinationIds = (registeredRows ?? []).filter((d) => d.is_backup).map((d) => d.destination_id as string);
     // The same narrowing as the student's own page: their countries, their
@@ -153,6 +157,8 @@ export default async function AgreementGeneratorPage(props: {
             service={service}
             countries={orderedCountries}
             today={agreementToday()}
+            feeCurrencies={Object.fromEntries((feeRows ?? []).map((d) => [d.id as string, (d.consultancy_fee_currency as string | null) ?? null]))}
+            standardRate={agreementRate}
           />
         )}
         {agreements && agreements.length > 0 && (

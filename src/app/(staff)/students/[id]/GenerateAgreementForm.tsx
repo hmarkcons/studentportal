@@ -9,6 +9,7 @@ import { toast } from "@/lib/toast";
 import { FileField } from "@/components/FileField";
 import { Input, Select } from "@/components/ui/Input";
 import type { ServiceType } from "@/lib/serviceType";
+import { AGREEMENT_CURRENCIES, AGREEMENT_CURRENCY_LABELS, STANDARD_AGREEMENT_PKR_PER_EUR, feeCurrencyOf } from "@/lib/agreementCurrency";
 
 type AgreementTemplateOption = {
   id: string;
@@ -110,6 +111,67 @@ function VisaFeeFields({
   );
 }
 
+/**
+ * The currency the agreement is printed in, euro or rupees, and the rate it is
+ * converted at (0351). It opens on the country's own fee currency; choosing
+ * the other asks for the rupees per euro, starting from the office's standard
+ * in Setup › Agreement templates. Everything typed on the form stays in the
+ * country's fee currency — only the printed agreement is converted.
+ */
+function CurrencyFields({
+  feeCurrency,
+  defaultCurrency,
+  defaultRate,
+  wide = false,
+}: {
+  feeCurrency: string;
+  defaultCurrency?: string | null;
+  defaultRate: number;
+  wide?: boolean;
+}) {
+  const [currency, setCurrency] = useState<string>(
+    defaultCurrency === "EUR" || defaultCurrency === "PKR" ? defaultCurrency : feeCurrency === "PKR" ? "PKR" : "EUR"
+  );
+  const converting = currency !== feeCurrency;
+  return (
+    <>
+      <label className={`flex flex-col gap-0.5 text-xs text-muted ${wide ? "w-full" : ""}`}>
+        Agreement currency
+        <Select name="currency" value={currency} onChange={(e) => setCurrency(e.target.value)} className={wide ? "w-full" : undefined} data-agreement-currency>
+          {AGREEMENT_CURRENCIES.map((c) => (
+            <option key={c} value={c}>
+              {AGREEMENT_CURRENCY_LABELS[c]}
+            </option>
+          ))}
+        </Select>
+      </label>
+      {converting && (
+        <label className={`flex flex-col gap-0.5 text-xs text-muted ${wide ? "w-full" : ""}`}>
+          Rupees per €1
+          <Input
+            name="pkr_per_eur"
+            type="number"
+            step="any"
+            min="1"
+            max="10000"
+            required
+            defaultValue={defaultRate}
+            className={wide ? "w-full" : "w-28"}
+            title="The rate every amount on the agreement is converted at"
+            data-agreement-rate
+          />
+        </label>
+      )}
+      {converting && (
+        <p className="w-full text-xs text-muted" data-agreement-conversion-note>
+          This country&rsquo;s fees are in {feeCurrency}. The agreement prints every amount in {currency}, converted at this rate, and keeps
+          the rate. Type any override or discount here in {feeCurrency}.
+        </p>
+      )}
+    </>
+  );
+}
+
 // A backup-country destination (per this student's lead_destinations —
 // see students/[id]/page.tsx) only ever gets an administrative-fee-only
 // agreement (no consultancy fee, see generateAgreement/generateAgreementPdf),
@@ -146,8 +208,14 @@ export function GenerateAgreementForm({
   visaFees = {},
   countries = [],
   today,
+  feeCurrencies = {},
+  standardRate = STANDARD_AGREEMENT_PKR_PER_EUR,
 }: {
   studentId: string;
+  /** Each country's fee currency, by destination id — what the agreement converts from (0351). */
+  feeCurrencies?: Record<string, string | null>;
+  /** Rupees per euro as standard (Setup › Agreement templates), offered when converting (0351). */
+  standardRate?: number;
   /** Today in Karachi, read on the server: the agreement's date unless another is chosen (0310). */
   today: string;
   /** Already narrowed to this student's own countries and service — see agreementTemplateChoices and templatesForService. */
@@ -178,6 +246,8 @@ export function GenerateAgreementForm({
   // A backup country's administrative-fee-only agreement has no meaning for
   // a visa-only client, who pays no administrative fee at all.
   const isBackup = !isVisaOnly && backupDestinationIds.includes(chosenDest?.id ?? "");
+  // What the amounts typed here are in: the country's fee currency (0351).
+  const unit = chosenDest ? ` (${feeCurrencyOf(feeCurrencies[chosenDest.id])})` : "";
 
   // An empty dropdown with no explanation is the worst version of this. The
   // two reasons it can be empty need different people to do different things,
@@ -227,6 +297,7 @@ export function GenerateAgreementForm({
         <option value="e_signature">E-signature (outside Karachi)</option>
       </Select>
       <AgreementDateField defaultValue={today} />
+      {chosenDest && <CurrencyFields key={chosenDest.id} feeCurrency={feeCurrencyOf(feeCurrencies[chosenDest.id])} defaultRate={standardRate} />}
       {isVisaOnly && (
         <VisaFeeFields
           countryFee={chosenDest ? visaFees[chosenDest.id] : undefined}
@@ -235,16 +306,16 @@ export function GenerateAgreementForm({
         />
       )}
       {!isVisaOnly && (
-        <Input name="admin_charge_override" type="number" step="0.01" placeholder="Admin charge override" className="w-40" />
+        <Input name="admin_charge_override" type="number" step="0.01" placeholder={`Admin charge override${unit}`} className="w-48" />
       )}
       {!isVisaOnly && !isBackup && (
         <>
-          <Input name="consultancy_fee_override" type="number" step="0.01" placeholder="Consultancy fee override" className="w-44" />
+          <Input name="consultancy_fee_override" type="number" step="0.01" placeholder={`Consultancy fee override${unit}`} className="w-56" />
           <Input
             name="discount_amount"
             type="number"
             step="0.01"
-            placeholder="Discount amount"
+            placeholder={`Discount amount${unit}`}
             defaultValue={discountAmount ?? ""}
             className="w-36"
           />
@@ -283,6 +354,8 @@ export function EditAgreementForm({
   visaFees = {},
   onSuccess,
   countries = [],
+  feeCurrencies = {},
+  standardRate = STANDARD_AGREEMENT_PKR_PER_EUR,
 }: {
   agreement: {
     id: string;
@@ -297,6 +370,9 @@ export function EditAgreementForm({
     destination_id?: string | null;
     /** The date printed on it (0310). */
     agreement_date?: string | null;
+    /** The currency it is printed in and the rate it keeps (0351). */
+    currency?: string | null;
+    pkr_per_eur?: number | null;
   };
   studentId: string;
   templates: AgreementTemplateOption[];
@@ -305,6 +381,10 @@ export function EditAgreementForm({
   visaFees?: Record<string, number | null>;
   /** The student's countries — offered with a general template. */
   countries?: Country[];
+  /** Each country's fee currency, by destination id (0351). */
+  feeCurrencies?: Record<string, string | null>;
+  /** Rupees per euro as standard, for an agreement that had none (0351). */
+  standardRate?: number;
   onSuccess: () => void;
 }) {
   const action = updateAgreement.bind(null, agreement.id, studentId);
@@ -318,6 +398,7 @@ export function EditAgreementForm({
     : templateDest(chosenTemplate?.destination ?? null);
   const isVisaOnly = service === "visa_only";
   const isBackup = !isVisaOnly && backupDestinationIds.includes(chosenDest?.id ?? "");
+  const unit = chosenDest ? ` (${feeCurrencyOf(feeCurrencies[chosenDest.id])})` : "";
 
   return (
     <form action={formAction} className="flex w-full flex-col flex-wrap items-end gap-2">
@@ -336,6 +417,15 @@ export function EditAgreementForm({
         <option value="paper">Paper (Karachi)</option>
         <option value="e_signature">E-signature (outside Karachi)</option>
       </Select>
+      {chosenDest && (
+        <CurrencyFields
+          key={chosenDest.id}
+          feeCurrency={feeCurrencyOf(feeCurrencies[chosenDest.id])}
+          defaultCurrency={agreement.currency}
+          defaultRate={agreement.pkr_per_eur ?? standardRate}
+          wide
+        />
+      )}
       {isVisaOnly && (
         <VisaFeeFields
           countryFee={chosenDest ? visaFees[chosenDest.id] : undefined}
@@ -351,7 +441,7 @@ export function EditAgreementForm({
           name="admin_charge_override"
           type="number"
           step="0.01"
-          placeholder="Admin charge override"
+          placeholder={`Admin charge override${unit}`}
           defaultValue={agreement.admin_charge_override ?? ""}
           className="w-full"
         />
@@ -365,7 +455,7 @@ export function EditAgreementForm({
             name="consultancy_fee_override"
             type="number"
             step="0.01"
-            placeholder="Consultancy fee override"
+            placeholder={`Consultancy fee override${unit}`}
             defaultValue={agreement.consultancy_fee_override ?? ""}
             className="w-full"
           />
@@ -373,7 +463,7 @@ export function EditAgreementForm({
             name="discount_amount"
             type="number"
             step="0.01"
-            placeholder="Discount amount"
+            placeholder={`Discount amount${unit}`}
             defaultValue={agreement.discount_amount ?? ""}
             className="w-full"
           />

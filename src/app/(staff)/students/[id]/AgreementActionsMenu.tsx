@@ -35,6 +35,9 @@ type AgreementRecord = {
   service_type?: string | null;
   visa_service_fee_override?: number | null;
   destination_id?: string | null;
+  /** The currency it is printed in and the rate it keeps (0351). */
+  currency?: string | null;
+  pkr_per_eur?: number | null;
   /** The signed copy on file, if one is. */
   signed_file_path?: string | null;
 };
@@ -56,6 +59,8 @@ export function AgreementActionsMenu({
   service = "full",
   visaFees = {},
   countries = [],
+  feeCurrencies = {},
+  standardRate,
   links,
   canEdit,
   canDelete,
@@ -69,6 +74,9 @@ export function AgreementActionsMenu({
   visaFees?: Record<string, number | null>;
   /** The student's countries — for a general visa template (0298). */
   countries?: { id: string; display_name: string }[];
+  /** Each country's fee currency and the standard rupee rate, for the edit form (0351). */
+  feeCurrencies?: Record<string, string | null>;
+  standardRate?: number;
   links?: { templateUrl?: string; signedUrl?: string; pdfUrl?: string };
   canEdit: boolean;
   canDelete: boolean;
@@ -194,6 +202,14 @@ export function AgreementActionsMenu({
           )}
           <Row label="Discount" value={agreement.discount_amount} />
           <Row label="Installments" value={agreement.installment_count} />
+          <Row
+            label="Currency"
+            value={
+              agreement.currency
+                ? `${agreement.currency}${agreement.pkr_per_eur ? ` (at PKR ${Number(agreement.pkr_per_eur).toLocaleString("en-US")} per €1)` : ""}`
+                : "The country's own"
+            }
+          />
 
           <div className="mt-3 flex flex-col gap-2">
             {links?.signedUrl && (
@@ -272,6 +288,8 @@ export function AgreementActionsMenu({
             service={service}
             visaFees={visaFees}
             countries={countries}
+            feeCurrencies={feeCurrencies}
+            standardRate={standardRate}
             onSuccess={() => setEditOpen(false)}
           />
         </SlideOver>

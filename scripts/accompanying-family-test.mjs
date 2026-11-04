@@ -8,15 +8,27 @@ import {
   familyFee,
   familyForAgreement,
   familyKindOf,
+  familyMemberLabels,
+  familyMembersOf,
+  familyMembersText,
   familyWords,
+  isFamilyDob,
   parseFamily,
 } from "../src/lib/accompanyingFamily.ts";
 import { REFERENCE_THEME, familyFeeParts, themedFeeRows } from "../src/lib/pdf/agreementTheme.ts";
 
+// As FormData reads a form: a field given several times (one name per person) is a list.
 const form = (fields) => {
   const m = new Map(Object.entries(fields));
-  return { has: (k) => m.has(k), get: (k) => (m.has(k) ? m.get(k) : null) };
+  const all = (k) => (m.has(k) ? [m.get(k)].flat() : []);
+  return { has: (k) => m.has(k), get: (k) => all(k)[0] ?? null, getAll: all };
 };
+
+const SPOUSE = { spouse_name: "Sara Khan", spouse_dob: "1996-03-14" };
+const CHILDREN = { child_name: ["Ali Khan", "Zara Khan"], child_dob: ["2018-07-02", "2021-11-20"] };
+const sara = { relation: "spouse", name: "Sara Khan", dob: "1996-03-14" };
+const ali = { relation: "child", name: "Ali Khan", dob: "2018-07-02" };
+const zara = { relation: "child", name: "Zara Khan", dob: "2021-11-20" };
 
 // ------------------------------------------------------------------ arithmetic and words
 
@@ -41,24 +53,30 @@ test("registration: no family fields posted leaves what is on file alone", () =>
 });
 
 test("registration: each kind reads only its own counts and fees", () => {
-  assert.deepEqual(parseFamily(form({ family_kind: "none", spouse_count: "2" })), { spouse_count: 0, children_count: 0, spouse_fee: null, child_fee: null });
-  assert.deepEqual(parseFamily(form({ family_kind: "spouse", spouse_count: "1", spouse_fee: "", children_count: "3" })), {
+  assert.deepEqual(parseFamily(form({ family_kind: "none", spouse_count: "2", ...SPOUSE })), {
+    spouse_count: 0,
+    children_count: 0,
+    spouse_fee: null,
+    child_fee: null,
+    family_members: [],
+  });
+  assert.deepEqual(parseFamily(form({ family_kind: "spouse", spouse_count: "1", spouse_fee: "", children_count: "3", ...SPOUSE, ...CHILDREN })), {
     spouse_count: 1,
     children_count: 0,
     spouse_fee: null,
     child_fee: null,
+    family_members: [sara],
   });
-  assert.deepEqual(parseFamily(form({ family_kind: "spouse_children", spouse_count: "1", spouse_fee: "450", children_count: "2", child_fee: "200.5" })), {
-    spouse_count: 1,
-    children_count: 2,
-    spouse_fee: 450,
-    child_fee: 200.5,
-  });
-  assert.deepEqual(parseFamily(form({ family_kind: "children", children_count: "3", spouse_count: "2" })), {
+  assert.deepEqual(
+    parseFamily(form({ family_kind: "spouse_children", spouse_count: "1", spouse_fee: "450", children_count: "2", child_fee: "200.5", ...SPOUSE, ...CHILDREN })),
+    { spouse_count: 1, children_count: 2, spouse_fee: 450, child_fee: 200.5, family_members: [sara, ali, zara] }
+  );
+  assert.deepEqual(parseFamily(form({ family_kind: "children", children_count: "2", spouse_count: "2", ...SPOUSE, ...CHILDREN })), {
     spouse_count: 0,
-    children_count: 3,
+    children_count: 2,
     spouse_fee: null,
     child_fee: null,
+    family_members: [ali, zara],
   });
 });
 
@@ -68,11 +86,49 @@ test("registration: counts out of range, half a child or a negative fee are refu
     { family_kind: "spouse", spouse_count: "5" },
     { family_kind: "children", children_count: "1.5" },
     { family_kind: "children", children_count: "11" },
-    { family_kind: "spouse", spouse_count: "1", spouse_fee: "-1" },
+    { family_kind: "spouse", spouse_count: "1", spouse_fee: "-1", ...SPOUSE },
     { family_kind: "cousins" },
   ]) {
     assert.ok("error" in parseFamily(form(bad)), JSON.stringify(bad));
   }
+});
+
+test("registration: everyone counted is named, with a real date of birth", () => {
+  const cases = [
+    [{ family_kind: "spouse", spouse_count: "1" }, /name of the spouse/],
+    [{ family_kind: "spouse", spouse_count: "1", spouse_name: "  ", spouse_dob: "1996-03-14" }, /name of the spouse/],
+    [{ family_kind: "spouse", spouse_count: "1", spouse_name: "Sara Khan" }, /date of birth of the spouse/],
+    [{ family_kind: "spouse", spouse_count: "1", spouse_name: "Sara Khan", spouse_dob: "1996-02-30" }, /date of birth of the spouse/],
+    [{ family_kind: "spouse", spouse_count: "1", spouse_name: "Sara Khan", spouse_dob: "14/03/1996" }, /date of birth of the spouse/],
+    [{ family_kind: "spouse", spouse_count: "1", spouse_name: "Sara Khan", spouse_dob: "2999-01-01" }, /date of birth of the spouse/],
+    [{ family_kind: "spouse", spouse_count: "1", spouse_name: "x".repeat(121), spouse_dob: "1996-03-14" }, /too long/],
+    [{ family_kind: "children", children_count: "2", child_name: ["Ali Khan"], child_dob: ["2018-07-02"] }, /name of child 2/],
+    [{ family_kind: "children", children_count: "2", child_name: ["Ali Khan", "Zara Khan"], child_dob: ["2018-07-02", ""] }, /date of birth of child 2/],
+  ];
+  for (const [fields, message] of cases) {
+    const out = parseFamily(form(fields));
+    assert.ok(out && "error" in out, JSON.stringify(fields));
+    assert.match(out.error, message);
+  }
+});
+
+test("a date of birth is a real day, from 1900 to tomorrow", () => {
+  assert.equal(isFamilyDob("2000-02-29"), true, "a leap day");
+  assert.equal(isFamilyDob("1900-02-29"), false, "1900 was not a leap year");
+  assert.equal(isFamilyDob("1899-12-31"), false);
+  assert.equal(isFamilyDob(new Date().toISOString().slice(0, 10)), true, "born today");
+  assert.equal(isFamilyDob("2000-1-1"), false);
+});
+
+test("the family as stored is read back safely, spouses first, and labelled", () => {
+  const stored = [zara, { relation: "cousin", name: "X", dob: "2000-01-01" }, { relation: "child", name: "  " }, sara, { ...ali, dob: "not a date" }, null, "x"];
+  const members = familyMembersOf(stored);
+  assert.deepEqual(members, [sara, zara, { ...ali, dob: "" }]);
+  assert.deepEqual(familyMemberLabels(members), ["Spouse", "Child 1", "Child 2"]);
+  assert.deepEqual(familyMemberLabels([sara, { ...sara, name: "B" }, ali]), ["Spouse 1", "Spouse 2", "Child"]);
+  assert.deepEqual(familyMembersOf("not a list"), []);
+  assert.equal(familyMembersText([sara, ali]), "Spouse: Sara Khan (date of birth 1996-03-14); Child: Ali Khan (date of birth 2018-07-02)");
+  assert.equal(familyMembersText([]), "");
 });
 
 // ------------------------------------------------------------------ the agreement takes it
@@ -80,17 +136,23 @@ test("registration: counts out of range, half a child or a negative fee are refu
 const SWEDEN = { allows_dependants: true, spouse_fee: 500, child_fee: 250 };
 
 test("an agreement takes the family with the student's own fee, else the country's", () => {
-  assert.deepEqual(familyForAgreement({ spouse_count: 1, children_count: 2, spouse_fee: null, child_fee: 200 }, SWEDEN), {
+  assert.deepEqual(familyForAgreement({ spouse_count: 1, children_count: 2, spouse_fee: null, child_fee: 200, family_members: [sara, ali, zara] }, SWEDEN), {
     spouse_count: 1,
     children_count: 2,
     spouse_fee: 500,
     child_fee: 200,
+    family_members: [sara, ali, zara],
   });
+});
+
+test("an agreement takes no more names than it charges for, and a registration from before names has none", () => {
+  assert.deepEqual(familyForAgreement({ spouse_count: 1, children_count: 1, family_members: [sara, ali, zara] }, SWEDEN).family_members, [sara, ali]);
+  assert.deepEqual(familyForAgreement({ spouse_count: 1, children_count: 2 }, SWEDEN).family_members, []);
 });
 
 test("no family on an agreement for a country without it, a backup country's, or a visa-only one", () => {
   const lead = { spouse_count: 1, children_count: 1 };
-  const none = { spouse_count: 0, children_count: 0, spouse_fee: null, child_fee: null };
+  const none = { spouse_count: 0, children_count: 0, spouse_fee: null, child_fee: null, family_members: [] };
   assert.deepEqual(familyForAgreement(lead, { allows_dependants: false, spouse_fee: 500, child_fee: 250 }), none);
   assert.deepEqual(familyForAgreement(lead, SWEDEN, { isBackup: true }), none);
   assert.deepEqual(familyForAgreement(lead, SWEDEN, { visaOnly: true }), none);

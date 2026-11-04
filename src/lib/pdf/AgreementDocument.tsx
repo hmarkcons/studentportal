@@ -169,6 +169,8 @@ export type AgreementPdfData = {
     emergencyContactNumber: string | null;
     /** "1 spouse and 2 children" coming with the student (0350); null when nobody. */
     family?: string | null;
+    /** Each of them by name and date of birth (0351), labelled "Spouse", "Child 1", … */
+    familyMembers?: { label: string; name: string; dob: string }[];
   };
   fee: {
     currencySymbol: string;
@@ -203,7 +205,9 @@ export type AgreementPdfData = {
 };
 
 export function money(symbol: string, n: number) {
-  return `${symbol}${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  // A currency written in letters ("PKR", 0351) is set apart from the figure; a sign (€) is not.
+  const gap = /[A-Za-z]$/.test(symbol) ? " " : "";
+  return `${symbol}${gap}${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 // ------------------------------------------------------------ themed styles
@@ -452,8 +456,15 @@ function StudentDetailsChart({ student, destinationLabel, theme }: { student: Ag
           { label: "University (Applying)", value: destinationLabel },
           { label: "Course of Interest", value: student.courseOfInterest ?? "" },
         ],
-        // Said on every agreement that carries family (0350), whatever the template's wording.
+        // Said on every agreement that carries family (0350), whatever the template's wording,
+        // and then each of them by name and date of birth (0351).
         ...(student.family ? [[{ label: "Accompanying Family", value: student.family, full: true }]] : []),
+        ...(student.family
+          ? (student.familyMembers ?? []).map((m) => [
+              { label: m.label, value: m.name },
+              { label: "DOB", value: m.dob },
+            ])
+          : []),
       ]}
     />
   );
@@ -733,6 +744,10 @@ function cellWidth(widths: number[] | undefined, col: number, span: number): Sty
 
 function RichTable({ block, theme }: { block: Extract<AgreementBlock, { kind: "richTable" }>; theme?: Theme | null }) {
   const border = block.border ?? theme?.table.border;
+  // A table of one cell is a banner — the green NO VISA GUARANTEE | NO JOB
+  // GUARANTEE box — and is given room around its lines, which a grid of
+  // figures packed as tightly as the fee table does not have.
+  const banner = block.rows.length === 1 && block.rows[0].cells.length === 1;
   const columnsOf = (cells: RichCell[]) => {
     let col = 0;
     return cells.map((cell) => {
@@ -771,6 +786,7 @@ function RichTable({ block, theme }: { block: Extract<AgreementBlock, { kind: "r
                           },
                         ]
                       : []),
+                    banner ? { paddingVertical: 6, paddingHorizontal: 10 } : {},
                   ]}
                 >
                   <RichRuns runs={cell.runs} bold={row.header} />
@@ -803,8 +819,8 @@ function RichTable({ block, theme }: { block: Extract<AgreementBlock, { kind: "r
                   style={{
                     flex: 1,
                     ...cellWidth(block.widths, cols[ci], cell.colspan ?? 1),
-                    paddingVertical: 2.5,
-                    paddingHorizontal: 5,
+                    paddingVertical: banner ? 6 : 2.5,
+                    paddingHorizontal: banner ? 10 : 5,
                     fontSize: theme.body.size,
                     lineHeight: 1.22,
                     color: row.header && t.headerFill ? t.headerText : theme.body.color,

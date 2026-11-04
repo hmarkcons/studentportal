@@ -59,7 +59,7 @@ export function RegistrationEditForm({
   /** When they registered — the day registration was done unless corrected. */
   registeredAt?: string | null;
   /** The family registered as accompanying them, and their fees when set for this student (0350). */
-  family?: { spouses: number; children: number; spouseFee: number | null; childFee: number | null } | null;
+  family?: { spouses: number; children: number; spouseFee: number | null; childFee: number | null; members?: unknown } | null;
 }) {
   const [editing, setEditing] = useState(false);
   // Starts at whatever the student is already registered for, so the intake
