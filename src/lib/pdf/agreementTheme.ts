@@ -485,7 +485,8 @@ export type FeeRow = { label: string; note?: string; value: number; total?: bool
 export function taxFeeRow(fee: Pick<FeeFigures, "tax">, format: (n: number) => string): FeeRow | null {
   if (!fee.tax || !(fee.tax.rate > 0)) return null;
   const rate = String(Math.round(fee.tax.rate * 100) / 100);
-  return { label: `SRB Tax (${rate}%)`, note: `On ${format(fee.tax.base)}, the total after discount`, value: fee.tax.amount };
+  // Non-refundable in every case, said where it is charged (2026-11-05).
+  return { label: `SRB Tax (${rate}%)`, note: `Non-refundable. On ${format(fee.tax.base)}, the total after discount`, value: fee.tax.amount };
 }
 
 /** The family's fees together. */

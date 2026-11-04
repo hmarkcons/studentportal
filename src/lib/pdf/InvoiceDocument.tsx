@@ -72,6 +72,7 @@ const styles = StyleSheet.create({
   // denominated in euro and this is the same number said again.
   pkrNum: { width: 96, textAlign: "right", fontSize: 8, color: GREY, marginTop: -1, marginBottom: 2 },
   pkrRowWrap: { flexDirection: "row", alignItems: "baseline" },
+  taxNote: { textAlign: "right", fontSize: 8, color: GREY, marginTop: -1, marginBottom: 3 },
   totalsNumBold: { fontFamily: "Helvetica-Bold", fontSize: 11, color: INK_STRONG },
   totalsRule: { borderTopWidth: 1, borderTopColor: RULE, marginTop: 6, paddingTop: 8 },
 
@@ -381,6 +382,8 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
               <Text style={styles.totalsNum}>{money(data.currencySymbol, data.taxAmount)}</Text>
             </View>
           )}
+          {/* Non-refundable in every case, as the agreement says too (2026-11-05). */}
+          {data.taxAmount > 0 && <Text style={styles.taxNote}>{issuer.taxLabel} is non-refundable.</Text>}
           <View style={styles.totalsRow}>
             <Text style={[styles.totalsKey, styles.totalsKeyBold]}>Total:</Text>
             <Text style={[styles.totalsNum, { fontFamily: "Helvetica-Bold", color: INK_STRONG }]}>

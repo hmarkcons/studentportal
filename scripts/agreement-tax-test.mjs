@@ -44,6 +44,7 @@ test("chart: the tax is a row after the payments and before a total that include
   const tax = rows.at(-2);
   assert.match(tax.label, /^SRB Tax \(5%\)$/);
   assert.match(tax.note, /On (€2,000|2,000 €), the total after discount/);
+  assert.match(tax.note, /^Non-refundable\./, "the tax is said to be non-refundable");
   assert.equal(tax.value, 100);
   const values = rows.filter((r) => !r.total).map((r) => r.value);
   assert.equal(values.reduce((a, b) => a + b, 0), rows.at(-1).value, "the rows add up to the total");
