@@ -91,7 +91,15 @@ export function agreementConversion(
 }
 
 /** A country's standard fees as an agreement form offers them, in its fee currency. */
-export type CountryFees = { currency?: string | null; admin?: number | null; consultancy?: number | null };
+export type CountryFees = {
+  currency?: string | null;
+  admin?: number | null;
+  consultancy?: number | null;
+  /** Whether students going there may bring family, and the fee per spouse and per child (0350). */
+  allowsFamily?: boolean | null;
+  spouse?: number | null;
+  child?: number | null;
+};
 
 type Num = number | string | null | undefined;
 const num = (v: Num): number | null => {

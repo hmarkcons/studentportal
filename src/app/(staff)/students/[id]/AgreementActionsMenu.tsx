@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/Input";
 import { useButtonAction } from "@/components/useButtonAction";
 import { useAnchoredMenu } from "@/components/useAnchoredMenu";
 import { SlideOver } from "@/components/ui/SlideOver";
-import { EditAgreementForm } from "./GenerateAgreementForm";
+import { EditAgreementForm, type RegisteredFamily } from "./GenerateAgreementForm";
 import type { CountryFees } from "@/lib/agreementCurrency";
 import type { ServiceType } from "@/lib/serviceType";
 import { storedFileName } from "@/lib/documentFileNames";
@@ -39,6 +39,9 @@ type AgreementRecord = {
   /** The currency it is printed in and the rate it keeps (0351). */
   currency?: string | null;
   pkr_per_eur?: number | null;
+  /** The fee per spouse and per child it charges (0350). */
+  spouse_fee?: number | null;
+  child_fee?: number | null;
   /** The signed copy on file, if one is. */
   signed_file_path?: string | null;
 };
@@ -62,6 +65,7 @@ export function AgreementActionsMenu({
   countries = [],
   countryFees = {},
   standardRate,
+  family = null,
   links,
   canEdit,
   canDelete,
@@ -78,6 +82,8 @@ export function AgreementActionsMenu({
   /** Each country's standard fees and the standard rupee rate, for the edit form (0351). */
   countryFees?: Record<string, CountryFees>;
   standardRate?: number;
+  /** The family on the registration, for the edit form's fee per spouse and per child. */
+  family?: RegisteredFamily | null;
   links?: { templateUrl?: string; signedUrl?: string; pdfUrl?: string };
   canEdit: boolean;
   canDelete: boolean;
@@ -295,6 +301,7 @@ export function AgreementActionsMenu({
             countries={countries}
             countryFees={countryFees}
             standardRate={standardRate}
+            family={family}
             onSuccess={() => setEditOpen(false)}
           />
         </SlideOver>

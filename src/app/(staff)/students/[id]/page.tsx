@@ -218,9 +218,19 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
         currency: (d.consultancy_fee_currency as string | null) ?? null,
         admin: d.admin_charge != null ? Number(d.admin_charge) : null,
         consultancy: d.consultancy_fee != null ? Number(d.consultancy_fee) : null,
+        allowsFamily: Boolean(d.allows_dependants),
+        spouse: d.spouse_fee != null ? Number(d.spouse_fee) : null,
+        child: d.child_fee != null ? Number(d.child_fee) : null,
       },
     ])
   );
+  // Who is accompanying them by their registration, and the fees set there (0350).
+  const registeredFamily = {
+    spouses: Number(leadRegistration?.spouse_count ?? 0),
+    children: Number(leadRegistration?.children_count ?? 0),
+    spouseFee: leadRegistration?.spouse_fee != null ? Number(leadRegistration.spouse_fee) : null,
+    childFee: leadRegistration?.child_fee != null ? Number(leadRegistration.child_fee) : null,
+  };
   const canDeleteInvoice = perms["finance.invoices.delete"] === true;
   const rawDocs = requirementsChanged ? (await readDocs(true)).data : docsBeforeTopUp;
 
@@ -1135,6 +1145,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
             today={agreementToday()}
             countryFees={countryFees}
             standardRate={agreementRate}
+            family={registeredFamily}
           />
         )}
         {agreements && agreements.length > 0 && (
@@ -1202,6 +1213,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                         countries={orderedCountries}
                         countryFees={countryFees}
                         standardRate={agreementRate}
+                        family={registeredFamily}
                         links={links}
                         canEdit={isSuperAdmin && a.status !== "signed"}
                         canDelete={isSuperAdmin}

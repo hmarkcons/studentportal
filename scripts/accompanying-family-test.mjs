@@ -14,6 +14,7 @@ import {
   familyWords,
   isFamilyDob,
   parseFamily,
+  withAgreementFamilyFees,
 } from "../src/lib/accompanyingFamily.ts";
 import { REFERENCE_THEME, familyFeeParts, themedFeeRows } from "../src/lib/pdf/agreementTheme.ts";
 
@@ -197,4 +198,29 @@ test("chart: no family, no change — and a backup or visa-only agreement never 
   assert.deepEqual(familyFeeParts(fee({ installmentAmounts: [1800], total: 2100 }), String), { studentFee: null, rows: [], note: null });
   assert.deepEqual(familyFeeParts(fee({ installmentAmounts: [0], total: 300, isBackup: true, family }), String), { studentFee: null, rows: [], note: null });
   assert.deepEqual(familyFeeParts(fee({ installmentAmounts: [500], total: 500, isVisaOnly: true, family }), String), { studentFee: null, rows: [], note: null });
+});
+
+// ------------------------------------------------------------------ a fee typed on the agreement form
+
+const taken = { spouse_count: 1, children_count: 2, spouse_fee: 167500, child_fee: 83750, family_members: [] };
+
+test("agreement form: a fee per spouse or child typed there replaces the registration's, for that agreement", () => {
+  assert.deepEqual(withAgreementFamilyFees(taken, form({ agreement_spouse_fee: "150000", agreement_child_fee: "70000.5" })), {
+    ...taken,
+    spouse_fee: 150000,
+    child_fee: 70000.5,
+  });
+  assert.deepEqual(withAgreementFamilyFees(taken, form({ agreement_spouse_fee: "0" })).spouse_fee, 0, "free is a fee");
+});
+
+test("agreement form: blank, or not on the form, keeps the registration's fee", () => {
+  assert.deepEqual(withAgreementFamilyFees(taken, form({ agreement_spouse_fee: "  ", agreement_child_fee: "" })), taken);
+  assert.deepEqual(withAgreementFamilyFees(taken, form({})), taken);
+});
+
+test("agreement form: no fee for someone the agreement does not charge, and a bad fee is refused", () => {
+  const none = { spouse_count: 0, children_count: 0, spouse_fee: null, child_fee: null, family_members: [] };
+  assert.deepEqual(withAgreementFamilyFees(none, form({ agreement_spouse_fee: "500", agreement_child_fee: "250" })), none);
+  assert.match(withAgreementFamilyFees(taken, form({ agreement_spouse_fee: "-1" })).error, /spouse/);
+  assert.match(withAgreementFamilyFees(taken, form({ agreement_child_fee: "abc" })).error, /child/);
 });

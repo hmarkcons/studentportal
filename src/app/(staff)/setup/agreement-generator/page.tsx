@@ -86,9 +86,9 @@ export default async function AgreementGeneratorPage(props: {
     const [{ data: allTemplates }, { data: registeredRows }, { data: leadService }, { data: feeRows }, agreementRate] = await Promise.all([
       supabase.from("agreement_templates").select("id, name, signatory_name, service_type, destination:destinations(id, display_name)"),
       supabase.from("lead_destinations").select("destination_id, is_backup, destination:destinations(display_name)").eq("lead_id", selected.id),
-      supabase.from("leads").select("service_type").eq("id", selected.id).maybeSingle(),
+      supabase.from("leads").select("service_type, spouse_count, children_count, spouse_fee, child_fee").eq("id", selected.id).maybeSingle(),
       // Each country's fee currency and the standard rupee rate, for an agreement in the other currency (0351).
-      supabase.from("destinations").select("id, consultancy_fee_currency, admin_charge, consultancy_fee"),
+      supabase.from("destinations").select("id, consultancy_fee_currency, admin_charge, consultancy_fee, allows_dependants, spouse_fee, child_fee"),
       readAgreementRate(supabase),
     ]);
     const backupDestinationIds = (registeredRows ?? []).filter((d) => d.is_backup).map((d) => d.destination_id as string);
@@ -164,9 +164,18 @@ export default async function AgreementGeneratorPage(props: {
                   currency: (d.consultancy_fee_currency as string | null) ?? null,
                   admin: d.admin_charge != null ? Number(d.admin_charge) : null,
                   consultancy: d.consultancy_fee != null ? Number(d.consultancy_fee) : null,
+                  allowsFamily: Boolean(d.allows_dependants),
+                  spouse: d.spouse_fee != null ? Number(d.spouse_fee) : null,
+                  child: d.child_fee != null ? Number(d.child_fee) : null,
                 },
               ])
             )}
+            family={{
+              spouses: Number(leadService?.spouse_count ?? 0),
+              children: Number(leadService?.children_count ?? 0),
+              spouseFee: leadService?.spouse_fee != null ? Number(leadService.spouse_fee) : null,
+              childFee: leadService?.child_fee != null ? Number(leadService.child_fee) : null,
+            }}
             standardRate={agreementRate}
           />
         )}

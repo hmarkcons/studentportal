@@ -234,3 +234,34 @@ export function parseFamily(form: {
     family_members: [...spouseList, ...childList],
   };
 }
+
+/**
+ * A fee per spouse and per child typed on the agreement form, in the
+ * agreement's own currency, over what the registration gives — for this one
+ * agreement (2026-11-05). A box left blank, or not on the form, keeps the
+ * registration's fee; a fee is taken only for someone the agreement charges.
+ */
+export function withAgreementFamilyFees(
+  family: FamilyColumns,
+  form: { has(name: string): boolean; get(name: string): unknown }
+): FamilyColumns | { error: string } {
+  const read = (name: string): number | null | undefined => {
+    if (!form.has(name)) return undefined;
+    const raw = String(form.get(name) ?? "").trim();
+    if (raw === "") return undefined;
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= 0 ? round2(n) : null;
+  };
+  const out = { ...family };
+  if (family.spouse_count > 0) {
+    const fee = read("agreement_spouse_fee");
+    if (fee === null) return { error: "The fee per spouse must be a number of 0 or more." };
+    if (fee !== undefined) out.spouse_fee = fee;
+  }
+  if (family.children_count > 0) {
+    const fee = read("agreement_child_fee");
+    if (fee === null) return { error: "The fee per child must be a number of 0 or more." };
+    if (fee !== undefined) out.child_fee = fee;
+  }
+  return out;
+}

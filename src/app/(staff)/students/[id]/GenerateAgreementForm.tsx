@@ -9,6 +9,7 @@ import { toast } from "@/lib/toast";
 import { FileField } from "@/components/FileField";
 import { Input, Select } from "@/components/ui/Input";
 import type { ServiceType } from "@/lib/serviceType";
+import { STANDARD_CHILD_FEE, STANDARD_SPOUSE_FEE } from "@/lib/accompanyingFamily";
 import {
   AGREEMENT_CURRENCIES,
   AGREEMENT_CURRENCY_LABELS,
@@ -27,6 +28,9 @@ type AgreementTemplateOption = {
 };
 
 type Country = { id: string; display_name: string };
+
+/** Who is accompanying the student by their registration, and the fees set for them there (0350), in the country's currency. */
+export type RegisteredFamily = { spouses: number; children: number; spouseFee: number | null; childFee: number | null };
 
 function templateDest(d: AgreementTemplateOption["destination"]) {
   return Array.isArray(d) ? d[0] : d;
@@ -88,10 +92,13 @@ function MoneyFields({
   isBackup,
   initial,
   standardRate,
+  family,
   wide = false,
 }: {
   /** The country's standard fees, in its fee currency. */
   fees: CountryFees | undefined;
+  /** The family on the registration, which the agreement charges for where its country allows family. */
+  family?: RegisteredFamily | null;
   /** The country's visa service fee, in its fee currency. */
   visaFee: number | null | undefined;
   countryName: string | null;
@@ -106,6 +113,9 @@ function MoneyFields({
     discount?: number | null;
     visa?: number | null;
     installments?: number | null;
+    /** The fee per spouse and per child it charges, in its own currency. */
+    spouseFee?: number | null;
+    childFee?: number | null;
   };
   standardRate: number;
   wide?: boolean;
@@ -119,6 +129,8 @@ function MoneyFields({
   const [consultancy, setConsultancy] = useState(asText(initial.consultancy));
   const [discount, setDiscount] = useState(asText(initial.discount));
   const [visa, setVisa] = useState(asText(initial.visa));
+  const [spouseFee, setSpouseFee] = useState(asText(initial.spouseFee));
+  const [childFee, setChildFee] = useState(asText(initial.childFee));
   const rateNumber = Number(rate) > 0 ? Number(rate) : standardRate;
   const converting = currency !== feeCurrency;
   const fromCountry = (n: number) => convertFee(n, feeCurrency, currency, rateNumber);
@@ -130,16 +142,28 @@ function MoneyFields({
     setConsultancy(swap(consultancy));
     setDiscount(swap(discount));
     setVisa(swap(visa));
+    setSpouseFee(swap(spouseFee));
+    setChildFee(swap(childFee));
     setCurrency(next);
   }
 
   const box = (narrow: string) => (wide ? "w-full" : narrow);
   // Captioned, not only placeholdered: a figure converted into the box hides its placeholder.
   const caption = `flex flex-col gap-0.5 text-xs text-muted ${wide ? "w-full" : ""}`;
+  // The accompanying family (0350): charged on a full agreement for a country
+  // that allows family, at the fee the registration set — the country's
+  // standard where it set none — unless another is typed here.
+  const charged = !isVisaOnly && !isBackup && Boolean(fees?.allowsFamily);
+  const spouses = charged ? (family?.spouses ?? 0) : 0;
+  const children = charged ? (family?.children ?? 0) : 0;
+  const registeredSpouseFee = family?.spouseFee ?? fees?.spouse ?? STANDARD_SPOUSE_FEE;
+  const registeredChildFee = family?.childFee ?? fees?.child ?? STANDARD_CHILD_FEE;
   const standard = [
     !isVisaOnly && fees?.admin != null ? `admin charge ${amountText(currency, fromCountry(fees.admin))}` : null,
     !isVisaOnly && !isBackup && fees?.consultancy != null ? `consultancy fee ${amountText(currency, fromCountry(fees.consultancy))}` : null,
     isVisaOnly && visaFee != null ? `visa service fee ${amountText(currency, fromCountry(visaFee))}` : null,
+    spouses > 0 ? `${amountText(currency, fromCountry(registeredSpouseFee))} per spouse` : null,
+    children > 0 ? `${amountText(currency, fromCountry(registeredChildFee))} per child` : null,
   ].filter((s): s is string => Boolean(s));
 
   return (
@@ -250,6 +274,38 @@ function MoneyFields({
                   data-agreement-discount
                 />
               </label>
+              {spouses > 0 && (
+                <label className={caption}>
+                  Fee per spouse ({currency}) × {spouses}
+                  <Input
+                    name="agreement_spouse_fee"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="Registration's"
+                    value={spouseFee}
+                    onChange={(e) => setSpouseFee(e.target.value)}
+                    className={box("w-44")}
+                    data-agreement-spouse-fee
+                  />
+                </label>
+              )}
+              {children > 0 && (
+                <label className={caption}>
+                  Fee per child ({currency}) × {children}
+                  <Input
+                    name="agreement_child_fee"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="Registration's"
+                    value={childFee}
+                    onChange={(e) => setChildFee(e.target.value)}
+                    className={box("w-44")}
+                    data-agreement-child-fee
+                  />
+                </label>
+              )}
               <Select name="installment_count" defaultValue={String(initial.installments ?? 1)} className={wide ? "w-full" : undefined}>
                 <option value="1">1 consultancy fee installment</option>
                 <option value="2">2 consultancy fee installments</option>
@@ -310,8 +366,11 @@ export function GenerateAgreementForm({
   today,
   countryFees = {},
   standardRate = STANDARD_AGREEMENT_PKR_PER_EUR,
+  family = null,
 }: {
   studentId: string;
+  /** The family on their registration (0350): a fee per spouse and per child can be typed for the agreement. */
+  family?: RegisteredFamily | null;
   /** Each country's standard fees and their currency, by destination id — what the agreement converts from (0351). */
   countryFees?: Record<string, CountryFees>;
   /** Rupees per euro as standard (Setup › Agreement templates), offered when converting (0351). */
@@ -407,6 +466,7 @@ export function GenerateAgreementForm({
           // The registration's discount, in the country's currency — which a new agreement opens on.
           initial={{ discount: discountAmount }}
           standardRate={standardRate}
+          family={family}
         />
       )}
       <Button type="submit" variant="primary" pending={pending} status={{ state, label: "Generated." }}>
@@ -439,6 +499,7 @@ export function EditAgreementForm({
   countries = [],
   countryFees = {},
   standardRate = STANDARD_AGREEMENT_PKR_PER_EUR,
+  family = null,
 }: {
   agreement: {
     id: string;
@@ -456,7 +517,12 @@ export function EditAgreementForm({
     /** The currency it is printed in and the rate it keeps (0351). */
     currency?: string | null;
     pkr_per_eur?: number | null;
+    /** The fee per spouse and per child it charges, in its own currency (0350). */
+    spouse_fee?: number | null;
+    child_fee?: number | null;
   };
+  /** The family on the registration, which saving takes again (0350). */
+  family?: RegisteredFamily | null;
   studentId: string;
   templates: AgreementTemplateOption[];
   backupDestinationIds?: string[];
@@ -519,10 +585,13 @@ export function EditAgreementForm({
                   discount: agreement.discount_amount,
                   visa: agreement.visa_service_fee_override,
                   installments: agreement.installment_count,
+                  spouseFee: agreement.spouse_fee,
+                  childFee: agreement.child_fee,
                 }
               : { installments: agreement.installment_count }
           }
           standardRate={standardRate}
+          family={family}
           wide
         />
       )}

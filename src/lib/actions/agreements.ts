@@ -1,6 +1,6 @@
 "use server";
 
-import { familyForAgreement, type FamilyColumns } from "@/lib/accompanyingFamily";
+import { familyForAgreement, withAgreementFamilyFees, type FamilyColumns } from "@/lib/accompanyingFamily";
 import { convertFee, feeCurrencyOf, parseAgreementCurrency, type AgreementCurrencyColumns } from "@/lib/agreementCurrency";
 import { removeStorageFiles } from "@/lib/fileTrash";
 import { revalidatePath } from "next/cache";
@@ -162,7 +162,10 @@ async function agreementTerms(
     family.spouse_fee = inAgreement(family.spouse_fee);
     family.child_fee = inAgreement(family.child_fee);
   }
-  return { family, money };
+  // A fee per spouse or child typed on the form, already in the agreement's currency.
+  const withFees = withAgreementFamilyFees(family, formData);
+  if ("error" in withFees) return { error: withFees.error };
+  return { family: withFees, money };
 }
 
 export async function generateAgreement(studentId: string, _prevState: unknown, formData: FormData) {
