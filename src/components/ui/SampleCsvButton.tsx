@@ -1,5 +1,7 @@
 "use client";
 
+import { csvBlob, saveBlob } from "@/components/saveBlob";
+
 export function SampleCsvButton({
   filename,
   headers,
@@ -11,13 +13,8 @@ export function SampleCsvButton({
 }) {
   function download() {
     const lines = [headers.join(","), exampleRow.map((v) => `"${v.replace(/"/g, '""')}"`).join(",")];
-    const blob = new Blob([lines.join("\n")], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
+    // UTF-8 with its mark: Excel on a Mac or Windows opens it with the example's letters intact.
+    saveBlob(csvBlob(lines), filename);
   }
 
   return (

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { NOT_A_SIGN_IN } from "@/components/CredentialField";
 import { formatStamp } from "@/lib/activityStamp";
+import { saveBlob } from "@/components/saveBlob";
 import { phoneBounds } from "@/lib/phoneNumber";
 import { saveGmailRecovery, revealGmailRecovery, removeGmailRecoveryPart } from "@/lib/actions/gmailRecovery";
 import {
@@ -101,12 +102,7 @@ export function GmailRecoveryBlock({ studentId, initial }: { studentId: string; 
 
   function download() {
     if (!details?.codes) return;
-    const url = URL.createObjectURL(new Blob([details.codes.replace(/\n/g, "\r\n") + "\r\n"], { type: "text/plain;charset=utf-8" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = codesDownloadName(details);
-    a.click();
-    URL.revokeObjectURL(url);
+    saveBlob(new Blob([details.codes.replace(/\n/g, "\r\n") + "\r\n"], { type: "text/plain;charset=utf-8" }), codesDownloadName(details));
   }
 
   const parts = partsOnFile(status);

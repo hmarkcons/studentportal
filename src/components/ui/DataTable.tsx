@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Maximize2, Minimize2 } from "lucide-react";
 import { TableFrame } from "@/components/ui/TableFrame";
+import { csvBlob, saveBlob } from "@/components/saveBlob";
 
 // Server Component pages build `cells`/`csv` for every row up front (calling
 // their own render logic server-side) instead of passing render/csv
@@ -364,13 +365,8 @@ export function DataTable({
       .map((r, i) =>
         [...(serial ? [String(i + 1)] : []), ...exportColumns.map((c) => `"${(r.csv?.[c.key] ?? "").replace(/"/g, '""')}"`)].join(",")
       );
-    const blob = new Blob([[header, ...lines].join("\n")], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${exportFilename ?? "export"}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    // UTF-8 with its mark, so Excel on a Mac or Windows keeps names as written.
+    saveBlob(csvBlob([header, ...lines]), `${exportFilename ?? "export"}.csv`);
   }
 
   const showToolbar = exportFilename || exportHref || searchable || filters.length > 0 || expandable;

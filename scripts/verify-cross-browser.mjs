@@ -4,6 +4,7 @@
 //
 //   VERIFY_AGAINST_PRODUCTION=yes npm run check:browsers
 //   ENGINES=webkit npm run check:browsers      # one engine
+//   STUDENT_ONLY=yes                           # the student portal alone
 //   SHOT_DIR=<folder>                          # a screenshot of each page
 //
 // Needs the engines: npx playwright install chromium webkit firefox.
@@ -194,12 +195,16 @@ try {
     date_of_inquiry: karachiToday(), country_of_interest: "Italy (Public)", intake: "Fall 2099", level_applying_for: "masters",
   });
   await admin.from("lead_destinations").insert([{ lead_id: studentId, destination_id: italy.id, is_backup: false, dashboard_stage_values: {} }]);
+  // The Student ID comes from the intake and the country (triggers, 0260); the
+  // portal is opened by an agreement (0253), which this student has no need of,
+  // so it is opened directly.
   for (let i = 0; i < 20 && !studentReady; i++) {
-    const { data } = await admin.from("leads").select("portal_active, student_code").eq("id", studentId).single();
-    studentReady = Boolean(data?.portal_active && data.student_code);
+    const { data } = await admin.from("leads").select("student_code").eq("id", studentId).single();
+    studentReady = Boolean(data?.student_code);
     if (!studentReady) await new Promise((r) => setTimeout(r, 1000));
   }
   if (studentReady) {
+    await admin.from("leads").update({ portal_active: true }).eq("id", studentId);
     const { data: made } = await admin.auth.admin.createUser({ email: STUDENT_EMAIL, password: FIXTURE_PASSWORD, email_confirm: true });
     studentUserId = made?.user?.id ?? null;
     await admin.from("leads").update({ auth_user_id: studentUserId }).eq("id", studentId);
@@ -223,8 +228,8 @@ try {
     let current = "/login";
     watch(page, problems, () => current);
 
-    const signedIn = await signInAs(page, fixtureEmail);
-    ok(`${name}: staff sign in`, signedIn, page.url());
+    const signedIn = process.env.STUDENT_ONLY === "yes" ? false : await signInAs(page, fixtureEmail);
+    if (process.env.STUDENT_ONLY !== "yes") ok(`${name}: staff sign in`, signedIn, page.url());
     if (signedIn) {
       const staffPages = routes.filter((r) => r !== "/login");
       const opened = await sweep(page, name, staffPages, problems, (r) => (current = r));
@@ -246,7 +251,7 @@ try {
         }
       }
     }
-    report(name, "staff", problems);
+    if (process.env.STUDENT_ONLY !== "yes") report(name, "staff", problems);
 
     // The student portal, in a context of its own.
     if (studentReady) {
