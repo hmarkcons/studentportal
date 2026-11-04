@@ -134,6 +134,8 @@ function MoneyFields({
   }
 
   const box = (narrow: string) => (wide ? "w-full" : narrow);
+  // Captioned, not only placeholdered: a figure converted into the box hides its placeholder.
+  const caption = `flex flex-col gap-0.5 text-xs text-muted ${wide ? "w-full" : ""}`;
   const standard = [
     !isVisaOnly && fees?.admin != null ? `admin charge ${amountText(currency, fromCountry(fees.admin))}` : null,
     !isVisaOnly && !isBackup && fees?.consultancy != null ? `consultancy fee ${amountText(currency, fromCountry(fees.consultancy))}` : null,
@@ -172,27 +174,33 @@ function MoneyFields({
       )}
       {isVisaOnly ? (
         <>
-          <Input
-            name="visa_service_fee_override"
-            type="number"
-            step="0.01"
-            min="0"
-            placeholder={`Visa service fee (${currency})`}
-            value={visa}
-            onChange={(e) => setVisa(e.target.value)}
-            className={box("w-56")}
-            data-visa-fee-input
-          />
-          <Input
-            name="discount_amount"
-            type="number"
-            step="0.01"
-            placeholder={`Discount amount (${currency})`}
-            value={discount}
-            onChange={(e) => setDiscount(e.target.value)}
-            className={box("w-44")}
-            data-agreement-discount
-          />
+          <label className={caption}>
+            Visa service fee ({currency})
+            <Input
+              name="visa_service_fee_override"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="Country's standard"
+              value={visa}
+              onChange={(e) => setVisa(e.target.value)}
+              className={box("w-44")}
+              data-visa-fee-input
+            />
+          </label>
+          <label className={caption}>
+            Discount ({currency})
+            <Input
+              name="discount_amount"
+              type="number"
+              step="0.01"
+              placeholder="None"
+              value={discount}
+              onChange={(e) => setDiscount(e.target.value)}
+              className={box("w-36")}
+              data-agreement-discount
+            />
+          </label>
           <Select name="installment_count" defaultValue={String(initial.installments ?? 1)} className={wide ? "w-full" : undefined}>
             <option value="1">1 visa service fee installment</option>
             <option value="2">2 visa service fee installments</option>
@@ -201,38 +209,47 @@ function MoneyFields({
         </>
       ) : (
         <>
-          <Input
-            name="admin_charge_override"
-            type="number"
-            step="0.01"
-            placeholder={`Admin charge override (${currency})`}
-            value={admin}
-            onChange={(e) => setAdmin(e.target.value)}
-            className={box("w-52")}
-            data-agreement-admin
-          />
+          <label className={caption}>
+            Admin charge ({currency})
+            <Input
+              name="admin_charge_override"
+              type="number"
+              step="0.01"
+              placeholder="Country's standard"
+              value={admin}
+              onChange={(e) => setAdmin(e.target.value)}
+              className={box("w-44")}
+              data-agreement-admin
+            />
+          </label>
           {!isBackup && (
             <>
-              <Input
-                name="consultancy_fee_override"
-                type="number"
-                step="0.01"
-                placeholder={`Consultancy fee override (${currency})`}
-                value={consultancy}
-                onChange={(e) => setConsultancy(e.target.value)}
-                className={box("w-60")}
-                data-agreement-consultancy
-              />
-              <Input
-                name="discount_amount"
-                type="number"
-                step="0.01"
-                placeholder={`Discount amount (${currency})`}
-                value={discount}
-                onChange={(e) => setDiscount(e.target.value)}
-                className={box("w-44")}
-                data-agreement-discount
-              />
+              <label className={caption}>
+                Consultancy fee ({currency})
+                <Input
+                  name="consultancy_fee_override"
+                  type="number"
+                  step="0.01"
+                  placeholder="Country's standard"
+                  value={consultancy}
+                  onChange={(e) => setConsultancy(e.target.value)}
+                  className={box("w-44")}
+                  data-agreement-consultancy
+                />
+              </label>
+              <label className={caption}>
+                Discount ({currency})
+                <Input
+                  name="discount_amount"
+                  type="number"
+                  step="0.01"
+                  placeholder="None"
+                  value={discount}
+                  onChange={(e) => setDiscount(e.target.value)}
+                  className={box("w-36")}
+                  data-agreement-discount
+                />
+              </label>
               <Select name="installment_count" defaultValue={String(initial.installments ?? 1)} className={wide ? "w-full" : undefined}>
                 <option value="1">1 consultancy fee installment</option>
                 <option value="2">2 consultancy fee installments</option>
