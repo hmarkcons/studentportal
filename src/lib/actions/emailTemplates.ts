@@ -312,11 +312,13 @@ export async function sendTemplateTest(versionId: string, _prev: unknown, formDa
   if (bad.length) return { error: `Not an email address: ${bad.join(", ")}.` };
 
   const supabase = await createClient();
-  const { data: v } = await supabase
+  // Named: versions and templates point at each other (template_id, current_version_id).
+  const { data: v, error } = await supabase
     .from("email_template_versions")
-    .select("html, text_body, template:email_templates(name)")
+    .select("html, text_body, template:email_templates!email_template_versions_template_id_fkey(name)")
     .eq("id", versionId)
     .maybeSingle();
+  if (error) return { error: error.message };
   if (!v) return { error: "That version no longer exists." };
   const templateName = (Array.isArray(v.template) ? v.template[0] : v.template)?.name ?? "Email";
   const subject = (String(formData.get("subject") ?? "").trim() || templateName).slice(0, 200);
