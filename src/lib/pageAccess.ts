@@ -66,6 +66,7 @@ export const PAGE_PERMISSIONS: Record<string, string> = {
   "/marketing/social-calendar": "page.marketing.social_calendar",
   "/marketing/ad-campaigns": "page.marketing.ad_campaigns",
   "/marketing/broadcast": "page.marketing.broadcast",
+  "/marketing/email": "page.marketing.email",
 
   "/reports": "page.reports",
 

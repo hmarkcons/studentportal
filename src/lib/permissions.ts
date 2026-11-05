@@ -75,6 +75,11 @@ export const PERMISSION_KEYS = [
   "social.posts.approve",
   "social.posts.publish",
   "social.analytics.view",
+  // Email campaigns (0354): page.marketing.email opens Marketing › Email
+  // campaigns; templates and settings each have their own switch.
+  "page.marketing.email",
+  "email.templates.manage",
+  "email.settings.manage",
 ] as const;
 
 /**

@@ -74,6 +74,7 @@ const BASE_STAFF_NAV: NavItem[] = [
       { label: "Social calendar", href: "/marketing/social-calendar" },
       { label: "Ad campaigns", href: "/marketing/ad-campaigns" },
       { label: "Broadcast message", href: "/marketing/broadcast" },
+      { label: "Email campaigns", href: "/marketing/email" },
     ],
   },
   { label: "Reports", href: "/reports", icon: "reports" },
