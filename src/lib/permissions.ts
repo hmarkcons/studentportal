@@ -80,6 +80,7 @@ export const PERMISSION_KEYS = [
   "page.marketing.email",
   "email.templates.manage",
   "email.settings.manage",
+  "email.audience.manage",
 ] as const;
 
 /**

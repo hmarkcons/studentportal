@@ -10,8 +10,8 @@ The work goes in phases. This file grows with each.
 | Phase | What | State |
 |---|---|---|
 | 1 | Templates: upload, processing, pre-flight checks, preview, test send | **Built** (0354) |
-| 2 | Audience: contact status, segments, lists, suppression, preference centre | Next |
-| 3 | Campaigns: wizard, approval, sending engine | — |
+| 2 | Audience: contact status, segments, lists, import, suppression, preference centre | **Built** (0355) |
+| 3 | Campaigns: wizard, approval, sending engine | Next |
 | 4 | Tracking: opens, clicks, bounces, complaints, website visits | — |
 | 5 | Reports | — |
 | 6 | Extras (A/B tests, automations, …) | — |
@@ -123,3 +123,73 @@ Super Admin holds all of them. Retune in Admin › Role Permissions.
 4. Upload it again: version 2 appears; "Use this version" on version 1.
 
 Unit tests: `scripts/email-templates-test.mjs`.
+
+## Phase 2 — Audience
+
+Campaigns go to the people already in the portal — every lead with an email,
+students included — and to **imported contacts** (`email_contacts`), people from
+a spreadsheet who are not leads and so never appear in counsellors' lead lists.
+Nothing is copied: a segment is evaluated each time it is used.
+
+### An address's state (`email_contact_status`)
+
+One row per email address (lower-cased): `subscribed`, `unsubscribed`,
+`bounced`, `complained`, `suppressed` (by staff) or `invalid`; why; where
+consent came from; the topics chosen on the preference page; and the private
+token its preference and unsubscribe links carry. An address with no row is a
+lead who enquired — consent "Enquiry", subscribed to everything. Keyed by the
+address, so a person on two lead records is one subscriber. Staff-only: a
+student can read their own `leads` row, so nothing email-related is on it.
+
+### Who a send reaches (`src/lib/emailCampaigns/audience.ts`)
+
+1. Everyone in any included segment or list (or everyone).
+2. Less anyone in an excluded segment or list.
+3. Less records with no usable address.
+4. One per address — a lead before an imported contact.
+5. Less leads marked **Not interested** or **Not eligible** (by default).
+6. Less the **do-not-email list** — it wins over every segment and list.
+7. Less anyone who opted out of the campaign's topic.
+
+The same function gives the segment builder's live count, a campaign's
+audience, and the snapshot taken when it is sent.
+
+### Segments
+
+Saved filters, all or any of up to 30 rules: lead status, country of interest,
+city, level, lead source, counsellor, intake, enquiry date (last N days, before,
+after — Karachi days), registered student, has an application, application
+stage, on a list, contact type. Engagement rules (opened, clicked, not engaged)
+come with tracking (Phase 4).
+
+### Lists and importing
+
+A list holds leads and imported contacts. Add by pasting addresses, or import a
+CSV: the columns are guessed from the headers and confirmed; each row's
+address is checked; repeats are kept once; an address that is a lead joins as
+that lead; a new address's domain is asked whether it takes email (MX, else an
+A/AAAA record) and refused if not; the consent source given is recorded on
+every new contact.
+
+### The do-not-email list
+
+Every non-subscribed address, with why and since when. Staff add addresses with
+a reason; they can take off one they added, one found invalid, or one that
+bounced and has been fixed — never one the person unsubscribed or marked as
+spam: only they can undo that, from their preference page.
+
+### The pages a recipient reaches (public, no login)
+
+- `/email/preferences/<token>` — choose topics (Settings holds the list), or
+  unsubscribe from everything; subscribe again after unsubscribing.
+- `/email/unsubscribe/<token>` — confirms with a button (a mail scanner opens
+  every link, so opening it changes nothing).
+- `POST /api/email/unsubscribe/<token>` — the RFC 8058 one-click unsubscribe a
+  mail app sends: acts at once, answers 200.
+
+`/email/*` and `/api/email/*` are let through `src/proxy.ts` without a session.
+
+Permission: `email.audience.manage` (Marketing, Digital Marketing) — segments,
+lists, imports, the do-not-email list. Viewing needs `page.marketing.email`.
+
+Unit tests: `scripts/email-audience-test.mjs`.

@@ -33,7 +33,10 @@ export async function proxy(request: NextRequest) {
   // The pages an email campaign links to — unsubscribe, preferences, the
   // web version, and the page a link in a test email opens — are for anyone
   // the email reached, signed in or not. Each carries its own token.
-  if (request.nextUrl.pathname.startsWith("/email/")) {
+  // The same goes for the endpoints behind them — one-click unsubscribe, and
+  // (as they are built) the open pixel, click redirect and sending-service
+  // webhooks — which a mail client or the service calls with no session.
+  if (request.nextUrl.pathname.startsWith("/email/") || request.nextUrl.pathname.startsWith("/api/email/")) {
     return NextResponse.next({ request });
   }
 
