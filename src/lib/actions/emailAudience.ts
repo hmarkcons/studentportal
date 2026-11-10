@@ -62,6 +62,8 @@ export async function saveEmailSegment(segmentId: string | null, _prev: unknown,
     if (error) return { error: error.message };
     if (!data?.length) return { error: "That segment no longer exists." };
     revalidatePath(`${AUDIENCE}/segments`);
+    // Its own page too: React resets the form after the action, back to the props it has.
+    revalidatePath(`${AUDIENCE}/segments/${segmentId}`);
     return { success: true, segmentId };
   }
   const { data, error } = await supabase.from("email_segments").insert({ name, description, rules, created_by: user?.id ?? null }).select("id").single();
@@ -288,6 +290,8 @@ export type ImportPreview = {
   sample: string[][];
   rows: number;
   mapping: ImportMapping;
+  /** The staged file's reference, posted again by the import step's own form. */
+  fileRef: string;
 };
 
 /** Reads an uploaded spreadsheet's header and first rows, and guesses which column is which. */
@@ -296,6 +300,10 @@ export async function previewContactImport(_prev: unknown, formData: FormData): 
   if (denied) return denied;
   const file = await uploadedFile(formData, "file");
   if (!file) return { error: "Choose the CSV file to import." };
+  // The import step is a form of its own (React resets a form after its action
+  // runs, which clears the file field), so it is handed the reference to post.
+  const fileRef = typeof formData.get("file") === "string" ? String(formData.get("file")) : "";
+  if (!fileRef) return { error: "The file could not be uploaded for import. Choose it again." };
   const rows = parseCsv(await readCsvFile(file)).filter((r) => r.some((v) => v.trim()));
   if (rows.length < 2) return { error: "The file has no rows under its header." };
   const [headers, ...body] = rows;
@@ -304,7 +312,7 @@ export async function previewContactImport(_prev: unknown, formData: FormData): 
     const guessed = guessEmailColumn(body.slice(0, 50));
     if (guessed !== undefined) mapping.email = guessed;
   }
-  return { success: true, preview: { headers, sample: body.slice(0, 5), rows: body.length, mapping } };
+  return { success: true, preview: { headers, sample: body.slice(0, 5), rows: body.length, mapping, fileRef } };
 }
 
 export type ImportReport = AddReport & { rows: number; listId: string };

@@ -10,8 +10,11 @@ import { AddReportView } from "../lists/ListForms";
 
 /**
  * A spreadsheet into the email audience: read the file, confirm which column
- * is which, choose the list, say where consent came from, import. One form, so
- * both steps post the same uploaded file.
+ * is which, choose the list, say where consent came from, import.
+ *
+ * Two forms. React resets a form once its action has run, which empties the
+ * file field — so the import step does not reuse the first form; it posts the
+ * staged file's reference the first step handed back.
  */
 export function ImportWizard({ lists }: { lists: { id: string; name: string }[] }) {
   const [previewState, previewAction, previewing] = useActionState(previewContactImport, undefined);
@@ -21,17 +24,18 @@ export function ImportWizard({ lists }: { lists: { id: string; name: string }[] 
   const preview = previewState && "success" in previewState ? previewState.preview : null;
 
   return (
-    <form className="flex flex-col gap-4" data-import-wizard>
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+    <div className="flex flex-col gap-4" data-import-wizard>
+      <form action={previewAction} className="flex flex-col gap-2 sm:flex-row sm:items-end">
         <FileField accept=".csv,text/csv" required noun="spreadsheet" hint="CSV (save the sheet as CSV from Excel or Google Sheets)" onChange={(s) => setReady(Boolean(s.file))} />
-        <Button type="submit" formAction={previewAction} pending={previewing} disabled={!ready}>
+        <Button type="submit" pending={previewing} disabled={!ready}>
           Read the file
         </Button>
-      </div>
+      </form>
       {previewState && "error" in previewState && <p className="text-xs text-danger">{previewState.error}</p>}
 
       {preview && (
-        <>
+        <form action={commitAction} className="flex flex-col gap-4">
+          <input type="hidden" name="file" value={preview.fileRef} />
           <p className="text-sm text-ink">
             {preview.rows.toLocaleString("en-US")} rows. Check which column is which — guessed from the headers.
           </p>
@@ -101,12 +105,12 @@ export function ImportWizard({ lists }: { lists: { id: string; name: string }[] 
             </label>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="submit" variant="primary" formAction={commitAction} pending={committing}>
+            <Button type="submit" variant="primary" pending={committing}>
               Import {preview.rows.toLocaleString("en-US")} rows
             </Button>
             <span className="text-[11px] text-muted">Each new address&rsquo;s domain is asked whether it takes email, which can take a little while.</span>
           </div>
-        </>
+        </form>
       )}
       {commitState && "error" in commitState && <p className="text-xs text-danger">{commitState.error}</p>}
       {commitState && "success" in commitState && (
@@ -117,6 +121,6 @@ export function ImportWizard({ lists }: { lists: { id: string; name: string }[] 
           </a>
         </div>
       )}
-    </form>
+    </div>
   );
 }
