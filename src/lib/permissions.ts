@@ -81,6 +81,10 @@ export const PERMISSION_KEYS = [
   "email.templates.manage",
   "email.settings.manage",
   "email.audience.manage",
+  "email.campaigns.create",
+  "email.campaigns.send",
+  "email.campaigns.approve",
+  "email.reports.view",
 ] as const;
 
 /**
