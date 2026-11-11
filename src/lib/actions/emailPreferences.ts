@@ -37,9 +37,9 @@ export async function savePreferences(token: string, _prev: unknown, formData: F
 }
 
 /** Unsubscribes the address from every email, from the preference or unsubscribe page. */
-export async function unsubscribeFromAll(token: string): Promise<Result> {
+export async function unsubscribeFromAll(token: string, recipientToken?: string | null): Promise<Result> {
   const admin = createAdminClient();
-  const done = await unsubscribeByToken(admin, token, "Unsubscribed on the unsubscribe page");
+  const done = await unsubscribeByToken(admin, token, "Unsubscribed on the unsubscribe page", recipientToken);
   if (!done) return { error: "This link is not valid any more. Use the link in a more recent email." };
   revalidatePath(`/email/preferences/${token}`);
   return { success: true, message: "You are unsubscribed and won't receive HMARK's emails." };

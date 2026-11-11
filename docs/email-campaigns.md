@@ -11,9 +11,9 @@ The work goes in phases. This file grows with each.
 |---|---|---|
 | 1 | Templates: upload, processing, pre-flight checks, preview, test send | **Built** (0354) |
 | 2 | Audience: contact status, segments, lists, import, suppression, preference centre | **Built** (0355) |
-| 3 | Campaigns: wizard, approval, sending engine | Next |
-| 4 | Tracking: opens, clicks, bounces, complaints, website visits | — |
-| 5 | Reports | — |
+| 3 | Campaigns: drafts, approval, scheduling, the sending engine | **Built** (0356, 0357) — practice mode until the service is bought |
+| 4 | Tracking: opens, clicks, bounces, complaints, website visits | **Built** (0356–0358) — bounces and complaints wait for the service |
+| 5 | Reports | Next |
 | 6 | Extras (A/B tests, automations, …) | — |
 
 ## The sending service — not connected yet
@@ -193,3 +193,106 @@ Permission: `email.audience.manage` (Marketing, Digital Marketing) — segments,
 lists, imports, the do-not-email list. Viewing needs `page.marketing.email`.
 
 Unit tests: `scripts/email-audience-test.mjs`.
+
+## Phase 3 — Campaigns
+
+Marketing › Email campaigns › Campaigns. A campaign is a template version, a
+subject (and preview text), a sender, an audience and tracking choices.
+
+### Life of a campaign (`email_campaigns.status`)
+
+`draft` → (`pending_approval` →) `scheduled` → `sending` → `sent`, with
+`paused`, `cancelled` and `failed` on the way.
+
+- **Create** (`email.campaigns.create`: Marketing, Digital Marketing): drafts,
+  test sends (to five addresses, through the portal's own mailbox), duplicates,
+  and sending for approval.
+- **Send** (`email.campaigns.send`): send now or at a Karachi time without
+  approval. A send to more than 500 people (`CONFIRM_ABOVE`) is confirmed by
+  typing its size or SEND.
+- **Approve** (`email.campaigns.approve`: Super Admin): approve or send back
+  with a note. Changing a campaign that is waiting sends it back to draft.
+- Pause, resume and cancel while it is sending; a cancelled email is never sent.
+
+### Sending (`src/lib/emailCampaigns/sender.ts`)
+
+`/api/cron/email-send` runs every minute (vercel.json) and spends at most 45
+seconds:
+
+1. A campaign whose time has come **starts**: its audience is resolved once
+   and frozen into `email_campaign_recipients` — whoever unsubscribes or
+   bounces after that is skipped at their turn, nobody is added — and the
+   email is prepared once (`render.ts`: tracked links numbered, the pixel's
+   place marked, the preview text put in).
+2. The run's **budget** is the smallest of the speed (per second × 50 s), what
+   is left of the hourly limit and, while warming up, the daily cap
+   (`sendingRules.ts`; Settings › Sending holds the numbers, the warm-up and
+   the topic list).
+3. Recipients are **claimed** by a conditional update, so two overlapping runs
+   never send the same email twice; one claimed and abandoned for ten minutes
+   is marked failed rather than resent blind.
+4. Each is **rendered** for its person (merge tags, their own tracking and
+   unsubscribe addresses, the List-Unsubscribe headers) and sent. A failure
+   waits 2, 4, 8, 16 minutes and is given up after five tries.
+5. A campaign with everyone sent is **finished**; one whose bounces pass 5%
+   or complaints 0.1% (once 100 are sent) **pauses itself** and says why.
+   Whoever created it, and the Super Admins, are told either way.
+
+### Practice mode — until the service is bought
+
+With no service connected (`getCampaignProvider` returns null) a campaign can
+still be sent, as **practice**: everything above runs, nobody is emailed, and
+every email is recorded as sent through a stand-in (`PRACTICE_SENDER`). It is
+badged Practice everywhere. On a practice campaign that has finished,
+**Simulate activity** (`simulate.ts`) makes up a believable story — deliveries,
+a few bounces, Apple's machine opens, link scanners, real opens and clicks,
+website visits and conversions — so the reports can be tried. Simulated events
+carry `simulated = true` and never touch an address's real state; they can be
+cleared again from the same place.
+
+## Phase 4 — Tracking
+
+All tracking addresses carry the recipient's token (32 hex characters), never
+an id, and are public (`src/proxy.ts` lets `/api/email/*` and `/email/*`
+through). Each answers at once and records afterwards (`after()`), so a slow
+database never delays a person's click.
+
+| Address | What it does |
+|---|---|
+| `/api/email/o/<token>.gif` | The open pixel. Records an open; flags Apple's privacy proxy and opens within 20 s of sending as machine opens (`tracking.ts`). |
+| `/api/email/c/<token>?l=<n>` | A tracked link. Redirects to the URL **stored** for link n of that campaign — never one taken from the address, so it cannot be used as an open redirect — with UTM tags (unless the link has its own) and, on hmarkconsultants.com, `hm_rid`. Clicks within 10 s of sending, bursts, and scanners' user agents are bot clicks. |
+| `/email/view/<token>` | The web version: the email in the browser, with no pixel (viewing it is not an open), under a sandboxing CSP. |
+| `/api/email/unsubscribe/<address>?r=<token>` | The one-click unsubscribe, now credited to the campaign that carried it. |
+| `/api/email/webhooks/ses` | Amazon SES's delivery reports through SNS: delivered, bounced, complained, delayed, rejected. Every message's signature is checked against Amazon's certificate before it is believed (`providers/sesWebhook.ts`); `SES_SNS_TOPIC_ARN` limits it to HMARK's own topic. |
+| `/api/email/web-event` | Website visits and conversions, from the website script below. |
+
+A hard bounce or a complaint changes the address's state at once (bounced,
+complained) and no campaign emails it again; three soft bounces count as a
+hard one. Opens and clicks set the address's `last_engaged_at`.
+
+Counts per campaign come from `email_campaign_stats()` (0358), which separates
+everything from what people did: "opened" in the portal means a person opened.
+
+### The website script
+
+On hmarkconsultants.com (not the portal), add before `</body>`:
+
+```html
+<script src="https://portal.hmarkconsultants.com/hmark-track.js" async></script>
+```
+
+When someone arrives from a campaign link (`?hm_rid=…`) it remembers them for
+30 days and reports each page they see. A form's thank-you, or any other goal,
+reports a conversion with:
+
+```js
+window.hmarkTrack && window.hmarkTrack("conversion", "contact_form");
+```
+
+The keys it may use are listed in Settings › Sending › Conversion events, and
+Settings › Website tracking shows the line to add, with the portal's address. A conversion
+also credits the campaign on the person's lead, if the lead has no campaign
+yet. The endpoint accepts calls only from *.hmarkconsultants.com, at most 100
+an hour per recipient.
+
+Unit tests: `scripts/email-campaigns-test.mjs`.

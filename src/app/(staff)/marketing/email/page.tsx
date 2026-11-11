@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-// Templates are the first part of Email campaigns to be built; the section opens on them.
+// The section opens on its campaigns.
 export default function EmailCampaignsPage() {
-  redirect("/marketing/email/templates");
+  redirect("/marketing/email/campaigns");
 }

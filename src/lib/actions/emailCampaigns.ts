@@ -14,6 +14,7 @@ import { campaignSlug, prepareCampaignHtml } from "@/lib/emailCampaigns/render";
 import { canReallySend, notify, parseCampaignAudience, resolveCampaignAudience, startCampaign, superAdminIds, type CampaignAudience } from "@/lib/emailCampaigns/sender";
 import { previewValues, readEmailSettings } from "@/lib/emailCampaigns/server";
 import { htmlToText } from "@/lib/emailCampaigns/templateHtml";
+import { seedOf, simulateActivity } from "@/lib/emailCampaigns/simulate";
 
 const CAMPAIGNS = "/marketing/email/campaigns";
 const CREATE_DENIED = "You don't have permission to create email campaigns.";
@@ -402,4 +403,92 @@ export async function sendEmailCampaignTest(campaignId: string, _prev: unknown, 
 export async function myCampaignRights(): Promise<{ create: boolean; send: boolean; approve: boolean }> {
   const [create, send, approve] = await Promise.all([hasPermission("email.campaigns.create"), hasPermission("email.campaigns.send"), hasPermission("email.campaigns.approve")]);
   return { create, send, approve };
+}
+
+/**
+ * Made-up activity for a PRACTICE campaign — nothing reached anyone, so its
+ * report would stay empty — to try the reports with. Once per campaign; every
+ * event is marked simulated and never touches anyone's real email state.
+ */
+export async function simulateEmailCampaignActivity(campaignId: string): Promise<Ok | Fail> {
+  const denied = await requirePermission("email.campaigns.send", "You don't have permission to do that.");
+  if (denied) return denied;
+  const admin = createAdminClient();
+  const { data: c } = await admin.from("email_campaigns").select("practice, status").eq("id", campaignId).maybeSingle();
+  if (!c) return { error: "That campaign no longer exists." };
+  if (!c.practice) return { error: "Only a practice campaign can be given made-up activity — this one really went." };
+  if (!["sent", "sending", "paused", "cancelled"].includes(c.status as string)) return { error: "Send it (in practice) first." };
+  const { count: already } = await admin.from("email_events").select("id", { count: "exact", head: true }).eq("campaign_id", campaignId).eq("simulated", true);
+  if (already) return { error: "It already has made-up activity." };
+
+  const recipients: { id: string; email: string; sent_at: string }[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data } = await admin.from("email_campaign_recipients").select("id, email, sent_at").eq("campaign_id", campaignId).eq("status", "sent").order("id").range(from, from + 999);
+    recipients.push(...((data ?? []) as typeof recipients));
+    if (!data || data.length < 1000) break;
+  }
+  if (!recipients.length) return { error: "No emails have been sent in it yet." };
+  const [{ data: links }, { data: settings }] = await Promise.all([
+    admin.from("email_campaign_links").select("id, url").eq("campaign_id", campaignId),
+    admin.from("email_settings").select("conversion_events").eq("id", true).maybeSingle(),
+  ]);
+  const conversionKeys = (Array.isArray(settings?.conversion_events) ? (settings!.conversion_events as { key?: string }[]) : []).map((c) => c.key).filter((k): k is string => Boolean(k));
+  const { events, updates } = simulateActivity({
+    recipients: recipients.map((r) => ({ id: r.id, campaignId, email: r.email, sentAt: r.sent_at })),
+    links: (links ?? []) as { id: string; url: string }[],
+    conversionKeys,
+    seed: seedOf(campaignId),
+  });
+  for (let i = 0; i < events.length; i += 1000) {
+    const { error } = await admin.from("email_events").insert(events.slice(i, i + 1000));
+    if (error) return { error: error.message };
+  }
+  const byId = new Map(recipients.map((r) => [r.id, r]));
+  for (let i = 0; i < updates.length; i += 500) {
+    const { error } = await admin
+      .from("email_campaign_recipients")
+      .upsert(updates.slice(i, i + 500).map((u) => ({ ...u, campaign_id: campaignId, email: byId.get(u.id)!.email })), { onConflict: "id" });
+    if (error) return { error: error.message };
+  }
+  revalidate(campaignId);
+  return { success: true, message: `Made-up activity added: ${events.length.toLocaleString("en-US")} events across ${recipients.length.toLocaleString("en-US")} recipients.` };
+}
+
+/** Takes a practice campaign's made-up activity away again, so it can be simulated afresh or left empty. */
+export async function clearSimulatedEmailCampaignActivity(campaignId: string): Promise<Ok | Fail> {
+  const denied = await requirePermission("email.campaigns.send", "You don't have permission to do that.");
+  if (denied) return denied;
+  const admin = createAdminClient();
+  const { data: c } = await admin.from("email_campaigns").select("practice").eq("id", campaignId).maybeSingle();
+  if (!c) return { error: "That campaign no longer exists." };
+  if (!c.practice) return { error: "Only a practice campaign has made-up activity." };
+  const { error } = await admin.from("email_events").delete().eq("campaign_id", campaignId).eq("simulated", true);
+  if (error) return { error: error.message };
+  // Nothing real reaches anyone in practice, so every count on its recipients is made up.
+  const { error: resetError } = await admin
+    .from("email_campaign_recipients")
+    .update({
+      delivered_at: null,
+      first_open_at: null,
+      open_count: 0,
+      human_open_count: 0,
+      first_click_at: null,
+      click_count: 0,
+      human_click_count: 0,
+      bounce: null,
+      bounce_reason: null,
+      complained_at: null,
+      unsubscribed_at: null,
+      visited_at: null,
+      converted_at: null,
+      last_activity_at: null,
+      device: null,
+      client: null,
+      country: null,
+      city: null,
+    })
+    .eq("campaign_id", campaignId);
+  if (resetError) return { error: resetError.message };
+  revalidate(campaignId);
+  return { success: true, message: "The made-up activity is gone." };
 }

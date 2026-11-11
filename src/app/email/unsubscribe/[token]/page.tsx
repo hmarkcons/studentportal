@@ -10,8 +10,9 @@ export const metadata: Metadata = { title: "Unsubscribe — HMARK Consultants", 
 // a mail scanner opens every link — the person confirms with a button. Their
 // mail client's own one-click unsubscribe posts to /api/email/unsubscribe/…
 // instead, which acts at once (RFC 8058).
-export default async function UnsubscribePage(props: { params: Promise<{ token: string }> }) {
+export default async function UnsubscribePage(props: { params: Promise<{ token: string }>; searchParams: Promise<{ r?: string }> }) {
   const { token } = await props.params;
+  const { r } = await props.searchParams;
   const row = await addressByToken(createAdminClient(), token);
   if (!row) {
     return (
@@ -26,7 +27,7 @@ export default async function UnsubscribePage(props: { params: Promise<{ token: 
       {already ? (
         <p className="text-sm text-muted">{row.email} won&rsquo;t receive HMARK&rsquo;s marketing emails.</p>
       ) : (
-        <UnsubscribeButton token={token} email={row.email} />
+        <UnsubscribeButton token={token} email={row.email} recipientToken={r ?? null} />
       )}
       <p className="mt-4 text-xs text-muted">
         <a href={`/email/preferences/${token}`} className="text-primary hover:underline">

@@ -4,7 +4,7 @@ import { unsubscribeFromAll } from "@/lib/actions/emailPreferences";
 import { useButtonAction } from "@/components/useButtonAction";
 import { Button } from "@/components/ui/Button";
 
-export function UnsubscribeButton({ token, email }: { token: string; email: string }) {
+export function UnsubscribeButton({ token, email, recipientToken }: { token: string; email: string; recipientToken: string | null }) {
   const run = useButtonAction();
   if (run.state?.success) {
     return <p className="text-sm text-success" data-unsubscribed>Done — {email} is unsubscribed and won&rsquo;t receive HMARK&rsquo;s emails.</p>;
@@ -15,7 +15,7 @@ export function UnsubscribeButton({ token, email }: { token: string; email: stri
         Stop all marketing emails to <span className="font-medium text-ink">{email}</span>?
       </p>
       <div>
-        <Button variant="danger" pending={run.pending} onClick={() => run.run(() => unsubscribeFromAll(token))} data-unsubscribe-confirm>
+        <Button variant="danger" pending={run.pending} onClick={() => run.run(() => unsubscribeFromAll(token, recipientToken))} data-unsubscribe-confirm>
           Unsubscribe
         </Button>
       </div>

@@ -41,3 +41,39 @@ export function karachiLocal(iso: string | null | undefined): string {
   if (!iso) return "";
   return new Date(new Date(iso).getTime() + 5 * 3_600_000).toISOString().slice(0, 16);
 }
+
+export type KeyedItem = { key: string; label: string };
+
+/**
+ * Settings' topic and conversion lists, one per line as "key | Label" — or a
+ * bare label, whose key is made from it. The key is what is stored on an
+ * address or sent by the website, so it is kept to lower-case letters, digits
+ * and underscores, and renaming a label never changes it.
+ */
+export function parseKeyedLines(text: string, { what, max = 20 }: { what: string; max?: number }): { items: KeyedItem[] } | { error: string } {
+  const items: KeyedItem[] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    const bar = line.indexOf("|");
+    const label = (bar >= 0 ? line.slice(bar + 1) : line).trim();
+    const key = (bar >= 0 ? line.slice(0, bar) : label)
+      .normalize("NFKD")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 40);
+    if (!label) return { error: `Each ${what} needs a name: “${line}”.` };
+    if (label.length > 80) return { error: `Keep each ${what}'s name to 80 characters.` };
+    if (!key) return { error: `“${line}” needs a key of letters or digits before the |.` };
+    if (items.some((i) => i.key === key)) return { error: `Two ${what}s share the key “${key}”.` };
+    items.push({ key, label });
+  }
+  if (items.length > max) return { error: `At most ${max} ${what}s.` };
+  return { items };
+}
+
+/** The other way: the lines a Settings box shows. */
+export function keyedLines(items: KeyedItem[]): string {
+  return items.map((i) => `${i.key} | ${i.label}`).join("\n");
+}

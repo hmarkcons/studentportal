@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth/currentUser";
 import { requirePermission } from "@/lib/auth/permissions";
 import { providerConfigured, PROVIDER_ENV } from "@/lib/emailCampaigns/providers";
+import { parseKeyedLines } from "@/lib/emailCampaigns/campaignRules";
+import { karachiDay } from "@/lib/emailCampaigns/sendingRules";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -40,6 +42,53 @@ export async function updateEmailSettings(_prev: unknown, formData: FormData): P
   const { data: saved, error } = await supabase
     .from("email_settings")
     .update({ provider, from_name, from_email, reply_to, physical_address, max_upload_mb, updated_by: user?.id ?? null })
+    .eq("id", true)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!saved?.length) return { error: "The settings weren't saved — you may not change them." };
+  revalidatePath("/marketing/email/settings");
+  return { success: true };
+}
+
+/** How fast campaigns send, the warm-up, and the topic and conversion lists (0355, 0356). */
+export async function updateEmailSendingSettings(_prev: unknown, formData: FormData): Promise<{ success: true } | { error: string }> {
+  const denied = await requirePermission("email.settings.manage", "Only someone allowed to change the email settings can save them.");
+  if (denied) return denied;
+
+  const send_per_second = Number(formData.get("send_per_second"));
+  if (!Number.isFinite(send_per_second) || send_per_second <= 0 || send_per_second > 100) return { error: "Emails a second is a number above 0, at most 100." };
+  const send_per_hour = Number(formData.get("send_per_hour"));
+  if (!Number.isInteger(send_per_hour) || send_per_hour < 1 || send_per_hour > 1_000_000) return { error: "Emails an hour is a whole number from 1 to 1,000,000." };
+  const warmup_enabled = formData.get("warmup_enabled") === "on";
+  const warmup_start_cap = Number(formData.get("warmup_start_cap"));
+  if (!Number.isInteger(warmup_start_cap) || warmup_start_cap < 1 || warmup_start_cap > 1_000_000) return { error: "The first day's limit is a whole number from 1 to 1,000,000." };
+  const warmup_growth_pct = Number(formData.get("warmup_growth_pct"));
+  if (!Number.isInteger(warmup_growth_pct) || warmup_growth_pct < 0 || warmup_growth_pct > 500) return { error: "The daily growth is a whole percentage from 0 to 500." };
+  const startedRaw = String(formData.get("warmup_started_on") ?? "").trim();
+  if (startedRaw && !/^\d{4}-\d{2}-\d{2}$/.test(startedRaw)) return { error: "The warm-up start is a date." };
+  // Turning warm-up on with no start date starts it today.
+  const warmup_started_on = startedRaw || (warmup_enabled ? karachiDay() : null);
+
+  const topics = parseKeyedLines(String(formData.get("topics") ?? ""), { what: "topic" });
+  if ("error" in topics) return topics;
+  const conversions = parseKeyedLines(String(formData.get("conversion_events") ?? ""), { what: "conversion" });
+  if ("error" in conversions) return conversions;
+
+  const supabase = await createClient();
+  const user = await getCurrentUser();
+  const { data: saved, error } = await supabase
+    .from("email_settings")
+    .update({
+      send_per_second,
+      send_per_hour,
+      warmup_enabled,
+      warmup_start_cap,
+      warmup_growth_pct,
+      warmup_started_on,
+      topics: topics.items,
+      conversion_events: conversions.items,
+      updated_by: user?.id ?? null,
+    })
     .eq("id", true)
     .select("id");
   if (error) return { error: error.message };

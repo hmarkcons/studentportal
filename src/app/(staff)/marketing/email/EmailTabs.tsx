@@ -2,11 +2,12 @@ import { SectionTabs } from "@/components/SectionTabs";
 
 // The Email campaigns section's tabs. Campaigns, Audience and Reports join
 // Templates and Settings as their phases are built.
-export function EmailTabs({ active }: { active: "templates" | "audience" | "settings" }) {
+export function EmailTabs({ active }: { active: "campaigns" | "templates" | "audience" | "settings" }) {
   return (
     <SectionTabs
       active={active}
       tabs={[
+        { key: "campaigns", label: "Campaigns", href: "/marketing/email/campaigns" },
         { key: "templates", label: "Templates", href: "/marketing/email/templates" },
         { key: "audience", label: "Audience", href: "/marketing/email/audience" },
         { key: "settings", label: "Settings", href: "/marketing/email/settings" },

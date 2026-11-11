@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { recordUnsubscribe } from "./trackingServer";
 
 // An address's subscription, found by the private token its email links
 // carry. Shared by the preference page, the unsubscribe page, and the
@@ -31,7 +32,7 @@ export async function addressByToken(admin: SupabaseClient, token: string): Prom
  * as spam, bounced or invalid stays so — the stronger reason. True when the
  * token named an address.
  */
-export async function unsubscribeByToken(admin: SupabaseClient, token: string, reason: string): Promise<boolean> {
+export async function unsubscribeByToken(admin: SupabaseClient, token: string, reason: string, recipientToken?: string | null): Promise<boolean> {
   const row = await addressByToken(admin, token);
   if (!row) return false;
   if (row.status === "subscribed" || row.status === "suppressed") {
@@ -40,5 +41,7 @@ export async function unsubscribeByToken(admin: SupabaseClient, token: string, r
       .update({ status: "unsubscribed", status_reason: reason, status_changed_at: new Date().toISOString() })
       .eq("token", token);
   }
+  // Counted against the campaign whose link it was (?r=), for its report.
+  await recordUnsubscribe(admin, recipientToken, row.email);
   return true;
 }

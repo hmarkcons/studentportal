@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { contactMergeValues, SAMPLE_CONTACT, type MergeValues } from "./mergeTags";
+import type { KeyedItem } from "./campaignRules";
 
 export const EMAIL_ASSETS_BUCKET = "email-assets";
 
@@ -30,6 +31,42 @@ export async function readEmailSettings(supabase: SupabaseClient): Promise<Email
     .eq("id", true)
     .maybeSingle<EmailSettings>();
   return data ? { ...EMAIL_SETTINGS_DEFAULTS, ...data } : EMAIL_SETTINGS_DEFAULTS;
+}
+
+export type SendingSettings = {
+  send_per_second: number;
+  send_per_hour: number;
+  warmup_enabled: boolean;
+  warmup_start_cap: number;
+  warmup_growth_pct: number;
+  warmup_started_on: string | null;
+  topics: KeyedItem[];
+  conversion_events: KeyedItem[];
+};
+
+const keyed = (raw: unknown): KeyedItem[] =>
+  (Array.isArray(raw) ? raw : [])
+    .map((t) => t as { key?: unknown; label?: unknown })
+    .filter((t) => typeof t.key === "string" && t.key)
+    .map((t) => ({ key: t.key as string, label: typeof t.label === "string" && t.label ? t.label : (t.key as string) }));
+
+/** How fast campaigns send, the warm-up, and the topic and conversion lists (0355, 0356). */
+export async function readSendingSettings(supabase: SupabaseClient): Promise<SendingSettings> {
+  const { data } = await supabase
+    .from("email_settings")
+    .select("send_per_second, send_per_hour, warmup_enabled, warmup_start_cap, warmup_growth_pct, warmup_started_on, topics, conversion_events")
+    .eq("id", true)
+    .maybeSingle();
+  return {
+    send_per_second: Number(data?.send_per_second ?? 10),
+    send_per_hour: Number(data?.send_per_hour ?? 20000),
+    warmup_enabled: Boolean(data?.warmup_enabled),
+    warmup_start_cap: Number(data?.warmup_start_cap ?? 200),
+    warmup_growth_pct: Number(data?.warmup_growth_pct ?? 50),
+    warmup_started_on: (data?.warmup_started_on as string | null) ?? null,
+    topics: keyed(data?.topics),
+    conversion_events: keyed(data?.conversion_events),
+  };
 }
 
 /** Where an uploaded file of a template version is stored: its own folder, a numbered safe name. */

@@ -40,6 +40,11 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
+  // The tracking script HMARK's website loads from here: a public file.
+  if (request.nextUrl.pathname === "/hmark-track.js") {
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
   // Someone who left "Keep me signed in" unticked: the tokens refreshed here
   // stay session cookies, so closing the browser still signs them out.
