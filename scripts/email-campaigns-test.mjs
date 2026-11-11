@@ -355,6 +355,13 @@ test("simulation: a bounced email has nothing after it; a person clicks only aft
   }
 });
 
+test("simulation: every event has the same keys, so a batch insert never sends null for a default", () => {
+  const shape = (e) => Object.keys(e).sort().join(",");
+  const shapes = new Set(sim.events.map(shape));
+  assert.equal(shapes.size, 1, [...shapes].join("\n"));
+  assert.ok(sim.events.every((e) => typeof e.is_machine === "boolean" && e.meta && typeof e.meta === "object"), "the NOT NULL columns always have a value");
+});
+
 test("simulation: no links means no clicks or visits", () => {
   const s = simulateActivity({ recipients: recipients.slice(0, 300), links: [], conversionKeys: [], seed: 7 });
   assert.ok(!s.events.some((e) => ["clicked", "website_visit", "conversion"].includes(e.type)));

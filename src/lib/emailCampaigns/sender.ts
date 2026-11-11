@@ -143,7 +143,7 @@ export async function startCampaign(admin: SupabaseClient, campaignId: string): 
   for (let i = 0; i < recipients.length; i += 1000) {
     const chunk = recipients.slice(i, i + 1000);
     await admin.from("email_contact_status").upsert(
-      chunk.map((r) => ({ email: r.email!, consent_source: r.kind === "lead" ? "Enquiry (they contacted HMARK)" : null, consent_at: r.enquiredAt })),
+      chunk.map((r) => ({ email: r.email!, consent_source: r.kind === "lead" ? "Enquiry (they contacted HMARK)" : null, consent_at: r.enquiredAt ?? null })),
       { onConflict: "email", ignoreDuplicates: true }
     );
     const { error } = await admin.from("email_campaign_recipients").insert(
@@ -300,7 +300,7 @@ export async function sendDueEmails(admin: SupabaseClient, { deadline }: { deadl
             .from("email_campaign_recipients")
             .update({ status: "sent", sent_at: at, provider_message_id: providerMessageId, attempts: (r.attempts as number) + 1, last_error: null })
             .eq("id", r.id);
-          events.push({ campaign_id: c.id, recipient_id: r.id, type: "sent", occurred_at: at, meta: c.practice ? { practice: true } : {} });
+          events.push({ campaign_id: c.id, recipient_id: r.id, type: "sent", occurred_at: at, diagnostic: null, meta: c.practice ? { practice: true } : {} });
           summary.sent += 1;
           budget -= 1;
         } catch (e) {
@@ -309,7 +309,7 @@ export async function sendDueEmails(admin: SupabaseClient, { deadline }: { deadl
           const permanent = Boolean((e as { permanent?: boolean })?.permanent);
           if (permanent || attempts >= MAX_ATTEMPTS) {
             await admin.from("email_campaign_recipients").update({ status: "failed", attempts, last_error: message.slice(0, 500) }).eq("id", r.id);
-            events.push({ campaign_id: c.id, recipient_id: r.id, type: "failed", diagnostic: message.slice(0, 500) });
+            events.push({ campaign_id: c.id, recipient_id: r.id, type: "failed", occurred_at: new Date().toISOString(), diagnostic: message.slice(0, 500), meta: c.practice ? { practice: true } : {} });
             summary.failed += 1;
           } else {
             await admin
@@ -329,7 +329,11 @@ export async function sendDueEmails(admin: SupabaseClient, { deadline }: { deadl
       // Whatever this run claimed and did not reach goes back on the queue untouched.
       const untouched = claimed.map((r) => r.id as string).filter((id) => !done.has(id));
       if (untouched.length) await admin.from("email_campaign_recipients").update({ status: "queued", claimed_at: null }).in("id", untouched).eq("status", "sending");
-      if (events.length) await admin.from("email_events").insert(events);
+      // Every row carries the same keys: a batch's missing key is sent as null, not its default.
+      if (events.length) {
+        const { error } = await admin.from("email_events").insert(events);
+        if (error) console.error("email-send: events not recorded", error.message);
+      }
     }
 
     // 5. Finished, or stopping itself.

@@ -136,8 +136,27 @@ export function simulateActivity(input: { recipients: SimRecipient[]; links: Sim
       country: null,
       city: null,
     };
+    // Every event carries every key: inserted in batches, a key one row lacks is sent as null for it, not its default.
     const ev = (type: string, at: number, extra: Partial<SimEvent> = {}) =>
-      events.push({ campaign_id: r.campaignId, recipient_id: r.id, type, occurred_at: iso(at), simulated: true, ...extra });
+      events.push({
+        campaign_id: r.campaignId,
+        recipient_id: r.id,
+        type,
+        occurred_at: iso(at),
+        link_id: null,
+        url: null,
+        device: null,
+        client: null,
+        ip_country: null,
+        ip_city: null,
+        is_machine: false,
+        bounce_type: null,
+        bounce_subtype: null,
+        diagnostic: null,
+        meta: {},
+        ...extra,
+        simulated: true,
+      });
 
     const roll = rnd();
     if (roll < 0.02) {
