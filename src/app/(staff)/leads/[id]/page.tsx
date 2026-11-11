@@ -17,6 +17,7 @@ import { getStaffSession } from "@/lib/auth/session";
 import { AuditHistoryLink } from "@/components/AuditHistoryLink";
 import { Suspense } from "react";
 import { TasksAboutCard } from "@/components/tasks/TasksAboutCard";
+import { EmailActivityCard } from "@/components/email/EmailActivityCard";
 
 type CallLog = { id: string; status_at_time: string; remark: string | null; created_at: string; counselor: { full_name: string } | { full_name: string }[] | null };
 
@@ -178,6 +179,11 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
       {/* Tasks about this lead (0331): follow-ups given to anyone, on their calendars. Streamed. */}
       <Suspense fallback={null}>
         <TasksAboutCard studentId={id} name={lead.full_name ?? "this lead"} revalidateTo={`/leads/${id}`} className="mt-6" />
+      </Suspense>
+
+      {/* The email campaigns sent to them and what they did (0356), for whoever may see email reports. Streamed. */}
+      <Suspense fallback={null}>
+        <EmailActivityCard leadId={id} email={lead.email ?? null} className="mt-6" />
       </Suspense>
 
       <Card className="mt-6">

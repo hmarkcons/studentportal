@@ -13,7 +13,7 @@ The work goes in phases. This file grows with each.
 | 2 | Audience: contact status, segments, lists, import, suppression, preference centre | **Built** (0355) |
 | 3 | Campaigns: drafts, approval, scheduling, the sending engine | **Built** (0356, 0357) — practice mode until the service is bought |
 | 4 | Tracking: opens, clicks, bounces, complaints, website visits | **Built** (0356–0358) — bounces and complaints wait for the service |
-| 5 | Reports | Next |
+| 5 | Reports: per campaign, the dashboard, PDF, exports, the lead's history | **Built** (0359) |
 | 6 | Extras (A/B tests, automations, …) | — |
 
 ## The sending service — not connected yet
@@ -296,3 +296,49 @@ yet. The endpoint accepts calls only from *.hmarkconsultants.com, at most 100
 an hour per recipient.
 
 Unit tests: `scripts/email-campaigns-test.mjs`.
+
+## Phase 5 — Reports
+
+Who sees them: `email.reports.view` (Management, Marketing, Digital
+Marketing). Every number is counted in the database by a security-invoker
+function (0358, 0359) over tables only that permission can read, so a
+report is never assembled from rows someone else may see. "Opened" and
+"clicked" always mean **people**: machine opens (Apple Mail's privacy proxy,
+gateways) and scanner clicks are kept and shown apart, never added in.
+
+### A campaign's report — `/marketing/email/campaigns/<id>/report`
+
+| Tab | What it shows |
+|---|---|
+| Overview | Sent, delivered, opened, clicked, click-to-open, website visits, conversions, bounces, unsubscribes, spam complaints; the funnel from inbox to website; the rates against the ten campaigns before it (practice against practice, each counted once whatever its size); opens and clicks hour by hour, Karachi time. |
+| Recipients | Everyone, filtered (opened, did not open, opened but did not click, clicked, visited, converted, bounced, unsubscribed, marked as spam, could not be sent) and searchable; one person's whole timeline; **Export CSV / Excel** of the filter; **Make a list** of the filter (needs `email.audience.manage`) for a follow-up campaign. |
+| Links | Each link's people, share and scanner clicks, and the **click map**: the email as sent, every link dead, a badge on each with its share. |
+| Deliverability | Bounces by reason and by provider; per-provider delivery, open, click and bounce rates; mail apps, devices, countries and cities of the people who opened. |
+| Website | Visitors, pages seen, conversions by kind (named as in Settings), and who converted. |
+
+**Download PDF summary** (`…/report/pdf`) is one branded page of the same:
+the numbers, the comparison, the top links, mail apps, countries, providers,
+bounces, pages and conversions. A practice campaign's PDF says, at the top,
+that nothing was sent and the activity is simulated.
+
+The rules behind these — the filters, the export's columns, the CSV's formula
+guard, the timeline's empty hours, the comparison — are in
+`src/lib/emailCampaigns/reportRules.ts`; the database reads in `reportData.ts`.
+
+### The dashboard — Marketing › Email campaigns › Reports
+
+- **Sender health** over the last 30 days: sent, bounce and complaint rates
+  against the limits (bounces under 2%, complaints under 0.1%; Gmail blocks
+  above 0.3%), day by day. Real sends only, unless "Include practice sends".
+- **The audience's state**: how many addresses are subscribed, unsubscribed,
+  bounced, marked as spam, on the do-not-email list or invalid, and how many
+  changed in the last 30 days.
+- **Campaigns side by side**: the last 25, with their rates, each linking to
+  its report.
+
+### On a lead
+
+A lead's page shows the campaigns sent to them and what they did with each,
+and their address's state, to whoever may see email reports.
+
+Unit tests: `scripts/email-reports-test.mjs`.

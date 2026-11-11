@@ -117,3 +117,23 @@ export function campaignSlug(name: string): string {
     .replace(/-+$/g, "");
   return slug || "campaign";
 }
+
+/**
+ * The click map: the email as sent, every link going nowhere, and beside each
+ * tracked link the share of people who clicked it. Shown in a sandboxed frame.
+ */
+export function clickMapHtml(preparedHtml: string, values: MergeValues, counts: Record<number, { people: number; share: string }>): string {
+  const $ = cheerio.load(preparedHtml.replace(/<img src="%%HMARK_PIXEL%%"[^>]*>/g, ""));
+  $("a[href]").each((_, node) => {
+    const el = node as Element;
+    const m = /^%%HMARK_LINK_(\d+)%%$/.exec(el.attribs.href);
+    $(el).attr("href", "#").removeAttr("target");
+    if (!m) return;
+    const c = counts[Number(m[1])];
+    const text = c ? `${c.share} · ${c.people.toLocaleString("en-US")}` : "0";
+    $(el).after(
+      `<span data-click-badge="${m[1]}" style="display:inline-block;margin:0 4px;padding:1px 7px;border-radius:9px;background:#0369A1;color:#ffffff;font:bold 11px/16px Arial,Helvetica,sans-serif;vertical-align:middle;white-space:nowrap;">${escapeHtml(text)}</span>`
+    );
+  });
+  return renderMergeTags($.html(), values, { html: true });
+}
