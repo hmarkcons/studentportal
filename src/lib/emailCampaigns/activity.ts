@@ -32,7 +32,8 @@ export type EmailActivity =
   | "block_saved"
   | "block_deleted"
   | "sunset_suppressed"
-  | "sunset_campaign";
+  | "sunset_campaign"
+  | "ab_decided";
 
 export const ACTIVITY_LABELS: Record<EmailActivity, string> = {
   campaign_sent: "Sent a campaign",
@@ -60,6 +61,7 @@ export const ACTIVITY_LABELS: Record<EmailActivity, string> = {
   block_deleted: "Deleted a content block",
   sunset_suppressed: "Stopped emailing silent people",
   sunset_campaign: "Made a re-engagement campaign",
+  ab_decided: "An A/B test picked its winner",
 };
 
 export async function logEmailActivity(

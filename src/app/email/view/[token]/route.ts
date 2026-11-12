@@ -13,15 +13,15 @@ export async function GET(_request: NextRequest, ctx: { params: Promise<{ token:
   const notFound = () => new Response("This email could not be found.", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } });
   if (!token) return notFound();
   const admin = createAdminClient();
-  const { data: r } = await admin.from("email_campaign_recipients").select("id, campaign_id, email, merge_values").eq("token", token).maybeSingle();
+  const { data: r } = await admin.from("email_campaign_recipients").select("id, campaign_id, email, merge_values, variant").eq("token", token).maybeSingle();
   if (!r) return notFound();
   const [{ data: c }, { data: address }] = await Promise.all([
-    admin.from("email_campaigns").select("prepared_html, prepared_text").eq("id", r.campaign_id).maybeSingle(),
+    admin.from("email_campaigns").select("prepared_html, prepared_text, ab_prepared_html_b, ab_prepared_text_b").eq("id", r.campaign_id).maybeSingle(),
     admin.from("email_contact_status").select("token").eq("email", r.email).maybeSingle(),
   ]);
   if (!c?.prepared_html) return notFound();
   const { html } = renderForRecipient({
-    preparedHtml: c.prepared_html as string,
+    preparedHtml: (r.variant === "B" && c.ab_prepared_html_b ? c.ab_prepared_html_b : c.prepared_html) as string,
     text: (c.prepared_text as string) ?? "",
     values: (r.merge_values ?? {}) as MergeValues,
     links: { site: getSiteUrl(), recipientToken: token, addressToken: (address?.token as string) ?? "" },

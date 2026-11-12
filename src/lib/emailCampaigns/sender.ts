@@ -9,6 +9,8 @@ import { autoPause, karachiDay, MAX_ATTEMPTS, retryDelayMs, runBudget, spreadAll
 import { withContentBlocks } from "./server";
 import { slackAlert } from "./slack";
 import { nextBestHour } from "./engagement";
+import { B_LINK_START, pickWinner, splitForTest, type VariantStats } from "./abTest";
+import { logEmailActivity } from "./activity";
 
 // The sending engine. A campaign is started (its audience frozen into
 // recipients, its email prepared) when it is sent or its scheduled time
@@ -156,7 +158,7 @@ export async function canReallySend(admin: SupabaseClient): Promise<boolean> {
 export async function startCampaign(admin: SupabaseClient, campaignId: string): Promise<{ recipients: number } | { error: string }> {
   const { data: c } = await admin
     .from("email_campaigns")
-    .select("id, status, topic, audience, template_version_id, track_opens, track_clicks, preheader, recipients_total, send_at_best_hour")
+    .select("id, status, topic, audience, template_version_id, track_opens, track_clicks, preheader, recipients_total, send_at_best_hour, ab_enabled, ab_subject_b, ab_preheader_b, ab_template_version_id_b, ab_test_percent, ab_wait_hours")
     .eq("id", campaignId)
     .single();
   if (!c || c.status !== "sending") return { error: "The campaign is not starting." };
@@ -182,8 +184,36 @@ export async function startCampaign(admin: SupabaseClient, campaignId: string): 
     preheader: c.preheader as string | null,
   });
   const text = full.text;
-  if (prepared.links.length) {
-    const { error } = await admin.from("email_campaign_links").insert(prepared.links.map((l) => ({ campaign_id: campaignId, ...l })));
+
+  // An A/B test (0363): version B made the same way, its links numbered from B_LINK_START so a click
+  // finds its own link; with the same template, B shares A's links and only its preview text differs.
+  let preparedB: { html: string; text: string } | null = null;
+  const linksB: { position: number; url: string; label: string }[] = [];
+  if (c.ab_enabled) {
+    const otherTemplate = c.ab_template_version_id_b && c.ab_template_version_id_b !== c.template_version_id;
+    let bHtml = full.html;
+    let bText = full.text;
+    if (otherTemplate) {
+      const { data: vb } = await admin.from("email_template_versions").select("html, text_body").eq("id", c.ab_template_version_id_b).single();
+      if (!vb) return fail("Version B's template could not be read.");
+      const fullB = await withContentBlocks(admin, vb.html as string, vb.text_body as string | null);
+      if (fullB.missing.length) return fail(`Version B's email uses a content block that no longer exists: ${fullB.missing.map((k) => `{{block:${k}}}`).join(", ")}.`);
+      bHtml = fullB.html;
+      bText = fullB.text;
+    }
+    const pb = prepareCampaignHtml(bHtml, {
+      trackClicks: c.track_clicks as boolean,
+      trackOpens: c.track_opens as boolean,
+      preheader: ((c.ab_preheader_b as string | null) || (c.preheader as string | null)) ?? null,
+      linkStart: otherTemplate ? B_LINK_START : 1,
+    });
+    preparedB = { html: pb.html, text: bText };
+    if (otherTemplate) linksB.push(...pb.links);
+  }
+
+  const allLinks = [...prepared.links, ...linksB];
+  if (allLinks.length) {
+    const { error } = await admin.from("email_campaign_links").insert(allLinks.map((l) => ({ campaign_id: campaignId, ...l })));
     if (error) return fail(`Its links could not be saved: ${error.message}`);
   }
 
@@ -201,6 +231,14 @@ export async function startCampaign(admin: SupabaseClient, campaignId: string): 
     }
   }
   const startedAt = new Date();
+  // Who tests which version, and who waits for the winner.
+  const versionOf = new Map<string, "A" | "B" | "held">();
+  if (preparedB) {
+    const split = splitForTest(recipients.map((r) => r.email!), { seed: campaignId, percent: Number(c.ab_test_percent ?? 20) });
+    for (const e of split.A) versionOf.set(e, "A");
+    for (const e of split.B) versionOf.set(e, "B");
+    for (const e of split.held) versionOf.set(e, "held");
+  }
 
   // Every address needs its row for its preference and unsubscribe links; a lead's consent is their enquiry.
   for (let i = 0; i < recipients.length; i += 1000) {
@@ -217,6 +255,8 @@ export async function startCampaign(admin: SupabaseClient, campaignId: string): 
         email: r.email!,
         // The same keys on every row: a batch's missing key is sent as null, not its default.
         next_attempt_at: bestHour.has(r.email!) ? nextBestHour(startedAt, bestHour.get(r.email!)!).toISOString() : null,
+        status: versionOf.get(r.email!) === "held" ? "held" : "queued",
+        variant: preparedB ? (versionOf.get(r.email!) === "B" ? "B" : versionOf.get(r.email!) === "A" ? "A" : null) : null,
         merge_values: contactMergeValues(
           { full_name: r.fullName, email: r.email, country_of_interest: r.country, intake: r.intake },
           r.counsellorId ? (counsellor.get(r.counsellorId) ?? null) : null
@@ -234,7 +274,16 @@ export async function startCampaign(admin: SupabaseClient, campaignId: string): 
       practice,
       recipients_total: recipients.length,
       audience_counts: counts,
-      started_at: new Date().toISOString(),
+      started_at: startedAt.toISOString(),
+      ...(preparedB
+        ? {
+            ab_prepared_html_b: preparedB.html,
+            ab_prepared_text_b: preparedB.text,
+            ab_decide_at: new Date(startedAt.getTime() + Number(c.ab_wait_hours ?? 4) * 3_600_000).toISOString(),
+            ab_winner: null,
+            ab_decided_at: null,
+          }
+        : {}),
     })
     .eq("id", campaignId);
   return { recipients: recipients.length };
@@ -298,11 +347,41 @@ export async function sendDueEmails(admin: SupabaseClient, { deadline }: { deadl
   });
   summary.budget = budget;
 
+  // 3b. A/B tests (0363) whose wait is over: the version more of its test group opened (or clicked)
+  // goes to everyone held for it.
+  const { data: deciding } = await admin
+    .from("email_campaigns")
+    .select("id, name, ab_winner_by, ab_subject_b, subject, created_by, practice")
+    .eq("status", "sending")
+    .eq("ab_enabled", true)
+    .is("ab_winner", null)
+    .lte("ab_decide_at", now.toISOString());
+  for (const d of deciding ?? []) {
+    const { data: stats } = await admin.rpc("email_campaign_variant_stats", { p_campaign_id: d.id, p_until: null });
+    const verdict = pickWinner(((stats ?? []) as VariantStats[]).map((x) => ({ ...x, sent: Number(x.sent), opened: Number(x.opened), clicked: Number(x.clicked) })), d.ab_winner_by === "clicks" ? "clicks" : "opens");
+    const { data: claimedWin } = await admin
+      .from("email_campaigns")
+      .update({ ab_winner: verdict.winner, ab_decided_at: now.toISOString() })
+      .eq("id", d.id)
+      .is("ab_winner", null)
+      .select("id");
+    if (!claimedWin?.length) continue;
+    await admin.from("email_campaign_recipients").update({ status: "queued", variant: verdict.winner }).eq("campaign_id", d.id).eq("status", "held");
+    const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
+    await notify(admin, [d.created_by as string], {
+      kind: "email_campaign_ab_winner",
+      title: `A/B test decided: version ${verdict.winner} won — ${d.name}`,
+      body: `${d.ab_winner_by === "clicks" ? "Clicked" : "Opened"}: A ${pct(verdict.rateA)}, B ${pct(verdict.rateB)}${d.practice ? " (a practice send: nobody really opened, so A keeps it)" : ""}. Version ${verdict.winner} is going to everyone else.`,
+      link: `/marketing/email/campaigns/${d.id}`,
+    });
+    await logEmailActivity("ab_decided", { campaignId: d.id as string, staffId: null, summary: `Version ${verdict.winner} won: A ${pct(verdict.rateA)}, B ${pct(verdict.rateB)} (${d.ab_winner_by})` });
+  }
+
   // 4. Send, campaign by campaign, oldest first.
   const provider = getCampaignProvider(settings.provider);
   const { data: sending } = await admin
     .from("email_campaigns")
-    .select("id, name, slug, practice, prepared_html, prepared_text, from_name, from_email, reply_to, subject, created_by, spread_hours, started_at, recipients_total")
+    .select("id, name, slug, practice, prepared_html, prepared_text, from_name, from_email, reply_to, subject, created_by, spread_hours, started_at, recipients_total, ab_subject_b, ab_prepared_html_b, ab_prepared_text_b")
     .eq("status", "sending")
     .order("started_at", { ascending: true });
 
@@ -341,7 +420,7 @@ export async function sendDueEmails(admin: SupabaseClient, { deadline }: { deadl
         .update({ status: "sending", claimed_at: nowIso })
         .in("id", queued.map((q) => q.id as string))
         .eq("status", "queued")
-        .select("id, email, token, merge_values, attempts");
+        .select("id, email, token, merge_values, attempts, variant");
       if (!claimed?.length) continue;
       const { data: tokens } = await admin.from("email_contact_status").select("email, token").in("email", claimed.map((r) => r.email as string));
       const addressToken = new Map((tokens ?? []).map((t) => [t.email as string, t.token as string]));
@@ -352,8 +431,9 @@ export async function sendDueEmails(admin: SupabaseClient, { deadline }: { deadl
         if (Date.now() > deadline || budget <= 0) break;
         const values = (r.merge_values ?? {}) as MergeValues;
         const rendered = renderForRecipient({
-          preparedHtml: c.prepared_html as string,
-          text: (c.prepared_text as string) ?? "",
+          // Version B's email for those who get B (0363); A's — the campaign's own — for everyone else.
+          preparedHtml: (r.variant === "B" && c.ab_prepared_html_b ? c.ab_prepared_html_b : c.prepared_html) as string,
+          text: ((r.variant === "B" && c.ab_prepared_html_b ? c.ab_prepared_text_b : c.prepared_text) as string) ?? "",
           values,
           links: { site, recipientToken: r.token as string, addressToken: addressToken.get(r.email as string) ?? "" },
           campaignId: c.id as string,
@@ -365,7 +445,7 @@ export async function sendDueEmails(admin: SupabaseClient, { deadline }: { deadl
             to: r.email as string,
             from,
             replyTo: (c.reply_to as string) || settings.reply_to,
-            subject: renderMergeTags((c.subject as string) ?? "", values, { html: false }),
+            subject: renderMergeTags(((r.variant === "B" && c.ab_subject_b ? c.ab_subject_b : c.subject) as string) ?? "", values, { html: false }),
             html: rendered.html,
             text: rendered.text,
             headers: rendered.headers,
@@ -417,7 +497,7 @@ export async function sendDueEmails(admin: SupabaseClient, { deadline }: { deadl
       .from("email_campaign_recipients")
       .select("id", { count: "exact", head: true })
       .eq("campaign_id", c.id)
-      .in("status", ["queued", "sending"]);
+      .in("status", ["queued", "sending", "held"]);
     if ((left ?? 0) === 0) {
       await admin.from("email_campaigns").update({ status: "sent", finished_at: new Date().toISOString() }).eq("id", c.id).eq("status", "sending");
       await notify(admin, [c.created_by as string], {

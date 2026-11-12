@@ -61,6 +61,13 @@ export type EditorCampaign = {
   add_utm: boolean;
   spread_hours: number | null;
   send_at_best_hour: boolean;
+  ab_enabled: boolean;
+  ab_subject_b: string | null;
+  ab_preheader_b: string | null;
+  ab_template_version_id_b: string | null;
+  ab_test_percent: number;
+  ab_winner_by: "opens" | "clicks";
+  ab_wait_hours: number;
   audience: { include: { all: boolean; segments: string[]; lists: string[] }; exclude: { segments: string[]; lists: string[] }; skipLeadStatuses: string[]; resendOf?: string | null };
 };
 
@@ -278,6 +285,55 @@ export function CampaignEditor({
         </label>
         <p className="text-[11px] text-muted" data-open-peak>
           {openPeak ? `Your recipients open most around ${openPeak}, Karachi time.` : "No real opens yet to learn from — practice sends do not count."}
+        </p>
+      </section>
+
+      <section className="flex flex-col gap-3" data-ab-section>
+        <h3 className="text-sm font-medium text-ink">6. A/B test (optional)</h3>
+        <label className="flex items-center gap-2 text-xs text-ink">
+          <input type="checkbox" name="ab_enabled" defaultChecked={campaign.ab_enabled} data-ab-enabled /> Test a second version on part of the audience
+          first, then send the winner to everyone else
+        </label>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label className={label}>
+            Version B&rsquo;s subject line <span className="text-[10px]">(blank: the same as A)</span>
+            <Input name="ab_subject_b" defaultValue={campaign.ab_subject_b ?? ""} maxLength={200} placeholder="e.g. Ayesha, your Italy shortlist is ready" data-ab-subject-b />
+          </label>
+          <label className={label}>
+            Version B&rsquo;s preview text <span className="text-[10px]">(blank: the same as A)</span>
+            <Input name="ab_preheader_b" defaultValue={campaign.ab_preheader_b ?? ""} maxLength={250} />
+          </label>
+          <label className={label}>
+            Version B&rsquo;s template
+            <Select name="ab_template_version_id_b" defaultValue={campaign.ab_template_version_id_b ?? ""}>
+              <option value="">The same as version A</option>
+              {templates.map((t) => (
+                <option key={t.versionId} value={t.versionId}>
+                  {t.name}
+                  {t.note ? ` — ${t.note}` : ""}
+                </option>
+              ))}
+            </Select>
+          </label>
+          <label className={label}>
+            Test on this share of the audience (%)
+            <Input name="ab_test_percent" type="number" min={10} max={50} step={1} defaultValue={campaign.ab_test_percent} className="sm:w-28" />
+          </label>
+          <label className={label}>
+            The winner is the version more people
+            <Select name="ab_winner_by" defaultValue={campaign.ab_winner_by}>
+              <option value="opens">opened</option>
+              <option value="clicks">clicked</option>
+            </Select>
+          </label>
+          <label className={label}>
+            Pick it after this many hours
+            <Input name="ab_wait_hours" type="number" min={1} max={48} step={1} defaultValue={campaign.ab_wait_hours} className="sm:w-28" />
+          </label>
+        </div>
+        <p className="text-[11px] text-muted">
+          Version A is the subject and template above. Half the test group gets A and half gets B; when the wait is over, everyone else gets
+          the one more of them {campaign.ab_winner_by === "clicks" ? "clicked" : "opened"} (a tie keeps A). Needs at least 20 people.
         </p>
       </section>
 

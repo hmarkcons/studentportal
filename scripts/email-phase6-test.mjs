@@ -136,3 +136,43 @@ test("sunset: step two falls due once the email has finished and the grace perio
   assert.equal(notYet.due, false);
   assert.equal(notYet.on.toISOString(), "2026-12-31T00:00:00.000Z");
 });
+
+// ---- A/B tests (0363) ------------------------------------------------------------
+
+import { AB_MIN_AUDIENCE, abProblems, pickWinner, splitForTest } from "../src/lib/emailCampaigns/abTest.ts";
+
+test("A/B: the test group is the share asked for, half each, the rest held; repeatable, and different per campaign", () => {
+  const people = Array.from({ length: 1000 }, (_, i) => `p${i}@x.com`);
+  const s = splitForTest(people, { seed: "camp-1", percent: 20 });
+  assert.equal(s.A.length, 100);
+  assert.equal(s.B.length, 100);
+  assert.equal(s.held.length, 800);
+  assert.equal(new Set([...s.A, ...s.B, ...s.held]).size, 1000, "everyone exactly once");
+  assert.deepEqual(splitForTest(people, { seed: "camp-1", percent: 20 }), s, "the same campaign splits the same way");
+  assert.notDeepEqual(splitForTest(people, { seed: "camp-2", percent: 20 }).A, s.A, "another campaign, another split");
+  const small = splitForTest(["a", "b", "c"], { seed: "x", percent: 10 });
+  assert.equal(small.A.length + small.B.length, 2, "at least one each");
+});
+
+test("A/B: the winner by opens or clicks, as a share of each version's sends; a tie keeps A", () => {
+  const stats = [
+    { variant: "A", sent: 100, opened: 30, clicked: 2 },
+    { variant: "B", sent: 90, opened: 30, clicked: 6 },
+  ];
+  assert.equal(pickWinner(stats, "opens").winner, "B", "30/90 beats 30/100");
+  assert.equal(pickWinner(stats, "clicks").winner, "B");
+  assert.equal(pickWinner([{ variant: "A", sent: 50, opened: 10, clicked: 1 }, { variant: "B", sent: 50, opened: 10, clicked: 1 }], "opens").winner, "A");
+  assert.equal(pickWinner([], "opens").winner, "A", "nothing to go on keeps A");
+});
+
+test("A/B: what stops it, in words", () => {
+  const base = { ab_enabled: true, subject: "Italy", template_version_id: "v1", ab_subject_b: "Italy now", ab_template_version_id_b: null };
+  assert.deepEqual(abProblems(base, 100), []);
+  assert.deepEqual(abProblems({ ...base, ab_enabled: false, ab_subject_b: null }, 5), [], "off: nothing to check");
+  assert.match(abProblems({ ...base, ab_subject_b: null }, 100).join(), /its own subject line or template/);
+  assert.match(abProblems({ ...base, ab_subject_b: "Italy" }, 100).join(), /the same as version A/);
+  assert.deepEqual(abProblems({ ...base, ab_subject_b: null, ab_template_version_id_b: "v2" }, 100), [], "another template is a test too");
+  assert.match(abProblems({ ...base, spread_hours: 3 }, 100).join(), /spread over hours/);
+  assert.match(abProblems({ ...base, send_at_best_hour: true }, 100).join(), /each person's hour/);
+  assert.match(abProblems(base, AB_MIN_AUDIENCE - 1).join(), new RegExp(`at least ${AB_MIN_AUDIENCE} people`));
+});

@@ -14,7 +14,7 @@ The work goes in phases. This file grows with each.
 | 3 | Campaigns: drafts, approval, scheduling, the sending engine | **Built** (0356, 0357) — practice mode until the service is bought |
 | 4 | Tracking: opens, clicks, bounces, complaints, website visits | **Built** (0356–0358) — bounces and complaints wait for the service |
 | 5 | Reports: per campaign, the dashboard, PDF, exports, the lead's history | **Built** (0359) |
-| 6 | Extras: resend to non-openers, content blocks, spam check, Slack alerts, activity log, data retention (0361); engagement scoring and hot leads, the sunset policy, each person's best hour (0362); A/B tests and automations to come | **In progress** |
+| 6 | Extras: resend to non-openers, content blocks, spam check, Slack alerts, activity log, data retention (0361); engagement scoring and hot leads, the sunset policy, each person's best hour (0362); A/B tests (0363); automations to come | **In progress** |
 
 ## The sending service — not connected yet
 
@@ -465,6 +465,24 @@ their real opens by a person in the last 180 days (two or more,
 `email_best_hours()`); they get it the next time that Karachi hour comes round
 within 24 hours (`nextBestHour`), everyone else at once. The draft also says
 when the office's recipients open most (`email_open_hours()`, `peakWindow`).
+
+### A/B tests (0363)
+
+The draft's **6. A/B test**: version A is the campaign's own subject and
+template; version B another subject (and preview text), another template, or
+both. When the campaign starts (`abTest.ts`), the audience is shuffled by the
+campaign — fair and repeatable — and the test share (10–50%, 20 to start) is
+split half to A and half to B; everyone else is **held** (a recipient status).
+After the wait (1–48 hours, 4 to start) the sender's every-minute run picks
+the version a larger share of its test group opened (or clicked) — a tie keeps
+A — and releases everyone held with the winner; the creator is told, and the
+activity log says so. B's email is prepared once like A's
+(`ab_prepared_html_b`); a B template's links are numbered from 1001, so each
+click finds its own link, and the web version shows the version the person
+got. A test send sends both versions, "[Test A]" and "[Test B]". It needs at
+least 20 people and does not combine with spreading or best hours. The report's
+Overview shows each version's test-group results and the winner
+(`email_campaign_variant_stats()`). In practice mode nobody opens, so A wins.
 
 Unit tests: `scripts/email-phase6-test.mjs`.
 

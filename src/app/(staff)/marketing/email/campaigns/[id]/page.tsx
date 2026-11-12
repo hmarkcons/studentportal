@@ -14,6 +14,7 @@ import { EmailTabs, karachiTime } from "../../EmailTabs";
 import { AutoRefresh, CampaignControls, CampaignEditor, CampaignSendPanel, ResendForm, type EditorCampaign } from "../CampaignClient";
 import { spamCheck } from "@/lib/emailCampaigns/spamCheck";
 import { hourText, peakWindow } from "@/lib/emailCampaigns/engagement";
+import { abProblems } from "@/lib/emailCampaigns/abTest";
 import { withContentBlocks } from "@/lib/emailCampaigns/server";
 import { STATUS } from "../campaignStatus";
 
@@ -96,7 +97,7 @@ export default async function EmailCampaignPage(props: { params: Promise<{ id: s
       sendPanel = (
         <CampaignSendPanel
           campaignId={id}
-          problems={[...campaignProblems(c as never, { realSend, audienceCount: reach.counts.final }), ...blockProblems]}
+          problems={[...campaignProblems(c as never, { realSend, audienceCount: reach.counts.final }), ...abProblems(c as never, reach.counts.final), ...blockProblems]}
           spam={spam}
           reach={reach.counts.final}
           realSend={realSend}
@@ -178,6 +179,13 @@ export default async function EmailCampaignPage(props: { params: Promise<{ id: s
                 <p className="text-ink">{karachiTime((status === "scheduled" ? c.scheduled_at : c.started_at) as string)}</p>
                 {c.spread_hours && <p className="text-xs text-muted">spread over {c.spread_hours as number} hour{c.spread_hours === 1 ? "" : "s"}</p>}
                 {c.send_at_best_hour && <p className="text-xs text-muted">each person at the hour they usually open</p>}
+                {c.ab_enabled && (
+                  <p className="text-xs text-muted" data-ab-status>
+                    {c.ab_winner
+                      ? `A/B test: version ${c.ab_winner as string} won, and went to everyone else`
+                      : `A/B test on ${c.ab_test_percent as number}% — the winner by ${c.ab_winner_by === "clicks" ? "clicks" : "opens"} is picked ${karachiTime(c.ab_decide_at as string)}`}
+                  </p>
+                )}
               </div>
               <div>
                 <p className="text-[11px] uppercase tracking-wide text-muted">Recipients</p>

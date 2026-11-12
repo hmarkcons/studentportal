@@ -8,6 +8,7 @@ import { hasPermission, requirePermission } from "@/lib/auth/permissions";
 import { sendEmail } from "@/lib/email";
 import { CONTACT_STATUS_LABELS, suppressedTotal, type AudienceCounts, type ContactStatus } from "@/lib/emailCampaigns/audience";
 import { campaignProblems, confirmsSend, karachiInstant } from "@/lib/emailCampaigns/campaignRules";
+import { abProblems } from "@/lib/emailCampaigns/abTest";
 import { renderMergeTags } from "@/lib/emailCampaigns/mergeTags";
 import { getCampaignProvider } from "@/lib/emailCampaigns/providers";
 import { campaignSlug, prepareCampaignHtml } from "@/lib/emailCampaigns/render";
@@ -90,6 +91,17 @@ export async function saveEmailCampaign(campaignId: string, _prev: unknown, form
   if (reply_to && !EMAIL_RE.test(reply_to)) return { error: "The reply-to address is not an email address." };
   const templateVersionId = String(formData.get("template_version_id") ?? "") || null;
   const topic = String(formData.get("topic") ?? "") || null;
+  const ab_enabled = formData.get("ab_enabled") === "on";
+  const ab_subject_b = String(formData.get("ab_subject_b") ?? "").trim() || null;
+  if (ab_subject_b && ab_subject_b.length > 200) return { error: "Keep version B's subject to 200 characters." };
+  const ab_preheader_b = String(formData.get("ab_preheader_b") ?? "").trim() || null;
+  if (ab_preheader_b && ab_preheader_b.length > 250) return { error: "Keep version B's preview text to 250 characters." };
+  const ab_template_version_id_b = String(formData.get("ab_template_version_id_b") ?? "") || null;
+  const ab_test_percent = Number(formData.get("ab_test_percent") ?? 20);
+  if (!Number.isInteger(ab_test_percent) || ab_test_percent < 10 || ab_test_percent > 50) return { error: "Test the versions on 10 to 50 per cent of the audience." };
+  const ab_winner_by = formData.get("ab_winner_by") === "clicks" ? "clicks" : "opens";
+  const ab_wait_hours = Number(formData.get("ab_wait_hours") ?? 4);
+  if (!Number.isInteger(ab_wait_hours) || ab_wait_hours < 1 || ab_wait_hours > 48) return { error: "Wait a whole number of hours, 1 to 48, before picking the winner." };
   const spreadRaw = String(formData.get("spread_hours") ?? "").trim();
   const spread_hours = spreadRaw ? Number(spreadRaw) : null;
   if (spread_hours !== null && (!Number.isInteger(spread_hours) || spread_hours < 1 || spread_hours > 72)) {
@@ -114,6 +126,13 @@ export async function saveEmailCampaign(campaignId: string, _prev: unknown, form
       add_utm: formData.get("add_utm") === "on",
       spread_hours,
       send_at_best_hour: formData.get("send_at_best_hour") === "on",
+      ab_enabled,
+      ab_subject_b,
+      ab_preheader_b,
+      ab_template_version_id_b,
+      ab_test_percent,
+      ab_winner_by,
+      ab_wait_hours,
       ...(current.status === "pending_approval" ? { status: "draft", submitted_at: null, submitted_by: null } : {}),
     })
     .eq("id", campaignId)
@@ -160,13 +179,13 @@ async function readyToGo(campaignId: string): Promise<{ count: number; realSend:
   const supabase = await createClient();
   const { data: c } = await supabase
     .from("email_campaigns")
-    .select("id, name, status, subject, from_name, from_email, template_version_id, audience, topic, created_by")
+    .select("id, name, status, subject, from_name, from_email, template_version_id, audience, topic, created_by, ab_enabled, ab_subject_b, ab_template_version_id_b, spread_hours, send_at_best_hour")
     .eq("id", campaignId)
     .maybeSingle();
   if (!c) return { error: "That campaign no longer exists." };
   const admin = createAdminClient();
   const [realSend, { counts }] = await Promise.all([canReallySend(admin), resolveCampaignAudience(admin, parseCampaignAudience(c.audience), (c.topic as string) ?? null)]);
-  const problems = campaignProblems(c as never, { realSend, audienceCount: counts.final });
+  const problems = [...campaignProblems(c as never, { realSend, audienceCount: counts.final }), ...abProblems(c as never, counts.final)];
   return { count: counts.final, realSend, problems, campaign: c };
 }
 
@@ -346,7 +365,7 @@ export async function duplicateEmailCampaign(campaignId: string): Promise<({ suc
   const supabase = await createClient();
   const { data: c } = await supabase
     .from("email_campaigns")
-    .select("name, from_name, from_email, reply_to, subject, preheader, template_version_id, topic, audience, track_opens, track_clicks, add_utm, spread_hours, send_at_best_hour")
+    .select("name, from_name, from_email, reply_to, subject, preheader, template_version_id, topic, audience, track_opens, track_clicks, add_utm, spread_hours, send_at_best_hour, ab_enabled, ab_subject_b, ab_preheader_b, ab_template_version_id_b, ab_test_percent, ab_winner_by, ab_wait_hours")
     .eq("id", campaignId)
     .maybeSingle();
   if (!c) return { error: "That campaign no longer exists." };
@@ -388,35 +407,54 @@ export async function sendEmailCampaignTest(campaignId: string, _prev: unknown, 
   if (addresses.length > 5) return { error: "A test goes to five addresses at most." };
   if (addresses.some((a) => !EMAIL_RE.test(a))) return { error: "One of those is not an email address." };
   const supabase = await createClient();
-  const { data: c } = await supabase.from("email_campaigns").select("subject, preheader, from_name, reply_to, template_version_id").eq("id", campaignId).maybeSingle();
+  const { data: c } = await supabase
+    .from("email_campaigns")
+    .select("subject, preheader, from_name, reply_to, template_version_id, ab_enabled, ab_subject_b, ab_preheader_b, ab_template_version_id_b")
+    .eq("id", campaignId)
+    .maybeSingle();
   if (!c?.template_version_id) return { error: "Choose a template first." };
-  const { data: v } = await supabase.from("email_template_versions").select("html, text_body").eq("id", c.template_version_id).maybeSingle();
-  if (!v) return { error: "The template could not be read." };
   const { values } = await previewValues(supabase, null);
-  const full = await withContentBlocks(supabase, v.html as string, v.text_body as string | null);
-  if (full.missing.length) return { error: `The email uses a content block that no longer exists: ${full.missing.map((k) => `{{block:${k}}}`).join(", ")}.` };
-  const prepared = prepareCampaignHtml(full.html, { trackClicks: false, trackOpens: false, preheader: c.preheader as string | null });
-  const html = renderMergeTags(prepared.html, values, { html: true });
-  const text = renderMergeTags(full.text, values, { html: false });
-  const subject = `[Test] ${renderMergeTags((c.subject as string) || "(no subject yet)", values, { html: false })}`.slice(0, 220);
+  // Each version as its people would get it: A, and B too when the campaign is an A/B test (0363).
+  const versions: { label: string; templateId: string; subject: string; preheader: string | null }[] = [
+    { label: c.ab_enabled ? "Test A" : "Test", templateId: c.template_version_id as string, subject: (c.subject as string) || "(no subject yet)", preheader: c.preheader as string | null },
+  ];
+  if (c.ab_enabled) {
+    versions.push({
+      label: "Test B",
+      templateId: ((c.ab_template_version_id_b as string | null) || c.template_version_id) as string,
+      subject: ((c.ab_subject_b as string | null) || (c.subject as string)) || "(no subject yet)",
+      preheader: ((c.ab_preheader_b as string | null) || (c.preheader as string | null)) ?? null,
+    });
+  }
   const settings = await readEmailSettings(supabase);
   const provider = getCampaignProvider(settings.provider);
   const failures: string[] = [];
-  for (const to of addresses) {
-    if (provider) {
-      try {
-        await provider.sendOne({ to, from: settings.from_email ? `${(c.from_name as string) || settings.from_name} <${settings.from_email}>` : settings.from_name, replyTo: (c.reply_to as string) || settings.reply_to, subject, html, text, headers: { "X-HMARK-Test": "1" } });
-      } catch (e) {
-        failures.push(`${to}: ${e instanceof Error ? e.message : "not sent"}`);
+  for (const version of versions) {
+    const { data: v } = await supabase.from("email_template_versions").select("html, text_body").eq("id", version.templateId).maybeSingle();
+    if (!v) return { error: "The template could not be read." };
+    const full = await withContentBlocks(supabase, v.html as string, v.text_body as string | null);
+    if (full.missing.length) return { error: `The email uses a content block that no longer exists: ${full.missing.map((k) => `{{block:${k}}}`).join(", ")}.` };
+    const prepared = prepareCampaignHtml(full.html, { trackClicks: false, trackOpens: false, preheader: version.preheader });
+    const html = renderMergeTags(prepared.html, values, { html: true });
+    const text = renderMergeTags(full.text, values, { html: false });
+    const subject = `[${version.label}] ${renderMergeTags(version.subject, values, { html: false })}`.slice(0, 220);
+    for (const to of addresses) {
+      if (provider) {
+        try {
+          await provider.sendOne({ to, from: settings.from_email ? `${(c.from_name as string) || settings.from_name} <${settings.from_email}>` : settings.from_name, replyTo: (c.reply_to as string) || settings.reply_to, subject, html, text, headers: { "X-HMARK-Test": "1" } });
+        } catch (e) {
+          failures.push(`${to}: ${e instanceof Error ? e.message : "not sent"}`);
+        }
+      } else {
+        const sent = await sendEmail({ to, subject, html, text, replyTo: ((c.reply_to as string) || settings.reply_to) ?? undefined });
+        if ("error" in sent && sent.error) failures.push(`${to}: ${sent.error}`);
       }
-    } else {
-      const sent = await sendEmail({ to, subject, html, text, replyTo: ((c.reply_to as string) || settings.reply_to) ?? undefined });
-      if ("error" in sent && sent.error) failures.push(`${to}: ${sent.error}`);
     }
   }
-  if (failures.length === addresses.length) return { error: `Not sent. ${failures.join("; ")}` };
+  if (failures.length === addresses.length * versions.length) return { error: `Not sent. ${failures.join("; ")}` };
   await logEmailActivity("test_sent", { campaignId, summary: `To ${addresses.join(", ")}` });
-  return { success: true, message: `Test sent to ${addresses.length - failures.length} address${addresses.length - failures.length === 1 ? "" : "es"}${provider ? "" : " through the portal's own mailbox"}.` };
+  const reached = new Set(addresses.filter((a) => !failures.some((f) => f.startsWith(`${a}:`)))).size;
+  return { success: true, message: `${versions.length > 1 ? "Both versions sent" : "Test sent"} to ${reached} address${reached === 1 ? "" : "es"}${provider ? "" : " through the portal's own mailbox"}.` };
 }
 
 /** Whether the person may send (or only draft and ask). */

@@ -48,7 +48,7 @@ export default async function CampaignReportPage(props: { params: Promise<{ id: 
 
   const { supabase } = await getStaffSession();
   const [{ data: c }, canReports, canAudience] = await Promise.all([
-    supabase.from("email_campaigns").select("id, name, subject, status, practice, started_at, finished_at, recipients_total, prepared_html, from_name").eq("id", id).maybeSingle(),
+    supabase.from("email_campaigns").select("id, name, subject, status, practice, started_at, finished_at, recipients_total, prepared_html, from_name, ab_enabled, ab_subject_b, ab_winner, ab_winner_by, ab_decide_at").eq("id", id).maybeSingle(),
     hasPermission("email.reports.view"),
     hasPermission("email.audience.manage"),
   ]);
@@ -112,11 +112,13 @@ export default async function CampaignReportPage(props: { params: Promise<{ id: 
     // Hour by hour for the first 72 hours; after that, day by day as well.
     const days = daysSince(started);
     const firstDay = karachiDay(started);
-    const [points, { comparison: cmp, count: earlierCount }, dayPoints] = await Promise.all([
+    const [points, { comparison: cmp, count: earlierCount }, dayPoints, { data: variantRows }] = await Promise.all([
       campaignTimeline(supabase, id, started, hours),
       earlierComparison(supabase, { id, practice: Boolean(c.practice), started_at: c.started_at as string }, stats),
       days > 3 ? campaignDaily(supabase, id, new Date(`${firstDay}T00:00:00+05:00`), days) : Promise.resolve(null),
+      c.ab_enabled ? supabase.rpc("email_campaign_variant_stats", { p_campaign_id: id, p_until: c.ab_decide_at ?? null }) : Promise.resolve({ data: null }),
     ]);
+    const variants = ((variantRows ?? []) as { variant: string; sent: number; opened: number; clicked: number }[]).map((v) => ({ ...v, sent: Number(v.sent), opened: Number(v.opened), clicked: Number(v.clicked) }));
     const machineOnly = stats.opened_any - stats.opened_human;
     body = (
       <div className="flex flex-col gap-6">
@@ -140,6 +142,44 @@ export default async function CampaignReportPage(props: { params: Promise<{ id: 
             </p>
           )}
         </Card>
+        {c.ab_enabled && (
+          <Card>
+            <h3 className="mb-1 text-sm font-medium text-ink">A/B test</h3>
+            <p className="mb-3 text-[11px] text-muted">
+              {c.ab_winner
+                ? `Version ${c.ab_winner as string} won on ${c.ab_winner_by === "clicks" ? "clicks" : "opens"} and went to everyone else.`
+                : `The winner by ${c.ab_winner_by === "clicks" ? "clicks" : "opens"} is picked ${karachiTime(c.ab_decide_at as string)}.`}{" "}
+              The test group only: those who got the winner later are not counted here.
+            </p>
+            <table className="w-full text-left text-xs" data-ab-results>
+              <thead className="text-muted">
+                <tr>
+                  <th className="py-1 pr-3 font-medium">Version</th>
+                  <th className="py-1 pr-3 font-medium">Subject</th>
+                  <th className="py-1 pr-3 text-right font-medium">Sent</th>
+                  <th className="py-1 pr-3 text-right font-medium">Opened</th>
+                  <th className="py-1 pr-3 text-right font-medium">Clicked</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {(["A", "B"] as const).map((k) => {
+                  const v = variants.find((x) => x.variant === k) ?? { sent: 0, opened: 0, clicked: 0 };
+                  return (
+                    <tr key={k}>
+                      <td className="py-1.5 pr-3 font-medium text-ink">
+                        {k} {c.ab_winner === k && <Badge tone="success">Winner</Badge>}
+                      </td>
+                      <td className="py-1.5 pr-3 text-ink">{k === "A" ? (c.subject as string) : ((c.ab_subject_b as string | null) || (c.subject as string))}</td>
+                      <td className="py-1.5 pr-3 text-right text-ink">{v.sent.toLocaleString("en-US")}</td>
+                      <td className="py-1.5 pr-3 text-right text-ink">{pct(v.opened, v.sent)}</td>
+                      <td className="py-1.5 pr-3 text-right text-ink">{pct(v.clicked, v.sent)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </Card>
+        )}
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           <Card>
             <h3 className="mb-3 text-sm font-medium text-ink">From inbox to website</h3>
@@ -424,7 +464,7 @@ export default async function CampaignReportPage(props: { params: Promise<{ id: 
               <tbody className="divide-y divide-border">
                 {links.map((l) => (
                   <tr key={l.link_id}>
-                    <td className="py-1.5 pr-3 text-muted">{l.pos}</td>
+                    <td className="py-1.5 pr-3 text-muted">{l.pos > 1000 ? `B${l.pos - 1000}` : l.pos}</td>
                     <td className="py-1.5 pr-3">
                       <p className="text-ink">{l.label || "(no text)"}</p>
                       <p className="max-w-[32rem] truncate text-muted" title={l.url}>

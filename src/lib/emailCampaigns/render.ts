@@ -24,7 +24,7 @@ const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;")
 /** The email as the campaign sends it: tracked links marked, the pixel's place marked, the preheader in. */
 export function prepareCampaignHtml(
   html: string,
-  { trackClicks, trackOpens, preheader }: { trackClicks: boolean; trackOpens: boolean; preheader?: string | null }
+  { trackClicks, trackOpens, preheader, linkStart = 1 }: { trackClicks: boolean; trackOpens: boolean; preheader?: string | null; linkStart?: number }
 ): { html: string; links: CampaignLink[] } {
   const $ = cheerio.load(html);
   const links: CampaignLink[] = [];
@@ -34,7 +34,7 @@ export function prepareCampaignHtml(
       const url = el.attribs.href.trim();
       // mailto:, tel:, #anchors and the merge-tag links (unsubscribe, preferences, web version) are left as they are.
       if (!/^https?:\/\//i.test(url) || url.includes("{{")) return;
-      const position = links.length + 1;
+      const position = linkStart + links.length;
       links.push({ position, url, label: $(el).text().replace(/\s+/g, " ").trim().slice(0, 200) || $(el).find("img").attr("alt")?.slice(0, 200) || "" });
       $(el).attr("href", LINK_MARK(position));
     });
