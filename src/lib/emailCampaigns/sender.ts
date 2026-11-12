@@ -6,7 +6,8 @@ import { contactMergeValues, renderMergeTags, type MergeValues } from "./mergeTa
 import { prepareCampaignHtml, renderForRecipient } from "./render";
 import { getCampaignProvider, type EmailProvider } from "./providers";
 import { autoPause, karachiDay, MAX_ATTEMPTS, retryDelayMs, runBudget, spreadAllowance, warmupCap } from "./sendingRules";
-import { htmlToText } from "./templateHtml";
+import { withContentBlocks } from "./server";
+import { slackAlert } from "./slack";
 
 // The sending engine. A campaign is started (its audience frozen into
 // recipients, its email prepared) when it is sent or its scheduled time
@@ -23,6 +24,8 @@ export type CampaignAudience = {
   include: { all: boolean; segments: string[]; lists: string[] };
   exclude: { segments: string[]; lists: string[] };
   skipLeadStatuses: string[];
+  /** A resend (Phase 6): the people an earlier campaign reached who did not open or click it. */
+  resendOf?: string | null;
 };
 
 const ids = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
@@ -36,7 +39,38 @@ export function parseCampaignAudience(raw: unknown): CampaignAudience {
     include: { all: inc.all === true, segments: ids(inc.segments), lists: ids(inc.lists) },
     exclude: { segments: ids(exc.segments), lists: ids(exc.lists) },
     skipLeadStatuses: Array.isArray(o.skipLeadStatuses) ? ids(o.skipLeadStatuses) : DEFAULT_SKIPPED_LEAD_STATUSES,
+    resendOf: typeof o.resendOf === "string" && UUID_RE.test(o.resendOf) ? o.resendOf : null,
   };
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/**
+ * Who an earlier campaign reached and did not move: sent, delivered or not
+ * yet known, no open or click by a person, no bounce, no unsubscribe, no
+ * spam report. By record ("lead:<id>" / "contact:<id>").
+ */
+export async function nonOpenerKeys(admin: SupabaseClient, campaignId: string): Promise<Set<string>> {
+  const keys = new Set<string>();
+  for (let from = 0; ; from += 1000) {
+    const { data } = await admin
+      .from("email_campaign_recipients")
+      .select("lead_id, contact_id")
+      .eq("campaign_id", campaignId)
+      .eq("status", "sent")
+      .eq("human_open_count", 0)
+      .eq("human_click_count", 0)
+      .is("bounce", null)
+      .is("unsubscribed_at", null)
+      .is("complained_at", null)
+      .order("id")
+      .range(from, from + 999);
+    for (const r of data ?? []) {
+      if (r.lead_id) keys.add(`lead:${r.lead_id}`);
+      else if (r.contact_id) keys.add(`contact:${r.contact_id}`);
+    }
+    if (!data || data.length < 1000) return keys;
+  }
 }
 
 async function segmentRules(admin: SupabaseClient, segmentIds: string[]): Promise<RuleSet[]> {
@@ -51,11 +85,24 @@ export async function resolveCampaignAudience(
   audience: CampaignAudience,
   topic: string | null
 ): Promise<{ recipients: AudienceContact[]; counts: AudienceCounts }> {
-  const [{ contacts, statuses }, incSegs, excSegs] = await Promise.all([
+  const [{ contacts, statuses }, incSegs, excSegs, resendKeys] = await Promise.all([
     loadAudience(admin),
     segmentRules(admin, audience.include.segments),
     segmentRules(admin, audience.exclude.segments),
+    audience.resendOf ? nonOpenerKeys(admin, audience.resendOf) : Promise.resolve(null),
   ]);
+  // A resend goes to the earlier campaign's non-openers only — worked out again now, so whoever has
+  // opened it since is left out; the do-not-email list and the other rules still apply.
+  if (resendKeys) {
+    return resolveAudience({
+      contacts: contacts.filter((c) => resendKeys.has(c.key)),
+      include: { all: true, segments: [], lists: [] },
+      exclude: { segments: excSegs, lists: audience.exclude.lists },
+      statuses,
+      topic,
+      skipLeadStatuses: audience.skipLeadStatuses,
+    });
+  }
   return resolveAudience({
     contacts,
     include: { all: audience.include.all, segments: incSegs, lists: audience.include.lists },
@@ -125,12 +172,15 @@ export async function startCampaign(admin: SupabaseClient, campaignId: string): 
   const { recipients, counts } = await resolveCampaignAudience(admin, parseCampaignAudience(c.audience), (c.topic as string | null) ?? null);
   if (!recipients.length) return fail("No one to send to: the audience is empty once the do-not-email list and the other rules are applied.");
 
-  const prepared = prepareCampaignHtml(version.html as string, {
+  // Content blocks (0361) go in now, once: the email as sent keeps them even if a block changes later.
+  const full = await withContentBlocks(admin, version.html as string, version.text_body as string | null);
+  if (full.missing.length) return fail(`Its email uses a content block that no longer exists: ${full.missing.map((k) => `{{block:${k}}}`).join(", ")}.`);
+  const prepared = prepareCampaignHtml(full.html, {
     trackClicks: c.track_clicks as boolean,
     trackOpens: c.track_opens as boolean,
     preheader: c.preheader as string | null,
   });
-  const text = (version.text_body as string) || htmlToText(version.html as string);
+  const text = full.text;
   if (prepared.links.length) {
     const { error } = await admin.from("email_campaign_links").insert(prepared.links.map((l) => ({ campaign_id: campaignId, ...l })));
     if (error) return fail(`Its links could not be saved: ${error.message}`);
@@ -184,6 +234,8 @@ export async function superAdminIds(admin: SupabaseClient): Promise<string[]> {
 export async function notify(admin: SupabaseClient, userIds: (string | null | undefined)[], n: { kind: string; title: string; body: string; link: string }) {
   const to = [...new Set(userIds.filter((u): u is string => Boolean(u)))];
   if (to.length) await admin.from("notifications").insert(to.map((user_id) => ({ user_id, ...n })));
+  // The portal's alerts are emailed already (notificationDelivery); a Slack channel hears them too, when one is set.
+  await slackAlert(n);
 }
 
 export type RunSummary = { started: number; sent: number; retried: number; failed: number; finished: number; paused: number; budget: number };

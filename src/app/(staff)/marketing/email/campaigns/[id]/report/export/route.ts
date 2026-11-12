@@ -5,6 +5,7 @@ import { allRecipients } from "@/lib/emailCampaigns/reportData";
 import { exportFileName, karachiStamp, recipientExportRow, recipientFilter, RECIPIENT_EXPORT_HEADER, toCsv } from "@/lib/emailCampaigns/reportRules";
 import { XLSX } from "@/lib/leadWorkbook";
 import { getSiteUrl } from "@/lib/siteUrl";
+import { logEmailActivity } from "@/lib/emailCampaigns/activity";
 
 // Fifty thousand recipients read a thousand at a time.
 export const maxDuration = 60;
@@ -40,6 +41,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   const name = exportFileName(c.slug as string, filter, karachiStamp(new Date().toISOString()).slice(0, 10), format);
   const headers = (type: string) => ({ "Content-Type": type, "Content-Disposition": `attachment; filename="${name}"`, "Cache-Control": "no-store, private" });
 
+  await logEmailActivity("recipients_exported", { campaignId: id, summary: `${table.length} rows, ${format.toUpperCase()}, ${filter.replace(/_/g, " ")}${search ? `, “${search}”` : ""}` });
   if (format === "csv") return new Response(toCsv([RECIPIENT_EXPORT_HEADER, ...table]), { headers: headers("text/csv; charset=utf-8") });
 
   const data = [

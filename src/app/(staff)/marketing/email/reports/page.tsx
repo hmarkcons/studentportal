@@ -190,7 +190,10 @@ export default async function EmailReportsPage(props: { searchParams: Promise<Re
   return (
     <div className="w-full">
       {header}
-      <div className="mb-3 flex items-center justify-end gap-2 text-xs">
+      <div className="mb-3 flex items-center justify-end gap-4 text-xs">
+        <Link prefetch={false} href="/marketing/email/reports/activity" className="text-primary hover:underline" data-activity-link>
+          Who did what
+        </Link>
         <Link prefetch={false} href={href({ practice: includePractice ? null : "1" })} className="text-primary hover:underline" data-practice-toggle>
           {includePractice ? "Show real sends only" : "Include practice sends"}
         </Link>

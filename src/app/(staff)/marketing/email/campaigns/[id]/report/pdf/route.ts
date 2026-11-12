@@ -5,6 +5,7 @@ import { breakdown, COMPARED_RATES, earlierComparison, linkReport, webReport } f
 import { karachiStamp } from "@/lib/emailCampaigns/reportRules";
 import { readSendingSettings } from "@/lib/emailCampaigns/server";
 import { renderEmailCampaignReport } from "@/lib/pdf/emailCampaignReportPdf";
+import { logEmailActivity } from "@/lib/emailCampaigns/activity";
 
 export const maxDuration = 60;
 
@@ -89,6 +90,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
     pages: web.filter((w) => w.kind === "page").slice(0, 8).map((w) => ({ key: w.key, value: w.events, cells: [n(w.events), n(w.people)] })),
     conversions: web.filter((w) => w.kind === "conversion").map((w) => ({ key: label(w.key), value: w.events, cells: [n(w.events), n(w.people)] })),
   });
+  await logEmailActivity("report_pdf", { campaignId: id });
   const file = `${(c.slug as string) || "campaign"}-report-${stamp.slice(0, 10)}.pdf`;
   return new Response(new Uint8Array(pdf), {
     headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${file}"`, "Content-Length": String(pdf.length), "Cache-Control": "no-store, private" },

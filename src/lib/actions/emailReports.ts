@@ -10,6 +10,7 @@ import { getStaffSession } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadTaskPeople } from "@/lib/staffTasksLoad";
 import { NOTES_MAX, TITLE_MAX } from "@/lib/staffTasks";
+import { logEmailActivity } from "@/lib/emailCampaigns/activity";
 
 type Fail = { error: string };
 
@@ -67,6 +68,7 @@ export async function listFromCampaignRecipients(
     if (addError) return { error: `The list was made, but not everyone was added: ${addError.message}` };
     added += data?.length ?? 0;
   }
+  await logEmailActivity("list_made", { campaignId, summary: `“${name}”, ${added} people (${filterLabel(filter).toLowerCase()})` });
   revalidatePath("/marketing/email/audience/lists");
   return { success: true, listId: list.id as string, added, message: `List “${name}” made with ${added.toLocaleString("en-US")} people.` };
 }
@@ -181,6 +183,7 @@ export async function followUpTasksFromCampaign(
   if (noOne) parts.push(`${noOne} with no counsellor were skipped`);
   if (open.size) parts.push(`${open.size} already had it open`);
   if (contacts) parts.push(`${contacts} imported contact${contacts === 1 ? "" : "s"} left out`);
+  await logEmailActivity("follow_up_tasks", { campaignId, summary: `${given} tasks “${title}” (${filterLabel(filter).toLowerCase()})` });
   // No revalidation: the task lists are read fresh, and revalidating would re-render this whole report into the answer.
   return { success: true, given, message: `${parts.join("; ")}.` };
 }

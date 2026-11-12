@@ -12,9 +12,9 @@ import { renderMergeTags } from "@/lib/emailCampaigns/mergeTags";
 import { getCampaignProvider } from "@/lib/emailCampaigns/providers";
 import { campaignSlug, prepareCampaignHtml } from "@/lib/emailCampaigns/render";
 import { canReallySend, notify, parseCampaignAudience, resolveCampaignAudience, startCampaign, superAdminIds, type CampaignAudience } from "@/lib/emailCampaigns/sender";
-import { previewValues, readEmailSettings } from "@/lib/emailCampaigns/server";
-import { htmlToText } from "@/lib/emailCampaigns/templateHtml";
+import { previewValues, readEmailSettings, withContentBlocks } from "@/lib/emailCampaigns/server";
 import { seedOf, simulateActivity } from "@/lib/emailCampaigns/simulate";
+import { logEmailActivity } from "@/lib/emailCampaigns/activity";
 
 const CAMPAIGNS = "/marketing/email/campaigns";
 const CREATE_DENIED = "You don't have permission to create email campaigns.";
@@ -63,6 +63,7 @@ function readAudience(formData: FormData): CampaignAudience {
     include: { all: formData.get("include_all") === "on", segments: list("include_segments"), lists: list("include_lists") },
     exclude: { segments: list("exclude_segments"), lists: list("exclude_lists") },
     skipLeadStatuses: list("skip_status"),
+    resendOf: /^[0-9a-f-]{36}$/.test(String(formData.get("resend_of") ?? "")) ? String(formData.get("resend_of")) : null,
   };
 }
 
@@ -190,6 +191,7 @@ export async function sendEmailCampaignNow(campaignId: string, _prev: unknown, f
   const started = await startCampaign(admin, campaignId);
   revalidate(campaignId);
   if ("error" in started) return started;
+  await logEmailActivity("campaign_sent", { campaignId, summary: `${ready.realSend ? "Sent" : "Practice send"} to ${started.recipients.toLocaleString("en-US")} people` });
   return {
     success: true,
     message: ready.realSend
@@ -222,6 +224,7 @@ export async function scheduleEmailCampaign(campaignId: string, _prev: unknown, 
   if (error) return { error: error.message };
   if (!data?.length) return { error: "It was changed meanwhile — reload the page." };
   revalidate(campaignId);
+  await logEmailActivity("campaign_scheduled", { campaignId, summary: `For ${at.toISOString()}` });
   return { success: true, message: `Scheduled for ${at.toLocaleString("en-GB", { timeZone: "Asia/Karachi", dateStyle: "medium", timeStyle: "short" })} (Karachi).` };
 }
 
@@ -251,6 +254,7 @@ export async function submitEmailCampaignForApproval(campaignId: string, _prev: 
     link: `${CAMPAIGNS}/${campaignId}`,
   });
   revalidate(campaignId);
+  await logEmailActivity("campaign_submitted", { campaignId, summary: `To ${ready.count.toLocaleString("en-US")} people` });
   return { success: true, message: "Sent for approval. The approvers have been told." };
 }
 
@@ -276,6 +280,7 @@ export async function approveEmailCampaign(campaignId: string): Promise<Ok | Fai
     link: `${CAMPAIGNS}/${campaignId}`,
   });
   revalidate(campaignId);
+  await logEmailActivity("campaign_approved", { campaignId });
   return { success: true, message: "Approved and scheduled." };
 }
 
@@ -296,6 +301,7 @@ export async function rejectEmailCampaign(campaignId: string, note: string): Pro
     link: `${CAMPAIGNS}/${campaignId}`,
   });
   revalidate(campaignId);
+  await logEmailActivity("campaign_sent_back", { campaignId, summary: text.slice(0, 300) });
   return { success: true, message: "Sent back to its author." };
 }
 
@@ -327,6 +333,7 @@ export async function changeEmailCampaignState(campaignId: string, to: "paused" 
     await admin.from("email_campaign_recipients").update({ status: "skipped", last_error: "Campaign cancelled" }).eq("campaign_id", campaignId).eq("status", "queued");
   }
   revalidate(campaignId);
+  await logEmailActivity(({ paused: "campaign_paused", sending: "campaign_resumed", cancelled: "campaign_cancelled", draft: "campaign_unscheduled" } as const)[to], { campaignId });
   return { success: true, message: { paused: "Paused.", sending: "Resumed.", cancelled: "Cancelled — no more emails will go.", draft: "Back to draft." }[to] };
 }
 
@@ -348,6 +355,7 @@ export async function duplicateEmailCampaign(campaignId: string): Promise<({ suc
     .select("id")
     .single();
   if (error) return { error: error.message };
+  await logEmailActivity("campaign_duplicated", { campaignId: data.id as string, summary: `Copy of “${c.name as string}”` });
   revalidate();
   return { success: true, campaignId: data.id as string };
 }
@@ -360,6 +368,7 @@ export async function deleteEmailCampaign(campaignId: string): Promise<Ok | Fail
   const { data, error } = await supabase.from("email_campaigns").delete().eq("id", campaignId).in("status", ["draft", "pending_approval"]).select("id");
   if (error) return { error: error.message };
   if (!data?.length) return { error: "Only a draft can be deleted; a campaign that was sent is kept for its report." };
+  await logEmailActivity("campaign_deleted", { summary: `Draft ${campaignId}` });
   revalidate();
   return { success: true };
 }
@@ -382,9 +391,11 @@ export async function sendEmailCampaignTest(campaignId: string, _prev: unknown, 
   const { data: v } = await supabase.from("email_template_versions").select("html, text_body").eq("id", c.template_version_id).maybeSingle();
   if (!v) return { error: "The template could not be read." };
   const { values } = await previewValues(supabase, null);
-  const prepared = prepareCampaignHtml(v.html as string, { trackClicks: false, trackOpens: false, preheader: c.preheader as string | null });
+  const full = await withContentBlocks(supabase, v.html as string, v.text_body as string | null);
+  if (full.missing.length) return { error: `The email uses a content block that no longer exists: ${full.missing.map((k) => `{{block:${k}}}`).join(", ")}.` };
+  const prepared = prepareCampaignHtml(full.html, { trackClicks: false, trackOpens: false, preheader: c.preheader as string | null });
   const html = renderMergeTags(prepared.html, values, { html: true });
-  const text = renderMergeTags((v.text_body as string) || htmlToText(v.html as string), values, { html: false });
+  const text = renderMergeTags(full.text, values, { html: false });
   const subject = `[Test] ${renderMergeTags((c.subject as string) || "(no subject yet)", values, { html: false })}`.slice(0, 220);
   const settings = await readEmailSettings(supabase);
   const provider = getCampaignProvider(settings.provider);
@@ -402,6 +413,7 @@ export async function sendEmailCampaignTest(campaignId: string, _prev: unknown, 
     }
   }
   if (failures.length === addresses.length) return { error: `Not sent. ${failures.join("; ")}` };
+  await logEmailActivity("test_sent", { campaignId, summary: `To ${addresses.join(", ")}` });
   return { success: true, message: `Test sent to ${addresses.length - failures.length} address${addresses.length - failures.length === 1 ? "" : "es"}${provider ? "" : " through the portal's own mailbox"}.` };
 }
 
@@ -457,6 +469,7 @@ export async function simulateEmailCampaignActivity(campaignId: string): Promise
     if (error) return { error: error.message };
   }
   revalidate(campaignId);
+  await logEmailActivity("simulated", { campaignId, summary: `${events.length} made-up events` });
   return { success: true, message: `Made-up activity added: ${events.length.toLocaleString("en-US")} events across ${recipients.length.toLocaleString("en-US")} recipients.` };
 }
 
@@ -496,5 +509,64 @@ export async function clearSimulatedEmailCampaignActivity(campaignId: string): P
     .eq("campaign_id", campaignId);
   if (resetError) return { error: resetError.message };
   revalidate(campaignId);
+  await logEmailActivity("simulation_cleared", { campaignId });
   return { success: true, message: "The made-up activity is gone." };
+}
+
+/**
+ * Resend to non-openers (Phase 6): a new draft of the same email, with a new
+ * subject, to the people the campaign reached who neither opened nor clicked
+ * it. Who they are is worked out again when the resend goes, so anyone who
+ * opens the first one meanwhile is left out; unsubscribes, bounces and spam
+ * reports never get it.
+ */
+export async function resendToNonOpeners(campaignId: string, _prev: unknown, formData: FormData): Promise<({ success: true; campaignId: string }) | Fail> {
+  const denied = await requirePermission("email.campaigns.create", CREATE_DENIED);
+  if (denied) return denied;
+  const subject = String(formData.get("subject") ?? "").trim();
+  if (!subject) return { error: "Give the resend a new subject line — the same one did not get them to open it." };
+  if (subject.length > 200) return { error: "Keep the subject line to 200 characters." };
+  const preheader = String(formData.get("preheader") ?? "").trim();
+  if (preheader.length > 250) return { error: "Keep the preview text to 250 characters." };
+  const supabase = await createClient();
+  const { data: c } = await supabase
+    .from("email_campaigns")
+    .select("name, status, subject, from_name, from_email, reply_to, template_version_id, topic, audience, track_opens, track_clicks, add_utm")
+    .eq("id", campaignId)
+    .maybeSingle();
+  if (!c) return { error: "That campaign no longer exists." };
+  if (!["sent", "cancelled", "paused"].includes(c.status as string)) return { error: "Resend it once it has been sent." };
+  if (subject.toLowerCase() === String(c.subject ?? "").trim().toLowerCase()) return { error: "Give it a different subject line from the first one." };
+  const original = parseCampaignAudience(c.audience);
+  const name = `${c.name as string} — resend to non-openers`.slice(0, 120);
+  const { data, error } = await supabase
+    .from("email_campaigns")
+    .insert({
+      name,
+      slug: campaignSlug(name),
+      subject,
+      preheader: preheader || null,
+      from_name: c.from_name,
+      from_email: c.from_email,
+      reply_to: c.reply_to,
+      template_version_id: c.template_version_id,
+      topic: c.topic,
+      track_opens: c.track_opens,
+      track_clicks: c.track_clicks,
+      add_utm: c.add_utm,
+      parent_campaign_id: campaignId,
+      audience: {
+        include: { all: false, segments: [], lists: [] },
+        exclude: { segments: [], lists: [] },
+        skipLeadStatuses: original.skipLeadStatuses,
+        resendOf: campaignId,
+      } satisfies CampaignAudience,
+      created_by: await myId(),
+    })
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+  await logEmailActivity("resend_created", { campaignId: data.id as string, summary: `Resend of “${c.name as string}” with the subject “${subject}”` });
+  revalidate();
+  return { success: true, campaignId: data.id as string };
 }

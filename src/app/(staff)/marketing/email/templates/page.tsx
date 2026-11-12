@@ -62,9 +62,14 @@ export default async function EmailTemplatesPage(props: { searchParams: Promise<
 
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-medium text-ink">{showArchived ? "Archived templates" : "Templates"}</h3>
-        <Link prefetch={false} href={showArchived ? "/marketing/email/templates" : "/marketing/email/templates?archived=1"} className="text-xs text-primary hover:underline">
-          {showArchived ? "Back to templates" : "Show archived"}
-        </Link>
+        <div className="flex gap-4">
+          <Link prefetch={false} href="/marketing/email/templates/blocks" className="text-xs text-primary hover:underline" data-blocks-link>
+            Content blocks
+          </Link>
+          <Link prefetch={false} href={showArchived ? "/marketing/email/templates" : "/marketing/email/templates?archived=1"} className="text-xs text-primary hover:underline">
+            {showArchived ? "Back to templates" : "Show archived"}
+          </Link>
+        </div>
       </div>
 
       {rows.length === 0 ? (

@@ -14,7 +14,7 @@ The work goes in phases. This file grows with each.
 | 3 | Campaigns: drafts, approval, scheduling, the sending engine | **Built** (0356, 0357) — practice mode until the service is bought |
 | 4 | Tracking: opens, clicks, bounces, complaints, website visits | **Built** (0356–0358) — bounces and complaints wait for the service |
 | 5 | Reports: per campaign, the dashboard, PDF, exports, the lead's history | **Built** (0359) |
-| 6 | Extras (A/B tests, automations, …) | — |
+| 6 | Extras: resend to non-openers, content blocks, spam check, Slack alerts, activity log, data retention (0361); scoring, sunset, send-time, A/B tests and automations to come | **In progress** |
 
 ## The sending service — not connected yet
 
@@ -371,6 +371,69 @@ and what they did with each, and their address's state, to whoever may see
 email reports.
 
 Unit tests: `scripts/email-reports-test.mjs`, `scripts/email-extras-test.mjs` (the 0360 additions). Against the deployed portal: `VERIFY_AGAINST_PRODUCTION=yes npm run check:emailreports`.
+
+## Phase 6 — Extras
+
+### Resend to non-openers
+
+On a campaign that has gone, **Resend to the people who did not open it**
+makes a new draft of the same email with a new subject (it must differ),
+`parent_campaign_id` pointing back. Its audience is `resendOf` (sender.ts
+`nonOpenerKeys`): the first campaign's recipients with no open or click by a
+person, no bounce, unsubscribe or spam report — worked out again when the
+resend goes, so anyone who opens the first one meanwhile is left out. The
+do-not-email list, topics and exclusions still apply.
+
+### Content blocks (0361)
+
+Templates › Content blocks keeps headers, footers, signatures and social rows
+once (`email_content_blocks`). A template writes `{{block:key}}`; the block
+goes in when an email is previewed, tested or sent (`withContentBlocks`,
+server.ts) — into the plain-text version as text too. A campaign is put
+together once, when it starts, so later edits to a block do not change an
+email already sent. A block's HTML is cleaned like a template's
+(`cleanBlockHtml`); a block holds no blocks. A template naming a block that no
+longer exists cannot be sent (the send panel says which), and a test refuses.
+
+### Spam check
+
+The send panel scores the subject, preview text and email (`spamCheck.ts`, the
+office chose built-in checks: nothing leaves the portal) from 0 to 10 — low,
+some risk, high — and lists each finding with its fix: capitals, exclamation
+marks, money-and-urgency phrases (whole phrases only, "guaranteed" and
+"visa guaranteed" among them), a fake RE:/FW:, an email that is nearly all
+pictures, no plain-text version, link shorteners, bare IP addresses, a link
+whose text shows one website and goes to another, non-https links. A warning,
+not a block.
+
+### Alerts
+
+Approval waiting, finished, and stopped by itself already reach people in the
+portal and by email (the portal's alert emails). Set `SLACK_WEBHOOK_URL` (a
+Slack incoming webhook) in Vercel and they are posted to that channel too
+(`slack.ts`; a deployment only). WhatsApp would need the WhatsApp Business
+API, which the portal does not have.
+
+### Who did what (0361)
+
+`email_activity_log`, written by the server only (`logEmailActivity`, never
+failing what it records): sends, schedules, approvals and send-backs,
+pause/resume/cancel, tests, simulations, resends, duplicates and deletes,
+exports and PDFs, lists and follow-up tasks made from reports, settings and
+content-block changes. Reports › **Who did what** lists them, filterable;
+readable with `email.reports.view`. Row-level changes are in the portal's
+audit log as before.
+
+### Data retention (0361)
+
+Settings › Sending › "keep each open's and click's browser and city for N
+months" (12 to start; 0 keeps them for ever). `/api/cron/email-retention`
+runs daily at 03:15 Karachi and calls `email_purge_event_details()`, which
+clears `user_agent` and `ip_city` on older events and `city` on older
+recipients. Counts, device, mail app and country stay, so every report still
+adds up.
+
+Unit tests: `scripts/email-phase6-test.mjs`.
 
 ## Not built, on purpose
 

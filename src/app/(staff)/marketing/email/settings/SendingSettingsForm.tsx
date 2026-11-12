@@ -54,6 +54,11 @@ export function SendingSettingsForm({ settings, canEdit, todaysCap }: { settings
           Conversion events <span className="text-[10px]">(one a line, “key | Name” — what the website script may report)</span>
           <Textarea name="conversion_events" rows={6} defaultValue={keyedLines(settings.conversion_events)} className="font-mono text-xs" data-settings-conversions />
         </label>
+        <label className="flex flex-col gap-1 text-xs text-muted sm:col-span-2 sm:max-w-md">
+          Keep each open&rsquo;s and click&rsquo;s browser and city for this many months{" "}
+          <span className="text-[10px]">(then they are cleared; counts, device, mail app and country stay; 0 keeps them for ever)</span>
+          <Input name="retention_months" type="number" min={0} max={120} step={1} defaultValue={settings.retention_months} required className="sm:w-28" data-retention-months />
+        </label>
         <p className="text-[11px] text-muted sm:col-span-2">
           A key is stored on each address and sent by the website, so change a name freely but keep its key. A key taken away stops being offered; nobody&rsquo;s choices are lost.
         </p>

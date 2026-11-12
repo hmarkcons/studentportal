@@ -10,7 +10,7 @@ import { readTemplateUpload } from "@/lib/emailCampaigns/templateFiles";
 import { htmlToText, linksAndImages, processTemplateHtml } from "@/lib/emailCampaigns/templateHtml";
 import { networkPreflight, staticPreflight, type PreflightCheck } from "@/lib/emailCampaigns/preflight";
 import { renderMergeTags } from "@/lib/emailCampaigns/mergeTags";
-import { EMAIL_ASSETS_BUCKET, assetStorageKey, previewValues, readEmailSettings } from "@/lib/emailCampaigns/server";
+import { EMAIL_ASSETS_BUCKET, assetStorageKey, previewValues, readEmailSettings, withContentBlocks } from "@/lib/emailCampaigns/server";
 import { getCampaignProvider } from "@/lib/emailCampaigns/providers";
 
 const TEMPLATES_PATH = "/marketing/email/templates";
@@ -323,8 +323,9 @@ export async function sendTemplateTest(versionId: string, _prev: unknown, formDa
   const templateName = (Array.isArray(v.template) ? v.template[0] : v.template)?.name ?? "Email";
   const subject = (String(formData.get("subject") ?? "").trim() || templateName).slice(0, 200);
   const { values } = await previewValues(supabase, String(formData.get("contact_id") ?? "") || null);
-  const html = renderMergeTags(v.html as string, values, { html: true });
-  const text = renderMergeTags((v.text_body as string) || htmlToText(v.html as string), values, { html: false });
+  const full = await withContentBlocks(supabase, v.html as string, v.text_body as string | null);
+  const html = renderMergeTags(full.html, values, { html: true });
+  const text = renderMergeTags(full.text, values, { html: false });
   const settings = await readEmailSettings(supabase);
 
   const provider = getCampaignProvider(settings.provider);

@@ -11,7 +11,9 @@ import { campaignStats, pct } from "@/lib/emailCampaigns/campaignData";
 import { canReallySend, parseCampaignAudience, resolveCampaignAudience } from "@/lib/emailCampaigns/sender";
 import { readEmailTopics } from "@/lib/emailCampaigns/subscription";
 import { EmailTabs, karachiTime } from "../../EmailTabs";
-import { AutoRefresh, CampaignControls, CampaignEditor, CampaignSendPanel, type EditorCampaign } from "../CampaignClient";
+import { AutoRefresh, CampaignControls, CampaignEditor, CampaignSendPanel, ResendForm, type EditorCampaign } from "../CampaignClient";
+import { spamCheck } from "@/lib/emailCampaigns/spamCheck";
+import { withContentBlocks } from "@/lib/emailCampaigns/server";
 import { STATUS } from "../campaignStatus";
 
 // Starting a send freezes the audience and saves every recipient, which takes a while for a big one.
@@ -42,7 +44,8 @@ export default async function EmailCampaignPage(props: { params: Promise<{ id: s
   let editor: React.ReactNode = null;
   let sendPanel: React.ReactNode = null;
   if (editable) {
-    const [{ data: templates }, { data: segments }, { data: lists }, topics, realSend, reach] = await Promise.all([
+    const audience = parseCampaignAudience(c.audience);
+    const [{ data: templates }, { data: segments }, { data: lists }, topics, realSend, reach, { data: versionBody }, { data: parent }] = await Promise.all([
       supabase
         .from("email_templates")
         .select("name, current_version_id, current:email_template_versions!email_templates_current_version_fkey(version)")
@@ -53,8 +56,16 @@ export default async function EmailCampaignPage(props: { params: Promise<{ id: s
       supabase.from("email_lists").select("id, name").order("name"),
       readEmailTopics(admin),
       canReallySend(admin),
-      resolveCampaignAudience(admin, parseCampaignAudience(c.audience), (c.topic as string) ?? null),
+      resolveCampaignAudience(admin, audience, (c.topic as string) ?? null),
+      c.template_version_id
+        ? supabase.from("email_template_versions").select("html, text_body").eq("id", c.template_version_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+      audience.resendOf ? supabase.from("email_campaigns").select("name").eq("id", audience.resendOf).maybeSingle() : Promise.resolve({ data: null }),
     ]);
+    // The email as it would go: content blocks in, then the spam check of it with the subject and preview text.
+    const body = versionBody ? await withContentBlocks(supabase, versionBody.html as string, versionBody.text_body as string | null) : null;
+    const spam = body && c.subject ? spamCheck({ subject: c.subject as string, preheader: c.preheader as string | null, html: body.html, text: body.text }) : null;
+    const blockProblems = body?.missing.length ? [`The email uses a content block that no longer exists: ${body.missing.map((k) => `{{block:${k}}}`).join(", ")}.`] : [];
     const templateOptions = (templates ?? []).map((t) => ({
       versionId: t.current_version_id as string,
       name: t.name as string,
@@ -67,7 +78,8 @@ export default async function EmailCampaignPage(props: { params: Promise<{ id: s
     if (canCreate) {
       editor = (
         <CampaignEditor
-          campaign={{ ...(c as unknown as EditorCampaign), audience: parseCampaignAudience(c.audience) }}
+          campaign={{ ...(c as unknown as EditorCampaign), audience }}
+          resendOfName={(parent?.name as string | undefined) ?? null}
           templates={templateOptions}
           segments={(segments ?? []) as { id: string; name: string }[]}
           lists={(lists ?? []) as { id: string; name: string }[]}
@@ -79,7 +91,8 @@ export default async function EmailCampaignPage(props: { params: Promise<{ id: s
       sendPanel = (
         <CampaignSendPanel
           campaignId={id}
-          problems={campaignProblems(c as never, { realSend, audienceCount: reach.counts.final })}
+          problems={[...campaignProblems(c as never, { realSend, audienceCount: reach.counts.final }), ...blockProblems]}
+          spam={spam}
           reach={reach.counts.final}
           realSend={realSend}
           rights={{ send: canSend, create: canCreate }}
@@ -91,6 +104,20 @@ export default async function EmailCampaignPage(props: { params: Promise<{ id: s
   }
 
   const stats = (c.recipients_total as number) > 0 ? (await campaignStats(supabase, [id])).get(id)! : null;
+  // Resend to non-openers (Phase 6), once it has gone.
+  const canResend = canCreate && ["sent", "cancelled", "paused"].includes(status) && (c.recipients_total as number) > 0;
+  const { count: nonOpeners } = canResend
+    ? await admin
+        .from("email_campaign_recipients")
+        .select("id", { count: "exact", head: true })
+        .eq("campaign_id", id)
+        .eq("status", "sent")
+        .eq("human_open_count", 0)
+        .eq("human_click_count", 0)
+        .is("bounce", null)
+        .is("unsubscribed_at", null)
+        .is("complained_at", null)
+    : { count: null };
   const { count: simulated } = await admin.from("email_events").select("id", { count: "exact", head: true }).eq("campaign_id", id).eq("simulated", true);
   const progress = stats ? Math.round(((stats.sent + stats.failed) / Math.max(1, stats.recipients)) * 100) : 0;
 
@@ -191,6 +218,12 @@ export default async function EmailCampaignPage(props: { params: Promise<{ id: s
               {c.practice && !simulated && (
                 <p className="mt-3 text-xs text-muted">A practice campaign reaches no one, so its report stays empty — use “Simulate activity” to try the report.</p>
               )}
+            </Card>
+          )}
+
+          {canResend && (
+            <Card>
+              <ResendForm campaignId={id} nonOpeners={nonOpeners ?? 0} subject={(c.subject as string) ?? ""} />
             </Card>
           )}
 

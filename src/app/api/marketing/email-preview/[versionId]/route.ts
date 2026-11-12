@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth/currentUser";
 import { renderMergeTags } from "@/lib/emailCampaigns/mergeTags";
 import { previewDocument } from "@/lib/emailCampaigns/preview";
-import { previewValues } from "@/lib/emailCampaigns/server";
+import { previewValues, withContentBlocks } from "@/lib/emailCampaigns/server";
 
 // A template version as the preview frame shows it: filled in as a contact
 // (?contact=<lead id>, else the sample one), optionally in imitation dark mode
@@ -23,7 +23,8 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ version
 
   const params = request.nextUrl.searchParams;
   const { values } = await previewValues(supabase, params.get("contact"));
-  const html = previewDocument(renderMergeTags(version.html as string, values, { html: true }), { dark: params.get("dark") === "1" });
+  const { html: full } = await withContentBlocks(supabase, version.html as string);
+  const html = previewDocument(renderMergeTags(full, values, { html: true }), { dark: params.get("dark") === "1" });
 
   return new Response(html, {
     headers: {

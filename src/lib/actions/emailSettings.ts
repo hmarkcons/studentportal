@@ -10,6 +10,7 @@ import { karachiDay } from "@/lib/emailCampaigns/sendingRules";
 import { checkRecords, domainOf, expectedRecords, normalizeDomain, parseDkimTokens, type RecordCheck } from "@/lib/emailCampaigns/dnsCheck";
 import { sesRegion } from "@/lib/emailCampaigns/providers";
 import { Resolver } from "node:dns/promises";
+import { logEmailActivity } from "@/lib/emailCampaigns/activity";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -49,6 +50,7 @@ export async function updateEmailSettings(_prev: unknown, formData: FormData): P
     .select("id");
   if (error) return { error: error.message };
   if (!saved?.length) return { error: "The settings weren't saved — you may not change them." };
+  await logEmailActivity("settings_changed", { summary: "The sender and footer" });
   revalidatePath("/marketing/email/settings");
   return { success: true };
 }
@@ -76,6 +78,8 @@ export async function updateEmailSendingSettings(_prev: unknown, formData: FormD
   if ("error" in topics) return topics;
   const conversions = parseKeyedLines(String(formData.get("conversion_events") ?? ""), { what: "conversion" });
   if ("error" in conversions) return conversions;
+  const retention_months = Number(formData.get("retention_months") ?? 12);
+  if (!Number.isInteger(retention_months) || retention_months < 0 || retention_months > 120) return { error: "Keep the details a whole number of months, from 0 (for ever) to 120." };
 
   const supabase = await createClient();
   const user = await getCurrentUser();
@@ -90,12 +94,14 @@ export async function updateEmailSendingSettings(_prev: unknown, formData: FormD
       warmup_started_on,
       topics: topics.items,
       conversion_events: conversions.items,
+      retention_months,
       updated_by: user?.id ?? null,
     })
     .eq("id", true)
     .select("id");
   if (error) return { error: error.message };
   if (!saved?.length) return { error: "The settings weren't saved — you may not change them." };
+  await logEmailActivity("settings_changed", { summary: "Sending speed, warm-up, topics, conversions" });
   revalidatePath("/marketing/email/settings");
   return { success: true };
 }
@@ -118,6 +124,7 @@ export async function saveSendingDomain(_prev: unknown, formData: FormData): Pro
     .select("id");
   if (error) return { error: error.message };
   if (!saved?.length) return { error: "The settings weren't saved — you may not change them." };
+  await logEmailActivity("settings_changed", { summary: "The sending domain" });
   revalidatePath("/marketing/email/settings");
   return { success: true };
 }

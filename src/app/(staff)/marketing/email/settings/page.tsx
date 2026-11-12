@@ -11,6 +11,7 @@ import { EmailTabs } from "../EmailTabs";
 import { EmailSettingsForm } from "./EmailSettingsForm";
 import { SendingSettingsForm } from "./SendingSettingsForm";
 import { SendingDomainCard } from "./SendingDomainCard";
+import { slackConfigured } from "@/lib/emailCampaigns/slack";
 
 export default async function EmailSettingsPage() {
   const { supabase } = await getStaffSession();
@@ -45,6 +46,10 @@ export default async function EmailSettingsPage() {
             portal&rsquo;s own mailbox. Amazon SES is the one recommended.
           </p>
         )}
+        <p className="mb-3 text-xs text-muted" data-slack-status>
+          Alerts — a campaign waiting for approval, finished, or stopped by itself — go to people in the portal and by email.
+          {slackConfigured() ? " They also go to the Slack channel set in SLACK_WEBHOOK_URL." : " To post them to a Slack channel too, set SLACK_WEBHOOK_URL (a Slack incoming-webhook address) in Vercel."}
+        </p>
         <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2" data-email-providers>
           {(Object.keys(PROVIDER_ENV) as ("ses" | "resend")[]).map((id) => {
             const missing = missingProviderEnv(id);

@@ -4,6 +4,7 @@ import { hasPermission } from "@/lib/auth/permissions";
 import { campaignRows } from "@/lib/emailCampaigns/reportData";
 import { CAMPAIGN_EXPORT_HEADER, campaignExportRow, campaignSort, karachiStamp, sortCampaigns, toCsv } from "@/lib/emailCampaigns/reportRules";
 import { XLSX } from "@/lib/leadWorkbook";
+import { logEmailActivity } from "@/lib/emailCampaigns/activity";
 
 export const maxDuration = 60;
 
@@ -26,6 +27,7 @@ export async function GET(request: Request) {
   const name = `email-campaigns${includePractice ? "-with-practice" : ""}-${karachiStamp(new Date().toISOString()).slice(0, 10)}.${format}`;
   const headers = (type: string) => ({ "Content-Type": type, "Content-Disposition": `attachment; filename="${name}"`, "Cache-Control": "no-store, private" });
 
+  await logEmailActivity("dashboard_exported", { summary: `${table.length} campaigns, ${format.toUpperCase()}${includePractice ? ", with practice" : ""}` });
   if (format === "csv") return new Response(toCsv([CAMPAIGN_EXPORT_HEADER, ...table]), { headers: headers("text/csv; charset=utf-8") });
 
   const data = [

@@ -16,6 +16,7 @@ import {
   sendEmailCampaignTest,
   simulateEmailCampaignActivity,
   clearSimulatedEmailCampaignActivity,
+  resendToNonOpeners,
   submitEmailCampaignForApproval,
   type AudienceSummary,
 } from "@/lib/actions/emailCampaigns";
@@ -59,7 +60,7 @@ export type EditorCampaign = {
   track_clicks: boolean;
   add_utm: boolean;
   spread_hours: number | null;
-  audience: { include: { all: boolean; segments: string[]; lists: string[] }; exclude: { segments: string[]; lists: string[] }; skipLeadStatuses: string[] };
+  audience: { include: { all: boolean; segments: string[]; lists: string[] }; exclude: { segments: string[]; lists: string[] }; skipLeadStatuses: string[]; resendOf?: string | null };
 };
 
 type Option = { id: string; name: string; note?: string };
@@ -86,7 +87,10 @@ export function CampaignEditor({
   segments,
   lists,
   topics,
+  resendOfName,
 }: {
+  /** For a resend: the campaign whose non-openers it goes to. */
+  resendOfName?: string | null;
   campaign: EditorCampaign;
   templates: { versionId: string; name: string; note?: string }[];
   segments: Option[];
@@ -177,19 +181,31 @@ export function CampaignEditor({
 
       <section className="flex flex-col gap-3" onChange={recount}>
         <h3 className="text-sm font-medium text-ink">3. Audience</h3>
-        <label className="flex items-center gap-2 text-sm text-ink">
-          <input type="checkbox" name="include_all" defaultChecked={campaign.audience.include.all} data-campaign-everyone />
-          Everyone with an email address
-        </label>
+        {campaign.audience.resendOf ? (
+          <div className="rounded-md bg-info-bg px-3 py-2 text-sm text-info" data-resend-notice>
+            <input type="hidden" name="resend_of" value={campaign.audience.resendOf} />
+            A resend: it goes to the people “{resendOfName ?? "the first campaign"}” reached who neither opened nor clicked it — worked out again when it
+            goes, so anyone who opens the first one meanwhile is left out.
+          </div>
+        ) : (
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <input type="checkbox" name="include_all" defaultChecked={campaign.audience.include.all} data-campaign-everyone />
+            Everyone with an email address
+          </label>
+        )}
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <div className={label}>
-            Send to these segments
-            <Checks name="include_segments" options={segments} chosen={campaign.audience.include.segments} />
-          </div>
-          <div className={label}>
-            and these lists
-            <Checks name="include_lists" options={lists} chosen={campaign.audience.include.lists} />
-          </div>
+          {!campaign.audience.resendOf && (
+            <>
+              <div className={label}>
+                Send to these segments
+                <Checks name="include_segments" options={segments} chosen={campaign.audience.include.segments} />
+              </div>
+              <div className={label}>
+                and these lists
+                <Checks name="include_lists" options={lists} chosen={campaign.audience.include.lists} />
+              </div>
+            </>
+          )}
           <div className={label}>
             Leave out these segments
             <Checks name="exclude_segments" options={segments} chosen={campaign.audience.exclude.segments} />
@@ -272,7 +288,10 @@ export function CampaignSendPanel({
   rights,
   confirmAbove,
   defaultTestTo,
+  spam,
 }: {
+  /** The built-in spam check of the subject, preview text and email. */
+  spam?: { score: number; level: "low" | "medium" | "high"; findings: { points: number; what: string; fix: string }[] } | null;
   campaignId: string;
   problems: string[];
   reach: number;
@@ -311,6 +330,26 @@ export function CampaignSendPanel({
               <li key={p}>{p}</li>
             ))}
           </ul>
+        )}
+        {spam && (
+          <div className="mt-2 rounded-md border border-border p-2 text-xs" data-spam-check data-spam-level={spam.level}>
+            <p className="text-ink">
+              Spam check:{" "}
+              <span className={spam.level === "high" ? "font-medium text-danger" : spam.level === "medium" ? "font-medium text-warning" : "font-medium text-success"}>
+                {spam.level === "high" ? "high risk" : spam.level === "medium" ? "some risk" : "low risk"}
+              </span>{" "}
+              <span className="text-muted">({spam.score} of 10)</span>
+            </p>
+            {spam.findings.length > 0 && (
+              <ul className="mt-1 list-disc pl-4 text-muted">
+                {spam.findings.map((f) => (
+                  <li key={f.what}>
+                    {f.what} <span className="text-ink">{f.fix}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
         {!realSend && (
           <p className="mt-2 rounded-md bg-warning-bg px-3 py-2 text-xs text-warning">
@@ -507,4 +546,38 @@ export function AutoRefresh({ seconds }: { seconds: number }) {
     return () => clearInterval(t);
   }, [seconds, router]);
   return null;
+}
+
+/** Resend to non-openers: the same email, a new subject, to those who did not open or click it. */
+export function ResendForm({ campaignId, nonOpeners, subject }: { campaignId: string; nonOpeners: number; subject: string }) {
+  const router = useRouter();
+  const [state, action, pending] = useActionState(resendToNonOpeners.bind(null, campaignId), undefined);
+  useEffect(() => {
+    if (state && "success" in state) router.push(`/marketing/email/campaigns/${state.campaignId}`);
+  }, [state, router]);
+  return (
+    <form action={action} className="flex flex-col gap-3" data-resend-form>
+      <div>
+        <h3 className="text-sm font-medium text-ink">Resend to the people who did not open it</h3>
+        <p className="text-[11px] text-muted">
+          {nonOpeners.toLocaleString("en-US")} people got it and neither opened nor clicked. The same email, with a new subject line, usually reaches
+          a good share of them — best sent three to seven days after the first. Anyone who opens the first one before then is left out.
+        </p>
+      </div>
+      <label className={label}>
+        New subject line <span className="text-[10px]">(the first was “{subject}”)</span>
+        <Input name="subject" maxLength={200} required placeholder="e.g. Last chance: Italy scholarships close Friday" />
+      </label>
+      <label className={label}>
+        Preview text
+        <Input name="preheader" maxLength={250} />
+      </label>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="submit" variant="outline-primary" pending={pending} disabled={nonOpeners === 0} data-resend-create>
+          Make the resend
+        </Button>
+        {state && "error" in state && <p className="text-xs text-danger">{state.error}</p>}
+      </div>
+    </form>
+  );
 }

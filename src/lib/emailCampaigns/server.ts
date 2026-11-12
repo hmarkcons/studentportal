@@ -3,6 +3,8 @@ import { getSiteUrl } from "@/lib/siteUrl";
 import { contactMergeValues, SAMPLE_CONTACT, type MergeValues } from "./mergeTags";
 import type { KeyedItem } from "./campaignRules";
 import { domainOf, normalizeDomain } from "./dnsCheck";
+import { blocksIn, expandBlocks } from "./contentBlocks";
+import { htmlToText } from "./templateHtml";
 
 export const EMAIL_ASSETS_BUCKET = "email-assets";
 
@@ -43,6 +45,7 @@ export type SendingSettings = {
   warmup_started_on: string | null;
   topics: KeyedItem[];
   conversion_events: KeyedItem[];
+  retention_months: number;
 };
 
 const keyed = (raw: unknown): KeyedItem[] =>
@@ -55,7 +58,7 @@ const keyed = (raw: unknown): KeyedItem[] =>
 export async function readSendingSettings(supabase: SupabaseClient): Promise<SendingSettings> {
   const { data } = await supabase
     .from("email_settings")
-    .select("send_per_second, send_per_hour, warmup_enabled, warmup_start_cap, warmup_growth_pct, warmup_started_on, topics, conversion_events")
+    .select("send_per_second, send_per_hour, warmup_enabled, warmup_start_cap, warmup_growth_pct, warmup_started_on, topics, conversion_events, retention_months")
     .eq("id", true)
     .maybeSingle();
   return {
@@ -67,7 +70,24 @@ export async function readSendingSettings(supabase: SupabaseClient): Promise<Sen
     warmup_started_on: (data?.warmup_started_on as string | null) ?? null,
     topics: keyed(data?.topics),
     conversion_events: keyed(data?.conversion_events),
+    retention_months: Number(data?.retention_months ?? 12),
   };
+}
+
+/**
+ * A template's email with its content blocks put in (0361) — the HTML, and the
+ * plain-text version with each block as text. Keys it names that no longer
+ * exist are listed, and left in place.
+ */
+export async function withContentBlocks(client: SupabaseClient, html: string, text?: string | null): Promise<{ html: string; text: string; missing: string[] }> {
+  const keys = blocksIn(html);
+  const plain = text || htmlToText(html);
+  if (!keys.length) return { html, text: plain, missing: [] };
+  const { data } = await client.from("email_content_blocks").select("key, html").in("key", keys);
+  const blocks = Object.fromEntries((data ?? []).map((b) => [b.key as string, b.html as string]));
+  const out = expandBlocks(html, blocks);
+  const asText = Object.fromEntries(Object.entries(blocks).map(([k, v]) => [k, htmlToText(v)]));
+  return { html: out.html, text: expandBlocks(plain, asText).html, missing: out.missing };
 }
 
 export type SendingDomain = { domain: string | null; saved: string | null; dkimTokens: string[] };
