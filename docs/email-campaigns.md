@@ -14,7 +14,7 @@ The work goes in phases. This file grows with each.
 | 3 | Campaigns: drafts, approval, scheduling, the sending engine | **Built** (0356, 0357) — practice mode until the service is bought |
 | 4 | Tracking: opens, clicks, bounces, complaints, website visits | **Built** (0356–0358) — bounces and complaints wait for the service |
 | 5 | Reports: per campaign, the dashboard, PDF, exports, the lead's history | **Built** (0359) |
-| 6 | Extras: resend to non-openers, content blocks, spam check, Slack alerts, activity log, data retention (0361); scoring, sunset, send-time, A/B tests and automations to come | **In progress** |
+| 6 | Extras: resend to non-openers, content blocks, spam check, Slack alerts, activity log, data retention (0361); engagement scoring and hot leads, the sunset policy, each person's best hour (0362); A/B tests and automations to come | **In progress** |
 
 ## The sending service — not connected yet
 
@@ -432,6 +432,39 @@ runs daily at 03:15 Karachi and calls `email_purge_event_details()`, which
 clears `user_agent` and `ip_city` on older events and `city` on older
 recipients. Counts, device, mail app and country stay, so every report still
 adds up.
+
+### Engagement scoring and hot leads (0362)
+
+`email_lead_scores()` scores each lead from the last 120 days of **real**
+campaigns: an open 1, a click 3, a website visit 5, an enquiry or other
+conversion 10, each halving every 30 days; anyone who unsubscribed or reported
+spam scores nothing. 8 or more is **hot**, 3 or more **warm**
+(`engagement.ts`). Security definer: whoever may see email reports gets every
+lead, anyone else on the staff only the leads assigned to them (the office's
+choice). Shown on the dashboard ("Hot leads from email", only once someone is
+warm), as a line on a lead's and a student's page, and as **Hot leads** on the
+Reports tab.
+
+### The sunset policy (0362)
+
+Audience › **Sunset**: people sent at least two real campaigns, the first over
+N months ago (6 to start), who have opened or clicked nothing since
+(`email_sunset_candidates()`). Step one makes a list of them and a
+re-engagement campaign to it ("Do you still want to hear from HMARK?");
+step two, once that has finished and the grace period (30 days) has passed,
+puts whoever is still silent on the do-not-email list with the reason.
+`email_settings.sunset_mode`: **confirm** (a person presses each button — the
+default) or **automatic** (`/api/cron/email-sunset`, daily 03:30 Karachi, does
+both, and needs the re-engagement template chosen). Rounds are kept in
+`email_sunset_runs`. A practice re-engagement suppresses nobody.
+
+### Each person's best hour (0362)
+
+The draft's Pace: **send each person at the hour they usually open** — from
+their real opens by a person in the last 180 days (two or more,
+`email_best_hours()`); they get it the next time that Karachi hour comes round
+within 24 hours (`nextBestHour`), everyone else at once. The draft also says
+when the office's recipients open most (`email_open_hours()`, `peakWindow`).
 
 Unit tests: `scripts/email-phase6-test.mjs`.
 

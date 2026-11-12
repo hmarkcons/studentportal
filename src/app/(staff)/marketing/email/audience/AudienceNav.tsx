@@ -6,6 +6,7 @@ const ITEMS = [
   { key: "lists", label: "Lists", href: "/marketing/email/audience/lists" },
   { key: "import", label: "Import", href: "/marketing/email/audience/import" },
   { key: "suppressed", label: "Do-not-email list", href: "/marketing/email/audience/suppressed" },
+  { key: "sunset", label: "Sunset", href: "/marketing/email/audience/sunset" },
 ] as const;
 
 /** The Audience tab's own sections. */

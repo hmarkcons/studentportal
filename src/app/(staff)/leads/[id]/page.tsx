@@ -18,6 +18,7 @@ import { AuditHistoryLink } from "@/components/AuditHistoryLink";
 import { Suspense } from "react";
 import { TasksAboutCard } from "@/components/tasks/TasksAboutCard";
 import { EmailActivityCard } from "@/components/email/EmailActivityCard";
+import { LeadEngagementLine } from "@/components/email/HotLeads";
 
 type CallLog = { id: string; status_at_time: string; remark: string | null; created_at: string; counselor: { full_name: string } | { full_name: string }[] | null };
 
@@ -183,6 +184,7 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
 
       {/* The email campaigns sent to them and what they did (0356), for whoever may see email reports. Streamed. */}
       <Suspense fallback={null}>
+        <LeadEngagementLine leadId={id} className="mt-6" />
         <EmailActivityCard leadId={id} email={lead.email ?? null} className="mt-6" />
       </Suspense>
 

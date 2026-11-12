@@ -9,6 +9,7 @@ import { karachiDay } from "@/lib/emailCampaigns/sendingRules";
 import { campaignSort, senderHealth, sortCampaigns, type CampaignSort } from "@/lib/emailCampaigns/reportRules";
 import { EmailTabs, karachiTime } from "../EmailTabs";
 import { Kpi } from "../campaigns/[id]/report/ReportParts";
+import { HotLeadsReport } from "@/components/email/HotLeads";
 
 const DAYS = 30;
 
@@ -254,6 +255,10 @@ export default async function EmailReportsPage(props: { searchParams: Promise<Re
             <TrendTable weeks={trend} />
           </div>
         </div>
+      </Card>
+
+      <Card className="mb-6">
+        <HotLeadsReport />
       </Card>
 
       <Card>

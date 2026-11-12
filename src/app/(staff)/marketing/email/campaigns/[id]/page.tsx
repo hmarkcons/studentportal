@@ -13,6 +13,7 @@ import { readEmailTopics } from "@/lib/emailCampaigns/subscription";
 import { EmailTabs, karachiTime } from "../../EmailTabs";
 import { AutoRefresh, CampaignControls, CampaignEditor, CampaignSendPanel, ResendForm, type EditorCampaign } from "../CampaignClient";
 import { spamCheck } from "@/lib/emailCampaigns/spamCheck";
+import { hourText, peakWindow } from "@/lib/emailCampaigns/engagement";
 import { withContentBlocks } from "@/lib/emailCampaigns/server";
 import { STATUS } from "../campaignStatus";
 
@@ -45,7 +46,7 @@ export default async function EmailCampaignPage(props: { params: Promise<{ id: s
   let sendPanel: React.ReactNode = null;
   if (editable) {
     const audience = parseCampaignAudience(c.audience);
-    const [{ data: templates }, { data: segments }, { data: lists }, topics, realSend, reach, { data: versionBody }, { data: parent }] = await Promise.all([
+    const [{ data: templates }, { data: segments }, { data: lists }, topics, realSend, reach, { data: versionBody }, { data: parent }, { data: openHours }] = await Promise.all([
       supabase
         .from("email_templates")
         .select("name, current_version_id, current:email_template_versions!email_templates_current_version_fkey(version)")
@@ -61,7 +62,10 @@ export default async function EmailCampaignPage(props: { params: Promise<{ id: s
         ? supabase.from("email_template_versions").select("html, text_body").eq("id", c.template_version_id).maybeSingle()
         : Promise.resolve({ data: null }),
       audience.resendOf ? supabase.from("email_campaigns").select("name").eq("id", audience.resendOf).maybeSingle() : Promise.resolve({ data: null }),
+      supabase.rpc("email_open_hours", { p_days: 180 }),
     ]);
+    const peak = peakWindow(((openHours ?? []) as { hour: number; opens: number }[]).map((h) => ({ hour: Number(h.hour), opens: Number(h.opens) })));
+    const openPeak = peak ? `${hourText(peak.from)}–${hourText(peak.to)} (${Math.round(peak.share * 100)}% of opens)` : null;
     // The email as it would go: content blocks in, then the spam check of it with the subject and preview text.
     const body = versionBody ? await withContentBlocks(supabase, versionBody.html as string, versionBody.text_body as string | null) : null;
     const spam = body && c.subject ? spamCheck({ subject: c.subject as string, preheader: c.preheader as string | null, html: body.html, text: body.text }) : null;
@@ -80,6 +84,7 @@ export default async function EmailCampaignPage(props: { params: Promise<{ id: s
         <CampaignEditor
           campaign={{ ...(c as unknown as EditorCampaign), audience }}
           resendOfName={(parent?.name as string | undefined) ?? null}
+          openPeak={openPeak}
           templates={templateOptions}
           segments={(segments ?? []) as { id: string; name: string }[]}
           lists={(lists ?? []) as { id: string; name: string }[]}
@@ -172,6 +177,7 @@ export default async function EmailCampaignPage(props: { params: Promise<{ id: s
                 <p className="text-[11px] uppercase tracking-wide text-muted">{status === "scheduled" ? "Goes" : "Started"}</p>
                 <p className="text-ink">{karachiTime((status === "scheduled" ? c.scheduled_at : c.started_at) as string)}</p>
                 {c.spread_hours && <p className="text-xs text-muted">spread over {c.spread_hours as number} hour{c.spread_hours === 1 ? "" : "s"}</p>}
+                {c.send_at_best_hour && <p className="text-xs text-muted">each person at the hour they usually open</p>}
               </div>
               <div>
                 <p className="text-[11px] uppercase tracking-wide text-muted">Recipients</p>

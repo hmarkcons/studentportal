@@ -17,6 +17,7 @@ import { MyTasksCard } from "./MyTasksCard";
 import { WhatsNewCard } from "@/components/WhatsNewCard";
 import { loadNews } from "@/lib/notificationFeed";
 import { getEffectivePermissions } from "@/lib/auth/permissions";
+import { HotLeadsCard } from "@/components/email/HotLeads";
 
 /**
  * Each job's dashboard: what is waiting on this person first, then the
@@ -42,6 +43,13 @@ export default async function DashboardPage(props: { searchParams: Promise<{ vie
       {staff && (
         <Suspense fallback={<div className="mb-6 h-40 animate-pulse rounded-lg border border-border bg-card" />}>
           <MyTasksCard supabase={supabase} me={staff.id} />
+        </Suspense>
+      )}
+
+      {/* Leads responding to HMARK's emails (0362): a counsellor's own, everyone's for whoever sees email reports. Nothing until someone is warm. */}
+      {staff && (
+        <Suspense fallback={null}>
+          <HotLeadsCard className="mb-6" />
         </Suspense>
       )}
 

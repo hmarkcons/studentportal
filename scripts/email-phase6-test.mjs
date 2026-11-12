@@ -90,3 +90,49 @@ test("spam: all pictures, no text version, shorteners, bare IPs and links that h
   const honest = spamCheck({ subject: "Your application", html: CLEAN.replace("Read about studying in Italy", "hmarkconsultants.com"), text: "x" });
   assert.ok(!honest.findings.some((f) => /shows one website/.test(f.what)));
 });
+
+// ---- engagement, best hours, the sunset (0362) ------------------------------------
+
+import { didWhat, engagementLevel, HOT_SCORE, nextBestHour, peakWindow, sunsetSuppressDue, WARM_SCORE } from "../src/lib/emailCampaigns/engagement.ts";
+
+test("engagement: levels and what they did", () => {
+  assert.equal(engagementLevel(HOT_SCORE), "hot");
+  assert.equal(engagementLevel(HOT_SCORE - 0.1), "warm");
+  assert.equal(engagementLevel(WARM_SCORE), "warm");
+  assert.equal(engagementLevel(WARM_SCORE - 0.1), "cold");
+  assert.equal(engagementLevel(null), "cold");
+  assert.equal(didWhat({ opened: 3, clicked: 1, visited: 1, converted: 0 }), "opened 3, clicked 1, visited the website");
+  assert.equal(didWhat({ opened: 1, clicked: 0, visited: 2, converted: 2 }), "opened 1, visited the website 2 times, enquired 2 times");
+});
+
+test("best hour: the next time that Karachi hour begins, within a day; now if we are in it", () => {
+  const at = new Date("2026-11-13T05:30:00Z"); // 10:30 Karachi
+  assert.equal(nextBestHour(at, 20).toISOString(), "2026-11-13T15:00:00.000Z", "20:00 today");
+  assert.equal(nextBestHour(at, 9).toISOString(), "2026-11-14T04:00:00.000Z", "09:00 tomorrow");
+  assert.equal(nextBestHour(at, 10).toISOString(), at.toISOString(), "in that hour already: now");
+  assert.equal(nextBestHour(new Date("2026-11-13T18:59:00Z"), 0).toISOString(), "2026-11-13T19:00:00.000Z", "midnight Karachi");
+  for (let h = 0; h < 24; h++) {
+    const t = nextBestHour(at, h).getTime() - at.getTime();
+    assert.ok(t >= 0 && t < 86_400_000, `hour ${h}`);
+  }
+});
+
+test("peak hours: the busiest two hours, wrapping past midnight; none with too few opens", () => {
+  const hours = [
+    { hour: 23, opens: 30 },
+    { hour: 0, opens: 25 },
+    { hour: 9, opens: 10 },
+    { hour: 20, opens: 20 },
+  ];
+  assert.deepEqual(peakWindow(hours), { from: 23, to: 1, share: 55 / 85 });
+  assert.equal(peakWindow([{ hour: 9, opens: 5 }]), null);
+});
+
+test("sunset: step two falls due once the email has finished and the grace period passed", () => {
+  const now = new Date("2026-12-20T00:00:00Z");
+  assert.deepEqual(sunsetSuppressDue({ finishedAt: null, graceDays: 30, now }), { due: false, on: null });
+  assert.equal(sunsetSuppressDue({ finishedAt: "2026-11-01T00:00:00Z", graceDays: 30, now }).due, true);
+  const notYet = sunsetSuppressDue({ finishedAt: "2026-12-01T00:00:00Z", graceDays: 30, now });
+  assert.equal(notYet.due, false);
+  assert.equal(notYet.on.toISOString(), "2026-12-31T00:00:00.000Z");
+});

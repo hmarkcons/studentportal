@@ -8,6 +8,7 @@ import { getCampaignProvider, type EmailProvider } from "./providers";
 import { autoPause, karachiDay, MAX_ATTEMPTS, retryDelayMs, runBudget, spreadAllowance, warmupCap } from "./sendingRules";
 import { withContentBlocks } from "./server";
 import { slackAlert } from "./slack";
+import { nextBestHour } from "./engagement";
 
 // The sending engine. A campaign is started (its audience frozen into
 // recipients, its email prepared) when it is sent or its scheduled time
@@ -155,7 +156,7 @@ export async function canReallySend(admin: SupabaseClient): Promise<boolean> {
 export async function startCampaign(admin: SupabaseClient, campaignId: string): Promise<{ recipients: number } | { error: string }> {
   const { data: c } = await admin
     .from("email_campaigns")
-    .select("id, status, topic, audience, template_version_id, track_opens, track_clicks, preheader, recipients_total")
+    .select("id, status, topic, audience, template_version_id, track_opens, track_clicks, preheader, recipients_total, send_at_best_hour")
     .eq("id", campaignId)
     .single();
   if (!c || c.status !== "sending") return { error: "The campaign is not starting." };
@@ -189,6 +190,18 @@ export async function startCampaign(admin: SupabaseClient, campaignId: string): 
   const { data: staff } = await admin.from("staff").select("id, full_name");
   const counsellor = new Map((staff ?? []).map((s) => [s.id as string, s.full_name as string]));
 
+  // Each person at the hour they usually open (Phase 6, 0362): within the next 24 hours; anyone
+  // with too few real opens to tell goes at once.
+  const bestHour = new Map<string, number>();
+  if (c.send_at_best_hour) {
+    const emails = recipients.map((r) => r.email!);
+    for (let i = 0; i < emails.length; i += 500) {
+      const { data } = await admin.rpc("email_best_hours", { p_emails: emails.slice(i, i + 500) });
+      for (const b of (data ?? []) as { email: string; best_hour: number }[]) bestHour.set(b.email, Number(b.best_hour));
+    }
+  }
+  const startedAt = new Date();
+
   // Every address needs its row for its preference and unsubscribe links; a lead's consent is their enquiry.
   for (let i = 0; i < recipients.length; i += 1000) {
     const chunk = recipients.slice(i, i + 1000);
@@ -202,6 +215,8 @@ export async function startCampaign(admin: SupabaseClient, campaignId: string): 
         lead_id: r.kind === "lead" ? r.id : null,
         contact_id: r.kind === "contact" ? r.id : null,
         email: r.email!,
+        // The same keys on every row: a batch's missing key is sent as null, not its default.
+        next_attempt_at: bestHour.has(r.email!) ? nextBestHour(startedAt, bestHour.get(r.email!)!).toISOString() : null,
         merge_values: contactMergeValues(
           { full_name: r.fullName, email: r.email, country_of_interest: r.country, intake: r.intake },
           r.counsellorId ? (counsellor.get(r.counsellorId) ?? null) : null

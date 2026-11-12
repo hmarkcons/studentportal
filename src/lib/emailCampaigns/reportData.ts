@@ -245,3 +245,22 @@ export async function campaignRows(supabase: SupabaseClient, { includePractice, 
     };
   });
 }
+
+export type LeadScore = { lead_id: string; score: number; opened: number; clicked: number; visited: number; converted: number; last_activity: string | null };
+
+/**
+ * Leads' engagement scores (0362), highest first: every lead for whoever may
+ * see email reports, only their own for anyone else (the function decides).
+ */
+export async function leadScores(supabase: SupabaseClient, { leadIds = null, limit = 200 }: { leadIds?: string[] | null; limit?: number } = {}): Promise<LeadScore[]> {
+  const { data } = await supabase.rpc("email_lead_scores", { p_lead_ids: leadIds, p_limit: limit });
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+    lead_id: String(r.lead_id),
+    score: num(r.score),
+    opened: num(r.opened),
+    clicked: num(r.clicked),
+    visited: num(r.visited),
+    converted: num(r.converted),
+    last_activity: (r.last_activity as string | null) ?? null,
+  }));
+}

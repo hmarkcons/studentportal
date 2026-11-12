@@ -60,6 +60,7 @@ export type EditorCampaign = {
   track_clicks: boolean;
   add_utm: boolean;
   spread_hours: number | null;
+  send_at_best_hour: boolean;
   audience: { include: { all: boolean; segments: string[]; lists: string[] }; exclude: { segments: string[]; lists: string[] }; skipLeadStatuses: string[]; resendOf?: string | null };
 };
 
@@ -88,7 +89,10 @@ export function CampaignEditor({
   lists,
   topics,
   resendOfName,
+  openPeak,
 }: {
+  /** When the office's recipients open most, e.g. "20:00–22:00 (31% of opens)"; null with too few real opens. */
+  openPeak?: string | null;
   /** For a resend: the campaign whose non-openers it goes to. */
   resendOfName?: string | null;
   campaign: EditorCampaign;
@@ -267,6 +271,13 @@ export function CampaignEditor({
         </label>
         <p className="text-[11px] text-muted">
           Useful for a big audience: replies and website visits arrive through the day rather than all at once, and counsellors can keep up.
+        </p>
+        <label className="flex items-center gap-2 text-xs text-ink">
+          <input type="checkbox" name="send_at_best_hour" defaultChecked={campaign.send_at_best_hour} data-campaign-best-hour /> Send each person at the
+          hour they usually open (within 24 hours of the start; anyone without enough opens to tell gets it at once)
+        </label>
+        <p className="text-[11px] text-muted" data-open-peak>
+          {openPeak ? `Your recipients open most around ${openPeak}, Karachi time.` : "No real opens yet to learn from — practice sends do not count."}
         </p>
       </section>
 

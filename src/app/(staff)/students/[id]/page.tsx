@@ -53,6 +53,7 @@ import { hasPermission } from "@/lib/auth/permissions";
 import { Suspense } from "react";
 import { TasksAboutCard } from "@/components/tasks/TasksAboutCard";
 import { EmailActivityCard } from "@/components/email/EmailActivityCard";
+import { LeadEngagementLine } from "@/components/email/HotLeads";
 import { loadRestartContext } from "@/lib/actions/intakeCycles";
 import { loadReengagementContext } from "@/lib/actions/reengagement";
 import {
@@ -1061,6 +1062,7 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
 
       {/* The email campaigns sent to them and what they did (0356), for whoever may see email reports. Streamed. */}
       <Suspense fallback={null}>
+        <LeadEngagementLine leadId={id} className="mt-6" />
         <EmailActivityCard leadId={id} email={student?.email ?? null} className="mt-6" />
       </Suspense>
 

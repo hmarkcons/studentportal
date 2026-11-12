@@ -113,6 +113,7 @@ export async function saveEmailCampaign(campaignId: string, _prev: unknown, form
       track_clicks: formData.get("track_clicks") === "on",
       add_utm: formData.get("add_utm") === "on",
       spread_hours,
+      send_at_best_hour: formData.get("send_at_best_hour") === "on",
       ...(current.status === "pending_approval" ? { status: "draft", submitted_at: null, submitted_by: null } : {}),
     })
     .eq("id", campaignId)
@@ -345,7 +346,7 @@ export async function duplicateEmailCampaign(campaignId: string): Promise<({ suc
   const supabase = await createClient();
   const { data: c } = await supabase
     .from("email_campaigns")
-    .select("name, from_name, from_email, reply_to, subject, preheader, template_version_id, topic, audience, track_opens, track_clicks, add_utm, spread_hours")
+    .select("name, from_name, from_email, reply_to, subject, preheader, template_version_id, topic, audience, track_opens, track_clicks, add_utm, spread_hours, send_at_best_hour")
     .eq("id", campaignId)
     .maybeSingle();
   if (!c) return { error: "That campaign no longer exists." };
