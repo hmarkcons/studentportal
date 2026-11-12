@@ -270,6 +270,7 @@ try {
 } catch (e) {
   r.ok("ran without error", false, e.message);
 } finally {
+  if (meId) await admin.from("email_activity_log").delete().eq("staff_id", meId);
   // Tasks first: a task names its lead and its people, which the fixtures' cleanup removes.
   await admin.from("personal_tasks").delete().like("title", "zztmp%");
   if (meId) await admin.from("staff_tasks").delete().eq("created_by", meId);

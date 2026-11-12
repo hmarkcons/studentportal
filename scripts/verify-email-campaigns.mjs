@@ -23,6 +23,12 @@
 //                records listed and each looked up, DKIM waiting for
 //                Amazon's tokens (the real settings are put back after)
 //   pace         (0360) a duplicate spread over 2 hours keeps it
+//   Phase 6      (0361) a content block made on screen is in the email as
+//                sent, its tag gone; the draft's spam check reads low risk;
+//                resend to non-openers makes a draft for exactly those who
+//                did not open and may still be emailed; the activity log
+//                has the send, the simulation and the resend; retention
+//                and Slack are shown in Settings
 //
 // Everything it makes is named zztmp and removed in a finally.
 import { BASE, clients, fixtures, openBrowser, reporter, requireConfirmation, signIn } from "./verify-portal-lib.mjs";
@@ -51,10 +57,12 @@ const HTML = `<!doctype html><html><head><title>x</title></head><body>
 <p><a href="https://hmarkconsultants.com/study-in-italy">Study in Italy</a></p>
 <p><a href="https://example.org/fees">Fees</a></p>
 <p><a href="{{unsubscribe_url}}">Unsubscribe</a> · <a href="{{web_version_url}}">View in browser</a></p>
+{{block:zztmp_footer}}
 </body></html>`;
 let templateId = null;
 let campaignId = null;
 let domainBefore = null;
+let meId = null;
 
 try {
   const me = await fx.staff("emailcamp", ["super_admin"]);
@@ -70,6 +78,18 @@ try {
   await admin.from("email_list_members").insert(contacts.map((c) => ({ list_id: list.id, contact_id: c.id, added_by: me.id })));
 
   const page = await signIn(browser, me.email);
+  meId = me.id;
+
+  // A content block (0361), made on screen; the template above names it.
+  await page.goto(`${BASE}/marketing/email/templates/blocks`, { waitUntil: "domcontentloaded" });
+  await settle(page);
+  const newBlock = page.locator('[data-block-form="new"]');
+  await newBlock.locator('input[name="name"]').fill("zztmp Footer");
+  await newBlock.locator('input[name="key"]').fill("zztmp_footer");
+  await newBlock.locator('textarea[name="html"]').fill('<p class="x" onclick="steal()">zztmp footer from a block</p>');
+  await newBlock.getByRole("button", { name: "Add block" }).click();
+  const block = await poll("the block saved", async () => (await admin.from("email_content_blocks").select("html").eq("key", "zztmp_footer").maybeSingle()).data);
+  r.ok("content block: saved, its click handler taken out", block.html.includes("zztmp footer from a block") && !block.html.includes("onclick"), block.html);
   await page.goto(`${BASE}/marketing/email/campaigns`, { waitUntil: "domcontentloaded" });
   await settle(page);
   await page.fill('[data-new-campaign] input[name="name"]', "zztmp Practice Campaign");
@@ -91,6 +111,7 @@ try {
   await page.getByRole("button", { name: "Save draft" }).click();
   await page.locator("[data-campaign-ready]").waitFor({ timeout: 30000 });
   r.ok("saved: ready, to 3 people", (await page.locator("[data-campaign-ready]").innerText()).includes("to 3 people"));
+  r.ok("spam check: a plain email reads low risk", (await page.locator("[data-spam-check]").getAttribute("data-spam-level")) === "low", await page.locator("[data-spam-check]").innerText());
   const sendText = await page.locator("[data-campaign-send]").innerText();
   r.ok("no service connected: it says the send is practice", sendText.includes("practice run"));
 
@@ -98,6 +119,7 @@ try {
   await page.getByText("Practice — nothing was sent").waitFor({ timeout: 60000 });
   const { data: started } = await admin.from("email_campaigns").select("status, practice, recipients_total, prepared_html").eq("id", campaignId).single();
   r.ok("started: practice, audience frozen at 3", started.practice === true && started.recipients_total === 3 && ["sending", "sent"].includes(started.status), JSON.stringify({ ...started, prepared_html: undefined }));
+  r.ok("content block: in the email as sent, the tag gone", started.prepared_html.includes("zztmp footer from a block") && !started.prepared_html.includes("{{block:"));
   r.ok("prepared once: links numbered, pixel marked", started.prepared_html.includes("%%HMARK_LINK_1%%") && started.prepared_html.includes("%%HMARK_LINK_2%%") && started.prepared_html.includes("%%HMARK_PIXEL%%"));
   const { data: links } = await admin.from("email_campaign_links").select("position, url").eq("campaign_id", campaignId).order("position");
   r.ok("its links are stored", links.length === 2 && links[0].url === "https://hmarkconsultants.com/study-in-italy", JSON.stringify(links));
@@ -222,7 +244,43 @@ try {
   });
   r.ok("clear: the made-up activity is gone", true);
 
+  // Resend to non-openers (Phase 6): exactly those who did not open or click and may still be emailed.
+  const { data: quiet } = await admin
+    .from("email_campaign_recipients")
+    .select("email")
+    .eq("campaign_id", campaignId)
+    .eq("status", "sent")
+    .eq("human_open_count", 0)
+    .eq("human_click_count", 0)
+    .is("bounce", null)
+    .is("unsubscribed_at", null)
+    .is("complained_at", null);
+  const { data: quietStates } = await admin.from("email_contact_status").select("email, status").in("email", quiet.map((q) => q.email));
+  const expected = quietStates.filter((q) => q.status === "subscribed").length;
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await settle(page);
+  await page.locator('[data-resend-form] input[name="subject"]').fill("zztmp A second look at Italy");
+  await page.locator("[data-resend-create]").click();
+  await page.waitForURL((u) => /campaigns\/[0-9a-f-]{36}$/.test(u.pathname) && !u.pathname.endsWith(campaignId), { timeout: 30000 });
+  const resendId = page.url().split("/").pop();
+  await settle(page);
+  const { data: resend } = await admin.from("email_campaigns").select("audience, parent_campaign_id, subject").eq("id", resendId).single();
+  r.ok("resend: a draft for the first one's non-openers, with the new subject", resend.audience.resendOf === campaignId && resend.parent_campaign_id === campaignId && resend.subject === "zztmp A second look at Italy");
+  r.ok("resend: the draft says who it goes to", (await page.locator("[data-resend-notice]").count()) === 1);
+  await poll(`reach of ${expected}`, async () => (await page.locator("[data-campaign-reach]").innerText()).includes(`Reaches ${expected} ${expected === 1 ? "person" : "people"}`) || (await page.locator("[data-campaign-reach]").innerText()).includes(`Reaches ${expected} people`));
+  r.ok(`resend: reaches the ${expected} who did not open and may still be emailed`, true);
+
+  // Who did what (0361).
+  const { data: acts } = await admin.from("email_activity_log").select("action, campaign_id").eq("staff_id", me.id);
+  const did = (a, id) => acts.some((x) => x.action === a && (!id || x.campaign_id === id));
+  r.ok("activity log: the send, the simulation and its clearing, the block, the resend", did("campaign_sent", campaignId) && did("simulated", campaignId) && did("simulation_cleared", campaignId) && did("block_saved") && did("resend_created", resendId), JSON.stringify(acts.map((a) => a.action)));
+  await page.goto(`${BASE}/marketing/email/reports/activity`, { waitUntil: "domcontentloaded" });
+  await settle(page);
+  r.ok("activity log: listed under Reports, by name", (await page.locator("[data-activity-table]").innerText()).includes("zztmp emailcamp"));
+
   // Pace (0360): a duplicate, spread over two hours.
+  await page.goto(`${BASE}/marketing/email/campaigns/${campaignId}`, { waitUntil: "domcontentloaded" });
+  await settle(page);
   await page.getByRole("button", { name: "Duplicate" }).click();
   await page.waitForURL((u) => /campaigns\/[0-9a-f-]{36}$/.test(u.pathname) && !u.pathname.endsWith(campaignId), { timeout: 30000 });
   const copyId = page.url().split("/").pop();
@@ -242,6 +300,7 @@ try {
   const conversions = await page.locator("[data-settings-conversions]").inputValue();
   r.ok("settings: conversion events listed as key | name", /^[a-z0-9_]+ \| \S/m.test(conversions), conversions);
   r.ok("settings: the website line", (await page.locator("[data-tracking-snippet]").innerText()).includes("/hmark-track.js"));
+  r.ok("settings: how long open details are kept, and the Slack switch", /^\d+$/.test(await page.locator("[data-retention-months]").inputValue()) && (await page.locator("[data-slack-status]").innerText()).includes("Slack"));
   const { data: before } = await admin.from("email_settings").select("conversion_events, topics").eq("id", true).single();
   await page.getByRole("button", { name: "Save sending settings" }).click();
   await page.locator("[data-sending-settings-form]").getByText("Saved.").waitFor({ timeout: 20000 });
@@ -271,6 +330,8 @@ try {
 } catch (e) {
   r.ok("ran without error", false, e.message);
 } finally {
+  await admin.from("email_content_blocks").delete().like("key", "zztmp%");
+  if (meId) await admin.from("email_activity_log").delete().eq("staff_id", meId);
   if (domainBefore) await admin.from("email_settings").update(domainBefore).eq("id", true);
   if (campaignId) await admin.from("email_campaigns").delete().eq("id", campaignId);
   await admin.from("email_campaigns").delete().like("name", "%zztmp%");
