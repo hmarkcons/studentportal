@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { deleteEmailSegment, previewSegmentAudience, saveEmailSegment, type AudiencePreview } from "@/lib/actions/emailAudience";
-import { CONTACT_STATUS_LABELS, FIELDS, OP_LABELS, suppressedTotal, type ContactStatus, type FieldKey, type Op, type OptionSource, type Rule, type RuleSet } from "@/lib/emailCampaigns/audience";
+import { CONTACT_STATUS_LABELS, DAY_OPS, FIELDS, NO_VALUE_OPS, OP_LABELS, suppressedTotal, type ContactStatus, type FieldKey, type Op, type OptionSource, type Rule, type RuleSet } from "@/lib/emailCampaigns/audience";
 import type { FieldOption } from "@/lib/emailCampaigns/audienceLoad";
 import { useButtonAction } from "@/components/useButtonAction";
 import { Button } from "@/components/ui/Button";
@@ -13,7 +13,6 @@ import { Input, Select } from "@/components/ui/Input";
 type Draft = { field: FieldKey; op: Op; values: string[]; text: string };
 
 const MULTI: Op[] = ["is_any", "is_none", "contains_any", "contains_none"];
-const NONE: Op[] = ["is_empty", "is_not_empty", "is_true", "is_false"];
 
 function toDraft(r: Rule): Draft {
   return { field: r.field, op: r.op, values: Array.isArray(r.value) ? r.value : [], text: Array.isArray(r.value) || r.value == null ? "" : String(r.value) };
@@ -21,8 +20,8 @@ function toDraft(r: Rule): Draft {
 
 function toRule(d: Draft): Rule {
   if (MULTI.includes(d.op)) return { field: d.field, op: d.op, value: d.values };
-  if (NONE.includes(d.op)) return { field: d.field, op: d.op };
-  if (d.op === "within_days" || d.op === "older_than_days") return { field: d.field, op: d.op, value: Number(d.text) };
+  if (NO_VALUE_OPS.includes(d.op)) return { field: d.field, op: d.op };
+  if (DAY_OPS.includes(d.op)) return { field: d.field, op: d.op, value: Number(d.text) };
   return { field: d.field, op: d.op, value: d.text };
 }
 
@@ -153,8 +152,13 @@ export function SegmentBuilder({
                     ))}
                   </Select>
                   {MULTI.includes(d.op) && def.options && <ValuePicker draft={d} options={options[def.options]} onChange={(n) => update(i, n)} />}
-                  {(d.op === "within_days" || d.op === "older_than_days") && (
+                  {DAY_OPS.includes(d.op) && (
                     <Input type="number" min={1} max={3650} value={d.text} onChange={(e) => update(i, { ...d, text: e.target.value })} className="sm:w-28" placeholder="Days" disabled={!canManage} />
+                  )}
+                  {d.field === "engagement" && (
+                    <p className="text-[11px] text-muted sm:max-w-xs sm:self-center" data-engagement-note>
+                      Real campaigns only — a practice send reached nobody. Opens and clicks by machines are not counted.
+                    </p>
                   )}
                   {(d.op === "after" || d.op === "before") && (
                     <Input type="date" value={d.text} onChange={(e) => update(i, { ...d, text: e.target.value })} className="sm:w-44" disabled={!canManage} />

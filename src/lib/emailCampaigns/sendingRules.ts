@@ -92,3 +92,16 @@ export function isHardBounce(type: string | null | undefined): boolean {
 
 /** After this many soft bounces across campaigns, an address is treated as bounced. */
 export const SOFT_BOUNCE_LIMIT = 3;
+
+/**
+ * How many more of a campaign spread over `hours` may go by now: its share of
+ * the time gone (counting the minute under way), less what has already gone.
+ * A slow minute is made up in the next; nothing goes faster than Settings
+ * allows, which the run's own budget still enforces. No spread: no limit.
+ */
+export function spreadAllowance({ total, done, startedAt, now, hours }: { total: number; done: number; startedAt: string | null; now: Date; hours: number | null }): number {
+  if (!hours || hours <= 0 || !startedAt) return Number.POSITIVE_INFINITY;
+  const elapsedMinutes = Math.max(0, (now.getTime() - Date.parse(startedAt)) / 60_000) + 1;
+  const share = Math.min(1, elapsedMinutes / (hours * 60));
+  return Math.max(0, Math.ceil(total * share) - done);
+}

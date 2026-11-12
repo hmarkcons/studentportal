@@ -2,17 +2,24 @@ import { getStaffSession } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { missingProviderEnv, providerConfigured, PROVIDER_ENV } from "@/lib/emailCampaigns/providers";
-import { readEmailSettings, readSendingSettings } from "@/lib/emailCampaigns/server";
+import { missingProviderEnv, providerConfigured, PROVIDER_ENV, sesRegion } from "@/lib/emailCampaigns/providers";
+import { readEmailSettings, readSendingDomain, readSendingSettings } from "@/lib/emailCampaigns/server";
+import { expectedRecords } from "@/lib/emailCampaigns/dnsCheck";
 import { karachiDay, warmupCap } from "@/lib/emailCampaigns/sendingRules";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { EmailTabs } from "../EmailTabs";
 import { EmailSettingsForm } from "./EmailSettingsForm";
 import { SendingSettingsForm } from "./SendingSettingsForm";
+import { SendingDomainCard } from "./SendingDomainCard";
 
 export default async function EmailSettingsPage() {
   const { supabase } = await getStaffSession();
-  const [settings, sending, canEdit] = await Promise.all([readEmailSettings(supabase), readSendingSettings(supabase), hasPermission("email.settings.manage")]);
+  const [settings, sending, sendingDomain, canEdit] = await Promise.all([
+    readEmailSettings(supabase),
+    readSendingSettings(supabase),
+    readSendingDomain(supabase),
+    hasPermission("email.settings.manage"),
+  ]);
   const todaysCap = warmupCap(
     { enabled: sending.warmup_enabled, startCap: sending.warmup_start_cap, growthPct: sending.warmup_growth_pct, startedOn: sending.warmup_started_on },
     karachiDay()
@@ -63,6 +70,21 @@ export default async function EmailSettingsPage() {
 
       <Card className="mb-6">
         <EmailSettingsForm settings={settings} canEdit={canEdit} connectable={connectable} />
+      </Card>
+
+      <Card className="mb-6">
+        <h3 className="mb-1 text-sm font-medium text-ink">Sending domain and DNS</h3>
+        <p className="mb-3 text-sm text-muted">
+          Gmail, Yahoo and Outlook deliver bulk email only from a domain that proves the mail is its own. Add these records once
+          the domain is set up in Amazon SES, then press Check DNS.
+        </p>
+        <SendingDomainCard
+          domain={sendingDomain.domain}
+          saved={sendingDomain.saved}
+          dkimTokens={sendingDomain.dkimTokens}
+          records={sendingDomain.domain ? expectedRecords({ domain: sendingDomain.domain, region: sesRegion(), dkimTokens: sendingDomain.dkimTokens }) : []}
+          canEdit={canEdit}
+        />
       </Card>
 
       <Card className="mb-6">

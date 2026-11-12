@@ -89,6 +89,11 @@ export async function saveEmailCampaign(campaignId: string, _prev: unknown, form
   if (reply_to && !EMAIL_RE.test(reply_to)) return { error: "The reply-to address is not an email address." };
   const templateVersionId = String(formData.get("template_version_id") ?? "") || null;
   const topic = String(formData.get("topic") ?? "") || null;
+  const spreadRaw = String(formData.get("spread_hours") ?? "").trim();
+  const spread_hours = spreadRaw ? Number(spreadRaw) : null;
+  if (spread_hours !== null && (!Number.isInteger(spread_hours) || spread_hours < 1 || spread_hours > 72)) {
+    return { error: "Spread it over a whole number of hours, from 1 to 72 — or leave it blank to send as fast as Settings allows." };
+  }
 
   const { data: saved, error } = await supabase
     .from("email_campaigns")
@@ -106,6 +111,7 @@ export async function saveEmailCampaign(campaignId: string, _prev: unknown, form
       track_opens: formData.get("track_opens") === "on",
       track_clicks: formData.get("track_clicks") === "on",
       add_utm: formData.get("add_utm") === "on",
+      spread_hours,
       ...(current.status === "pending_approval" ? { status: "draft", submitted_at: null, submitted_by: null } : {}),
     })
     .eq("id", campaignId)
@@ -331,7 +337,7 @@ export async function duplicateEmailCampaign(campaignId: string): Promise<({ suc
   const supabase = await createClient();
   const { data: c } = await supabase
     .from("email_campaigns")
-    .select("name, from_name, from_email, reply_to, subject, preheader, template_version_id, topic, audience, track_opens, track_clicks, add_utm")
+    .select("name, from_name, from_email, reply_to, subject, preheader, template_version_id, topic, audience, track_opens, track_clicks, add_utm, spread_hours")
     .eq("id", campaignId)
     .maybeSingle();
   if (!c) return { error: "That campaign no longer exists." };

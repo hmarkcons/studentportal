@@ -147,10 +147,10 @@ export function fillHours(points: HourPoint[], from: Date, hours: number): HourP
   });
 }
 
-/** How many hours the timeline shows: from the start until now, at least a day and at most a week. */
+/** How many hours the hourly chart shows: from the start until now, at least a day and at most 72 hours (day by day after that). */
 export function timelineHours(startedAt: Date, now: Date = new Date()): number {
   const elapsed = Math.ceil((now.getTime() - startedAt.getTime()) / 3_600_000) + 1;
-  return Math.min(168, Math.max(24, elapsed));
+  return Math.min(72, Math.max(24, elapsed));
 }
 
 export type Rates = { sent: number; delivered: number; opened: number; clicked: number; bounced: number; unsubscribed: number; complained: number };
@@ -288,4 +288,136 @@ export function senderHealth({ sent, bounced, complaints }: { sent: number; boun
   if (b > 0.05 || c > 0.003) return { label: "At risk", tone: "danger", bounceBad, complaintBad };
   if (bounceBad || complaintBad) return { label: "Watch it", tone: "warning", bounceBad, complaintBad };
   return { label: "Healthy", tone: "success", bounceBad, complaintBad };
+}
+
+export type DayPoint = { day: string; opens: number; clicks: number; visits: number };
+
+/** Every Karachi day from `firstDay` for `days`, quiet days as zeros. */
+export function fillDays(points: DayPoint[], firstDay: string, days: number): DayPoint[] {
+  const byDay = new Map(points.map((p) => [p.day.slice(0, 10), p]));
+  const start = Date.parse(`${firstDay}T00:00:00Z`);
+  return Array.from({ length: Math.max(0, days) }, (_, i) => {
+    const day = new Date(start + i * 86_400_000).toISOString().slice(0, 10);
+    const p = byDay.get(day);
+    return { day, opens: p?.opens ?? 0, clicks: p?.clicks ?? 0, visits: p?.visits ?? 0 };
+  });
+}
+
+/** Days from the start's Karachi day to today's, inclusive, at most 60. */
+export function daysSince(startedAt: Date, now: Date = new Date()): number {
+  const k = (d: Date) => Date.parse(new Date(d.getTime() + 5 * 3_600_000).toISOString().slice(0, 10));
+  return Math.min(60, Math.max(1, Math.round((k(now) - k(startedAt)) / 86_400_000) + 1));
+}
+
+/** One campaign as the dashboard's table shows it. */
+export type CampaignRow = {
+  id: string;
+  name: string;
+  practice: boolean;
+  started_at: string;
+  sent: number;
+  delivered: number;
+  opened: number;
+  clicked: number;
+  visited: number;
+  converted: number;
+  bounced: number;
+  unsubscribed: number;
+  complaints: number;
+};
+
+export const CAMPAIGN_SORTS = ["started", "name", "sent", "opened", "clicked", "visited", "converted", "bounced", "unsubscribed"] as const;
+export type CampaignSort = (typeof CAMPAIGN_SORTS)[number];
+
+export function campaignSort(raw: string | null | undefined): CampaignSort {
+  return (CAMPAIGN_SORTS as readonly string[]).includes(raw ?? "") ? (raw as CampaignSort) : "started";
+}
+
+const reachedOf = (r: CampaignRow) => r.delivered || r.sent;
+const shareOf = (n: number, d: number) => (d > 0 ? n / d : -1);
+
+/** The value a column sorts by: a rate where the table shows a rate, a count where it shows a count. */
+export function sortValue(r: CampaignRow, key: CampaignSort): number | string {
+  switch (key) {
+    case "started":
+      return r.started_at;
+    case "name":
+      return r.name.toLowerCase();
+    case "sent":
+      return r.sent;
+    case "opened":
+      return shareOf(r.opened, reachedOf(r));
+    case "clicked":
+      return shareOf(r.clicked, reachedOf(r));
+    case "visited":
+      return r.visited;
+    case "converted":
+      return r.converted;
+    case "bounced":
+      return shareOf(r.bounced, r.sent);
+    case "unsubscribed":
+      return r.unsubscribed;
+  }
+}
+
+/** Rows sorted by a column; ties keep the newest first. */
+export function sortCampaigns(rows: CampaignRow[], key: CampaignSort, dir: "asc" | "desc"): CampaignRow[] {
+  const sign = dir === "asc" ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const va = sortValue(a, key);
+    const vb = sortValue(b, key);
+    const c = va < vb ? -1 : va > vb ? 1 : 0;
+    return c !== 0 ? c * sign : b.started_at.localeCompare(a.started_at);
+  });
+}
+
+const pctText = (n: number, d: number) => (d > 0 ? `${((n / d) * 100).toFixed(1)}%` : "");
+
+export const CAMPAIGN_EXPORT_HEADER = [
+  "Campaign",
+  "Practice",
+  "Started",
+  "Sent",
+  "Delivered",
+  "Opened (people)",
+  "Opened %",
+  "Clicked (people)",
+  "Clicked %",
+  "Visited the website",
+  "Converted",
+  "Bounced",
+  "Bounced %",
+  "Unsubscribed",
+  "Marked as spam",
+];
+
+/** The dashboard's table as rows for a file, in CAMPAIGN_EXPORT_HEADER's order. */
+export function campaignExportRow(r: CampaignRow): string[] {
+  const base = reachedOf(r);
+  return [
+    r.name,
+    r.practice ? "yes" : "",
+    karachiStamp(r.started_at),
+    String(r.sent),
+    String(r.delivered),
+    String(r.opened),
+    pctText(r.opened, base),
+    String(r.clicked),
+    pctText(r.clicked, base),
+    String(r.visited),
+    String(r.converted),
+    String(r.bounced),
+    pctText(r.bounced, r.sent),
+    String(r.unsubscribed),
+    String(r.complaints),
+  ];
+}
+
+/** A time on site: 38s, 4m 05s, 1h 02m. */
+export function durationText(seconds: number | null | undefined): string {
+  if (seconds === null || seconds === undefined || !Number.isFinite(seconds) || seconds < 0) return "—";
+  const s = Math.round(seconds);
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`;
+  return `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}m`;
 }

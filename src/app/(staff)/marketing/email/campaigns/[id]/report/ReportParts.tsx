@@ -1,4 +1,4 @@
-import type { HourPoint } from "@/lib/emailCampaigns/reportRules";
+import type { DayPoint, HourPoint } from "@/lib/emailCampaigns/reportRules";
 
 // The report's pieces, drawn on the server: no chart library, no client code.
 
@@ -144,5 +144,56 @@ export function Funnel({ steps }: { steps: { label: string; value: number }[] })
         </li>
       ))}
     </ol>
+  );
+}
+
+/** Opens and clicks day by day, Karachi days, after the first 72 hours. */
+export function DayChart({ points }: { points: DayPoint[] }) {
+  const W = 840;
+  const H = 150;
+  const pad = { l: 34, r: 8, t: 8, b: 22 };
+  const max = Math.max(1, ...points.map((p) => Math.max(p.opens, p.clicks)));
+  const step = (W - pad.l - pad.r) / Math.max(1, points.length);
+  const y = (v: number) => pad.t + (H - pad.t - pad.b) * (1 - v / max);
+  const bar = Math.max(2, step * 0.7);
+  const every = Math.max(1, Math.ceil(points.length / 12));
+  return (
+    <figure data-report-daily>
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label="Opens and clicks by day">
+        {[0, 0.5, 1].map((f) => (
+          <g key={f}>
+            <line x1={pad.l} x2={W - pad.r} y1={y(max * f)} y2={y(max * f)} stroke="currentColor" className="text-border" strokeWidth={0.5} />
+            <text x={pad.l - 4} y={y(max * f) + 3} textAnchor="end" fontSize={9} fill="currentColor" className="text-muted">
+              {Math.round(max * f)}
+            </text>
+          </g>
+        ))}
+        {points.map((p, i) => {
+          const x = pad.l + i * step + (step - bar) / 2;
+          return (
+            <g key={p.day}>
+              {p.opens > 0 && <rect x={x} y={y(p.opens)} width={bar} height={y(0) - y(p.opens)} fill="var(--primary)" opacity={0.35} />}
+              {p.clicks > 0 && <rect x={x + bar * 0.25} y={y(p.clicks)} width={bar * 0.5} height={y(0) - y(p.clicks)} fill="var(--primary)" />}
+              {i % every === 0 && (
+                <text x={x + bar / 2} y={H - 8} textAnchor="middle" fontSize={9} fill="currentColor" className="text-muted">
+                  {new Date(`${p.day}T00:00:00Z`).toLocaleDateString("en-GB", { timeZone: "UTC", day: "numeric", month: "short" })}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+      <figcaption className="mt-1 flex flex-wrap gap-4 text-[11px] text-muted">
+        <span>
+          <span className="mr-1 inline-block h-2 w-3 rounded-sm bg-primary opacity-35" />
+          Opens (people)
+        </span>
+        <span>
+          <span className="mr-1 inline-block h-2 w-3 rounded-sm bg-primary" />
+          Clicks (people)
+        </span>
+        <span>Karachi days</span>
+      </figcaption>
+    </figure>
   );
 }

@@ -47,6 +47,23 @@ export type AudienceContact = {
   applicationStages: string[];
   /** The lists they are on, by id. */
   lists: string[];
+  /** Their address's record across real campaigns; absent or null when never sent one. */
+  engagement?: Engagement | null;
+};
+
+/**
+ * An address's email activity: only REAL campaigns count — a practice send
+ * reached nobody. `lastEngagedAt` is the last open, click or website visit a
+ * person (not a machine) made.
+ */
+export type Engagement = {
+  received: number;
+  lastSentAt: string | null;
+  lastOpened: boolean;
+  lastClicked: boolean;
+  everOpened: boolean;
+  everClicked: boolean;
+  lastEngagedAt: string | null;
 };
 
 export type FieldKey =
@@ -62,7 +79,8 @@ export type FieldKey =
   | "has_application"
   | "application_stage"
   | "list"
-  | "contact_type";
+  | "contact_type"
+  | "engagement";
 
 export type Op =
   | "is_any"
@@ -77,7 +95,14 @@ export type Op =
   | "after"
   | "before"
   | "is_true"
-  | "is_false";
+  | "is_false"
+  | "opened_last"
+  | "clicked_last"
+  | "not_opened_last"
+  | "never_opened"
+  | "never_emailed"
+  | "engaged_within_days"
+  | "not_engaged_days";
 
 export type Rule = { field: FieldKey; op: Op; value?: string | string[] | number };
 export type RuleSet = { match: "all" | "any"; rules: Rule[] };
@@ -99,7 +124,17 @@ export const OP_LABELS: Record<Op, string> = {
   before: "before",
   is_true: "yes",
   is_false: "no",
+  opened_last: "opened the last campaign they got",
+  clicked_last: "clicked in the last campaign they got",
+  not_opened_last: "did not open the last campaign they got",
+  never_opened: "has never opened one",
+  never_emailed: "has never been sent one",
+  engaged_within_days: "opened or clicked in the last … days",
+  not_engaged_days: "not opened or clicked for … days",
 };
+
+/** The engagement ops that take a number of days. */
+export const DAY_OPS: Op[] = ["within_days", "older_than_days", "engaged_within_days", "not_engaged_days"];
 
 export const FIELDS: Record<FieldKey, { label: string; ops: Op[]; options?: OptionSource }> = {
   lead_status: { label: "Lead status", ops: ["is_any", "is_none"], options: "lead_statuses" },
@@ -115,10 +150,14 @@ export const FIELDS: Record<FieldKey, { label: string; ops: Op[]; options?: Opti
   application_stage: { label: "Application stage", ops: ["is_any", "is_none"], options: "stages" },
   list: { label: "On list", ops: ["is_any", "is_none"], options: "lists" },
   contact_type: { label: "Contact type", ops: ["is_any"], options: "contact_types" },
+  engagement: {
+    label: "Email activity",
+    ops: ["opened_last", "clicked_last", "not_opened_last", "never_opened", "never_emailed", "engaged_within_days", "not_engaged_days"],
+  },
 };
 
 const MULTI_OPS: Op[] = ["is_any", "is_none", "contains_any", "contains_none"];
-const NO_VALUE_OPS: Op[] = ["is_empty", "is_not_empty", "is_true", "is_false"];
+export const NO_VALUE_OPS: Op[] = ["is_empty", "is_not_empty", "is_true", "is_false", "opened_last", "clicked_last", "not_opened_last", "never_opened", "never_emailed"];
 
 const EMAIL_RE = /^[^@\s<>()[\],;:"]+@[^@\s<>()[\],;:"]+\.[A-Za-z]{2,}$/;
 
@@ -194,6 +233,31 @@ export function matchesRule(c: AudienceContact, rule: Rule, now: Date = new Date
     }
     case "contact_type":
       return oneOf(c.kind);
+    case "engagement": {
+      const e = c.engagement;
+      const got = Boolean(e && e.received > 0);
+      const engagedAt = e?.lastEngagedAt ? new Date(e.lastEngagedAt).getTime() : null;
+      const since = now.getTime() - Number(rule.value) * DAY;
+      switch (rule.op) {
+        case "opened_last":
+          return got && e!.lastOpened;
+        case "clicked_last":
+          return got && e!.lastClicked;
+        case "not_opened_last":
+          return got && !e!.lastOpened;
+        case "never_opened":
+          return got && !e!.everOpened;
+        case "never_emailed":
+          return !got;
+        case "engaged_within_days":
+          return engagedAt !== null && engagedAt >= since;
+        case "not_engaged_days":
+          // Sent at least one, and nothing from them since the cut-off (or ever).
+          return got && (engagedAt === null || engagedAt < since);
+        default:
+          return false;
+      }
+    }
   }
 }
 
@@ -235,7 +299,7 @@ export function validateRuleSet(raw: unknown): RuleSet | { error: string } {
       if (!values.length) return { error: `Rule ${n}: choose at least one ${def.label.toLowerCase()}.` };
       if (values.some((v) => v.length > 200)) return { error: `Rule ${n}: a value is too long.` };
       rules.push({ field, op, value: values });
-    } else if (op === "within_days" || op === "older_than_days") {
+    } else if (DAY_OPS.includes(op)) {
       const days = Number(r.value);
       if (!Number.isInteger(days) || days < 1 || days > 3650) return { error: `Rule ${n}: give a number of days from 1 to 3650.` };
       rules.push({ field, op, value: days });

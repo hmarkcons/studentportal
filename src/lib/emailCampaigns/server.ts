@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { contactMergeValues, SAMPLE_CONTACT, type MergeValues } from "./mergeTags";
 import type { KeyedItem } from "./campaignRules";
+import { domainOf, normalizeDomain } from "./dnsCheck";
 
 export const EMAIL_ASSETS_BUCKET = "email-assets";
 
@@ -67,6 +68,15 @@ export async function readSendingSettings(supabase: SupabaseClient): Promise<Sen
     topics: keyed(data?.topics),
     conversion_events: keyed(data?.conversion_events),
   };
+}
+
+export type SendingDomain = { domain: string | null; saved: string | null; dkimTokens: string[] };
+
+/** The sending domain (0360): the one saved, else the sender address's own. */
+export async function readSendingDomain(supabase: SupabaseClient): Promise<SendingDomain> {
+  const { data } = await supabase.from("email_settings").select("sending_domain, dkim_tokens, from_email").eq("id", true).maybeSingle();
+  const saved = normalizeDomain(data?.sending_domain as string | null);
+  return { domain: saved ?? domainOf(data?.from_email as string | null), saved, dkimTokens: ((data?.dkim_tokens as string[] | null) ?? []).filter(Boolean) };
 }
 
 /** Where an uploaded file of a template version is stored: its own folder, a numbered safe name. */

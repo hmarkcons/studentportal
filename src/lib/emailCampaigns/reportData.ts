@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { campaignStats, type CampaignStats } from "./campaignData";
-import { applyFilter, compareWithEarlier, type HourPoint, type Rates, type RecipientFilter } from "./reportRules";
+import { applyFilter, compareWithEarlier, type CampaignRow, type DayPoint, type HourPoint, type Rates, type RecipientFilter } from "./reportRules";
 
 // A campaign report's reads (0359). Each is read as the caller, so someone
 // without email.reports.view gets empty answers, never another's numbers.
@@ -185,3 +185,63 @@ export const COMPARED_RATES = [
   ["Unsubscribed", "unsubscribe", false],
   ["Marked as spam", "complaint", false],
 ] as const;
+
+export async function campaignDaily(supabase: SupabaseClient, campaignId: string, from: Date, days: number): Promise<DayPoint[]> {
+  const { data } = await supabase.rpc("email_campaign_daily", { p_campaign_id: campaignId, p_from: from.toISOString(), p_days: days });
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({ day: String(r.day), opens: num(r.opens), clicks: num(r.clicks), visits: num(r.visits) }));
+}
+
+export type WebSessions = { visits: number; pageViews: number; multiPageVisits: number; avgSeconds: number | null };
+
+export async function webSessions(supabase: SupabaseClient, campaignId: string): Promise<WebSessions> {
+  const { data } = await supabase.rpc("email_campaign_web_sessions", { p_campaign_id: campaignId });
+  const r = ((data ?? []) as Record<string, unknown>[])[0] ?? {};
+  return { visits: num(r.visits), pageViews: num(r.page_views), multiPageVisits: num(r.multi_page_visits), avgSeconds: r.avg_seconds == null ? null : Number(r.avg_seconds) };
+}
+
+export type TrendWeek = { week: string; newLeads: number; newContacts: number; unsubscribed: number; bounced: number; complained: number };
+
+export async function audienceTrend(supabase: SupabaseClient, weeks: number): Promise<TrendWeek[]> {
+  const { data } = await supabase.rpc("email_audience_trend", { p_weeks: weeks });
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+    week: String(r.week_start),
+    newLeads: num(r.new_leads),
+    newContacts: num(r.new_contacts),
+    unsubscribed: num(r.unsubscribed),
+    bounced: num(r.bounced),
+    complained: num(r.complained),
+  }));
+}
+
+export async function engagedShare(supabase: SupabaseClient, days: number, includePractice: boolean): Promise<{ reached: number; engaged: number }> {
+  const { data } = await supabase.rpc("email_engaged_share", { p_days: days, p_include_practice: includePractice });
+  const r = ((data ?? []) as Record<string, unknown>[])[0] ?? {};
+  return { reached: num(r.reached), engaged: num(r.engaged) };
+}
+
+/** Started campaigns (real only, unless practice is asked for) as the dashboard's rows. */
+export async function campaignRows(supabase: SupabaseClient, { includePractice, limit }: { includePractice: boolean; limit: number }): Promise<CampaignRow[]> {
+  let q = supabase.from("email_campaigns").select("id, name, practice, started_at").not("started_at", "is", null);
+  if (!includePractice) q = q.eq("practice", false);
+  const { data } = await q.order("started_at", { ascending: false }).limit(limit);
+  const list = data ?? [];
+  const stats = await campaignStats(supabase, list.map((c) => c.id as string));
+  return list.map((c) => {
+    const s = stats.get(c.id as string)!;
+    return {
+      id: c.id as string,
+      name: c.name as string,
+      practice: Boolean(c.practice),
+      started_at: c.started_at as string,
+      sent: s.sent,
+      delivered: s.delivered,
+      opened: s.opened_human,
+      clicked: s.clicked_human,
+      visited: s.visited,
+      converted: s.converted,
+      bounced: s.hard_bounces + s.soft_bounces,
+      unsubscribed: s.unsubscribes,
+      complaints: s.complaints,
+    };
+  });
+}

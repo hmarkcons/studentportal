@@ -5,7 +5,7 @@ import { DEFAULT_SKIPPED_LEAD_STATUSES, resolveAudience, validateRuleSet, type A
 import { contactMergeValues, renderMergeTags, type MergeValues } from "./mergeTags";
 import { prepareCampaignHtml, renderForRecipient } from "./render";
 import { getCampaignProvider, type EmailProvider } from "./providers";
-import { autoPause, karachiDay, MAX_ATTEMPTS, retryDelayMs, runBudget, warmupCap } from "./sendingRules";
+import { autoPause, karachiDay, MAX_ATTEMPTS, retryDelayMs, runBudget, spreadAllowance, warmupCap } from "./sendingRules";
 import { htmlToText } from "./templateHtml";
 
 // The sending engine. A campaign is started (its audience frozen into
@@ -235,7 +235,7 @@ export async function sendDueEmails(admin: SupabaseClient, { deadline }: { deadl
   const provider = getCampaignProvider(settings.provider);
   const { data: sending } = await admin
     .from("email_campaigns")
-    .select("id, name, slug, practice, prepared_html, prepared_text, from_name, from_email, reply_to, subject, created_by")
+    .select("id, name, slug, practice, prepared_html, prepared_text, from_name, from_email, reply_to, subject, created_by, spread_hours, started_at, recipients_total")
     .eq("status", "sending")
     .order("started_at", { ascending: true });
 
@@ -251,7 +251,15 @@ export async function sendDueEmails(admin: SupabaseClient, { deadline }: { deadl
     const fromEmail = (c.from_email as string) || settings.from_email;
     const from = fromEmail ? `${fromName} <${fromEmail}>` : fromName;
 
-    while (budget > 0 && Date.now() < deadline) {
+    // Spread over hours (0360): at most its share of the time gone so far.
+    let allowance = Number.POSITIVE_INFINITY;
+    if (c.spread_hours) {
+      const { count: waiting } = await admin.from("email_campaign_recipients").select("id", { count: "exact", head: true }).eq("campaign_id", c.id).eq("status", "queued");
+      const total = Number(c.recipients_total ?? 0);
+      allowance = spreadAllowance({ total, done: total - (waiting ?? 0), startedAt: c.started_at as string | null, now: new Date(), hours: Number(c.spread_hours) });
+    }
+
+    while (budget > 0 && allowance > 0 && Date.now() < deadline) {
       const nowIso = new Date().toISOString();
       const { data: queued } = await admin
         .from("email_campaign_recipients")
@@ -259,7 +267,7 @@ export async function sendDueEmails(admin: SupabaseClient, { deadline }: { deadl
         .eq("campaign_id", c.id)
         .eq("status", "queued")
         .or(`next_attempt_at.is.null,next_attempt_at.lte.${nowIso}`)
-        .limit(Math.min(budget, 100));
+        .limit(Math.min(budget, allowance, 100));
       if (!queued?.length) break;
       const { data: claimed } = await admin
         .from("email_campaign_recipients")
@@ -303,6 +311,7 @@ export async function sendDueEmails(admin: SupabaseClient, { deadline }: { deadl
           events.push({ campaign_id: c.id, recipient_id: r.id, type: "sent", occurred_at: at, diagnostic: null, meta: c.practice ? { practice: true } : {} });
           summary.sent += 1;
           budget -= 1;
+          allowance -= 1;
         } catch (e) {
           const attempts = (r.attempts as number) + 1;
           const message = e instanceof Error ? e.message : "Not sent";

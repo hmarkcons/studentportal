@@ -144,6 +144,7 @@ export default async function EmailCampaignPage(props: { params: Promise<{ id: s
               <div>
                 <p className="text-[11px] uppercase tracking-wide text-muted">{status === "scheduled" ? "Goes" : "Started"}</p>
                 <p className="text-ink">{karachiTime((status === "scheduled" ? c.scheduled_at : c.started_at) as string)}</p>
+                {c.spread_hours && <p className="text-xs text-muted">spread over {c.spread_hours as number} hour{c.spread_hours === 1 ? "" : "s"}</p>}
               </div>
               <div>
                 <p className="text-[11px] uppercase tracking-wide text-muted">Recipients</p>

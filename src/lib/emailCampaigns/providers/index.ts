@@ -38,3 +38,9 @@ export function getCampaignProvider(chosen: string | null | undefined): EmailPro
   if (!providerConfigured(chosen)) return null;
   return null;
 }
+
+/** The SES region: the one set, else Sydney, next to the portal. */
+export function sesRegion(): string {
+  const r = process.env.SES_REGION?.trim();
+  return r && /^[a-z]{2}-[a-z]+-\d$/.test(r) ? r : "ap-southeast-2";
+}

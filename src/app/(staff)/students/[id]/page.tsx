@@ -52,6 +52,7 @@ import { StudentReportsSection } from "./StudentReportsSection";
 import { hasPermission } from "@/lib/auth/permissions";
 import { Suspense } from "react";
 import { TasksAboutCard } from "@/components/tasks/TasksAboutCard";
+import { EmailActivityCard } from "@/components/email/EmailActivityCard";
 import { loadRestartContext } from "@/lib/actions/intakeCycles";
 import { loadReengagementContext } from "@/lib/actions/reengagement";
 import {
@@ -1056,6 +1057,11 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
           given to anyone — beside the applications' tasks above. Streamed. */}
       <Suspense fallback={null}>
         <TasksAboutCard studentId={id} name={student?.full_name ?? "this student"} revalidateTo={`/students/${id}`} className="mt-6" />
+      </Suspense>
+
+      {/* The email campaigns sent to them and what they did (0356), for whoever may see email reports. Streamed. */}
+      <Suspense fallback={null}>
+        <EmailActivityCard leadId={id} email={student?.email ?? null} className="mt-6" />
       </Suspense>
 
       {/* Reports (0348): this student's documents checklist and applications &

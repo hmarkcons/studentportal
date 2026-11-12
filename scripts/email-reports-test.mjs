@@ -145,7 +145,7 @@ test("timeline: every hour present, quiet ones as zeros, in order", () => {
   assert.deepEqual(filled.map((p) => [p.bucket.slice(11, 13), p.opens, p.clicks]), [["05", 2, 0], ["06", 0, 0], ["07", 4, 1], ["08", 0, 0]]);
   assert.equal(fillHours([], from, 0).length, 0);
   assert.equal(timelineHours(new Date("2026-11-11T00:00:00Z"), new Date("2026-11-11T02:00:00Z")), 24, "at least a day");
-  assert.equal(timelineHours(new Date("2026-11-01T00:00:00Z"), new Date("2026-11-11T00:00:00Z")), 168, "at most a week");
+  assert.equal(timelineHours(new Date("2026-11-01T00:00:00Z"), new Date("2026-11-11T00:00:00Z")), 72, "at most 72 hours — day by day after that");
   assert.equal(timelineHours(new Date("2026-11-11T00:00:00Z"), new Date("2026-11-12T23:30:00Z")), 49);
 });
 

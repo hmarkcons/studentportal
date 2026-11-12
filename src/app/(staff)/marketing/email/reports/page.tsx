@@ -3,10 +3,10 @@ import { getStaffSession } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { campaignStats, pct } from "@/lib/emailCampaigns/campaignData";
-import { audienceHealth, dailyActivity, type DayRow } from "@/lib/emailCampaigns/reportData";
+import { pct } from "@/lib/emailCampaigns/campaignData";
+import { audienceHealth, audienceTrend, campaignRows, dailyActivity, engagedShare, type DayRow, type TrendWeek } from "@/lib/emailCampaigns/reportData";
 import { karachiDay } from "@/lib/emailCampaigns/sendingRules";
-import { senderHealth } from "@/lib/emailCampaigns/reportRules";
+import { campaignSort, senderHealth, sortCampaigns, type CampaignSort } from "@/lib/emailCampaigns/reportRules";
 import { EmailTabs, karachiTime } from "../EmailTabs";
 import { Kpi } from "../campaigns/[id]/report/ReportParts";
 
@@ -77,15 +77,81 @@ function DailyChart({ days }: { days: DayRow[] }) {
   );
 }
 
+/** The audience week by week: who joined, and who left or can no longer be reached. */
+function TrendTable({ weeks }: { weeks: TrendWeek[] }) {
+  const max = Math.max(1, ...weeks.map((w) => w.newLeads + w.newContacts));
+  return (
+    <div className="overflow-x-auto" data-audience-trend>
+      <table className="w-full text-left text-xs">
+        <thead className="text-muted">
+          <tr>
+            <th className="py-1 pr-3 font-medium">Week of</th>
+            <th className="py-1 pr-3 font-medium">New leads and contacts</th>
+            <th className="py-1 pr-3 text-right font-medium">Unsubscribed</th>
+            <th className="py-1 pr-3 text-right font-medium">Bounced</th>
+            <th className="py-1 pr-3 text-right font-medium">Marked as spam</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {weeks.map((w) => {
+            const joined = w.newLeads + w.newContacts;
+            return (
+              <tr key={w.week}>
+                <td className="py-1 pr-3 text-muted">{new Date(`${w.week}T00:00:00Z`).toLocaleDateString("en-GB", { timeZone: "UTC", day: "numeric", month: "short" })}</td>
+                <td className="py-1 pr-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-1.5 w-32 rounded-full bg-bg">
+                      <div className="h-1.5 rounded-full bg-primary" style={{ width: `${(joined / max) * 100}%` }} />
+                    </div>
+                    <span className="text-ink">
+                      {joined.toLocaleString("en-US")}
+                      {w.newContacts > 0 && <span className="text-muted"> ({w.newContacts.toLocaleString("en-US")} imported)</span>}
+                    </span>
+                  </div>
+                </td>
+                <td className="py-1 pr-3 text-right text-ink">{w.unsubscribed || "—"}</td>
+                <td className="py-1 pr-3 text-right text-ink">{w.bounced || "—"}</td>
+                <td className={`py-1 pr-3 text-right ${w.complained ? "text-danger" : "text-ink"}`}>{w.complained || "—"}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+const COLUMNS: { key: CampaignSort; label: string; right?: boolean }[] = [
+  { key: "name", label: "Campaign" },
+  { key: "sent", label: "Sent", right: true },
+  { key: "opened", label: "Opened", right: true },
+  { key: "clicked", label: "Clicked", right: true },
+  { key: "visited", label: "Visited", right: true },
+  { key: "converted", label: "Converted", right: true },
+  { key: "bounced", label: "Bounced", right: true },
+  { key: "unsubscribed", label: "Unsubscribed", right: true },
+];
+
 export default async function EmailReportsPage(props: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await props.searchParams;
-  const includePractice = sp.practice === "1";
+  const param = (k: string) => (Array.isArray(sp[k]) ? sp[k][0] : sp[k]) ?? "";
+  const includePractice = param("practice") === "1";
+  const sort = campaignSort(param("sort"));
+  const dir: "asc" | "desc" = param("dir") === "asc" ? "asc" : "desc";
+  /** This page's address with the given changes, for the sort headers and the practice switch. */
+  const href = (over: Record<string, string | null>) => {
+    const q = new URLSearchParams();
+    const merged: Record<string, string | null> = { practice: includePractice ? "1" : null, sort: sort === "started" ? null : sort, dir: dir === "desc" ? null : dir, ...over };
+    for (const [k, v] of Object.entries(merged)) if (v) q.set(k, v);
+    const qs = q.toString();
+    return qs ? `/marketing/email/reports?${qs}` : "/marketing/email/reports";
+  };
   const { supabase } = await getStaffSession();
   const canReports = await hasPermission("email.reports.view");
   const header = (
     <>
       <h2 className="mb-1 text-lg font-semibold text-ink">Email campaigns</h2>
-      <p className="mb-4 text-sm text-muted">How the sending is going, the state of the audience, and every campaign side by side.</p>
+      <p className="mb-4 text-sm text-muted">How the sending is going, the audience over time, and every campaign side by side.</p>
       <EmailTabs active="reports" />
     </>
   );
@@ -101,14 +167,12 @@ export default async function EmailReportsPage(props: { searchParams: Promise<Re
   }
 
   const { today, sinceDay, since } = window30();
-  const [rows, health, { data: recent }] = await Promise.all([
+  const [rows, health, allCampaigns, trend, share] = await Promise.all([
     dailyActivity(supabase, sinceDay, includePractice),
     audienceHealth(supabase, since),
-    (() => {
-      let q = supabase.from("email_campaigns").select("id, name, status, practice, started_at, recipients_total").not("started_at", "is", null);
-      if (!includePractice) q = q.eq("practice", false);
-      return q.order("started_at", { ascending: false }).limit(25);
-    })(),
+    campaignRows(supabase, { includePractice, limit: 100 }),
+    audienceTrend(supabase, 12),
+    engagedShare(supabase, 90, includePractice),
   ]);
   const byDay = new Map(rows.map((r) => [r.day, r]));
   const days: DayRow[] = Array.from({ length: DAYS }, (_, i) => {
@@ -120,15 +184,14 @@ export default async function EmailReportsPage(props: { searchParams: Promise<Re
   const bounced = sum("hard_bounces") + sum("soft_bounces");
   const complaints = sum("complaints");
   const health30 = senderHealth({ sent, bounced, complaints });
-  const campaigns = recent ?? [];
-  const stats = await campaignStats(supabase, campaigns.map((c) => c.id as string));
+  const campaigns = sortCampaigns(allCampaigns, sort, dir);
   const totalAudience = health.reduce((s, h) => s + h.total, 0);
 
   return (
     <div className="w-full">
       {header}
       <div className="mb-3 flex items-center justify-end gap-2 text-xs">
-        <Link prefetch={false} href={includePractice ? "/marketing/email/reports" : "/marketing/email/reports?practice=1"} className="text-primary hover:underline" data-practice-toggle>
+        <Link prefetch={false} href={href({ practice: includePractice ? null : "1" })} className="text-primary hover:underline" data-practice-toggle>
           {includePractice ? "Show real sends only" : "Include practice sends"}
         </Link>
       </div>
@@ -171,10 +234,39 @@ export default async function EmailReportsPage(props: { searchParams: Promise<Re
             return <Kpi key={k} label={STATUS_LABEL[k]} value={(h?.total ?? 0).toLocaleString("en-US")} sub={h?.changed_since ? `${h.changed_since.toLocaleString("en-US")} in the last ${DAYS} days` : `none in the last ${DAYS} days`} />;
           })}
         </div>
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]">
+          <div data-engaged-share>
+            <Kpi
+              label="Engaged in the last 90 days"
+              value={pct(share.engaged, share.reached)}
+              sub={
+                share.reached
+                  ? `${share.engaged.toLocaleString("en-US")} of the ${share.reached.toLocaleString("en-US")} people sent a ${includePractice ? "" : "real "}campaign opened or clicked`
+                  : `nobody has been sent a ${includePractice ? "" : "real "}campaign in 90 days`
+              }
+            />
+          </div>
+          <div>
+            <p className="mb-1 text-xs font-medium text-ink">The last 12 weeks</p>
+            <TrendTable weeks={trend} />
+          </div>
+        </div>
       </Card>
 
       <Card>
-        <h3 className="mb-3 text-sm font-medium text-ink">Campaigns side by side</h3>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-medium text-ink">Campaigns side by side</h3>
+          {campaigns.length > 0 && (
+            <div className="flex gap-3 text-xs">
+              <a href={`/marketing/email/reports/export?format=csv${includePractice ? "&practice=1" : ""}&sort=${sort}&dir=${dir}`} className="text-primary hover:underline" data-dashboard-csv>
+                Export CSV
+              </a>
+              <a href={`/marketing/email/reports/export?format=xlsx${includePractice ? "&practice=1" : ""}&sort=${sort}&dir=${dir}`} className="text-primary hover:underline" data-dashboard-xlsx>
+                Export Excel
+              </a>
+            </div>
+          )}
+        </div>
         {!campaigns.length ? (
           <p className="text-xs text-muted">No {includePractice ? "" : "real "}campaign has been sent yet.</p>
         ) : (
@@ -182,36 +274,40 @@ export default async function EmailReportsPage(props: { searchParams: Promise<Re
             <table className="w-full text-left text-xs" data-campaign-league>
               <thead className="text-muted">
                 <tr>
-                  <th className="py-1 pr-3 font-medium">Campaign</th>
-                  <th className="py-1 pr-3 text-right font-medium">Sent</th>
-                  <th className="py-1 pr-3 text-right font-medium">Opened</th>
-                  <th className="py-1 pr-3 text-right font-medium">Clicked</th>
-                  <th className="py-1 pr-3 text-right font-medium">Visited</th>
-                  <th className="py-1 pr-3 text-right font-medium">Converted</th>
-                  <th className="py-1 pr-3 text-right font-medium">Bounced</th>
-                  <th className="py-1 pr-3 text-right font-medium">Unsubscribed</th>
+                  {COLUMNS.map((col) => {
+                    const active = col.key === sort;
+                    // A new column sorts highest first (names A to Z); the active one flips.
+                    const next = active ? (dir === "desc" ? "asc" : "desc") : col.key === "name" ? "asc" : "desc";
+                    return (
+                      <th key={col.key} className={`py-1 pr-3 font-medium ${col.right ? "text-right" : ""}`} aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : undefined}>
+                        <Link prefetch={false} href={href({ sort: col.key, dir: next === "desc" ? null : next })} className={`hover:text-ink ${active ? "text-ink" : ""}`} data-sort={col.key}>
+                          {col.label}
+                          {active ? (dir === "asc" ? " ▲" : " ▼") : ""}
+                        </Link>
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {campaigns.map((c) => {
-                  const s = stats.get(c.id as string)!;
-                  const base = s.delivered || s.sent;
+                  const base = c.delivered || c.sent;
                   return (
-                    <tr key={c.id as string}>
+                    <tr key={c.id}>
                       <td className="py-1.5 pr-3">
                         <Link prefetch={false} href={`/marketing/email/campaigns/${c.id}/report`} className="font-medium text-ink hover:text-primary">
-                          {c.name as string}
+                          {c.name}
                         </Link>{" "}
                         {c.practice && <Badge tone="warning">Practice</Badge>}
-                        <p className="text-muted">{karachiTime(c.started_at as string)}</p>
+                        <p className="text-muted">{karachiTime(c.started_at)}</p>
                       </td>
-                      <td className="py-1.5 pr-3 text-right text-ink">{s.sent.toLocaleString("en-US")}</td>
-                      <td className="py-1.5 pr-3 text-right text-ink">{pct(s.opened_human, base)}</td>
-                      <td className="py-1.5 pr-3 text-right text-ink">{pct(s.clicked_human, base)}</td>
-                      <td className="py-1.5 pr-3 text-right text-ink">{s.visited.toLocaleString("en-US")}</td>
-                      <td className="py-1.5 pr-3 text-right text-ink">{s.converted.toLocaleString("en-US")}</td>
-                      <td className="py-1.5 pr-3 text-right text-ink">{pct(s.hard_bounces + s.soft_bounces, s.sent)}</td>
-                      <td className="py-1.5 pr-3 text-right text-ink">{s.unsubscribes.toLocaleString("en-US")}</td>
+                      <td className="py-1.5 pr-3 text-right text-ink">{c.sent.toLocaleString("en-US")}</td>
+                      <td className="py-1.5 pr-3 text-right text-ink">{pct(c.opened, base)}</td>
+                      <td className="py-1.5 pr-3 text-right text-ink">{pct(c.clicked, base)}</td>
+                      <td className="py-1.5 pr-3 text-right text-ink">{c.visited.toLocaleString("en-US")}</td>
+                      <td className="py-1.5 pr-3 text-right text-ink">{c.converted.toLocaleString("en-US")}</td>
+                      <td className="py-1.5 pr-3 text-right text-ink">{pct(c.bounced, c.sent)}</td>
+                      <td className="py-1.5 pr-3 text-right text-ink">{c.unsubscribed.toLocaleString("en-US")}</td>
                     </tr>
                   );
                 })}

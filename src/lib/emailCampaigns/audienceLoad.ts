@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { LEAD_STATUS_LABELS } from "@/lib/constants";
-import { countriesOf, normalizeEmail, titleCase, type AddressState, type AudienceContact, type ContactStatus, type OptionSource } from "./audience";
+import { countriesOf, normalizeEmail, titleCase, type AddressState, type AudienceContact, type ContactStatus, type Engagement, type OptionSource } from "./audience";
 
 // Everyone an email campaign could reach, read once: every lead (students are
 // leads) and every imported contact, with what segments filter on — their
@@ -40,7 +40,7 @@ type ContactRow = { id: string; email: string; full_name: string | null; country
 export type LoadedAudience = { contacts: AudienceContact[]; statuses: Map<string, AddressState> };
 
 export async function loadAudience(admin: SupabaseClient): Promise<LoadedAudience> {
-  const [leads, contacts, applications, members, states] = await Promise.all([
+  const [leads, contacts, applications, members, states, sends, engagedAt] = await Promise.all([
     allRows<LeadRow>((a, b) =>
       admin
         .from("leads")
@@ -56,7 +56,38 @@ export async function loadAudience(admin: SupabaseClient): Promise<LoadedAudienc
     allRows<{ email: string; status: ContactStatus; topics: string[] | null }>((a, b) =>
       admin.from("email_contact_status").select("email, status, topics").or("status.neq.subscribed,topics.neq.{}").order("email").range(a, b)
     ),
+    // Each address's record across real campaigns (0360), for the "Email activity" rules.
+    allRows<{ email: string; received: number; last_sent_at: string | null; last_opened: boolean; last_clicked: boolean; ever_opened: boolean; ever_clicked: boolean }>((a, b) =>
+      admin.rpc("email_engagement_by_address").order("email").range(a, b)
+    ),
+    allRows<{ email: string; last_engaged_at: string }>((a, b) =>
+      admin.from("email_contact_status").select("email, last_engaged_at").not("last_engaged_at", "is", null).order("email").range(a, b)
+    ),
   ]);
+
+  const lastEngaged = new Map(engagedAt.map((e) => [e.email, e.last_engaged_at]));
+  const engagement = new Map<string, Engagement>(
+    sends.map((r) => [
+      r.email,
+      {
+        received: Number(r.received),
+        lastSentAt: r.last_sent_at,
+        lastOpened: Boolean(r.last_opened),
+        lastClicked: Boolean(r.last_clicked),
+        everOpened: Boolean(r.ever_opened),
+        everClicked: Boolean(r.ever_clicked),
+        lastEngagedAt: lastEngaged.get(r.email) ?? null,
+      },
+    ])
+  );
+  // Someone never sent a real campaign can still have engaged (a test, or a practice link followed).
+  const engagementOf = (email: string | null): Engagement | null => {
+    if (!email) return null;
+    const e = engagement.get(email);
+    if (e) return e;
+    const at = lastEngaged.get(email);
+    return at ? { received: 0, lastSentAt: null, lastOpened: false, lastClicked: false, everOpened: false, everClicked: false, lastEngagedAt: at } : null;
+  };
 
   const stages = new Map<string, string[]>();
   for (const a of applications) {
@@ -87,6 +118,7 @@ export async function loadAudience(admin: SupabaseClient): Promise<LoadedAudienc
     hasApplication: stages.has(l.id),
     applicationStages: stages.get(l.id) ?? [],
     lists: listsOf.get(`lead:${l.id}`) ?? [],
+    engagement: engagementOf(normalizeEmail(l.email)),
   }));
   for (const c of contacts) {
     out.push({
@@ -106,6 +138,7 @@ export async function loadAudience(admin: SupabaseClient): Promise<LoadedAudienc
       hasApplication: false,
       applicationStages: [],
       lists: listsOf.get(`contact:${c.id}`) ?? [],
+      engagement: engagementOf(normalizeEmail(c.email)),
     });
   }
   return { contacts: out, statuses: new Map(states.map((s) => [s.email, { status: s.status, topics: s.topics ?? [] }])) };

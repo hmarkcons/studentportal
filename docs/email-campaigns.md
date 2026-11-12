@@ -36,9 +36,23 @@ written against `src/lib/emailCampaigns/providers/types.ts` when it is bought.
 ### Sending domain (when the service is bought)
 
 Send from a subdomain — `news.hmarkconsultants.com` — so the main domain's
-reputation is protected. The service gives the DNS records to add at the DNS
-host: SPF, DKIM (2048-bit) and DMARC, aligned. Settings will show them with a
-"Check DNS" button (Phase 3).
+reputation is protected. **Settings › Sending domain and DNS** (0360,
+`src/lib/emailCampaigns/dnsCheck.ts`) takes the domain and the three DKIM
+tokens Amazon gives, lists every record to add at the DNS host, and **Check
+DNS** looks each up in public DNS (Cloudflare and Google) and says whether it
+is right:
+
+| Record | Name | Value |
+|---|---|---|
+| DKIM ×3 (CNAME) | `<token>._domainkey.<domain>` | `<token>.dkim.amazonses.com` |
+| MAIL FROM (MX) | `bounce.<domain>` | `10 feedback-smtp.<region>.amazonses.com` |
+| SPF (TXT) | `bounce.<domain>` | `v=spf1 include:amazonses.com ~all` |
+| DMARC (TXT) | `_dmarc.<domain>` | `v=DMARC1; p=none; rua=mailto:dmarc-reports@hmarkconsultants.com` |
+
+The custom MAIL FROM is what makes SPF align with our own domain rather than
+Amazon's. A subdomain with no DMARC record of its own is covered by the parent
+domain's, and the check says so. DKIM shows "Waiting for Amazon" until the
+tokens are saved.
 
 ## Phase 1 — Templates
 
@@ -122,7 +136,7 @@ Super Admin holds all of them. Retune in Admin › Role Permissions.
 3. Preview on Mobile and Dark; "Preview as" a lead; send a test to yourself.
 4. Upload it again: version 2 appears; "Use this version" on version 1.
 
-Unit tests: `scripts/email-templates-test.mjs`.
+Unit tests: `scripts/email-templates-test.mjs`. Against the deployed portal: `VERIFY_AGAINST_PRODUCTION=yes npm run check:emailtemplates`.
 
 ## Phase 2 — Audience
 
@@ -159,8 +173,13 @@ audience, and the snapshot taken when it is sent.
 Saved filters, all or any of up to 30 rules: lead status, country of interest,
 city, level, lead source, counsellor, intake, enquiry date (last N days, before,
 after — Karachi days), registered student, has an application, application
-stage, on a list, contact type. Engagement rules (opened, clicked, not engaged)
-come with tracking (Phase 4).
+stage, on a list, contact type — and **Email activity** (0360): opened, or
+clicked in, the last campaign they got; did not open it; has never opened
+one; has never been sent one; opened or clicked in the last N days; not for
+N days. Only **real** campaigns count (a practice send reached nobody), and
+only people's opens and clicks, never machines'. Each address's record comes
+from `email_engagement_by_address()`; "not engaged" means sent at least one
+and silent since — someone never sent anything is "never been sent one".
 
 ### Lists and importing
 
@@ -192,7 +211,7 @@ spam: only they can undo that, from their preference page.
 Permission: `email.audience.manage` (Marketing, Digital Marketing) — segments,
 lists, imports, the do-not-email list. Viewing needs `page.marketing.email`.
 
-Unit tests: `scripts/email-audience-test.mjs`.
+Unit tests: `scripts/email-audience-test.mjs`. Against the deployed portal: `VERIFY_AGAINST_PRODUCTION=yes npm run check:emailaudience`.
 
 ## Phase 3 — Campaigns
 
@@ -237,6 +256,11 @@ seconds:
 5. A campaign with everyone sent is **finished**; one whose bounces pass 5%
    or complaints 0.1% (once 100 are sent) **pauses itself** and says why.
    Whoever created it, and the Super Admins, are told either way.
+
+A campaign may be **spread over 1–72 hours** (the draft's "Pace", 0360): each
+run sends at most its share of the time gone so far, less what has gone
+(`spreadAllowance`), so a slow minute is made up in the next and it finishes
+on time — within the speed, hourly and warm-up limits, which still apply.
 
 ### Practice mode — until the service is bought
 
@@ -295,7 +319,7 @@ also credits the campaign on the person's lead, if the lead has no campaign
 yet. The endpoint accepts calls only from *.hmarkconsultants.com, at most 100
 an hour per recipient.
 
-Unit tests: `scripts/email-campaigns-test.mjs`.
+Unit tests: `scripts/email-campaigns-test.mjs`. Against the deployed portal: `VERIFY_AGAINST_PRODUCTION=yes npm run check:emailcampaigns`.
 
 ## Phase 5 — Reports
 
@@ -310,11 +334,11 @@ gateways) and scanner clicks are kept and shown apart, never added in.
 
 | Tab | What it shows |
 |---|---|
-| Overview | Sent, delivered, opened, clicked, click-to-open, website visits, conversions, bounces, unsubscribes, spam complaints; the funnel from inbox to website; the rates against the ten campaigns before it (practice against practice, each counted once whatever its size); opens and clicks hour by hour, Karachi time. |
-| Recipients | Everyone, filtered (opened, did not open, opened but did not click, clicked, visited, converted, bounced, unsubscribed, marked as spam, could not be sent) and searchable; one person's whole timeline; **Export CSV / Excel** of the filter; **Make a list** of the filter (needs `email.audience.manage`) for a follow-up campaign. |
+| Overview | Sent, delivered, opened, clicked, click-to-open, website visits, conversions, bounces, unsubscribes, spam complaints; the funnel from inbox to website; the rates against the ten campaigns before it (practice against practice, each counted once whatever its size); opens and clicks hour by hour for the first 72 hours, then day by day (Karachi time). |
+| Recipients | Everyone, filtered (opened, did not open, opened but did not click, clicked, visited, converted, bounced, unsubscribed, marked as spam, could not be sent) and searchable; one person's whole timeline; **Export CSV / Excel** of the filter; **Make a list** of the filter (needs `email.audience.manage`) for a follow-up campaign; **Give follow-up tasks**: one task per lead in the filter, to that lead's own counsellor and linked to the lead (a lead with no counsellor goes to a person picked, or is skipped; imported contacts are left out; a lead with the same task already open is not given it twice; at most 500 at a time). |
 | Links | Each link's people, share and scanner clicks, and the **click map**: the email as sent, every link dead, a badge on each with its share. |
 | Deliverability | Bounces by reason and by provider; per-provider delivery, open, click and bounce rates; mail apps, devices, countries and cities of the people who opened. |
-| Website | Visitors, pages seen, conversions by kind (named as in Settings), and who converted. |
+| Website | Visitors, pages seen, pages a visit, **time on site** (first page to last, averaged over visits of two pages or more — a one-page visit has no measurable length), conversions by kind (named as in Settings), and who converted. |
 
 **Download PDF summary** (`…/report/pdf`) is one branded page of the same:
 the numbers, the comparison, the top links, mail apps, countries, providers,
@@ -332,13 +356,28 @@ guard, the timeline's empty hours, the comparison — are in
   above 0.3%), day by day. Real sends only, unless "Include practice sends".
 - **The audience's state**: how many addresses are subscribed, unsubscribed,
   bounced, marked as spam, on the do-not-email list or invalid, and how many
-  changed in the last 30 days.
-- **Campaigns side by side**: the last 25, with their rates, each linking to
-  its report.
+  changed in the last 30 days; **engaged in the last 90 days** (of the people
+  sent a campaign, the share who opened or clicked); and **the last 12 weeks**:
+  new leads and imported contacts against unsubscribes, bounces and spam
+  complaints, week by week (`email_audience_trend()`, 0360).
+- **Campaigns side by side**: the last 100, sortable by any column (rates sort
+  by rate), each linking to its report; **Export CSV / Excel** in the order
+  shown.
 
 ### On a lead
 
-A lead's page shows the campaigns sent to them and what they did with each,
-and their address's state, to whoever may see email reports.
+A lead's page, and a registered student's, show the campaigns sent to them
+and what they did with each, and their address's state, to whoever may see
+email reports.
 
-Unit tests: `scripts/email-reports-test.mjs`.
+Unit tests: `scripts/email-reports-test.mjs`, `scripts/email-extras-test.mjs` (the 0360 additions). Against the deployed portal: `VERIFY_AGAINST_PRODUCTION=yes npm run check:emailreports`.
+
+## Not built, on purpose
+
+- **The `mailto:` half of List-Unsubscribe.** It needs a mailbox the portal
+  reads (SES inbound receiving); it comes with the SES connection. The https
+  one-click unsubscribe, which Gmail and Yahoo require, is in every email.
+- **A seed script of fake contacts.** There is one database, the live one: fake
+  contacts would be in every "Everyone" audience and a real send would bounce
+  on them. The simulate tool and the `check:email*` scripts (which clean up
+  after themselves) cover what a seed was for.

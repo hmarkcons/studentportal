@@ -7,6 +7,9 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { providerConfigured, PROVIDER_ENV } from "@/lib/emailCampaigns/providers";
 import { parseKeyedLines } from "@/lib/emailCampaigns/campaignRules";
 import { karachiDay } from "@/lib/emailCampaigns/sendingRules";
+import { checkRecords, domainOf, expectedRecords, normalizeDomain, parseDkimTokens, type RecordCheck } from "@/lib/emailCampaigns/dnsCheck";
+import { sesRegion } from "@/lib/emailCampaigns/providers";
+import { Resolver } from "node:dns/promises";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -95,4 +98,46 @@ export async function updateEmailSendingSettings(_prev: unknown, formData: FormD
   if (!saved?.length) return { error: "The settings weren't saved — you may not change them." };
   revalidatePath("/marketing/email/settings");
   return { success: true };
+}
+
+/** The sending domain and Amazon's DKIM tokens (0360), for the DNS check. */
+export async function saveSendingDomain(_prev: unknown, formData: FormData): Promise<{ success: true } | { error: string }> {
+  const denied = await requirePermission("email.settings.manage", "Only someone allowed to change the email settings can save them.");
+  if (denied) return denied;
+  const rawDomain = String(formData.get("sending_domain") ?? "").trim();
+  const sending_domain = rawDomain ? normalizeDomain(rawDomain) : null;
+  if (rawDomain && !sending_domain) return { error: "That is not a domain — e.g. news.hmarkconsultants.com." };
+  const tokens = parseDkimTokens(String(formData.get("dkim_tokens") ?? ""));
+  if ("error" in tokens) return tokens;
+  const supabase = await createClient();
+  const user = await getCurrentUser();
+  const { data: saved, error } = await supabase
+    .from("email_settings")
+    .update({ sending_domain, dkim_tokens: tokens.tokens, updated_by: user?.id ?? null })
+    .eq("id", true)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!saved?.length) return { error: "The settings weren't saved — you may not change them." };
+  revalidatePath("/marketing/email/settings");
+  return { success: true };
+}
+
+/** Looks the sending domain's records up in public DNS and says which are right. */
+export async function checkSendingDns(): Promise<{ checks: RecordCheck[]; domain: string; checkedAt: string } | { error: string }> {
+  const denied = await requirePermission("page.marketing.email", "You don't have access to the email settings.");
+  if (denied) return denied;
+  const supabase = await createClient();
+  const { data } = await supabase.from("email_settings").select("sending_domain, dkim_tokens, from_email").eq("id", true).maybeSingle();
+  const domain = normalizeDomain(data?.sending_domain as string | null) ?? domainOf(data?.from_email as string | null);
+  if (!domain) return { error: "Give the sending domain first (or a sender address on it)." };
+  const tokens = ((data?.dkim_tokens as string[] | null) ?? []).filter(Boolean);
+  // Public resolvers, so a record just added is seen as the world sees it, not as a cache remembers it.
+  const resolver = new Resolver({ timeout: 4000, tries: 2 });
+  resolver.setServers(["1.1.1.1", "8.8.8.8"]);
+  const checks = await checkRecords(expectedRecords({ domain, region: sesRegion(), dkimTokens: tokens }), {
+    cname: (n) => resolver.resolveCname(n),
+    mx: (n) => resolver.resolveMx(n),
+    txt: (n) => resolver.resolveTxt(n),
+  }, { domain, hasTokens: tokens.length > 0 });
+  return { checks, domain, checkedAt: new Date().toISOString() };
 }

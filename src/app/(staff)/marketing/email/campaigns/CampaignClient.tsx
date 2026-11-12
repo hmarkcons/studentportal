@@ -58,6 +58,7 @@ export type EditorCampaign = {
   track_opens: boolean;
   track_clicks: boolean;
   add_utm: boolean;
+  spread_hours: number | null;
   audience: { include: { all: boolean; segments: string[]; lists: string[] }; exclude: { segments: string[]; lists: string[] }; skipLeadStatuses: string[] };
 };
 
@@ -240,6 +241,17 @@ export function CampaignEditor({
         <label className="flex items-center gap-2 text-xs text-ink">
           <input type="checkbox" name="add_utm" defaultChecked={campaign.add_utm} /> Add UTM tags to links (utm_source=hmark_portal, utm_medium=email)
         </label>
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h3 className="text-sm font-medium text-ink">5. Pace</h3>
+        <label className={`${label} sm:max-w-md`}>
+          Spread the send over this many hours <span className="text-[10px]">(optional, 1–72 — blank sends as fast as Settings allows)</span>
+          <Input name="spread_hours" type="number" min={1} max={72} step={1} defaultValue={campaign.spread_hours ?? ""} placeholder="e.g. 6" className="sm:w-28" data-campaign-spread />
+        </label>
+        <p className="text-[11px] text-muted">
+          Useful for a big audience: replies and website visits arrive through the day rather than all at once, and counsellors can keep up.
+        </p>
       </section>
 
       <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">

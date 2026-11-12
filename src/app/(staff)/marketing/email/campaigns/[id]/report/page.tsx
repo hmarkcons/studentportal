@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { SectionTabs } from "@/components/SectionTabs";
 import { campaignStats, pct } from "@/lib/emailCampaigns/campaignData";
-import { breakdown, campaignTimeline, COMPARED_RATES, earlierComparison, linkReport, recipientEvents, recipientPage, webReport } from "@/lib/emailCampaigns/reportData";
+import { breakdown, campaignDaily, campaignTimeline, COMPARED_RATES, earlierComparison, linkReport, recipientEvents, recipientPage, webReport, webSessions } from "@/lib/emailCampaigns/reportData";
 import {
   fillHours,
   filterLabel,
@@ -14,19 +14,29 @@ import {
   recipientOutcome,
   RECIPIENT_FILTERS,
   timelineHours,
+  daysSince,
+  fillDays,
+  durationText,
   type RecipientFilter,
 } from "@/lib/emailCampaigns/reportRules";
 import { clickMapHtml } from "@/lib/emailCampaigns/render";
 import { previewValues, readSendingSettings } from "@/lib/emailCampaigns/server";
 import { EmailTabs, karachiTime } from "../../../EmailTabs";
 import { STATUS } from "../../campaignStatus";
-import { BarTable, Funnel, Kpi, TimelineChart } from "./ReportParts";
-import { MakeListForm } from "./ReportClient";
+import { BarTable, DayChart, Funnel, Kpi, TimelineChart } from "./ReportParts";
+import { FollowUpTasksForm, MakeListForm } from "./ReportClient";
+import { loadTaskPeople } from "@/lib/staffTasksLoad";
+import { karachiDay } from "@/lib/emailCampaigns/sendingRules";
 
 const TABS = ["overview", "recipients", "links", "deliverability", "website"] as const;
 type Tab = (typeof TABS)[number];
 const TAB_LABEL: Record<Tab, string> = { overview: "Overview", recipients: "Recipients", links: "Links", deliverability: "Deliverability", website: "Website" };
 const PAGE_SIZE = 50;
+
+/** Two Karachi days from now, for a follow-up's due date. */
+function dueInTwoDays(): string {
+  return karachiDay(new Date(Date.now() + 2 * 86_400_000));
+}
 
 const rate = (v: number | null) => (v === null ? "—" : `${(v * 100).toFixed(1)}%`);
 
@@ -99,9 +109,13 @@ export default async function CampaignReportPage(props: { params: Promise<{ id: 
   if (tab === "overview") {
     const started = new Date(c.started_at as string);
     const hours = timelineHours(started);
-    const [points, { comparison: cmp, count: earlierCount }] = await Promise.all([
+    // Hour by hour for the first 72 hours; after that, day by day as well.
+    const days = daysSince(started);
+    const firstDay = karachiDay(started);
+    const [points, { comparison: cmp, count: earlierCount }, dayPoints] = await Promise.all([
       campaignTimeline(supabase, id, started, hours),
       earlierComparison(supabase, { id, practice: Boolean(c.practice), started_at: c.started_at as string }, stats),
+      days > 3 ? campaignDaily(supabase, id, new Date(`${firstDay}T00:00:00+05:00`), days) : Promise.resolve(null),
     ]);
     const machineOnly = stats.opened_any - stats.opened_human;
     body = (
@@ -176,9 +190,15 @@ export default async function CampaignReportPage(props: { params: Promise<{ id: 
           </Card>
         </div>
         <Card>
-          <h3 className="mb-3 text-sm font-medium text-ink">When people opened and clicked</h3>
+          <h3 className="mb-3 text-sm font-medium text-ink">When people opened and clicked{dayPoints ? " — the first 72 hours" : ""}</h3>
           <TimelineChart points={fillHours(points, started, hours)} />
         </Card>
+        {dayPoints && (
+          <Card>
+            <h3 className="mb-3 text-sm font-medium text-ink">Day by day</h3>
+            <DayChart points={fillDays(dayPoints, firstDay, days)} />
+          </Card>
+        )}
       </div>
     );
   }
@@ -188,9 +208,10 @@ export default async function CampaignReportPage(props: { params: Promise<{ id: 
     const search = one("q");
     const page = Math.max(0, Number.parseInt(one("page") || "0", 10) || 0);
     const rid = one("r");
-    const [{ rows, total }, detail] = await Promise.all([
+    const [{ rows, total }, detail, people] = await Promise.all([
       recipientPage(supabase, id, { filter, search, page, size: PAGE_SIZE }),
       /^[0-9a-f-]{36}$/.test(rid) ? Promise.all([supabase.from("email_campaign_recipients").select("id, email, merge_values").eq("id", rid).eq("campaign_id", id).maybeSingle(), recipientEvents(supabase, rid)]) : null,
+      loadTaskPeople(supabase),
     ]);
     const known: Partial<Record<RecipientFilter, number>> = {
       all: stats.sent,
@@ -357,6 +378,19 @@ export default async function CampaignReportPage(props: { params: Promise<{ id: 
             </div>
           )}
         </Card>
+        {!search && filter !== "all" && (
+          <Card>
+            <FollowUpTasksForm
+              campaignId={id}
+              filter={filter}
+              filterLabel={filterLabel(filter)}
+              count={total}
+              defaultTitle={`Follow up: ${c.name as string}`.slice(0, 200)}
+              defaultDue={dueInTwoDays()}
+              people={people.filter((p) => p.active).map((p) => ({ id: p.id, name: p.full_name }))}
+            />
+          </Card>
+        )}
         {canAudience && !search && (
           <Card>
             <MakeListForm campaignId={id} filter={filter} filterLabel={filterLabel(filter)} count={total} />
@@ -492,7 +526,7 @@ export default async function CampaignReportPage(props: { params: Promise<{ id: 
   }
 
   if (tab === "website") {
-    const [web, sending] = await Promise.all([webReport(supabase, id), readSendingSettings(supabase)]);
+    const [web, sending, sessions] = await Promise.all([webReport(supabase, id), readSendingSettings(supabase), webSessions(supabase, id)]);
     const pages = web.filter((w) => w.kind === "page");
     const conversions = web.filter((w) => w.kind === "conversion");
     const label = (key: string) => sending.conversion_events.find((e) => e.key === key)?.label ?? key;
@@ -500,9 +534,15 @@ export default async function CampaignReportPage(props: { params: Promise<{ id: 
     body = (
       <div className="flex flex-col gap-6">
         <Card>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4" data-website-kpis>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6" data-website-kpis>
             <Kpi label="Visited the website" value={stats.visited.toLocaleString("en-US")} sub={`${pct(stats.visited, stats.clicked_human)} of those who clicked`} />
-            <Kpi label="Pages seen" value={pageViews.toLocaleString("en-US")} sub={stats.visited ? `${(pageViews / stats.visited).toFixed(1)} each` : undefined} />
+            <Kpi label="Pages seen" value={pageViews.toLocaleString("en-US")} sub={stats.visited ? `${(pageViews / stats.visited).toFixed(1)} a visitor` : undefined} />
+            <Kpi label="Pages a visit" value={sessions.visits ? (sessions.pageViews / sessions.visits).toFixed(1) : "—"} sub={`${sessions.visits.toLocaleString("en-US")} visit${sessions.visits === 1 ? "" : "s"}`} />
+            <Kpi
+              label="Time on site"
+              value={durationText(sessions.avgSeconds)}
+              sub={sessions.multiPageVisits ? `average of the ${sessions.multiPageVisits.toLocaleString("en-US")} visit${sessions.multiPageVisits === 1 ? "" : "s"} of 2+ pages` : "needs a visit of 2+ pages"}
+            />
             <Kpi label="Converted" value={stats.converted.toLocaleString("en-US")} sub={`${pct(stats.converted, stats.visited)} of visitors`} tone={stats.converted ? "good" : undefined} />
             <Kpi label="Conversions" value={conversions.reduce((s, x) => s + x.events, 0).toLocaleString("en-US")} />
           </div>
