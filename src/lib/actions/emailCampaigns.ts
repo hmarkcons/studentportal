@@ -130,7 +130,8 @@ export async function previewEmailCampaignAudience(formData: FormData): Promise<
   const denied = await requirePermission("page.marketing.email", "You don't have access to email campaigns.");
   if (denied) return denied;
   const audience = readAudience(formData);
-  if (!audience.include.all && !audience.include.segments.length && !audience.include.lists.length) {
+  // A resend (Phase 6) has no segments or lists of its own: its people are the first campaign's non-openers.
+  if (!audience.resendOf && !audience.include.all && !audience.include.segments.length && !audience.include.lists.length) {
     return { counts: { matched: 0, excluded: 0, invalid: 0, duplicates: 0, skippedLeadStatus: 0, suppressed: {}, topicOptOut: 0, final: 0 }, lines: ["Choose segments or lists to send to, or everyone."] };
   }
   const { counts } = await resolveCampaignAudience(createAdminClient(), audience, String(formData.get("topic") ?? "") || null);
