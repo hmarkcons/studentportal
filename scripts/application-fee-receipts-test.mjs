@@ -2,7 +2,7 @@
 // the rest of the documents code must do with them.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { FEE_RECEIPT_CATEGORY, MAX_FEE_RECEIPTS_AT_ONCE, feeReceiptPath, isFeeReceiptPath } from "../src/lib/applicationFeeReceipts.ts";
+import { FEE_RECEIPT_CATEGORY, FEE_RECEIPT_SECTION_LABEL, MAX_FEE_RECEIPTS_AT_ONCE, feeReceiptPath, isFeeReceiptPath, looksLikeReceipt, receiptEntryName } from "../src/lib/applicationFeeReceipts.ts";
 import { CATEGORY_ORDER, CATEGORY_LABELS, sectionOfCategory } from "../src/lib/documentCategories.ts";
 import { CATEGORIES_NOT_CARRIED } from "../src/lib/intakeCycle.ts";
 import { planAutoStages } from "../src/lib/autoStages.ts";
@@ -33,11 +33,12 @@ test("isFeeReceiptPath knows the receipts' folder from any other document's", ()
   assert.equal(isFeeReceiptPath(undefined), false);
 });
 
-test("the Application Fee section sits after the admission documents, under its own name", () => {
+test("the Receipts - Universities section sits after the admission documents, under its own name", () => {
   const order = [...CATEGORY_ORDER];
   assert.ok(order.includes(FEE_RECEIPT_CATEGORY));
   assert.equal(order.indexOf(FEE_RECEIPT_CATEGORY), order.indexOf("admission") + 1);
-  assert.equal(CATEGORY_LABELS[FEE_RECEIPT_CATEGORY], "Application Fee");
+  assert.equal(CATEGORY_LABELS[FEE_RECEIPT_CATEGORY], "Receipts - Universities");
+  assert.equal(FEE_RECEIPT_SECTION_LABEL, CATEGORY_LABELS[FEE_RECEIPT_CATEGORY]);
   assert.equal(sectionOfCategory(FEE_RECEIPT_CATEGORY), FEE_RECEIPT_CATEGORY);
 });
 
@@ -73,6 +74,22 @@ test("a receipt, filed approved, does not make an application's documents look c
     ]))),
     "documents_verified"
   );
+});
+
+test("an application's receipts are listed under its university's name", () => {
+  assert.equal(receiptEntryName("University of Padova", "Application fee receipt"), "University of Padova");
+  assert.equal(receiptEntryName("  ", "Application fee receipt"), "Application fee receipt");
+  assert.equal(receiptEntryName(null, "Application fee receipt"), "Application fee receipt");
+});
+
+test("a name typed for a university's document says when it is a receipt", () => {
+  // What was typed when a receipt and an invoice went to Acceptance Letters.
+  for (const name of ["Padova App Fee Recceipt", "Padova App Invoice", "Application fee receipt", "Tuition fee receipt", "Payment confirmation", "Fee paid", "Ricevuta di pagamento", "Fattura", "Reciept"]) {
+    assert.equal(looksLikeReceipt(name), true, name);
+  }
+  for (const name of ["Acceptance letter", "Offer letter", "Conditional offer letter", "CAS", "I-20", "Confirmation of enrolment (CoE)", "Pre-admission letter", "Letter of acceptance (LOA)"]) {
+    assert.equal(looksLikeReceipt(name), false, name);
+  }
 });
 
 test("several at once, but not without limit", () => {

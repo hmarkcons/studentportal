@@ -5,16 +5,16 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePermission } from "@/lib/auth/permissions";
 import { uploadedFiles } from "@/lib/stagedUpload";
-import { sanitizeFilename, validateDocumentFile } from "@/lib/documentUpload";
+import { validateDocumentFile } from "@/lib/documentUpload";
 import { removeStorageFiles } from "@/lib/fileTrash";
-import { ensureCurrentCycle } from "@/lib/ensureCycle";
-import { FEE_RECEIPT_CATEGORY, FEE_RECEIPT_NAME, MAX_FEE_RECEIPTS_AT_ONCE, feeReceiptPath } from "@/lib/applicationFeeReceipts";
+import { fileReceipts } from "@/lib/receiptFiling";
+import { FEE_RECEIPT_CATEGORY, MAX_FEE_RECEIPTS_AT_ONCE } from "@/lib/applicationFeeReceipts";
 
-// Application fee receipts (0365), filed on an application by Processing (and
+// Receipts from universities (0365), filed on an application by Processing (and
 // Super Admin) — the office's choice, the same line as the documents from the
 // university. Each file is kept as its own; all of an application's receipts
-// sit in one "Application fee receipt" requirement in the student's
-// Application Fee section, approved as they are filed. The student sees them
+// sit in one requirement in the student's Receipts - Universities section,
+// listed under the university's name, approved as they are filed. The student sees them
 // only once "Show to the student" is ticked, and is told then.
 
 const DENIED = "Only Super Admin and the Processing team can file application fee receipts.";
@@ -48,72 +48,14 @@ export async function uploadFeeReceipts(studentId: string, applicationId: string
     if (problem) return { error: `${f.name}: ${problem}` };
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const now = new Date().toISOString();
-
-  // The application's receipts requirement: found, or made — approved, as what is filed here is.
-  const { data: existing } = await supabase
-    .from("student_documents")
-    .select("id")
-    .eq("application_id", applicationId)
-    .eq("category", FEE_RECEIPT_CATEGORY)
-    .order("created_at")
-    .limit(1)
-    .maybeSingle();
-  let documentId = existing?.id as string | undefined;
-  let made = false;
-  if (!documentId) {
-    const cycleId = (app.cycle_id as string | null) ?? (await ensureCurrentCycle(studentId))?.id ?? null;
-    const { data: row, error } = await supabase
-      .from("student_documents")
-      .insert({
-        student_id: studentId,
-        application_id: applicationId,
-        category: FEE_RECEIPT_CATEGORY,
-        custom_name: FEE_RECEIPT_NAME,
-        status: "verified",
-        uploaded_by_role: "staff",
-        uploaded_at: now,
-        verified_by: user?.id ?? null,
-        verified_at: now,
-        cycle_id: cycleId,
-      })
-      .select("id")
-      .single();
-    if (error || !row) return { error: error?.message.includes("row-level security") ? DENIED : (error?.message ?? "The receipt could not be filed.") };
-    documentId = row.id as string;
-    made = true;
-  }
-
-  let added = 0;
-  for (const f of files) {
-    const path = feeReceiptPath(studentId, applicationId, sanitizeFilename(f.name), crypto.randomUUID().slice(0, 8));
-    const { error: uploadError } = await supabase.storage.from("documents").upload(path, f, { upsert: false, contentType: f.type || undefined });
-    if (uploadError) {
-      if (made && added === 0) await supabase.from("student_documents").delete().eq("id", documentId);
-      return { error: added ? `${added} receipt${added === 1 ? "" : "s"} uploaded, then ${f.name} failed: ${uploadError.message}` : uploadError.message };
-    }
-    const { error: fileError } = await supabase.rpc("add_student_document_file", {
-      p_document_id: documentId,
-      p_path: path,
-      p_name: f.name,
-      p_sources: null,
-      p_role: "staff",
-      p_status: "verified",
-    });
-    if (fileError) {
-      // Only a file just put there, never recorded, is removed outright.
-      await supabase.storage.from("documents").remove([path]);
-      if (made && added === 0) await supabase.from("student_documents").delete().eq("id", documentId);
-      return { error: fileError.message === "not authorized" ? DENIED : fileError.message };
-    }
-    added += 1;
-  }
-
-  // Shown to the student already: they hear that another has arrived.
-  if (app.fee_receipts_visible) await createAdminClient().rpc("notify_fee_receipts", { p_application: applicationId });
+  const filed = await fileReceipts(
+    supabase,
+    { id: applicationId, studentId, cycleId: (app.cycle_id as string | null) ?? null, visible: Boolean(app.fee_receipts_visible) },
+    files.map((file) => ({ file, name: file.name })),
+    DENIED
+  );
+  if ("error" in filed) return { error: filed.error };
+  const added = filed.added;
   revalidateAll(studentId, applicationId);
   return { success: true, message: `${added} receipt${added === 1 ? "" : "s"} uploaded.` };
 }

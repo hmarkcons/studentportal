@@ -10,14 +10,14 @@ import { uploadedLine } from "@/lib/activityStamp";
 import { stageFile } from "@/lib/stageFile";
 import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
 import { MAX_UPLOAD_BYTES, formatFileSize } from "@/lib/fileSize";
-import { MAX_FEE_RECEIPTS_AT_ONCE } from "@/lib/applicationFeeReceipts";
+import { FEE_RECEIPT_SECTION_LABEL, MAX_FEE_RECEIPTS_AT_ONCE } from "@/lib/applicationFeeReceipts";
 
 export type FeeReceipt = { id: string; name: string; url: string | null; uploadedAt: string | null };
 
 type Chosen = { key: string; name: string; size: number; ref: string | null; error: string | null; staging: boolean };
 
 /**
- * An application's fee receipts (0365): each its own file, uploaded several
+ * An application's receipts (0365, 0366): each its own file, uploaded several
  * at a time or one by one, and a switch that shows them to the student —
  * hidden until it is ticked. Processing manages them; anyone else who opens
  * the application sees them, read only.
@@ -25,12 +25,14 @@ type Chosen = { key: string; name: string; size: number; ref: string | null; err
 export function FeeReceiptsCard({
   studentId,
   applicationId,
+  universityName,
   receipts,
   visible,
   canManage,
 }: {
   studentId: string;
   applicationId: string;
+  universityName: string;
   receipts: FeeReceipt[];
   visible: boolean;
   canManage: boolean;
@@ -90,8 +92,11 @@ export function FeeReceiptsCard({
     <div className="flex flex-col gap-4" data-fee-receipts>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-medium text-ink">Application fee receipts</h3>
-          <p className="text-[11px] text-muted">Kept in the student&rsquo;s Documents › Application Fee, each as its own file.</p>
+          <h3 className="text-sm font-medium text-ink">Receipts</h3>
+          <p className="text-[11px] text-muted">
+            The application fee&rsquo;s receipts and invoices, kept in the student&rsquo;s Documents › {FEE_RECEIPT_SECTION_LABEL} under{" "}
+            {universityName}, each as its own file.
+          </p>
         </div>
         {canManage ? (
           <label className="flex items-start gap-2 text-xs text-ink" data-fee-receipts-visible>

@@ -1,4 +1,4 @@
-// Application fee receipts (0365) — end to end against a portal:
+// Receipts from universities (0365, 0366) — end to end against a portal:
 //
 //   VERIFY_AGAINST_PRODUCTION=yes npm run check:feereceipts
 //
@@ -11,13 +11,16 @@
 //     other documents and the student's other files;
 //   * Management, who may open the application but not file receipts, sees
 //     them there read only;
-//   * the staff Documents tab lists them under Application Fee, read only,
+//   * the staff Documents tab lists them under Receipts - Universities, by the
+//     university's name, read only,
 //     pointing back to the application, which keeps them out of its checklist;
 //   * "Show to the student" ticked: the student is alerted, and sees them on
-//     the application and in Documents › Application Fee, to open only — they
+//     the application and in Documents › Receipts - Universities, to open only — they
 //     can neither add, change nor remove one;
 //   * a receipt removed goes to the 90-day trash; hidden again, the student
-//     sees nothing; the last one removed takes the requirement with it.
+//     sees nothing; the last one removed takes the requirement with it;
+//   * "Documents from the university" files an invoice typed as such with the
+//     receipts — never as an acceptance letter — and moves no stage.
 //
 // Everything is named zztmp and removed in a finally, with its files.
 import { BASE, FIXTURE_PASSWORD, apiAs, clients, fixtures, openBrowser, removeStagedFiles, reporter, requireConfirmation, signIn } from "./verify-portal-lib.mjs";
@@ -220,7 +223,8 @@ try {
   await page.goto(`${BASE}/students/${studentId}/documents?doc=${docId}`, { waitUntil: "domcontentloaded" });
   const row = page.locator(`[data-document-row="${docId}"]`);
   await row.waitFor({ timeout: 120000 });
-  ok("the Documents tab lists them as one requirement under Application Fee", (await row.getAttribute("data-fee-receipt-row")) !== null && (await page.evaluate(() => document.body.textContent.includes("Application Fee"))));
+  ok("the Documents tab lists them as one requirement under Receipts - Universities", (await row.getAttribute("data-fee-receipt-row")) !== null && (await page.evaluate(() => document.body.textContent.includes("Receipts - Universities"))));
+  ok("...named for the university", ((await row.locator("p").first().textContent()) ?? "").trim().endsWith(UNI) && !((await row.textContent()) ?? "").includes("Application fee receipt"), await row.locator("p").first().textContent());
   ok("...each file by name", (await row.locator("[data-file-name]").allTextContents()).sort().join("|") === "receipt-bank.pdf|receipt-later.pdf|receipt-portal.pdf");
   ok("...read only: no upload, no review, no remove there", (await row.locator("input[type=file]").count()) === 0 && (await row.getByRole("button").count()) === 0);
   ok("...pointing to the application, and saying they are hidden", ((await row.locator("[data-fee-receipt-application]").getAttribute("href")) ?? "").endsWith(`/applications/${applicationId}`) && (await row.locator("[data-receipts-shown]").getAttribute("data-receipts-shown")) === "no");
@@ -249,6 +253,7 @@ try {
   const sRow = sp.locator(`[data-document-row="${docId}"]`);
   await sRow.waitFor({ timeout: 30000 }).catch(() => {});
   ok("...and in their Documents, each file by name", (await sRow.locator("[data-file-name]").count()) === 3);
+  ok("...under the university's name", ((await sRow.textContent()) ?? "").includes(UNI) && !((await sRow.textContent()) ?? "").includes("Application fee receipt"));
   ok("...to open only: no upload and no Remove", (await sRow.locator("input[type=file]").count()) === 0 && (await sRow.getByRole("button", { name: /^Remove / }).count()) === 0);
   await shot(sp, "fee-student-documents");
 
@@ -287,6 +292,35 @@ try {
   }
   const gone = await poll(async () => ((await receiptDoc()) ? null : true));
   ok("the last one removed takes the requirement with it", Boolean(gone));
+
+  // ------------------------------------------------------------ from "Documents from the university"
+  await page.goto(appUrl, { waitUntil: "domcontentloaded" });
+  const box = page.locator("[data-university-upload]");
+  await box.waitFor({ timeout: 120000 });
+  await page.waitForFunction(() => {
+    const input = document.querySelector("[data-university-upload] input[name=name]");
+    return Boolean(input && Object.keys(input).some((k) => k.startsWith("__reactProps")));
+  }, null, { timeout: 60000 });
+  const kindSelect = box.locator("select[name=kind]");
+  await box.locator("input[name=name]").fill("zztmp Acceptance letter");
+  ok("the university box files a letter as a letter", (await kindSelect.inputValue()) === "letter");
+  await box.locator("input[name=name]").fill("zztmp Fee Invoice");
+  ok("...and a name saying invoice as a receipt", (await kindSelect.inputValue()) === "receipt");
+  await box.locator("input[type=file]").setInputFiles([await file("invoice-scan.pdf")]);
+  const boxButton = box.getByRole("button", { name: "Upload" });
+  await poll(async () => (await boxButton.isEnabled()) || null, 60);
+  await boxButton.click();
+  const fromBox = await poll(async () => {
+    const doc = await receiptDoc();
+    const list = doc ? await receiptFiles(doc.id) : [];
+    return list.length === 1 ? list : null;
+  }, 60);
+  ok("...into the receipts, under the name typed", fromBox?.[0]?.file_name === "zztmp Fee Invoice.pdf" && isFeeReceiptPath(fromBox[0].file_path), JSON.stringify(fromBox));
+  const { count: letters } = await admin.from("student_documents").select("id", { count: "exact", head: true }).eq("application_id", applicationId).eq("category", "acceptance_letters");
+  const { data: stageNow } = await admin.from("applications").select("current_stage").eq("id", applicationId).single();
+  ok("...not as an acceptance letter, and no stage moved", letters === 0 && stageNow?.current_stage === "documents_pending", JSON.stringify({ letters, stage: stageNow?.current_stage }));
+  reads = await studentReads();
+  ok("...hidden from the student", reads.docs === 0);
 } catch (e) {
   ok("the run finished", false, e?.stack ?? String(e));
 } finally {

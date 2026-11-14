@@ -328,13 +328,15 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
         </div>
       </Card>
 
-      {/* The fee's receipts (0365), kept in the student's Documents under
-          Application Fee and hidden from them until shown. Processing files
-          them; anyone else here sees them, read only. */}
+      {/* The receipts (0365), kept in the student's Documents under Receipts -
+          Universities by the university's name (0366), and hidden from them
+          until shown. Processing files them; anyone else here sees them, read
+          only. */}
       <Card className="mb-6">
         <FeeReceiptsCard
           studentId={id}
           applicationId={appId}
+          universityName={university?.name ?? "the university"}
           receipts={feeReceipts}
           visible={Boolean(app.fee_receipts_visible)}
           canManage={canManage}

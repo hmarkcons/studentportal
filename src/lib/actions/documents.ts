@@ -12,6 +12,7 @@ import { requirePermission, requireStaffStudentWrite } from "@/lib/auth/permissi
 import { categoryCarriesOver, documentCarriesOver } from "@/lib/intakeCycle";
 import { ensureCurrentCycle } from "@/lib/ensureCycle";
 import { uploadedFile } from "@/lib/stagedUpload";
+import { fileReceipts } from "@/lib/receiptFiling";
 import { syncStagesForDocument, syncStudentStages } from "@/lib/autoStagesSync";
 
 const MANAGE_DENIED = "Only Super Admin and the Processing team can add or remove document requirements.";
@@ -373,7 +374,7 @@ export async function ensureStudentDocumentRequirements(studentId: string): Prom
 // Application fee receipts (0365) are filed, and taken off, on their application
 // by Processing alone (actions/applicationFeeReceipts.ts) — never through the
 // Documents tab's own add, review and remove, which more roles may use.
-const FEE_RECEIPT_ELSEWHERE = "Application fee receipts are filed and removed on their application, by the Processing team.";
+const FEE_RECEIPT_ELSEWHERE = "Receipts are filed and removed on their application, by the Processing team.";
 
 async function isFeeReceipt(supabase: Awaited<ReturnType<typeof createClient>>, { documentId, fileId }: { documentId?: string; fileId?: string }): Promise<boolean> {
   let docId = documentId;
@@ -609,8 +610,28 @@ export async function uploadApplicationDocument(
   const validationError = validateDocumentFile(file);
   if (validationError) return { error: validationError };
 
-  const { data: app } = await supabase.from("applications").select("id, student_id, cycle_id").eq("id", applicationId).maybeSingle();
+  const { data: app } = await supabase.from("applications").select("id, student_id, cycle_id, fee_receipts_visible").eq("id", applicationId).maybeSingle();
   if (!app || app.student_id !== studentId) return { error: "That application isn't this student's." };
+
+  // A receipt or an invoice is not a letter (0366): it goes with the
+  // application's receipts in Receipts - Universities, under the name typed,
+  // hidden from the student until shown — and moves no stage, where a letter
+  // moves the application to its acceptance stage.
+  if (formData.get("kind") === "receipt") {
+    const ext = (file.name.match(/\.[A-Za-z0-9]{1,5}$/) ?? [""])[0];
+    const fileName = ext && !name.toLowerCase().endsWith(ext.toLowerCase()) ? `${name}${ext}` : name;
+    const filed = await fileReceipts(
+      supabase,
+      { id: applicationId, studentId, cycleId: (app.cycle_id as string | null) ?? null, visible: Boolean(app.fee_receipts_visible) },
+      [{ file, name: fileName, sources: parseSourceNames(formData.get("file_sources")) }],
+      "Only the processing team can file documents for this student."
+    );
+    if ("error" in filed) return { error: filed.error };
+    revalidatePath(revalidateTo);
+    revalidatePath(`/students/${studentId}/documents`);
+    return { success: true };
+  }
+
   const cycleId = (app.cycle_id as string | null) ?? (await ensureCurrentCycle(studentId))?.id ?? null;
 
   const now = new Date().toISOString();

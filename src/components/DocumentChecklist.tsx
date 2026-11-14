@@ -695,7 +695,7 @@ export function DocumentChecklist({
                       </p>
                     )}
                   </div>
-                  {/* Application Fee holds only what is filed on an application. */}
+                  {/* Receipts - Universities holds only what is filed on an application. */}
                   {canManage && section.key !== FEE_RECEIPT_CATEGORY && (
                     <AddRequirementForm
                       studentId={studentId}

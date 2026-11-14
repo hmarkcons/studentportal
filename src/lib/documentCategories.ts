@@ -42,7 +42,7 @@ export function sectionOfCategory(category: string | null | undefined): string {
 
 export const CATEGORY_LABELS: Record<string, string> = {
   admission: "Admission Documents",
-  application_fee: "Application Fee",
+  application_fee: "Receipts - Universities",
   acceptance_letters: "Acceptance Letters",
   attestation: "Attestation",
   visa: "Visa Application Requirements",

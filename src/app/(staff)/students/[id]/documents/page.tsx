@@ -5,6 +5,7 @@ import { loadDocumentFiles } from "@/lib/documentFilesLoad";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { DocumentChecklist, type DocRow } from "@/components/DocumentChecklist";
+import { FEE_RECEIPT_CATEGORY, receiptEntryName } from "@/lib/applicationFeeReceipts";
 import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
 import { loadStudentChecklistSections } from "@/lib/studentChecklistSections";
 import { hasPermission } from "@/lib/auth/permissions";
@@ -120,10 +121,11 @@ export default async function StudentDocumentsTab(props: {
       // Said in the name, because a document approved last year sitting in
       // this year's checklist with no explanation looks like a mistake.
       const carried = inheritedFrom ? ` — carried over from intake ${inheritedFrom}` : "";
-      const fileLabel = `${base}${uni?.name ? ` — ${uni.name}` : ""}`;
+      // An application's receipts are listed under its university's name (0366).
+      const fileLabel = d.category === FEE_RECEIPT_CATEGORY ? receiptEntryName(uni?.name, base) : `${base}${uni?.name ? ` — ${uni.name}` : ""}`;
       const name = `${fileLabel}${carried}`;
       const past = history.get(d.id) ?? [];
-      const shown = d.category === "application_fee" && d.application_id ? { receiptsShown: receiptsShown.get(d.application_id) ?? false } : {};
+      const shown = d.category === FEE_RECEIPT_CATEGORY && d.application_id ? { receiptsShown: receiptsShown.get(d.application_id) ?? false } : {};
       return { ...d, name, fileLabel, history: past, files: filesByDoc.get(d.id) ?? [], ...shown };
   });
 

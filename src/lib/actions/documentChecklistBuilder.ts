@@ -209,7 +209,7 @@ export async function removeSectionFromDestination(destinationId: string | null,
   if (error) return { error };
   // Where every application's fee receipts are kept (0365), whatever the destination.
   if (sectionKey === FEE_RECEIPT_CATEGORY && destinationId === null) {
-    return { error: "Application Fee holds the fee receipts filed on students' applications, so it stays on every checklist." };
+    return { error: "Receipts - Universities holds the receipts filed on students' applications, so it stays on every checklist." };
   }
   const supabase = await createClient();
 
@@ -272,7 +272,7 @@ export async function addChecklistItem(
   if (error) return { error };
   // Its only requirement is the receipts Processing files on each application (0365).
   if (sectionKey === FEE_RECEIPT_CATEGORY) {
-    return { error: "Application Fee holds only the receipts filed on each application, so nothing is asked for here." };
+    return { error: "Receipts - Universities holds only the receipts filed on each application, so nothing is asked for here." };
   }
   const supabase = await createClient();
 

@@ -11,6 +11,7 @@ import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
 import { loadStudentChecklistSections } from "@/lib/studentChecklistSections";
 import { DocumentSectionList } from "@/components/DocumentSectionList";
 import { sectionOfCategory } from "@/lib/documentCategories";
+import { FEE_RECEIPT_CATEGORY, receiptEntryName } from "@/lib/applicationFeeReceipts";
 import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
 import { PortalStat, PortalStats } from "@/components/studentPortal/PortalStat";
 import { PortalEmpty } from "@/components/studentPortal/PortalEmpty";
@@ -65,7 +66,9 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
       // A document approved for an earlier intake says so, or it looks like a
       // mistake sitting in this year's list already ticked off.
       const carried = inheritedFromById.get(d.id) ? " — already approved, carried over" : "";
-      const custom_name = `${baseName}${uni?.name ? ` — ${uni.name}` : ""}${carried}`;
+      // An application's receipts are listed under its university's name (0366).
+      const custom_name =
+        d.category === FEE_RECEIPT_CATEGORY ? receiptEntryName(uni?.name, baseName) : `${baseName}${uni?.name ? ` — ${uni.name}` : ""}${carried}`;
       const past = docHistory.get(d.id) ?? [];
       return { ...d, custom_name, history: past, files: filesByDoc.get(d.id) ?? [] };
   });

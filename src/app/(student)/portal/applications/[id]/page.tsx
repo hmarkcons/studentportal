@@ -11,7 +11,7 @@ import { sortRounds, type ProgramRound } from "@/lib/programRounds";
 import { UniversityLinksCard } from "@/components/studentPortal/UniversityLinksCard";
 import { applicationLogins, loadMyLogins } from "@/lib/studentLogins";
 import { loadDocumentFiles } from "@/lib/documentFilesLoad";
-import { FEE_RECEIPT_CATEGORY } from "@/lib/applicationFeeReceipts";
+import { FEE_RECEIPT_CATEGORY, FEE_RECEIPT_SECTION_LABEL } from "@/lib/applicationFeeReceipts";
 import { uploadedLine } from "@/lib/activityStamp";
 
 function one<T>(v: T | T[] | null) {
@@ -24,7 +24,7 @@ function one<T>(v: T | T[] | null) {
  * Its documents are not repeated here. They live on the Documents page, the
  * application's own ones labelled with its university, so a student has one
  * checklist to work through rather than the same passport in two places.
- * The one exception is its fee receipts (0365), nothing to act on and only
+ * The one exception is its receipts (0365), nothing to act on and only
  * once staff have shown them: they belong with the application they paid for.
  */
 export default async function PortalApplicationPage(props: PageProps<"/portal/applications/[id]">) {
@@ -121,7 +121,7 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
               <div className="flex flex-col gap-3" data-fee-receipts>
                 <h3 className="flex items-center gap-2 text-base font-semibold text-ink">
                   <ReceiptText aria-hidden className="h-5 w-5 shrink-0 text-primary" />
-                  {receiptFiles.length === 1 ? "Application fee receipt" : "Application fee receipts"}
+                  {receiptFiles.length === 1 ? "Receipt" : "Receipts"}
                 </h3>
                 <ul className="flex flex-col gap-2">
                   {receiptFiles.map((f) => {
@@ -148,7 +148,7 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
                   <Link prefetch={false} href="/portal/documents" className="font-medium text-primary hover:underline">
                     Documents
                   </Link>{" "}
-                  page, under Application Fee.
+                  page, under {FEE_RECEIPT_SECTION_LABEL}.
                 </p>
               </div>
             </Card>
