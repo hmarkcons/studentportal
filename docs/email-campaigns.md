@@ -14,7 +14,7 @@ The work goes in phases. This file grows with each.
 | 3 | Campaigns: drafts, approval, scheduling, the sending engine | **Built** (0356, 0357) — practice mode until the service is bought |
 | 4 | Tracking: opens, clicks, bounces, complaints, website visits | **Built** (0356–0358) — bounces and complaints wait for the service |
 | 5 | Reports: per campaign, the dashboard, PDF, exports, the lead's history | **Built** (0359) |
-| 6 | Extras: resend to non-openers, content blocks, spam check, Slack alerts, activity log, data retention (0361); engagement scoring and hot leads, the sunset policy, each person's best hour (0362); A/B tests (0363); automations to come | **In progress** |
+| 6 | Extras: resend to non-openers, content blocks, spam check, Slack alerts, activity log, data retention (0361); engagement scoring and hot leads, the sunset policy, each person's best hour (0362); A/B tests (0363); automations (0364) | **Built** |
 
 ## The sending service — not connected yet
 
@@ -483,6 +483,39 @@ got. A test send sends both versions, "[Test A]" and "[Test B]". It needs at
 least 20 people and does not combine with spreading or best hours. The report's
 Overview shows each version's test-group results and the winner
 (`email_campaign_variant_stats()`). In practice mode nobody opens, so A wins.
+
+### Automations (0364)
+
+Email campaigns › **Automations**: journeys of emails that start by
+themselves. Each has a trigger (`journeys.ts`, `email_journey_candidates()`):
+
+| Trigger | Who it starts for | Ends early when |
+|---|---|---|
+| A new lead enquires | leads who enquire after it is switched on (never the backlog) | they register, are marked not interested or not eligible |
+| An application reaches a stage | an application reaching one of the chosen stages (`application_stage_history`), still there, in the last 14 days | — |
+| A student still owes documents | registered students owing a required document (missing, or sent back) — one round per 60 days | they owe nothing |
+| A visa appointment is coming up | the `visa_appointment_date` tracker field (or any appointment field named visa), at 09:00 Karachi, up to 61 days ahead | the date is moved or removed, or passes |
+| An interview is coming up | `application_interviews` scheduled or rescheduled, up to 61 days ahead | it is moved or cancelled, or passes |
+
+Everyone also leaves when their address is no longer subscribed or they opted
+out of the journey's topic. A journey's emails (up to 10) each go a number of
+days after the start — or before the appointment — always, or only if the
+person did (or did not) open or click the email before (which then waits at
+least a day). A countdown email whose moment passed more than a day ago is
+skipped, never sent late.
+
+Each step sends through a campaign of its own, `kind = 'automation'`, made
+when the journey is switched on (and made anew, the old one closed, if its
+email changed): the every-minute sender sends it, with tracking, unsubscribe
+and reports as for any campaign, and it never "finishes". People join as
+`email_journey_enrolments` (once per thing that started it), and
+`/api/cron/email-journeys` (every ten minutes, `journeyEngine.ts`) takes in
+whoever is new and queues each email as it falls due. Each email of a journey
+reaches a person once. Switching on needs `email.campaigns.send`; drafting,
+`email.campaigns.create`. Pausing holds everyone where they are. Practice mode
+holds: until the sending service is connected its emails are practice.
+Automation emails are left out of the campaign list and comparisons; the
+journey's page shows each email's results and links to its report.
 
 Unit tests: `scripts/email-phase6-test.mjs`.
 

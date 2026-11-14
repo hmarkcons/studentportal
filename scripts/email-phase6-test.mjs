@@ -176,3 +176,55 @@ test("A/B: what stops it, in words", () => {
   assert.match(abProblems({ ...base, send_at_best_hour: true }, 100).join(), /each person's hour/);
   assert.match(abProblems(base, AB_MIN_AUDIENCE - 1).join(), new RegExp(`at least ${AB_MIN_AUDIENCE} people`));
 });
+
+// ---- automations (0364) -----------------------------------------------------------
+
+import { conditionMet, stepAction, stepDueAt, stepWhen, validateSteps } from "../src/lib/emailCampaigns/journeys.ts";
+
+const T = "11111111-1111-1111-1111-111111111111";
+
+test("journeys: a step falls due days after the start, or days before the appointment", () => {
+  assert.equal(stepDueAt("2026-11-14T05:00:00Z", 3).toISOString(), "2026-11-17T05:00:00.000Z");
+  assert.equal(stepDueAt("2026-11-20T04:00:00Z", -7).toISOString(), "2026-11-13T04:00:00.000Z");
+  const now = new Date("2026-11-14T06:00:00Z");
+  assert.equal(stepAction({ anchorAt: "2026-11-14T05:00:00Z", day: 0, countdown: false, now }), "send");
+  assert.equal(stepAction({ anchorAt: "2026-11-14T05:00:00Z", day: 3, countdown: false, now }), "wait");
+  assert.equal(stepAction({ anchorAt: "2026-10-01T05:00:00Z", day: 3, countdown: false, now }), "send", "a series step is never too late");
+  assert.equal(stepAction({ anchorAt: "2026-11-19T05:00:00Z", day: -5, countdown: true, now }), "send", "five days before, now");
+  assert.equal(stepAction({ anchorAt: "2026-11-19T05:00:00Z", day: -3, countdown: true, now }), "wait");
+  assert.equal(stepAction({ anchorAt: "2026-11-19T05:00:00Z", day: -10, countdown: true, now }), "skip", "a countdown email is never sent late");
+  assert.equal(stepAction({ anchorAt: "2026-11-14T05:00:00Z", day: -1, countdown: true, now }), "over", "the appointment has passed");
+});
+
+test("journeys: conditions on the email before", () => {
+  assert.equal(conditionMet("always", null), true);
+  assert.equal(conditionMet("opened_previous", { opened: true, clicked: false }), true);
+  assert.equal(conditionMet("opened_previous", null), false);
+  assert.equal(conditionMet("not_opened_previous", { opened: false, clicked: false }), true);
+  assert.equal(conditionMet("not_opened_previous", null), false, "they never got the one before");
+  assert.equal(conditionMet("clicked_previous", { opened: true, clicked: true }), true);
+  assert.equal(conditionMet("not_clicked_previous", { opened: true, clicked: false }), true);
+});
+
+test("journeys: steps checked — order, ranges, a first email that always goes, a day to open before a condition", () => {
+  const step = (over) => ({ day: 0, condition: "always", subject: "Hi", preheader: "", template_version_id: T, ...over });
+  assert.deepEqual(validateSteps([step(), step({ day: 3, condition: "not_opened_previous" })], "new_lead"), {
+    steps: [
+      { day: 0, condition: "always", subject: "Hi", preheader: null, template_version_id: T },
+      { day: 3, condition: "not_opened_previous", subject: "Hi", preheader: null, template_version_id: T },
+    ],
+  });
+  assert.match(validateSteps([], "new_lead").error, /at least one/);
+  assert.match(validateSteps([step({ day: -1 })], "new_lead").error, /days after/);
+  assert.match(validateSteps([step({ day: 3 })], "interview").error, /days before/);
+  assert.ok("steps" in validateSteps([step({ day: -7 }), step({ day: -1 })], "visa_appointment"));
+  assert.match(validateSteps([step({ day: 5 }), step({ day: 2 })], "new_lead").error, /order they go/);
+  assert.match(validateSteps([step({ condition: "opened_previous" })], "new_lead").error, /first email/);
+  assert.match(validateSteps([step(), step({ condition: "opened_previous" })], "new_lead").error, /at least a day after/);
+  assert.match(validateSteps([step({ subject: " " })], "new_lead").error, /subject/);
+  assert.match(validateSteps([step({ template_version_id: "" })], "new_lead").error, /template/);
+  assert.equal(stepWhen(0, "new_lead"), "at once");
+  assert.equal(stepWhen(3, "new_lead"), "3 days after");
+  assert.equal(stepWhen(-1, "interview"), "1 day before");
+  assert.equal(stepWhen(0, "visa_appointment"), "on the day");
+});

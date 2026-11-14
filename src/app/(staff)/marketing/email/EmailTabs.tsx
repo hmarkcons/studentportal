@@ -1,12 +1,13 @@
 import { SectionTabs } from "@/components/SectionTabs";
 
 // The Email campaigns section's tabs.
-export function EmailTabs({ active }: { active: "campaigns" | "reports" | "templates" | "audience" | "settings" }) {
+export function EmailTabs({ active }: { active: "campaigns" | "automations" | "reports" | "templates" | "audience" | "settings" }) {
   return (
     <SectionTabs
       active={active}
       tabs={[
         { key: "campaigns", label: "Campaigns", href: "/marketing/email/campaigns" },
+        { key: "automations", label: "Automations", href: "/marketing/email/automations" },
         { key: "reports", label: "Reports", href: "/marketing/email/reports" },
         { key: "templates", label: "Templates", href: "/marketing/email/templates" },
         { key: "audience", label: "Audience", href: "/marketing/email/audience" },

@@ -381,7 +381,7 @@ export async function sendDueEmails(admin: SupabaseClient, { deadline }: { deadl
   const provider = getCampaignProvider(settings.provider);
   const { data: sending } = await admin
     .from("email_campaigns")
-    .select("id, name, slug, practice, prepared_html, prepared_text, from_name, from_email, reply_to, subject, created_by, spread_hours, started_at, recipients_total, ab_subject_b, ab_prepared_html_b, ab_prepared_text_b")
+    .select("id, name, slug, kind, practice, prepared_html, prepared_text, from_name, from_email, reply_to, subject, created_by, spread_hours, started_at, recipients_total, ab_subject_b, ab_prepared_html_b, ab_prepared_text_b")
     .eq("status", "sending")
     .order("started_at", { ascending: true });
 
@@ -498,7 +498,8 @@ export async function sendDueEmails(admin: SupabaseClient, { deadline }: { deadl
       .select("id", { count: "exact", head: true })
       .eq("campaign_id", c.id)
       .in("status", ["queued", "sending", "held"]);
-    if ((left ?? 0) === 0) {
+    // An automation's email (0364) stays open: its journey queues more people as they reach it.
+    if ((left ?? 0) === 0 && c.kind !== "automation") {
       await admin.from("email_campaigns").update({ status: "sent", finished_at: new Date().toISOString() }).eq("id", c.id).eq("status", "sending");
       await notify(admin, [c.created_by as string], {
         kind: "email_campaign_sent",

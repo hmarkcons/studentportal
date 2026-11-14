@@ -17,6 +17,8 @@ export default async function EmailCampaignsListPage() {
     supabase
       .from("email_campaigns")
       .select("id, name, subject, status, practice, recipients_total, scheduled_at, started_at, finished_at, created_at")
+      // An automation's emails (0364) are listed with their automation.
+      .eq("kind", "campaign")
       .order("created_at", { ascending: false })
       .limit(200),
   ]);

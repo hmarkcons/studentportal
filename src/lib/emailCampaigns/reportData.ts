@@ -167,6 +167,7 @@ export async function earlierComparison(
     .from("email_campaigns")
     .select("id")
     .eq("status", "sent")
+    .eq("kind", "campaign")
     .eq("practice", c.practice)
     .neq("id", c.id)
     .lt("started_at", c.started_at)
@@ -221,7 +222,7 @@ export async function engagedShare(supabase: SupabaseClient, days: number, inclu
 
 /** Started campaigns (real only, unless practice is asked for) as the dashboard's rows. */
 export async function campaignRows(supabase: SupabaseClient, { includePractice, limit }: { includePractice: boolean; limit: number }): Promise<CampaignRow[]> {
-  let q = supabase.from("email_campaigns").select("id, name, practice, started_at").not("started_at", "is", null);
+  let q = supabase.from("email_campaigns").select("id, name, practice, started_at").eq("kind", "campaign").not("started_at", "is", null);
   if (!includePractice) q = q.eq("practice", false);
   const { data } = await q.order("started_at", { ascending: false }).limit(limit);
   const list = data ?? [];
