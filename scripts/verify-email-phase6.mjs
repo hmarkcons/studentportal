@@ -14,6 +14,11 @@
 //   sunset       the silent contact is listed; the re-engagement makes a list
 //                and a draft to them; once it has gone and the grace period
 //                passed, "Stop emailing" puts them on the do-not-email list
+//   A/B test     (0363) 24 contacts, half tested: six get A, six get B (another
+//                subject and template, its links numbered from 1001), twelve
+//                are held; when B has more opens at decision time, the held
+//                twelve get B; a B click finds B's link, the web version shows
+//                B, and the report marks B the winner
 //   best hour    a campaign sent "at each person's hour" holds the 21:00
 //                opener until 21:00 Karachi and sends the others at once
 //
@@ -42,7 +47,7 @@ const ago = (days) => new Date(Date.now() - days * DAY).toISOString();
 const HOT = "zztmp-hot@hmarkconsultants.com";
 const SILENT = "zztmp-silent@hmarkconsultants.com";
 const OWL = "zztmp-owl@hmarkconsultants.com";
-const made = { campaigns: [], lists: [], runs: [], templateId: null, staff: [] };
+const made = { campaigns: [], lists: [], runs: [], templateId: null, templateIds: [], staff: [] };
 
 /** A real campaign already sent, with its recipients as given. */
 async function realCampaign(name, sentDaysAgo, recipients, by) {
@@ -202,6 +207,78 @@ try {
   r.ok("best hour: the 21:00 opener waits for 21:00 Karachi, within a day", karachiHour === 21 && Date.parse(owlAt) - Date.now() < DAY + 60_000, String(owlAt));
   r.ok("best hour: someone with no opens to learn from goes at once", hotAt === null, String(hotAt));
   await admin.from("email_campaigns").update({ status: "cancelled" }).eq("id", bhId);
+
+  // ---- A/B test (0363)
+  const AB = Array.from({ length: 24 }, (_, i) => `zztmp-ab${i + 1}@hmarkconsultants.com`);
+  const { data: abContacts } = await admin.from("email_contacts").insert(AB.map((email, i) => ({ email, full_name: `zztmp AB${i + 1} Test`, source: "zztmp" }))).select("id");
+  const { data: abList } = await admin.from("email_lists").insert({ name: "zztmp AB List", created_by: me.id }).select("id").single();
+  made.lists.push(abList.id);
+  await admin.from("email_list_members").insert(abContacts.map((c) => ({ list_id: abList.id, contact_id: c.id, added_by: me.id })));
+  const { data: tB } = await admin.from("email_templates").insert({ name: "zztmp Phase6 Template B", created_by: me.id }).select("id").single();
+  made.templateIds.push(tB.id);
+  const { data: vB } = await admin
+    .from("email_template_versions")
+    .insert({ template_id: tB.id, version: 1, source_kind: "html", html: '<p>Version B body</p><p><a href="https://hmarkconsultants.com/b-page">B link</a></p><p>{{unsubscribe_url}}</p>', text_body: "B", created_by: me.id })
+    .select("id")
+    .single();
+  await admin.from("email_templates").update({ current_version_id: vB.id }).eq("id", tB.id);
+
+  await page.goto(`${BASE}/marketing/email/campaigns`, { waitUntil: "domcontentloaded" });
+  await settle(page);
+  await page.fill('[data-new-campaign] input[name="name"]', "zztmp AB Test");
+  await page.locator("[data-new-campaign]").getByRole("button", { name: "New campaign" }).click();
+  await page.waitForURL(/campaigns\/[0-9a-f-]{36}$/, { timeout: 30000 });
+  const abId = page.url().split("/").pop();
+  made.campaigns.push(abId);
+  await settle(page);
+  await page.fill("[data-campaign-subject]", "zztmp Version A subject");
+  await page.locator("[data-campaign-template]").selectOption(v.id);
+  await page.locator("[data-campaign-everyone]").setChecked(false);
+  await page.locator(`input[name="include_lists"][value="${abList.id}"]`).check();
+  await page.locator("[data-ab-enabled]").check();
+  await page.locator("[data-ab-subject-b]").fill("zztmp Version B subject");
+  await page.locator('select[name="ab_template_version_id_b"]').selectOption(vB.id);
+  await page.locator('input[name="ab_test_percent"]').fill("50");
+  await page.locator('input[name="ab_wait_hours"]').fill("1");
+  await poll("reach of 24", async () => (await page.locator("[data-campaign-reach]").innerText()).includes("Reaches 24 people"));
+  await page.getByRole("button", { name: "Save draft" }).click();
+  await page.locator("[data-campaign-ready]").waitFor({ timeout: 30000 });
+  await page.locator("[data-campaign-send-now]").click();
+  await page.getByText("Practice — nothing was sent").waitFor({ timeout: 60000 });
+  const { data: abRecipients } = await admin.from("email_campaign_recipients").select("id, email, token, status, variant").eq("campaign_id", abId);
+  const count = (f) => abRecipients.filter(f).length;
+  r.ok("A/B: half tested — six A, six B — and twelve held", count((x) => x.variant === "A") === 6 && count((x) => x.variant === "B") === 6 && count((x) => x.status === "held") === 12, JSON.stringify({ A: count((x) => x.variant === "A"), B: count((x) => x.variant === "B"), held: count((x) => x.status === "held") }));
+  const { data: abLinks } = await admin.from("email_campaign_links").select("position, url").eq("campaign_id", abId).order("position");
+  const { data: abC } = await admin.from("email_campaigns").select("ab_prepared_html_b, ab_decide_at, started_at").eq("id", abId).single();
+  r.ok("A/B: B's email prepared once, its link numbered 1001", abC.ab_prepared_html_b.includes("Version B body") && abLinks.some((l) => l.position === 1001 && l.url === "https://hmarkconsultants.com/b-page"), JSON.stringify(abLinks));
+  r.ok("A/B: the winner is picked an hour after the start", Math.abs(Date.parse(abC.ab_decide_at) - Date.parse(abC.started_at) - 3_600_000) < 5000);
+  await poll("the test group sent", async () => {
+    const { count: sentN } = await admin.from("email_campaign_recipients").select("id", { count: "exact", head: true }).eq("campaign_id", abId).eq("status", "sent");
+    return sentN === 12;
+  }, 180000);
+  const { count: stillHeld } = await admin.from("email_campaign_recipients").select("id", { count: "exact", head: true }).eq("campaign_id", abId).eq("status", "held");
+  r.ok("A/B: the cron sends the test group and holds the rest", stillHeld === 12);
+  // B wins: three of its test group opened. Then it is time to decide.
+  const bIds = abRecipients.filter((x) => x.variant === "B").slice(0, 3).map((x) => x.id);
+  await admin.from("email_campaign_recipients").update({ open_count: 1, human_open_count: 1, first_open_at: new Date().toISOString() }).in("id", bIds);
+  await admin.from("email_campaigns").update({ ab_decide_at: new Date(Date.now() - 60_000).toISOString() }).eq("id", abId);
+  const decided = await poll("the winner picked and sent to the rest", async () => {
+    const { data } = await admin.from("email_campaigns").select("ab_winner, status").eq("id", abId).single();
+    return data.ab_winner && data.status === "sent" ? data : null;
+  }, 240000);
+  const { data: after } = await admin.from("email_campaign_recipients").select("status, variant").eq("campaign_id", abId);
+  r.ok("A/B: B won, and the twelve held got B", decided.ab_winner === "B" && after.every((x) => x.status === "sent") && after.filter((x) => x.variant === "B").length === 18, JSON.stringify(decided));
+  const bRecipient = abRecipients.find((x) => x.variant === "B");
+  const anon = await browser.newContext();
+  const bClick = await anon.request.get(`${BASE}/api/email/c/${bRecipient.token}?l=1001`, { maxRedirects: 0 });
+  r.ok("A/B: a click on B's link finds B's link", bClick.status() === 302 && (bClick.headers().location ?? "").startsWith("https://hmarkconsultants.com/b-page"), bClick.headers().location);
+  const bView = await (await anon.request.get(`${BASE}/email/view/${bRecipient.token}`)).text();
+  r.ok("A/B: the web version shows the version they got", bView.includes("Version B body"));
+  await anon.close();
+  await page.goto(`${BASE}/marketing/email/campaigns/${abId}/report`, { waitUntil: "domcontentloaded" });
+  await settle(page);
+  const abTable = await page.locator("[data-ab-results]").innerText();
+  r.ok("A/B: the report shows each version and the winner", abTable.includes("zztmp Version B subject") && abTable.includes("Winner"), abTable);
 } catch (e) {
   r.ok("ran without error", false, e.message);
 } finally {
@@ -210,9 +287,9 @@ try {
   await admin.from("email_campaigns").delete().like("name", "%zztmp%");
   if (made.lists.length) await admin.from("email_lists").delete().in("id", made.lists);
   await admin.from("email_lists").delete().like("name", "zztmp%");
-  if (made.templateId) {
-    await admin.from("email_templates").update({ current_version_id: null }).eq("id", made.templateId);
-    await admin.from("email_templates").delete().eq("id", made.templateId);
+  for (const tid of [made.templateId, ...made.templateIds].filter(Boolean)) {
+    await admin.from("email_templates").update({ current_version_id: null }).eq("id", tid);
+    await admin.from("email_templates").delete().eq("id", tid);
   }
   await admin.from("email_contacts").delete().like("email", "zztmp-%");
   await admin.from("email_contact_status").delete().like("email", "zztmp-%");
