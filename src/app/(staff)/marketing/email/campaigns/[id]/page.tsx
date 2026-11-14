@@ -28,7 +28,8 @@ export default async function EmailCampaignPage(props: { params: Promise<{ id: s
   const { supabase } = await getStaffSession();
   const admin = createAdminClient();
   const [{ data: c }, canCreate, canSend, canApprove, canReports, user] = await Promise.all([
-    supabase.from("email_campaigns").select("*, version:email_template_versions(version, template:email_templates!email_template_versions_template_id_fkey(name))").eq("id", id).maybeSingle(),
+    // Named: version B of an A/B test (0363) is a second link to the versions table, and an unnamed embed is then refused.
+    supabase.from("email_campaigns").select("*, version:email_template_versions!email_campaigns_template_version_id_fkey(version, template:email_templates!email_template_versions_template_id_fkey(name))").eq("id", id).maybeSingle(),
     hasPermission("email.campaigns.create"),
     hasPermission("email.campaigns.send"),
     hasPermission("email.campaigns.approve"),
