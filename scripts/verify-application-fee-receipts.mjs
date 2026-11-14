@@ -9,7 +9,8 @@
 //     their Documents, not through the API, not in storage, and no alert;
 //   * a partner university never sees them, though it sees the application's
 //     other documents and the student's other files;
-//   * a counsellor sees them on the application, read only;
+//   * Management, who may open the application but not file receipts, sees
+//     them there read only;
 //   * the staff Documents tab lists them under Application Fee, read only,
 //     pointing back to the application, which keeps them out of its checklist;
 //   * "Show to the student" ticked: the student is alerted, and sees them on
@@ -71,12 +72,12 @@ const extraPaths = [];
 
 try {
   const proc = await fx.staff(`feeproc${RUN}`, ["processing"]);
-  const counselor = await fx.staff(`feecoun${RUN}`, ["counselor"]);
+  const manager = await fx.staff(`feemgmt${RUN}`, ["management"]);
   const { data: italy } = await admin.from("destinations").select("id, display_name").eq("display_name", "Italy (Public)").single();
   studentId = await fx.lead({
     full_name: STUDENT, email: STUDENT_EMAIL, contact_number: "0300-9999942",
     status: "registered", registration_status: "registered", registered_at: new Date().toISOString(),
-    date_of_inquiry: new Date().toISOString().slice(0, 10), processing_officer_id: proc.id, assigned_counselor_id: counselor.id,
+    date_of_inquiry: new Date().toISOString().slice(0, 10), processing_officer_id: proc.id, assigned_counselor_id: proc.id,
     date_of_birth: "2002-04-17", address: "12 Test Street, Karachi", intake: "Fall 2099", level_applying_for: "masters",
     country_of_interest: italy.display_name,
   });
@@ -185,7 +186,7 @@ try {
   };
   const portalDocs = async () => {
     await sp.goto(`${BASE}/portal/documents?guide=${docId}`, { waitUntil: "domcontentloaded" });
-    await sp.locator("[data-upload-limit]").waitFor({ timeout: 60000 });
+    await sp.locator("[data-upload-limit]").first().waitFor({ timeout: 60000 });
   };
   await portalApp();
   ok("hidden: not on the student's application page", (await sp.locator("[data-fee-receipts]").count()) === 0);
@@ -205,12 +206,12 @@ try {
   const { data: partnerReceipt } = await partner.storage.from("documents").download(bank.file_path);
   ok("...and opens the student's other files, but not a receipt", Boolean(partnerControl) && !partnerReceipt);
 
-  // ------------------------------------------------------------ a counsellor, read only
-  const cp = await signIn(browser, counselor.email);
+  // ------------------------------------------------------------ Management, read only
+  const cp = await signIn(browser, manager.email);
   await cp.setViewportSize({ width: 1400, height: 1100 });
   const cCard = await openCard(cp);
   await cCard.locator("[data-fee-receipt]").first().waitFor({ timeout: 30000 }).catch(() => {});
-  ok("a counsellor sees the receipts on the application", (await cCard.locator("[data-fee-receipt]").count()) === 3);
+  ok("Management sees the receipts on the application", (await cCard.locator("[data-fee-receipt]").count()) === 3);
   ok("...read only: no upload, no Remove, no switch", (await cCard.locator("[data-fee-receipt-upload]").count()) === 0 && (await cCard.getByRole("button", { name: /^Remove / }).count()) === 0 && (await cCard.locator("input[type=checkbox]").count()) === 0);
   ok("...told they are hidden from the student", ((await cCard.locator("[data-fee-receipts-visible]").getAttribute("data-fee-receipts-visible")) ?? "") === "hidden");
   await cp.close();
