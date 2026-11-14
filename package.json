@@ -77,6 +77,7 @@
     "check:emailcampaigns": "node scripts/verify-email-campaigns.mjs",
     "check:emailreports": "node scripts/verify-email-reports.mjs",
     "check:emailphase6": "node scripts/verify-email-phase6.mjs",
+    "check:emailautomations": "node scripts/verify-email-automations.mjs",
     "check:avatars": "node scripts/verify-avatars.mjs",
     "check:signinlanding": "node scripts/verify-sign-in-landing.mjs",
     "check:aeo": "node scripts/verify-aeo.mjs",
