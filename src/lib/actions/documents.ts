@@ -370,6 +370,22 @@ export async function ensureStudentDocumentRequirements(studentId: string): Prom
   return changed;
 }
 
+// Application fee receipts (0365) are filed, and taken off, on their application
+// by Processing alone (actions/applicationFeeReceipts.ts) — never through the
+// Documents tab's own add, review and remove, which more roles may use.
+const FEE_RECEIPT_ELSEWHERE = "Application fee receipts are filed and removed on their application, by the Processing team.";
+
+async function isFeeReceipt(supabase: Awaited<ReturnType<typeof createClient>>, { documentId, fileId }: { documentId?: string; fileId?: string }): Promise<boolean> {
+  let docId = documentId;
+  if (!docId && fileId) {
+    const { data } = await supabase.from("student_document_files").select("document_id").eq("id", fileId).maybeSingle();
+    docId = (data?.document_id as string | undefined) ?? undefined;
+  }
+  if (!docId) return false;
+  const { data } = await supabase.from("student_documents").select("category").eq("id", docId).maybeSingle();
+  return data?.category === "application_fee";
+}
+
 export async function uploadDocument(
   documentId: string,
   studentId: string,
@@ -378,6 +394,7 @@ export async function uploadDocument(
   formData: FormData
 ) {
   const supabase = await createClient();
+  if (await isFeeReceipt(supabase, { documentId })) return { error: FEE_RECEIPT_ELSEWHERE };
   // Staff gate (0343); the student uploading their own document is left to RLS
   // (and to the add_student_document_file definer, which refuses otherwise).
   const denied = await requireStaffStudentWrite("student.documents.add", "You do not have permission to upload documents for this student.");
@@ -430,6 +447,7 @@ export async function reviewDocumentFile(
   reason?: string
 ) {
   const supabase = await createClient();
+  if (await isFeeReceipt(supabase, { documentId })) return { error: FEE_RECEIPT_ELSEWHERE };
   const denied = await requireStaffStudentWrite("student.documents.edit", "You do not have permission to review this student's documents.");
   if (denied) return { error: denied.error };
   const trimmed = reason?.trim() || null;
@@ -473,6 +491,7 @@ export async function deleteDocumentVersion(archiveId: string, revalidateTo: str
 /** Takes one file off a requirement; the file itself is kept for 90 days (fileTrash). */
 export async function removeDocumentFile(fileId: string, studentId: string, revalidateTo: string) {
   const supabase = await createClient();
+  if (await isFeeReceipt(supabase, { fileId })) return { error: FEE_RECEIPT_ELSEWHERE };
   const denied = await requireStaffStudentWrite("student.documents.delete", "You do not have permission to remove this student's documents.");
   if (denied) return { error: denied.error };
   const { data: path, error } = await supabase.rpc("remove_student_document_file", { p_file_id: fileId });
@@ -659,6 +678,7 @@ export async function addDocumentRequirement(
   const deadline = String(formData.get("deadline") ?? "") || null;
 
   if (!name) return { error: "Name is required." };
+  if (category === "application_fee") return { error: FEE_RECEIPT_ELSEWHERE };
 
   const { error } = await supabase.from("student_documents").insert({
     student_id: studentId,

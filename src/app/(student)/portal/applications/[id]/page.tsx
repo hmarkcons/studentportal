@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, CalendarRange, FolderOpen } from "lucide-react";
+import { ArrowLeft, CalendarRange, FileText, FolderOpen, ReceiptText } from "lucide-react";
 import { notFound } from "next/navigation";
 import { getStudentUser } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
@@ -10,6 +10,9 @@ import { karachiToday } from "@/lib/calendarDates";
 import { sortRounds, type ProgramRound } from "@/lib/programRounds";
 import { UniversityLinksCard } from "@/components/studentPortal/UniversityLinksCard";
 import { applicationLogins, loadMyLogins } from "@/lib/studentLogins";
+import { loadDocumentFiles } from "@/lib/documentFilesLoad";
+import { FEE_RECEIPT_CATEGORY } from "@/lib/applicationFeeReceipts";
+import { uploadedLine } from "@/lib/activityStamp";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -21,13 +24,16 @@ function one<T>(v: T | T[] | null) {
  * Its documents are not repeated here. They live on the Documents page, the
  * application's own ones labelled with its university, so a student has one
  * checklist to work through rather than the same passport in two places.
+ * The one exception is its fee receipts (0365), nothing to act on and only
+ * once staff have shown them: they belong with the application they paid for.
  */
 export default async function PortalApplicationPage(props: PageProps<"/portal/applications/[id]">) {
   const { id } = await props.params;
   const { supabase, userId } = await getStudentUser();
 
   // The logins need only the student, so they are read beside the application.
-  const [{ data: app, error }, logins] = await Promise.all([
+  // So do the fee receipts: RLS returns them only once staff have shown them (0365).
+  const [{ data: app, error }, logins, { data: receiptDocs }] = await Promise.all([
     supabase
       .from("applications")
       .select(
@@ -36,6 +42,11 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
       .eq("id", id)
       .maybeSingle(),
     loadMyLogins(supabase),
+    supabase
+      .from("student_documents")
+      .select("id, file_path, status, uploaded_at, uploaded_by_role, verified_at")
+      .eq("application_id", id)
+      .eq("category", FEE_RECEIPT_CATEGORY),
   ]);
 
   if (error || !app || one(app.student)?.auth_user_id !== userId) notFound();
@@ -51,6 +62,7 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
     rounds?: ProgramRound[];
   } | null;
   const rounds = sortRounds(program?.rounds ?? []);
+  const receiptFiles = receiptDocs?.length ? [...(await loadDocumentFiles(supabase, receiptDocs)).values()].flat() : [];
 
   return (
     <div className="flex w-full flex-col gap-6" data-portal-page>
@@ -102,21 +114,62 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
           )}
         </Card>
 
-        <Card>
-          <div className="flex flex-col gap-3" data-documents-pointer>
-            <span aria-hidden className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <FolderOpen className="h-5 w-5" />
-            </span>
-            <p className="text-sm text-ink">
-              Documents for this application are on your{" "}
-              <Link prefetch={false} href="/portal/documents" className="font-medium text-primary hover:underline">
-                Documents
-              </Link>{" "}
-              page, with everything else we need from you.
-            </p>
-            <p className="text-xs text-muted">One checklist for everything, so the same passport is never asked for twice.</p>
-          </div>
-        </Card>
+        <div className="flex flex-col gap-5">
+          {/* Shown once staff tick "Show to the student" on the application; to open and keep. */}
+          {receiptFiles.length > 0 && (
+            <Card>
+              <div className="flex flex-col gap-3" data-fee-receipts>
+                <h3 className="flex items-center gap-2 text-base font-semibold text-ink">
+                  <ReceiptText aria-hidden className="h-5 w-5 shrink-0 text-primary" />
+                  {receiptFiles.length === 1 ? "Application fee receipt" : "Application fee receipts"}
+                </h3>
+                <ul className="flex flex-col gap-2">
+                  {receiptFiles.map((f) => {
+                    const uploaded = uploadedLine({ at: f.uploadedAt, byRole: f.uploadedByRole, audience: "student" });
+                    return (
+                      <li key={f.id ?? f.path} className="flex items-start gap-2" data-fee-receipt>
+                        <FileText aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-muted" />
+                        <span className="min-w-0">
+                          {f.url ? (
+                            <a href={f.url} target="_blank" rel="noreferrer" className="break-all text-sm font-medium text-primary hover:underline">
+                              {f.name}
+                            </a>
+                          ) : (
+                            <span className="break-all text-sm text-ink">{f.name}</span>
+                          )}
+                          {uploaded && <span className="block text-xs text-muted">{uploaded}</span>}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <p className="text-xs text-muted">
+                  Also kept on your{" "}
+                  <Link prefetch={false} href="/portal/documents" className="font-medium text-primary hover:underline">
+                    Documents
+                  </Link>{" "}
+                  page, under Application Fee.
+                </p>
+              </div>
+            </Card>
+          )}
+
+          <Card>
+            <div className="flex flex-col gap-3" data-documents-pointer>
+              <span aria-hidden className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <FolderOpen className="h-5 w-5" />
+              </span>
+              <p className="text-sm text-ink">
+                Documents for this application are on your{" "}
+                <Link prefetch={false} href="/portal/documents" className="font-medium text-primary hover:underline">
+                  Documents
+                </Link>{" "}
+                page, with everything else we need from you.
+              </p>
+              <p className="text-xs text-muted">One checklist for everything, so the same passport is never asked for twice.</p>
+            </div>
+          </Card>
+        </div>
       </div>
 
       {/* The university's Links & contact, as staff keep them on the application, and its portal login. */}

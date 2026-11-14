@@ -10,6 +10,8 @@ import { StageForm } from "./StageForm";
 import { applicationStageLabel } from "@/lib/finalizedStage";
 import { TaskList } from "./TaskList";
 import { UniversityDocumentUpload } from "./UniversityDocumentUpload";
+import { FeeReceiptsCard } from "./FeeReceiptsCard";
+import { FEE_RECEIPT_CATEGORY } from "@/lib/applicationFeeReceipts";
 import { ApplicationDetailsForm } from "./ApplicationDetailsForm";
 import { AddBackupPrograms } from "./AddBackupPrograms";
 import { LinksContactForm } from "./LinksContactForm";
@@ -38,7 +40,7 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
   const { data: app, error } = await supabase
     .from("applications")
     .select(
-      `id, current_stage, intake, deadline, application_fee, application_fee_currency, special_requirements, program_id, round_id, is_finalized, cycle_id,
+      `id, current_stage, intake, deadline, application_fee, application_fee_currency, special_requirements, program_id, round_id, is_finalized, cycle_id, fee_receipts_visible,
        university:universities(id, name, city, contact_email, application_fee, application_fee_currency, destination:destinations(pipeline_stages, country_code, display_name, intake_mode, intake_seasons, currency)),
        program:programs(id, name, page_link, requirements_link, application_portal_link, coordinator_email),
        round:program_intake_rounds(id, label, start_date, application_deadline, start_text, deadline_text, sort_order)`
@@ -207,7 +209,13 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
     loadDocumentFiles(supabase, rawDocs ?? []),
   ]);
 
-  const docsWithUrls = (rawDocs ?? []).map((d) => {
+  // The fee receipts (0365) have a card of their own; the checklist lists the rest.
+  const feeReceipts = (rawDocs ?? [])
+    .filter((d) => d.category === FEE_RECEIPT_CATEGORY)
+    .flatMap((d) => filesByDoc.get(d.id) ?? [])
+    .flatMap((f) => (f.id ? [{ id: f.id, name: f.name, url: f.url ?? null, uploadedAt: f.uploadedAt }] : []));
+
+  const docsWithUrls = (rawDocs ?? []).filter((d) => d.category !== FEE_RECEIPT_CATEGORY).map((d) => {
       const templateName = one2(d.template as never) as { name?: string } | null;
       const baseName = d.custom_name ?? templateName?.name ?? d.category ?? "Document";
       // Student-level documents (application_id null) are shared across every
@@ -318,6 +326,19 @@ export default async function ApplicationDetailPage(props: PageProps<"/students/
             today={today}
           />
         </div>
+      </Card>
+
+      {/* The fee's receipts (0365), kept in the student's Documents under
+          Application Fee and hidden from them until shown. Processing files
+          them; anyone else here sees them, read only. */}
+      <Card className="mb-6">
+        <FeeReceiptsCard
+          studentId={id}
+          applicationId={appId}
+          receipts={feeReceipts}
+          visible={Boolean(app.fee_receipts_visible)}
+          canManage={canManage}
+        />
       </Card>
 
       {/* The university's side of it: whatever it sends back, filed on this

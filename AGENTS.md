@@ -224,6 +224,17 @@ any of its files; add, review and remove files through
 remembered in `student_document_removals` — anything that rebuilds the
 checklist must skip those, or the deleted requirement comes straight back.
 
+**An application's fee receipts are hidden from its student by RLS alone**
+(0365). They are a `student_documents` requirement like any other, category
+`application_fee`, files under `<student>/fee-receipts/<application>/`, and the
+student's row, file and storage reads return them only once
+`applications.fee_receipts_visible` is ticked; a partner never sees them. So
+anything that reads a student's documents with the admin client and shows the
+result to the student — an email, a count, an export — must leave that
+category out unless the application has them shown. Only Processing and Super
+Admin file, remove or show them (`documents.manage_requirements`), on the
+application; the Documents tab's own add, review and remove refuse them.
+
 ## Migrations
 
 Numbered files in `supabase/migrations/`, applied by hand — there is no CLI

@@ -15,6 +15,7 @@
 // reads one and then the other.
 export const CATEGORY_ORDER = [
   "admission",
+  "application_fee",
   "acceptance_letters",
   "attestation",
   "scholarship_documents",
@@ -41,6 +42,7 @@ export function sectionOfCategory(category: string | null | undefined): string {
 
 export const CATEGORY_LABELS: Record<string, string> = {
   admission: "Admission Documents",
+  application_fee: "Application Fee",
   acceptance_letters: "Acceptance Letters",
   attestation: "Attestation",
   visa: "Visa Application Requirements",

@@ -66,6 +66,7 @@ export function notificationTone(kind: string): NotificationTone {
     case "task_comment":
       return "message";
     case "document_approved":
+    case "fee_receipt":
     case "payment":
     case "task_done":
       return "good";

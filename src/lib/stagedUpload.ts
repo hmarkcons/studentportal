@@ -43,6 +43,37 @@ export async function uploadedFile(
   return new File([blob], ref.fileName, { type: blob.type || "application/octet-stream" });
 }
 
+/**
+ * Several files posted under one name, each staged on its own — kept as
+ * separate files, unlike FileField's "multiple", which joins them into one
+ * PDF. Files that cannot be read (expired, not the caller's) are left out;
+ * the caller compares the count with what was sent.
+ */
+export async function uploadedFiles(formData: FormData, name: string, { max = 10 }: { max?: number } = {}): Promise<{ files: File[]; sent: number }> {
+  const all = formData.getAll(name);
+  const values = all.slice(0, max);
+  const supabase = await createClient();
+  const user = await getCurrentUser();
+  const files: File[] = [];
+  let bucket: string | null = null;
+  for (const value of values) {
+    if (value instanceof File) {
+      if (value.size > 0) files.push(value);
+      continue;
+    }
+    if (!user || !isStagedRef(value)) continue;
+    const ref = parseStagedRef(value, user.id, { allowVideo: false });
+    if ("error" in ref) continue;
+    const { data: blob, error } = await supabase.storage.from(ref.bucket).download(ref.path);
+    if (error || !blob) continue;
+    bucket = ref.bucket;
+    files.push(new File([blob], ref.fileName, { type: blob.type || "application/octet-stream" }));
+  }
+  // One sweep for the lot, not one per file.
+  if (bucket && user) await sweepStaged(supabase, bucket, user.id);
+  return { files, sent: all.length };
+}
+
 /** Removes this person's staged files once they are a day old. Best effort. */
 async function sweepStaged(supabase: Awaited<ReturnType<typeof createClient>>, bucket: string, userId: string) {
   try {

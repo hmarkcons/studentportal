@@ -167,8 +167,9 @@ export function planAutoStages(input: AutoStageInput): AutoStagePlan {
   };
   for (const app of input.applications) {
     if (app.stage && CLOSED.has(app.stage)) continue;
-    // Its own documents in, and the shared admission documents, all approved.
-    const own = documents.filter((d) => d.applicationId === app.id || (d.applicationId === null && d.category === "admission"));
+    // Its own documents in, and the shared admission documents, all approved. A fee receipt (0365) is
+    // filed already approved and says nothing about the student's documents, so it never counts.
+    const own = documents.filter((d) => (d.applicationId === app.id && d.category !== "application_fee") || (d.applicationId === null && d.category === "admission"));
     if (own.length > 0 && own.every((d) => d.status === "verified")) move(app, "documents_verified");
     // The university's letter is in.
     const letter = documents.some(

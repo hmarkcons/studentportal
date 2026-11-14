@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import Link from "next/link";
 import { FileText, Trash2, X } from "lucide-react";
 import { useButtonAction } from "@/components/useButtonAction";
 import {
@@ -27,6 +28,7 @@ import { FileField } from "@/components/FileField";
 import { DocumentGuidePanel, DocumentGuideToggle, guideHasMore } from "@/components/DocumentGuide";
 import type { ResolvedGuide } from "@/lib/documentGuides";
 import { DownloadDocumentsPdf } from "@/components/DownloadDocumentsPdf";
+import { FEE_RECEIPT_CATEGORY } from "@/lib/applicationFeeReceipts";
 
 export type DocRow = {
   id: string;
@@ -55,7 +57,71 @@ export type DocRow = {
   template_id?: string | null;
   /** Its files, each with its name and its own review (0328). */
   files?: DocFile[];
+  /** The application it belongs to, for one filed on an application. */
+  application_id?: string | null;
+  /** For an application's fee receipts (0365): whether the student has been shown them. */
+  receiptsShown?: boolean;
 };
+
+/**
+ * An application's fee receipts (0365), as the Documents tab shows them: to
+ * open, never to change here. They are filed, removed and shown to the
+ * student on their application, by Processing.
+ */
+function FeeReceiptRow({ doc, studentId, number }: { doc: DocRow; studentId: string; number?: string }) {
+  const files = doc.files ?? [];
+  return (
+    <div id={`doc-${doc.id}`} className="flex flex-col gap-2 py-3" data-document-row={doc.id} data-fee-receipt-row>
+      <div>
+        <p className="text-sm text-ink">
+          {number && <span className="mr-1.5 font-mono text-xs text-muted">{number}</span>}
+          {doc.name ?? "Application fee receipt"}
+        </p>
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <Badge tone={DOCUMENT_STATUS_TONE[doc.status] ?? "neutral"}>{DOCUMENT_STATUS_LABELS[doc.status] ?? doc.status.replace("_", " ")}</Badge>
+          {files.length > 1 && <span className="text-xs text-muted">{files.length} files</span>}
+          {doc.receiptsShown !== undefined && (
+            <span className="text-xs text-muted" data-receipts-shown={doc.receiptsShown ? "yes" : "no"}>
+              {doc.receiptsShown ? "Shown to the student" : "Hidden from the student"}
+            </span>
+          )}
+        </div>
+      </div>
+      {files.length > 0 && (
+        <ul className="flex flex-col gap-1.5" data-document-files>
+          {files.map((f) => {
+            const uploaded = uploadedLine({ at: f.uploadedAt, byRole: f.uploadedByRole, audience: "staff" });
+            return (
+              <li key={f.id ?? f.path} className="flex flex-wrap items-center gap-2 rounded-md border border-border px-2 py-1.5" data-document-file={f.id ?? "legacy"}>
+                <FileText aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted" />
+                {f.url ? (
+                  <a href={f.url} target="_blank" rel="noreferrer" className="min-w-0 break-all text-xs font-medium text-primary hover:underline" data-file-name>
+                    {f.name}
+                  </a>
+                ) : (
+                  <span className="min-w-0 break-all text-xs font-medium text-ink" data-file-name>
+                    {f.name}
+                  </span>
+                )}
+                {uploaded && <span className="text-[11px] text-muted">{uploaded}</span>}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {doc.application_id && (
+        <Link
+          prefetch={false}
+          href={`/students/${studentId}/applications/${doc.application_id}`}
+          className="text-xs text-primary hover:underline"
+          data-fee-receipt-application
+        >
+          Add, remove or show them to the student on the application &rarr;
+        </Link>
+      )}
+    </div>
+  );
+}
 
 /**
  * One file of a requirement, for staff: its name as uploaded (and what it was
@@ -605,23 +671,32 @@ export function DocumentChecklist({
                   onToggle={() => setOpenSections((prev) => ({ ...prev, [section.key]: !prev[section.key] }))}
                 >
                   <div className="flex flex-col divide-y divide-border">
-                    {section.docs.map((doc, j) => (
-                      <UploadRow
-                        key={doc.id}
-                        doc={doc}
-                        studentId={studentId}
-                        revalidateTo={revalidateTo}
-                        number={`${n}.${j + 1}`}
-                        canManage={canManage}
-                        guide={guides[doc.id] ?? null}
-                        focused={doc.id === focusDocId}
-                      />
-                    ))}
+                    {section.docs.map((doc, j) =>
+                      doc.category === FEE_RECEIPT_CATEGORY ? (
+                        <FeeReceiptRow key={doc.id} doc={doc} studentId={studentId} number={`${n}.${j + 1}`} />
+                      ) : (
+                        <UploadRow
+                          key={doc.id}
+                          doc={doc}
+                          studentId={studentId}
+                          revalidateTo={revalidateTo}
+                          number={`${n}.${j + 1}`}
+                          canManage={canManage}
+                          guide={guides[doc.id] ?? null}
+                          focused={doc.id === focusDocId}
+                        />
+                      )
+                    )}
                     {section.docs.length === 0 && (
-                      <p className="py-3 text-xs text-muted">Nothing required here yet.</p>
+                      <p className="py-3 text-xs text-muted">
+                        {section.key === FEE_RECEIPT_CATEGORY
+                          ? "No receipts yet. Processing files them on each application."
+                          : "Nothing required here yet."}
+                      </p>
                     )}
                   </div>
-                  {canManage && (
+                  {/* Application Fee holds only what is filed on an application. */}
+                  {canManage && section.key !== FEE_RECEIPT_CATEGORY && (
                     <AddRequirementForm
                       studentId={studentId}
                       applicationId={applicationId}

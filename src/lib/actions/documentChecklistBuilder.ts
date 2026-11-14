@@ -17,6 +17,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { isTrackScope } from "@/lib/documentChecklist";
 import { requirePermission } from "@/lib/auth/permissions";
+import { FEE_RECEIPT_CATEGORY } from "@/lib/applicationFeeReceipts";
 
 const REVALIDATE = "/setup/create-doc-checklist";
 const DENIED = "Only Super Admin and the Processing team can edit document checklists.";
@@ -206,6 +207,10 @@ export async function addSectionToDestination(destinationId: string | null, sect
 export async function removeSectionFromDestination(destinationId: string | null, sectionKey: string) {
   const error = await gate();
   if (error) return { error };
+  // Where every application's fee receipts are kept (0365), whatever the destination.
+  if (sectionKey === FEE_RECEIPT_CATEGORY && destinationId === null) {
+    return { error: "Application Fee holds the fee receipts filed on students' applications, so it stays on every checklist." };
+  }
   const supabase = await createClient();
 
   let owned = supabase.from("document_templates").select("id").eq("category", sectionKey);
@@ -265,6 +270,10 @@ export async function addChecklistItem(
 ) {
   const error = await gate();
   if (error) return { error };
+  // Its only requirement is the receipts Processing files on each application (0365).
+  if (sectionKey === FEE_RECEIPT_CATEGORY) {
+    return { error: "Application Fee holds only the receipts filed on each application, so nothing is asked for here." };
+  }
   const supabase = await createClient();
 
   const name = String(formData.get("name") ?? "").trim();

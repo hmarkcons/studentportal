@@ -30,7 +30,7 @@ export default async function StudentDocumentsTab(props: {
     ensureStudentDocumentRequirements(id),
     loadStudentChecklistSections(supabase, id),
     hasPermission("documents.manage_requirements"),
-    supabase.from("applications").select("id, university:universities(name)").eq("student_id", id),
+    supabase.from("applications").select("id, fee_receipts_visible, university:universities(name)").eq("student_id", id),
     supabase.from("student_cycles").select("id, sequence, intake, is_current").eq("student_id", id).order("sequence"),
     supabase.from("document_templates").select("id").eq("renew_each_intake", true),
     // For the name of the "Download all" ZIP.
@@ -92,6 +92,8 @@ export default async function StudentDocumentsTab(props: {
   }
 
   const appLabel = new Map((applications ?? []).map((a) => [a.id, one(a.university as never) as { name?: string } | null]));
+  // Whether each application's fee receipts have been shown to the student (0365).
+  const receiptsShown = new Map((applications ?? []).map((a) => [a.id, Boolean(a.fee_receipts_visible)]));
 
   const [history, guides, filesByDoc, { data: removalRows }] = await Promise.all([
     loadDocumentHistory(supabase, docs.map((d) => d.id)),
@@ -121,7 +123,8 @@ export default async function StudentDocumentsTab(props: {
       const fileLabel = `${base}${uni?.name ? ` — ${uni.name}` : ""}`;
       const name = `${fileLabel}${carried}`;
       const past = history.get(d.id) ?? [];
-      return { ...d, name, fileLabel, history: past, files: filesByDoc.get(d.id) ?? [] };
+      const shown = d.category === "application_fee" && d.application_id ? { receiptsShown: receiptsShown.get(d.application_id) ?? false } : {};
+      return { ...d, name, fileLabel, history: past, files: filesByDoc.get(d.id) ?? [], ...shown };
   });
 
   return (
