@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { QUALIFICATION_TYPES } from "@/lib/qualifications";
+import { QUALIFICATION_TYPES, readQualificationDates } from "@/lib/qualifications";
 import { requireStaffStudentWrite } from "@/lib/auth/permissions";
 
 // A refused UPDATE/DELETE matches no rows and raises nothing (AGENTS.md); say so.
@@ -21,7 +21,12 @@ export async function upsertStudentQualification(
     return { error: "Choose a valid qualification type." };
   }
 
+  // When the level started and was (or will be) completed (0367).
+  const dates = readQualificationDates(String(formData.get("start_date") ?? ""), String(formData.get("completion_date") ?? ""));
+  if ("error" in dates) return { error: dates.error };
+
   const fields = {
+    ...dates,
     qualification_name: String(formData.get("qualification_name") ?? "").trim() || null,
     institution_name: String(formData.get("institution_name") ?? "").trim() || null,
     city: String(formData.get("city") ?? "").trim() || null,

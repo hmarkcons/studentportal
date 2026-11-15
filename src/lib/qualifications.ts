@@ -40,6 +40,37 @@ export function institutionLabel(type: QualificationType): string {
   return "Institution name";
 }
 
+const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/** A YYYY-MM-DD date that exists on the calendar, or null. */
+function realDate(value: string): string | null {
+  const m = ISO_DATE.exec(value);
+  if (!m) return null;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const at = new Date(Date.UTC(y, mo - 1, d));
+  if (at.getUTCFullYear() !== y || at.getUTCMonth() !== mo - 1 || at.getUTCDate() !== d) return null;
+  return y >= 1950 && y <= 2100 ? value : null;
+}
+
+/**
+ * An education level's start and completion dates (0367), as typed: both
+ * optional, the completion possibly ahead for studies under way, never before
+ * the start. Blank is null; anything else must be a real date.
+ */
+export function readQualificationDates(
+  start: string,
+  completion: string
+): { start_date: string | null; completion_date: string | null } | { error: string } {
+  const s = start.trim();
+  const c = completion.trim();
+  const startDate = s ? realDate(s) : null;
+  const completionDate = c ? realDate(c) : null;
+  if (s && !startDate) return { error: "The start date is not a date — choose it from the calendar." };
+  if (c && !completionDate) return { error: "The completion date is not a date — choose it from the calendar." };
+  if (startDate && completionDate && completionDate < startDate) return { error: "The completion date is before the start date." };
+  return { start_date: startDate, completion_date: completionDate };
+}
+
 // Non-blocking completeness check for the tab's checklist banner — per the
 // user's own direction, missing qualifications are surfaced as an
 // incomplete indicator only, nothing is blocked anywhere else in the app.

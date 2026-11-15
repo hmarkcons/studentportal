@@ -11,6 +11,9 @@ import { QUALIFICATION_TYPE_LABELS, institutionLabel, type QualificationType } f
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
+import { formatDateOnly } from "@/lib/formatDate";
+
+const shortDate = (d: string) => formatDateOnly(d, { day: "numeric", month: "short", year: "numeric" });
 
 export type QualificationRowData = {
   id: string;
@@ -21,6 +24,9 @@ export type QualificationRowData = {
   country: string | null;
   address: string | null;
   grade_percentage: string | null;
+  /** When the level started and was completed (0367); the completion may be ahead. */
+  start_date?: string | null;
+  completion_date?: string | null;
 } | null;
 
 export function QualificationRow({
@@ -93,6 +99,16 @@ export function QualificationRow({
             Grade / percentage
             <Input name="grade_percentage" defaultValue={data?.grade_percentage ?? ""} />
           </label>
+          <span className="hidden sm:block" aria-hidden />
+          <label className="flex flex-col gap-1 text-xs text-muted">
+            Start date
+            <Input name="start_date" type="date" defaultValue={data?.start_date ?? ""} data-qualification-start />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-muted">
+            Completion date
+            <Input name="completion_date" type="date" defaultValue={data?.completion_date ?? ""} data-qualification-completion />
+            <span className="text-[11px]">The expected date, if still studying.</span>
+          </label>
           <div className="col-span-full flex items-center gap-2">
             <Button type="submit" variant="primary" size="sm" pending={pending} status={{ state: result, label: "Saved." }}>
               Save
@@ -135,6 +151,9 @@ export function QualificationRow({
           </p>
           {data?.address && <p className="text-xs text-muted">{data.address}</p>}
           <p className="text-xs text-muted">Grade/percentage: {data?.grade_percentage ?? "—"}</p>
+          <p className="text-xs text-muted" data-qualification-dates>
+            Start: {data?.start_date ? shortDate(data.start_date) : "—"} · Completion: {data?.completion_date ? shortDate(data.completion_date) : "—"}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <button type="button" onClick={() => setEditing(true)} className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
