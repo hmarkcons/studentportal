@@ -57,6 +57,8 @@ export type ApplicationRow = {
   tasksTotal: number;
   createdAt: string;
   updatedAt: string;
+  /** When it was first submitted (applicationSubmissionOrder.ts); set on one student's list only. */
+  submittedAt?: string | null;
 };
 
 /** A programme of a university, with its intake rounds, for the Programme and Round cells. */

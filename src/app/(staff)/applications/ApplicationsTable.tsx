@@ -22,6 +22,7 @@ import {
 import { deleteApplication } from "@/lib/actions/applications";
 import type { ApplicationRow, ProgramOption } from "@/lib/applicationRows";
 import { compareApplications, GROUP_LABEL, stageGroup, stageLabel, type ApplicationColumnKey, type StageGroup } from "@/lib/applicationTable";
+import { isSubmitted, submittedFirst } from "@/lib/applicationSubmissionOrder";
 import { applicationCellText } from "@/lib/applicationText";
 import { formatFee } from "@/lib/applicationFee";
 import { daysUntil } from "@/lib/applicationDeadline";
@@ -115,14 +116,15 @@ export function ApplicationsTable({
     setEdits((all) => Object.fromEntries(Object.entries(all).filter(([, e]) => e.at > refreshedAt)));
   }
 
-  const merged = useMemo(
-    () =>
-      rows
-        .filter((r) => !gone.has(r.id))
-        .map((r) => (edits[r.id] ? { ...r, ...edits[r.id].patch } : r))
-        .sort((a, b) => compareApplications(sortable(a), sortable(b))),
-    [rows, edits, gone]
-  );
+  const merged = useMemo(() => {
+    const shown = rows.filter((r) => !gone.has(r.id)).map((r) => (edits[r.id] ? { ...r, ...edits[r.id].patch } : r));
+    const byRule = (a: ApplicationRow, b: ApplicationRow) => compareApplications(sortable(a), sortable(b));
+    // One student's list: the submitted first, the first submitted on top,
+    // then the rest by the office's rule. The whole list keeps that rule.
+    return scope === "student"
+      ? submittedFirst(shown, (r) => ({ submitted: isSubmitted(r.stage, r.pipeline), at: r.submittedAt }), byRule)
+      : shown.sort(byRule);
+  }, [rows, edits, gone, scope]);
 
   const counts = useMemo(() => {
     const c: Record<StageGroup, number> = { accepted: 0, progress: 0, closed: 0, rejected: 0 };
@@ -167,8 +169,19 @@ export function ApplicationsTable({
   async function saveStage(row: ApplicationRow, stage: string) {
     const was = stageGroup(row.stage, row.pipeline);
     const now = stageGroup(stage, row.pipeline);
+    const wasIn = isSubmitted(row.stage, row.pipeline);
+    const nowIn = isSubmitted(stage, row.pipeline);
     const moved =
-      now === was
+      // One student's list orders by submission first.
+      scope === "student" && wasIn !== nowIn
+        ? nowIn
+          ? "Submitted — moved up with the submitted applications."
+          : now === "rejected"
+            ? "Rejected — moved below the submitted applications."
+            : "Stage saved — moved below the submitted applications."
+        : scope === "student" && nowIn
+          ? "Stage saved."
+          : now === was
         ? "Stage saved."
         : now === "rejected"
           ? "Rejected — moved to the bottom of the list."

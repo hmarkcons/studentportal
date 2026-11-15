@@ -8,6 +8,7 @@ import { ProgramDates } from "@/components/ProgramDates";
 import { karachiToday } from "@/lib/calendarDates";
 import { loadStudentApplications } from "@/lib/studentApplications";
 import { applicationAdmitted, applicationSubmitted } from "@/lib/studentJourney";
+import { firstSubmittedAt, isSubmitted, submittedFirst, type StageEntry } from "@/lib/applicationSubmissionOrder";
 import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
 import { PortalStat, PortalStats } from "@/components/studentPortal/PortalStat";
 import { PortalEmpty } from "@/components/studentPortal/PortalEmpty";
@@ -28,7 +29,31 @@ export default async function PortalApplicationsPage() {
   const { data: student } = await supabase.from("students").select("id").eq("auth_user_id", userId ?? "").maybeSingle();
   if (!student) return null;
 
-  const apps = await loadStudentApplications(supabase, student.id);
+  const loaded = await loadStudentApplications(supabase, student.id);
+  // The submitted first, the first submitted on top; then the rest in the
+  // order they were added — as staff see this student's list
+  // (applicationSubmissionOrder.ts).
+  const { data: historyRows } = loaded.length
+    ? await supabase.from("application_stage_history").select("application_id, stage, entered_at").in("application_id", loaded.map(({ app }) => app.id))
+    : { data: [] };
+  const historyOf = new Map<string, StageEntry[]>();
+  for (const h of historyRows ?? []) {
+    const list = historyOf.get(h.application_id as string) ?? [];
+    list.push({ stage: h.stage as string, enteredAt: h.entered_at as string });
+    historyOf.set(h.application_id as string, list);
+  }
+  const added = new Map(loaded.map(({ app }, i) => [app.id, i]));
+  const apps = submittedFirst(
+    loaded,
+    ({ app, dest }) => {
+      const pipeline = dest?.pipeline_stages ?? [];
+      return {
+        submitted: isSubmitted(app.current_stage, pipeline),
+        at: firstSubmittedAt({ stage: app.current_stage, pipeline, createdAt: app.created_at }, historyOf.get(app.id) ?? []),
+      };
+    },
+    (a, b) => (added.get(a.app.id) ?? 0) - (added.get(b.app.id) ?? 0)
+  );
   // Karachi's business day decides which rounds have closed.
   const today = karachiToday();
   const { submitted, offers } = summarise(apps);

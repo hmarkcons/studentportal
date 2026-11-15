@@ -1,3 +1,4 @@
+import { firstSubmittedAt, type StageEntry } from "@/lib/applicationSubmissionOrder";
 import { hasRole } from "@/lib/auth/roles";
 import Link from "next/link";
 import { getStaffSession } from "@/lib/auth/session";
@@ -104,9 +105,23 @@ export default async function StudentApplicationsTab(props: {
   // priority order are all per intake: last year's finalised university must
   // not lock this year's, and "application #3" has to mean the third one of
   // this attempt — in the priority staff set, as the cards numbered them.
-  const rows = allRows
-    .filter((r) => !showCycleTabs || (r.cycleId ?? firstCycleId) === activeCycleId)
-    .map((r) => ({ ...r, cycleId: r.cycleId ?? firstCycleId }));
+  const intakeRows = allRows.filter((r) => !showCycleTabs || (r.cycleId ?? firstCycleId) === activeCycleId);
+  // When each was first submitted, from its stage history: the submitted are
+  // listed first, the first submitted on top (applicationSubmissionOrder.ts).
+  const { data: historyRows } = intakeRows.length
+    ? await supabase.from("application_stage_history").select("application_id, stage, entered_at").in("application_id", intakeRows.map((r) => r.id))
+    : { data: [] };
+  const historyOf = new Map<string, StageEntry[]>();
+  for (const h of historyRows ?? []) {
+    const list = historyOf.get(h.application_id as string) ?? [];
+    list.push({ stage: h.stage as string, enteredAt: h.entered_at as string });
+    historyOf.set(h.application_id as string, list);
+  }
+  const rows = intakeRows.map((r) => ({
+    ...r,
+    cycleId: r.cycleId ?? firstCycleId,
+    submittedAt: firstSubmittedAt({ stage: r.stage, pipeline: r.pipeline, createdAt: r.createdAt }, historyOf.get(r.id) ?? []),
+  }));
   [...rows]
     .sort((x, y) => (x.sortOrder ?? Number.MAX_SAFE_INTEGER) - (y.sortOrder ?? Number.MAX_SAFE_INTEGER) || x.createdAt.localeCompare(y.createdAt))
     .forEach((r, i) => (r.number = i + 1));
