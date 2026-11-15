@@ -1,11 +1,12 @@
-// Application fee receipts (0365): src/lib/applicationFeeReceipts.ts, and what
-// the rest of the documents code must do with them.
+// Receipts from universities (0365, 0366) — src/lib/applicationFeeReceipts.ts —
+// and a university's specific requirements in Other (universityRequirements.ts).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { FEE_RECEIPT_CATEGORY, FEE_RECEIPT_SECTION_LABEL, MAX_FEE_RECEIPTS_AT_ONCE, feeReceiptPath, isFeeReceiptPath, looksLikeReceipt, receiptEntryName } from "../src/lib/applicationFeeReceipts.ts";
 import { CATEGORY_ORDER, CATEGORY_LABELS, sectionOfCategory } from "../src/lib/documentCategories.ts";
 import { CATEGORIES_NOT_CARRIED } from "../src/lib/intakeCycle.ts";
 import { planAutoStages } from "../src/lib/autoStages.ts";
+import { keepUniversitiesTogether, universityRequirementName } from "../src/lib/universityRequirements.ts";
 
 const STUDENT = "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b";
 const APP = "0a1b2c3d-4e5f-4061-8728-394a5b6c7d8e";
@@ -95,4 +96,31 @@ test("a name typed for a university's document says when it is a receipt", () =>
 test("several at once, but not without limit", () => {
   assert.ok(MAX_FEE_RECEIPTS_AT_ONCE >= 2);
   assert.ok(MAX_FEE_RECEIPTS_AT_ONCE <= 20);
+});
+
+// ------------------------------------------------ a university's specific requirements, in Other
+
+test("a university's requirement is named with the university and the programme", () => {
+  assert.equal(universityRequirementName("Motivation form", "University of Padova", "MSc Data Science"), "Motivation form — University of Padova — MSc Data Science");
+  assert.equal(universityRequirementName("Motivation form", "University of Padova", null), "Motivation form — University of Padova");
+  assert.equal(universityRequirementName("Motivation form", null, "  "), "Motivation form");
+});
+
+test("one university's documents stay together in Other, in the order they were added", () => {
+  // Newest first, as the Documents pages read them.
+  const docs = [
+    { id: "padova-2", uni: "padova", created_at: "2026-11-15T10:00:00Z" },
+    { id: "general-1", uni: null, created_at: "2026-11-15T09:00:00Z" },
+    { id: "bologna-1", uni: "bologna", created_at: "2026-11-15T08:00:00Z" },
+    { id: "padova-1", uni: "padova", created_at: "2026-11-15T07:00:00Z" },
+    { id: "general-2", uni: null, created_at: "2026-11-15T06:00:00Z" },
+    { id: "padova-3", uni: "padova", created_at: "2026-11-15T11:00:00Z" },
+  ];
+  const order = keepUniversitiesTogether(docs, (d) => d.uni).map((d) => d.id);
+  assert.deepEqual(order, ["padova-1", "padova-2", "padova-3", "general-1", "bologna-1", "general-2"]);
+});
+
+test("nothing to group: the order is untouched", () => {
+  const docs = [{ id: "a", created_at: "2" }, { id: "b", created_at: "1" }];
+  assert.deepEqual(keepUniversitiesTogether(docs, () => null).map((d) => d.id), ["a", "b"]);
 });

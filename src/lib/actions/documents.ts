@@ -13,6 +13,7 @@ import { categoryCarriesOver, documentCarriesOver } from "@/lib/intakeCycle";
 import { ensureCurrentCycle } from "@/lib/ensureCycle";
 import { uploadedFile } from "@/lib/stagedUpload";
 import { fileReceipts } from "@/lib/receiptFiling";
+import { UNIVERSITY_REQUIREMENT_CATEGORY } from "@/lib/universityRequirements";
 import { syncStagesForDocument, syncStudentStages } from "@/lib/autoStagesSync";
 
 const MANAGE_DENIED = "Only Super Admin and the Processing team can add or remove document requirements.";
@@ -605,10 +606,17 @@ export async function uploadApplicationDocument(
   if (!name) return { error: "Say what the document is — an acceptance letter, an offer letter, a CAS…" };
   if (name.length > 120) return { error: "Keep the document's name to 120 characters." };
 
-  const file = await uploadedFile(formData, "file");
-  if (!file || file.size === 0) return { error: "Choose a file to upload." };
-  const validationError = validateDocumentFile(file);
-  if (validationError) return { error: validationError };
+  // A letter, a receipt or invoice, or something this university asks for
+  // that no other does (File under, on the form).
+  const kind = String(formData.get("kind") ?? "letter");
+  const sent = await uploadedFile(formData, "file");
+  const file = sent && sent.size > 0 ? sent : null;
+  // A university's requirement with no file is asked of the student instead.
+  if (!file && kind !== "requirement") return { error: "Choose a file to upload." };
+  if (file) {
+    const validationError = validateDocumentFile(file);
+    if (validationError) return { error: validationError };
+  }
 
   const { data: app } = await supabase.from("applications").select("id, student_id, cycle_id, fee_receipts_visible").eq("id", applicationId).maybeSingle();
   if (!app || app.student_id !== studentId) return { error: "That application isn't this student's." };
@@ -617,7 +625,7 @@ export async function uploadApplicationDocument(
   // application's receipts in Receipts - Universities, under the name typed,
   // hidden from the student until shown — and moves no stage, where a letter
   // moves the application to its acceptance stage.
-  if (formData.get("kind") === "receipt") {
+  if (kind === "receipt" && file) {
     const ext = (file.name.match(/\.[A-Za-z0-9]{1,5}$/) ?? [""])[0];
     const fileName = ext && !name.toLowerCase().endsWith(ext.toLowerCase()) ? `${name}${ext}` : name;
     const filed = await fileReceipts(
@@ -633,6 +641,28 @@ export async function uploadApplicationDocument(
   }
 
   const cycleId = (app.cycle_id as string | null) ?? (await ensureCurrentCycle(studentId))?.id ?? null;
+  // A university's own requirement goes to Other, named on the pages with the
+  // university and programme and kept with that university's others; it is
+  // not a letter, so it moves no stage the way a letter does.
+  const category = kind === "requirement" ? UNIVERSITY_REQUIREMENT_CATEGORY : "acceptance_letters";
+
+  if (!file) {
+    // Nothing uploaded: the student is asked for it, as for any requirement.
+    const { error: askError } = await supabase.from("student_documents").insert({
+      student_id: studentId,
+      application_id: applicationId,
+      category,
+      custom_name: name,
+      status: "missing",
+      cycle_id: cycleId,
+    });
+    if (askError) {
+      return { error: askError.message.includes("row-level security") ? "Only the processing team can file documents for this student." : askError.message };
+    }
+    revalidatePath(revalidateTo);
+    revalidatePath(`/students/${studentId}/documents`);
+    return { success: true };
+  }
 
   const now = new Date().toISOString();
   const { data: row, error: insertError } = await supabase
@@ -640,7 +670,7 @@ export async function uploadApplicationDocument(
     .insert({
       student_id: studentId,
       application_id: applicationId,
-      category: "acceptance_letters",
+      category,
       custom_name: name,
       status: "verified",
       uploaded_by_role: "staff",
@@ -676,7 +706,7 @@ export async function uploadApplicationDocument(
     return { error: pathError.message === "not authorized" ? "Only the processing team can file documents for this student." : pathError.message };
   }
 
-  await syncStudentStages(studentId);
+  if (category === "acceptance_letters") await syncStudentStages(studentId);
   revalidatePath(revalidateTo);
   revalidatePath(`/students/${studentId}/documents`);
   revalidatePath(`/students/${studentId}`);

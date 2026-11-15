@@ -20,7 +20,10 @@
 //   * a receipt removed goes to the 90-day trash; hidden again, the student
 //     sees nothing; the last one removed takes the requirement with it;
 //   * "Documents from the university" files an invoice typed as such with the
-//     receipts — never as an acceptance letter — and moves no stage.
+//     receipts — never as an acceptance letter — and moves no stage;
+//   * and a specific requirement of the university in Other: with a file,
+//     approved; with none, asked of the student; named with the university
+//     and programme, one university's kept together in the order added.
 //
 // Everything is named zztmp and removed in a finally, with its files.
 import { BASE, FIXTURE_PASSWORD, apiAs, clients, fixtures, openBrowser, removeStagedFiles, reporter, requireConfirmation, signIn } from "./verify-portal-lib.mjs";
@@ -37,6 +40,7 @@ const STUDENT = `zztmp Fee Student ${RUN}`;
 const STUDENT_EMAIL = `zztmp-fee-${RUN}@hmark-test.local`;
 const PARTNER_EMAIL = `zztmp-fee-partner-${RUN}@hmark-test.local`;
 const UNI = `zztmp Fee University ${RUN}`;
+const PROGRAMME = `zztmp Fee Programme ${RUN}`;
 
 async function poll(fn, seconds = 45, every = 500) {
   const until = Date.now() + seconds * 1000;
@@ -97,7 +101,9 @@ try {
     .select("id").single();
   if (uniError) throw new Error(`university: ${uniError.message}`);
   universityId = uni.id;
-  const { data: app, error: appError } = await admin.from("applications").insert({ student_id: studentId, university_id: uni.id, intake: "Fall 2099", current_stage: "documents_pending" }).select("id").single();
+  const { data: programme, error: programmeError } = await admin.from("programs").insert({ university_id: uni.id, level: "masters", name: PROGRAMME }).select("id").single();
+  if (programmeError) throw new Error(`programme: ${programmeError.message}`);
+  const { data: app, error: appError } = await admin.from("applications").insert({ student_id: studentId, university_id: uni.id, program_id: programme.id, intake: "Fall 2099", current_stage: "documents_pending" }).select("id").single();
   if (appError) throw new Error(`application: ${appError.message}`);
   applicationId = app.id;
   const { data: madePartner, error: partnerError } = await admin.auth.admin.createUser({ email: PARTNER_EMAIL, password: FIXTURE_PASSWORD, email_confirm: true });
@@ -321,6 +327,52 @@ try {
   ok("...not as an acceptance letter, and no stage moved", letters === 0 && stageNow?.current_stage === "documents_pending", JSON.stringify({ letters, stage: stageNow?.current_stage }));
   reads = await studentReads();
   ok("...hidden from the student", reads.docs === 0);
+
+  // ------------------------------------------------------------ a specific requirement of the university, in Other
+  const otherDocs = async () => (await admin.from("student_documents").select("id, custom_name, status, category, application_id, created_at").eq("student_id", studentId).eq("category", "other").order("created_at")).data ?? [];
+  const fileUnder = async (name, kind, chosen) => {
+    await page.goto(appUrl, { waitUntil: "domcontentloaded" });
+    const b = page.locator("[data-university-upload]");
+    await b.waitFor({ timeout: 120000 });
+    await page.waitForFunction(() => {
+      const input = document.querySelector("[data-university-upload] select[name=kind]");
+      return Boolean(input && Object.keys(input).some((k) => k.startsWith("__reactProps")));
+    }, null, { timeout: 60000 });
+    await b.locator("input[name=name]").fill(name);
+    await b.locator("select[name=kind]").selectOption(kind);
+    if (chosen) await b.locator("input[type=file]").setInputFiles(chosen);
+    const go = b.getByRole("button", { name: chosen ? "Upload" : "Add requirement" });
+    await poll(async () => (await go.isEnabled()) || null, 60);
+    await go.click();
+  };
+  await fileUnder("zztmp Motivation form", "requirement", [await file("motivation.pdf")]);
+  const first = await poll(async () => (await otherDocs()).find((d) => d.custom_name === "zztmp Motivation form") ?? null, 60);
+  const firstFiles = first ? await receiptFiles(first.id) : [];
+  ok("a specific requirement with a file is filed in Other, approved, on the application", first?.application_id === applicationId && first.status === "verified" && firstFiles.length === 1 && firstFiles[0].status === "verified", JSON.stringify({ first, firstFiles }));
+  ok("...and moves no stage", (await admin.from("applications").select("current_stage").eq("id", applicationId).single()).data?.current_stage === "documents_pending");
+  // Something else in Other in between, so keeping a university's together is something the page has to do.
+  const { data: general } = await admin.from("student_documents").insert({ student_id: studentId, category: "other", custom_name: `zztmp General ${RUN}`, status: "missing" }).select("id").single();
+  await new Promise((r) => setTimeout(r, 1200));
+  await fileUnder("zztmp Language certificate", "requirement", null);
+  const second = await poll(async () => (await otherDocs()).find((d) => d.custom_name === "zztmp Language certificate") ?? null, 60);
+  ok("...with no file, the student is asked for it", second?.application_id === applicationId && second.status === "missing", JSON.stringify(second));
+
+  await page.goto(`${BASE}/students/${studentId}/documents?doc=${first.id}`, { waitUntil: "domcontentloaded" });
+  await page.locator(`[data-document-row="${first.id}"]`).waitFor({ timeout: 120000 });
+  const staffOrder = await page.locator("[data-document-row]").evaluateAll((rows) => rows.map((r) => r.getAttribute("data-document-row")));
+  const at = (order, id) => order.indexOf(id);
+  ok("the Documents tab keeps the university's together in Other, in the order added", at(staffOrder, first.id) >= 0 && at(staffOrder, second.id) === at(staffOrder, first.id) + 1 && at(staffOrder, general.id) > at(staffOrder, second.id), JSON.stringify({ first: at(staffOrder, first.id), second: at(staffOrder, second.id), general: at(staffOrder, general.id) }));
+  const firstName = ((await page.locator(`[data-document-row="${first.id}"] p`).first().textContent()) ?? "").trim();
+  ok("...named with the university and the programme", firstName.endsWith(`zztmp Motivation form — ${UNI} — ${PROGRAMME}`), firstName);
+  await shot(page, "fee-staff-other");
+
+  await sp.goto(`${BASE}/portal/documents?guide=${second.id}`, { waitUntil: "domcontentloaded" });
+  await sp.locator(`[data-document-row="${second.id}"]`).waitFor({ timeout: 60000 });
+  const studentOrder = await sp.locator("[data-document-row]").evaluateAll((rows) => rows.map((r) => r.getAttribute("data-document-row")));
+  ok("the student sees them the same way, together and in order", at(studentOrder, second.id) === at(studentOrder, first.id) + 1 && at(studentOrder, general.id) > at(studentOrder, second.id), JSON.stringify({ first: at(studentOrder, first.id), second: at(studentOrder, second.id), general: at(studentOrder, general.id) }));
+  const secondRow = sp.locator(`[data-document-row="${second.id}"]`);
+  ok("...named with the university and the programme, and asked to upload the one with no file", ((await secondRow.textContent()) ?? "").includes(`zztmp Language certificate — ${UNI} — ${PROGRAMME}`) && (await secondRow.locator("input[type=file]").count()) === 1);
+  await shot(sp, "fee-student-other");
 } catch (e) {
   ok("the run finished", false, e?.stack ?? String(e));
 } finally {
@@ -344,6 +396,7 @@ try {
   if (universityId) {
     await admin.from("applications").delete().eq("university_id", universityId);
     if (partnerUserId) await admin.from("partner_university_accounts").delete().eq("id", partnerUserId);
+    await admin.from("programs").delete().eq("university_id", universityId);
     await admin.from("universities").delete().eq("id", universityId);
   }
   for (const id of [studentUserId, partnerUserId]) {

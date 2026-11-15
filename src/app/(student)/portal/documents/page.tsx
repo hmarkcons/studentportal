@@ -12,6 +12,7 @@ import { loadStudentChecklistSections } from "@/lib/studentChecklistSections";
 import { DocumentSectionList } from "@/components/DocumentSectionList";
 import { sectionOfCategory } from "@/lib/documentCategories";
 import { FEE_RECEIPT_CATEGORY, receiptEntryName } from "@/lib/applicationFeeReceipts";
+import { keepUniversitiesTogether, universityRequirementName } from "@/lib/universityRequirements";
 import { PortalPageHeader } from "@/components/studentPortal/PortalPageHeader";
 import { PortalStat, PortalStats } from "@/components/studentPortal/PortalStat";
 import { PortalEmpty } from "@/components/studentPortal/PortalEmpty";
@@ -36,7 +37,7 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
   // student is the one reading it. What does not depend on it is read beside
   // it rather than after.
   const [{ data: applications }, configured] = await Promise.all([
-    supabase.from("applications").select("id, university:universities(name)").eq("student_id", student.id),
+    supabase.from("applications").select("id, university_id, university:universities(name), program:programs(name)").eq("student_id", student.id),
     // Order and labels come from what the Create Doc Checklist builder set for
     // this student's destinations — see the sections below.
     loadStudentChecklistSections(supabase, student.id),
@@ -46,6 +47,10 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
   // document ring counts exactly these.
   const cycleDocs = await loadCycleDocuments(supabase, student.id, cycleParam);
   const appLabel = new Map((applications ?? []).map((a) => [a.id, one(a.university as never) as { name?: string } | null]));
+  // A university's own requirements in Other name the programme too, and stay together by university.
+  const programmeOf = new Map((applications ?? []).map((a) => [a.id, (one(a.program as never) as { name?: string } | null)?.name ?? null]));
+  const universityOf = new Map((applications ?? []).map((a) => [a.id, (a.university_id as string | null) ?? null]));
+  const inOther = (d: { category: string | null }) => sectionOfCategory(d.category) === "other";
   const { docs: rawDocs, cycles, showCycleTabs, activeCycleId, isPreviousIntake, inheritedFromById } = cycleDocs;
 
   const [docHistory, guides, filesByDoc] = await Promise.all([
@@ -56,7 +61,8 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
     loadDocumentFiles(supabase, rawDocs),
   ]);
 
-  const docsWithUrls = rawDocs.map((d) => {
+  // One university's own requirements together in Other, in the order they were added.
+  const docsWithUrls = keepUniversitiesTogether(rawDocs.map((d) => {
       const uni = d.application_id ? appLabel.get(d.application_id) : null;
       const templateName = one(d.template as never) as { name?: string } | null;
       const baseName = d.custom_name ?? templateName?.name ?? d.category ?? "Document";
@@ -68,10 +74,14 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
       const carried = inheritedFromById.get(d.id) ? " — already approved, carried over" : "";
       // An application's receipts are listed under its university's name (0366).
       const custom_name =
-        d.category === FEE_RECEIPT_CATEGORY ? receiptEntryName(uni?.name, baseName) : `${baseName}${uni?.name ? ` — ${uni.name}` : ""}${carried}`;
+        d.category === FEE_RECEIPT_CATEGORY
+          ? receiptEntryName(uni?.name, baseName)
+          : d.application_id && inOther(d)
+            ? `${universityRequirementName(baseName, uni?.name, programmeOf.get(d.application_id))}${carried}`
+            : `${baseName}${uni?.name ? ` — ${uni.name}` : ""}${carried}`;
       const past = docHistory.get(d.id) ?? [];
       return { ...d, custom_name, history: past, files: filesByDoc.get(d.id) ?? [] };
-  });
+  }), (d) => (d.application_id && inOther(d) ? universityOf.get(d.application_id) : null));
 
   // Grouped and numbered the same way staff see them on the Documents tab, so
   // "section 2, item 3" means the same thing to a student on the phone as to

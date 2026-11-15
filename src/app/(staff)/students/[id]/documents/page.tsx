@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { DocumentChecklist, type DocRow } from "@/components/DocumentChecklist";
 import { FEE_RECEIPT_CATEGORY, receiptEntryName } from "@/lib/applicationFeeReceipts";
+import { keepUniversitiesTogether, universityRequirementName } from "@/lib/universityRequirements";
+import { sectionOfCategory } from "@/lib/documentCategories";
 import { ensureStudentDocumentRequirements } from "@/lib/actions/documents";
 import { loadStudentChecklistSections } from "@/lib/studentChecklistSections";
 import { hasPermission } from "@/lib/auth/permissions";
@@ -31,7 +33,7 @@ export default async function StudentDocumentsTab(props: {
     ensureStudentDocumentRequirements(id),
     loadStudentChecklistSections(supabase, id),
     hasPermission("documents.manage_requirements"),
-    supabase.from("applications").select("id, fee_receipts_visible, university:universities(name)").eq("student_id", id),
+    supabase.from("applications").select("id, university_id, fee_receipts_visible, university:universities(name), program:programs(name)").eq("student_id", id),
     supabase.from("student_cycles").select("id, sequence, intake, is_current").eq("student_id", id).order("sequence"),
     supabase.from("document_templates").select("id").eq("renew_each_intake", true),
     // For the name of the "Download all" ZIP.
@@ -95,6 +97,10 @@ export default async function StudentDocumentsTab(props: {
   const appLabel = new Map((applications ?? []).map((a) => [a.id, one(a.university as never) as { name?: string } | null]));
   // Whether each application's fee receipts have been shown to the student (0365).
   const receiptsShown = new Map((applications ?? []).map((a) => [a.id, Boolean(a.fee_receipts_visible)]));
+  // A university's own requirements in Other name the programme too, and stay together by university.
+  const programmeOf = new Map((applications ?? []).map((a) => [a.id, (one(a.program as never) as { name?: string } | null)?.name ?? null]));
+  const universityOf = new Map((applications ?? []).map((a) => [a.id, (a.university_id as string | null) ?? null]));
+  const inOther = (d: { category: string | null }) => sectionOfCategory(d.category) === "other";
 
   const [history, guides, filesByDoc, { data: removalRows }] = await Promise.all([
     loadDocumentHistory(supabase, docs.map((d) => d.id)),
@@ -122,7 +128,12 @@ export default async function StudentDocumentsTab(props: {
       // this year's checklist with no explanation looks like a mistake.
       const carried = inheritedFrom ? ` — carried over from intake ${inheritedFrom}` : "";
       // An application's receipts are listed under its university's name (0366).
-      const fileLabel = d.category === FEE_RECEIPT_CATEGORY ? receiptEntryName(uni?.name, base) : `${base}${uni?.name ? ` — ${uni.name}` : ""}`;
+      const fileLabel =
+        d.category === FEE_RECEIPT_CATEGORY
+          ? receiptEntryName(uni?.name, base)
+          : d.application_id && inOther(d)
+            ? universityRequirementName(base, uni?.name, programmeOf.get(d.application_id))
+            : `${base}${uni?.name ? ` — ${uni.name}` : ""}`;
       const name = `${fileLabel}${carried}`;
       const past = history.get(d.id) ?? [];
       const shown = d.category === FEE_RECEIPT_CATEGORY && d.application_id ? { receiptsShown: receiptsShown.get(d.application_id) ?? false } : {};
@@ -161,7 +172,7 @@ export default async function StudentDocumentsTab(props: {
       <Card>
         <h3 className="mb-3 text-sm font-medium text-ink">All documents</h3>
         <DocumentChecklist
-          docs={docsWithUrls}
+          docs={keepUniversitiesTogether(docsWithUrls, (d) => (d.application_id && inOther(d) ? universityOf.get(d.application_id) : null))}
           studentId={id}
           applicationId={null}
           revalidateTo={`/students/${id}/documents${showCycleTabs && activeCycleId ? `?cycle=${activeCycleId}` : ""}`}
