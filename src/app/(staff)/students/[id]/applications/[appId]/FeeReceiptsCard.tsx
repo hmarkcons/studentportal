@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/Button";
 import { ActionStatus } from "@/components/ActionStatus";
 import { uploadedLine } from "@/lib/activityStamp";
 import { stageFile } from "@/lib/stageFile";
-import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
 import { MAX_UPLOAD_BYTES, formatFileSize } from "@/lib/fileSize";
 import { FEE_RECEIPT_SECTION_LABEL, MAX_FEE_RECEIPTS_AT_ONCE } from "@/lib/applicationFeeReceipts";
 
@@ -175,7 +174,6 @@ export function FeeReceiptsCard({
               ref={input}
               type="file"
               multiple
-              accept={ACCEPTED_DOCUMENT_ACCEPT}
               onChange={(e) => void pick(e.target.files)}
               className="text-xs"
               aria-label="Choose receipt files"
@@ -183,7 +181,7 @@ export function FeeReceiptsCard({
             />
           </div>
           <p className="text-[11px] text-muted">
-            PDF, Word or image, up to {formatFileSize(MAX_UPLOAD_BYTES)} each. Choose several at once or one at a time (up to {MAX_FEE_RECEIPTS_AT_ONCE}), then upload.
+            Any file type, up to {formatFileSize(MAX_UPLOAD_BYTES)} each. Choose several at once or one at a time (up to {MAX_FEE_RECEIPTS_AT_ONCE}), then upload.
           </p>
           {chosen.length > 0 && (
             <ul className="flex flex-col gap-1" data-fee-receipt-chosen>

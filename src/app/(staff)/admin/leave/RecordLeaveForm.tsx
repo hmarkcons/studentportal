@@ -5,7 +5,6 @@ import { recordLeaveFor } from "@/lib/actions/leave";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { FileField } from "@/components/FileField";
-import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
 
 /** Leave entered for someone — they phoned in sick — approved as it is recorded. */
 export function RecordLeaveForm({ staff }: { staff: { id: string; full_name: string }[] }) {
@@ -38,7 +37,7 @@ export function RecordLeaveForm({ staff }: { staff: { id: string; full_name: str
       <Input name="reason" placeholder="Reason (optional)" />
       <div className="flex flex-col gap-1">
         <span className="text-xs text-muted">Medical certificate — without one, sick and emergency leave is recorded as unpaid.</span>
-        <FileField multiple name="certificate" accept={ACCEPTED_DOCUMENT_ACCEPT} noun="certificate" inputClassName="text-sm" />
+        <FileField multiple name="certificate" noun="certificate" inputClassName="text-sm" />
       </div>
       <div>
         <Button

@@ -6,7 +6,6 @@ import { submitSignedAgreement } from "@/lib/actions/portal-agreement";
 import { previewESignedAgreement, submitESignedAgreement } from "@/lib/actions/portal-esign";
 import { SignatureCapture, type CapturedSignature } from "@/components/SignatureCapture";
 import { Button } from "@/components/ui/Button";
-import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
 import { MAX_UPLOAD_BYTES, fileSizeError, formatFileSize, isShrinkableImage, limitHint, reduceHint, shrunkNote } from "@/lib/fileSize";
 import { shrinkImageToFit } from "@/components/shrinkImage";
 import { stageFile } from "@/lib/stageFile";
@@ -444,7 +443,6 @@ export function SubmitSignedAgreementForm({
               ref={documentInput}
               type="file"
               multiple
-              accept={ACCEPTED_DOCUMENT_ACCEPT}
               className="sr-only"
               disabled={pending || joining}
               onChange={(e) => {

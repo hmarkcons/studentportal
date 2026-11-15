@@ -188,16 +188,8 @@ export function matchesQuery(
 
 // ------------------------------------------------------------------ files
 
-/** What a task may carry: documents, pictures, and the sheets work is done in. */
-export const TASK_FILE_EXTENSIONS = ["pdf", "jpg", "jpeg", "png", "webp", "heic", "heif", "doc", "docx", "xls", "xlsx", "csv", "txt"] as const;
-export const TASK_FILE_ACCEPT = TASK_FILE_EXTENSIONS.map((e) => `.${e}`).join(",");
-
-/** Why a file cannot go on a task, or null when it can. */
-export function taskFileError(name: string, size: number, maxBytes: number): string | null {
-  const ext = (/\.([a-z0-9]+)$/i.exec(name)?.[1] ?? "").toLowerCase();
-  if (!(TASK_FILE_EXTENSIONS as readonly string[]).includes(ext)) {
-    return "Attach a PDF, a picture, a Word or Excel file, a CSV or a text file.";
-  }
+/** Why a file cannot go on a task, or null when it can: any type, within the size limit. */
+export function taskFileError(size: number, maxBytes: number): string | null {
   if (size <= 0) return "That file is empty.";
   if (size > maxBytes) return `That file is ${(size / 1024 / 1024).toFixed(1)} MB; the most a task can take is ${Math.round(maxBytes / 1024 / 1024)} MB.`;
   return null;

@@ -8,7 +8,7 @@ import { FormField } from "@/components/ui/FormField";
 import { Input, Select, Textarea } from "@/components/ui/Input";
 import { FileField } from "@/components/FileField";
 import { createTask } from "@/lib/actions/staffTasks";
-import { NOTES_MAX, STEP_MAX, TASK_FILE_ACCEPT, TITLE_MAX } from "@/lib/staffTasks";
+import { NOTES_MAX, STEP_MAX, TITLE_MAX } from "@/lib/staffTasks";
 import type { TaskPerson } from "@/lib/staffTasksLoad";
 import { toast } from "@/lib/toast";
 import { PeoplePicker } from "./PeoplePicker";
@@ -77,7 +77,7 @@ function NewTaskForm({
         <Textarea id="task-steps" name="steps" rows={3} placeholder={"Scan the passport\nEmail it to the university"} />
       </FormField>
       <FormField label="Attach a file (optional)" hint="More can be added once the task is made.">
-        <FileField name="file" accept={TASK_FILE_ACCEPT} noun="file" hint="PDF, picture, Word, Excel, CSV or text" onChange={(s) => setFileBusy(s.busy)} />
+        <FileField name="file" noun="file" hint="Any file type" onChange={(s) => setFileBusy(s.busy)} />
       </FormField>
       {state?.error && (
         <p role="alert" className="text-sm text-danger">

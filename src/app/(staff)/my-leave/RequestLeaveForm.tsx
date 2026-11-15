@@ -5,7 +5,6 @@ import { requestMyLeave } from "@/lib/actions/leave";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { FileField } from "@/components/FileField";
-import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
 
 export function RequestLeaveForm() {
   const [state, formAction, pending] = useActionState(requestMyLeave, undefined);
@@ -38,7 +37,7 @@ export function RequestLeaveForm() {
           <span className="text-xs text-muted">
             Medical certificate — sick and emergency leave is paid only with one; without it the days are unpaid.
           </span>
-          <FileField multiple name="certificate" accept={ACCEPTED_DOCUMENT_ACCEPT} noun="certificate" inputClassName="text-sm" />
+          <FileField multiple name="certificate" noun="certificate" inputClassName="text-sm" />
         </div>
       )}
       <div>

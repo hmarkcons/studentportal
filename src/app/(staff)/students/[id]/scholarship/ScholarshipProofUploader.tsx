@@ -4,7 +4,6 @@ import { useRef, useState } from "react";
 import { CircleAlert, LoaderCircle, Upload, X } from "lucide-react";
 import { stageFile } from "@/lib/stageFile";
 import { MAX_UPLOAD_BYTES, fileSizeError, formatFileSize, isShrinkableImage, limitHint, reduceHint } from "@/lib/fileSize";
-import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
 import { shrinkImageToFit } from "@/components/shrinkImage";
 import { toast } from "@/lib/toast";
 
@@ -148,7 +147,7 @@ export function ScholarshipProofUploader({ send, disabled = false }: { send: Pro
           Upload files
         </button>
         <span className="text-xs text-muted">
-          or drop them here — choose several at once. PDF, Word or photo · <span className="font-semibold text-ink">{limitHint(MAX_UPLOAD_BYTES)}</span>
+          or drop them here — choose several at once. Any file type · <span className="font-semibold text-ink">{limitHint(MAX_UPLOAD_BYTES)}</span>
         </span>
         {busy && (
           <span className="inline-flex items-center gap-1 text-xs text-muted" aria-live="polite">
@@ -160,7 +159,6 @@ export function ScholarshipProofUploader({ send, disabled = false }: { send: Pro
           ref={input}
           type="file"
           multiple
-          accept={ACCEPTED_DOCUMENT_ACCEPT}
           className="sr-only"
           tabIndex={-1}
           aria-label="Choose proof files"

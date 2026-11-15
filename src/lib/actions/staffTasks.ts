@@ -30,7 +30,7 @@ const text = (form: FormData, key: string) => {
 
 /** Puts a file on a task: in documents/tasks/<task>/…, then its row. */
 async function attach(supabase: Awaited<ReturnType<typeof getStaffSession>>["supabase"], taskId: string, file: File): Promise<string | null> {
-  const problem = taskFileError(file.name, file.size, MAX_UPLOAD_BYTES);
+  const problem = taskFileError(file.size, MAX_UPLOAD_BYTES);
   if (problem) return problem;
   const path = `tasks/${taskId}/${Date.now()}-${sanitizeFilename(file.name)}`;
   const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: false, contentType: file.type || undefined });

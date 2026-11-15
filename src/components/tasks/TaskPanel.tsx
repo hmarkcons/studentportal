@@ -30,7 +30,6 @@ import {
   NOTES_MAX,
   PRIORITY_LABELS,
   STEP_MAX,
-  TASK_FILE_ACCEPT,
   TASK_STATUSES,
   TASK_STATUS_LABELS,
   TITLE_MAX,
@@ -117,7 +116,7 @@ function AttachForm({ taskId, onAttached }: { taskId: string; onAttached: () => 
   const [busy, setBusy] = useState(false);
   return (
     <form key={round} action={action} className="flex flex-col gap-2" data-attach-file>
-      <FileField name="file" accept={TASK_FILE_ACCEPT} noun="file" hint="PDF, picture, Word, Excel, CSV or text" onChange={(s) => setBusy(s.busy)} />
+      <FileField name="file" noun="file" hint="Any file type" onChange={(s) => setBusy(s.busy)} />
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
       <Button type="submit" size="sm" variant="outline-primary" pending={pending} disabled={busy} className="self-start" data-attach-submit>
         Attach

@@ -25,9 +25,9 @@ const BTN =
  * "Download all" merges every uploaded document, and "Download selected" opens
  * them as a checklist grouped by section so a subset can be chosen. Both
  * combine in the browser — photos become pages, PDFs are joined page for page —
- * reusing combineIntoPdf, as the upload path does. Word and HEIC files cannot
- * go into a PDF, so they are listed as left out rather than failing the whole
- * download. Links are minted fresh at click time (documentDownloadLinks for
+ * reusing combineIntoPdf, as the upload path does. Only PDFs and photos can
+ * go into a PDF — any other file, now that any type may be uploaded, is listed
+ * as left out rather than failing the whole download. Links are minted fresh at click time (documentDownloadLinks for
  * staff, studentDocumentDownloadLinks for a student's own), so a file replaced
  * since the page loaded is the one saved.
  */
@@ -98,7 +98,7 @@ export function DownloadDocumentsPdf({
         setMessage({
           tone: "error",
           text: excluded.length
-            ? `None of these can be put into a PDF (Word and HEIC files can't be merged): ${excluded.join("; ")}.`
+            ? `None of these can be put into a PDF (only PDFs and photos can be merged): ${excluded.join("; ")}.`
             : "Nothing could be downloaded.",
         });
         return;
@@ -192,8 +192,8 @@ export function DownloadDocumentsPdf({
       <Modal open={open} onClose={closeDialog} title="Download selected documents">
         <div className="flex flex-col gap-3">
           <p className="text-xs text-muted">
-            Tick the documents to include — they&rsquo;ll be combined into a single PDF (photos become pages). Word and
-            HEIC files can&rsquo;t be merged into a PDF and will be left out.
+            Tick the documents to include — they&rsquo;ll be combined into a single PDF (photos become pages). Only PDFs
+            and photos can be merged; any other file is left out — open it from its document instead.
           </p>
 
           <div className="flex items-center justify-between">

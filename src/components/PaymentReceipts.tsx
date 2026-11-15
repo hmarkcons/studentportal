@@ -120,7 +120,7 @@ function useReceiptsDialog({ kind, paymentId, title, revalidateTo }: Props) {
       <FileField
         key={`${replaces ?? "new"}-${fieldKey}`}
         required
-        hint="PDF or image"
+        hint="Any file type"
         noun="receipt"
         className="min-w-0 flex-1"
         onChange={(s) => setReady(Boolean(s.file) && !s.busy && !s.error)}

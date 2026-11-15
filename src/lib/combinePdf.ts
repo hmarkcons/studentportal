@@ -79,7 +79,7 @@ export function combinedName(files: File[]): string {
 export function cannotJoin(file: File): string | null {
   const kind = kindOf(file);
   if (kind === "word") return `${file.name} is a Word file, which cannot be joined to other files. Save it as a PDF first, or upload it on its own.`;
-  if (kind === "other") return `${file.name} is not a PDF or a photo, so it cannot be joined to other files.`;
+  if (kind === "other") return `${file.name} is not a PDF or a photo, so it cannot be joined to other files. Upload it on its own.`;
   return null;
 }
 

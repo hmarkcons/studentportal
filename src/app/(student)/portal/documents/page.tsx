@@ -156,8 +156,8 @@ export default async function PortalDocumentsPage(props: { searchParams: Promise
       <p className="flex items-start gap-2.5 rounded-xl border border-info/30 bg-info-bg px-4 py-3 text-xs text-info" data-upload-limit data-rise>
         <Lightbulb aria-hidden className="mt-px h-4 w-4 shrink-0" />
         <span>
-          Each file can be up to <strong className="font-semibold">{formatFileSize(MAX_UPLOAD_BYTES)}</strong> — a PDF, a Word file
-          or a photo. If a photo is larger, you can shrink it with one click when you choose it.
+          Each file can be up to <strong className="font-semibold">{formatFileSize(MAX_UPLOAD_BYTES)}</strong>, of any type. If a
+          photo is larger, you can shrink it with one click when you choose it.
         </span>
       </p>
 

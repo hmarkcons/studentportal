@@ -19,7 +19,6 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DOCUMENT_STATUS_TONE, DOCUMENT_STATUS_LABELS } from "@/lib/constants";
-import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
 import { CATEGORY_ORDER, CATEGORY_LABELS, sectionOfCategory } from "@/lib/documentCategories";
 import { uploadedLine, reviewedLine, addedLine, type UploaderRole } from "@/lib/activityStamp";
 import { DocumentHistory, type ArchivedUpload } from "@/components/DocumentHistory";
@@ -343,7 +342,7 @@ function UploadRow({
 
       <form action={formAction} className="flex flex-col gap-1" data-document-upload>
         <div className="flex flex-wrap items-start gap-2">
-          <FileField multiple accept={ACCEPTED_DOCUMENT_ACCEPT} hint="PDF, Word or image" onChange={(s) => setReady(Boolean(s.file))} />
+          <FileField multiple hint="Any file type" onChange={(s) => setReady(Boolean(s.file))} />
           <Button
             type="submit"
             pending={pending}

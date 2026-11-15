@@ -19,7 +19,6 @@ import { Badge } from "@/components/ui/Badge";
 import { Input, Select } from "@/components/ui/Input";
 import { FileField } from "@/components/FileField";
 import { useButtonAction } from "@/components/useButtonAction";
-import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
 import { AgreementDateEditor } from "@/components/AgreementDateEditor";
 import { AGREEMENT_DATE_MAX, AGREEMENT_DATE_MIN, agreementToday } from "@/lib/agreementDate";
 
@@ -70,7 +69,7 @@ function UploadSigned({
   return (
     <form action={formAction} className="flex flex-wrap items-end gap-2">
       {!agreementId && <Input name="title" placeholder="Title, e.g. Employment Agreement 2026" required className="min-w-[220px] flex-1" />}
-      <FileField multiple accept={ACCEPTED_DOCUMENT_ACCEPT} required noun="agreement" inputClassName="text-xs" />
+      <FileField multiple required noun="agreement" inputClassName="text-xs" />
       <Button type="submit" size="sm" pending={pending} status={{ state, label: "Uploaded.", showError: true }}>
         {agreementId ? "Upload signed copy" : "Upload"}
       </Button>

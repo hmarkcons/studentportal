@@ -5,7 +5,6 @@ import { recordExistingAdmission } from "@/lib/actions/visaOnly";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { FileField } from "@/components/FileField";
-import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
 
 export function RecordAdmissionForm({
   studentId,
@@ -67,7 +66,7 @@ export function RecordAdmissionForm({
 
       <div className="flex flex-col gap-1 text-xs text-muted">
         Admission letter
-        <FileField multiple accept={ACCEPTED_DOCUMENT_ACCEPT} required noun="admission letter" hint="PDF or photo" onChange={(s) => setLetterReady(Boolean(s.file))} />
+        <FileField multiple required noun="admission letter" hint="Any file type" onChange={(s) => setLetterReady(Boolean(s.file))} />
       </div>
 
       <Button type="submit" variant="primary" pending={pending} disabled={!universityId || !letterReady} status={{ state, label: "Recorded.", showError: true }}>

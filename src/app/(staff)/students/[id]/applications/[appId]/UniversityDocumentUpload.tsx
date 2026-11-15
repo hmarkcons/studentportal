@@ -6,7 +6,6 @@ import { uploadApplicationDocument } from "@/lib/actions/documents";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { FileField } from "@/components/FileField";
-import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
 import { FEE_RECEIPT_SECTION_LABEL, looksLikeReceipt } from "@/lib/applicationFeeReceipts";
 
 type Kind = "letter" | "receipt" | "requirement";
@@ -130,8 +129,7 @@ export function UniversityDocumentUpload({
         <FileField
           multiple
           required={kind !== "requirement"}
-          accept={ACCEPTED_DOCUMENT_ACCEPT}
-          hint={kind === "requirement" ? "PDF, Word or photo — or none, for the student to upload" : "PDF, Word or photo"}
+          hint={kind === "requirement" ? "Any file type — or none, for the student to upload" : "Any file type"}
           noun="document"
           onChange={(s) => setChosen({ file: Boolean(s.file), busy: Boolean(s.busy) })}
         />

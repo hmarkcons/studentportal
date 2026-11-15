@@ -12,7 +12,6 @@ import type { DocFile } from "@/lib/documentFileNames";
 import { formatDateOnly } from "@/lib/formatDate";
 import { Badge } from "@/components/ui/Badge";
 import { DOCUMENT_STATUS_TONE, DOCUMENT_STATUS_LABELS } from "@/lib/constants";
-import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
 import { uploadedLine, reviewedLine, type UploaderRole } from "@/lib/activityStamp";
 
 const LONG_DATE: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", year: "numeric" };
@@ -237,9 +236,8 @@ export function PortalDocumentRow({
         <ConfirmedUploadForm
           multiple
           action={action}
-          accept={ACCEPTED_DOCUMENT_ACCEPT}
           capture="environment"
-          hint="PDF, Word or photo"
+          hint="Any file type"
           submitLabel={sentBack ? "Replace" : files.length > 0 ? "Add another file" : "Upload"}
           replacing={sentBack}
           removable

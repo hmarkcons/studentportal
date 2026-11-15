@@ -197,8 +197,7 @@ export function GuideEditor({
             )}
             <FileField
               name="sample"
-              accept=".pdf,.jpg,.jpeg,.png,.webp"
-              hint={guide.sampleUrl ? "Choose another to replace it · PDF or image" : "PDF or image"}
+              hint={guide.sampleUrl ? "Choose another to replace it · any file type" : "Any file type — a picture shows as a preview"}
               noun="sample"
               onChange={(s) => setNewSample(s.file ? s.file.name : null)}
             />

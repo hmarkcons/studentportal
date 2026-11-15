@@ -4,20 +4,12 @@ import { MAX_UPLOAD_BYTES, fileSizeError, reduceHint } from "./fileSize.ts";
 // browser hint, the browser check and this backstop can never disagree.
 export const MAX_DOCUMENT_SIZE_BYTES = MAX_UPLOAD_BYTES;
 
-export const ACCEPTED_DOCUMENT_TYPES = [
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/heic",
-  "image/heif",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-] as const;
-
-// A hint for the <input accept> attribute — kept in sync with ACCEPTED_DOCUMENT_TYPES.
-export const ACCEPTED_DOCUMENT_ACCEPT = ".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.doc,.docx";
-
+/**
+ * Whether a document can be stored: any type at all (the office's choice,
+ * 2026-11-15), within the size limit. Uploads whose file is read or shown as
+ * it is — a spreadsheet to import, a photo, an email template, a consent
+ * video — check their own format; this is for everything kept as a file.
+ */
 export function validateDocumentFile(file: File, noun = "document"): string | null {
   // The same sentence the browser would have shown. Reached when the browser
   // check was bypassed or the file grew between the two — so it has to stand
@@ -26,11 +18,6 @@ export function validateDocumentFile(file: File, noun = "document"): string | nu
   if (tooLarge) {
     const advice = reduceHint(file.type, file.name);
     return advice ? `${tooLarge} ${advice}` : tooLarge;
-  }
-  // Some mobile browsers/cameras omit a MIME type on capture — only reject
-  // when a type IS reported and it's not one we accept, rather than requiring one.
-  if (file.type && !(ACCEPTED_DOCUMENT_TYPES as readonly string[]).includes(file.type)) {
-    return "Unsupported file type — upload a PDF, Word document, or image.";
   }
   return null;
 }

@@ -2,7 +2,6 @@
 
 import { partnerUploadLetter } from "@/lib/actions/partner";
 import { ConfirmedUploadForm } from "@/components/ConfirmedUploadForm";
-import { ACCEPTED_DOCUMENT_ACCEPT } from "@/lib/documentUpload";
 
 export function LetterUploadForm({
   applicationId,
@@ -24,8 +23,7 @@ export function LetterUploadForm({
     <ConfirmedUploadForm
       multiple
       action={action}
-      accept={ACCEPTED_DOCUMENT_ACCEPT}
-      hint="PDF, Word or image"
+      hint="Any file type"
       submitLabel={`${alreadySent ? "Replace" : "Upload"} ${label}`}
       replacing={alreadySent}
     />
