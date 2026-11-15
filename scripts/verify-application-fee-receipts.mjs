@@ -153,9 +153,10 @@ try {
   };
 
   // No receipt yet: the Documents tab has no Receipts - Universities section at all.
+  // Read as shown (innerText): the page's data carries every section's name either way.
   await page.goto(`${BASE}/students/${studentId}/documents`, { waitUntil: "domcontentloaded" });
   await page.getByText("Admission Documents").first().waitFor({ timeout: 120000 });
-  ok("before any receipt, the Documents tab shows no Receipts - Universities section", !(await page.evaluate(() => document.body.textContent.includes("Receipts - Universities"))));
+  ok("before any receipt, the Documents tab shows no Receipts - Universities section", !(await page.evaluate(() => document.body.innerText.includes("Receipts - Universities"))));
 
   let filed = await upload([await file("receipt-bank.pdf"), await file("receipt-portal.pdf")], 2);
   ok("two receipts chosen together are each kept as a file of their own", filed?.list.map((f) => f.file_name).join("|") === "receipt-bank.pdf|receipt-portal.pdf" && filed.list.every((f) => !f.source_names), JSON.stringify(filed?.list));
@@ -235,7 +236,7 @@ try {
   await page.goto(`${BASE}/students/${studentId}/documents?doc=${docId}`, { waitUntil: "domcontentloaded" });
   const row = page.locator(`[data-document-row="${docId}"]`);
   await row.waitFor({ timeout: 120000 });
-  ok("the Documents tab lists them as one requirement under Receipts - Universities", (await row.getAttribute("data-fee-receipt-row")) !== null && (await page.evaluate(() => document.body.textContent.includes("Receipts - Universities"))));
+  ok("the Documents tab lists them as one requirement under Receipts - Universities", (await row.getAttribute("data-fee-receipt-row")) !== null && (await page.evaluate(() => document.body.innerText.includes("Receipts - Universities"))));
   ok("...named for the university", ((await row.locator("p").first().textContent()) ?? "").trim().endsWith(UNI) && !((await row.textContent()) ?? "").includes("Application fee receipt"), await row.locator("p").first().textContent());
   ok("...each file by name", (await row.locator("[data-file-name]").allTextContents()).sort().join("|") === "receipt-bank.pdf|receipt-later.pdf|receipt-portal.pdf");
   ok("...read only: no upload, no review, no remove there", (await row.locator("input[type=file]").count()) === 0 && (await row.getByRole("button").count()) === 0);
