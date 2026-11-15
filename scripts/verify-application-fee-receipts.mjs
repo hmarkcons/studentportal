@@ -11,7 +11,8 @@
 //     other documents and the student's other files;
 //   * Management, who may open the application but not file receipts, sees
 //     them there read only;
-//   * the staff Documents tab lists them under Receipts - Universities, by the
+//   * the staff Documents tab has no Receipts - Universities section until the
+//     first receipt, then lists them there, by the
 //     university's name, read only,
 //     pointing back to the application, which keeps them out of its checklist;
 //   * "Show to the student" ticked: the student is alerted, and sees them on
@@ -150,6 +151,11 @@ try {
       return list.length === count ? { doc, list } : null;
     }, 60);
   };
+
+  // No receipt yet: the Documents tab has no Receipts - Universities section at all.
+  await page.goto(`${BASE}/students/${studentId}/documents`, { waitUntil: "domcontentloaded" });
+  await page.getByText("Admission Documents").first().waitFor({ timeout: 120000 });
+  ok("before any receipt, the Documents tab shows no Receipts - Universities section", !(await page.evaluate(() => document.body.textContent.includes("Receipts - Universities"))));
 
   let filed = await upload([await file("receipt-bank.pdf"), await file("receipt-portal.pdf")], 2);
   ok("two receipts chosen together are each kept as a file of their own", filed?.list.map((f) => f.file_name).join("|") === "receipt-bank.pdf|receipt-portal.pdf" && filed.list.every((f) => !f.source_names), JSON.stringify(filed?.list));

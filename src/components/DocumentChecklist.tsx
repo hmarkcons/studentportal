@@ -595,7 +595,9 @@ export function DocumentChecklist({
     // An empty section is still shown to whoever can add to it — that is where
     // the "Add requirement" button lives, and a section with nothing in it is
     // exactly the one that needs something adding.
-    const showWhenEmpty = canManage && (emptySections === "all" || emptySections.includes(entry.key));
+    // Except Receipts - Universities, for every country: nothing is added to it
+    // here, so it appears only once a receipt is filed on an application.
+    const showWhenEmpty = entry.key !== FEE_RECEIPT_CATEGORY && canManage && (emptySections === "all" || emptySections.includes(entry.key));
     if (catDocs.length === 0 && !showWhenEmpty) return [];
     return [{ key: entry.key, label: entry.label, docs: catDocs }];
   });
@@ -687,11 +689,7 @@ export function DocumentChecklist({
                       )
                     )}
                     {section.docs.length === 0 && (
-                      <p className="py-3 text-xs text-muted">
-                        {section.key === FEE_RECEIPT_CATEGORY
-                          ? "No receipts yet. Processing files them on each application."
-                          : "Nothing required here yet."}
-                      </p>
+                      <p className="py-3 text-xs text-muted">Nothing required here yet.</p>
                     )}
                   </div>
                   {/* Receipts - Universities holds only what is filed on an application. */}
