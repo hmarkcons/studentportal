@@ -10,6 +10,10 @@
 //   staff:   S1, S2, then the office's rule — P1, P2 (in progress), R (rejected)
 //   student: S1, S2, then in the order they were added — P1, R, P2
 //
+// And the columns: on the student's Applications tab a Super Admin, and only
+// a Super Admin, has Arrange columns; an order saved there is the table's.
+// The live order is put back in the finally.
+//
 // Everything is named zztmp and removed in a finally.
 import { BASE, FIXTURE_PASSWORD, clients, fixtures, openBrowser, removeStagedFiles, reporter, requireConfirmation, signIn } from "./verify-portal-lib.mjs";
 
@@ -39,9 +43,13 @@ let browser = null;
 let studentId = null;
 let studentUserId = null;
 let universityId = null;
+let savedOrder = undefined;
 
 try {
+  const { data: before } = await admin.from("list_column_orders").select("list_key, column_keys, updated_by, updated_at").eq("list_key", "applications").maybeSingle();
+  savedOrder = before ?? null;
   const proc = await fx.staff(`apporder${RUN}`, ["processing"]);
+  const sup = await fx.staff(`apporderadmin${RUN}`, ["super_admin"]);
   const { data: italy } = await admin.from("destinations").select("id, display_name, pipeline_stages").eq("display_name", "Italy (Public)").single();
   for (const s of ["documents_pending", "documents_verified", "application_submitted", "under_review"]) {
     if (!italy.pipeline_stages.includes(s)) throw new Error(`Italy (Public)'s pipeline has no ${s}: ${italy.pipeline_stages.join(", ")}`);
@@ -122,6 +130,45 @@ try {
   await sp.locator("[data-applications]").waitFor({ timeout: 60000 });
   const studentAfter = orderOf(await sp.locator("[data-applications] > div").allTextContents());
   ok("student: the same", JSON.stringify(studentAfter) === JSON.stringify(["S1", "S2", "P2", "P1", "R"]), studentAfter.join(", "));
+
+  // ------------------------------------------------------------ the columns, a Super Admin's to arrange
+  ok("Processing has no Arrange columns on the student's tab", (await page.locator("[data-arrange-columns]").count()) === 0);
+  const ap = await signIn(browser, sup.email);
+  await ap.setViewportSize({ width: 1600, height: 1100 });
+  const tab = `${BASE}/students/${studentId}/applications`;
+  await ap.goto(tab, { waitUntil: "domcontentloaded" });
+  await ap.locator("tbody tr[data-row]").first().waitFor({ timeout: 120000 });
+  const arrangeButton = ap.locator("[data-arrange-columns]");
+  ok("a Super Admin has Arrange columns on the student's tab", (await arrangeButton.count()) === 1);
+  await ap.waitForFunction(() => {
+    const b = document.querySelector("[data-arrange-columns]");
+    return Boolean(b && Object.keys(b).some((k) => k.startsWith("__reactProps")));
+  }, null, { timeout: 60000 });
+  await arrangeButton.click();
+  const dialog = ap.locator("[data-arrange-dialog]");
+  await dialog.waitFor({ timeout: 30000 });
+  const headerOf = new Map();
+  for (const item of await dialog.locator("[data-arrange-item]").all()) {
+    headerOf.set(await item.getAttribute("data-arrange-item"), ((await item.innerText()).replace(/^\s*\d+\s*/, "").trim()));
+  }
+  // Stage moved one place: up, or down when it is first already.
+  const up = dialog.getByRole("button", { name: "Move Stage up" });
+  if (await up.isDisabled()) await dialog.getByRole("button", { name: "Move Stage down" }).click();
+  else await up.click();
+  const wanted = await dialog.locator("[data-arrange-item]").evaluateAll((items) => items.map((i) => i.getAttribute("data-arrange-item")));
+  await dialog.getByRole("button", { name: "Save order" }).click();
+  const stored = await poll(async () => {
+    const { data } = await admin.from("list_column_orders").select("column_keys").eq("list_key", "applications").maybeSingle();
+    return JSON.stringify(data?.column_keys) === JSON.stringify(wanted) ? data.column_keys : null;
+  }, 30);
+  ok("...whose order, saved there, is everyone's", Boolean(stored), JSON.stringify({ wanted, stored }));
+  await ap.goto(tab, { waitUntil: "domcontentloaded" });
+  await ap.locator("tbody tr[data-row]").first().waitFor({ timeout: 120000 });
+  const norm = (t) => t.replace(/\s+/g, " ").trim().toLowerCase();
+  const shown = (await ap.locator("thead th").allInnerTexts()).map(norm);
+  const expected = wanted.map((k) => norm(headerOf.get(k) ?? "")).filter((h) => h && shown.includes(h));
+  const actual = shown.filter((h) => expected.includes(h));
+  ok("...and the student's table shows its columns in that order", expected.length >= 5 && JSON.stringify(actual) === JSON.stringify(expected), JSON.stringify({ expected, actual }));
 } catch (e) {
   ok("the run finished", false, e?.stack ?? String(e));
 } finally {
@@ -136,6 +183,9 @@ try {
     await admin.from("programs").delete().eq("university_id", universityId);
     await admin.from("universities").delete().eq("id", universityId);
   }
+  // The office's own column order, as it was.
+  if (savedOrder === null) await admin.from("list_column_orders").delete().eq("list_key", "applications");
+  else if (savedOrder) await admin.from("list_column_orders").upsert(savedOrder);
   const removed = await fx.cleanup();
   process.exitCode = finish(removed) === 0 ? 0 : 1;
 }

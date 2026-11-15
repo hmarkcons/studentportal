@@ -15,7 +15,8 @@ export type ArrangeableList = "leads" | "applications";
 
 const LISTS: Record<ArrangeableList, { read: (keys: unknown) => string[] | null; count: number; paths: string[]; name: string }> = {
   leads: { read: readLeadColumnOrder, count: ARRANGEABLE_LEAD_COLUMNS.length, paths: ["/leads"], name: "leads" },
-  applications: { read: readApplicationColumnOrder, count: APPLICATION_COLUMNS.length, paths: ["/applications"], name: "applications" },
+  // The Applications page, and every student's Applications tab, which follow the same order.
+  applications: { read: readApplicationColumnOrder, count: APPLICATION_COLUMNS.length, paths: ["/applications", "/students/[id]/applications"], name: "applications" },
 };
 
 async function superAdmin(list: ArrangeableList) {
@@ -26,7 +27,7 @@ async function superAdmin(list: ArrangeableList) {
 }
 
 function refresh(list: ArrangeableList) {
-  for (const path of LISTS[list].paths) revalidatePath(path);
+  for (const path of LISTS[list].paths) revalidatePath(path, path.includes("[") ? "page" : undefined);
 }
 
 /** Saves a list's order: every column, once. */

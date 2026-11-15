@@ -13,6 +13,7 @@ import { canSetService, serviceOf } from "@/lib/serviceType";
 import { loadApplicationRows } from "@/lib/applicationRows";
 import { orderedApplicationColumns } from "@/lib/applicationTable";
 import { ApplicationsTable } from "@/app/(staff)/applications/ApplicationsTable";
+import { ArrangeLeadColumns } from "@/app/(staff)/leads/ArrangeLeadColumns";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -252,25 +253,33 @@ export default async function StudentApplicationsTab(props: {
           </EmptyState>
         </Card>
       ) : (
-        <ApplicationsTable
-          rows={rows}
-          programsByUniversity={programsByUniversity}
-          columns={columns}
-          scope="student"
-          today={karachiToday()}
-          canEditCatalogue={isSuperAdmin}
-          canDelete={canDelete}
-          readOnly={isPreviousIntake || !canEditApplications}
-          exportHref={`/api/export/applications?student=${id}${showCycleTabs && activeCycleId ? `&cycle=${activeCycleId}` : ""}`}
-          label={`Applications — ${serviceRow?.full_name ?? "student"}`}
-          // Expanded, the student's name and ID are no longer on screen: said above the table.
-          heading={{
-            title: `${serviceRow?.full_name ?? "Student"} — Applications`,
-            detail: [serviceRow?.student_code, activeCycle ? intakeLabel(activeCycle.intake) : null, `${rows.length} applications`]
-              .filter(Boolean)
-              .join(" · "),
-          }}
-        />
+        <>
+          {/* A Super Admin arranges the columns here as on the Applications page: one order, for everyone. */}
+          {isSuperAdmin && !isPreviousIntake && (
+            <div className="mb-2 flex justify-end">
+              <ArrangeLeadColumns list="applications" columns={orderedApplicationColumns(savedOrder?.column_keys).map((c) => ({ key: c.key, header: c.header }))} />
+            </div>
+          )}
+          <ApplicationsTable
+            rows={rows}
+            programsByUniversity={programsByUniversity}
+            columns={columns}
+            scope="student"
+            today={karachiToday()}
+            canEditCatalogue={isSuperAdmin}
+            canDelete={canDelete}
+            readOnly={isPreviousIntake || !canEditApplications}
+            exportHref={`/api/export/applications?student=${id}${showCycleTabs && activeCycleId ? `&cycle=${activeCycleId}` : ""}`}
+            label={`Applications — ${serviceRow?.full_name ?? "student"}`}
+            // Expanded, the student's name and ID are no longer on screen: said above the table.
+            heading={{
+              title: `${serviceRow?.full_name ?? "Student"} — Applications`,
+              detail: [serviceRow?.student_code, activeCycle ? intakeLabel(activeCycle.intake) : null, `${rows.length} applications`]
+                .filter(Boolean)
+                .join(" · "),
+            }}
+          />
+        </>
       )}
     </div>
   );
