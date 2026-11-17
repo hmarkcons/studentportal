@@ -16,7 +16,7 @@
 // no HEIC encoder here to make one, so it is not in this check.
 //
 // Everything is named zztmp and removed in a finally, with its files.
-import { readFileSync } from "fs";
+import { readFileSync, writeFileSync } from "fs";
 import { deflateSync } from "zlib";
 import JSZip from "jszip";
 import writeXlsxFile from "write-excel-file/node";
@@ -107,7 +107,10 @@ async function xlsx() {
     [{ value: `zztmp ${title} one` }, { value: 30 }, { value: true }],
     [{ value: `zztmp ${title} two` }, { value: 45.5 }, { value: false }],
   ];
-  return writeXlsxFile([sheet("A"), sheet("B")], { sheets: ["Fees", "Others"] }).toBuffer();
+  return writeXlsxFile([
+    { data: sheet("A"), sheet: "Fees" },
+    { data: sheet("B"), sheet: "Others" },
+  ]).toBuffer();
 }
 
 async function pdf() {
@@ -179,7 +182,10 @@ try {
   const save = async (page, locator) => {
     const [download] = await Promise.all([page.waitForEvent("download", { timeout: 90000 }), locator.click()]);
     const at = await download.path();
-    return { name: download.suggestedFilename(), bytes: at ? readFileSync(at) : Buffer.alloc(0) };
+    const bytes = at ? readFileSync(at) : Buffer.alloc(0);
+    // SAVE_DIR=<folder> keeps what came down, to look at.
+    if (process.env.SAVE_DIR) writeFileSync(`${process.env.SAVE_DIR}/${download.suggestedFilename()}`, bytes);
+    return { name: download.suggestedFilename(), bytes };
   };
 
   // ------------------------------------------------------------ staff
