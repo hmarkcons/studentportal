@@ -10,6 +10,7 @@ import { uploadedLine } from "@/lib/activityStamp";
 import { stageFile } from "@/lib/stageFile";
 import { MAX_UPLOAD_BYTES, formatFileSize } from "@/lib/fileSize";
 import { FEE_RECEIPT_SECTION_LABEL, MAX_FEE_RECEIPTS_AT_ONCE } from "@/lib/applicationFeeReceipts";
+import { StoredFileLink } from "@/components/StoredFileLink";
 
 export type FeeReceipt = { id: string; name: string; url: string | null; uploadedAt: string | null };
 
@@ -133,9 +134,9 @@ export function FeeReceiptsCard({
             <li key={f.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-2 py-1.5" data-fee-receipt={f.id}>
               <span className="min-w-0">
                 {f.url ? (
-                  <a href={f.url} target="_blank" rel="noreferrer" className="break-all text-xs font-medium text-primary hover:underline">
+                  <StoredFileLink href={f.url} name={f.name} original className="break-all text-xs font-medium text-primary hover:underline">
                     {f.name}
-                  </a>
+                  </StoredFileLink>
                 ) : (
                   <span className="break-all text-xs text-ink">{f.name}</span>
                 )}

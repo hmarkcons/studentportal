@@ -13,6 +13,7 @@ import type { CountryFees } from "@/lib/agreementCurrency";
 import type { ServiceType } from "@/lib/serviceType";
 import { storedFileName } from "@/lib/documentFileNames";
 import { agreementDateShort } from "@/lib/agreementDate";
+import { StoredFileLink } from "@/components/StoredFileLink";
 
 type AgreementTemplateOption = {
   id: string;
@@ -227,9 +228,9 @@ export function AgreementActionsMenu({
 
           <div className="mt-3 flex flex-col gap-2">
             {links?.signedUrl && (
-              <a href={links.signedUrl} target="_blank" rel="noreferrer" className="text-sm text-primary hover:underline">
-                View signed copy
-              </a>
+              <StoredFileLink href={links.signedUrl} name={agreement.signed_file_path ? storedFileName(agreement.signed_file_path) : null} original className="text-sm text-primary hover:underline">
+                Download signed copy
+              </StoredFileLink>
             )}
             {links?.signedUrl && agreement.signed_file_path && <span className="break-all text-[11px] text-muted" data-file-name>{storedFileName(agreement.signed_file_path)}</span>}
             {links?.pdfUrl && (
@@ -238,9 +239,9 @@ export function AgreementActionsMenu({
               </a>
             )}
             {!links?.pdfUrl && links?.templateUrl && (
-              <a href={links.templateUrl} target="_blank" rel="noreferrer" className="text-sm text-primary hover:underline">
-                View blank template
-              </a>
+              <StoredFileLink href={links.templateUrl} original className="text-sm text-primary hover:underline">
+                Download blank template
+              </StoredFileLink>
             )}
             {!links?.signedUrl && !links?.pdfUrl && !links?.templateUrl && <p className="text-sm text-muted">No document generated yet.</p>}
           </div>

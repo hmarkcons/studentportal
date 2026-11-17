@@ -21,6 +21,7 @@ import { FileField } from "@/components/FileField";
 import { useButtonAction } from "@/components/useButtonAction";
 import { AgreementDateEditor } from "@/components/AgreementDateEditor";
 import { AGREEMENT_DATE_MAX, AGREEMENT_DATE_MIN, agreementToday } from "@/lib/agreementDate";
+import { StoredFileLink } from "@/components/StoredFileLink";
 
 export const STATUS_LABEL: Record<StaffAgreementView["status"], string> = {
   draft: "Draft",
@@ -120,7 +121,9 @@ function AgreementRow({ staffId, agreement, reload }: { staffId: string; agreeme
 
       <div className="flex flex-wrap items-center gap-3">
         <FileLink href={a.pdfUrl}>View PDF</FileLink>
-        <FileLink href={a.signedUrl}>View signed copy</FileLink>
+        <StoredFileLink href={a.signedUrl} original className="w-fit text-xs font-medium text-primary hover:underline">
+          Download signed copy
+        </StoredFileLink>
 
         {a.status === "draft" && (
           <Button

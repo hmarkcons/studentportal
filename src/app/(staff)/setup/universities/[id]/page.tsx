@@ -19,6 +19,7 @@ import { EmailLinks } from "@/components/EmailLinks";
 import { getCurrentUser } from "@/lib/auth/currentUser";
 import { storedFileName } from "@/lib/documentFileNames";
 import { MessageThread, type MessageRow } from "@/components/MessageThread";
+import { StoredFileLink } from "@/components/StoredFileLink";
 
 export default async function UniversityDetailPage(props: PageProps<"/setup/universities/[id]">) {
   const { id } = await props.params;
@@ -247,14 +248,13 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
                   </span>
                 </span>
                 {exchangeLinks.has(d.id) && (
-                  <a
+                  <StoredFileLink
                     href={exchangeLinks.get(d.id)}
-                    target="_blank"
-                    rel="noreferrer"
+                    original
                     className="shrink-0 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
                   >
-                    View file
-                  </a>
+                    Download file
+                  </StoredFileLink>
                 )}
                 {exchangeLinks.has(d.id) && d.file_path && <span className="break-all text-[11px] text-muted" data-file-name>{storedFileName(d.file_path)}</span>}
               </div>

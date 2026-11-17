@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { FileField } from "@/components/FileField";
 import { addedLine } from "@/lib/activityStamp";
 import { ActionStatus } from "@/components/ActionStatus";
+import { StoredFileLink } from "@/components/StoredFileLink";
 
 type ActionState = { error?: string; success?: boolean } | undefined;
 
@@ -28,15 +29,15 @@ export function ProofFileCell({
   return (
     <div className="flex flex-col gap-1">
       {viewUrl && (
-        <a
+        <StoredFileLink
           href={viewUrl}
-          target="_blank"
-          rel="noreferrer"
+          name={fileName}
+          original
           className="inline-flex w-fit items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
         >
           <Eye aria-hidden className="h-3.5 w-3.5 shrink-0" />
           View proof
-        </a>
+        </StoredFileLink>
       )}
       {viewUrl && fileName && (
         <span className="break-all text-[11px] text-muted" data-file-name>

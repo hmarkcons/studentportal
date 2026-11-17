@@ -6,6 +6,7 @@ import { LeaveSummary } from "@/components/LeaveBits";
 import { formatLeaveRange } from "@/lib/leaveEmail";
 import { RequestLeaveForm } from "./RequestLeaveForm";
 import { CancelLeaveButton } from "./CancelLeaveButton";
+import { StoredFileLink } from "@/components/StoredFileLink";
 
 /**
  * A staff member's own leave: what they have left this leave year, a way to
@@ -52,9 +53,9 @@ export default async function MyLeavePage() {
                 {r.recordedForThem && <p className="text-xs text-muted">Recorded for you by HR.</p>}
                 {r.decisionNote && <p className="text-xs text-muted">Note: “{r.decisionNote}”</p>}
                 {r.certificateUrl && (
-                  <a href={r.certificateUrl} target="_blank" rel="noreferrer" className="w-fit text-xs text-primary hover:underline">
+                  <StoredFileLink href={r.certificateUrl} name={r.certificateName} original className="w-fit text-xs text-primary hover:underline">
                     Medical certificate{r.certificateName ? ` · ${r.certificateName}` : ""}
-                  </a>
+                  </StoredFileLink>
                 )}
               </li>
             ))}

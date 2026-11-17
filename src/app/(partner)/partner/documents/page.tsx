@@ -5,6 +5,7 @@ import { UploadExchangeForm } from "./UploadExchangeForm";
 import { uploadedLine } from "@/lib/activityStamp";
 import { storedFileName } from "@/lib/documentFileNames";
 import { getCurrentUser } from "@/lib/auth/currentUser";
+import { StoredFileLink } from "@/components/StoredFileLink";
 
 export default async function PartnerDocumentsPage() {
   const supabase = await createClient();
@@ -48,9 +49,9 @@ export default async function PartnerDocumentsPage() {
                 })}
               </span>
             </span>
-            <a href={links.get(d.id)} target="_blank" rel="noreferrer" className="shrink-0 break-all text-primary underline" data-file-name>
+            <StoredFileLink href={links.get(d.id)} name={storedFileName(d.file_path)} className="shrink-0 break-all text-primary underline" data-file-name>
               {storedFileName(d.file_path)}
-            </a>
+            </StoredFileLink>
           </div>
         ))}
         {(!docs || docs.length === 0) && <p className="px-4 py-6 text-sm text-muted">No documents shared yet.</p>}

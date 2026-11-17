@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/Badge";
 import { formatStamp } from "@/lib/activityStamp";
 import { useButtonAction } from "@/components/useButtonAction";
 import { deleteDocumentVersion } from "@/lib/actions/documents";
+import { StoredFileLink } from "@/components/StoredFileLink";
 
 export type ArchivedUpload = {
   id: string;
@@ -83,9 +84,9 @@ export function DocumentHistory({
           {/* Why it was sent back, which is the reason this is kept at all. */}
           {v.rejectedReason && <span>· {v.rejectedReason}</span>}
           {v.fileUrl ? (
-            <a href={v.fileUrl} target="_blank" rel="noreferrer" className="break-all text-primary hover:underline" data-history-file>
+            <StoredFileLink href={v.fileUrl} name={v.fileName} original={audience === "staff"} className="break-all text-primary hover:underline" data-history-file>
               {v.fileName ?? (audience === "staff" ? "View" : "View what you sent")}
-            </a>
+            </StoredFileLink>
           ) : (
             v.fileName && <span className="break-all">{v.fileName}</span>
           )}

@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { storedFileName } from "@/lib/documentFileNames";
 import { getCurrentUser } from "@/lib/auth/currentUser";
+import { StoredFileLink } from "@/components/StoredFileLink";
 
 export default async function PartnerAgreementPage() {
   const supabase = await createClient();
@@ -35,9 +36,9 @@ export default async function PartnerAgreementPage() {
       <Card>
         {agreement.expiry_date && <p className="text-sm text-muted">Expires: {formatDateOnly(agreement.expiry_date)}</p>}
         {data?.signedUrl && (
-          <a href={data.signedUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm text-primary underline">
-            View agreement
-          </a>
+          <StoredFileLink href={data.signedUrl} name={agreement.file_path ? storedFileName(agreement.file_path) : null} className="mt-2 inline-block text-sm text-primary underline">
+            Download agreement
+          </StoredFileLink>
         )}
         {data?.signedUrl && agreement.file_path && (
           <p className="mt-1 break-all text-xs text-muted" data-file-name>

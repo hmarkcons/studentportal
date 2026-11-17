@@ -7,6 +7,7 @@ import { formatLeaveRange } from "@/lib/leaveEmail";
 import { DecideButtons } from "./DecideButtons";
 import { RecordLeaveForm } from "./RecordLeaveForm";
 import { TableFrame } from "@/components/ui/TableFrame";
+import { StoredFileLink } from "@/components/StoredFileLink";
 
 /**
  * Leave, for whoever holds leave.approve — Management and Super Admin until
@@ -60,9 +61,9 @@ export default async function LeaveAdminPage() {
                 </p>
                 {r.reason && <p className="text-xs text-muted">“{r.reason}”</p>}
                 {r.certificateUrl && (
-                  <a href={r.certificateUrl} target="_blank" rel="noreferrer" className="w-fit text-xs text-primary hover:underline">
+                  <StoredFileLink href={r.certificateUrl} name={r.certificateName} original className="w-fit text-xs text-primary hover:underline">
                     Medical certificate{r.certificateName ? ` · ${r.certificateName}` : ""}
-                  </a>
+                  </StoredFileLink>
                 )}
                 {r.staffId === data.meId ? (
                   <p className="text-xs text-muted">Your own request — someone else has to decide it.</p>

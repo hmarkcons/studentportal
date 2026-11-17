@@ -324,7 +324,7 @@ try {
     (await current.innerText()).replace(/\s+/g, " "));
   ok("...the older one says it was replaced by version 2 and is kept for records",
     /contained mistakes and was replaced by version 2/.test((await replaced.innerText()).replace(/\s+/g, " ")), (await replaced.innerText()).replace(/\s+/g, " "));
-  ok("...each with its signed copy", (await page.getByRole("link", { name: /View your signed copy/ }).count()) === 2);
+  ok("...each with its signed copy", (await page.getByRole("button", { name: /Download your signed copy/ }).count()) === 2);
   const agreementText = await page.locator("main").innerText();
   ok("the draft the office is preparing is not shown", !/Being prepared/.test(agreementText) && !/Version 3/.test(agreementText));
   ok("no unsigned agreement is offered to view", (await page.getByRole("link", { name: /View agreement|Download to sign|Download the agreement/ }).count()) === 0);

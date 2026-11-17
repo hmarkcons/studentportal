@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { storedFileName } from "@/lib/documentFileNames";
 import { ReturnSignedForm } from "./ReturnSignedForm";
+import { StoredFileLink } from "@/components/StoredFileLink";
 
 const LABEL = {
   awaiting_signature: "Waiting for your signature",
@@ -47,9 +48,9 @@ export default async function MyAgreementPage() {
                   </a>
                 )}
                 {a.signedUrl && (
-                  <a href={a.signedUrl} target="_blank" rel="noreferrer" className="w-fit font-medium text-primary hover:underline">
+                  <StoredFileLink href={a.signedUrl} original className="w-fit font-medium text-primary hover:underline">
                     Download the signed copy
-                  </a>
+                  </StoredFileLink>
                 )}
                 {a.signedUrl && a.signedName && <span className="break-all text-[11px] text-muted" data-file-name>{storedFileName(a.signedName)}</span>}
               </div>

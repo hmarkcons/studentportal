@@ -9,6 +9,7 @@ import { formatStamp, uploadedLine } from "@/lib/activityStamp";
 import { formatFileSize } from "@/lib/fileSize";
 import { receiptButtonLabel, type ReceiptKind } from "@/lib/paymentReceipts";
 import { listPaymentReceipts, removePaymentReceipt, uploadPaymentReceipt, type PaymentReceipt } from "@/lib/actions/paymentReceipts";
+import { StoredFileLink } from "@/components/StoredFileLink";
 
 // The receipts on one payment (0308, 0309): proof of what was paid, each file
 // with who uploaded it and when. Anyone who handles the payment's receipts
@@ -139,16 +140,16 @@ function useReceiptsDialog({ kind, paymentId, title, revalidateTo }: Props) {
   const fileLine = (r: PaymentReceipt, earlier: boolean) => (
     <div className="min-w-0">
       {r.url ? (
-        <a
+        <StoredFileLink
           href={r.url}
-          target="_blank"
-          rel="noreferrer"
+          name={r.fileName}
+          original
           className={`inline-flex max-w-full items-center gap-1.5 font-medium hover:underline ${earlier ? "text-xs text-muted" : "text-sm text-primary"}`}
           data-receipt-link
         >
           <FileText aria-hidden className="h-4 w-4 shrink-0" />
           <span className="truncate">{r.fileName}</span>
-        </a>
+        </StoredFileLink>
       ) : (
         <span className="text-sm text-ink">{r.fileName}</span>
       )}
@@ -317,17 +318,17 @@ export function ReceiptCell({
       {first ? (
         <div className="flex items-center gap-0.5">
           {first.url ? (
-            <a
+            <StoredFileLink
               href={first.url}
-              target="_blank"
-              rel="noreferrer"
+              name={first.fileName}
+              original
               title={first.fileName}
               className="inline-flex min-w-0 max-w-[9rem] items-center gap-1 text-xs font-medium text-primary hover:underline"
               data-receipt-link
             >
               <FileText aria-hidden className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">{first.fileName}</span>
-            </a>
+            </StoredFileLink>
           ) : (
             <span className="max-w-[9rem] truncate text-xs text-ink">{first.fileName}</span>
           )}

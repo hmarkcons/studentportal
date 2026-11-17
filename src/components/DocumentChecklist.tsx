@@ -28,6 +28,7 @@ import { DocumentGuidePanel, DocumentGuideToggle, guideHasMore } from "@/compone
 import type { ResolvedGuide } from "@/lib/documentGuides";
 import { DownloadDocumentsPdf } from "@/components/DownloadDocumentsPdf";
 import { FEE_RECEIPT_CATEGORY } from "@/lib/applicationFeeReceipts";
+import { StoredFileLink } from "@/components/StoredFileLink";
 
 export type DocRow = {
   id: string;
@@ -94,9 +95,9 @@ function FeeReceiptRow({ doc, studentId, number }: { doc: DocRow; studentId: str
               <li key={f.id ?? f.path} className="flex flex-wrap items-center gap-2 rounded-md border border-border px-2 py-1.5" data-document-file={f.id ?? "legacy"}>
                 <FileText aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted" />
                 {f.url ? (
-                  <a href={f.url} target="_blank" rel="noreferrer" className="min-w-0 break-all text-xs font-medium text-primary hover:underline" data-file-name>
+                  <StoredFileLink href={f.url} name={f.name} original className="min-w-0 break-all text-xs font-medium text-primary hover:underline" data-file-name>
                     {f.name}
-                  </a>
+                  </StoredFileLink>
                 ) : (
                   <span className="min-w-0 break-all text-xs font-medium text-ink" data-file-name>
                     {f.name}
@@ -151,9 +152,9 @@ function StaffFileRow({
       <div className="flex flex-wrap items-center gap-2">
         <FileText aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted" />
         {file.url ? (
-          <a href={file.url} target="_blank" rel="noreferrer" className="min-w-0 break-all text-xs font-medium text-primary hover:underline" data-file-name>
+          <StoredFileLink href={file.url} name={file.name} original className="min-w-0 break-all text-xs font-medium text-primary hover:underline" data-file-name>
             {file.name}
-          </a>
+          </StoredFileLink>
         ) : (
           <span className="min-w-0 break-all text-xs font-medium text-ink" data-file-name>
             {file.name}

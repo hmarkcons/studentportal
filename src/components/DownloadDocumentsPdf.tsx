@@ -25,9 +25,10 @@ const BTN =
  * "Download all" merges every uploaded document, and "Download selected" opens
  * them as a checklist grouped by section so a subset can be chosen. Both
  * combine in the browser — photos become pages, PDFs are joined page for page —
- * reusing combineIntoPdf, as the upload path does. Only PDFs and photos can
- * go into a PDF — any other file, now that any type may be uploaded, is listed
- * as left out rather than failing the whole download. Links are minted fresh at click time (documentDownloadLinks for
+ * reusing combineIntoPdf, as the upload path does. Word, Excel, text and
+ * iPhone photos are made PDFs first (toPdf.tsx), as a single download is; a
+ * file that cannot be one (a .zip, a video) is listed as left out rather than
+ * failing the whole download. Links are minted fresh at click time (documentDownloadLinks for
  * staff, studentDocumentDownloadLinks for a student's own), so a file replaced
  * since the page loaded is the one saved.
  */
@@ -85,7 +86,12 @@ export function DownloadDocumentsPdf({
           if (MERGEABLE.includes(ext)) {
             mergeFiles.push(new File([blob], `${safeName(docName)}.${ext}`, { type: blob.type || undefined }));
           } else {
-            excluded.push(`${docName}${ext ? ` (.${ext})` : ""}`);
+            // Anything else that can be a PDF — Word, Excel, text, an iPhone
+            // photo — is made one first, as a single download is (toPdf.tsx).
+            const { convertToPdf } = await import("@/lib/toPdf");
+            const pdf = await convertToPdf(blob, `${safeName(docName)}${ext ? `.${ext}` : ""}`);
+            if (pdf.ok) mergeFiles.push(new File([pdf.blob], `${safeName(docName)}.pdf`, { type: "application/pdf" }));
+            else excluded.push(`${docName}${ext ? ` (.${ext})` : ""}`);
           }
         } catch (e) {
           excluded.push(`${docName}: ${e instanceof Error ? e.message : "could not be fetched"}`);
@@ -98,7 +104,7 @@ export function DownloadDocumentsPdf({
         setMessage({
           tone: "error",
           text: excluded.length
-            ? `None of these can be put into a PDF (only PDFs and photos can be merged): ${excluded.join("; ")}.`
+            ? `None of these can be made into a PDF (a .zip or a video, say): ${excluded.join("; ")}.`
             : "Nothing could be downloaded.",
         });
         return;
@@ -121,7 +127,7 @@ export function DownloadDocumentsPdf({
       setMessage({
         tone: excluded.length ? "error" : "ok",
         text: excluded.length
-          ? `Downloaded ${mergeFiles.length} document${mergeFiles.length === 1 ? "" : "s"} as one PDF. Left out (can't go in a PDF): ${excluded.join("; ")}.`
+          ? `Downloaded ${mergeFiles.length} document${mergeFiles.length === 1 ? "" : "s"} as one PDF. Left out (can't be made a PDF): ${excluded.join("; ")}.`
           : `Downloaded ${mergeFiles.length} document${mergeFiles.length === 1 ? "" : "s"} as one PDF.`,
       });
       if (what === "selected" && !excluded.length) setOpen(false);
@@ -192,8 +198,8 @@ export function DownloadDocumentsPdf({
       <Modal open={open} onClose={closeDialog} title="Download selected documents">
         <div className="flex flex-col gap-3">
           <p className="text-xs text-muted">
-            Tick the documents to include — they&rsquo;ll be combined into a single PDF (photos become pages). Only PDFs
-            and photos can be merged; any other file is left out — open it from its document instead.
+            Tick the documents to include — they&rsquo;ll be combined into a single PDF. Photos, Word, Excel and text
+            files become pages too; only a file that can&rsquo;t be made a PDF (a .zip, a video) is left out.
           </p>
 
           <div className="flex items-center justify-between">

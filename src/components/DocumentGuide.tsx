@@ -3,6 +3,7 @@
 import { BookOpen, ChevronDown, ExternalLink, FileText, MapPin } from "lucide-react";
 import type { GuideBlock, GuideInline } from "@/lib/documentGuide";
 import type { ResolvedGuide } from "@/lib/documentGuides";
+import { StoredFileLink } from "@/components/StoredFileLink";
 
 /**
  * A document's guide, drawn from the blocks src/lib/documentGuide.ts parsed —
@@ -102,10 +103,9 @@ export function DocumentGuideView({ guide, title }: { guide: ResolvedGuide; titl
       {(guide.sampleUrl || guide.video) && (
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start">
           {guide.sampleUrl && (
-            <a
+            <StoredFileLink
               href={guide.sampleUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+              name={guide.sampleName}
               className="group flex w-fit flex-col gap-1.5 rounded-lg border border-border bg-card p-2 text-xs font-medium text-primary hover:border-primary"
               data-guide-sample
             >
@@ -116,10 +116,9 @@ export function DocumentGuideView({ guide, title }: { guide: ResolvedGuide; titl
               )}
               <span className="inline-flex items-center gap-1.5">
                 <FileText aria-hidden className="h-3.5 w-3.5 shrink-0" />
-                See a correct sample
-                <ExternalLink aria-hidden className="h-3 w-3 shrink-0 opacity-70" />
+                Download a correct sample
               </span>
-            </a>
+            </StoredFileLink>
           )}
           {guide.video && (
             <div className="flex w-full max-w-md flex-col gap-1" data-guide-video>

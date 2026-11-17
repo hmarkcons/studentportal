@@ -21,6 +21,7 @@ import { AgreementDateEditor } from "@/components/AgreementDateEditor";
 import { agreementToday } from "@/lib/agreementDate";
 import { setAgreementDate } from "@/lib/actions/agreements";
 import { readAgreementRate } from "@/lib/agreementCompanyRead";
+import { StoredFileLink } from "@/components/StoredFileLink";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -194,25 +195,23 @@ export default async function AgreementGeneratorPage(props: {
                   </span>
                   <div className="flex flex-wrap items-center gap-2">
                     {links?.signedUrl ? (
-                      <a
+                      <StoredFileLink
                         href={links.signedUrl}
-                        target="_blank"
-                        rel="noreferrer"
+                        original
                         className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
                       >
-                        View signed copy
-                      </a>
+                        Download signed copy
+                      </StoredFileLink>
                     ) : (
                       !links?.pdfUrl &&
                       links?.templateUrl && (
-                        <a
+                        <StoredFileLink
                           href={links.templateUrl}
-                          target="_blank"
-                          rel="noreferrer"
+                          original
                           className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
                         >
-                          View template
-                        </a>
+                          Download template
+                        </StoredFileLink>
                       )
                     )}
                     {links?.pdfUrl && (

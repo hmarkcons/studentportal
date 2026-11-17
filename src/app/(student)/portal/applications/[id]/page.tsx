@@ -13,6 +13,7 @@ import { applicationLogins, loadMyLogins } from "@/lib/studentLogins";
 import { loadDocumentFiles } from "@/lib/documentFilesLoad";
 import { FEE_RECEIPT_CATEGORY, FEE_RECEIPT_SECTION_LABEL } from "@/lib/applicationFeeReceipts";
 import { uploadedLine } from "@/lib/activityStamp";
+import { StoredFileLink } from "@/components/StoredFileLink";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -131,9 +132,9 @@ export default async function PortalApplicationPage(props: PageProps<"/portal/ap
                         <FileText aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-muted" />
                         <span className="min-w-0">
                           {f.url ? (
-                            <a href={f.url} target="_blank" rel="noreferrer" className="break-all text-sm font-medium text-primary hover:underline">
+                            <StoredFileLink href={f.url} name={f.name} className="break-all text-sm font-medium text-primary hover:underline">
                               {f.name}
-                            </a>
+                            </StoredFileLink>
                           ) : (
                             <span className="break-all text-sm text-ink">{f.name}</span>
                           )}

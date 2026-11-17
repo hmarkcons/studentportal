@@ -44,6 +44,7 @@ import { toast } from "@/lib/toast";
 import { PeoplePicker } from "./PeoplePicker";
 import { StudentPicker, type PickedStudent } from "./StudentPicker";
 import { STATUS_TONE } from "./TaskCard";
+import { StoredFileLink } from "@/components/StoredFileLink";
 
 const when = (iso: string) =>
   new Date(iso).toLocaleString("en-GB", { timeZone: "Asia/Karachi", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false });
@@ -496,10 +497,10 @@ function TaskBody({
             {detail.files.map((f) => (
               <li key={f.id} className="flex items-center gap-2 px-3 py-1.5 text-sm" data-task-file={f.file_name}>
                 {f.url ? (
-                  <a href={f.url} target="_blank" rel="noreferrer" className="inline-flex min-w-0 items-center gap-1 text-primary hover:underline">
+                  <StoredFileLink href={f.url} name={f.file_name} original className="inline-flex min-w-0 items-center gap-1 text-primary hover:underline">
                     <Download aria-hidden className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate">{f.file_name}</span>
-                  </a>
+                  </StoredFileLink>
                 ) : (
                   <span className="truncate text-ink">{f.file_name}</span>
                 )}

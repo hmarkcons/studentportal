@@ -72,6 +72,7 @@ import { inCredentialsSection } from "@/lib/studentCredentials";
 import { loadDocumentFiles } from "@/lib/documentFilesLoad";
 import { storedFileName } from "@/lib/documentFileNames";
 import { loadLatestPkrRate } from "@/lib/pkrRates";
+import { StoredFileLink } from "@/components/StoredFileLink";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -1177,25 +1178,23 @@ export default async function StudentDashboardPage(props: PageProps<"/students/[
                     <div className="flex flex-wrap items-center justify-end gap-2">
                       {links?.signedUrl && a.signed_file_path && <span className="break-all text-[11px] text-muted" data-file-name>{storedFileName(a.signed_file_path)}</span>}
                       {links?.signedUrl ? (
-                        <a
+                        <StoredFileLink
                           href={links.signedUrl}
-                          target="_blank"
-                          rel="noreferrer"
+                          original
                           className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
                         >
-                          View signed copy
-                        </a>
+                          Download signed copy
+                        </StoredFileLink>
                       ) : (
                         !links?.pdfUrl &&
                         links?.templateUrl && (
-                          <a
+                          <StoredFileLink
                             href={links.templateUrl}
-                            target="_blank"
-                            rel="noreferrer"
+                            original
                             className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
                           >
-                            View template
-                          </a>
+                            Download template
+                          </StoredFileLink>
                         )
                       )}
                       {links?.pdfUrl && (

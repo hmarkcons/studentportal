@@ -13,6 +13,7 @@ import { PARTNER_COMMISSION_STATUS_LABELS, type PartnerCommissionStatus } from "
 import { TableFrame } from "@/components/ui/TableFrame";
 import { storedFileName } from "@/lib/documentFileNames";
 import { getCurrentUser } from "@/lib/auth/currentUser";
+import { StoredFileLink } from "@/components/StoredFileLink";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -130,15 +131,14 @@ export default async function PartnerCommissionsPage() {
                         uploadAction={uploadPartnerCommissionProof.bind(null, r.id, "/finance/partner-commissions")}
                       />
                     ) : proofUrls.has(r.id) ? (
-                      <a
+                      <StoredFileLink
                         href={proofUrls.get(r.id)}
-                        target="_blank"
-                        rel="noreferrer"
+                        original
                         className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
                       >
                         <Eye className="h-3.5 w-3.5 shrink-0" aria-hidden />
                         View proof
-                      </a>
+                      </StoredFileLink>
                     ) : (
                       "—"
                     )}

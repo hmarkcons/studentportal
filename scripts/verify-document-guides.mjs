@@ -27,6 +27,7 @@
 // destination, and the shared and profile ones get only that destination's
 // notes, which go with it in the finally. SHOT_DIR=<folder> saves the
 // builder's editor and the student's opened guide.
+import { readFileSync } from "fs";
 import { BASE, clients, fixtures, FIXTURE_PASSWORD, openBrowser, reporter, requireConfirmation, signIn } from "./verify-portal-lib.mjs";
 
 requireConfirmation("check:docguides");
@@ -267,9 +268,11 @@ try {
         /<script>window.__zztmpInjected = true<\/script>/.test(await guide.innerText()) &&
         (await student.evaluate(() => window.__zztmpInjected === undefined)));
     const sample = guide.locator("[data-guide-sample]");
-    const href = await sample.getAttribute("href").catch(() => null);
-    const fetched = href ? await fetch(href).then(async (r) => ({ status: r.status, bytes: Buffer.from(await r.arrayBuffer()) })) : null;
-    ok("...the sample opens, and is the file attached", fetched?.status === 200 && fetched.bytes.equals(PNG), String(fetched?.status));
+    // Every stored file downloads as a PDF: the PNG sample comes down as one.
+    const [download] = await Promise.all([student.waitForEvent("download", { timeout: 60000 }), sample.click()]);
+    const savedAt = await download.path();
+    const saved = savedAt ? readFileSync(savedAt) : null;
+    ok("...the sample downloads, as a PDF of the picture attached", Boolean(saved) && saved.subarray(0, 5).toString("latin1") === "%PDF-" && /\.pdf$/.test(download.suggestedFilename()), download.suggestedFilename());
     const thumb = await sample.locator("img").evaluate((img) => img.complete && img.naturalWidth > 0).catch(() => false);
     ok("...shown as a picture, since it is one", thumb);
     ok("...and the video plays from youtube-nocookie",

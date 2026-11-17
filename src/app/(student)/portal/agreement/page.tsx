@@ -12,6 +12,7 @@ import { signedAgreementGroups } from "@/lib/studentAgreements";
 import { getCurrentUser } from "@/lib/auth/currentUser";
 import { storedFileName } from "@/lib/documentFileNames";
 import { documentUrls } from "@/lib/storageUrls";
+import { StoredFileLink } from "@/components/StoredFileLink";
 
 
 // The stored values are draft / pending_signature / signed. Those are database
@@ -283,10 +284,8 @@ export default async function PortalAgreementPage() {
                         </p>
                       )}
                       {signed.has(v.id) ? (
-                        <a
+                        <StoredFileLink
                           href={signed.get(v.id)}
-                          target="_blank"
-                          rel="noreferrer"
                           className={`inline-flex w-fit items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
                             v.current
                               ? "bg-primary text-primary-ink shadow-sm transition-colors hover:bg-[var(--brand-strong)]"
@@ -294,8 +293,8 @@ export default async function PortalAgreementPage() {
                           }`}
                         >
                           <FileCheck2 aria-hidden className="h-3.5 w-3.5 shrink-0" />
-                          View your signed copy
-                        </a>
+                          Download your signed copy
+                        </StoredFileLink>
                       ) : (
                         <p className="text-xs text-muted">The office is filing your signed copy — it will appear here shortly.</p>
                       )}

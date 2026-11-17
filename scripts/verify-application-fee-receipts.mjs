@@ -260,7 +260,7 @@ try {
   ok("...and the file opens", Boolean(dl2) && dl2.size > 100);
   await portalApp();
   const portalCard = sp.locator("[data-fee-receipts]");
-  ok("the student sees them on the application, each a link", (await portalCard.count()) === 1 && (await portalCard.locator("[data-fee-receipt] a[href]").count()) === 3);
+  ok("the student sees them on the application, each a link", (await portalCard.count()) === 1 && (await portalCard.locator("[data-fee-receipt] [data-file-download]").count()) === 3);
   await shot(sp, "fee-student-application");
   await portalDocs();
   const sRow = sp.locator(`[data-document-row="${docId}"]`);

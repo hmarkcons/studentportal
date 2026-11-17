@@ -26,6 +26,7 @@
 //                on their own student's payments or their own commission.
 //
 // Everything is named zztmp and removed in a finally, files included.
+import { readFileSync } from "fs";
 import { BASE, apiAs, clients, fixtures, openBrowser, reporter, requireConfirmation, signIn } from "./verify-portal-lib.mjs";
 
 requireConfirmation("check:receipts");
@@ -79,9 +80,15 @@ async function uploadReceipt(page, paymentId, fileName) {
     count: await items.count(),
     name: (await last.locator("[data-receipt-link]").innerText().catch(() => "")).trim(),
     meta: (await last.locator("[data-receipt-meta]").innerText().catch(() => "")).trim(),
-    href: await last.locator("[data-receipt-link]").getAttribute("href").catch(() => null),
   };
   return { ...result, dialog, button };
+}
+
+/** What clicking a stored file's button saves: its name and its bytes. */
+async function downloadOf(page, locator) {
+  const [download] = await Promise.all([page.waitForEvent("download", { timeout: 60000 }), locator.click()]);
+  const path = await download.path();
+  return path ? { name: download.suggestedFilename(), bytes: readFileSync(path) } : null;
 }
 
 async function closeDialog(page) {
@@ -155,8 +162,8 @@ try {
     const r = await uploadReceipt(page, made[kind], `zztmp ${kind} slip.pdf`);
     ok(`${label}: a receipt is uploaded and listed under who uploaded it`,
       r.count === 1 && r.name === `zztmp ${kind} slip.pdf` && /^Uploaded .+ by zztmp rcptadmin/.test(r.meta), JSON.stringify({ count: r.count, name: r.name, meta: r.meta }));
-    const file = r.href ? await page.request.get(r.href) : null;
-    ok("...and opens the file itself through its link", Boolean(file?.ok()) && (await file.body()).toString().includes(`zztmp zztmp ${kind} slip.pdf`), String(file?.status()));
+    const file = await downloadOf(page, r.dialog.locator("[data-receipt]").last().locator("[data-receipt-link]"));
+    ok("...and downloads the file itself, a PDF already", file?.name === `zztmp ${kind} slip.pdf` && file.bytes.toString("latin1").includes(`zztmp zztmp ${kind} slip.pdf`), file?.name);
     const row = (await admin.from("payment_receipts").select("kind, path, uploaded_by").eq(`${kind}_id`, made[kind])).data ?? [];
     ok("...filed in that payment's own folder, under who uploaded it",
       row.length === 1 && row[0].kind === kind && row[0].path.startsWith(`payment-receipts/${kind}/${made[kind]}/`) && row[0].uploaded_by === uploader.id, JSON.stringify(row));
@@ -183,7 +190,8 @@ try {
     /PKR 1,000\.00/.test(await cell.innerText()) && /Due /.test(await cell.innerText()) &&
       (await cell.locator("[data-receipt-link]").innerText()).trim() === "zztmp installment slip.pdf",
     await cell.innerText());
-  ok("...which opens", Boolean((await page.request.get(await cell.locator("[data-receipt-link]").getAttribute("href"))).ok()));
+  const cellFile = await downloadOf(page, cell.locator("[data-receipt-link]"));
+  ok("...which downloads", cellFile?.bytes.subarray(0, 5).toString("latin1") === "%PDF-", cellFile?.name);
   await page.locator("table[data-row-highlight] > tbody > tr").first().locator("td").nth(2).click();
   ok("the table's rows are coloured, and the one clicked stays marked",
     (await page.locator("table[data-row-highlight] > tbody > tr[data-current]").count()) === 1);

@@ -12,6 +12,7 @@ import { ActionStatus } from "@/components/ActionStatus";
 import { useButtonAction } from "@/components/useButtonAction";
 import { DocumentGuideView } from "@/components/DocumentGuide";
 import type { ResolvedGuide } from "@/lib/documentGuides";
+import { StoredFileLink } from "@/components/StoredFileLink";
 
 /** A guide as the builder edits it. */
 export type EditableGuide = {
@@ -186,9 +187,9 @@ export function GuideEditor({
             <span className="font-normal text-muted">A correct one, so the student can see what is expected. Blur anything personal.</span>
             {guide.sampleUrl && !newSample && (
               <span className="flex flex-wrap items-center gap-3 font-normal">
-                <a href={guide.sampleUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                <StoredFileLink href={guide.sampleUrl} name={guide.sampleName} original className="text-primary hover:underline">
                   {guide.sampleName ?? "Current sample"}
-                </a>
+                </StoredFileLink>
                 <label className="flex items-center gap-1 text-muted">
                   <input type="checkbox" name="remove_sample" checked={removeSample} onChange={(e) => setRemoveSample(e.target.checked)} />
                   Remove it

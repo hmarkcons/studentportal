@@ -13,6 +13,7 @@ import { formatDateOnly } from "@/lib/formatDate";
 import { Badge } from "@/components/ui/Badge";
 import { DOCUMENT_STATUS_TONE, DOCUMENT_STATUS_LABELS } from "@/lib/constants";
 import { uploadedLine, reviewedLine, type UploaderRole } from "@/lib/activityStamp";
+import { StoredFileLink } from "@/components/StoredFileLink";
 
 const LONG_DATE: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", year: "numeric" };
 
@@ -39,9 +40,9 @@ function StudentFileRow({ file, revalidateTo, readOnly }: { file: DocFile; reval
       <div className="flex flex-wrap items-center gap-2">
         <FileText aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted" />
         {file.url ? (
-          <a href={file.url} target="_blank" rel="noreferrer" className="min-w-0 break-all text-xs font-medium text-primary hover:underline" data-file-name>
+          <StoredFileLink href={file.url} name={file.name} className="min-w-0 break-all text-xs font-medium text-primary hover:underline" data-file-name>
             {file.name}
-          </a>
+          </StoredFileLink>
         ) : (
           <span className="min-w-0 break-all text-xs font-medium text-ink" data-file-name>
             {file.name}

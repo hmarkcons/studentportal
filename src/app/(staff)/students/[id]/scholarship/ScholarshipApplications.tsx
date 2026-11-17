@@ -25,6 +25,7 @@ import {
   type ScholarshipStatus,
 } from "@/lib/scholarships";
 import { ScholarshipProofUploader } from "./ScholarshipProofUploader";
+import { StoredFileLink } from "@/components/StoredFileLink";
 
 export type ScholarshipBody = { id: string; name: string; region: string | null };
 
@@ -297,10 +298,10 @@ function ScholarshipPanel({
               <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5">
                 <span className="flex min-w-0 flex-wrap items-center gap-x-2 text-xs">
                   {p.url ? (
-                    <a href={p.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-primary hover:underline">
+                    <StoredFileLink href={p.url} name={p.fileName} original className="inline-flex items-center gap-1 font-medium text-primary hover:underline">
                       <FileText aria-hidden className="h-3.5 w-3.5 shrink-0" />
                       {p.fileName}
-                    </a>
+                    </StoredFileLink>
                   ) : (
                     <span className="inline-flex items-center gap-1 font-medium text-ink">
                       <FileText aria-hidden className="h-3.5 w-3.5 shrink-0" />
