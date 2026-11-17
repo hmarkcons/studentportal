@@ -239,7 +239,7 @@ try {
   ok("the Documents tab lists them as one requirement under Receipts - Universities", (await row.getAttribute("data-fee-receipt-row")) !== null && (await page.evaluate(() => document.body.innerText.includes("Receipts - Universities"))));
   ok("...named for the university", ((await row.locator("p").first().textContent()) ?? "").trim().endsWith(UNI) && !((await row.textContent()) ?? "").includes("Application fee receipt"), await row.locator("p").first().textContent());
   ok("...each file by name", (await row.locator("[data-file-name]").allTextContents()).sort().join("|") === "receipt-bank.pdf|receipt-later.pdf|receipt-portal.pdf");
-  ok("...read only: no upload, no review, no remove there", (await row.locator("input[type=file]").count()) === 0 && (await row.getByRole("button").count()) === 0);
+  ok("...read only: no upload, no review, no remove there", (await row.locator("input[type=file]").count()) === 0 && (await row.locator("button:not([data-file-download])").count()) === 0);
   ok("...pointing to the application, and saying they are hidden", ((await row.locator("[data-fee-receipt-application]").getAttribute("href")) ?? "").endsWith(`/applications/${applicationId}`) && (await row.locator("[data-receipts-shown]").getAttribute("data-receipts-shown")) === "no");
   await shot(page, "fee-staff-documents");
 
@@ -353,7 +353,11 @@ try {
     await go.click();
   };
   await fileUnder("zztmp Motivation form", "requirement", [await file("motivation.pdf")]);
-  const first = await poll(async () => (await otherDocs()).find((d) => d.custom_name === "zztmp Motivation form") ?? null, 60);
+  // The requirement is made a moment before its file is attached: wait for both.
+  const first = await poll(async () => {
+    const d = (await otherDocs()).find((x) => x.custom_name === "zztmp Motivation form");
+    return d && (await receiptFiles(d.id)).length ? d : null;
+  }, 60);
   const firstFiles = first ? await receiptFiles(first.id) : [];
   ok("a specific requirement with a file is filed in Other, approved, on the application", first?.application_id === applicationId && first.status === "verified" && firstFiles.length === 1 && firstFiles[0].status === "verified", JSON.stringify({ first, firstFiles }));
   ok("...and moves no stage", (await admin.from("applications").select("current_stage").eq("id", applicationId).single()).data?.current_stage === "documents_pending");
