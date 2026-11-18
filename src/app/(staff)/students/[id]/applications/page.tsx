@@ -14,6 +14,8 @@ import { loadApplicationRows } from "@/lib/applicationRows";
 import { orderedApplicationColumns } from "@/lib/applicationTable";
 import { ApplicationsTable } from "@/app/(staff)/applications/ApplicationsTable";
 import { ArrangeLeadColumns } from "@/app/(staff)/leads/ArrangeLeadColumns";
+import { ReportFilterPanel } from "@/components/reports/ReportFilterPanel";
+import { appCategoryOptions } from "@/lib/reports/applicationsStatusReport";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -27,6 +29,8 @@ export default async function StudentApplicationsTab(props: {
   const { cycle: cycleParam } = await props.searchParams;
   const { supabase, staff: staffRow } = await getStaffSession();
   const isSuperAdmin = hasRole(staffRow, "super_admin");
+  // The applications report's panel: Super Admin and Processing, as the office asked (2026-11-18).
+  const canReport = hasRole(staffRow, "super_admin", "processing");
   // Who may add / edit / delete these applications drives the controls shown,
   // from the Role Permissions toggles (0343), not a fixed role list. Editing
   // the catalogue cells (programme, coordinator) stays Super Admin's (0039).
@@ -244,6 +248,20 @@ export default async function StudentApplicationsTab(props: {
           This is a previous intake, kept for reference. The student&rsquo;s current work is under{" "}
           <strong className="font-medium text-ink">{cycleTabLabel("Apps", cycles[0])}</strong>.
         </p>
+      )}
+
+      {canReport && (
+        <Card className="mb-4">
+          <ReportFilterPanel
+            id="applications-status"
+            title="Applications report"
+            description="This student's applications — submitted, pending, rejected or not eligible — as PDF or Excel."
+            reportHref="/reports/applications-status"
+            downloadHref="/reports/applications-status/download"
+            fixed={{ student: id }}
+            selects={[{ name: "category", label: "Applications", options: appCategoryOptions() }]}
+          />
+        </Card>
       )}
 
       {rows.length === 0 ? (

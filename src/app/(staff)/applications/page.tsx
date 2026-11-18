@@ -7,6 +7,10 @@ import { RefreshIfStale } from "@/components/RefreshIfStale";
 import { ArrangeLeadColumns } from "../leads/ArrangeLeadColumns";
 import { NewApplicationForStudent } from "./NewApplicationForStudent";
 import { ApplicationsTable } from "./ApplicationsTable";
+import { Card } from "@/components/ui/Card";
+import { ReportFilterPanel } from "@/components/reports/ReportFilterPanel";
+import { appCategoryOptions, studentOption } from "@/lib/reports/applicationsStatusReport";
+import { loadRegisteredStudents } from "@/lib/reports/applicationsStatusLoad";
 
 /**
  * Every application the viewer can see, as one table (ApplicationsTable):
@@ -23,6 +27,9 @@ export default async function ApplicationsPage() {
   ]);
 
   const isSuperAdmin = hasRole(staff, "super_admin");
+  // The applications report's panel: Super Admin and Processing, as the office asked (2026-11-18).
+  const canReport = hasRole(staff, "super_admin", "processing");
+  const reportStudents = canReport ? await loadRegisteredStudents(supabase) : [];
   const columns = orderedApplicationColumns(savedOrder?.column_keys, "all").map((c) => ({ key: c.key, header: c.header }));
   const studentCount = new Set(rows.map((r) => r.studentId)).size;
 
@@ -43,6 +50,21 @@ export default async function ApplicationsPage() {
           <NewApplicationForStudent students={students ?? []} />
         </div>
       </div>
+      {canReport && (
+        <Card className="mb-4">
+          <ReportFilterPanel
+            id="applications-status"
+            title="Applications report"
+            description="Registered students' applications — one student or all — as PDF or Excel."
+            reportHref="/reports/applications-status"
+            downloadHref="/reports/applications-status/download"
+            selects={[
+              { name: "student", label: "Student", options: [{ value: "", label: "All registered students" }, ...reportStudents.map(studentOption)] },
+              { name: "category", label: "Applications", options: appCategoryOptions() },
+            ]}
+          />
+        </Card>
+      )}
       <ApplicationsTable
         rows={rows}
         programsByUniversity={programsByUniversity}

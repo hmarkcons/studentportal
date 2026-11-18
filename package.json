@@ -83,6 +83,7 @@
     "check:apporder": "node scripts/verify-application-order.mjs",
     "check:academicdates": "node scripts/verify-qualification-dates.mjs",
     "check:pdfdownloads": "node scripts/verify-pdf-downloads.mjs",
+    "check:newreports": "node scripts/verify-new-reports.mjs",
     "check:avatars": "node scripts/verify-avatars.mjs",
     "check:signinlanding": "node scripts/verify-sign-in-landing.mjs",
     "check:aeo": "node scripts/verify-aeo.mjs",

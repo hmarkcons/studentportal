@@ -12,6 +12,9 @@ import { FeeProductCatalog } from "./FeeProductCatalog";
 import { ConsultancyFeeList } from "./ConsultancyFeeList";
 import { ConsultancyFeeOverview, type FeeRow, type FeeStatus } from "./ConsultancyFeeOverview";
 import { loadLatestPkrRate } from "@/lib/pkrRates";
+import { Card } from "@/components/ui/Card";
+import { ReportFilterPanel } from "@/components/reports/ReportFilterPanel";
+import { FEE_FILTER_LABELS, type FeeFilter } from "@/lib/reports/consultancyFeeReport";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -211,6 +214,24 @@ export default async function ConsultancyFeePage() {
       <p className="mb-4 text-sm text-muted">
         Consultancy fee and administrative fee payments across every registered student — installments, payment mode, status, and invoicing.
       </p>
+
+      {/* The consultancy fee report, made from here as from Reports (2026-11-18). */}
+      <Card className="mb-4">
+        <ReportFilterPanel
+          id="consultancy-fee"
+          title="Create a report"
+          description="Every registered student's fee by how it stands, as PDF or Excel."
+          reportHref="/reports/consultancy-fee"
+          downloadHref="/reports/consultancy-fee/download"
+          selects={[
+            {
+              name: "category",
+              label: "Payment",
+              options: (Object.keys(FEE_FILTER_LABELS) as FeeFilter[]).map((k) => ({ value: k === "all" ? "" : k, label: FEE_FILTER_LABELS[k] })),
+            },
+          ]}
+        />
+      </Card>
 
       <ConsultancyFeeOverview rows={feeRows} canManage={canManage} isSuperAdmin={isSuperAdmin} />
 

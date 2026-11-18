@@ -20,6 +20,8 @@ import { getCurrentUser } from "@/lib/auth/currentUser";
 import { storedFileName } from "@/lib/documentFileNames";
 import { MessageThread, type MessageRow } from "@/components/MessageThread";
 import { StoredFileLink } from "@/components/StoredFileLink";
+import { DeadlinesReportPanel } from "@/components/reports/DeadlinesReportPanel";
+import { loadUniversityProgrammeOptions } from "@/lib/reports/universityDeadlinesLoad";
 
 export default async function UniversityDetailPage(props: PageProps<"/setup/universities/[id]">) {
   const { id } = await props.params;
@@ -95,6 +97,9 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
   // with no reader. Restricted to the same two roles the policy names, so the
   // card is absent rather than empty for anyone else.
   const canSeeExchange = hasRole(staffRow, "super_admin") || hasRole(staffRow, "processing");
+  // The deadlines report's panel: Super Admin and Processing, as the office asked (2026-11-18).
+  const canReport = hasRole(staffRow, "super_admin", "processing");
+  const reportProgrammes = canReport ? await loadUniversityProgrammeOptions(supabase, id) : [];
   const { data: exchange } = canSeeExchange
     ? await supabase
         .from("partner_document_exchange")
@@ -141,6 +146,20 @@ export default async function UniversityDetailPage(props: PageProps<"/setup/univ
         <span>{destination?.display_name}</span>
         {isSuperAdmin && <AuditHistoryLink tab="universities" id={id} />}
       </p>
+
+      {canReport && (
+        <Card className="mb-6">
+          <DeadlinesReportPanel
+            title="Deadlines report"
+            description="This university's programmes and their deadlines, by level and field, as PDF or Excel."
+            countries={[]}
+            initial={{ country: university.destination_id as string, university: id, level: "all", field: "", programme: "" }}
+            universities={[]}
+            programmes={reportProgrammes}
+            lockUniversity
+          />
+        </Card>
+      )}
 
       <Card className="mb-6">
         <h3 className="mb-3 text-sm font-medium text-ink">Details</h3>

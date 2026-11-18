@@ -13,6 +13,10 @@ import { loadStudentChecklistSections } from "@/lib/studentChecklistSections";
 import { hasPermission } from "@/lib/auth/permissions";
 import { orderCycles, cycleTabLabel, resolveCycleDocuments, type Cycle } from "@/lib/intakeCycle";
 import { safeName } from "@/lib/documentZip";
+import { ReportFilterPanel } from "@/components/reports/ReportFilterPanel";
+import { showOptions } from "@/lib/documentChecklistReport";
+import { getStaffSession } from "@/lib/auth/session";
+import { hasRole } from "@/lib/auth/roles";
 
 function one<T>(v: T | T[] | null) {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -26,6 +30,9 @@ export default async function StudentDocumentsTab(props: {
   // doc: the document Waiting on you was opened for, picked out on the page.
   const { cycle: cycleParam, doc: focusDocId } = await props.searchParams;
   const supabase = await createClient();
+  // The documents report's panel: Super Admin and Processing, as the office asked (2026-11-18).
+  const { staff: viewer } = await getStaffSession();
+  const canReport = hasRole(viewer, "super_admin", "processing");
 
   // One wave for everything but the documents themselves, which are read once
   // the checklist is up to date. These were three waves of their own.
@@ -167,6 +174,20 @@ export default async function StudentDocumentsTab(props: {
           This is a previous intake&rsquo;s paperwork, kept for reference. Anything still valid is already carried over
           into <strong className="font-medium text-ink">{cycleTabLabel("Docs", cycles[0])}</strong>.
         </p>
+      )}
+
+      {canReport && (
+        <Card className="mb-4">
+          <ReportFilterPanel
+            id="documents"
+            title="Documents report"
+            description="This student's documents — completed, missing or rejected — as PDF or Excel."
+            reportHref="/reports/documents-checklist"
+            downloadHref="/reports/documents-checklist/download"
+            fixed={{ students: id }}
+            selects={[{ name: "show", label: "Documents", options: showOptions() }]}
+          />
+        </Card>
       )}
 
       <Card>

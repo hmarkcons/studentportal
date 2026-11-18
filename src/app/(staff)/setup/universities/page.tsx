@@ -9,6 +9,7 @@ import { ImportUniversitiesForm } from "./ImportUniversitiesForm";
 import { ImportCatalogueForm } from "./ImportCatalogueForm";
 import { UniversityBrowser, type BrowserUniversity } from "./UniversityBrowser";
 import { getCurrentUser } from "@/lib/auth/currentUser";
+import { DeadlinesReportPanel } from "@/components/reports/DeadlinesReportPanel";
 
 export default async function UniversitiesPage(props: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const params = await props.searchParams;
@@ -38,6 +39,8 @@ export default async function UniversitiesPage(props: { searchParams: Promise<Re
     supabase.from("scholarship_bodies").select("id, name, region, destinations:scholarship_body_destinations(destination_id)"),
   ]);
   const isSuperAdmin = hasRole(staffRow, "super_admin");
+  // The deadlines report's panel: Super Admin and Processing, as the office asked (2026-11-18).
+  const canReport = hasRole(staffRow, "super_admin", "processing");
   const bodies = (bodyRows ?? []).map((b) => ({
     id: b.id as string,
     name: b.name as string,
@@ -48,6 +51,18 @@ export default async function UniversitiesPage(props: { searchParams: Promise<Re
   return (
     <div className="w-full">
       <h2 className="mb-4 text-lg font-semibold text-ink">Universities</h2>
+      {canReport && (
+        <Card className="mb-6">
+          <DeadlinesReportPanel
+            title="Universities and deadlines report"
+            description="A country's universities and their programmes' deadlines, by level and field, as PDF or Excel."
+            countries={(destinations ?? []).map((d) => ({ value: d.id as string, label: (d.display_name as string | null) ?? "Unnamed country" }))}
+            initial={{ country: "", university: "", level: "all", field: "", programme: "" }}
+            universities={[]}
+            programmes={[]}
+          />
+        </Card>
+      )}
       <Card className="mb-6">
         <NewUniversityForm destinations={destinations ?? []} bodies={bodies} />
         {/* Importing is a Super Admin's alone — the actions refuse anyone else

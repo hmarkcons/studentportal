@@ -56,6 +56,27 @@ export const REPORT_CATALOGUE: ReportCatalogueEntry[] = [
     roles: ["super_admin", "processing"],
   },
   {
+    href: "/reports/consultancy-fee",
+    label: "Consultancy fee report",
+    description: "Every registered student's consultancy fee by how it stands — paid in full, pending, overdue or withdrawn. Download as PDF or Excel.",
+    // As the Consultancy Fee section: Super Admin and Finance.
+    roles: ["super_admin", "finance"],
+  },
+  {
+    href: "/reports/applications-status",
+    label: "Applications report",
+    description: "Registered students' applications — one student or all — submitted, pending, rejected or not eligible. Download as PDF or Excel.",
+    // Super Admin and Processing, as the office asked (2026-11-18).
+    roles: ["super_admin", "processing"],
+  },
+  {
+    href: "/reports/university-deadlines",
+    label: "Universities & deadlines",
+    description: "A country's universities and their programmes' deadlines, by level and field — every university or one. Download as PDF or Excel.",
+    // Super Admin and Processing, as the office asked (2026-11-18).
+    roles: ["super_admin", "processing"],
+  },
+  {
     href: "/reports/revenue-commission",
     label: "Revenue & commission",
     description: "Invoiced revenue, collections, and commission totals.",

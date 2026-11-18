@@ -139,7 +139,11 @@ export type ChecklistReport = {
 
 // ------------------------------------------------------------------ filters
 
-export type ChecklistShow = "all" | "left" | "complete";
+// complete, missing and rejected are the office's three (2026-11-18): a
+// student whose every document is approved; one with a document not yet sent,
+// listed with those only; one with a document sent back, listed with those
+// only. "left" — anything not yet approved — is kept for the links to it.
+export type ChecklistShow = "all" | "complete" | "missing" | "rejected" | "left";
 export type ChecklistSort = "name" | "progress";
 
 export type ChecklistFilters = {
@@ -158,9 +162,16 @@ export const DEFAULT_FILTERS: ChecklistFilters = { officer: "", country: "", sho
 
 export const SHOW_LABELS: Record<ChecklistShow, string> = {
   all: "All registered students",
+  complete: "Documents completed",
+  missing: "Documents missing",
+  rejected: "Documents rejected",
   left: "Students with documents left",
-  complete: "Students with every document approved",
 };
+
+/** The Documents dropdown of a report panel, in the office's order; "" is All. */
+export function showOptions(): { value: string; label: string }[] {
+  return (["all", "complete", "missing", "rejected", "left"] as ChecklistShow[]).map((k) => ({ value: k === "all" ? "" : k, label: SHOW_LABELS[k] }));
+}
 
 export const SORT_LABELS: Record<ChecklistSort, string> = {
   name: "Name (A–Z)",
@@ -181,7 +192,7 @@ export function parseChecklistFilters(params: ReportParams): ChecklistFilters {
   return {
     officer: officer === "none" || UUID.test(officer) ? officer : "",
     country: UUID.test(country) ? country : "",
-    show: show === "left" || show === "complete" ? show : "all",
+    show: show === "left" || show === "complete" || show === "missing" || show === "rejected" ? show : "all",
     sort: sort === "progress" ? "progress" : "name",
     students: parseStudentIds(params),
   };
@@ -343,8 +354,23 @@ export function buildChecklistReport(input: {
     if (filters.country && !countryOf.get(s.id)?.has(filters.country)) return false;
     if (filters.show === "left" && isComplete(s.counts)) return false;
     if (filters.show === "complete" && !isComplete(s.counts)) return false;
+    if (filters.show === "missing" && s.counts.missing === 0) return false;
+    if (filters.show === "rejected" && s.counts.sentBack === 0) return false;
     return true;
   });
+  // Missing and rejected list only those documents; the student's counts stay
+  // whole, so "3 of 12 approved" still reads true beside them.
+  const only: ChecklistState | null = filters.show === "missing" ? "missing" : filters.show === "rejected" ? "sent_back" : null;
+  if (only) {
+    for (const s of students) {
+      s.sections = s.sections
+        .map((section) => {
+          const docs = section.docs.filter((d) => d.state === only);
+          return { ...section, docs, counts: countDocs(docs) };
+        })
+        .filter((section) => section.docs.length > 0);
+    }
+  }
 
   const byName = (a: ChecklistStudent, b: ChecklistStudent) =>
     a.name.localeCompare(b.name, "en", { sensitivity: "base" }) || (a.code ?? "").localeCompare(b.code ?? "");

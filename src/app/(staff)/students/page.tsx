@@ -11,6 +11,9 @@ import { RowActionsMenu } from "@/components/RowActionsMenu";
 import { searchTerm } from "@/lib/listSearch";
 import { loginEmailMatches } from "@/lib/loginEmailSearch";
 import { getCurrentUser } from "@/lib/auth/currentUser";
+import { Card } from "@/components/ui/Card";
+import { ReportFilterPanel } from "@/components/reports/ReportFilterPanel";
+import { showOptions } from "@/lib/documentChecklistReport";
 
 type StudentRow = {
   id: string;
@@ -131,6 +134,8 @@ export default async function StudentsPage(props: { searchParams: Promise<Record
     term.length >= 2 ? loginEmailMatches(supabase, term) : Promise.resolve([] as string[]),
   ]);
   const canDelete = hasRole(staffRow, "super_admin") || hasRole(staffRow, "processing");
+  // The documents report's panel: Super Admin and Processing, as the office asked (2026-11-18).
+  const canReport = hasRole(staffRow, "super_admin", "processing");
 
   // The filter choices, from every student rather than the page shown.
   const counselorIdByName = new Map<string, string>();
@@ -349,6 +354,19 @@ export default async function StudentsPage(props: { searchParams: Promise<Record
       </div>
 
       <ImportRegisteredStudentsForm />
+
+      {canReport && (
+        <Card className="mt-4">
+          <ReportFilterPanel
+            id="documents"
+            title="Documents report"
+            description="Every registered student's documents — completed, missing or rejected — as PDF or Excel."
+            reportHref="/reports/documents-checklist"
+            downloadHref="/reports/documents-checklist/download"
+            selects={[{ name: "show", label: "Documents", options: showOptions() }]}
+          />
+        </Card>
+      )}
 
       {error && <p className="text-sm text-danger">{error.message}</p>}
 
