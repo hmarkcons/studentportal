@@ -91,13 +91,17 @@ try {
   universityId = uni.id;
   const { data: cs } = await admin.from("programs").insert({ university_id: uni.id, level: "masters", name: `zztmp Computer Science ${RUN}`, core_field: "Computer Science" }).select("id, field_group").single();
   const { data: med } = await admin.from("programs").insert({ university_id: uni.id, level: "bachelors", name: `zztmp Medicine ${RUN}`, core_field: "Medicine and Surgery" }).select("id, field_group").single();
+  // One application per programme and round is all the portal allows: two more programmes, masters and
+  // outside CS/IT, so the deadline checks below (CS/IT; Bachelors) are not changed by them.
+  const { data: econ } = await admin.from("programs").insert({ university_id: uni.id, level: "masters", name: `zztmp Economics ${RUN}`, core_field: "Economics" }).select("id").single();
+  const { data: phys } = await admin.from("programs").insert({ university_id: uni.id, level: "masters", name: `zztmp Physics ${RUN}`, core_field: "Physics" }).select("id").single();
   ok("the fixture programmes are classified as expected", cs.field_group === "computer_science" && med.field_group === "medicine", JSON.stringify({ cs: cs.field_group, med: med.field_group }));
   await admin.from("program_intake_rounds").insert([
     { program_id: cs.id, label: "Round 1", application_deadline: shift(today, 60), start_date: shift(today, 300), sort_order: 1 },
     { program_id: cs.id, label: "Round 2", application_deadline: shift(today, 10), start_date: shift(today, 300), sort_order: 2 },
     { program_id: med.id, label: "Main", application_deadline: shift(today, -3), start_date: shift(today, 280), sort_order: 1 },
   ]);
-  for (const [stage, prog] of [["application_submitted", cs.id], ["documents_pending", cs.id], ["rejected", med.id], ["declined", med.id]]) {
+  for (const [stage, prog] of [["application_submitted", cs.id], ["documents_pending", econ.id], ["rejected", med.id], ["declined", phys.id]]) {
     const { error } = await admin.from("applications").insert({ student_id: owing, university_id: uni.id, program_id: prog, intake: "Fall 2099", current_stage: stage });
     if (error) throw new Error(`application ${stage}: ${error.message}`);
   }
@@ -108,6 +112,7 @@ try {
     await page.goto(`${BASE}${path}`, { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("load");
   };
+  const sentAway = (page, path) => poll(async () => (page.url().includes(path) ? null : true), 20);
   const download = async (page, path) => {
     const r = await page.request.get(`${BASE}${path}`);
     const body = await r.body();
@@ -138,19 +143,22 @@ try {
   // ------------------------------------------------------------ Processing: documents, applications, deadlines
   const pp = await signIn(browser, proc.email);
   await open(pp, "/reports/consultancy-fee");
-  ok("fee: Processing cannot open it", !pp.url().includes("/reports/consultancy-fee"), pp.url());
+  ok("fee: Processing cannot open it", Boolean(await sentAway(pp, "/reports/consultancy-fee")) && (await pp.locator("[data-table-report]").count()) === 0, pp.url());
 
-  const docsText = async (show) => {
+  // The student's own row in the results (the picker above names them whatever is shown); its
+  // documents sit in a closed <details>, so its textContent, not what is drawn.
+  const docsRow = async (show) => {
     await open(pp, `/reports/documents-checklist?students=${owing}&show=${show}`);
-    await pp.locator("main").waitFor({ timeout: 60000 });
-    return pp.locator("main").innerText();
+    await pp.locator("[data-showing]").waitFor({ timeout: 60000 });
+    const row = pp.locator(`[data-student-row="${owing}"]`);
+    return (await row.count()) ? ((await row.textContent()) ?? "") : null;
   };
-  let text = await docsText("missing");
-  ok("documents: Missing lists the missing document only", text.includes(`zztmp Missing doc ${RUN}`) && !text.includes(`zztmp Rejected doc ${RUN}`) && !text.includes(`zztmp Approved doc ${RUN}`));
-  text = await docsText("rejected");
-  ok("documents: Rejected lists the one sent back only", text.includes(`zztmp Rejected doc ${RUN}`) && !text.includes(`zztmp Missing doc ${RUN}`));
-  text = await docsText("complete");
-  ok("documents: Completed does not list a student with documents left", !text.includes(owingName));
+  let text = await docsRow("missing");
+  ok("documents: Missing lists the missing document only", Boolean(text) && text.includes(`zztmp Missing doc ${RUN}`) && !text.includes(`zztmp Rejected doc ${RUN}`) && !text.includes(`zztmp Approved doc ${RUN}`), text ?? "no row");
+  text = await docsRow("rejected");
+  ok("documents: Rejected lists the one sent back only", Boolean(text) && text.includes(`zztmp Rejected doc ${RUN}`) && !text.includes(`zztmp Missing doc ${RUN}`), text ?? "no row");
+  text = await docsRow("complete");
+  ok("documents: Completed does not list a student with documents left", text === null, text ?? "");
   const docPdf = await download(pp, `/reports/documents-checklist/download?students=${owing}&show=missing&format=pdf`);
   ok("documents: the PDF comes down", docPdf.ok && docPdf.head === "%PDF", docPdf.name);
   await open(pp, "/students");
@@ -216,9 +224,9 @@ try {
   await mp.locator("table").first().waitFor({ timeout: 120000 }).catch(() => {});
   ok("Management: no applications report panel", (await mp.locator('[data-report-panel="applications-status"]').count()) === 0);
   await open(mp, "/reports/university-deadlines");
-  ok("Management: cannot open the deadlines report", !mp.url().includes("/reports/university-deadlines"), mp.url());
+  ok("Management: cannot open the deadlines report", Boolean(await sentAway(mp, "/reports/university-deadlines")) && (await mp.locator("[data-table-report]").count()) === 0, mp.url());
   await open(mp, "/reports/applications-status");
-  ok("Management: cannot open the applications report", !mp.url().includes("/reports/applications-status"), mp.url());
+  ok("Management: cannot open the applications report", Boolean(await sentAway(mp, "/reports/applications-status")) && (await mp.locator("[data-table-report]").count()) === 0, mp.url());
   await mp.close();
 } catch (e) {
   ok("the run finished", false, e?.stack ?? String(e));
