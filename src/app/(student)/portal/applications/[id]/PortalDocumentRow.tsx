@@ -237,7 +237,6 @@ export function PortalDocumentRow({
         <ConfirmedUploadForm
           multiple
           action={action}
-          capture="environment"
           hint="Any file type"
           submitLabel={sentBack ? "Replace" : files.length > 0 ? "Add another file" : "Upload"}
           replacing={sentBack}

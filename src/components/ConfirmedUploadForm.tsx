@@ -20,7 +20,6 @@ import { FileField } from "@/components/FileField";
 export function ConfirmedUploadForm({
   action,
   accept,
-  capture,
   submitLabel,
   replacing = false,
   removable = false,
@@ -33,7 +32,6 @@ export function ConfirmedUploadForm({
 }: {
   action: (prevState: unknown, formData: FormData) => Promise<{ error?: string; success?: boolean } | void>;
   accept?: string;
-  capture?: "environment" | "user";
   /** Defaults to the app-wide 5 MB. */
   limitBytes?: number;
   noun?: string;
@@ -78,7 +76,6 @@ export function ConfirmedUploadForm({
         <FileField
           key={fieldKey}
           accept={accept}
-          capture={capture}
           multiple={multiple}
           required
           limitBytes={limitBytes}

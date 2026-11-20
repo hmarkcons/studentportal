@@ -35,7 +35,6 @@ export type FileFieldState = {
 export function FileField({
   name = "file",
   accept,
-  capture,
   required,
   limitBytes = MAX_UPLOAD_BYTES,
   noun = "document",
@@ -48,7 +47,6 @@ export function FileField({
 }: {
   name?: string;
   accept?: string;
-  capture?: "environment" | "user";
   required?: boolean;
   limitBytes?: number;
   /** What this is, for the error wording: "document", "photo", "file". */
@@ -237,7 +235,10 @@ export function FileField({
         ref={inputRef}
         type="file"
         accept={accept}
-        capture={capture}
+        // Never a capture attribute (2026-11-20): on a phone it skips the file
+        // picker and opens the camera, so nobody could choose a file they had.
+        // Without it the phone shows its own picker — the file manager or the
+        // gallery, the camera among the choices where the phone offers it.
         multiple={multiple || undefined}
         // Not required once a file is in storage: what the form posts is the
         // reference below, and a pick that adds to a list empties this input.
